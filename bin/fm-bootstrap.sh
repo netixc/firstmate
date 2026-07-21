@@ -94,6 +94,8 @@ DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 . "$SCRIPT_DIR/fm-tangle-lib.sh"
 # shellcheck source=bin/fm-ff-lib.sh disable=SC1091
 . "$SCRIPT_DIR/fm-ff-lib.sh"
+# shellcheck source=bin/fm-wake-lib.sh disable=SC1091
+. "$SCRIPT_DIR/fm-wake-lib.sh"
 # shellcheck source=bin/fm-config-inherit-lib.sh disable=SC1091
 . "$SCRIPT_DIR/fm-config-inherit-lib.sh"
 # shellcheck source=bin/fm-x-lib.sh disable=SC1091
@@ -339,7 +341,7 @@ secondmate_sync() {
   # running home, send its literal-content reread instruction pointer so the
   # live agent does not keep applying stale defaults. Spawn/respawn already
   # re-reads at launch and needs no redundant nudge unless files changed after launch.
-  local id home home_real propagated_homes report reread_out reread_skip_pending
+  local id home home_real home_lock propagated_homes report reread_out reread_skip_pending
   propagated_homes=""
   SECONDMATE_RESPAWNED_IDS=${SECONDMATE_RESPAWNED_IDS:-}
   while IFS='|' read -r id home _window _meta; do
@@ -353,8 +355,26 @@ secondmate_sync() {
       *" $home_real "*) continue ;;
     esac
     propagated_homes="$propagated_homes $home_real"
+    mkdir -p "$home_real/state" || {
+      echo "CONFIG_REREAD: secondmate $id: send failed: could not create state directory"
+      continue
+    }
+    home_lock=$(fm_config_inherit_lock_path "$home_real") || {
+      echo "CONFIG_REREAD: secondmate $id: send failed: could not resolve per-home lock"
+      continue
+    }
+    fm_lock_acquire_wait "$home_lock" || {
+      echo "CONFIG_REREAD: secondmate $id: send failed: could not acquire per-home lock"
+      continue
+    }
+    if fm_config_reread_retry_queue_is_full "$FM_HOME" "$id"; then
+      echo "CONFIG_REREAD: secondmate $id: send failed: retry instruction queue is full"
+      fm_lock_release "$home_lock" || true
+      continue
+    fi
     report=$(mktemp "${TMPDIR:-/tmp}/fm-bootstrap-inherit.XXXXXX" 2>/dev/null) || {
       echo "SECONDMATE_SYNC: secondmate $id: skipped: inheritance failed"
+      fm_lock_release "$home_lock" || true
       continue
     }
     if FM_CONFIG_INHERIT_REPORT="$report" \
@@ -380,6 +400,7 @@ secondmate_sync() {
       printf '%s\n' "$reread_out"
     fi
     rm -f "$report"
+    fm_lock_release "$home_lock" || true
   done < <(live_secondmate_meta_records "$STATE" "$DATA/secondmates.md")
   return 0
 }

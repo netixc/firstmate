@@ -445,6 +445,9 @@ propagate_inheritable_config() {
 # Kept under state/ (gitignored operational dir) so it never dirties the home.
 FM_CONFIG_REREAD_INSTRUCTION_PREFIX_REL="state/.fm-inherited-config-reread"
 FM_CONFIG_REREAD_MAX_SENT=16
+FM_CONFIG_REREAD_RETRY_ROOT_REL="state/.fm-inherited-config-reread-retry"
+FM_CONFIG_REREAD_MAX_PENDING=16
+FM_CONFIG_INHERIT_LOCK_REL="state/.fm-inherited-config.lock"
 
 # Framing lines for the config-reread instruction. Defaults/rules only - never
 # an enforcement claim, and never a parsed summary of file contents.
@@ -473,6 +476,65 @@ fm_config_reread_changed_items() {
     [ "$status" = pushed ] || continue
     printf '%s\n' "$item"
   done
+}
+
+fm_config_inherit_lock_path() {
+  local dest_home=$1
+  [ -n "$dest_home" ] || return 1
+  printf '%s/%s\n' "$dest_home" "$FM_CONFIG_INHERIT_LOCK_REL"
+}
+
+fm_config_reread_retry_dir() {
+  local source_home=$1 id=$2 token
+  [ -n "$source_home" ] && [ -n "$id" ] || return 1
+  token=${id//[^a-zA-Z0-9_.-]/_}
+  [ -n "$token" ] || token=unknown
+  printf '%s/%s/%s\n' "$source_home" "$FM_CONFIG_REREAD_RETRY_ROOT_REL" "$token"
+}
+
+fm_config_reread_pending_stages() {
+  local source_home=$1 id=$2 retry_dir stage
+  retry_dir=$(fm_config_reread_retry_dir "$source_home" "$id") || return 1
+  for stage in "$retry_dir"/.fm-inherited-config-reread.*; do
+    [ -f "$stage" ] && [ ! -L "$stage" ] || continue
+    printf '%s\n' "$stage"
+  done | LC_ALL=C sort
+}
+
+fm_config_reread_has_staged() {
+  local source_home=$1 id=$2 stage
+  while IFS= read -r stage; do
+    [ -n "$stage" ] && return 0
+  done < <(fm_config_reread_pending_stages "$source_home" "$id")
+  return 1
+}
+
+fm_config_reread_retry_queue_is_full() {
+  local source_home=$1 id=$2 count
+  count=$(fm_config_reread_pending_stages "$source_home" "$id" | wc -l | tr -d ' ')
+  [ "$count" -ge "$FM_CONFIG_REREAD_MAX_PENDING" ]
+}
+
+fm_config_reread_new_retry_stage_path() {
+  local source_home=$1 id=$2 retry_dir sequence sequence_file sequence_tmp generation stage
+  retry_dir=$(fm_config_reread_retry_dir "$source_home" "$id") || return 1
+  mkdir -p "$retry_dir" 2>/dev/null || return 1
+  chmod 0700 "$retry_dir" 2>/dev/null || return 1
+  sequence=$(cat "$retry_dir/.sequence" 2>/dev/null || true)
+  case "$sequence" in
+    ''|*[!0-9]*) sequence=0 ;;
+  esac
+  sequence=$((sequence + 1))
+  sequence_file="$retry_dir/.sequence"
+  sequence_tmp=$(umask 077; mktemp "$retry_dir/.sequence.XXXXXX" 2>/dev/null) || return 1
+  if ! printf '%s\n' "$sequence" > "$sequence_tmp" || ! chmod 0600 "$sequence_tmp" 2>/dev/null || ! mv -f "$sequence_tmp" "$sequence_file" 2>/dev/null; then
+    rm -f "$sequence_tmp"
+    return 1
+  fi
+  generation=$(date -u +%Y%m%dT%H%M%S 2>/dev/null) || return 1
+  generation="$generation.$(printf '%08d' "$sequence")"
+  stage=$(umask 077; mktemp "$retry_dir/.fm-inherited-config-reread.$generation.XXXXXX" 2>/dev/null) || return 1
+  printf '%s\n' "$stage"
 }
 
 # fm_config_write_reread_instruction <dest-home> <report> <instruction-path>
@@ -607,6 +669,31 @@ fm_config_reread_mark_pending() {
   return 0
 }
 
+fm_config_reread_publish_stage() {
+  local dest_home=$1 stage=$2 state final pending_pointer tmp
+  [ -f "$stage" ] && [ ! -L "$stage" ] || return 1
+  state="$dest_home/${FM_CONFIG_REREAD_INSTRUCTION_PREFIX_REL%/*}"
+  mkdir -p "$state" 2>/dev/null || return 1
+  final="$state/${stage##*/}"
+  if [ -f "$final.pending" ] && [ ! -L "$final.pending" ]; then
+    pending_pointer=$(cat "$final.pending" 2>/dev/null || true)
+    [ "$pending_pointer" = "$final" ] || return 1
+    [ -f "$final" ] && [ ! -L "$final" ] || return 1
+    printf '%s\n' "$final"
+    return 0
+  fi
+  tmp=$(umask 077; mktemp "$state/.fm-config-reread-publish.XXXXXX" 2>/dev/null) || return 1
+  if ! cat "$stage" > "$tmp" || ! chmod 0600 "$tmp" 2>/dev/null || ! mv -f "$tmp" "$final" 2>/dev/null; then
+    rm -f "$tmp"
+    return 1
+  fi
+  if ! fm_config_reread_mark_pending "$final" "$final.pending"; then
+    rm -f "$final"
+    return 1
+  fi
+  printf '%s\n' "$final"
+}
+
 fm_config_reread_send_failure() {
   local id=$1 instruction_path=$2 pending_path=$3 detail=$4
   if ! fm_config_reread_mark_pending "$instruction_path" "$pending_path"; then
@@ -657,7 +744,7 @@ fm_config_reread_send_pointer() {
 
 # fm_config_reread_discard_pending <dest-home>
 fm_config_reread_discard_pending() {
-  local dest_home=$1 state pending instruction rc=0
+  local dest_home=$1 id=${2:-} source_home=${3:-} state pending instruction retry_dir retry_stage rc=0
   state="$dest_home/${FM_CONFIG_REREAD_INSTRUCTION_PREFIX_REL%/*}"
   for pending in "$state"/.fm-inherited-config-reread.*.pending; do
     [ -f "$pending" ] && [ ! -L "$pending" ] || continue
@@ -665,6 +752,17 @@ fm_config_reread_discard_pending() {
     rm -f "$pending" 2>/dev/null || rc=1
     rm -f "$instruction" 2>/dev/null || rc=1
   done
+  if [ -n "$id" ] && [ -n "$source_home" ]; then
+    retry_dir=$(fm_config_reread_retry_dir "$source_home" "$id") || rc=1
+    if [ -d "$retry_dir" ]; then
+      for retry_stage in "$retry_dir"/.fm-inherited-config-reread.*; do
+        [ -f "$retry_stage" ] && [ ! -L "$retry_stage" ] || continue
+        rm -f "$retry_stage" 2>/dev/null || rc=1
+      done
+      rm -f "$retry_dir/.sequence" 2>/dev/null || true
+      rmdir "$retry_dir" 2>/dev/null || true
+    fi
+  fi
   return "$rc"
 }
 
@@ -680,7 +778,8 @@ fm_config_reread_discard_pending() {
 # non-zero - never claim the live agent reread the values.
 fm_config_send_reread_nudge() {
   local id=$1 dest_home=$2 report=$3
-  local dest_home_abs state changed_items pending_paths instruction_path current_path pending_path send_failures
+  local dest_home_abs state source_home_abs changed_items pending_paths stage_paths delivery_paths
+  local stage_path instruction_path current_stage_path send_failures
   [ -n "$id" ] || return 1
   [ -n "$dest_home" ] || return 1
   [ -n "$report" ] && [ -f "$report" ] || return 1
@@ -691,43 +790,79 @@ fm_config_send_reread_nudge() {
   state="$dest_home_abs/${FM_CONFIG_REREAD_INSTRUCTION_PREFIX_REL%/*}"
   changed_items=$(fm_config_reread_changed_items "$report")
   pending_paths=""
+  stage_paths=""
   if [ "${FM_CONFIG_REREAD_SKIP_PENDING:-0}" != 1 ]; then
     pending_paths=$(fm_config_reread_pending_instructions "$state")
+    source_home_abs=$(cd "${FM_HOME:-}" 2>/dev/null && pwd -P || true)
+    if [ -n "$source_home_abs" ]; then
+      stage_paths=$(fm_config_reread_pending_stages "$source_home_abs" "$id")
+    fi
   fi
   if [ -n "$changed_items" ]; then
-    current_path=$(fm_config_reread_new_instruction_path "$dest_home_abs") || {
-      printf 'CONFIG_REREAD: secondmate %s: send failed: could not reserve instruction file\n' "$id"
+    source_home_abs=$(cd "${FM_HOME:-}" 2>/dev/null && pwd -P || true)
+    if [ -z "$source_home_abs" ]; then
+      printf 'CONFIG_REREAD: secondmate %s: send failed: could not reserve retry instruction\n' "$id"
+      return 1
+    fi
+    if fm_config_reread_retry_queue_is_full "$source_home_abs" "$id"; then
+      printf 'CONFIG_REREAD: secondmate %s: send failed: retry instruction queue is full\n' "$id"
+      return 1
+    fi
+    current_stage_path=$(fm_config_reread_new_retry_stage_path "$source_home_abs" "$id") || {
+      printf 'CONFIG_REREAD: secondmate %s: send failed: could not reserve retry instruction\n' "$id"
       return 1
     }
-    if ! fm_config_write_reread_instruction "$dest_home_abs" "$report" "$current_path"; then
-      rm -f "$current_path"
-      printf 'CONFIG_REREAD: secondmate %s: send failed: could not write instruction file\n' "$id"
+    if ! fm_config_write_reread_instruction "$dest_home_abs" "$report" "$current_stage_path"; then
+      rm -f "$current_stage_path"
+      printf 'CONFIG_REREAD: secondmate %s: send failed: could not write retry instruction\n' "$id"
       return 1
     fi
-    pending_path="$current_path.pending"
-    if ! fm_config_reread_mark_pending "$current_path" "$pending_path"; then
-      printf 'CONFIG_REREAD: secondmate %s: send failed: could not record retry marker\n' "$id"
-      return 1
+    if [ -n "$stage_paths" ]; then
+      stage_paths+=$'\n'
     fi
-    if [ -n "$pending_paths" ]; then
-      pending_paths+=$'\n'
-    fi
-    pending_paths+="$current_path"
+    stage_paths+="$current_stage_path"
   fi
-  if [ -z "$pending_paths" ]; then
+  delivery_paths="$pending_paths"
+  while IFS= read -r stage_path; do
+    [ -n "$stage_path" ] || continue
+    if instruction_path=$(fm_config_reread_publish_stage "$dest_home_abs" "$stage_path"); then
+      if [ -n "$delivery_paths" ]; then
+        case $'\n'"$delivery_paths"$'\n' in
+          *$'\n'"$instruction_path"$'\n'*) ;;
+          *) delivery_paths+=$'\n'; delivery_paths+="$instruction_path" ;;
+        esac
+      else
+        delivery_paths="$instruction_path"
+      fi
+    else
+      printf 'CONFIG_REREAD: secondmate %s: send failed: could not publish retry instruction\n' "$id"
+      send_failures=1
+    fi
+  done <<EOF
+$stage_paths
+EOF
+  if [ -z "$delivery_paths" ]; then
     fm_config_reread_cleanup_sent "$dest_home_abs"
+    [ "${send_failures:-0}" = 1 ] && return 1
     return 0
   fi
-  send_failures=0
+  send_failures=${send_failures:-0}
+  delivery_paths=$(printf '%s\n' "$delivery_paths" | LC_ALL=C sort)
   while IFS= read -r instruction_path; do
     [ -n "$instruction_path" ] || continue
     if fm_config_reread_send_pointer "$id" "$instruction_path"; then
-      :
+      while IFS= read -r stage_path; do
+        [ -n "$stage_path" ] || continue
+        [ "${stage_path##*/}" = "${instruction_path##*/}" ] || continue
+        rm -f "$stage_path" 2>/dev/null || true
+      done <<EOF
+$stage_paths
+EOF
     else
       send_failures=1
     fi
   done <<EOF
-$pending_paths
+$delivery_paths
 EOF
   [ "$send_failures" -eq 0 ] || return 1
   fm_config_reread_cleanup_sent "$dest_home_abs"

@@ -821,6 +821,17 @@ reread_pending_path() {
   printf '%s.pending\n' "$(reread_instruction_path "$1")"
 }
 
+reread_retry_stage_path() {
+  local home=$1 id=$2 retry_dir path latest=
+  retry_dir="$home/state/.fm-inherited-config-reread-retry/$id"
+  for path in "$retry_dir"/.fm-inherited-config-reread.*; do
+    [ -f "$path" ] && [ ! -L "$path" ] || continue
+    latest="$path"
+  done
+  [ -n "$latest" ] || return 1
+  printf '%s\n' "$latest"
+}
+
 reread_mode() {
   if [ "$(uname)" = Darwin ]; then
     stat -f %Lp "$1"
@@ -847,6 +858,15 @@ assert_no_reread_pending() {
   for path in "$state"/.fm-inherited-config-reread.*.pending; do
     [ -e "$path" ] || [ -L "$path" ] || continue
     fail "unexpected pending config reread marker: $path"
+  done
+}
+
+assert_no_reread_retry_stages() {
+  local home=$1 id=$2 retry_dir path
+  retry_dir="$home/state/.fm-inherited-config-reread-retry/$id"
+  for path in "$retry_dir"/.fm-inherited-config-reread.*; do
+    [ -e "$path" ] || [ -L "$path" ] || continue
+    fail "unexpected staged config reread retry: $path"
   done
 }
 
@@ -1402,6 +1422,119 @@ test_config_reread_isolation_and_absent_and_send_failure() {
   pass "B16 config reread isolation, ABSENT, generation safety, send failure, and retry"
 }
 
+test_config_reread_publication_failure_retries_exact_generation() {
+  local w head fakebin real_mv alpha_state out status stage log instr retry_out retry_status
+  w=$(new_world config-reread-publication-retry)
+  head=$(git -C "$w/main" rev-parse HEAD)
+  add_sm_worktree "$w" alpha "$head"
+  mkdir -p "$w/alpha/config" "$w/alpha/state"
+  printf 'old\n' > "$w/alpha/config/crew-harness"
+  printf 'codex\n' > "$w/home/config/crew-harness"
+
+  fakebin=$(make_fake_toolchain "$w")
+  real_mv=$(command -v mv)
+  alpha_state=$(cd "$w/alpha/state" && pwd -P)
+  cat > "$fakebin/mv" <<SH
+#!/usr/bin/env bash
+case "\$*" in
+  *"$alpha_state/.fm-inherited-config-reread."*) exit 1 ;;
+esac
+exec "$real_mv" "\$@"
+SH
+  chmod +x "$fakebin/mv"
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
+    FM_SEND_SETTLE=0 "$ROOT/bin/fm-config-push.sh" 2>&1); status=$?
+  expect_code 1 "$status" "publication failure should remain diagnostic"
+  assert_contains "$out" "CONFIG_REREAD: secondmate" "publication failure diagnostic missing"
+  assert_not_contains "$out" "config-reread: sent" \
+    "publication failure must not claim reread delivery"
+  [ "$(cat "$w/alpha/config/crew-harness")" = codex ] \
+    || fail "publication failure did not retain the completed config write"
+  stage=$(reread_retry_stage_path "$w/home" alpha) \
+    || fail "publication failure did not retain an exact retry generation"
+  assert_contains "$(cat "$stage")" \
+    $'-----BEGIN config/crew-harness-----\ncodex\n-----END config/crew-harness-----' \
+    "retry generation did not retain exact destination bytes"
+  assert_no_reread_instructions "$w/alpha"
+
+  rm -f "$fakebin/mv"
+  log="$w/config-reread-publication-retry.tmux.log"
+  retry_out=$(run_config_push "$w" "$log" 2>/dev/null); retry_status=$?
+  expect_code 0 "$retry_status" "publication failure should retry on an unchanged push"
+  assert_contains "$retry_out" "config-reread: sent" \
+    "successful publication retry should report delivery"
+  instr=$(reread_instruction_path "$w/alpha") \
+    || fail "publication retry did not publish an instruction"
+  assert_contains "$(cat "$log")" "CONFIG_REREAD: $instr" \
+    "publication retry did not send the durable pointer"
+  assert_no_reread_retry_stages "$w/home" alpha
+  pass "B20 config reread publication failures retain exact generations for retry"
+}
+
+test_config_reread_serializes_concurrent_pushes() {
+  local w head fakebin marker entered log first_out second_out first_pid first_status second_status
+  local first_instr second_instr first_line second_line
+  w=$(new_world config-reread-serialized-pushes)
+  head=$(git -C "$w/main" rev-parse HEAD)
+  add_sm_worktree "$w" sm "$head"
+  mkdir -p "$w/sm/config" "$w/sm/state"
+  printf 'old\n' > "$w/sm/config/crew-harness"
+  printf 'one\n' > "$w/home/config/crew-harness"
+
+  fakebin=$(make_fake_toolchain "$w")
+  mv "$fakebin/tmux" "$fakebin/tmux.real"
+  marker="$w/first-send.marker"
+  entered="$w/first-send.entered"
+  log="$w/config-reread-serialized.tmux.log"
+  cat > "$fakebin/tmux" <<SH
+#!/usr/bin/env bash
+case "\$*" in
+  *send-keys*)
+    if (set -o noclobber; : > "$marker") 2>/dev/null; then
+      : > "$entered"
+      sleep 1
+    fi
+    ;;
+esac
+exec "$fakebin/tmux.real" "\$@"
+SH
+  chmod +x "$fakebin/tmux"
+
+  first_out="$w/first-push.out"
+  (
+    PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
+      FM_SEND_SETTLE=0 FM_FAKE_TMUX_LOG="$log" \
+      "$ROOT/bin/fm-config-push.sh" > "$first_out" 2>&1
+  ) &
+  first_pid=$!
+  for _ in $(seq 1 100); do
+    [ -e "$entered" ] && break
+    sleep 0.02
+  done
+  [ -e "$entered" ] || fail "first config push did not reach pointer delivery"
+  first_instr=$(reread_instruction_path "$w/sm") \
+    || fail "first concurrent push did not publish its generation"
+  printf 'two\n' > "$w/home/config/crew-harness"
+  second_out="$w/second-push.out"
+  PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
+    FM_SEND_SETTLE=0 FM_FAKE_TMUX_LOG="$log" \
+    "$ROOT/bin/fm-config-push.sh" > "$second_out" 2>&1
+  second_status=$?
+  wait "$first_pid"; first_status=$?
+  expect_code 0 "$first_status" "first serialized config push failed"
+  expect_code 0 "$second_status" "second serialized config push failed"
+  second_instr=$(reread_instruction_path "$w/sm") \
+    || fail "second concurrent push did not publish its generation"
+  [ "$first_instr" != "$second_instr" ] || fail "concurrent pushes reused a generation"
+  [ "$(cat "$w/sm/config/crew-harness")" = two ] \
+    || fail "concurrent pushes did not converge the latest config bytes"
+  first_line=$(grep -n -F "CONFIG_REREAD: $first_instr" "$log" | head -n 1 | cut -d: -f1)
+  second_line=$(grep -n -F "CONFIG_REREAD: $second_instr" "$log" | head -n 1 | cut -d: -f1)
+  [ -n "$first_line" ] && [ -n "$second_line" ] && [ "$first_line" -lt "$second_line" ] \
+    || fail "concurrent pushes delivered generations out of order"
+  pass "B21 config reread serializes concurrent propagation and delivery"
+}
+
 test_config_reread_skips_when_unchanged_and_reads_after_push() {
   local w head log out err status report instr n path pending_instruction count
   w=$(new_world config-reread-after-push)
@@ -1595,6 +1728,8 @@ test_config_push_exits_nonzero_on_copy_error
 test_config_push_rereads_after_partial_propagation
 test_config_reread_per_home_changed_sets_and_exact_bytes
 test_config_reread_isolation_and_absent_and_send_failure
+test_config_reread_publication_failure_retries_exact_generation
+test_config_reread_serializes_concurrent_pushes
 test_config_reread_skips_when_unchanged_and_reads_after_push
 test_config_reread_bootstrap_path_and_spawn_flexibility
 test_bootstrap_respawns_before_config_reread

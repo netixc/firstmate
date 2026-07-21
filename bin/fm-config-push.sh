@@ -71,6 +71,8 @@ SECONDMATES_MD="$DATA/secondmates.md"
 
 # shellcheck source=bin/fm-ff-lib.sh
 . "$SCRIPT_DIR/fm-ff-lib.sh"
+# shellcheck source=bin/fm-wake-lib.sh
+. "$SCRIPT_DIR/fm-wake-lib.sh"
 # shellcheck source=bin/fm-config-inherit-lib.sh
 . "$SCRIPT_DIR/fm-config-inherit-lib.sh"
 
@@ -133,9 +135,32 @@ while IFS='|' read -r id home _window meta; do
     echo "  home: dirty working tree - local-material push continuing"
   fi
 
+  mkdir -p "$home_real/state" || {
+    echo "  config-reread: error - could not create state directory"
+    errors=1
+    continue
+  }
+  home_lock=$(fm_config_inherit_lock_path "$home_real") || {
+    echo "  config-reread: error - could not resolve per-home lock"
+    errors=1
+    continue
+  }
+  fm_lock_acquire_wait "$home_lock" || {
+    echo "  config-reread: error - could not acquire per-home lock"
+    errors=1
+    continue
+  }
+  if fm_config_reread_retry_queue_is_full "$FM_HOME" "$id"; then
+    echo "  config-reread: error - retry instruction queue is full"
+    errors=1
+    fm_lock_release "$home_lock" || true
+    continue
+  fi
+
   report=$(mktemp "${TMPDIR:-/tmp}/fm-config-push-report.XXXXXX" 2>/dev/null) || {
     echo "  home: error - could not create report file"
     errors=1
+    fm_lock_release "$home_lock" || true
     continue
   }
   reports="$reports $report"
@@ -146,7 +171,9 @@ while IFS='|' read -r id home _window meta; do
   fi
   print_item_report "$report"
   reread_pending=0
-  fm_config_reread_has_pending "$home_real" && reread_pending=1 || true
+  if fm_config_reread_has_pending "$home_real" || fm_config_reread_has_staged "$FM_HOME" "$id"; then
+    reread_pending=1
+  fi
   if reread_out=$(FM_HOME="$FM_HOME" FM_ROOT_OVERRIDE="$FM_ROOT" \
     FM_STATE_OVERRIDE="$STATE" \
     fm_config_send_reread_nudge "$id" "$home_real" "$report" 2>&1); then
@@ -162,6 +189,7 @@ while IFS='|' read -r id home _window meta; do
       printf '  config-reread: send failed\n'
     fi
   fi
+  fm_lock_release "$home_lock" || true
 done < "$records"
 
 [ "$errors" -eq 0 ] || exit 1
