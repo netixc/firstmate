@@ -105,7 +105,7 @@ assert_meta_profile() {
   assert_grep "effort=$effort" "$meta" "meta missing effort=$effort"
 }
 
-test_claude_defaults_to_auto_permission_mode() {
+test_claude_pins_unattended_default_to_sonnet() {
   local rec id out status expected launch
   id=profile-off-z1
   rec=$(make_spawn_case profile-off claude "$id")
@@ -115,14 +115,25 @@ test_claude_defaults_to_auto_permission_mode() {
   status=$?
   expect_code 0 "$status" "claude spawn without profile flags should succeed"
   assert_contains "$out" "spawned $id harness=claude" "spawn did not report claude"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" claude default default
+  assert_meta_profile "$HOME_DIR/state/$id.meta" claude sonnet default
 
   launch=$(cat "$LAUNCH_LOG")
-  expected="CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false claude --permission-mode auto \"\$(cat '$HOME_DIR/data/$id/brief.md')\""
+  expected="CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false claude --permission-mode auto --model 'sonnet' \"\$(cat '$HOME_DIR/data/$id/brief.md')\""
   [ "$launch" = "$expected" ] || fail "no-profile claude launch changed"$'\n'"expected: $expected"$'\n'"actual:   $launch"
   assert_not_contains "$launch" "--dangerously-skip-permissions" \
     "claude launch must never use the root-incompatible permission bypass"
-  pass "claude defaults to auto permissions and retains the quoted brief path"
+
+  id=profile-explicit-default-z1b
+  rec=$(make_spawn_case profile-explicit-default claude "$id")
+  read_case_record "$rec"
+  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" --model default)
+  status=$?
+  expect_code 0 "$status" "claude spawn with a literal default model should succeed"
+  assert_meta_profile "$HOME_DIR/state/$id.meta" claude sonnet default
+  launch=$(cat "$LAUNCH_LOG")
+  assert_contains "$launch" "claude --permission-mode auto --model 'sonnet'" \
+    "literal Claude default did not resolve to the verified unattended model"
+  pass "claude implicit and literal defaults pin Sonnet under auto permissions"
 }
 
 test_active_dispatch_profile_requires_explicit_harness_for_ship() {
@@ -425,7 +436,7 @@ test_active_dispatch_profile_does_not_block_secondmate_launch() {
   pass "active crew-dispatch profile does not block secondmate launches"
 }
 
-test_claude_defaults_to_auto_permission_mode
+test_claude_pins_unattended_default_to_sonnet
 test_active_dispatch_profile_requires_explicit_harness_for_ship
 test_active_dispatch_profile_requires_explicit_harness_for_scout
 test_active_dispatch_profile_allows_explicit_harness

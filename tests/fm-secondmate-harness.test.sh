@@ -461,10 +461,9 @@ spawn_secondmate_capture() {
     "$ROOT/bin/fm-spawn.sh" "$id" "$home" "$@" --secondmate
 }
 
-# A bare "<harness>" secondmate-harness file (today's format) must launch with
-# NO --model/--effort flag at all, and meta must keep recording model=default,
-# effort=default - the core backward-compat requirement of the new format.
-test_spawn_bare_harness_no_model_effort_flag() {
+# A bare Claude secondmate-harness file pins the verified unattended model while
+# leaving the optional effort axis at its default.
+test_spawn_bare_claude_harness_pins_sonnet() {
   local w sm meta launchlog launch out status
   w="$TMP_ROOT/spawn-bare-tokens"
   sm="$w/sm"
@@ -477,12 +476,13 @@ test_spawn_bare_harness_no_model_effort_flag() {
   expect_code 0 "$status" "bare-harness secondmate spawn should succeed"
 
   meta="$w/home/state/sm.meta"
-  [ "$(meta_field "$meta" model)" = default ] || fail "bare-tokens: meta model not default (got '$(meta_field "$meta" model)')"
+  [ "$(meta_field "$meta" model)" = sonnet ] || fail "bare-tokens: meta model not sonnet (got '$(meta_field "$meta" model)')"
   [ "$(meta_field "$meta" effort)" = default ] || fail "bare-tokens: meta effort not default (got '$(meta_field "$meta" effort)')"
   launch=$(cat "$launchlog")
-  assert_not_contains "$launch" "--model" "bare-tokens: launch must not carry a --model flag"
+  assert_contains "$launch" "claude --permission-mode auto --model 'sonnet'" \
+    "bare-tokens: launch did not pin the verified unattended Claude model"
   assert_not_contains "$launch" "--effort" "bare-tokens: launch must not carry an --effort flag"
-  pass "C2 spawn: a bare harness-only secondmate-harness file launches with no model/effort flag (backward-compat)"
+  pass "C2 spawn: a bare Claude secondmate harness pins Sonnet and leaves effort at default"
 }
 
 # "<harness> <model>" durably threads --model into the secondmate launch and
@@ -1028,7 +1028,7 @@ test_spawn_backward_compat_crew_fallback
 test_spawn_bare_backward_compat
 test_spawn_explicit_harness_wins
 test_spawn_unverified_secondmate_harness_refused
-test_spawn_bare_harness_no_model_effort_flag
+test_spawn_bare_claude_harness_pins_sonnet
 test_spawn_secondmate_harness_model_token
 test_spawn_secondmate_harness_model_and_effort_tokens
 test_spawn_explicit_model_overrides_secondmate_harness_token

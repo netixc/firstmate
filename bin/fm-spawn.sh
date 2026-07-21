@@ -497,6 +497,9 @@ fi
 
 if [ "$HARNESS" = claude ]; then
   case "$MODEL" in
+    ''|default)
+      MODEL=sonnet
+      ;;
     *[Hh][Aa][Ii][Kk][Uu]*)
       echo "error: Claude auto permission mode is unavailable for Haiku; choose a model verified for unattended work, such as Sonnet or Opus" >&2
       exit 1
