@@ -832,6 +832,17 @@ reread_retry_stage_path() {
   printf '%s\n' "$latest"
 }
 
+reread_retry_report_path() {
+  local home=$1 id=$2 retry_dir path latest=
+  retry_dir="$home/state/.fm-inherited-config-reread-retry/$id"
+  for path in "$retry_dir"/.fm-inherited-config-reread.*.report; do
+    [ -f "$path" ] && [ ! -L "$path" ] || continue
+    latest="$path"
+  done
+  [ -n "$latest" ] || return 1
+  printf '%s\n' "$latest"
+}
+
 reread_mode() {
   if [ "$(uname)" = Darwin ]; then
     stat -f %Lp "$1"
@@ -847,7 +858,7 @@ assert_no_reread_instructions() {
     case "$path" in
       *.pending) continue ;;
     esac
-    [ -e "$path" ] || [ -L "$path" ] || continue
+    [ -f "$path" ] || [ -L "$path" ] || continue
     fail "unexpected config reread instruction: $path"
   done
 }
@@ -1471,6 +1482,55 @@ SH
   pass "B20 config reread publication failures retain exact generations for retry"
 }
 
+test_config_reread_write_failure_retains_retry_report() {
+  local w head fakebin real_mv retry_dir out status report_path log retry_out retry_status instr
+  w=$(new_world config-reread-write-retry)
+  head=$(git -C "$w/main" rev-parse HEAD)
+  add_sm_worktree "$w" sm "$head"
+  mkdir -p "$w/sm/config" "$w/sm/state"
+  printf 'old\n' > "$w/sm/config/crew-harness"
+  printf 'codex\n' > "$w/home/config/crew-harness"
+  fakebin=$(make_fake_toolchain "$w")
+  real_mv=$(command -v mv)
+  mkdir -p "$w/home/state/.fm-inherited-config-reread-retry/sm"
+  retry_dir=$(cd "$w/home/state/.fm-inherited-config-reread-retry/sm" && pwd -P)
+  cat > "$fakebin/mv" <<SH
+#!/usr/bin/env bash
+target=
+for arg in "\$@"; do target="\$arg"; done
+case "\$target" in
+  *"$retry_dir"/.fm-inherited-config-reread.*)
+    case "\$target" in
+      *.report) ;;
+      *) exit 1 ;;
+    esac
+    ;;
+esac
+exec "$real_mv" "\$@"
+SH
+  chmod +x "$fakebin/mv"
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
+    FM_SEND_SETTLE=0 "$ROOT/bin/fm-config-push.sh" 2>&1); status=$?
+  expect_code 1 "$status" "instruction-write failure should remain diagnostic"
+  assert_contains "$out" "retained retry report" \
+    "instruction-write failure did not retain a retry report"
+  report_path=$(reread_retry_report_path "$w/home" sm) \
+    || fail "instruction-write failure did not leave a durable retry report"
+  rm -f "$fakebin/mv"
+  log="$w/config-reread-write-retry.tmux.log"
+  retry_out=$(run_config_push "$w" "$log" 2>/dev/null); retry_status=$?
+  expect_code 0 "$retry_status" "unchanged push should retry an instruction-write failure"
+  assert_contains "$retry_out" "config-reread: sent" \
+    "unchanged push did not deliver the retained retry report"
+  [ ! -e "$report_path" ] || fail "delivered retry report was not consumed"
+  instr=$(reread_instruction_path "$w/sm") \
+    || fail "retry report delivery did not publish an instruction"
+  assert_contains "$(cat "$instr")" \
+    $'-----BEGIN config/crew-harness-----\ncodex\n-----END config/crew-harness-----' \
+    "retry report delivery did not reconstruct exact destination bytes"
+  pass "B21 config reread instruction-write failures retain retryable reports"
+}
+
 test_config_reread_serializes_concurrent_pushes() {
   local w head fakebin marker entered log first_out second_out first_pid first_status second_status
   local first_instr second_instr first_line second_line
@@ -1795,6 +1855,53 @@ SH
   pass "B19 bootstrap respawns before inherited-config reread"
 }
 
+test_spawn_quarantines_pending_rereads_on_cleanup_failure() {
+  local w sm report stale fakebin real_rm out status launchlog quarantine_root quarantined_count
+  w=$(new_world config-reread-spawn-quarantine)
+  sm="$w/sm"
+  mkdir -p "$w/home/config"
+  printf 'codex\n' > "$w/home/config/crew-harness"
+  make_seeded_home "$sm" sm
+  mkdir -p "$sm/state"
+  report="$sm/state/stale-reread.report"
+  printf '%s\n' $'crew-harness\tpushed\t' > "$report"
+  stale="$sm/state/.fm-inherited-config-reread.spawn-stale"
+  fm_config_write_reread_instruction "$sm" "$report" "$stale" \
+    || fail "could not create pending spawn reread generation"
+  fm_config_reread_mark_pending "$stale" "$stale.pending" \
+    || fail "could not mark pending spawn reread generation"
+  fakebin=$(make_launch_capturing_tmux "$w/tmux-spawn-quarantine")
+  real_rm=$(command -v rm)
+  cat > "$fakebin/rm" <<SH
+#!/usr/bin/env bash
+case "\$*" in
+  *'.fm-inherited-config-reread.'*) exit 1 ;;
+esac
+exec "$real_rm" "\$@"
+SH
+  chmod +x "$fakebin/rm"
+  launchlog="$w/spawn-quarantine.launch.log"
+  out=$(PATH="$fakebin:$BASE_PATH" TMUX='' CLAUDECODE=1 \
+    FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$w/home" \
+    FM_STATE_OVERRIDE="$w/home/state" FM_DATA_OVERRIDE="$w/home/data" \
+    FM_PROJECTS_OVERRIDE="$w/home/projects" FM_CONFIG_OVERRIDE="$w/home/config" \
+    FM_SPAWN_NO_GUARD=1 FM_FAKE_LAUNCH_LOG="$launchlog" \
+    "$ROOT/bin/fm-spawn.sh" sm "$sm" --secondmate 2>&1); status=$?
+  expect_code 0 "$status" "spawn should remain available after reread cleanup failure"
+  assert_contains "$out" "CONFIG_REREAD: secondmate sm: quarantined pre-relaunch generations" \
+    "spawn cleanup failure did not emit a CONFIG_REREAD quarantine diagnostic"
+  assert_no_reread_pending "$sm"
+  assert_no_reread_instructions "$sm"
+  quarantine_root="$sm/state/.fm-inherited-config-reread-quarantine"
+  assert_present "$quarantine_root" "spawn cleanup failure did not create a quarantine directory"
+  quarantined_count=$(find "$quarantine_root" -type f | wc -l | tr -d ' ')
+  [ "$quarantined_count" -ge 2 ] \
+    || fail "spawn cleanup failure did not quarantine both generation artifacts"
+  assert_not_contains "$(cat "$launchlog")" "CONFIG_REREAD:" \
+    "spawn cleanup failure left a stale reread pointer eligible for delivery"
+  pass "B25 spawn quarantines stale rereads without blocking relaunch"
+}
+
 test_harness_resolution
 test_secondmate_model_effort_tokens
 test_propagate_lib
@@ -1824,12 +1931,14 @@ test_config_push_rereads_after_partial_propagation
 test_config_reread_per_home_changed_sets_and_exact_bytes
 test_config_reread_isolation_and_absent_and_send_failure
 test_config_reread_publication_failure_retries_exact_generation
+test_config_reread_write_failure_retains_retry_report
 test_config_reread_serializes_concurrent_pushes
 test_config_reread_full_retry_queue_drains_before_new_push
 test_config_reread_cleanup_runs_after_mixed_delivery_failure
 test_config_reread_skips_when_unchanged_and_reads_after_push
 test_config_reread_bootstrap_path_and_spawn_flexibility
 test_bootstrap_respawns_before_config_reread
+test_spawn_quarantines_pending_rereads_on_cleanup_failure
 test_bootstrap_detect_only_does_not_create_state
 
 echo "# all fm-secondmate-harness tests passed"
