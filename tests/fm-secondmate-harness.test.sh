@@ -23,7 +23,7 @@
 #      config under an already-running home, a literal-content reread instruction
 #      is written to the secondmate home and only its pointer is sent via the
 #      routed secondmate path (exact destination bytes, no summaries); unchanged
-#      config sends nothing.
+#      config sends nothing unless a previous send failure is pending.
 
 #   C) Model/effort pin. config/secondmate-harness may carry optional model and
 #      effort tokens after the harness ("<harness> [<model>] [<effort>]"), read by
@@ -1239,7 +1239,7 @@ test_config_reread_per_home_changed_sets_and_exact_bytes() {
 }
 
 test_config_reread_isolation_and_absent_and_send_failure() {
-  local w head log out err status instr_a instr_b report
+  local w head log out err status instr_a instr_b report retry_log retry_out retry_status retry_pointer
   w=$(new_world config-reread-absent)
   head=$(git -C "$w/main" rev-parse HEAD)
   add_sm_worktree "$w" alpha "$head"
@@ -1312,7 +1312,26 @@ test_config_reread_isolation_and_absent_and_send_failure() {
   assert_contains "$out" "send failed" "send failure must say send failed"
   assert_not_contains "$out" "config-reread: sent" \
     "must not claim reread landed when send failed"
-  pass "B16 config reread isolation, ABSENT, captain-shared exclusion, and send-failure diagnostic"
+  assert_present "$w/alpha/$FM_CONFIG_REREAD_PENDING_REL" \
+    "alpha send failure did not record a retry marker"
+  assert_present "$w/beta/$FM_CONFIG_REREAD_PENDING_REL" \
+    "beta send failure did not record a retry marker"
+
+  # A normal later push retries the durable pointer even though propagation is
+  # unchanged, then clears the marker after delivery succeeds.
+  retry_log="$w/config-reread-send-retry.tmux.log"
+  retry_out=$(run_config_push "$w" "$retry_log" 2>"$err"); retry_status=$?
+  expect_code 0 "$retry_status" "send failure should be retryable"
+  assert_contains "$retry_out" "config-reread: sent" \
+    "retry should report the reread as sent"
+  retry_pointer="CONFIG_REREAD: $(reread_instruction_path "$w/beta")"
+  assert_contains "$(cat "$retry_log")" "$retry_pointer" \
+    "retry did not resend the durable pointer"
+  assert_absent "$w/alpha/$FM_CONFIG_REREAD_PENDING_REL" \
+    "successful alpha retry did not clear the marker"
+  assert_absent "$w/beta/$FM_CONFIG_REREAD_PENDING_REL" \
+    "successful beta retry did not clear the marker"
+  pass "B16 config reread isolation, ABSENT, captain-shared exclusion, send failure, and retry"
 }
 
 test_config_reread_skips_when_unchanged_and_reads_after_push() {

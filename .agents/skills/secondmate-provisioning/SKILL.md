@@ -99,13 +99,13 @@ After successful propagation, both the locked bootstrap convergence path and mid
 Each changed path is printed with clear begin/end delimiters and the destination file's full exact new bytes unparsed, or the explicit token `ABSENT` when propagation removed the destination copy.
 The instruction uses only minimal framing that these are defaults/rules and do not remove judgment; it never includes SHA values, selected profiles, parsed summaries, or any other generated interpretation.
 `data/captain-shared.md` is not a config file and is never inlined into this instruction file or message.
-Homes whose allowlisted config files were all unchanged receive no config-reread message.
+Homes whose allowlisted config files were all unchanged receive no config-reread message when no retry is pending.
 Different homes may receive different changed-file sets based on their pre-push destination bytes.
-Delivery uses the existing routed secondmate path (`fm-send`) with only a single-line `CONFIG_REREAD: <absolute instruction path>` pointer; a failed send surfaces a concrete `CONFIG_REREAD:` retry diagnostic and must not be reported as if the live agent already re-read the values.
+Delivery uses the existing routed secondmate path (`fm-send`) with only a single-line `CONFIG_REREAD: <absolute instruction path>` pointer; a failed send records a durable retry marker, surfaces a concrete `CONFIG_REREAD:` retry diagnostic, and must not be reported as if the live agent already re-read the values.
 A newly launched or relaunched secondmate already reads its files at launch and needs no redundant live-agent config nudge unless propagation changed files after launch.
 These config values remain defaults and rules only; they must not harden `fm-spawn` to reject a deliberate runtime choice that differs from the configured defaults.
 For already-live secondmates, use `bin/fm-config-push.sh` to push a mid-session inherited local-material change without running the tracked-file fast-forward.
-It uses the same live-home discovery and propagation helper as bootstrap, reports each item as `pushed`, `unchanged`, `skipped`, or `error`, and sends the config-reread instruction only for homes whose allowlisted config changed.
+It uses the same live-home discovery and propagation helper as bootstrap, reports each item as `pushed`, `unchanged`, `skipped`, or `error`, and sends the config-reread instruction only for homes whose allowlisted config changed or whose previous delivery failure is pending.
 `bin/fm-home-seed.sh` refuses to copy a missing or placeholder charter.
 
 Direct seed without a preexisting brief requires `FM_SECONDMATE_CHARTER`.
