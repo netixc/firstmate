@@ -447,6 +447,7 @@ FM_CONFIG_REREAD_INSTRUCTION_PREFIX_REL="state/.fm-inherited-config-reread"
 FM_CONFIG_REREAD_MAX_SENT=16
 FM_CONFIG_REREAD_RETRY_ROOT_REL="state/.fm-inherited-config-reread-retry"
 FM_CONFIG_REREAD_MAX_PENDING=16
+FM_CONFIG_REREAD_MAX_QUARANTINE=16
 FM_CONFIG_INHERIT_LOCK_REL="state/.fm-inherited-config.lock"
 
 # Framing lines for the config-reread instruction. Defaults/rules only - never
@@ -590,6 +591,7 @@ fm_config_reread_save_retry_report() {
 # values, selected profiles, or any generated interpretation.
 fm_config_write_reread_instruction() {
   local dest_home=$1 report=$2 instruction_path=$3 item rel dest parent tmp first=1
+  FM_CONFIG_REREAD_FAILED_TEMP=""
   [ -n "$dest_home" ] || return 1
   [ -n "$report" ] && [ -f "$report" ] || return 1
   [ -n "$instruction_path" ] || return 1
@@ -625,19 +627,10 @@ fm_config_write_reread_instruction() {
     return 1
   fi
   if ! mv -f "$tmp" "$instruction_path" 2>/dev/null; then
-    rm -f "$tmp"
+    FM_CONFIG_REREAD_FAILED_TEMP="$tmp"
     return 1
   fi
   return 0
-}
-
-fm_config_reread_new_instruction_path() {
-  local dest_home=$1 state generation prefix
-  state="$dest_home/${FM_CONFIG_REREAD_INSTRUCTION_PREFIX_REL%/*}"
-  mkdir -p "$state" 2>/dev/null || return 1
-  generation=$(date -u +%Y%m%dT%H%M%S 2>/dev/null) || return 1
-  prefix="$dest_home/$FM_CONFIG_REREAD_INSTRUCTION_PREFIX_REL.$generation"
-  (umask 077; mktemp "$prefix.XXXXXX" 2>/dev/null)
 }
 
 fm_config_reread_pending_instructions() {
@@ -809,12 +802,49 @@ fm_config_reread_discard_pending() {
   return "$rc"
 }
 
+fm_config_reread_quarantine_prune() {
+  local root=$1 keep=${2:-$FM_CONFIG_REREAD_MAX_QUARANTINE} dirs dir oldest path remove
+  case "$keep" in
+    ''|*[!0-9]*) keep=$FM_CONFIG_REREAD_MAX_QUARANTINE ;;
+  esac
+  [ -d "$root" ] || return 0
+  dirs=""
+  for dir in "$root"/generation.*; do
+    [ -d "$dir" ] && [ ! -L "$dir" ] || continue
+    [ -n "$dirs" ] && dirs+=$'\n'
+    dirs+="$dir"
+  done
+  dirs=$(printf '%s\n' "$dirs" | LC_ALL=C sort)
+  [ -n "$dirs" ] || return 0
+  remove=$(printf '%s\n' "$dirs" | wc -l | tr -d ' ')
+  remove=$((remove - keep))
+  while [ "$remove" -gt 0 ]; do
+    oldest=${dirs%%$'\n'*}
+    if [ "$oldest" = "$dirs" ]; then
+      dirs=""
+    else
+      dirs=${dirs#*$'\n'}
+    fi
+    for path in "$oldest"/*; do
+      [ -e "$path" ] || [ -L "$path" ] || continue
+      if [ -d "$path" ] && [ ! -L "$path" ]; then
+        rmdir "$path" 2>/dev/null || return 1
+      else
+        rm -f "$path" 2>/dev/null || return 1
+      fi
+    done
+    rmdir "$oldest" 2>/dev/null || return 1
+    remove=$((remove - 1))
+  done
+}
+
 fm_config_reread_quarantine_dir() {
   local home=$1 state root quarantine
   state="$home/${FM_CONFIG_REREAD_INSTRUCTION_PREFIX_REL%/*}"
   root="$state/.fm-inherited-config-reread-quarantine"
   mkdir -p "$root" 2>/dev/null || return 1
   chmod 0700 "$root" 2>/dev/null || return 1
+  fm_config_reread_quarantine_prune "$root" $((FM_CONFIG_REREAD_MAX_QUARANTINE - 1)) || return 1
   quarantine=$(umask 077; mktemp -d "$root/generation.XXXXXX" 2>/dev/null) || return 1
   chmod 0700 "$quarantine" 2>/dev/null || return 1
   printf '%s\n' "$quarantine"
@@ -822,9 +852,19 @@ fm_config_reread_quarantine_dir() {
 
 fm_config_reread_quarantine_pending() {
   local dest_home=$1 id=${2:-} source_home=${3:-}
-  local state pending instruction retry_dir retry_stage dest_quarantine source_quarantine rc=0
+  local state pending instruction retry_dir retry_stage dest_quarantine source_quarantine
+  local dest_has_artifacts source_has_artifacts rc=0
   state="$dest_home/${FM_CONFIG_REREAD_INSTRUCTION_PREFIX_REL%/*}"
-  dest_quarantine=$(fm_config_reread_quarantine_dir "$dest_home" 2>/dev/null || true)
+  dest_has_artifacts=0
+  for pending in "$state"/.fm-inherited-config-reread.*.pending; do
+    [ -f "$pending" ] && [ ! -L "$pending" ] || continue
+    dest_has_artifacts=1
+    break
+  done
+  dest_quarantine=""
+  if [ "$dest_has_artifacts" -eq 1 ]; then
+    dest_quarantine=$(fm_config_reread_quarantine_dir "$dest_home" 2>/dev/null || true)
+  fi
   for pending in "$state"/.fm-inherited-config-reread.*.pending; do
     [ -f "$pending" ] && [ ! -L "$pending" ] || continue
     instruction=${pending%.pending}
@@ -843,7 +883,18 @@ fm_config_reread_quarantine_pending() {
   done
   if [ -n "$id" ] && [ -n "$source_home" ]; then
     retry_dir=$(fm_config_reread_retry_dir "$source_home" "$id") || retry_dir=
-    source_quarantine=$(fm_config_reread_quarantine_dir "$source_home" 2>/dev/null || true)
+    source_has_artifacts=0
+    if [ -d "$retry_dir" ]; then
+      for retry_stage in "$retry_dir"/.fm-inherited-config-reread.*; do
+        [ -f "$retry_stage" ] && [ ! -L "$retry_stage" ] || continue
+        source_has_artifacts=1
+        break
+      done
+    fi
+    source_quarantine=""
+    if [ "$source_has_artifacts" -eq 1 ]; then
+      source_quarantine=$(fm_config_reread_quarantine_dir "$source_home" 2>/dev/null || true)
+    fi
     if [ -d "$retry_dir" ]; then
       for retry_stage in "$retry_dir"/.fm-inherited-config-reread.*; do
         [ -f "$retry_stage" ] && [ ! -L "$retry_stage" ] || continue
@@ -881,7 +932,8 @@ fm_config_reread_quarantine_pending() {
 fm_config_send_reread_nudge() {
   local id=$1 dest_home=$2 report=$3
   local dest_home_abs state source_home_abs changed_items pending_paths stage_paths delivery_paths
-  local stage_path instruction_path current_stage_path send_failures retry_report_paths retry_report_path retry_stage_path retry_record_path
+  local stage_path instruction_path current_stage_path exact_stage_path exact_tmp
+  local send_failures retry_report_paths retry_report_path retry_stage_path retry_record_path
   [ -n "$id" ] || return 1
   [ -n "$dest_home" ] || return 1
   [ -n "$report" ] && [ -f "$report" ] || return 1
@@ -913,12 +965,28 @@ fm_config_send_reread_nudge() {
       fi
       stage_paths+="$retry_stage_path"
     else
-      printf 'CONFIG_REREAD: secondmate %s: send failed: could not rebuild retry instruction\n' "$id"
-      send_failures=1
+      exact_tmp=${FM_CONFIG_REREAD_FAILED_TEMP:-}
+      if [ -n "$exact_tmp" ] && [ -f "$exact_tmp" ] \
+        && mv -f "$exact_tmp" "$retry_stage_path" 2>/dev/null; then
+        rm -f "$retry_report_path" 2>/dev/null || send_failures=1
+        if [ -n "$stage_paths" ]; then
+          stage_paths+=$'\n'
+        fi
+        stage_paths+="$retry_stage_path"
+      else
+        rm -f "$exact_tmp" 2>/dev/null || true
+        printf 'CONFIG_REREAD: secondmate %s: send failed: could not rebuild retry instruction\n' "$id"
+        send_failures=1
+        break
+      fi
     fi
   done <<EOF
 $retry_report_paths
 EOF
+  if [ "$send_failures" -ne 0 ]; then
+    fm_config_reread_cleanup_sent "$dest_home_abs"
+    return 1
+  fi
   if [ -n "$changed_items" ]; then
     source_home_abs=$(cd "${FM_HOME:-}" 2>/dev/null && pwd -P || true)
     if [ -z "$source_home_abs" ]; then
@@ -934,9 +1002,17 @@ EOF
       return 1
     }
     if ! fm_config_write_reread_instruction "$dest_home_abs" "$report" "$current_stage_path"; then
-      if retry_record_path=$(fm_config_reread_save_retry_report "$report" "$current_stage_path"); then
+      exact_tmp=${FM_CONFIG_REREAD_FAILED_TEMP:-}
+      exact_stage_path="$current_stage_path.exact"
+      if [ -n "$exact_tmp" ] && [ -f "$exact_tmp" ] \
+        && mv -f "$exact_tmp" "$exact_stage_path" 2>/dev/null; then
+        rm -f "$current_stage_path" 2>/dev/null || true
+        printf 'CONFIG_REREAD: secondmate %s: send failed: could not publish retry instruction; retained exact retry generation %s\n' "$id" "$exact_stage_path"
+      elif retry_record_path=$(fm_config_reread_save_retry_report "$report" "$current_stage_path"); then
+        rm -f "$current_stage_path" 2>/dev/null || true
         printf 'CONFIG_REREAD: secondmate %s: send failed: could not write retry instruction; retained retry report %s\n' "$id" "$retry_record_path"
       else
+        rm -f "$current_stage_path" 2>/dev/null || true
         printf 'CONFIG_REREAD: secondmate %s: send failed: could not write retry instruction or retain retry report\n' "$id"
       fi
       return 1
@@ -961,6 +1037,7 @@ EOF
     else
       printf 'CONFIG_REREAD: secondmate %s: send failed: could not publish retry instruction\n' "$id"
       send_failures=1
+      break
     fi
   done <<EOF
 $stage_paths
@@ -983,6 +1060,7 @@ $stage_paths
 EOF
     else
       send_failures=1
+      break
     fi
   done <<EOF
 $delivery_paths
