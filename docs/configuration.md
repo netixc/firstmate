@@ -179,8 +179,7 @@ When the harness token is absent or `default`, secondmate launch falls back thro
 `fm-harness.sh secondmate-model` and `fm-harness.sh secondmate-effort` expose only the optional tokens from `config/secondmate-harness`; `config/crew-harness` remains a bare adapter-name file.
 An explicit harness argument to `fm-spawn.sh` still overrides either config file for that spawn only.
 An explicit `--model` or `--effort` overrides the matching token from `config/secondmate-harness`; an explicit harness starts with clean model and effort defaults unless those flags are also passed.
-Raw launch commands own their model and effort axes directly and accept only a simple unquoted executable/argument form with no shell quoting, escaping, parameter or command expansion, globbing, or operators.
-They cannot name a Claude executable token or include `--dangerously-skip-permissions`; Claude workers must use the verified adapter.
+`fm-spawn.sh` accepts only the verified structured adapters `claude`, `codex`, `opencode`, `pi`, and `grok`; arbitrary command strings are rejected.
 When `config/crew-dispatch.json` exists, crewmate and scout spawns require an explicit resolved harness instead of automatically falling back to `config/crew-harness`.
 The inherited-local-material contract is owned by `secondmate-provisioning`; for harness behavior, its propagated config items make a secondmate's own crewmates, dispatch profiles, and backlog backend use the primary values.
 `config/secondmate-harness` is not inherited because secondmates do not launch secondmates.
@@ -191,7 +190,7 @@ For Pi secondmate launches, `fm-spawn.sh` starts Pi with `-e` pointed at the sec
 
 `config/crew-dispatch.json` is an optional local, gitignored file containing natural-language rules that firstmate reads before dispatching a crewmate or scout.
 The shell scripts do not match those rules; firstmate chooses the best matching rule with judgment, resolves that rule directly or through a supported selector, and passes only concrete `--harness`, `--model`, and `--effort` flags to `fm-spawn.sh`.
-When the file exists, `fm-spawn.sh` enforces that contract by refusing crewmate and scout spawns that lack an explicit harness (`--harness`, a positional adapter, or a raw launch command).
+When the file exists, `fm-spawn.sh` enforces that contract by refusing crewmate and scout spawns that lack an explicit verified harness through `--harness` or the positional adapter form.
 Batch spawns satisfy the same requirement with a shared `--harness`.
 Secondmate spawns are exempt and still resolve through `config/secondmate-harness` and its optional model and effort tokens.
 This section is the single owner of the canonical schema and its per-field semantics; `AGENTS.md` section 4 keeps only the dispatch procedure and points here.

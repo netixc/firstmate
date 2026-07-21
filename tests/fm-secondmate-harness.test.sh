@@ -371,7 +371,7 @@ test_spawn_explicit_harness_wins() {
   pass "B5 spawn: an explicit per-spawn harness arg overrides config/secondmate-harness"
 }
 
-# The unverified-adapter guard holds on the resolved secondmate path: an unknown
+# The verified-adapter allowlist holds on the resolved secondmate path: an unknown
 # config/secondmate-harness aborts the spawn (no meta written) and names the source.
 test_spawn_unverified_secondmate_harness_refused() {
   local w sm fakebin err rc

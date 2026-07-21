@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Spawn a direct report: a crewmate in a treehouse or Orca worktree, or a
 # secondmate in its isolated firstmate home.
-# Usage: fm-spawn.sh <task-id> <project-dir> [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--backend <name>] [--scout]
-#        fm-spawn.sh <task-id> [<firstmate-home>] [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--backend <name>] --secondmate
+# Usage: fm-spawn.sh <task-id> <project-dir> [--harness <name>|harness] [--model <name>] [--effort <level>] [--backend <name>] [--scout]
+#        fm-spawn.sh <task-id> [<firstmate-home>] [--harness <name>|harness] [--model <name>] [--effort <level>] [--backend <name>] --secondmate
 #   --harness <name> is the explicit per-spawn harness/profile adapter. The old
 #   positional harness arg still works for back-compat.
 #   --model <name> and --effort <low|medium|high|xhigh|max> are concrete profile
@@ -57,24 +57,17 @@
 #   secondmate-vs-crewmate split is DURABLE across every respawn (recovery,
 #   /updatefirstmate, restart). A bare adapter name (claude|codex|opencode|pi|grok)
 #   overrides it for this spawn (either kind); Claude also requires --model opus,
-#   sonnet, claude-opus-*, or claude-sonnet-*. A non-flag string containing
-#   whitespace is treated as a RAW launch command - the escape hatch for verifying
-#   new adapters. Raw commands accept only unquoted, space-separated tokens made
-#   from letters, digits, `_./:=,@%+~-`; shell quoting, escaping, parameter or
-#   command expansion, globbing, and operators are rejected. Raw commands must
-#   not name a Claude executable token or carry
-#   --dangerously-skip-permissions; Claude launches use the verified adapter so its
-#   deterministic template owns permission policy.
+#   sonnet, claude-opus-*, or claude-sonnet-*. Every launch uses one of these
+#   verified structured adapters; arbitrary command strings are rejected.
 #   config/secondmate-harness may also carry an optional model and effort as extra
 #   whitespace-separated tokens ("<harness> [<model>] [<effort>]"). For a
 #   --secondmate spawn, those tokens apply only when this spawn also resolves its
 #   harness from config/secondmate-harness. An explicit per-spawn --harness or
 #   positional harness arg starts with clean model/effort defaults unless the caller
-#   also passes explicit --model/--effort flags; a raw launch command owns its axes
-#   directly. When the file governs the spawn, its model/effort tokens are re-resolved
-#   on every respawn exactly like the harness axis, and explicit --model/--effort flags
-#   still win over the file's tokens. Every Claude path requires an explicit supported
-#   non-Haiku model.
+#   also passes explicit --model/--effort flags. When the file governs the spawn,
+#   its model/effort tokens are re-resolved on every respawn exactly like the harness
+#   axis, and explicit --model/--effort flags still win over the file's tokens. Every
+#   Claude path requires an explicit supported non-Haiku model.
 #   A --secondmate spawn also propagates the primary's declared inherited local
 #   material, so the secondmate's OWN crewmates inherit primary config and the
 #   secondmate receives the primary's read-only shared captain-preference file
@@ -379,14 +372,6 @@ if [ "$KIND" = secondmate ]; then
     ''|claude|codex|opencode|pi|grok)
       ARG3=${POS[1]:-}
       ;;
-    *' '*)
-      if [ "${#POS[@]}" -gt 2 ] || [ -d "${POS[1]}" ]; then
-        FIRSTMATE_HOME=${POS[1]}
-        ARG3=${POS[2]:-}
-      else
-        ARG3=${POS[1]}
-      fi
-      ;;
     *)
       FIRSTMATE_HOME=${POS[1]}
       ARG3=${POS[2]:-}
@@ -445,29 +430,6 @@ launch_template() {
 }
 
 case "$ARG3" in
-  *' '*)  # raw launch command (unverified-adapter escape hatch)
-    LAUNCH=$ARG3
-    HARNESS=""
-    case "$LAUNCH" in
-      *--dangerously-skip-permissions*)
-        echo "error: raw launch commands must not use --dangerously-skip-permissions" >&2
-        exit 1
-        ;;
-      *[!A-Za-z0-9_./:=,@%+~\ -]*)
-        echo "error: raw launch commands accept only unquoted, space-separated executable and argument tokens; shell syntax is not allowed" >&2
-        exit 1
-        ;;
-    esac
-    for word in $LAUNCH; do
-      case "$word" in
-        claude|*/claude|*=claude|*=*/claude|-Sclaude|-S*/claude)
-          echo "error: raw launch commands must not invoke Claude; use --harness claude with an explicit supported --model" >&2
-          exit 1
-          ;;
-      esac
-      case "$word" in [A-Za-z_]*=*) continue ;; *) [ -n "$HARNESS" ] || HARNESS=$(basename "$word") ;; esac
-    done
-    ;;
   '')
     # No explicit harness: resolve from config. A secondmate AGENT launches on the
     # secondmate harness (config/secondmate-harness -> config/crew-harness -> own);
@@ -475,8 +437,8 @@ case "$ARG3" in
     # active. Resolving here on every spawn is what makes the split DURABLE - a
     # respawn (recovery, /updatefirstmate, restart) re-resolves, so
     # config/secondmate-harness keeps governing secondmate launches across restarts.
-    # The launch_template lookup below is the unverified-adapter guard for both
-    # kinds: a harness with no template aborts the spawn.
+    # The launch_template lookup below enforces the verified-adapter allowlist for
+    # both kinds: a harness with no template aborts the spawn.
     if [ "$KIND" = secondmate ]; then
       HARNESS=$("$FM_ROOT/bin/fm-harness.sh" secondmate)
       harness_src='config/secondmate-harness (falling back to config/crew-harness)'
@@ -488,17 +450,17 @@ case "$ARG3" in
       HARNESS=$("$FM_ROOT/bin/fm-harness.sh" crew)
       harness_src='config/crew-harness'
     fi
-    LAUNCH=$(launch_template "$HARNESS" "$KIND") || { echo "error: no launch template for harness '$HARNESS' (from $harness_src or detection); pass a raw launch command to use an unverified adapter" >&2; exit 1; }
+    LAUNCH=$(launch_template "$HARNESS" "$KIND") || { echo "error: no launch template for harness '$HARNESS' (from $harness_src or detection); choose a verified adapter: claude, codex, opencode, pi, or grok" >&2; exit 1; }
     ;;
   *)
     HARNESS=$ARG3
-    LAUNCH=$(launch_template "$HARNESS" "$KIND") || { echo "error: unknown harness '$HARNESS'; pass a raw launch command to use an unverified adapter" >&2; exit 1; }
+    LAUNCH=$(launch_template "$HARNESS" "$KIND") || { echo "error: unknown harness '$HARNESS'; choose a verified adapter: claude, codex, opencode, pi, or grok" >&2; exit 1; }
     ;;
 esac
 
 # config/secondmate-harness may carry optional model/effort tokens alongside the
 # harness ("<harness> [<model>] [<effort>]"). They apply only when this is a
-# --secondmate spawn and no explicit per-spawn harness/raw launch was supplied, so
+# --secondmate spawn and no explicit per-spawn harness was supplied, so
 # the harness itself came from the secondmate config fallback chain. Resolving
 # here on every spawn makes the pin durable across respawns. Precedence: explicit
 # --model/--effort flags still win over the file's tokens.

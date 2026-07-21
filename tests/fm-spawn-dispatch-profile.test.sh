@@ -199,83 +199,35 @@ test_active_dispatch_profile_allows_positional_harness() {
   pass "active crew-dispatch profile allows the legacy positional harness form"
 }
 
-test_active_dispatch_profile_allows_raw_launch_command() {
-  local rec id out status launch
-  id=profile-raw-z15
-  rec=$(make_spawn_case profile-raw claude "$id")
-  read_case_record "$rec"
-  enable_dispatch_profile "$HOME_DIR"
+test_unstructured_launch_commands_are_rejected() {
+  local rec id out status command n
 
-  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id" "$PROJ_DIR" "custom-agent --flag")
-  status=$?
-  expect_code 0 "$status" "raw launch command should satisfy active dispatch-profile requirement"
-  assert_contains "$out" "spawned $id harness=custom-agent" "spawn did not report raw command harness"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" custom-agent default default
-  launch=$(cat "$LAUNCH_LOG")
-  [ "$launch" = "custom-agent --flag" ] || fail "raw launch command changed"$'\n'"actual: $launch"
-  pass "active crew-dispatch profile allows the raw launch-command escape hatch"
-}
+  n=0
+  for command in \
+    "custom-agent --flag" \
+    "custom-agent --dangerously-skip-permissions" \
+    "claude --dangerously-skip-permissions --model opus" \
+    "env claude --permission-mode auto --model opus" \
+    "npx @anthropic-ai/claude-code --model opus" \
+    "clau''de --dangerously-skip-permission''s --model opus"; do
+    n=$((n + 1))
+    id="profile-unstructured-z15$n"
+    rec=$(make_spawn_case "profile-unstructured-$n" claude "$id")
+    read_case_record "$rec"
+    enable_dispatch_profile "$HOME_DIR"
 
-test_raw_commands_cannot_bypass_claude_policy() {
-  local rec id out status launch
-
-  id=profile-raw-dangerous-z15a
-  rec=$(make_spawn_case profile-raw-dangerous claude "$id")
-  read_case_record "$rec"
-  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id" "$PROJ_DIR" "custom-agent --dangerously-skip-permissions")
-  status=$?
-  expect_code 1 "$status" "every raw dangerous permission bypass should fail closed"
-  assert_contains "$out" "raw launch commands must not use --dangerously-skip-permissions" \
-    "global raw dangerous-flag refusal was not actionable"
-  assert_absent "$HOME_DIR/state/$id.meta" "raw dangerous-flag refusal should precede metadata"
-
-  id=profile-raw-claude-direct-z15b
-  rec=$(make_spawn_case profile-raw-claude-direct claude "$id")
-  read_case_record "$rec"
-  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id" "$PROJ_DIR" "claude --permission-mode auto --model opus")
-  status=$?
-  expect_code 1 "$status" "direct raw Claude should use the verified adapter instead"
-  assert_contains "$out" "raw launch commands must not invoke Claude" \
-    "direct raw Claude refusal was not actionable"
-  assert_absent "$HOME_DIR/state/$id.meta" "direct raw Claude refusal should precede metadata"
-
-  id=profile-raw-claude-env-z15c
-  rec=$(make_spawn_case profile-raw-claude-env claude "$id")
-  read_case_record "$rec"
-  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id" "$PROJ_DIR" "env claude --permission-mode auto --model opus")
-  status=$?
-  expect_code 1 "$status" "env-wrapped raw Claude should fail closed"
-  assert_contains "$out" "raw launch commands must not invoke Claude" \
-    "env-wrapped raw Claude refusal was not actionable"
-  assert_absent "$HOME_DIR/state/$id.meta" "env-wrapped raw Claude refusal should precede metadata"
-
-  id=profile-raw-claude-obfuscated-z15d
-  rec=$(make_spawn_case profile-raw-claude-obfuscated claude "$id")
-  read_case_record "$rec"
-  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id" "$PROJ_DIR" "clau''de --dangerously-skip-permission''s --model opus")
-  status=$?
-  expect_code 1 "$status" "shell-composed Claude and dangerous flags should fail closed"
-  assert_contains "$out" "shell syntax is not allowed" \
-    "shell-composed raw Claude refusal was not actionable"
-  assert_absent "$HOME_DIR/state/$id.meta" "shell-composed raw Claude refusal should precede metadata"
-
-  id=profile-raw-opencode-claude-model-z15e
-  rec=$(make_spawn_case profile-raw-opencode-claude-model opencode "$id")
-  read_case_record "$rec"
-  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id" "$PROJ_DIR" "opencode --model anthropic/claude-sonnet-4-5 --prompt ready")
-  status=$?
-  expect_code 0 "$status" "a non-Claude raw adapter may name a Claude-backed model"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" opencode default default
-  launch=$(cat "$LAUNCH_LOG")
-  [ "$launch" = "opencode --model anthropic/claude-sonnet-4-5 --prompt ready" ] \
-    || fail "non-Claude raw launch changed: $launch"
-  pass "raw commands cannot bypass Claude permission ownership"
+    out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
+      "$id" "$PROJ_DIR" "$command")
+    status=$?
+    expect_code 1 "$status" "unstructured launch command '$command' should fail closed"
+    assert_contains "$out" "unknown harness '$command'" \
+      "unstructured launch refusal did not identify the unsupported harness input"
+    assert_contains "$out" "choose a verified adapter: claude, codex, opencode, pi, or grok" \
+      "unstructured launch refusal did not identify the supported structured adapters"
+    assert_absent "$HOME_DIR/state/$id.meta" "unstructured launch refusal should precede metadata"
+    [ ! -s "$LAUNCH_LOG" ] || fail "unstructured launch refusal sent a launch command"
+  done
+  pass "unstructured launch commands cannot bypass verified adapter ownership"
 }
 
 test_claude_threads_model_and_effort_after_auto_mode() {
@@ -515,8 +467,7 @@ test_active_dispatch_profile_requires_explicit_harness_for_ship
 test_active_dispatch_profile_requires_explicit_harness_for_scout
 test_active_dispatch_profile_allows_explicit_harness
 test_active_dispatch_profile_allows_positional_harness
-test_active_dispatch_profile_allows_raw_launch_command
-test_raw_commands_cannot_bypass_claude_policy
+test_unstructured_launch_commands_are_rejected
 test_claude_threads_model_and_effort_after_auto_mode
 test_claude_rejects_unsupported_models_without_launching
 test_claude_auto_mode_preserves_quoted_brief_path

@@ -51,6 +51,15 @@ export FM_GATE_REFUSE_BYPASS=1
 # The dedicated regression is
 # tests/fm-backend.test.sh:test_spawn_symlinked_project_prefix_avoids_false_refusal.
 TMP_ROOT=$(mktemp -d "$(cd "${TMPDIR:-/tmp}" && pwd -P)/fm-backend-autodetect-smoke.XXXXXX")
+FAKEBIN="$TMP_ROOT/fakebin"
+mkdir -p "$FAKEBIN"
+cat > "$FAKEBIN/codex" <<'SH'
+#!/usr/bin/env bash
+printf 'autodetect-smoke-ok\n'
+sleep 5
+SH
+chmod +x "$FAKEBIN/codex"
+export PATH="$FAKEBIN:$PATH"
 HERDR_LAB_HELPER="$ROOT/bin/fm-herdr-lab.sh"
 HERDR_LAB_SESSION=$("$HERDR_LAB_HELPER" name fm-autodetect-smoke-concurrency-h3) || {
   rm -rf "$TMP_ROOT"
@@ -95,7 +104,7 @@ env -u TMUX -u FM_BACKEND PATH="$PATH" HERDR_ENV=1 \
   FM_ROOT_OVERRIDE="$ROOT" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" \
   FM_CONFIG_OVERRIDE="$CONFIG" FM_PROJECTS_OVERRIDE="$TMP_ROOT/unused-projects" \
   FM_SPAWN_NO_GUARD=1 \
-  "$ROOT/bin/fm-spawn.sh" "$ID" "$PROJ" "echo autodetect-smoke-ok" \
+  "$ROOT/bin/fm-spawn.sh" "$ID" "$PROJ" codex \
   >"$OUT_FILE" 2>"$ERR_FILE"
 status=$?
 [ "$status" -eq 0 ] || fail "fm-spawn.sh did not succeed auto-detecting herdr"$'\n'"--- stdout ---"$'\n'"$(cat "$OUT_FILE")"$'\n'"--- stderr ---"$'\n'"$(cat "$ERR_FILE")"
@@ -128,7 +137,7 @@ PANE=$(grep '^herdr_pane_id=' "$META" | cut -d= -f2-)
 [ -n "$PANE" ] || fail "auto-detected spawn meta is missing herdr_pane_id"
 pass "real herdr: auto-detected spawn records backend=herdr and herdr_session/workspace/tab/pane fields in meta"
 
-# --- confirm the trivial launch command actually ran in the herdr pane ------
+# --- confirm the verified adapter launch reached the herdr pane -------------
 
 sleep 1
 CAPTURED=$("$HERDR_LAB_HELPER" run "$HERDR_LAB_SESSION" pane read "$PANE" --source recent --lines 200) || \
@@ -136,9 +145,9 @@ CAPTURED=$("$HERDR_LAB_HELPER" run "$HERDR_LAB_SESSION" pane read "$PANE" --sour
 CAPTURED=$(printf '%s\n' "$CAPTURED" | tail -n 30)
 case "$CAPTURED" in
   *autodetect-smoke-ok*) : ;;
-  *) fail "the raw launch command did not run in the auto-detected herdr pane"$'\n'"$CAPTURED" ;;
+  *) fail "the verified adapter launch did not reach the auto-detected herdr pane"$'\n'"$CAPTURED" ;;
 esac
-pass "real herdr: the auto-detected spawn's launch command actually ran in the herdr pane"
+pass "real herdr: the auto-detected spawn runs a verified adapter launch in the herdr pane"
 
 # --- teardown completes the trivial spawn/teardown cycle --------------------
 
