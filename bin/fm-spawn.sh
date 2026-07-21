@@ -495,6 +495,15 @@ if [ "$KIND" = secondmate ] && [ -z "$ARG3" ]; then
   fi
 fi
 
+if [ "$HARNESS" = claude ]; then
+  case "$MODEL" in
+    *[Hh][Aa][Ii][Kk][Uu]*)
+      echo "error: Claude auto permission mode is unavailable for Haiku; choose a model verified for unattended work, such as Sonnet or Opus" >&2
+      exit 1
+      ;;
+  esac
+fi
+
 secondmate_registry_value() {
   local id=$1 key=$2 reg line value
   reg="$DATA/secondmates.md"

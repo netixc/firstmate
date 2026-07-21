@@ -228,6 +228,23 @@ test_claude_threads_model_and_effort_after_auto_mode() {
   pass "claude receives auto permissions before --model and --effort profile flags"
 }
 
+test_claude_rejects_haiku_without_launching() {
+  local rec id out status
+  id=profile-claude-haiku-z2a
+  rec=$(make_spawn_case profile-claude-haiku claude "$id")
+  read_case_record "$rec"
+
+  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+    --model claude-3-5-Haiku-latest --effort low)
+  status=$?
+  expect_code 1 "$status" "Claude Haiku spawn should fail closed when auto permissions are unavailable"
+  assert_contains "$out" "Claude auto permission mode is unavailable for Haiku" \
+    "Claude Haiku refusal did not explain the unattended-permission incompatibility"
+  assert_absent "$HOME_DIR/state/$id.meta" "Claude Haiku refusal should happen before meta is written"
+  [ ! -s "$LAUNCH_LOG" ] || fail "Claude Haiku refusal sent a launch command"
+  pass "Claude Haiku profiles fail closed before launch"
+}
+
 test_claude_auto_mode_preserves_shell_quoted_profile_values() {
   local rec id out status launch model
   id=profile-claude-quote-z2b
@@ -415,6 +432,7 @@ test_active_dispatch_profile_allows_explicit_harness
 test_active_dispatch_profile_allows_positional_harness
 test_active_dispatch_profile_allows_raw_launch_command
 test_claude_threads_model_and_effort_after_auto_mode
+test_claude_rejects_haiku_without_launching
 test_claude_auto_mode_preserves_shell_quoted_profile_values
 test_codex_threads_model_and_effort
 test_codex_omits_invalid_max_effort

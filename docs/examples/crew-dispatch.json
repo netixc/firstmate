@@ -7,8 +7,8 @@
     },
     {
       "when": "The task is a trivial mechanical edit such as a rote rename, formatting sweep, targeted typo fix, or simple file gathering.",
-      "use": { "harness": "claude", "model": "haiku", "effort": "low" },
-      "why": "Use the cheapest fast profile when the task is narrow and low ambiguity."
+      "use": { "harness": "claude", "model": "sonnet", "effort": "low" },
+      "why": "Use a fast unattended profile when the task is narrow and low ambiguity."
     },
     {
       "when": "The task is a big or ambiguous multi-file feature, a risky refactor, or work that requires holding many moving parts in mind.",

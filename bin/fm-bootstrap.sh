@@ -679,6 +679,13 @@ crew_dispatch_validate() {
       | map(select(. as $p | effort_ok($p.h; $p.e) | not))
       | map("\(.h):\(.e)")
       | unique;
+    def bad_models:
+      ([(.rules // [])[]? | use_profiles(.use?)[]? | {h: .harness, m: .model}]
+        + (if (.default? | type) == "object" then [{h: .default.harness, m: .default.model}] else [] end))
+      | map(select(.h == "claude" and (.m | type) == "string"))
+      | map(select(.m | ascii_downcase | contains("haiku")))
+      | map("\(.h):\(.m)")
+      | unique;
     if type != "object" then "top-level value must be an object"
     elif has("rules") and (.rules | type) != "array" then "rules must be an array"
     elif [(.rules // [])[]? | select(type != "object")] | length > 0 then "each rule must be an object"
@@ -698,6 +705,7 @@ crew_dispatch_validate() {
         | map(select(. as $h | verified($h) | not))
         | unique) as $bad_harnesses
       | if ($bad_harnesses | length) > 0 then "unverified harness: " + ($bad_harnesses | join(", "))
+        elif (bad_models | length) > 0 then "unsupported unattended model: " + (bad_models | join(", "))
         elif (bad_efforts | length) > 0 then "invalid effort: " + (bad_efforts | join(", "))
         else empty
         end
