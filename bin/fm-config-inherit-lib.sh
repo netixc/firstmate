@@ -19,6 +19,9 @@
 # (bin/fm-config-push.sh). It is PRIMARY-AUTHORITATIVE: the primary's value wins
 # and is re-pushed on every convergence, so the fleet stays converged on the
 # primary; an item the primary does not set is mirrored as absence downstream.
+# After successful config/* changes under an already-running secondmate, callers
+# invoke fm_config_send_reread_nudge so the live agent re-reads exact post-write
+# bytes (spawn/respawn already re-reads at launch and needs no redundant nudge).
 #
 # Extensible by design: FM_INHERITABLE_CONFIG is the single declared list of
 # config-dir-relative items the primary propagates. Add an item there and every
@@ -435,4 +438,155 @@ propagate_inheritable_config() {
     fi
   done
   return "$rc"
+}
+
+# Relative path of the per-home instruction file written after a successful
+# config push so the live secondmate can re-read exact post-write bytes.
+# Kept under state/ (gitignored operational dir) so it never dirties the home.
+FM_CONFIG_REREAD_INSTRUCTION_REL="state/.fm-inherited-config-reread"
+
+# Framing lines for the config-reread instruction. Defaults/rules only - never
+# an enforcement claim, and never a parsed summary of file contents.
+FM_CONFIG_REREAD_FRAMING='These inherited config files changed. Re-read and apply their exact contents at every future intake. They are defaults/rules and do not remove your judgment to choose differently when warranted.'
+
+# fm_config_reread_is_allowlisted_item <item>
+# True only for the declared inheritable config allowlist (bare item name as
+# recorded in FM_CONFIG_INHERIT_REPORT). data/captain-shared.md is never
+# allowlisted here and must never be inlined into a reread instruction.
+fm_config_reread_is_allowlisted_item() {
+  local item=$1 candidate
+  for candidate in $FM_INHERITABLE_CONFIG; do
+    [ "$candidate" = "$item" ] && return 0
+  done
+  return 1
+}
+
+# fm_config_reread_changed_items <report>
+# Print bare allowlisted config item names whose report status is "pushed",
+# in FM_INHERITABLE_CONFIG order (deterministic path order). Empty when none.
+fm_config_reread_changed_items() {
+  local report=$1 item status
+  [ -n "$report" ] && [ -f "$report" ] || return 0
+  for item in $FM_INHERITABLE_CONFIG; do
+    status=$(awk -F '\t' -v item="$item" '$1 == item { print $2; exit }' "$report" 2>/dev/null) || status=""
+    [ "$status" = pushed ] || continue
+    printf '%s\n' "$item"
+  done
+}
+
+# fm_config_write_reread_instruction <dest-home> <report> <instruction-path>
+# After successful propagation, write one instruction from the validated
+# destination state. Includes only changed allowlisted config files, each with
+# relative path, begin/end delimiters, and either the destination file's full
+# exact post-write bytes (streamed unparsed) or the literal token ABSENT when
+# the destination copy was removed. Returns 1 when no allowlisted config item
+# changed (or on write failure). Never inlines data/captain-shared.md, SHA
+# values, selected profiles, or any generated interpretation.
+fm_config_write_reread_instruction() {
+  local dest_home=$1 report=$2 instruction_path=$3 item rel dest parent tmp first=1 tail_hex
+  [ -n "$dest_home" ] || return 1
+  [ -n "$report" ] && [ -f "$report" ] || return 1
+  [ -n "$instruction_path" ] || return 1
+  parent=${instruction_path%/*}
+  [ -n "$parent" ] && [ "$parent" != "$instruction_path" ] || return 1
+  mkdir -p "$parent" 2>/dev/null || return 1
+  tmp=$(mktemp "$parent/.fm-config-reread.XXXXXX" 2>/dev/null) || return 1
+  while IFS= read -r item; do
+    [ -n "$item" ] || continue
+    fm_config_reread_is_allowlisted_item "$item" || continue
+    rel="config/$item"
+    dest="$dest_home/config/$item"
+    if [ "$first" = 1 ]; then
+      printf '%s\n' "$FM_CONFIG_REREAD_FRAMING" >> "$tmp" || { rm -f "$tmp"; return 1; }
+      first=0
+    fi
+    {
+      printf '\n'
+      printf '%s\n' "$rel"
+      printf '%s\n' "-----BEGIN $rel-----"
+    } >> "$tmp" || { rm -f "$tmp"; return 1; }
+    if [ -f "$dest" ] && [ ! -L "$dest" ]; then
+      # Stream destination post-write bytes only - never re-read the primary.
+      cat "$dest" >> "$tmp" || { rm -f "$tmp"; return 1; }
+      # Keep the end delimiter on its own line. When the destination already ends
+      # in a newline, cat provided it; otherwise append a structural newline that
+      # is not part of a re-read of the destination path itself.
+      if [ -s "$dest" ]; then
+        tail_hex=$(tail -c 1 "$dest" | od -An -tx1 2>/dev/null | tr -d ' \n')
+        if [ "$tail_hex" != "0a" ]; then
+          printf '\n' >> "$tmp" || { rm -f "$tmp"; return 1; }
+        fi
+      else
+        printf '\n' >> "$tmp" || { rm -f "$tmp"; return 1; }
+      fi
+    else
+      printf '%s\n' "ABSENT" >> "$tmp" || { rm -f "$tmp"; return 1; }
+    fi
+    printf '%s\n' "-----END $rel-----" >> "$tmp" || { rm -f "$tmp"; return 1; }
+  done < <(fm_config_reread_changed_items "$report")
+  if [ "$first" = 1 ]; then
+    rm -f "$tmp"
+    return 1
+  fi
+  if ! mv -f "$tmp" "$instruction_path" 2>/dev/null; then
+    rm -f "$tmp"
+    return 1
+  fi
+  return 0
+}
+
+# fm_config_send_reread_nudge <id> <dest-home> <report>
+# After successful propagation, if any allowlisted config item changed for this
+# home, write the exact-byte instruction under the destination home and deliver
+# that full instruction body through the routed secondmate path (fm-send).
+# The instruction contains only changed config paths, clear delimiters, and the
+# destination's full exact post-write bytes (or ABSENT) - never summaries, SHA
+# values, selected profiles, or data/captain-shared.md. No-op (return 0) when
+# nothing changed. On send failure, print a concrete CONFIG_REREAD retry
+# diagnostic to stdout and return non-zero - never claim the live agent reread
+# the values. Requires FM_HOME (and optional FM_ROOT_OVERRIDE /
+# FM_STATE_OVERRIDE) so fm-send resolves the secondmate selector against the
+# correct primary home.
+fm_config_send_reread_nudge() {
+  local id=$1 dest_home=$2 report=$3
+  local instruction_path selector out rc send_bin message
+  [ -n "$id" ] || return 1
+  [ -n "$dest_home" ] || return 1
+  [ -n "$report" ] && [ -f "$report" ] || return 1
+  instruction_path="$dest_home/$FM_CONFIG_REREAD_INSTRUCTION_REL"
+  if ! fm_config_write_reread_instruction "$dest_home" "$report" "$instruction_path"; then
+    if [ -z "$(fm_config_reread_changed_items "$report")" ]; then
+      return 0
+    fi
+    printf 'CONFIG_REREAD: secondmate %s: send failed: could not write instruction file\n' "$id"
+    return 1
+  fi
+  # Load the durable instruction after the write so the routed message is built
+  # from destination-validated post-write bytes, never from a stale source read.
+  message=$(cat "$instruction_path" 2>/dev/null) || {
+    printf 'CONFIG_REREAD: secondmate %s: send failed: could not read instruction file\n' "$id"
+    return 1
+  }
+  selector="fm-$id"
+  send_bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fm-send.sh"
+  if [ ! -x "$send_bin" ]; then
+    printf 'CONFIG_REREAD: secondmate %s: send failed: fm-send.sh not executable at %s\n' "$id" "$send_bin"
+    return 1
+  fi
+  if [ -z "${FM_HOME:-}" ]; then
+    printf 'CONFIG_REREAD: secondmate %s: send failed: FM_HOME is not set\n' "$id"
+    return 1
+  fi
+  out=$(FM_HOME="$FM_HOME" \
+    FM_ROOT_OVERRIDE="${FM_ROOT_OVERRIDE:-}" \
+    FM_STATE_OVERRIDE="${FM_STATE_OVERRIDE:-}" \
+    FM_SEND_SETTLE="${FM_SEND_SETTLE:-0}" \
+    "$send_bin" "$selector" "$message" 2>&1) && rc=0 || rc=$?
+  if [ "$rc" -eq 0 ]; then
+    return 0
+  fi
+  out=${out%%$'\n'*}
+  [ -n "$out" ] || out="fm-send exited $rc"
+  printf 'CONFIG_REREAD: secondmate %s: send failed: %s\n' "$id" "$out"
+  return 1
 }

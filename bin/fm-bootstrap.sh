@@ -335,7 +335,11 @@ secondmate_sync() {
   # surface into every VALIDATED live secondmate home swept above.
   # FF_SEEN_HOMES is exactly that set, and fm-config-inherit-lib.sh owns the
   # declared config items plus data/captain-shared.md.
-  local id home home_real propagated_homes
+  # After a successful push that changes allowlisted config/* for an already-
+  # running home, send the literal-content reread instruction so the live
+  # agent does not keep applying stale defaults. Spawn/respawn already re-reads
+  # at launch and needs no redundant nudge unless files changed after launch.
+  local id home home_real propagated_homes report reread_out
   propagated_homes=""
   while IFS='|' read -r id home _window _meta; do
     validate_secondmate_home "$id" "$home" || continue
@@ -348,9 +352,28 @@ secondmate_sync() {
       *" $home_real "*) continue ;;
     esac
     propagated_homes="$propagated_homes $home_real"
-    if ! propagate_secondmate_inheritance "$FM_HOME" "$home_real" "$CONFIG" "$DATA"; then
+    report=$(mktemp "${TMPDIR:-/tmp}/fm-bootstrap-inherit.XXXXXX" 2>/dev/null) || {
       echo "SECONDMATE_SYNC: secondmate $id: skipped: inheritance failed"
+      continue
+    }
+    if ! FM_CONFIG_INHERIT_REPORT="$report" \
+      propagate_secondmate_inheritance "$FM_HOME" "$home_real" "$CONFIG" "$DATA"; then
+      echo "SECONDMATE_SYNC: secondmate $id: skipped: inheritance failed"
+      rm -f "$report"
+      continue
     fi
+    if ! reread_out=$(FM_HOME="$FM_HOME" FM_ROOT_OVERRIDE="$FM_ROOT" \
+      FM_STATE_OVERRIDE="$STATE" \
+      fm_config_send_reread_nudge "$id" "$home_real" "$report" 2>&1); then
+      if [ -n "$reread_out" ]; then
+        printf '%s\n' "$reread_out"
+      else
+        echo "CONFIG_REREAD: secondmate $id: send failed: unknown error"
+      fi
+    elif [ -n "$reread_out" ]; then
+      printf '%s\n' "$reread_out"
+    fi
+    rm -f "$report"
   done < <(live_secondmate_meta_records "$STATE" "$DATA/secondmates.md")
   return 0
 }

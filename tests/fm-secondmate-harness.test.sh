@@ -19,7 +19,11 @@
 #      inherit the primary's settings. It is primary-authoritative (re-pushed at
 #      secondmate spawn, on the bootstrap secondmate sweep, and by config push).
 #      config/secondmate-harness is deliberately NOT inherited (secondmates do
-#      not spawn secondmates).
+#      not spawn secondmates). After a successful push that changes allowlisted
+#      config under an already-running home, a literal-content reread instruction
+#      is sent via the routed secondmate path (exact destination bytes, no
+#      summaries); unchanged config sends nothing.
+
 #   C) Model/effort pin. config/secondmate-harness may carry optional model and
 #      effort tokens after the harness ("<harness> [<model>] [<effort>]"), read by
 #      fm-harness.sh secondmate-model / secondmate-effort. A bare harness-only
@@ -721,7 +725,31 @@ make_fake_toolchain() {
   local dir=$1 fakebin
   fakebin="$dir/fakebin"
   mkdir -p "$fakebin"
-  fm_fake_exit0 "$fakebin" tmux node gh-axi chrome-devtools-axi lavish-axi
+  fm_fake_exit0 "$fakebin" node gh-axi chrome-devtools-axi lavish-axi
+  # tmux fake supports fm-send's composer-verified submit path and optional
+  # FM_FAKE_TMUX_LOG / FM_FAKE_TMUX_FAIL_LITERAL for reread-nudge assertions.
+  cat > "$fakebin/tmux" <<'SH'
+#!/usr/bin/env bash
+if [ -n "${FM_FAKE_TMUX_LOG:-}" ]; then
+  printf '%s\n' "$*" >> "$FM_FAKE_TMUX_LOG"
+fi
+case "$*" in
+  *display-message*'#{pane_current_command}'*) printf '%s\n' codex; exit 0 ;;
+  *display-message*'#{pane_id}'*) printf '%s\n' '%1'; exit 0 ;;
+  *display-message*'#{cursor_y}'*) printf '%s\n' 0; exit 0 ;;
+  *capture-pane*) printf '\n'; exit 0 ;;
+  *'send-keys'*' -l '*)
+    [ "${FM_FAKE_TMUX_FAIL_LITERAL:-0}" = 1 ] && exit 1
+    exit 0
+    ;;
+  *send-keys*)
+    [ "${FM_FAKE_TMUX_FAIL_LITERAL:-0}" = 1 ] && exit 1
+    exit 0
+    ;;
+esac
+exit 0
+SH
+  chmod +x "$fakebin/tmux"
   cat > "$fakebin/gh" <<'SH'
 #!/usr/bin/env bash
 exit 0
@@ -751,13 +779,21 @@ run_bootstrap() {
   local w=$1 fakebin
   fakebin=$(make_fake_toolchain "$w")
   PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
-    "$ROOT/bin/fm-bootstrap.sh" 2>/dev/null
+    FM_SEND_SETTLE=0 "$ROOT/bin/fm-bootstrap.sh" 2>/dev/null
 }
 
 run_config_push() {
-  local w=$1
-  PATH="$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
-    "$ROOT/bin/fm-config-push.sh"
+  local w=$1 fakebin log=${2:-}
+  fakebin=$(make_fake_toolchain "$w")
+  if [ -n "$log" ]; then
+    PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
+      FM_SEND_SETTLE=0 FM_FAKE_TMUX_LOG="$log" \
+      "$ROOT/bin/fm-config-push.sh"
+  else
+    PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
+      FM_SEND_SETTLE=0 \
+      "$ROOT/bin/fm-config-push.sh"
+  fi
 }
 
 # The sweep pushes the primary's declared inherited config into a live home,
@@ -899,7 +935,7 @@ test_bootstrap_sweep_surfaces_config_propagation_failure() {
 }
 
 test_config_push_propagates_reports_without_ff_or_nudge() {
-  local w c1 sm_real old_head out err status out2 tmp
+  local w c1 sm_real old_head out err status out2 tmp log
   w=$(new_world config-push-basic)
   c1=$(git -C "$w/main" rev-parse HEAD)
   add_sm_worktree "$w" sm "$c1"
@@ -918,7 +954,8 @@ test_config_push_propagates_reports_without_ff_or_nudge() {
   printf 'codex\n' > "$w/home/config/crew-harness"
   printf 'manual\n' > "$w/home/config/backlog-backend"
   err="$w/config-push-basic.err"
-  out=$(run_config_push "$w" 2>"$err"); status=$?
+  log="$w/config-push-basic.tmux.log"
+  out=$(run_config_push "$w" "$log" 2>"$err"); status=$?
 
   expect_code 0 "$status" "config push should succeed"
   assert_contains "$out" "config-push: $w/home -> live secondmate homes" \
@@ -931,13 +968,18 @@ test_config_push_propagates_reports_without_ff_or_nudge() {
     "config push did not report crew-harness as pushed"
   assert_contains "$out" "backlog-backend: pushed" \
     "config push did not report backlog-backend as pushed"
+  assert_contains "$out" "config-reread: sent" \
+    "config push with changed config must send a literal reread instruction"
   assert_not_contains "$out" "NUDGE_SECONDMATES" \
-    "config push must not nudge secondmates"
+    "config push must not use the AGENTS.md instruction-surface nudge channel"
   [ "$(git -C "$w/sm" rev-parse HEAD)" = "$old_head" ] \
     || fail "config push fast-forwarded tracked files"
   [ ! -s "$err" ] || fail "clean config push wrote unexpected stderr: $(cat "$err")"
+  assert_contains "$(cat "$log")" "[fm-from-firstmate]" \
+    "config reread must use the marked routed secondmate path"
 
-  out2=$(run_config_push "$w" 2>"$err"); status=$?
+  : > "$log"
+  out2=$(run_config_push "$w" "$log" 2>"$err"); status=$?
   expect_code 0 "$status" "idempotent config push should succeed"
   assert_contains "$out2" "crew-dispatch.json: unchanged" \
     "idempotent config push did not report crew-dispatch as unchanged"
@@ -945,7 +987,10 @@ test_config_push_propagates_reports_without_ff_or_nudge() {
     "idempotent config push did not report crew-harness as unchanged"
   assert_contains "$out2" "backlog-backend: unchanged" \
     "idempotent config push did not report backlog-backend as unchanged"
-  pass "B12 config-push propagates via shared live discovery, reports items, and does not fast-forward or nudge"
+  assert_not_contains "$out2" "config-reread: sent" \
+    "unchanged config must not send a reread message"
+  [ ! -s "$log" ] || fail "unchanged config push still invoked tmux send: $(cat "$log")"
+  pass "B12 config-push propagates via shared live discovery, reports items, rereads on change only, and does not fast-forward"
 }
 
 test_config_push_reports_skips_dirty_and_invalid_home() {
@@ -1016,6 +1061,269 @@ test_config_push_exits_nonzero_on_copy_error() {
   pass "B14 config-push exits nonzero on real propagation errors"
 }
 
+# ---------------------------------------------------------------------------
+# Literal-content config reread nudge (post-propagation live-agent wake)
+# ---------------------------------------------------------------------------
+
+shared_captain_header_for_tests() {
+  cat <<'EOF'
+# Shared captain preferences
+
+This file is main-authoritative in the main firstmate home.
+In secondmate homes it is read-only in secondmate homes and must not be edited there.
+Route new captain-preference discoveries to the main firstmate through marked status or a document pointer.
+EOF
+}
+
+# End-user-aligned reproduction of the pre-fix gap, then the fixed behavior:
+# two live homes start with different stale config subsets; after push each is
+# updated and each live agent receives only its own changed-content instruction.
+test_config_reread_per_home_changed_sets_and_exact_bytes() {
+  local w head log out err status instr_a instr_b multiline_json
+  w=$(new_world config-reread-per-home)
+  head=$(git -C "$w/main" rev-parse HEAD)
+  add_sm_worktree "$w" alpha "$head"
+  add_sm_worktree "$w" beta "$head"
+  mkdir -p "$w/alpha/config" "$w/beta/config" "$w/alpha/state" "$w/beta/state"
+
+  # alpha is stale on harness + backlog; beta is stale on multiline dispatch only.
+  printf 'pi\n' > "$w/alpha/config/crew-harness"
+  printf 'tasks-axi\n' > "$w/alpha/config/backlog-backend"
+  printf '{"default":{"harness":"old"}}\n' > "$w/beta/config/crew-dispatch.json"
+
+  multiline_json=$(printf '{\n  "default": {\n    "harness": "grok",\n    "model": "grok-4.5"\n  },\n  "rules": [\n    {"when": "news", "use": {"harness": "grok"}}\n  ]\n}\n')
+  printf '%s' "$multiline_json" > "$w/home/config/crew-dispatch.json"
+  printf 'codex\n' > "$w/home/config/crew-harness"
+  printf 'manual\n' > "$w/home/config/backlog-backend"
+  {
+    shared_captain_header_for_tests
+    printf '%s\n' "shared secret preference body that must never appear in a config reread"
+  } > "$w/home/data/captain-shared.md"
+
+  log="$w/config-reread-per-home.tmux.log"
+  err="$w/config-reread-per-home.err"
+  out=$(run_config_push "$w" "$log" 2>"$err"); status=$?
+  expect_code 0 "$status" "per-home reread config push should succeed"
+  [ ! -s "$err" ] || fail "unexpected stderr: $(cat "$err")"
+
+  # Destination bytes converged per home.
+  cmp -s "$w/home/config/crew-dispatch.json" "$w/alpha/config/crew-dispatch.json" \
+    || fail "alpha did not receive multiline dispatch"
+  cmp -s "$w/home/config/crew-dispatch.json" "$w/beta/config/crew-dispatch.json" \
+    || fail "beta did not receive multiline dispatch"
+  [ "$(cat "$w/alpha/config/crew-harness")" = codex ] || fail "alpha harness not updated"
+  [ "$(cat "$w/alpha/config/backlog-backend")" = manual ] || fail "alpha backlog-backend not updated"
+
+  instr_a="$w/alpha/$FM_CONFIG_REREAD_INSTRUCTION_REL"
+  instr_b="$w/beta/$FM_CONFIG_REREAD_INSTRUCTION_REL"
+  assert_present "$instr_a" "alpha should receive a config-reread instruction file"
+  assert_present "$instr_b" "beta should receive a config-reread instruction file"
+
+  # Deterministic allowlist path order and exact destination bytes for alpha
+  # (all three config items were missing/stale and therefore pushed).
+  assert_grep "These inherited config files changed" "$instr_a" "alpha framing missing"
+  assert_grep "defaults/rules" "$instr_a" "alpha must preserve agent judgment framing"
+  assert_contains "$(cat "$instr_a")" "config/crew-dispatch.json" "alpha missing dispatch path"
+  assert_contains "$(cat "$instr_a")" "config/crew-harness" "alpha missing harness path"
+  assert_contains "$(cat "$instr_a")" "config/backlog-backend" "alpha missing backlog path"
+  # Path order follows FM_INHERITABLE_CONFIG.
+  awk '
+    /config\/crew-dispatch\.json/ { d=NR }
+    /config\/crew-harness/ { h=NR }
+    /config\/backlog-backend/ { b=NR }
+    END {
+      if (!(d && h && b && d < h && h < b)) exit 1
+    }
+  ' "$instr_a" || fail "alpha instruction path order is not deterministic allowlist order"
+
+  # Exact multiline JSON appears byte-for-byte between delimiters.
+  assert_contains "$(cat "$instr_a")" "$multiline_json" \
+    "alpha instruction must include exact multiline dispatch bytes"
+  assert_contains "$(cat "$instr_a")" $'-----BEGIN config/crew-harness-----\ncodex\n-----END config/crew-harness-----' \
+    "alpha instruction must include exact harness scalar bytes"
+  assert_contains "$(cat "$instr_a")" $'-----BEGIN config/backlog-backend-----\nmanual\n-----END config/backlog-backend-----' \
+    "alpha instruction must include exact backlog-backend scalar bytes"
+
+  # No parsed/effective summary, no SHA, no captain-shared dump.
+  assert_not_contains "$(cat "$instr_a")" "Default worker" "must not emit parsed worker summary"
+  assert_not_contains "$(cat "$instr_a")" "sha" "must not emit sha tokens"
+  assert_not_contains "$(cat "$instr_a")" "SHA" "must not emit SHA tokens"
+  assert_not_contains "$(cat "$instr_a")" "captain-shared" "captain-shared path must not appear"
+  assert_not_contains "$(cat "$instr_a")" "shared secret preference body" \
+    "captain-shared content must never be inlined"
+  assert_not_contains "$(cat "$instr_b")" "shared secret preference body" \
+    "beta must not inline captain-shared either"
+
+  # Beta started with only dispatch stale; harness/backlog were absent on both
+  # sides for beta... wait: primary has harness+backlog, beta lacked them, so
+  # they are also pushed. Seed beta with matching harness/backlog so only
+  # dispatch changes for beta - re-run a focused unit of the write helper below.
+  # For this push, beta was missing harness and backlog too, so all three push.
+  # Prove isolation by comparing that neither instruction references the other's
+  # pre-push stale unique value.
+  assert_not_contains "$(cat "$instr_a")" '"harness":"old"' \
+    "alpha must not receive beta's pre-push stale dispatch"
+  assert_not_contains "$(cat "$instr_b")" $'pi\n' \
+    "beta instruction must not leak alpha-only stale harness bytes as a standalone scalar block incorrectly"
+
+  # Routed send used the from-firstmate marker and carried exact content.
+  assert_contains "$(cat "$log")" "[fm-from-firstmate]" "reread send must be marked"
+  assert_contains "$(cat "$log")" "config/crew-dispatch.json" "sent instruction must name changed paths"
+  assert_contains "$(cat "$log")" '"harness": "grok"' "sent instruction must carry exact JSON bytes"
+  assert_not_contains "$(cat "$log")" "Default worker" "sent message must not summarize"
+  pass "B15 config reread is per-home, exact-byte, ordered, and free of summaries/shared dumps"
+}
+
+test_config_reread_isolation_and_absent_and_send_failure() {
+  local w head log out err status instr_a instr_b report
+  w=$(new_world config-reread-absent)
+  head=$(git -C "$w/main" rev-parse HEAD)
+  add_sm_worktree "$w" alpha "$head"
+  add_sm_worktree "$w" beta "$head"
+  mkdir -p "$w/alpha/config" "$w/beta/config" "$w/alpha/state" "$w/beta/state"
+
+  # alpha: only harness will change (dispatch+backlog already match primary absence).
+  # beta: only dispatch will change.
+  printf 'old-harness\n' > "$w/alpha/config/crew-harness"
+  printf '{"stale":true}\n' > "$w/beta/config/crew-dispatch.json"
+  # Primary has only crew-harness set; dispatch and backlog absent.
+  printf 'codex\n' > "$w/home/config/crew-harness"
+  rm -f "$w/home/config/crew-dispatch.json" "$w/home/config/backlog-backend"
+
+  log="$w/config-reread-absent.tmux.log"
+  err="$w/config-reread-absent.err"
+  out=$(run_config_push "$w" "$log" 2>"$err"); status=$?
+  expect_code 0 "$status" "absent-mirror reread push should succeed"
+
+  instr_a="$w/alpha/$FM_CONFIG_REREAD_INSTRUCTION_REL"
+  instr_b="$w/beta/$FM_CONFIG_REREAD_INSTRUCTION_REL"
+  assert_present "$instr_a" "alpha instruction missing after harness change"
+  assert_present "$instr_b" "beta instruction missing after dispatch removal"
+
+  # alpha changed harness only.
+  assert_contains "$(cat "$instr_a")" "config/crew-harness" "alpha should mention harness"
+  assert_contains "$(cat "$instr_a")" $'-----BEGIN config/crew-harness-----\ncodex\n-----END config/crew-harness-----' \
+    "alpha harness block exact"
+  assert_not_contains "$(cat "$instr_a")" "config/crew-dispatch.json" \
+    "alpha must not list unchanged/absent-both dispatch"
+  assert_not_contains "$(cat "$instr_a")" "config/backlog-backend" \
+    "alpha must not list unchanged/absent-both backlog"
+  assert_not_contains "$(cat "$instr_a")" '{"stale":true}' \
+    "alpha must not receive beta's changed dispatch content"
+
+  # beta: dispatch mirrored to ABSENT (and harness is also newly pushed from primary).
+  assert_contains "$(cat "$instr_b")" "config/crew-dispatch.json" "beta should mention dispatch"
+  assert_contains "$(cat "$instr_b")" $'-----BEGIN config/crew-dispatch.json-----\nABSENT\n-----END config/crew-dispatch.json-----' \
+    "beta must represent removal as ABSENT"
+  assert_not_contains "$(cat "$instr_b")" "old-harness" \
+    "beta must not receive alpha's pre-push stale harness content"
+  # Pure ABSENT + unchanged isolation via the write helper (no second inheritance path).
+  report="$w/absent-only.report"
+  {
+    printf '%s\n' $'crew-dispatch.json\tpushed\tmirrored primary absence'
+    printf '%s\n' $'crew-harness\tunchanged\t'
+    printf '%s\n' $'backlog-backend\tunchanged\t'
+    printf '%s\n' $'data/captain-shared.md\tpushed\t'
+  } > "$report"
+  rm -f "$w/beta/config/crew-dispatch.json"
+  fm_config_write_reread_instruction "$w/beta" "$report" "$w/beta/state/.fm-inherited-config-reread-absent" \
+    || fail "ABSENT instruction write failed"
+  assert_contains "$(cat "$w/beta/state/.fm-inherited-config-reread-absent")" \
+    $'-----BEGIN config/crew-dispatch.json-----\nABSENT\n-----END config/crew-dispatch.json-----' \
+    "helper ABSENT representation"
+  assert_not_contains "$(cat "$w/beta/state/.fm-inherited-config-reread-absent")" "captain-shared" \
+    "helper must ignore captain-shared even when report says pushed"
+  assert_not_contains "$(cat "$w/beta/state/.fm-inherited-config-reread-absent")" "config/crew-harness" \
+    "helper must omit unchanged items"
+
+  # Send failure becomes a retryable diagnostic and non-zero exit.
+  printf 'claude\n' > "$w/home/config/crew-harness"
+  err="$w/config-reread-send-fail.err"
+  out=$(PATH="$(make_fake_toolchain "$w"):$BASE_PATH" \
+    FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" FM_SEND_SETTLE=0 \
+    FM_FAKE_TMUX_FAIL_LITERAL=1 \
+    "$ROOT/bin/fm-config-push.sh" 2>"$err"); status=$?
+  expect_code 1 "$status" "send failure should make config-push exit non-zero"
+  assert_contains "$out" "CONFIG_REREAD: secondmate" "send failure diagnostic missing"
+  assert_contains "$out" "send failed" "send failure must say send failed"
+  assert_not_contains "$out" "config-reread: sent" \
+    "must not claim reread landed when send failed"
+  pass "B16 config reread isolation, ABSENT, captain-shared exclusion, and send-failure diagnostic"
+}
+
+test_config_reread_skips_when_unchanged_and_reads_after_push() {
+  local w head log out err status report instr
+  w=$(new_world config-reread-after-push)
+  head=$(git -C "$w/main" rev-parse HEAD)
+  add_sm_worktree "$w" sm "$head"
+  mkdir -p "$w/sm/config" "$w/sm/state"
+
+  printf 'codex\n' > "$w/home/config/crew-harness"
+  printf 'codex\n' > "$w/sm/config/crew-harness"
+  log="$w/config-reread-unchanged.tmux.log"
+  out=$(run_config_push "$w" "$log" 2>/dev/null); status=$?
+  expect_code 0 "$status" "unchanged push should succeed"
+  assert_not_contains "$out" "config-reread: sent" "no reread when nothing changed"
+  [ ! -s "$log" ] || fail "unchanged push still sent text: $(cat "$log")"
+  assert_absent "$w/sm/$FM_CONFIG_REREAD_INSTRUCTION_REL" \
+    "unchanged push must not write a reread instruction"
+
+  # Prove instruction bytes are taken from destination after write: if we only
+  # read the primary source, a post-copy destination mutation would not matter.
+  # Here we call the write helper after planting distinct dest bytes and a
+  # pushed report line.
+  printf 'destination-post-write\n' > "$w/sm/config/crew-harness"
+  printf 'primary-source-only\n' > "$w/home/config/crew-harness"
+  report="$w/after-push.report"
+  printf '%s\n' $'crew-harness\tpushed\t' > "$report"
+  instr="$w/sm/state/.fm-inherited-config-reread-dest"
+  fm_config_write_reread_instruction "$w/sm" "$report" "$instr" \
+    || fail "destination-byte instruction write failed"
+  assert_contains "$(cat "$instr")" "destination-post-write" \
+    "instruction must use destination post-write bytes"
+  assert_not_contains "$(cat "$instr")" "primary-source-only" \
+    "instruction must not fall back to primary source bytes"
+  pass "B17 config reread skips unchanged homes and reads destination post-write bytes"
+}
+
+test_config_reread_bootstrap_path_and_spawn_flexibility() {
+  local w head log out fakebin sm launchlog launch
+  w=$(new_world config-reread-bootstrap)
+  head=$(git -C "$w/main" rev-parse HEAD)
+  add_sm_worktree "$w" sm "$head"
+  mkdir -p "$w/sm/config" "$w/sm/state"
+  printf 'old\n' > "$w/sm/config/crew-harness"
+  printf 'codex\n' > "$w/home/config/crew-harness"
+
+  fakebin=$(make_fake_toolchain "$w")
+  log="$w/bootstrap-reread.tmux.log"
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
+    FM_SEND_SETTLE=0 FM_FAKE_TMUX_LOG="$log" \
+    "$ROOT/bin/fm-bootstrap.sh" 2>/dev/null)
+  [ "$(cat "$w/sm/config/crew-harness")" = codex ] || fail "bootstrap did not push harness"
+  assert_present "$w/sm/$FM_CONFIG_REREAD_INSTRUCTION_REL" \
+    "bootstrap must write a config reread instruction when config changed"
+  assert_contains "$(cat "$log")" "[fm-from-firstmate]" \
+    "bootstrap config reread must use routed secondmate send"
+  assert_contains "$(cat "$w/sm/$FM_CONFIG_REREAD_INSTRUCTION_REL")" \
+    $'-----BEGIN config/crew-harness-----\ncodex\n-----END config/crew-harness-----' \
+    "bootstrap instruction must carry exact post-write harness bytes"
+
+  # fm-spawn still permits a conscious explicit runtime outside the config
+  # (defaults/rules only - never harden spawn against deliberate choice).
+  w=$(new_world config-reread-spawn-flex)
+  printf 'codex\n' > "$w/home/config/crew-harness"
+  printf 'codex\n' > "$w/home/config/secondmate-harness"
+  sm="$w/sm-flex"
+  make_seeded_home "$sm" sm-flex
+  launchlog="$w/spawn-flex.launch.log"
+  spawn_secondmate_capture "$w" sm-flex "$sm" "$launchlog" --harness pi >/dev/null 2>&1
+  launch=$(cat "$launchlog")
+  assert_contains "$launch" "pi" \
+    "explicit --harness pi must still win over configured codex defaults"
+  pass "B18 bootstrap config reread path works; spawn flexibility remains defaults-only"
+}
+
 test_harness_resolution
 test_secondmate_model_effort_tokens
 test_propagate_lib
@@ -1040,5 +1348,9 @@ test_bootstrap_sweep_surfaces_config_propagation_failure
 test_config_push_propagates_reports_without_ff_or_nudge
 test_config_push_reports_skips_dirty_and_invalid_home
 test_config_push_exits_nonzero_on_copy_error
+test_config_reread_per_home_changed_sets_and_exact_bytes
+test_config_reread_isolation_and_absent_and_send_failure
+test_config_reread_skips_when_unchanged_and_reads_after_push
+test_config_reread_bootstrap_path_and_spawn_flexibility
 
 echo "# all fm-secondmate-harness tests passed"
