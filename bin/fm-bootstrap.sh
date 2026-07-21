@@ -682,8 +682,9 @@ crew_dispatch_validate() {
     def bad_models:
       ([(.rules // [])[]? | use_profiles(.use?)[]? | {h: .harness, m: .model}]
         + (if (.default? | type) == "object" then [{h: .default.harness, m: .default.model}] else [] end))
-      | map(select(.h == "claude" and (.m | type) == "string"))
-      | map(select(.m | ascii_downcase | contains("haiku")))
+      | map(select(.h == "claude"))
+      | map(.m = (if (.m | type) == "string" then .m else "<missing>" end))
+      | map(select((.m | ascii_downcase | test("sonnet|opus")) | not))
       | map("\(.h):\(.m)")
       | unique;
     if type != "object" then "top-level value must be an object"

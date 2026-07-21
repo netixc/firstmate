@@ -8,10 +8,10 @@
 #      to launch SECONDMATE agents, independent of config/crew-harness (the
 #      crewmate harness). fm-harness.sh secondmate resolves the fallback chain
 #      config/secondmate-harness -> config/crew-harness -> own; an absent or
-#      "default" secondmate-harness behaves exactly as the crew harness did before
-#      this knob existed (full backward-compat). fm-spawn.sh resolves a secondmate
-#      launch through that mode, durably (every respawn re-resolves), while an
-#      explicit per-spawn harness arg still wins.
+#      "default" secondmate-harness follows the crew harness as before this knob
+#      existed. fm-spawn.sh resolves a secondmate launch through that mode, durably
+#      (every respawn re-resolves), while an explicit per-spawn harness arg still
+#      wins and every Claude launch requires an explicit supported model.
 #   B) Inheritance. The primary pushes a declared, extensible set of LOCAL
 #      (gitignored) config items - config/crew-dispatch.json, config/crew-harness,
 #      and config/backlog-backend - down into each secondmate home's config/, so
@@ -23,7 +23,8 @@
 #   C) Model/effort pin. config/secondmate-harness may carry optional model and
 #      effort tokens after the harness ("<harness> [<model>] [<effort>]"), read by
 #      fm-harness.sh secondmate-model / secondmate-effort. A bare harness-only
-#      line (today's format) yields empty model/effort - full backward-compat.
+#      line yields empty model/effort, which fm-spawn accepts for non-Claude adapters
+#      and refuses for Claude because unattended auto mode needs a supported model.
 #      fm-spawn.sh populates MODEL/EFFORT from those tokens for a --secondmate
 #      spawn only when the harness also resolves from that file, so the pin is
 #      durable across every respawn while explicit per-spawn harness/model/effort
@@ -259,19 +260,20 @@ make_seeded_home() {
   printf 'charter\n' > "$home/data/charter.md"
 }
 
-# spawn_secondmate <world> <id> <home> [explicit-harness]
+# spawn_secondmate <world> <id> <home> [fm-spawn args...]
 # Runs fm-spawn.sh in secondmate mode. FM_ROOT is the real repo (so fm-harness.sh
 # resolves), the primary config dir is <world>/home/config, and CLAUDECODE pins
 # detect_own. stderr is discarded (the local-HEAD ff sync harmlessly skips a
 # non-worktree home). Inspect <world>/home/state/<id>.meta and <home>/config after.
 spawn_secondmate() {
-  local world=$1 id=$2 home=$3 harness=${4:-} fakebin
+  local world=$1 id=$2 home=$3 fakebin
+  shift 3
   mkdir -p "$world/home/state" "$world/home/data"
   fakebin=$(make_noop_tmux "$world/tmux-$id")
   # An empty harness must contribute zero args, not an empty positional; build the
   # arg list explicitly so the optional harness is omitted cleanly.
   local spawn_args=("$id" "$home")
-  [ -n "$harness" ] && spawn_args+=("$harness")
+  [ "$#" -eq 0 ] || spawn_args+=("$@")
   spawn_args+=(--secondmate)
   PATH="$fakebin:$BASE_PATH" TMUX='' CLAUDECODE=1 \
     FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$world/home" \
@@ -335,10 +337,9 @@ test_spawn_backward_compat_crew_fallback() {
   pass "B3 spawn: an absent secondmate-harness falls back to the crew harness (backward-compat)"
 }
 
-# Bare backward-compat: no config at all. The secondmate falls through to its own
-# harness (claude here), and with no inheritable file the home is left untouched -
-# no config/ side effects.
-test_spawn_bare_backward_compat() {
+# With no config, the secondmate falls through to Claude but lacks the explicit
+# model required for unattended work, so launch refuses without config side effects.
+test_spawn_bare_claude_fallback_refused() {
   local w sm meta
   w="$TMP_ROOT/spawn-bare"
   sm="$w/sm"
@@ -347,11 +348,10 @@ test_spawn_bare_backward_compat() {
   spawn_secondmate "$w" sm "$sm"
 
   meta="$w/home/state/sm.meta"
-  [ "$(meta_harness "$meta")" = claude ] \
-    || fail "bare: secondmate launched on '$(meta_harness "$meta")', expected own harness claude"
+  [ ! -e "$meta" ] || fail "bare: model-less Claude fallback wrote metadata"
   [ -e "$sm/config/crew-dispatch.json" ] && fail "bare: an unset primary still created a home crew-dispatch.json"
   [ -e "$sm/config/crew-harness" ] && fail "bare: an unset primary still created a home crew-harness"
-  pass "B4 spawn: no config at all -> own harness and no propagation side effects"
+  pass "B4 spawn: model-less Claude fallback refuses without propagation side effects"
 }
 
 # An explicit per-spawn harness arg wins over config/secondmate-harness.
@@ -363,7 +363,7 @@ test_spawn_explicit_harness_wins() {
   printf 'codex\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
-  spawn_secondmate "$w" sm "$sm" claude
+  spawn_secondmate "$w" sm "$sm" claude --model opus
 
   meta="$w/home/state/sm.meta"
   [ "$(meta_harness "$meta")" = claude ] \
@@ -461,10 +461,9 @@ spawn_secondmate_capture() {
     "$ROOT/bin/fm-spawn.sh" "$id" "$home" "$@" --secondmate
 }
 
-# A bare Claude secondmate-harness file pins the verified unattended model while
-# leaving the optional effort axis at its default.
-test_spawn_bare_claude_harness_pins_sonnet() {
-  local w sm meta launchlog launch out status
+# A bare Claude secondmate-harness file fails closed without an explicit model.
+test_spawn_bare_claude_harness_refused() {
+  local w sm meta launchlog out status
   w="$TMP_ROOT/spawn-bare-tokens"
   sm="$w/sm"
   launchlog="$w/launch.log"
@@ -473,16 +472,14 @@ test_spawn_bare_claude_harness_pins_sonnet() {
   make_seeded_home "$sm" sm
 
   out=$(spawn_secondmate_capture "$w" sm "$sm" "$launchlog" 2>&1); status=$?
-  expect_code 0 "$status" "bare-harness secondmate spawn should succeed"
+  expect_code 1 "$status" "bare Claude secondmate spawn should fail closed"
 
   meta="$w/home/state/sm.meta"
-  [ "$(meta_field "$meta" model)" = sonnet ] || fail "bare-tokens: meta model not sonnet (got '$(meta_field "$meta" model)')"
-  [ "$(meta_field "$meta" effort)" = default ] || fail "bare-tokens: meta effort not default (got '$(meta_field "$meta" effort)')"
-  launch=$(cat "$launchlog")
-  assert_contains "$launch" "claude --permission-mode auto --model 'sonnet'" \
-    "bare-tokens: launch did not pin the verified unattended Claude model"
-  assert_not_contains "$launch" "--effort" "bare-tokens: launch must not carry an --effort flag"
-  pass "C2 spawn: a bare Claude secondmate harness pins Sonnet and leaves effort at default"
+  [ ! -e "$meta" ] || fail "bare-tokens: model-less Claude secondmate wrote metadata"
+  assert_contains "$out" "Claude workers require an explicit supported model" \
+    "bare-tokens: refusal did not explain the explicit Claude model requirement"
+  [ ! -s "$launchlog" ] || fail "bare-tokens: model-less Claude secondmate sent a launch command"
+  pass "C2 spawn: a bare Claude secondmate harness fails closed before launch"
 }
 
 # "<harness> <model>" durably threads --model into the secondmate launch and
@@ -1025,10 +1022,10 @@ test_secondmate_model_effort_tokens
 test_propagate_lib
 test_spawn_split_and_inherit
 test_spawn_backward_compat_crew_fallback
-test_spawn_bare_backward_compat
+test_spawn_bare_claude_fallback_refused
 test_spawn_explicit_harness_wins
 test_spawn_unverified_secondmate_harness_refused
-test_spawn_bare_claude_harness_pins_sonnet
+test_spawn_bare_claude_harness_refused
 test_spawn_secondmate_harness_model_token
 test_spawn_secondmate_harness_model_and_effort_tokens
 test_spawn_explicit_model_overrides_secondmate_harness_token

@@ -56,18 +56,21 @@
 #   harness (config/secondmate-harness -> config/crew-harness -> own), so the
 #   secondmate-vs-crewmate split is DURABLE across every respawn (recovery,
 #   /updatefirstmate, restart). A bare adapter name (claude|codex|opencode|pi|grok)
-#   overrides it for this spawn (either kind). A non-flag string containing
-#   whitespace is treated as a RAW launch command - the escape hatch for verifying
-#   new adapters.
+#   overrides it for this spawn (either kind); Claude also requires an explicit
+#   supported --model. A non-flag string containing whitespace is treated as a RAW
+#   launch command - the escape hatch for verifying new adapters. A raw Claude
+#   command must carry --permission-mode auto and a supported non-Haiku --model,
+#   and must not carry --dangerously-skip-permissions.
 #   config/secondmate-harness may also carry an optional model and effort as extra
 #   whitespace-separated tokens ("<harness> [<model>] [<effort>]"). For a
 #   --secondmate spawn, those tokens apply only when this spawn also resolves its
-#   harness from config/secondmate-harness. An explicit per-spawn --harness,
-#   positional harness arg, or raw launch command starts with clean model/effort
-#   defaults unless the caller also passes explicit --model/--effort flags. When
-#   the file governs the spawn, its model/effort tokens are re-resolved on every
-#   respawn exactly like the harness axis, and explicit --model/--effort flags
-#   still win over the file's tokens.
+#   harness from config/secondmate-harness. An explicit per-spawn --harness or
+#   positional harness arg starts with clean model/effort defaults unless the caller
+#   also passes explicit --model/--effort flags; a raw launch command owns its axes
+#   directly. When the file governs the spawn, its model/effort tokens are re-resolved
+#   on every respawn exactly like the harness axis, and explicit --model/--effort flags
+#   still win over the file's tokens. Every Claude path requires an explicit supported
+#   non-Haiku model.
 #   A --secondmate spawn also propagates the primary's declared inherited local
 #   material, so the secondmate's OWN crewmates inherit primary config and the
 #   secondmate receives the primary's read-only shared captain-preference file
@@ -437,12 +440,31 @@ launch_template() {
   esac
 }
 
+RAW_LAUNCH=0
+RAW_MODEL=
+RAW_PERMISSION_MODE=
 case "$ARG3" in
   *' '*)  # raw launch command (unverified-adapter escape hatch)
+    RAW_LAUNCH=1
     LAUNCH=$ARG3
     HARNESS=""
+    raw_value=
     for word in $LAUNCH; do
-      case "$word" in [A-Za-z_]*=*) continue ;; *) HARNESS=$(basename "$word"); break ;; esac
+      if [ -n "$raw_value" ]; then
+        case "$raw_value" in
+          model) RAW_MODEL=$word ;;
+          permission) RAW_PERMISSION_MODE=$word ;;
+        esac
+        raw_value=
+        continue
+      fi
+      case "$word" in
+        --model) raw_value=model ;;
+        --model=*) RAW_MODEL=${word#--model=} ;;
+        --permission-mode) raw_value=permission ;;
+        --permission-mode=*) RAW_PERMISSION_MODE=${word#--permission-mode=} ;;
+      esac
+      case "$word" in [A-Za-z_]*=*) continue ;; *) [ -n "$HARNESS" ] || HARNESS=$(basename "$word") ;; esac
     done
     ;;
   '')
@@ -496,12 +518,39 @@ if [ "$KIND" = secondmate ] && [ -z "$ARG3" ]; then
 fi
 
 if [ "$HARNESS" = claude ]; then
+  if [ "$RAW_LAUNCH" -eq 1 ]; then
+    case "$LAUNCH" in
+      *--dangerously-skip-permissions*)
+        echo "error: raw Claude launch commands must not use --dangerously-skip-permissions" >&2
+        exit 1
+        ;;
+    esac
+    RAW_MODEL=${RAW_MODEL#\'}
+    RAW_MODEL=${RAW_MODEL%\'}
+    RAW_MODEL=${RAW_MODEL#\"}
+    RAW_MODEL=${RAW_MODEL%\"}
+    RAW_PERMISSION_MODE=${RAW_PERMISSION_MODE#\'}
+    RAW_PERMISSION_MODE=${RAW_PERMISSION_MODE%\'}
+    RAW_PERMISSION_MODE=${RAW_PERMISSION_MODE#\"}
+    RAW_PERMISSION_MODE=${RAW_PERMISSION_MODE%\"}
+    [ "$RAW_PERMISSION_MODE" = auto ] || {
+      echo "error: raw Claude launch commands require --permission-mode auto" >&2
+      exit 1
+    }
+    MODEL=$RAW_MODEL
+  fi
   case "$MODEL" in
     ''|default)
-      MODEL=sonnet
+      echo "error: Claude workers require an explicit supported model, such as Sonnet or Opus" >&2
+      exit 1
       ;;
     *[Hh][Aa][Ii][Kk][Uu]*)
       echo "error: Claude auto permission mode is unavailable for Haiku; choose a model verified for unattended work, such as Sonnet or Opus" >&2
+      exit 1
+      ;;
+    *[Ss][Oo][Nn][Nn][Ee][Tt]*|*[Oo][Pp][Uu][Ss]*) ;;
+    *)
+      echo "error: unsupported Claude unattended model '$MODEL'; choose Sonnet or Opus" >&2
       exit 1
       ;;
   esac
