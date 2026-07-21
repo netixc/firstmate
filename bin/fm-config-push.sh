@@ -137,28 +137,25 @@ while IFS='|' read -r id home _window meta; do
   }
   reports="$reports $report"
   if FM_CONFIG_INHERIT_REPORT="$report" propagate_secondmate_inheritance "$FM_HOME" "$home_real" "$CONFIG" "$DATA"; then
-    print_item_report "$report"
-    # Literal-content reread only after successful propagation, using the
-    # validated destination bytes and the same per-home report. No-op when no
-    # allowlisted config/* item changed for this home.
-    if reread_out=$(FM_HOME="$FM_HOME" FM_ROOT_OVERRIDE="$FM_ROOT" \
-      FM_STATE_OVERRIDE="$STATE" \
-      fm_config_send_reread_nudge "$id" "$home_real" "$report" 2>&1); then
-      if [ -n "$(fm_config_reread_changed_items "$report")" ]; then
-        printf '  config-reread: sent\n'
-      fi
-      [ -z "$reread_out" ] || printf '%s\n' "$reread_out"
-    else
-      errors=1
-      if [ -n "$reread_out" ]; then
-        printf '%s\n' "$reread_out"
-      else
-        printf '  config-reread: send failed\n'
-      fi
-    fi
+    :
   else
     errors=1
-    print_item_report "$report"
+  fi
+  print_item_report "$report"
+  if reread_out=$(FM_HOME="$FM_HOME" FM_ROOT_OVERRIDE="$FM_ROOT" \
+    FM_STATE_OVERRIDE="$STATE" \
+    fm_config_send_reread_nudge "$id" "$home_real" "$report" 2>&1); then
+    if [ -n "$(fm_config_reread_changed_items "$report")" ]; then
+      printf '  config-reread: sent\n'
+    fi
+    [ -z "$reread_out" ] || printf '%s\n' "$reread_out"
+  else
+    errors=1
+    if [ -n "$reread_out" ]; then
+      printf '%s\n' "$reread_out"
+    else
+      printf '  config-reread: send failed\n'
+    fi
   fi
 done < "$records"
 

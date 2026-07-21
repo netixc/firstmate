@@ -356,11 +356,11 @@ secondmate_sync() {
       echo "SECONDMATE_SYNC: secondmate $id: skipped: inheritance failed"
       continue
     }
-    if ! FM_CONFIG_INHERIT_REPORT="$report" \
+    if FM_CONFIG_INHERIT_REPORT="$report" \
       propagate_secondmate_inheritance "$FM_HOME" "$home_real" "$CONFIG" "$DATA"; then
+      :
+    else
       echo "SECONDMATE_SYNC: secondmate $id: skipped: inheritance failed"
-      rm -f "$report"
-      continue
     fi
     if ! reread_out=$(FM_HOME="$FM_HOME" FM_ROOT_OVERRIDE="$FM_ROOT" \
       FM_STATE_OVERRIDE="$STATE" \
@@ -823,8 +823,8 @@ if [ "${FM_BOOTSTRAP_VERBOSE_FACTS:-0}" = 1 ] \
   echo "BOOTSTRAP_INFO: tasks-axi available"
 fi
 if [ "${FM_BOOTSTRAP_DETECT_ONLY:-0}" != 1 ]; then
-  secondmate_sync
   secondmate_liveness_sweep
+  secondmate_sync
   x_mode_setup
   fleet_sync
 fi

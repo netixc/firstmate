@@ -776,10 +776,16 @@ SH
 }
 
 run_bootstrap() {
-  local w=$1 fakebin
+  local w=$1 fakebin log=${2:-}
   fakebin=$(make_fake_toolchain "$w")
-  PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
-    FM_SEND_SETTLE=0 "$ROOT/bin/fm-bootstrap.sh" 2>/dev/null
+  if [ -n "$log" ]; then
+    PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
+      FM_SEND_SETTLE=0 FM_FAKE_TMUX_LOG="$log" \
+      "$ROOT/bin/fm-bootstrap.sh" 2>/dev/null
+  else
+    PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
+      FM_SEND_SETTLE=0 "$ROOT/bin/fm-bootstrap.sh" 2>/dev/null
+  fi
 }
 
 run_config_push() {
@@ -934,6 +940,27 @@ test_bootstrap_sweep_surfaces_config_propagation_failure() {
   pass "B11 bootstrap sweep surfaces config propagation failures"
 }
 
+test_bootstrap_rereads_after_partial_propagation() {
+  local w head log out instruction
+  w=$(new_world boot-prop-partial)
+  head=$(git -C "$w/main" rev-parse HEAD)
+  add_sm_worktree "$w" sm "$head"
+  printf '{"default":{"harness":"codex"}}\n' > "$w/home/config/crew-dispatch.json"
+  printf 'invalid shared header\n' > "$w/home/data/captain-shared.md"
+  log="$w/boot-prop-partial.tmux.log"
+
+  out=$(run_bootstrap "$w" "$log")
+  assert_contains "$out" "SECONDMATE_SYNC: secondmate sm: skipped: inheritance failed" \
+    "partial bootstrap propagation did not remain diagnostic"
+  [ "$(cat "$w/sm/config/crew-dispatch.json")" = '{"default":{"harness":"codex"}}' ] \
+    || fail "partial bootstrap propagation did not retain the completed config write"
+  instruction="$w/sm/$FM_CONFIG_REREAD_INSTRUCTION_REL"
+  assert_present "$instruction" "partial bootstrap propagation did not write a reread instruction"
+  assert_contains "$(cat "$log")" "config/crew-dispatch.json" \
+    "partial bootstrap propagation did not route the completed config reread"
+  pass "B11 bootstrap rereads completed config writes after partial propagation"
+}
+
 test_config_push_propagates_reports_without_ff_or_nudge() {
   local w c1 sm_real old_head out err status out2 tmp log
   w=$(new_world config-push-basic)
@@ -1059,6 +1086,33 @@ test_config_push_exits_nonzero_on_copy_error() {
   assert_contains "$err_text" "fm-config-inherit: error: failed to copy crew-harness" \
     "copy error did not emit a stderr diagnostic"
   pass "B14 config-push exits nonzero on real propagation errors"
+}
+
+test_config_push_rereads_after_partial_propagation() {
+  local w head log out err status instruction
+  w=$(new_world config-push-partial)
+  head=$(git -C "$w/main" rev-parse HEAD)
+  add_sm_worktree "$w" sm "$head"
+  printf '{"default":{"harness":"codex"}}\n' > "$w/home/config/crew-dispatch.json"
+  printf 'invalid shared header\n' > "$w/home/data/captain-shared.md"
+  log="$w/config-push-partial.tmux.log"
+  err="$w/config-push-partial.err"
+
+  out=$(run_config_push "$w" "$log" 2>"$err"); status=$?
+  expect_code 1 "$status" "partial propagation should remain non-zero"
+  assert_contains "$out" "crew-dispatch.json: pushed" \
+    "partial propagation did not report the completed config item"
+  assert_contains "$out" "data/captain-shared.md: error" \
+    "partial propagation did not report the failed shared item"
+  assert_contains "$out" "config-reread: sent" \
+    "partial propagation lost the completed config reread"
+  [ "$(cat "$w/sm/config/crew-dispatch.json")" = '{"default":{"harness":"codex"}}' ] \
+    || fail "partial propagation did not retain the completed config write"
+  instruction="$w/sm/$FM_CONFIG_REREAD_INSTRUCTION_REL"
+  assert_present "$instruction" "partial propagation did not write a reread instruction"
+  assert_contains "$(cat "$log")" "config/crew-dispatch.json" \
+    "partial propagation did not route the completed config reread"
+  pass "B14 config-push rereads completed config writes after partial propagation"
 }
 
 # ---------------------------------------------------------------------------
@@ -1272,7 +1326,7 @@ test_config_reread_skips_when_unchanged_and_reads_after_push() {
   # read the primary source, a post-copy destination mutation would not matter.
   # Here we call the write helper after planting distinct dest bytes and a
   # pushed report line.
-  printf 'destination-post-write\n' > "$w/sm/config/crew-harness"
+  printf '%s' 'destination-post-write' > "$w/sm/config/crew-harness"
   printf 'primary-source-only\n' > "$w/home/config/crew-harness"
   report="$w/after-push.report"
   printf '%s\n' $'crew-harness\tpushed\t' > "$report"
@@ -1281,8 +1335,16 @@ test_config_reread_skips_when_unchanged_and_reads_after_push() {
     || fail "destination-byte instruction write failed"
   assert_contains "$(cat "$instr")" "destination-post-write" \
     "instruction must use destination post-write bytes"
+  assert_contains "$(cat "$instr")" $'destination-post-write-----END config/crew-harness-----' \
+    "instruction must not append a byte to a non-newline-terminated destination"
   assert_not_contains "$(cat "$instr")" "primary-source-only" \
     "instruction must not fall back to primary source bytes"
+  : > "$w/sm/config/crew-harness"
+  fm_config_write_reread_instruction "$w/sm" "$report" "$instr" \
+    || fail "empty destination instruction write failed"
+  assert_contains "$(cat "$instr")" $'-----BEGIN config/crew-harness-----
+-----END config/crew-harness-----' \
+    "instruction must represent an empty destination without a synthetic byte"
   pass "B17 config reread skips unchanged homes and reads destination post-write bytes"
 }
 
@@ -1324,6 +1386,48 @@ test_config_reread_bootstrap_path_and_spawn_flexibility() {
   pass "B18 bootstrap config reread path works; spawn flexibility remains defaults-only"
 }
 
+test_bootstrap_respawns_before_config_reread() {
+  local w head fakebin log
+  w=$(new_world config-reread-respawn-order)
+  head=$(git -C "$w/main" rev-parse HEAD)
+  add_sm_worktree "$w" sm "$head"
+  mkdir -p "$w/sm/config" "$w/sm/state"
+  printf 'harness=codex\n' >> "$w/home/state/sm.meta"
+  printf '%s' old > "$w/sm/config/crew-harness"
+  printf '%s' codex > "$w/home/config/crew-harness"
+  log="$w/config-reread-respawn-order.log"
+
+  cat > "$w/main/bin/fm-spawn.sh" <<SH
+#!/usr/bin/env bash
+printf '%s' spawn >> '$log'
+printf '%s' codex > '$w/sm/config/crew-harness'
+SH
+  chmod +x "$w/main/bin/fm-spawn.sh"
+  fakebin=$(make_fake_toolchain "$w")
+  cat > "$fakebin/tmux" <<SH
+#!/usr/bin/env bash
+case "\$*" in
+  *display-message*'#{pane_current_command}'*) printf '%s' zsh ;;
+  *display-message*'#{pane_id}'*) printf '%s' '%1' ;;
+  *display-message*'#{cursor_y}'*) printf '%s' 0 ;;
+  *capture-pane*) :
+    ;;
+  *send-keys*) printf '%s' send-keys >> '$log' ;;
+esac
+SH
+  chmod +x "$fakebin/tmux"
+  PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
+    FM_SEND_SETTLE=0 FM_FAKE_TMUX_LOG="$log" \
+    "$ROOT/bin/fm-bootstrap.sh" >/dev/null 2>&1
+  assert_contains "$(cat "$log")" "spawn" \
+    "bootstrap did not respawn the dead secondmate"
+  assert_not_contains "$(cat "$log")" "send-keys" \
+    "bootstrap nudged a secondmate before its respawn completed"
+  assert_absent "$w/sm/$FM_CONFIG_REREAD_INSTRUCTION_REL" \
+    "respawned secondmate received a redundant config reread instruction"
+  pass "B19 bootstrap respawns before inherited-config reread"
+}
+
 test_harness_resolution
 test_secondmate_model_effort_tokens
 test_propagate_lib
@@ -1345,12 +1449,15 @@ test_bootstrap_sweep_propagates_when_tracked_current
 test_bootstrap_sweep_defers_dispatch_on_stale_unignored_home
 test_bootstrap_sweep_no_inheritance_is_noop
 test_bootstrap_sweep_surfaces_config_propagation_failure
+test_bootstrap_rereads_after_partial_propagation
 test_config_push_propagates_reports_without_ff_or_nudge
 test_config_push_reports_skips_dirty_and_invalid_home
 test_config_push_exits_nonzero_on_copy_error
+test_config_push_rereads_after_partial_propagation
 test_config_reread_per_home_changed_sets_and_exact_bytes
 test_config_reread_isolation_and_absent_and_send_failure
 test_config_reread_skips_when_unchanged_and_reads_after_push
 test_config_reread_bootstrap_path_and_spawn_flexibility
+test_bootstrap_respawns_before_config_reread
 
 echo "# all fm-secondmate-harness tests passed"

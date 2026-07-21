@@ -483,7 +483,7 @@ fm_config_reread_changed_items() {
 # changed (or on write failure). Never inlines data/captain-shared.md, SHA
 # values, selected profiles, or any generated interpretation.
 fm_config_write_reread_instruction() {
-  local dest_home=$1 report=$2 instruction_path=$3 item rel dest parent tmp first=1 tail_hex
+  local dest_home=$1 report=$2 instruction_path=$3 item rel dest parent tmp first=1
   [ -n "$dest_home" ] || return 1
   [ -n "$report" ] && [ -f "$report" ] || return 1
   [ -n "$instruction_path" ] || return 1
@@ -508,17 +508,6 @@ fm_config_write_reread_instruction() {
     if [ -f "$dest" ] && [ ! -L "$dest" ]; then
       # Stream destination post-write bytes only - never re-read the primary.
       cat "$dest" >> "$tmp" || { rm -f "$tmp"; return 1; }
-      # Keep the end delimiter on its own line. When the destination already ends
-      # in a newline, cat provided it; otherwise append a structural newline that
-      # is not part of a re-read of the destination path itself.
-      if [ -s "$dest" ]; then
-        tail_hex=$(tail -c 1 "$dest" | od -An -tx1 2>/dev/null | tr -d ' \n')
-        if [ "$tail_hex" != "0a" ]; then
-          printf '\n' >> "$tmp" || { rm -f "$tmp"; return 1; }
-        fi
-      else
-        printf '\n' >> "$tmp" || { rm -f "$tmp"; return 1; }
-      fi
     else
       printf '%s\n' "ABSENT" >> "$tmp" || { rm -f "$tmp"; return 1; }
     fi
