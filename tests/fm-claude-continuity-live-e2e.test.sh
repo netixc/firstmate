@@ -62,7 +62,7 @@ PROMPT='Use Bash with run_in_background=true to run exactly `bin/fm-watch-arm.sh
 (
   cd "$PROJECT" || exit 1
   FM_HOME="$HOME_DIR" FM_ROOT_OVERRIDE="$PROJECT" CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false \
-    claude -p "$PROMPT" --dangerously-skip-permissions --effort low --output-format stream-json --verbose
+    claude -p "$PROMPT" --permission-mode auto --model opus --effort low --output-format stream-json --verbose
 ) > "$TRANSCRIPT" 2>&1 || fail "Claude credentialed continuity turn failed: $(tail -20 "$TRANSCRIPT")"
 
 [ -f "$HOME_DIR/state/claude-arm-ran" ] || fail "Claude did not run the tracked background arm fixture"

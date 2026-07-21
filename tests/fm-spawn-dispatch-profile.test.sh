@@ -105,7 +105,7 @@ assert_meta_profile() {
   assert_grep "effort=$effort" "$meta" "meta missing effort=$effort"
 }
 
-test_no_profile_keeps_claude_launch_unchanged() {
+test_claude_defaults_to_auto_permission_mode() {
   local rec id out status expected launch
   id=profile-off-z1
   rec=$(make_spawn_case profile-off claude "$id")
@@ -118,9 +118,11 @@ test_no_profile_keeps_claude_launch_unchanged() {
   assert_meta_profile "$HOME_DIR/state/$id.meta" claude default default
 
   launch=$(cat "$LAUNCH_LOG")
-  expected="CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false claude --dangerously-skip-permissions \"\$(cat '$HOME_DIR/data/$id/brief.md')\""
+  expected="CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false claude --permission-mode auto \"\$(cat '$HOME_DIR/data/$id/brief.md')\""
   [ "$launch" = "$expected" ] || fail "no-profile claude launch changed"$'\n'"expected: $expected"$'\n'"actual:   $launch"
-  pass "no --model/--effort records defaults and keeps the claude launch byte-identical"
+  assert_not_contains "$launch" "--dangerously-skip-permissions" \
+    "claude launch must never use the root-incompatible permission bypass"
+  pass "claude defaults to auto permissions and retains the quoted brief path"
 }
 
 test_active_dispatch_profile_requires_explicit_harness_for_ship() {
@@ -208,7 +210,7 @@ test_active_dispatch_profile_allows_raw_launch_command() {
   pass "active crew-dispatch profile allows the raw launch-command escape hatch"
 }
 
-test_claude_threads_model_and_effort() {
+test_claude_threads_model_and_effort_after_auto_mode() {
   local rec id out status launch
   id=profile-claude-z2
   rec=$(make_spawn_case profile-claude claude "$id")
@@ -219,9 +221,31 @@ test_claude_threads_model_and_effort() {
   expect_code 0 "$status" "claude spawn with profile flags should succeed"
   assert_meta_profile "$HOME_DIR/state/$id.meta" claude sonnet high
   launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "claude --dangerously-skip-permissions --model 'sonnet' --effort 'high'" \
-    "claude launch did not thread model and effort flags"
-  pass "claude receives --model and --effort profile flags"
+  assert_contains "$launch" "claude --permission-mode auto --model 'sonnet' --effort 'high'" \
+    "claude launch did not thread auto mode before model and effort flags"
+  assert_not_contains "$launch" "--dangerously-skip-permissions" \
+    "profiled claude launch must never use the root-incompatible permission bypass"
+  pass "claude receives auto permissions before --model and --effort profile flags"
+}
+
+test_claude_auto_mode_preserves_shell_quoted_profile_values() {
+  local rec id out status launch model
+  id=profile-claude-quote-z2b
+  model="owner's sonnet"
+  rec=$(make_spawn_case profile-claude-quote claude "$id")
+  read_case_record "$rec"
+
+  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+    --model "$model" --effort xhigh)
+  status=$?
+  expect_code 0 "$status" "claude spawn with a quoted model value should succeed"
+  assert_meta_profile "$HOME_DIR/state/$id.meta" claude "$model" xhigh
+  launch=$(cat "$LAUNCH_LOG")
+  assert_contains "$launch" "claude --permission-mode auto --model 'owner'\\''s sonnet' --effort 'xhigh'" \
+    "claude auto mode disturbed shell quoting for model and effort flags"
+  assert_not_contains "$launch" "--dangerously-skip-permissions" \
+    "quoted claude launch must never use the root-incompatible permission bypass"
+  pass "claude auto permissions preserve shell-quoted model and effort values"
 }
 
 test_codex_threads_model_and_effort() {
@@ -384,13 +408,14 @@ test_active_dispatch_profile_does_not_block_secondmate_launch() {
   pass "active crew-dispatch profile does not block secondmate launches"
 }
 
-test_no_profile_keeps_claude_launch_unchanged
+test_claude_defaults_to_auto_permission_mode
 test_active_dispatch_profile_requires_explicit_harness_for_ship
 test_active_dispatch_profile_requires_explicit_harness_for_scout
 test_active_dispatch_profile_allows_explicit_harness
 test_active_dispatch_profile_allows_positional_harness
 test_active_dispatch_profile_allows_raw_launch_command
-test_claude_threads_model_and_effort
+test_claude_threads_model_and_effort_after_auto_mode
+test_claude_auto_mode_preserves_shell_quoted_profile_values
 test_codex_threads_model_and_effort
 test_codex_omits_invalid_max_effort
 test_grok_threads_model_and_reasoning_effort

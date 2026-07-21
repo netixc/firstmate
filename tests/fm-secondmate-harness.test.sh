@@ -503,8 +503,10 @@ test_spawn_secondmate_harness_model_token() {
   [ "$(meta_field "$meta" model)" = opus ] || fail "model-token: meta model not opus (got '$(meta_field "$meta" model)')"
   [ "$(meta_field "$meta" effort)" = default ] || fail "model-token: meta effort not default (got '$(meta_field "$meta" effort)')"
   launch=$(cat "$launchlog")
-  assert_contains "$launch" "claude --dangerously-skip-permissions --model 'opus'" \
-    "model-token: launch did not carry --model opus"
+  assert_contains "$launch" "claude --permission-mode auto --model 'opus'" \
+    "model-token: launch did not carry auto mode followed by --model opus"
+  assert_not_contains "$launch" "--dangerously-skip-permissions" \
+    "model-token: secondmate launch must reject the root-incompatible permission bypass"
   assert_not_contains "$launch" "--effort" "model-token: launch must not carry an --effort flag"
   pass "C3 spawn: config/secondmate-harness's model token threads --model into the launch and meta"
 }
@@ -525,8 +527,10 @@ test_spawn_secondmate_harness_model_and_effort_tokens() {
   [ "$(meta_field "$meta" model)" = opus ] || fail "model-effort-tokens: meta model not opus"
   [ "$(meta_field "$meta" effort)" = high ] || fail "model-effort-tokens: meta effort not high (got '$(meta_field "$meta" effort)')"
   launch=$(cat "$launchlog")
-  assert_contains "$launch" "claude --dangerously-skip-permissions --model 'opus' --effort 'high'" \
-    "model-effort-tokens: launch did not carry both --model opus and --effort high"
+  assert_contains "$launch" "claude --permission-mode auto --model 'opus' --effort 'high'" \
+    "model-effort-tokens: launch did not carry auto mode followed by --model opus and --effort high"
+  assert_not_contains "$launch" "--dangerously-skip-permissions" \
+    "model-effort-tokens: secondmate launch must reject the root-incompatible permission bypass"
   pass "C4 spawn: config/secondmate-harness's model+effort tokens thread into the launch and meta"
 }
 

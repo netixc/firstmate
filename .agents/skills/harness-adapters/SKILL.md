@@ -103,7 +103,7 @@ The supported launch-profile flags below are verified locally; each row records 
 
 | Harness | Model flag | Effort flag | Notes |
 |---|---|---|---|
-| claude | `--model <model>` | `--effort <low\|medium\|high\|xhigh\|max>` | Verified on Claude Code 2.1.196. |
+| claude | `--model <model>` | `--effort <low\|medium\|high\|xhigh\|max>` | Verified on Claude Code 2.1.216. Auto permissions were verified with Opus and Sonnet; this version reports auto mode unavailable for Haiku. |
 | codex | `--model <model>` | `-c 'model_reasoning_effort="<low\|medium\|high\|xhigh>"'` | Verified on codex-cli 0.142.1. The installed binary schema contains `model_reasoning_effort`, the active config uses it, and the bundled model catalog advertises only low/medium/high/xhigh. `max` is omitted. |
 | grok | `--model <model>` | `--reasoning-effort <low\|medium\|high>` | Verified on grok 0.2.99 (2026-07-13). `--effort` is an alias, but firstmate's profile axis is reasoning effort. As of 0.2.99 the ceiling is `high`; both `xhigh` and `max` are rejected with `use one of: high, medium, low`, so firstmate omits them. |
 | pi | `--model <model>` | `--thinking <low\|medium\|high\|xhigh\|max>` | Verified 2026-07-13 on Pi 0.80.6. `pi --help` advertises `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`; `pi --print --model openai-codex/gpt-5.6-sol --thinking max 'Reply with exactly OK.'` completed successfully. |
@@ -131,10 +131,24 @@ Natural language is acceptable if uncertain.
 | Exit command | `/exit` |
 | Interrupt | single Escape |
 | Skill invocation | `/<skill>` (e.g. `/no-mistakes`) |
+| Unattended permissions | `--permission-mode auto`, which retains Claude's sandbox, policy checks, and project-trust confirmation. |
 
-First launch in a fresh worktree, or first ever on a machine, may show a trust or bypass-permissions confirmation.
+First launch in a fresh worktree, or first ever on a machine, may show a project-trust confirmation.
 After every spawn, peek the pane within about 20 seconds.
 If such a dialog is showing, accept it from an active firstmate session using `FM_HOME=<this-firstmate-home> bin/fm-send.sh <window> --key Enter`, or the choice the dialog requires, unless `FM_HOME` is already set to the active firstmate home; verify the brief started processing.
+
+**Unattended-permission verification (2026-07-21, Claude Code 2.1.216).**
+`claude --version` returned `2.1.216 (Claude Code)`.
+Under uid 0, `CLAUDE_CONFIG_DIR=<scratch-config> claude --dangerously-skip-permissions -p 'Reply NO.' --model haiku --effort low --output-format text` exited 1 before model execution with `--dangerously-skip-permissions cannot be used with root/sudo privileges for security reasons`.
+The smallest root counterfactual, `cd <scratch-project> && CLAUDE_CONFIG_DIR=<scratch-config> claude --permission-mode auto -p 'Use Bash to run exactly \`printf CURRENT_ROOT_OPUS_AUTO_OK > current-root-opus-auto-ran\`, then reply exactly CURRENT_ROOT_OPUS_DONE.' --model opus --effort low --output-format stream-json --verbose`, exited 0, initialized with `permissionMode:"auto"`, wrote a marker containing `CURRENT_ROOT_OPUS_AUTO_OK`, returned `CURRENT_ROOT_OPUS_DONE`, and reported no permission denials.
+The same root command with `--model sonnet` wrote `CURRENT_ROOT_SONNET_AUTO_OK`, returned `CURRENT_ROOT_SONNET_DONE`, and reported no permission denials.
+For the ordinary-user countercheck, the verification shell opened the root-private scratch config and installed binary on inherited file descriptors, then ran `setpriv --inh-caps=+dac_override,+dac_read_search --ambient-caps=+dac_override,+dac_read_search --reuid=65534 --regid=65534 --clear-groups env CLAUDE_CONFIG_DIR=/proc/self/fd/8 /proc/self/fd/9 --permission-mode auto -p 'Use the Bash tool to run exactly \`printf ORDINARY_AUTO_OK > ordinary-auto-cap-ran\`, then reply with exactly ORDINARY_DONE.' --effort low --output-format stream-json --verbose`.
+The filesystem capabilities only let uid 65534 traverse this root-owned verification worktree; Claude still observed and ran as the ordinary uid.
+That command exited 0, wrote `ORDINARY_AUTO_OK`, returned `ORDINARY_DONE`, initialized with `permissionMode:"auto"`, and reported no permission denials.
+The disconfirming ordinary-user command using `--dangerously-skip-permissions` also started successfully, proving uid 0 is the masking condition for the reported immediate exit rather than the initiating spawn itself.
+In a fresh interactive pseudo-terminal, `CLAUDE_CONFIG_DIR=<fresh-config> CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false claude --permission-mode auto --model opus --effort low 'Use the Bash tool to run exactly \`printf INTERACTIVE_OPUS_216_AUTO_OK > interactive-opus-216-tool-ran\`, then reply with exactly INTERACTIVE_OPUS_216_DONE.'` first displayed `Quick safety check: Is this a project you created or one you trust?`.
+After one Enter accepted `Yes, I trust this folder`, the footer displayed `auto mode on`, the Bash tool wrote `INTERACTIVE_OPUS_216_AUTO_OK`, and no per-tool `Do you want to proceed?` prompt appeared.
+Claude Code 2.1.216 reports `auto mode unavailable for this model` for an explicit Haiku profile and falls back to manual permissions, so do not select Haiku for unattended Claude work until the installed CLI supports that combination.
 
 Claude renders a predicted-next-prompt suggestion as dim/faint text inside an otherwise-empty composer after a turn completes.
 A plain `tmux capture-pane` cannot tell that ghost text apart from typed text.
