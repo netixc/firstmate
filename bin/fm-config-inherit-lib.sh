@@ -526,11 +526,11 @@ fm_config_write_reread_instruction() {
 
 # fm_config_send_reread_nudge <id> <dest-home> <report>
 # After successful propagation, if any allowlisted config item changed for this
-# home, write the exact-byte instruction under the destination home and deliver
-# that full instruction body through the routed secondmate path (fm-send).
-# The instruction contains only changed config paths, clear delimiters, and the
-# destination's full exact post-write bytes (or ABSENT) - never summaries, SHA
-# values, selected profiles, or data/captain-shared.md. No-op (return 0) when
+# home, write the exact-byte instruction under the destination home and send a
+# single-line pointer to that file through the routed secondmate path (fm-send).
+# The instruction file contains only changed config paths, clear delimiters, and
+# the destination's full exact post-write bytes (or ABSENT) - never summaries,
+# SHA values, selected profiles, or data/captain-shared.md. No-op (return 0) when
 # nothing changed. On send failure, print a concrete CONFIG_REREAD retry
 # diagnostic to stdout and return non-zero - never claim the live agent reread
 # the values. Requires FM_HOME (and optional FM_ROOT_OVERRIDE /
@@ -538,11 +538,15 @@ fm_config_write_reread_instruction() {
 # correct primary home.
 fm_config_send_reread_nudge() {
   local id=$1 dest_home=$2 report=$3
-  local instruction_path selector out rc send_bin message
+  local instruction_path dest_home_abs selector out rc send_bin message
   [ -n "$id" ] || return 1
   [ -n "$dest_home" ] || return 1
   [ -n "$report" ] && [ -f "$report" ] || return 1
-  instruction_path="$dest_home/$FM_CONFIG_REREAD_INSTRUCTION_REL"
+  dest_home_abs=$(cd "$dest_home" 2>/dev/null && pwd -P) || {
+    printf 'CONFIG_REREAD: secondmate %s: send failed: destination home is not readable\n' "$id"
+    return 1
+  }
+  instruction_path="$dest_home_abs/$FM_CONFIG_REREAD_INSTRUCTION_REL"
   if ! fm_config_write_reread_instruction "$dest_home" "$report" "$instruction_path"; then
     if [ -z "$(fm_config_reread_changed_items "$report")" ]; then
       return 0
@@ -550,12 +554,7 @@ fm_config_send_reread_nudge() {
     printf 'CONFIG_REREAD: secondmate %s: send failed: could not write instruction file\n' "$id"
     return 1
   fi
-  # Load the durable instruction after the write so the routed message is built
-  # from destination-validated post-write bytes, never from a stale source read.
-  message=$(cat "$instruction_path" 2>/dev/null) || {
-    printf 'CONFIG_REREAD: secondmate %s: send failed: could not read instruction file\n' "$id"
-    return 1
-  }
+  message="CONFIG_REREAD: $instruction_path"
   selector="fm-$id"
   send_bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fm-send.sh"
   if [ ! -x "$send_bin" ]; then

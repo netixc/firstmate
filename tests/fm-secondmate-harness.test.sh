@@ -21,8 +21,9 @@
 #      config/secondmate-harness is deliberately NOT inherited (secondmates do
 #      not spawn secondmates). After a successful push that changes allowlisted
 #      config under an already-running home, a literal-content reread instruction
-#      is sent via the routed secondmate path (exact destination bytes, no
-#      summaries); unchanged config sends nothing.
+#      is written to the secondmate home and only its pointer is sent via the
+#      routed secondmate path (exact destination bytes, no summaries); unchanged
+#      config sends nothing.
 
 #   C) Model/effort pin. config/secondmate-harness may carry optional model and
 #      effort tokens after the harness ("<harness> [<model>] [<effort>]"), read by
@@ -802,6 +803,11 @@ run_config_push() {
   fi
 }
 
+reread_instruction_path() {
+  local home=$1
+  printf '%s/%s\n' "$(cd "$home" && pwd -P)" "$FM_CONFIG_REREAD_INSTRUCTION_REL"
+}
+
 # The sweep pushes the primary's declared inherited config into a live home,
 # re-converges it when the primary changes it, and mirrors absence when the
 # primary clears it - all while never inheriting secondmate-harness.
@@ -941,7 +947,7 @@ test_bootstrap_sweep_surfaces_config_propagation_failure() {
 }
 
 test_bootstrap_rereads_after_partial_propagation() {
-  local w head log out instruction
+  local w head log out instruction pointer
   w=$(new_world boot-prop-partial)
   head=$(git -C "$w/main" rev-parse HEAD)
   add_sm_worktree "$w" sm "$head"
@@ -956,8 +962,9 @@ test_bootstrap_rereads_after_partial_propagation() {
     || fail "partial bootstrap propagation did not retain the completed config write"
   instruction="$w/sm/$FM_CONFIG_REREAD_INSTRUCTION_REL"
   assert_present "$instruction" "partial bootstrap propagation did not write a reread instruction"
-  assert_contains "$(cat "$log")" "config/crew-dispatch.json" \
-    "partial bootstrap propagation did not route the completed config reread"
+  pointer="CONFIG_REREAD: $(reread_instruction_path "$w/sm")"
+  assert_contains "$(cat "$log")" "$pointer" \
+    "partial bootstrap propagation did not route the instruction pointer"
   pass "B11 bootstrap rereads completed config writes after partial propagation"
 }
 
@@ -1089,7 +1096,7 @@ test_config_push_exits_nonzero_on_copy_error() {
 }
 
 test_config_push_rereads_after_partial_propagation() {
-  local w head log out err status instruction
+  local w head log out err status instruction pointer
   w=$(new_world config-push-partial)
   head=$(git -C "$w/main" rev-parse HEAD)
   add_sm_worktree "$w" sm "$head"
@@ -1110,8 +1117,9 @@ test_config_push_rereads_after_partial_propagation() {
     || fail "partial propagation did not retain the completed config write"
   instruction="$w/sm/$FM_CONFIG_REREAD_INSTRUCTION_REL"
   assert_present "$instruction" "partial propagation did not write a reread instruction"
-  assert_contains "$(cat "$log")" "config/crew-dispatch.json" \
-    "partial propagation did not route the completed config reread"
+  pointer="CONFIG_REREAD: $(reread_instruction_path "$w/sm")"
+  assert_contains "$(cat "$log")" "$pointer" \
+    "partial propagation did not route the instruction pointer"
   pass "B14 config-push rereads completed config writes after partial propagation"
 }
 
@@ -1133,7 +1141,7 @@ EOF
 # two live homes start with different stale config subsets; after push each is
 # updated and each live agent receives only its own changed-content instruction.
 test_config_reread_per_home_changed_sets_and_exact_bytes() {
-  local w head log out err status instr_a instr_b multiline_json
+  local w head log out err status instr_a instr_b multiline_json pointer
   w=$(new_world config-reread-per-home)
   head=$(git -C "$w/main" rev-parse HEAD)
   add_sm_worktree "$w" alpha "$head"
@@ -1220,12 +1228,14 @@ test_config_reread_per_home_changed_sets_and_exact_bytes() {
   assert_not_contains "$(cat "$instr_b")" $'pi\n' \
     "beta instruction must not leak alpha-only stale harness bytes as a standalone scalar block incorrectly"
 
-  # Routed send used the from-firstmate marker and carried exact content.
+  # Routed send used the from-firstmate marker and carried only the pointer.
+  pointer="CONFIG_REREAD: $(reread_instruction_path "$w/alpha")"
   assert_contains "$(cat "$log")" "[fm-from-firstmate]" "reread send must be marked"
-  assert_contains "$(cat "$log")" "config/crew-dispatch.json" "sent instruction must name changed paths"
-  assert_contains "$(cat "$log")" '"harness": "grok"' "sent instruction must carry exact JSON bytes"
+  assert_contains "$(cat "$log")" "$pointer" "reread send must point to the durable instruction file"
+  assert_not_contains "$(cat "$log")" '"harness": "grok"' "sent message must not inline multiline JSON"
+  assert_not_contains "$(cat "$log")" $'\n  "default"' "sent message must not contain embedded newlines"
   assert_not_contains "$(cat "$log")" "Default worker" "sent message must not summarize"
-  pass "B15 config reread is per-home, exact-byte, ordered, and free of summaries/shared dumps"
+  pass "B15 config reread is per-home, exact-byte, ordered, and pointer-only"
 }
 
 test_config_reread_isolation_and_absent_and_send_failure() {

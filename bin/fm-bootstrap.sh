@@ -336,9 +336,9 @@ secondmate_sync() {
   # FF_SEEN_HOMES is exactly that set, and fm-config-inherit-lib.sh owns the
   # declared config items plus data/captain-shared.md.
   # After a successful push that changes allowlisted config/* for an already-
-  # running home, send the literal-content reread instruction so the live
-  # agent does not keep applying stale defaults. Spawn/respawn already re-reads
-  # at launch and needs no redundant nudge unless files changed after launch.
+  # running home, send its literal-content reread instruction pointer so the
+  # live agent does not keep applying stale defaults. Spawn/respawn already
+  # re-reads at launch and needs no redundant nudge unless files changed after launch.
   local id home home_real propagated_homes report reread_out
   propagated_homes=""
   while IFS='|' read -r id home _window _meta; do
