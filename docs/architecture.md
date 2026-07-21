@@ -131,7 +131,7 @@ Ship tasks change projects and ship by project mode (`no-mistakes`, `direct-PR`,
 
 ## Dispatch profiles
 
-Crewmate and scout dispatch can stay on the static crewmate harness resolved by `config/crew-harness`, or it can use local dispatch profiles in `config/crew-dispatch.json`.
+Crewmate and scout dispatch can stay on the static crewmate harness resolved by `config/crew-harness` for non-Claude adapters, or it can use local dispatch profiles in `config/crew-dispatch.json`; unattended Claude dispatch requires a profile or per-spawn override carrying an explicit supported model.
 The dispatch file is intentionally judgment-based: firstmate reads the natural-language rules at intake, chooses the best matching rule, resolves that rule directly or through a supported selector, and passes only concrete `--harness`, `--model`, and `--effort` axes to `fm-spawn.sh`.
 The shell scripts validate the JSON shape and verified harness/model/effort combinations, and `fm-dispatch-select.sh` owns deterministic selector behavior, but they do not parse task intent or match the natural-language rules.
 The session-start bootstrap step surfaces either the active rule block or a concise invalid-config line at startup.

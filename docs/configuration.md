@@ -172,6 +172,7 @@ Primary-session watcher wake protocols are rendered at session start by [`bin/fm
 Claude and Grok use background-notify cycles, Codex uses bounded foreground checkpoints, Pi uses its two tracked primary extensions, and OpenCode uses its TUI plugin.
 `config/crew-harness` is a local, gitignored file containing one adapter name for crewmate and scout launches.
 When it is absent or contains `default`, crewmates mirror the firstmate's own harness.
+That static harness-only path launches non-Claude adapters with their own model default, but a resolved Claude harness fails closed unless the spawn also receives an explicit supported `--model`; use a Claude dispatch profile for a durable crewmate model choice.
 `config/secondmate-harness` is a separate local, gitignored file containing the adapter the primary uses to launch secondmate agents, optionally followed by model and effort tokens on the same line.
 The first non-empty, non-comment line is parsed as `<harness> [<model>] [<effort>]`.
 A bare `<harness>` preserves the previous behavior for non-Claude adapters: harness only, with no model or effort launch flag; a Claude secondmate entry must also name `opus`, `sonnet`, a `claude-opus-*` full model name, or a `claude-sonnet-*` full model name.
@@ -225,7 +226,7 @@ See [`docs/examples/crew-dispatch.json`](examples/crew-dispatch.json) for a star
 When the file exists, bootstrap validates it with `jq`.
 Valid files stay silent by default; with `FM_BOOTSTRAP_VERBOSE_FACTS=1`, bootstrap emits `BOOTSTRAP_INFO: crew dispatch active config/crew-dispatch.json` plus one `BOOTSTRAP_INFO:` fact per rule and default profile.
 Malformed JSON, an unverified harness, a missing or unsupported Claude model, a malformed array profile, an unknown `select`, or an effort value unsupported by that harness is reported as `CREW_DISPATCH: invalid config/crew-dispatch.json - ...`; missing `jq` is reported through the normal `MISSING: jq` install-consent flow.
-If no dispatch rule fits, firstmate uses the dispatch profile `default` when present, then falls back to `config/crew-harness`.
+If no dispatch rule fits, firstmate uses the dispatch profile `default` when present, then falls back to `config/crew-harness`; when that fallback resolves to Claude without a separately chosen explicit supported model, the spawn fails closed.
 Because the spawn backstop is gated by file presence, any fallback path after a missing match, validation error, or missing `jq` still passes a resolved harness explicitly until the file is fixed or removed.
 Secondmate homes inherit this file from the primary, so a secondmate's own crewmates apply the same dispatch profile behavior.
 
