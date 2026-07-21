@@ -59,7 +59,10 @@
 #   overrides it for this spawn (either kind); Claude also requires --model opus,
 #   sonnet, claude-opus-*, or claude-sonnet-*. A non-flag string containing
 #   whitespace is treated as a RAW launch command - the escape hatch for verifying
-#   new adapters. Raw commands must not invoke Claude or carry
+#   new adapters. Raw commands accept only unquoted, space-separated tokens made
+#   from letters, digits, `_./:=,@%+~-`; shell quoting, escaping, parameter or
+#   command expansion, globbing, and operators are rejected. Raw commands must
+#   not name a Claude executable token or carry
 #   --dangerously-skip-permissions; Claude launches use the verified adapter so its
 #   deterministic template owns permission policy.
 #   config/secondmate-harness may also carry an optional model and effort as extra
@@ -445,18 +448,23 @@ case "$ARG3" in
   *' '*)  # raw launch command (unverified-adapter escape hatch)
     LAUNCH=$ARG3
     HARNESS=""
-    RAW_CLAUDE_COMMAND_PATTERN="(^|[[:space:];|&()'\"])([^[:space:];|&()'\"]*/)?claude([[:space:];|&()'\"]|$)"
     case "$LAUNCH" in
       *--dangerously-skip-permissions*)
         echo "error: raw launch commands must not use --dangerously-skip-permissions" >&2
         exit 1
         ;;
+      *[!A-Za-z0-9_./:=,@%+~\ -]*)
+        echo "error: raw launch commands accept only unquoted, space-separated executable and argument tokens; shell syntax is not allowed" >&2
+        exit 1
+        ;;
     esac
-    if [[ $LAUNCH =~ $RAW_CLAUDE_COMMAND_PATTERN ]]; then
-      echo "error: raw launch commands must not invoke Claude; use --harness claude with an explicit supported --model" >&2
-      exit 1
-    fi
     for word in $LAUNCH; do
+      case "$word" in
+        claude|*/claude|*=claude|*=*/claude|-Sclaude|-S*/claude)
+          echo "error: raw launch commands must not invoke Claude; use --harness claude with an explicit supported --model" >&2
+          exit 1
+          ;;
+      esac
       case "$word" in [A-Za-z_]*=*) continue ;; *) [ -n "$HARNESS" ] || HARNESS=$(basename "$word") ;; esac
     done
     ;;

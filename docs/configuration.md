@@ -179,7 +179,8 @@ When the harness token is absent or `default`, secondmate launch falls back thro
 `fm-harness.sh secondmate-model` and `fm-harness.sh secondmate-effort` expose only the optional tokens from `config/secondmate-harness`; `config/crew-harness` remains a bare adapter-name file.
 An explicit harness argument to `fm-spawn.sh` still overrides either config file for that spawn only.
 An explicit `--model` or `--effort` overrides the matching token from `config/secondmate-harness`; an explicit harness starts with clean model and effort defaults unless those flags are also passed.
-Raw launch commands own their model and effort axes directly, but they cannot invoke Claude and cannot include `--dangerously-skip-permissions`; Claude workers must use the verified adapter.
+Raw launch commands own their model and effort axes directly and accept only a simple unquoted executable/argument form with no shell quoting, escaping, parameter or command expansion, globbing, or operators.
+They cannot name a Claude executable token or include `--dangerously-skip-permissions`; Claude workers must use the verified adapter.
 When `config/crew-dispatch.json` exists, crewmate and scout spawns require an explicit resolved harness instead of automatically falling back to `config/crew-harness`.
 The inherited-local-material contract is owned by `secondmate-provisioning`; for harness behavior, its propagated config items make a secondmate's own crewmates, dispatch profiles, and backlog backend use the primary values.
 `config/secondmate-harness` is not inherited because secondmates do not launch secondmates.

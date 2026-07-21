@@ -253,16 +253,16 @@ test_raw_commands_cannot_bypass_claude_policy() {
     "env-wrapped raw Claude refusal was not actionable"
   assert_absent "$HOME_DIR/state/$id.meta" "env-wrapped raw Claude refusal should precede metadata"
 
-  id=profile-raw-claude-shell-z15d
-  rec=$(make_spawn_case profile-raw-claude-shell claude "$id")
+  id=profile-raw-claude-obfuscated-z15d
+  rec=$(make_spawn_case profile-raw-claude-obfuscated claude "$id")
   read_case_record "$rec"
   out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id" "$PROJ_DIR" "bash -c 'claude --permission-mode auto --model opus'")
+    "$id" "$PROJ_DIR" "clau''de --dangerously-skip-permission''s --model opus")
   status=$?
-  expect_code 1 "$status" "shell-wrapped raw Claude should fail closed"
-  assert_contains "$out" "raw launch commands must not invoke Claude" \
-    "shell-wrapped raw Claude refusal was not actionable"
-  assert_absent "$HOME_DIR/state/$id.meta" "shell-wrapped raw Claude refusal should precede metadata"
+  expect_code 1 "$status" "shell-composed Claude and dangerous flags should fail closed"
+  assert_contains "$out" "shell syntax is not allowed" \
+    "shell-composed raw Claude refusal was not actionable"
+  assert_absent "$HOME_DIR/state/$id.meta" "shell-composed raw Claude refusal should precede metadata"
 
   id=profile-raw-opencode-claude-model-z15e
   rec=$(make_spawn_case profile-raw-opencode-claude-model opencode "$id")
