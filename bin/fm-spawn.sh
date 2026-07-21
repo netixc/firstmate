@@ -71,7 +71,8 @@
 #   A --secondmate spawn also propagates the primary's declared inherited local
 #   material, so the secondmate's OWN crewmates inherit primary config and the
 #   secondmate receives the primary's read-only shared captain-preference file
-#   (fm-config-inherit-lib.sh).
+#   (fm-config-inherit-lib.sh). A successful launch clears pending inherited
+#   config reread generations because the new agent reads the converged files.
 #   --scout records kind=scout in the task's meta (report deliverable, scratch worktree;
 #   see AGENTS.md task lifecycle); --secondmate records kind=secondmate and launches in a
 #   provisioned firstmate home; the default is kind=ship.
@@ -1256,5 +1257,9 @@ if [ "${HERDR_PROJECTED:-0}" -eq 1 ]; then
   spawn_herdr_presentation_order_lock_release
 fi
 spawn_send_key "$T" Enter
+if [ "$KIND" = secondmate ]; then
+  fm_config_reread_discard_pending "$PROJ_ABS" || \
+    echo "warning: secondmate $ID pending config reread cleanup failed for $PROJ_ABS" >&2
+fi
 
 echo "spawned $ID harness=$HARNESS kind=$KIND mode=$MODE yolo=$YOLO window=$META_WINDOW worktree=$WT"

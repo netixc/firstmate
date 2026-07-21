@@ -440,11 +440,11 @@ propagate_inheritable_config() {
   return "$rc"
 }
 
-# Relative path of the per-home instruction file written after a successful
+# Relative prefix of per-home instruction files written after a successful
 # config push so the live secondmate can re-read exact post-write bytes.
 # Kept under state/ (gitignored operational dir) so it never dirties the home.
-FM_CONFIG_REREAD_INSTRUCTION_REL="state/.fm-inherited-config-reread"
-FM_CONFIG_REREAD_PENDING_REL="state/.fm-inherited-config-reread.pending"
+FM_CONFIG_REREAD_INSTRUCTION_PREFIX_REL="state/.fm-inherited-config-reread"
+FM_CONFIG_REREAD_MAX_SENT=16
 
 # Framing lines for the config-reread instruction. Defaults/rules only - never
 # an enforcement claim, and never a parsed summary of file contents.
@@ -491,7 +491,8 @@ fm_config_write_reread_instruction() {
   parent=${instruction_path%/*}
   [ -n "$parent" ] && [ "$parent" != "$instruction_path" ] || return 1
   mkdir -p "$parent" 2>/dev/null || return 1
-  tmp=$(mktemp "$parent/.fm-config-reread.XXXXXX" 2>/dev/null) || return 1
+  tmp=$(umask 077; mktemp "$parent/.fm-config-reread.XXXXXX" 2>/dev/null) || return 1
+  chmod 0600 "$tmp" 2>/dev/null || { rm -f "$tmp"; return 1; }
   while IFS= read -r item; do
     [ -n "$item" ] || continue
     fm_config_reread_is_allowlisted_item "$item" || continue
@@ -525,11 +526,77 @@ fm_config_write_reread_instruction() {
   return 0
 }
 
+fm_config_reread_new_instruction_path() {
+  local dest_home=$1 state generation prefix
+  state="$dest_home/${FM_CONFIG_REREAD_INSTRUCTION_PREFIX_REL%/*}"
+  mkdir -p "$state" 2>/dev/null || return 1
+  generation=$(date -u +%Y%m%dT%H%M%S 2>/dev/null) || return 1
+  prefix="$dest_home/$FM_CONFIG_REREAD_INSTRUCTION_PREFIX_REL.$generation"
+  (umask 077; mktemp "$prefix.XXXXXX" 2>/dev/null)
+}
+
+fm_config_reread_pending_instructions() {
+  local state=$1 pending instruction
+  for pending in "$state"/.fm-inherited-config-reread.*.pending; do
+    [ -f "$pending" ] && [ ! -L "$pending" ] || continue
+    instruction=${pending%.pending}
+    printf '%s\n' "$instruction"
+  done | LC_ALL=C sort
+}
+
+fm_config_reread_has_pending() {
+  local dest_home=$1 state pending
+  state="$dest_home/${FM_CONFIG_REREAD_INSTRUCTION_PREFIX_REL%/*}"
+  for pending in "$state"/.fm-inherited-config-reread.*.pending; do
+    [ -f "$pending" ] && [ ! -L "$pending" ] || continue
+    return 0
+  done
+  return 1
+}
+
+fm_config_reread_cleanup_sent() {
+  local dest_home=$1 state path paths sorted total remove
+  state="$dest_home/${FM_CONFIG_REREAD_INSTRUCTION_PREFIX_REL%/*}"
+  [ -d "$state" ] || return 0
+  paths=""
+  for path in "$state"/.fm-inherited-config-reread.*; do
+    case "$path" in
+      *.pending) continue ;;
+    esac
+    [ -f "$path" ] && [ ! -L "$path" ] || continue
+    [ -e "$path.pending" ] || [ -L "$path.pending" ] && continue
+    if [ -n "$paths" ]; then
+      paths+=$'\n'
+    fi
+    paths+="$path"
+  done
+  [ -n "$paths" ] || return 0
+  sorted=$(printf '%s\n' "$paths" | LC_ALL=C sort)
+  total=$(printf '%s\n' "$sorted" | wc -l | tr -d ' ')
+  remove=$((total - FM_CONFIG_REREAD_MAX_SENT))
+  [ "$remove" -gt 0 ] || return 0
+  while IFS= read -r path; do
+    [ "$remove" -gt 0 ] || break
+    [ -n "$path" ] || continue
+    [ -e "$path.pending" ] || [ -L "$path.pending" ] && continue
+    rm -f "$path" 2>/dev/null || continue
+    remove=$((remove - 1))
+  done <<EOF
+$sorted
+EOF
+}
+
 fm_config_reread_mark_pending() {
   local instruction_path=$1 pending_path=$2 parent tmp
   parent=${pending_path%/*}
-  tmp=$(mktemp "$parent/.fm-config-reread-pending.XXXXXX" 2>/dev/null) || return 1
+  [ -n "$parent" ] && [ "$parent" != "$pending_path" ] || return 1
+  mkdir -p "$parent" 2>/dev/null || return 1
+  tmp=$(umask 077; mktemp "$parent/.fm-config-reread-pending.XXXXXX" 2>/dev/null) || return 1
   if ! printf '%s\n' "$instruction_path" > "$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  if ! chmod 0600 "$tmp" 2>/dev/null; then
     rm -f "$tmp"
     return 1
   fi
@@ -549,47 +616,19 @@ fm_config_reread_send_failure() {
   return 1
 }
 
-# fm_config_send_reread_nudge <id> <dest-home> <report>
-# After successful propagation, if any allowlisted config item changed for this
-# home, write the exact-byte instruction under the destination home and send a
-# single-line pointer to that file through the routed secondmate path (fm-send).
-# The instruction file contains only changed config paths, clear delimiters, and
-# the destination's full exact post-write bytes (or ABSENT) - never summaries,
-# SHA values, selected profiles, or data/captain-shared.md. No-op (return 0) when
-# nothing changed and no prior send failure is pending. On send failure, record
-# a retry marker, print a concrete CONFIG_REREAD retry
-# diagnostic to stdout and return non-zero - never claim the live agent reread
-# the values. Requires FM_HOME (and optional FM_ROOT_OVERRIDE /
-# FM_STATE_OVERRIDE) so fm-send resolves the secondmate selector against the
-# correct primary home.
-fm_config_send_reread_nudge() {
-  local id=$1 dest_home=$2 report=$3
-  local instruction_path pending_path dest_home_abs selector out rc send_bin message changed_items pending_pointer
-  [ -n "$id" ] || return 1
-  [ -n "$dest_home" ] || return 1
-  [ -n "$report" ] && [ -f "$report" ] || return 1
-  dest_home_abs=$(cd "$dest_home" 2>/dev/null && pwd -P) || {
-    printf 'CONFIG_REREAD: secondmate %s: send failed: destination home is not readable\n' "$id"
+# fm_config_reread_send_pointer <id> <instruction-path>
+fm_config_reread_send_pointer() {
+  local id=$1 instruction_path=$2 pending_path selector out rc send_bin message pending_pointer
+  pending_path="$instruction_path.pending"
+  if [ ! -f "$instruction_path" ] || [ -L "$instruction_path" ]; then
+    printf 'CONFIG_REREAD: secondmate %s: send failed: pending instruction file is missing\n' "$id"
     return 1
-  }
-  instruction_path="$dest_home_abs/$FM_CONFIG_REREAD_INSTRUCTION_REL"
-  pending_path="$dest_home_abs/$FM_CONFIG_REREAD_PENDING_REL"
-  changed_items=$(fm_config_reread_changed_items "$report")
-  if [ -n "$changed_items" ]; then
-    if ! fm_config_write_reread_instruction "$dest_home" "$report" "$instruction_path"; then
-      printf 'CONFIG_REREAD: secondmate %s: send failed: could not write instruction file\n' "$id"
-      return 1
-    fi
-  elif [ -f "$pending_path" ]; then
-    pending_pointer=$(cat "$pending_path" 2>/dev/null || true)
-    if [ ! -f "$instruction_path" ] || [ "$pending_pointer" != "$instruction_path" ]; then
-      printf 'CONFIG_REREAD: secondmate %s: send failed: pending instruction file is missing or mismatched\n' "$id"
-      return 1
-    fi
-  else
-    return 0
   fi
-  message="CONFIG_REREAD: $instruction_path"
+  pending_pointer=$(cat "$pending_path" 2>/dev/null || true)
+  if [ "$pending_pointer" != "$instruction_path" ]; then
+    printf 'CONFIG_REREAD: secondmate %s: send failed: pending instruction file is mismatched\n' "$id"
+    return 1
+  fi
   selector="fm-$id"
   send_bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fm-send.sh"
   if [ ! -x "$send_bin" ]; then
@@ -600,6 +639,7 @@ fm_config_send_reread_nudge() {
     fm_config_reread_send_failure "$id" "$instruction_path" "$pending_path" "FM_HOME is not set"
     return 1
   fi
+  message="CONFIG_REREAD: $instruction_path"
   out=$(FM_HOME="$FM_HOME" \
     FM_ROOT_OVERRIDE="${FM_ROOT_OVERRIDE:-}" \
     FM_STATE_OVERRIDE="${FM_STATE_OVERRIDE:-}" \
@@ -613,4 +653,83 @@ fm_config_send_reread_nudge() {
   [ -n "$out" ] || out="fm-send exited $rc"
   fm_config_reread_send_failure "$id" "$instruction_path" "$pending_path" "$out"
   return 1
+}
+
+# fm_config_reread_discard_pending <dest-home>
+fm_config_reread_discard_pending() {
+  local dest_home=$1 state pending instruction rc=0
+  state="$dest_home/${FM_CONFIG_REREAD_INSTRUCTION_PREFIX_REL%/*}"
+  for pending in "$state"/.fm-inherited-config-reread.*.pending; do
+    [ -f "$pending" ] && [ ! -L "$pending" ] || continue
+    instruction=${pending%.pending}
+    rm -f "$pending" 2>/dev/null || rc=1
+    rm -f "$instruction" 2>/dev/null || rc=1
+  done
+  return "$rc"
+}
+
+# fm_config_send_reread_nudge <id> <dest-home> <report>
+# After successful propagation, if any allowlisted config item changed for this
+# home, write the exact-byte instruction under the destination home and send a
+# single-line pointers to those files through the routed secondmate path
+# (fm-send). The files contain only changed config paths, clear delimiters, and
+# the destination's full exact post-write bytes (or ABSENT) - never summaries,
+# SHA values, selected profiles, or data/captain-shared.md. No-op (return 0) when
+# nothing changed and no pending delivery exists. On publication or send
+# failure, print a concrete CONFIG_REREAD retry diagnostic to stdout and return
+# non-zero - never claim the live agent reread the values.
+fm_config_send_reread_nudge() {
+  local id=$1 dest_home=$2 report=$3
+  local dest_home_abs state changed_items pending_paths instruction_path current_path pending_path send_failures
+  [ -n "$id" ] || return 1
+  [ -n "$dest_home" ] || return 1
+  [ -n "$report" ] && [ -f "$report" ] || return 1
+  dest_home_abs=$(cd "$dest_home" 2>/dev/null && pwd -P) || {
+    printf 'CONFIG_REREAD: secondmate %s: send failed: destination home is not readable\n' "$id"
+    return 1
+  }
+  state="$dest_home_abs/${FM_CONFIG_REREAD_INSTRUCTION_PREFIX_REL%/*}"
+  changed_items=$(fm_config_reread_changed_items "$report")
+  pending_paths=""
+  if [ "${FM_CONFIG_REREAD_SKIP_PENDING:-0}" != 1 ]; then
+    pending_paths=$(fm_config_reread_pending_instructions "$state")
+  fi
+  if [ -n "$changed_items" ]; then
+    current_path=$(fm_config_reread_new_instruction_path "$dest_home_abs") || {
+      printf 'CONFIG_REREAD: secondmate %s: send failed: could not reserve instruction file\n' "$id"
+      return 1
+    }
+    if ! fm_config_write_reread_instruction "$dest_home_abs" "$report" "$current_path"; then
+      rm -f "$current_path"
+      printf 'CONFIG_REREAD: secondmate %s: send failed: could not write instruction file\n' "$id"
+      return 1
+    fi
+    pending_path="$current_path.pending"
+    if ! fm_config_reread_mark_pending "$current_path" "$pending_path"; then
+      printf 'CONFIG_REREAD: secondmate %s: send failed: could not record retry marker\n' "$id"
+      return 1
+    fi
+    if [ -n "$pending_paths" ]; then
+      pending_paths+=$'\n'
+    fi
+    pending_paths+="$current_path"
+  fi
+  if [ -z "$pending_paths" ]; then
+    fm_config_reread_cleanup_sent "$dest_home_abs"
+    return 0
+  fi
+  send_failures=0
+  while IFS= read -r instruction_path; do
+    [ -n "$instruction_path" ] || continue
+    if fm_config_reread_send_pointer "$id" "$instruction_path"; then
+      :
+    else
+      send_failures=1
+    fi
+  done <<EOF
+$pending_paths
+EOF
+  [ "$send_failures" -eq 0 ] || return 1
+  fm_config_reread_cleanup_sent "$dest_home_abs"
+  return 0
 }

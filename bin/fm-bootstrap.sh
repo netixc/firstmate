@@ -339,8 +339,9 @@ secondmate_sync() {
   # running home, send its literal-content reread instruction pointer so the
   # live agent does not keep applying stale defaults. Spawn/respawn already
   # re-reads at launch and needs no redundant nudge unless files changed after launch.
-  local id home home_real propagated_homes report reread_out
+  local id home home_real propagated_homes report reread_out reread_skip_pending
   propagated_homes=""
+  SECONDMATE_RESPAWNED_IDS=${SECONDMATE_RESPAWNED_IDS:-}
   while IFS='|' read -r id home _window _meta; do
     validate_secondmate_home "$id" "$home" || continue
     home_real="$VALIDATED_HOME"
@@ -362,8 +363,13 @@ secondmate_sync() {
     else
       echo "SECONDMATE_SYNC: secondmate $id: skipped: inheritance failed"
     fi
+    reread_skip_pending=0
+    case " $SECONDMATE_RESPAWNED_IDS " in
+      *" $id "*) reread_skip_pending=1 ;;
+    esac
     if ! reread_out=$(FM_HOME="$FM_HOME" FM_ROOT_OVERRIDE="$FM_ROOT" \
       FM_STATE_OVERRIDE="$STATE" \
+      FM_CONFIG_REREAD_SKIP_PENDING="$reread_skip_pending" \
       fm_config_send_reread_nudge "$id" "$home_real" "$report" 2>&1); then
       if [ -n "$reread_out" ]; then
         printf '%s\n' "$reread_out"
@@ -411,6 +417,7 @@ secondmate_liveness_sweep() {
   # explicitly out of scope here.
   [ -d "$STATE" ] || return 0
   local meta id window harness backend target verdict out
+  SECONDMATE_RESPAWNED_IDS=""
   for meta in "$STATE"/*.meta; do
     [ -f "$meta" ] || continue
     grep -q '^kind=secondmate$' "$meta" 2>/dev/null || continue
@@ -432,6 +439,7 @@ secondmate_liveness_sweep() {
       dead)
         fm_backend_kill "$backend" "$target" 2>/dev/null || true
         if out=$(FM_SPAWN_NO_GUARD=1 "$FM_ROOT/bin/fm-spawn.sh" "$id" --secondmate 2>&1); then
+          SECONDMATE_RESPAWNED_IDS="$SECONDMATE_RESPAWNED_IDS $id"
           :
         else
           echo "SECONDMATE_LIVENESS: secondmate $id: respawn failed: $(first_line "$out")"

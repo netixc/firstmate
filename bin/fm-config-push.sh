@@ -9,8 +9,9 @@
 # propagation machinery as bootstrap, but deliberately does not
 # fast-forward tracked files.
 # After a successful per-home propagation that changes any allowlisted config/*
-# item, writes the literal-content reread instruction and sends its pointer to
-# that live secondmate via fm-config-inherit-lib.sh (fm_config_send_reread_nudge).
+# item, writes a generation-specific literal-content reread instruction and
+# sends its pointer to that live secondmate via fm-config-inherit-lib.sh
+# (fm_config_send_reread_nudge).
 # Unchanged config and data/captain-shared.md-only updates send no reread
 # message unless a previous send failure is pending for that home.
 # Warnings-only skips exit 0; real propagation or reread-send errors exit non-zero.
@@ -25,8 +26,8 @@ live secondmate home.
 
 This is local-material-only:
   - does not fast-forward tracked files
-  - after successful config/* changes, writes a literal-content reread
-    instruction and sends its pointer to that live secondmate
+  - after successful config/* changes, writes a generation-specific
+    literal-content reread instruction and sends its pointer to that live secondmate
     (no message when config is unchanged unless a previous send failure is pending)
   - reports each live home and each inheritable item as pushed, unchanged,
     skipped, or error
@@ -145,7 +146,7 @@ while IFS='|' read -r id home _window meta; do
   fi
   print_item_report "$report"
   reread_pending=0
-  [ -f "$home_real/$FM_CONFIG_REREAD_PENDING_REL" ] && reread_pending=1
+  fm_config_reread_has_pending "$home_real" && reread_pending=1 || true
   if reread_out=$(FM_HOME="$FM_HOME" FM_ROOT_OVERRIDE="$FM_ROOT" \
     FM_STATE_OVERRIDE="$STATE" \
     fm_config_send_reread_nudge "$id" "$home_real" "$report" 2>&1); then
