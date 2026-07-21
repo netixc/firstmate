@@ -94,8 +94,6 @@ DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 . "$SCRIPT_DIR/fm-tangle-lib.sh"
 # shellcheck source=bin/fm-ff-lib.sh disable=SC1091
 . "$SCRIPT_DIR/fm-ff-lib.sh"
-# shellcheck source=bin/fm-wake-lib.sh disable=SC1091
-. "$SCRIPT_DIR/fm-wake-lib.sh"
 # shellcheck source=bin/fm-config-inherit-lib.sh disable=SC1091
 . "$SCRIPT_DIR/fm-config-inherit-lib.sh"
 # shellcheck source=bin/fm-x-lib.sh disable=SC1091
@@ -187,6 +185,8 @@ fleet_sync() {
 }
 
 secondmate_sync() {
+  # shellcheck source=bin/fm-wake-lib.sh disable=SC1091
+  . "$SCRIPT_DIR/fm-wake-lib.sh"
   # Local-HEAD secondmate sync: fast-forward every LIVE secondmate home
   # to the primary checkout's current default-branch commit. Purely LOCAL - no
   # fetch, no origin dependency: a linked-worktree home already holds the primary's
@@ -367,10 +367,18 @@ secondmate_sync() {
       echo "CONFIG_REREAD: secondmate $id: send failed: could not acquire per-home lock"
       continue
     }
-    if fm_config_reread_retry_queue_is_full "$FM_HOME" "$id"; then
-      echo "CONFIG_REREAD: secondmate $id: send failed: retry instruction queue is full"
-      fm_lock_release "$home_lock" || true
-      continue
+    reread_skip_pending=0
+    case " $SECONDMATE_RESPAWNED_IDS " in
+      *" $id "*) reread_skip_pending=1 ;;
+    esac
+    if [ "$reread_skip_pending" -eq 0 ] \
+      && fm_config_reread_retry_queue_is_full "$FM_HOME" "$id"; then
+      fm_config_reread_retry_pending "$id" "$home_real" || true
+      if fm_config_reread_retry_queue_is_full "$FM_HOME" "$id"; then
+        echo "CONFIG_REREAD: secondmate $id: send failed: retry instruction queue is full"
+        fm_lock_release "$home_lock" || true
+        continue
+      fi
     fi
     report=$(mktemp "${TMPDIR:-/tmp}/fm-bootstrap-inherit.XXXXXX" 2>/dev/null) || {
       echo "SECONDMATE_SYNC: secondmate $id: skipped: inheritance failed"
@@ -383,10 +391,6 @@ secondmate_sync() {
     else
       echo "SECONDMATE_SYNC: secondmate $id: skipped: inheritance failed"
     fi
-    reread_skip_pending=0
-    case " $SECONDMATE_RESPAWNED_IDS " in
-      *" $id "*) reread_skip_pending=1 ;;
-    esac
     if ! reread_out=$(FM_HOME="$FM_HOME" FM_ROOT_OVERRIDE="$FM_ROOT" \
       FM_STATE_OVERRIDE="$STATE" \
       FM_CONFIG_REREAD_SKIP_PENDING="$reread_skip_pending" \

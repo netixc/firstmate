@@ -151,10 +151,13 @@ while IFS='|' read -r id home _window meta; do
     continue
   }
   if fm_config_reread_retry_queue_is_full "$FM_HOME" "$id"; then
-    echo "  config-reread: error - retry instruction queue is full"
-    errors=1
-    fm_lock_release "$home_lock" || true
-    continue
+    fm_config_reread_retry_pending "$id" "$home_real" || true
+    if fm_config_reread_retry_queue_is_full "$FM_HOME" "$id"; then
+      echo "  config-reread: error - retry instruction queue is full"
+      errors=1
+      fm_lock_release "$home_lock" || true
+      continue
+    fi
   fi
 
   report=$(mktemp "${TMPDIR:-/tmp}/fm-config-push-report.XXXXXX" 2>/dev/null) || {

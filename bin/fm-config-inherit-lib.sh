@@ -515,6 +515,19 @@ fm_config_reread_retry_queue_is_full() {
   [ "$count" -ge "$FM_CONFIG_REREAD_MAX_PENDING" ]
 }
 
+fm_config_reread_retry_pending() {
+  local id=$1 dest_home=$2 report retry_out rc
+  report=$(mktemp "${TMPDIR:-/tmp}/fm-config-reread-retry.XXXXXX" 2>/dev/null) || {
+    printf 'CONFIG_REREAD: secondmate %s: send failed: could not create retry report\n' "$id"
+    return 1
+  }
+  retry_out=$(fm_config_send_reread_nudge "$id" "$dest_home" "$report" 2>&1)
+  rc=$?
+  rm -f "$report"
+  [ -z "$retry_out" ] || printf '%s\n' "$retry_out"
+  return "$rc"
+}
+
 fm_config_reread_new_retry_stage_path() {
   local source_home=$1 id=$2 retry_dir sequence sequence_file sequence_tmp generation stage
   retry_dir=$(fm_config_reread_retry_dir "$source_home" "$id") || return 1
@@ -864,7 +877,10 @@ EOF
   done <<EOF
 $delivery_paths
 EOF
-  [ "$send_failures" -eq 0 ] || return 1
+  if [ "$send_failures" -ne 0 ]; then
+    fm_config_reread_cleanup_sent "$dest_home_abs"
+    return 1
+  fi
   fm_config_reread_cleanup_sent "$dest_home_abs"
   return 0
 }

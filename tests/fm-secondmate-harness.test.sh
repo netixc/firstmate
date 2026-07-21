@@ -1535,6 +1535,101 @@ SH
   pass "B21 config reread serializes concurrent propagation and delivery"
 }
 
+test_config_reread_full_retry_queue_drains_before_new_push() {
+  local w head retry_dir path n fakebin log out status pointer_count
+  w=$(new_world config-reread-full-queue)
+  head=$(git -C "$w/main" rev-parse HEAD)
+  add_sm_worktree "$w" sm "$head"
+  mkdir -p "$w/sm/config" "$w/sm/state"
+  printf 'old\n' > "$w/sm/config/crew-harness"
+  printf 'new\n' > "$w/home/config/crew-harness"
+  retry_dir="$w/home/state/.fm-inherited-config-reread-retry/sm"
+  mkdir -p "$retry_dir"
+  for n in $(seq -w 1 16); do
+    path="$retry_dir/.fm-inherited-config-reread.20260721T000000.$n"
+    printf 'generation-%s\n' "$n" > "$path"
+    chmod 0600 "$path"
+  done
+  fakebin=$(make_fake_toolchain "$w")
+  log="$w/config-reread-full-queue.tmux.log"
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
+    FM_SEND_SETTLE=0 FM_FAKE_TMUX_LOG="$log" \
+    "$ROOT/bin/fm-config-push.sh" 2>&1); status=$?
+  expect_code 0 "$status" "a full retry queue should drain before a new push"
+  assert_contains "$out" "config-reread: sent" \
+    "a new config generation was not delivered after retry draining"
+  [ "$(cat "$w/sm/config/crew-harness")" = new ] \
+    || fail "the new config generation did not propagate after retry draining"
+  assert_no_reread_retry_stages "$w/home" sm
+  pointer_count=$(grep -c 'CONFIG_REREAD:' "$log" 2>/dev/null || true)
+  [ "$pointer_count" -ge 17 ] \
+    || fail "full retry queue did not deliver all pending generations before the new one"
+  pass "B22 full config reread retry queues drain before new publication"
+}
+
+test_config_reread_cleanup_runs_after_mixed_delivery_failure() {
+  local w head fakebin state_real fail_path path n report out status count
+  w=$(new_world config-reread-mixed-delivery)
+  head=$(git -C "$w/main" rev-parse HEAD)
+  add_sm_worktree "$w" sm "$head"
+  mkdir -p "$w/sm/state"
+  state_real=$(cd "$w/sm/state" && pwd -P)
+  fail_path="$state_real/.fm-inherited-config-reread.0000-fail"
+  for n in $(seq -w 1 17); do
+    path="$state_real/.fm-inherited-config-reread.00$n"
+    printf 'generation-%s\n' "$n" > "$path"
+    chmod 0600 "$path"
+  done
+  printf 'failed-generation\n' > "$fail_path"
+  chmod 0600 "$fail_path"
+  for path in "$state_real"/.fm-inherited-config-reread.*; do
+    fm_config_reread_mark_pending "$path" "$path.pending" \
+      || fail "could not mark mixed-delivery generation pending"
+  done
+  fakebin=$(make_fake_toolchain "$w")
+  mv "$fakebin/tmux" "$fakebin/tmux.real"
+  cat > "$fakebin/tmux" <<SH
+#!/usr/bin/env bash
+case "\$*" in
+  *send-keys*'.0000-fail'*) exit 1 ;;
+esac
+exec "$fakebin/tmux.real" "\$@"
+SH
+  chmod +x "$fakebin/tmux"
+  report="$w/empty-reread.report"
+  : > "$report"
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
+    FM_SEND_SETTLE=0 fm_config_send_reread_nudge sm "$w/sm" "$report" 2>&1); status=$?
+  expect_code 1 "$status" "mixed delivery failure should remain diagnostic"
+  assert_contains "$out" "CONFIG_REREAD: secondmate sm: send failed" \
+    "mixed delivery failure diagnostic missing"
+  count=0
+  for path in "$state_real"/.fm-inherited-config-reread.*; do
+    case "$path" in
+      *.pending) continue ;;
+    esac
+    [ -f "$path" ] && [ ! -L "$path" ] || continue
+    [ ! -e "$path.pending" ] || continue
+    count=$((count + 1))
+  done
+  [ "$count" = 16 ] || fail "mixed delivery failure skipped bounded sent-history cleanup (count=$count)"
+  assert_present "$fail_path.pending" "failed generation lost its retry marker"
+  pass "B23 mixed config reread delivery failures still bound sent history"
+}
+
+test_bootstrap_detect_only_does_not_create_state() {
+  local w fakebin detect_state out status
+  w=$(new_world bootstrap-detect-only)
+  detect_state="$w/detect-state"
+  fakebin=$(make_fake_toolchain "$w")
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
+    FM_STATE_OVERRIDE="$detect_state" FM_BOOTSTRAP_DETECT_ONLY=1 \
+    "$ROOT/bin/fm-bootstrap.sh" 2>&1); status=$?
+  expect_code 0 "$status" "detect-only bootstrap should succeed"
+  [ ! -e "$detect_state" ] || fail "detect-only bootstrap created its state directory"
+  pass "B24 bootstrap detect-only mode remains filesystem read-only"
+}
+
 test_config_reread_skips_when_unchanged_and_reads_after_push() {
   local w head log out err status report instr n path pending_instruction count
   w=$(new_world config-reread-after-push)
@@ -1730,8 +1825,11 @@ test_config_reread_per_home_changed_sets_and_exact_bytes
 test_config_reread_isolation_and_absent_and_send_failure
 test_config_reread_publication_failure_retries_exact_generation
 test_config_reread_serializes_concurrent_pushes
+test_config_reread_full_retry_queue_drains_before_new_push
+test_config_reread_cleanup_runs_after_mixed_delivery_failure
 test_config_reread_skips_when_unchanged_and_reads_after_push
 test_config_reread_bootstrap_path_and_spawn_flexibility
 test_bootstrap_respawns_before_config_reread
+test_bootstrap_detect_only_does_not_create_state
 
 echo "# all fm-secondmate-harness tests passed"
