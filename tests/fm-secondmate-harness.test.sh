@@ -1541,6 +1541,74 @@ SH
   pass "B21 config reread instruction-write failures retain exact retry generations"
 }
 
+test_config_reread_exact_temp_survives_adoption_failure() {
+  local w head fakebin real_mv real_cp retry_dir out status stage_path log retry_out retry_status
+  local old_instr new_instr
+  w=$(new_world config-reread-exact-temp-fallback)
+  head=$(git -C "$w/main" rev-parse HEAD)
+  add_sm_worktree "$w" sm "$head"
+  mkdir -p "$w/sm/config" "$w/sm/state"
+  printf 'old\n' > "$w/sm/config/crew-harness"
+  printf 'codex\n' > "$w/home/config/crew-harness"
+  fakebin=$(make_fake_toolchain "$w")
+  real_mv=$(command -v mv)
+  real_cp=$(command -v cp)
+  mkdir -p "$w/home/state/.fm-inherited-config-reread-retry/sm"
+  retry_dir=$(cd "$w/home/state/.fm-inherited-config-reread-retry/sm" && pwd -P)
+  cat > "$fakebin/mv" <<SH
+#!/usr/bin/env bash
+target=
+for arg in "\$@"; do target="\$arg"; done
+case "\$target" in
+  *"$retry_dir"/.fm-inherited-config-reread.*) exit 1 ;;
+esac
+exec "$real_mv" "\$@"
+SH
+  chmod +x "$fakebin/mv"
+  cat > "$fakebin/cp" <<SH
+#!/usr/bin/env bash
+target=
+for arg in "\$@"; do target="\$arg"; done
+case "\$target" in
+  *"$retry_dir"/.fm-inherited-config-reread.*) exit 1 ;;
+esac
+exec "$real_cp" "\$@"
+SH
+  chmod +x "$fakebin/cp"
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
+    FM_SEND_SETTLE=0 "$ROOT/bin/fm-config-push.sh" 2>&1); status=$?
+  expect_code 1 "$status" "exact temporary fallback failure should remain diagnostic"
+  assert_contains "$out" "retained exact retry temporary" \
+    "exact temporary fallback failure did not retain the immutable bytes"
+  stage_path=$(reread_retry_stage_path "$w/home" sm) \
+    || fail "exact temporary fallback failure lost its retry artifact"
+  case "$stage_path" in
+    *.tmp.*) : ;;
+    *) fail "exact temporary fallback retained an unexpected artifact: $stage_path" ;;
+  esac
+  [ ! -e "$stage_path.report" ] \
+    || fail "exact temporary fallback created a lossy retry report"
+  assert_contains "$(cat "$stage_path")" \
+    $'-----BEGIN config/crew-harness-----\ncodex\n-----END config/crew-harness-----' \
+    "exact temporary fallback did not preserve the original bytes"
+  printf 'changed-before-retry\n' > "$w/home/config/crew-harness"
+  rm -f "$fakebin/mv" "$fakebin/cp"
+  log="$w/config-reread-exact-temp-fallback.tmux.log"
+  retry_out=$(run_config_push "$w" "$log" 2>/dev/null); retry_status=$?
+  expect_code 0 "$retry_status" "later push should deliver retained exact temporary bytes"
+  old_instr=$(grep 'CONFIG_REREAD:' "$log" | head -n 1 | sed 's/.*CONFIG_REREAD: //')
+  new_instr=$(grep 'CONFIG_REREAD:' "$log" | tail -n 1 | sed 's/.*CONFIG_REREAD: //')
+  [ -n "$old_instr" ] && [ -n "$new_instr" ] && [ "$old_instr" != "$new_instr" ] \
+    || fail "later push did not deliver both exact generations"
+  assert_contains "$(cat "$old_instr")" \
+    $'-----BEGIN config/crew-harness-----\ncodex\n-----END config/crew-harness-----' \
+    "later push rebuilt the retained temporary from newer bytes"
+  assert_contains "$(cat "$new_instr")" "changed-before-retry" \
+    "later push did not deliver the new destination bytes"
+  assert_no_reread_retry_stages "$w/home" sm
+  pass "B21 config reread preserves exact bytes when temporary adoption also fails"
+}
+
 test_config_reread_serializes_concurrent_pushes() {
   local w head fakebin marker entered log first_out second_out first_pid first_status second_status
   local first_instr second_instr first_line second_line
@@ -1927,6 +1995,7 @@ test_spawn_quarantines_pending_rereads_on_cleanup_failure() {
     dir="$quarantine_root/generation.old$n"
     mkdir -p "$dir"
     printf 'old-quarantine-%s\n' "$n" > "$dir/snapshot"
+    printf 'hidden-quarantine-%s\n' "$n" > "$dir/.hidden-snapshot"
   done
   fakebin=$(make_launch_capturing_tmux "$w/tmux-spawn-quarantine")
   real_rm=$(command -v rm)
@@ -2005,6 +2074,7 @@ test_config_reread_per_home_changed_sets_and_exact_bytes
 test_config_reread_isolation_and_absent_and_send_failure
 test_config_reread_publication_failure_retries_exact_generation
 test_config_reread_write_failure_retains_exact_retry_generation
+test_config_reread_exact_temp_survives_adoption_failure
 test_config_reread_serializes_concurrent_pushes
 test_config_reread_full_retry_queue_drains_before_new_push
 test_config_reread_cleanup_runs_after_mixed_delivery_failure

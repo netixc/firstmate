@@ -598,7 +598,7 @@ fm_config_write_reread_instruction() {
   parent=${instruction_path%/*}
   [ -n "$parent" ] && [ "$parent" != "$instruction_path" ] || return 1
   mkdir -p "$parent" 2>/dev/null || return 1
-  tmp=$(umask 077; mktemp "$parent/.fm-config-reread.XXXXXX" 2>/dev/null) || return 1
+  tmp=$(umask 077; mktemp "$instruction_path.tmp.XXXXXX" 2>/dev/null) || return 1
   chmod 0600 "$tmp" 2>/dev/null || { rm -f "$tmp"; return 1; }
   while IFS= read -r item; do
     [ -n "$item" ] || continue
@@ -631,6 +631,23 @@ fm_config_write_reread_instruction() {
     return 1
   fi
   return 0
+}
+
+fm_config_reread_adopt_exact_temp() {
+  local exact_tmp=$1 stage_path=$2
+  [ -f "$exact_tmp" ] && [ ! -L "$exact_tmp" ] || return 1
+  [ ! -L "$stage_path" ] || return 1
+  if mv -f "$exact_tmp" "$stage_path" 2>/dev/null; then
+    return 0
+  fi
+  if cp "$exact_tmp" "$stage_path" 2>/dev/null \
+    && chmod 0600 "$stage_path" 2>/dev/null \
+    && cmp -s "$exact_tmp" "$stage_path"; then
+    rm -f "$exact_tmp" 2>/dev/null || true
+    return 0
+  fi
+  rm -f "$stage_path" 2>/dev/null || true
+  return 1
 }
 
 fm_config_reread_pending_instructions() {
@@ -825,7 +842,7 @@ fm_config_reread_quarantine_prune() {
     else
       dirs=${dirs#*$'\n'}
     fi
-    for path in "$oldest"/*; do
+    for path in "$oldest"/.[!.]* "$oldest"/..?* "$oldest"/*; do
       [ -e "$path" ] || [ -L "$path" ] || continue
       if [ -d "$path" ] && [ ! -L "$path" ]; then
         rmdir "$path" 2>/dev/null || return 1
@@ -932,7 +949,7 @@ fm_config_reread_quarantine_pending() {
 fm_config_send_reread_nudge() {
   local id=$1 dest_home=$2 report=$3
   local dest_home_abs state source_home_abs changed_items pending_paths stage_paths delivery_paths
-  local stage_path instruction_path current_stage_path exact_stage_path exact_tmp
+  local stage_path instruction_path current_stage_path exact_tmp
   local send_failures retry_report_paths retry_report_path retry_stage_path retry_record_path
   [ -n "$id" ] || return 1
   [ -n "$dest_home" ] || return 1
@@ -958,6 +975,16 @@ fm_config_send_reread_nudge() {
   while IFS= read -r retry_report_path; do
     [ -n "$retry_report_path" ] || continue
     retry_stage_path=${retry_report_path%.report}
+    exact_tmp=""
+    for stage_path in "$retry_stage_path".tmp.*; do
+      [ -f "$stage_path" ] && [ ! -L "$stage_path" ] || continue
+      exact_tmp="$stage_path"
+      break
+    done
+    if [ -n "$exact_tmp" ]; then
+      rm -f "$retry_report_path" 2>/dev/null || send_failures=1
+      continue
+    fi
     if fm_config_write_reread_instruction "$dest_home_abs" "$retry_report_path" "$retry_stage_path"; then
       rm -f "$retry_report_path" 2>/dev/null || send_failures=1
       if [ -n "$stage_paths" ]; then
@@ -966,15 +993,18 @@ fm_config_send_reread_nudge() {
       stage_paths+="$retry_stage_path"
     else
       exact_tmp=${FM_CONFIG_REREAD_FAILED_TEMP:-}
-      if [ -n "$exact_tmp" ] && [ -f "$exact_tmp" ] \
-        && mv -f "$exact_tmp" "$retry_stage_path" 2>/dev/null; then
+      if [ -n "$exact_tmp" ] \
+        && fm_config_reread_adopt_exact_temp "$exact_tmp" "$retry_stage_path"; then
         rm -f "$retry_report_path" 2>/dev/null || send_failures=1
         if [ -n "$stage_paths" ]; then
           stage_paths+=$'\n'
         fi
         stage_paths+="$retry_stage_path"
+      elif [ -n "$exact_tmp" ] && [ -f "$exact_tmp" ]; then
+        printf 'CONFIG_REREAD: secondmate %s: send failed: retained exact retry temporary %s\n' "$id" "$exact_tmp"
+        send_failures=1
+        break
       else
-        rm -f "$exact_tmp" 2>/dev/null || true
         printf 'CONFIG_REREAD: secondmate %s: send failed: could not rebuild retry instruction\n' "$id"
         send_failures=1
         break
@@ -1003,11 +1033,12 @@ EOF
     }
     if ! fm_config_write_reread_instruction "$dest_home_abs" "$report" "$current_stage_path"; then
       exact_tmp=${FM_CONFIG_REREAD_FAILED_TEMP:-}
-      exact_stage_path="$current_stage_path.exact"
-      if [ -n "$exact_tmp" ] && [ -f "$exact_tmp" ] \
-        && mv -f "$exact_tmp" "$exact_stage_path" 2>/dev/null; then
+      if [ -n "$exact_tmp" ] \
+        && fm_config_reread_adopt_exact_temp "$exact_tmp" "$current_stage_path"; then
+        printf 'CONFIG_REREAD: secondmate %s: send failed: could not publish retry instruction; retained exact retry generation %s\n' "$id" "$current_stage_path"
+      elif [ -n "$exact_tmp" ] && [ -f "$exact_tmp" ]; then
         rm -f "$current_stage_path" 2>/dev/null || true
-        printf 'CONFIG_REREAD: secondmate %s: send failed: could not publish retry instruction; retained exact retry generation %s\n' "$id" "$exact_stage_path"
+        printf 'CONFIG_REREAD: secondmate %s: send failed: retained exact retry temporary %s\n' "$id" "$exact_tmp"
       elif retry_record_path=$(fm_config_reread_save_retry_report "$report" "$current_stage_path"); then
         rm -f "$current_stage_path" 2>/dev/null || true
         printf 'CONFIG_REREAD: secondmate %s: send failed: could not write retry instruction; retained retry report %s\n' "$id" "$retry_record_path"
