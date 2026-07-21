@@ -148,8 +148,8 @@ That command exited 0, wrote `ORDINARY_AUTO_OK`, returned `ORDINARY_DONE`, initi
 The disconfirming ordinary-user command using `--dangerously-skip-permissions` also started successfully, proving uid 0 is the masking condition for the reported immediate exit rather than the initiating spawn itself.
 In a fresh interactive pseudo-terminal, `CLAUDE_CONFIG_DIR=<fresh-config> CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false claude --permission-mode auto --model opus --effort low 'Use the Bash tool to run exactly \`printf INTERACTIVE_OPUS_216_AUTO_OK > interactive-opus-216-tool-ran\`, then reply with exactly INTERACTIVE_OPUS_216_DONE.'` first displayed `Quick safety check: Is this a project you created or one you trust?`.
 After one Enter accepted `Yes, I trust this folder`, the footer displayed `auto mode on`, the Bash tool wrote `INTERACTIVE_OPUS_216_AUTO_OK`, and no per-tool `Do you want to proceed?` prompt appeared.
-Claude Code 2.1.216 reports `auto mode unavailable for this model` for an explicit Haiku profile and falls back to manual permissions, so `fm-spawn.sh` requires every Claude worker to name an explicit verified Sonnet or Opus model and rejects omitted, literal `default`, Haiku, and unsupported model values.
-Raw Claude launch commands additionally require `--permission-mode auto` and reject `--dangerously-skip-permissions`.
+Claude Code 2.1.216 reports `auto mode unavailable for this model` for an explicit Haiku profile and falls back to manual permissions, so `fm-spawn.sh` accepts only `opus`, `sonnet`, `claude-opus-*`, and `claude-sonnet-*` for Claude workers and rejects omitted, literal `default`, Haiku, Fable, and every other model value.
+Raw launch commands cannot invoke Claude and reject `--dangerously-skip-permissions` regardless of their detected harness; Claude workers must use the verified adapter so its template owns permission policy.
 
 Claude renders a predicted-next-prompt suggestion as dim/faint text inside an otherwise-empty composer after a turn completes.
 A plain `tmux capture-pane` cannot tell that ghost text apart from typed text.

@@ -217,65 +217,65 @@ test_active_dispatch_profile_allows_raw_launch_command() {
   pass "active crew-dispatch profile allows the raw launch-command escape hatch"
 }
 
-test_raw_claude_enforces_unattended_profile() {
+test_raw_commands_cannot_bypass_claude_policy() {
   local rec id out status launch
 
-  id=profile-raw-claude-no-model-z15a
-  rec=$(make_spawn_case profile-raw-claude-no-model claude "$id")
+  id=profile-raw-dangerous-z15a
+  rec=$(make_spawn_case profile-raw-dangerous claude "$id")
   read_case_record "$rec"
   out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id" "$PROJ_DIR" "claude --permission-mode auto")
+    "$id" "$PROJ_DIR" "custom-agent --dangerously-skip-permissions")
   status=$?
-  expect_code 1 "$status" "raw Claude without a model should fail closed"
-  assert_contains "$out" "Claude workers require an explicit supported model" \
-    "raw Claude missing-model refusal was not actionable"
-  assert_absent "$HOME_DIR/state/$id.meta" "raw Claude missing-model refusal should precede metadata"
+  expect_code 1 "$status" "every raw dangerous permission bypass should fail closed"
+  assert_contains "$out" "raw launch commands must not use --dangerously-skip-permissions" \
+    "global raw dangerous-flag refusal was not actionable"
+  assert_absent "$HOME_DIR/state/$id.meta" "raw dangerous-flag refusal should precede metadata"
 
-  id=profile-raw-claude-dangerous-z15b
-  rec=$(make_spawn_case profile-raw-claude-dangerous claude "$id")
+  id=profile-raw-claude-direct-z15b
+  rec=$(make_spawn_case profile-raw-claude-direct claude "$id")
   read_case_record "$rec"
   out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id" "$PROJ_DIR" "claude --dangerously-skip-permissions --model opus")
+    "$id" "$PROJ_DIR" "claude --permission-mode auto --model opus")
   status=$?
-  expect_code 1 "$status" "raw Claude with the dangerous permission bypass should fail closed"
-  assert_contains "$out" "raw Claude launch commands must not use --dangerously-skip-permissions" \
-    "raw Claude dangerous-flag refusal was not actionable"
-  assert_absent "$HOME_DIR/state/$id.meta" "raw Claude dangerous-flag refusal should precede metadata"
+  expect_code 1 "$status" "direct raw Claude should use the verified adapter instead"
+  assert_contains "$out" "raw launch commands must not invoke Claude" \
+    "direct raw Claude refusal was not actionable"
+  assert_absent "$HOME_DIR/state/$id.meta" "direct raw Claude refusal should precede metadata"
 
-  id=profile-raw-claude-haiku-z15c
-  rec=$(make_spawn_case profile-raw-claude-haiku claude "$id")
+  id=profile-raw-claude-env-z15c
+  rec=$(make_spawn_case profile-raw-claude-env claude "$id")
   read_case_record "$rec"
   out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id" "$PROJ_DIR" "claude --permission-mode=auto --model=haiku")
+    "$id" "$PROJ_DIR" "env claude --permission-mode auto --model opus")
   status=$?
-  expect_code 1 "$status" "raw Claude Haiku should fail closed"
-  assert_contains "$out" "Claude auto permission mode is unavailable for Haiku" \
-    "raw Claude Haiku refusal was not actionable"
-  assert_absent "$HOME_DIR/state/$id.meta" "raw Claude Haiku refusal should precede metadata"
+  expect_code 1 "$status" "env-wrapped raw Claude should fail closed"
+  assert_contains "$out" "raw launch commands must not invoke Claude" \
+    "env-wrapped raw Claude refusal was not actionable"
+  assert_absent "$HOME_DIR/state/$id.meta" "env-wrapped raw Claude refusal should precede metadata"
 
-  id=profile-raw-claude-manual-z15d
-  rec=$(make_spawn_case profile-raw-claude-manual claude "$id")
+  id=profile-raw-claude-shell-z15d
+  rec=$(make_spawn_case profile-raw-claude-shell claude "$id")
   read_case_record "$rec"
   out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id" "$PROJ_DIR" "claude --model opus")
+    "$id" "$PROJ_DIR" "bash -c 'claude --permission-mode auto --model opus'")
   status=$?
-  expect_code 1 "$status" "raw Claude without auto permission mode should fail closed"
-  assert_contains "$out" "raw Claude launch commands require --permission-mode auto" \
-    "raw Claude manual-mode refusal was not actionable"
-  assert_absent "$HOME_DIR/state/$id.meta" "raw Claude manual-mode refusal should precede metadata"
+  expect_code 1 "$status" "shell-wrapped raw Claude should fail closed"
+  assert_contains "$out" "raw launch commands must not invoke Claude" \
+    "shell-wrapped raw Claude refusal was not actionable"
+  assert_absent "$HOME_DIR/state/$id.meta" "shell-wrapped raw Claude refusal should precede metadata"
 
-  id=profile-raw-claude-valid-z15e
-  rec=$(make_spawn_case profile-raw-claude-valid claude "$id")
+  id=profile-raw-opencode-claude-model-z15e
+  rec=$(make_spawn_case profile-raw-opencode-claude-model opencode "$id")
   read_case_record "$rec"
   out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id" "$PROJ_DIR" "claude --permission-mode auto --model opus --print ready")
+    "$id" "$PROJ_DIR" "opencode --model anthropic/claude-sonnet-4-5 --prompt ready")
   status=$?
-  expect_code 0 "$status" "raw Claude with auto mode and Opus should succeed"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" claude opus default
+  expect_code 0 "$status" "a non-Claude raw adapter may name a Claude-backed model"
+  assert_meta_profile "$HOME_DIR/state/$id.meta" opencode default default
   launch=$(cat "$LAUNCH_LOG")
-  [ "$launch" = "claude --permission-mode auto --model opus --print ready" ] \
-    || fail "validated raw Claude launch changed: $launch"
-  pass "raw Claude commands require safe unattended permission and model flags"
+  [ "$launch" = "opencode --model anthropic/claude-sonnet-4-5 --prompt ready" ] \
+    || fail "non-Claude raw launch changed: $launch"
+  pass "raw commands cannot bypass Claude permission ownership"
 }
 
 test_claude_threads_model_and_effort_after_auto_mode() {
@@ -296,8 +296,8 @@ test_claude_threads_model_and_effort_after_auto_mode() {
   pass "claude receives auto permissions before --model and --effort profile flags"
 }
 
-test_claude_rejects_haiku_without_launching() {
-  local rec id out status
+test_claude_rejects_unsupported_models_without_launching() {
+  local rec id out status model n
   id=profile-claude-haiku-z2a
   rec=$(make_spawn_case profile-claude-haiku claude "$id")
   read_case_record "$rec"
@@ -311,38 +311,43 @@ test_claude_rejects_haiku_without_launching() {
   assert_absent "$HOME_DIR/state/$id.meta" "Claude Haiku refusal should happen before meta is written"
   [ ! -s "$LAUNCH_LOG" ] || fail "Claude Haiku refusal sent a launch command"
 
-  id=profile-claude-unsupported-z2aa
-  rec=$(make_spawn_case profile-claude-unsupported claude "$id")
-  read_case_record "$rec"
-  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
-    --model claude-mystery --effort low)
-  status=$?
-  expect_code 1 "$status" "unsupported Claude model should fail closed"
-  assert_contains "$out" "unsupported Claude unattended model 'claude-mystery'" \
-    "unsupported Claude refusal did not explain the supported model requirement"
-  assert_absent "$HOME_DIR/state/$id.meta" "unsupported Claude refusal should happen before meta is written"
-  [ ! -s "$LAUNCH_LOG" ] || fail "unsupported Claude refusal sent a launch command"
-  pass "Claude Haiku profiles fail closed before launch"
+  n=0
+  for model in claude-mystery not-opus fable "owner's sonnet"; do
+    n=$((n + 1))
+    id="profile-claude-unsupported-z2a$n"
+    rec=$(make_spawn_case "profile-claude-unsupported-$n" claude "$id")
+    read_case_record "$rec"
+    out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+      --model "$model" --effort low)
+    status=$?
+    expect_code 1 "$status" "unsupported Claude model '$model' should fail closed"
+    assert_contains "$out" "unsupported Claude unattended model '$model'" \
+      "unsupported Claude refusal did not explain the supported model requirement"
+    assert_absent "$HOME_DIR/state/$id.meta" "unsupported Claude refusal should happen before meta is written"
+    [ ! -s "$LAUNCH_LOG" ] || fail "unsupported Claude refusal sent a launch command"
+  done
+  pass "unsupported Claude model names fail closed before launch"
 }
 
-test_claude_auto_mode_preserves_shell_quoted_profile_values() {
-  local rec id out status launch model
+test_claude_auto_mode_preserves_quoted_brief_path() {
+  local rec id out status launch
   id=profile-claude-quote-z2b
-  model="owner's sonnet"
-  rec=$(make_spawn_case profile-claude-quote claude "$id")
+  rec=$(make_spawn_case "profile-claude-owner's-path" claude "$id")
   read_case_record "$rec"
 
   out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
-    --model "$model" --effort xhigh)
+    --model claude-sonnet-4-5 --effort xhigh)
   status=$?
-  expect_code 0 "$status" "claude spawn with a quoted model value should succeed"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" claude "$model" xhigh
+  expect_code 0 "$status" "claude spawn with a quoted brief path should succeed"
+  assert_meta_profile "$HOME_DIR/state/$id.meta" claude claude-sonnet-4-5 xhigh
   launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "claude --permission-mode auto --model 'owner'\\''s sonnet' --effort 'xhigh'" \
-    "claude auto mode disturbed shell quoting for model and effort flags"
+  assert_contains "$launch" "claude --permission-mode auto --model 'claude-sonnet-4-5' --effort 'xhigh'" \
+    "claude auto mode disturbed model and effort flag ordering"
+  assert_contains "$launch" "profile-claude-owner'\\''s-path" \
+    "claude auto mode did not preserve shell quoting for the brief path"
   assert_not_contains "$launch" "--dangerously-skip-permissions" \
-    "quoted claude launch must never use the root-incompatible permission bypass"
-  pass "claude auto permissions preserve shell-quoted model and effort values"
+    "quoted-path Claude launch must never use the root-incompatible permission bypass"
+  pass "claude auto permissions preserve quoted brief paths and profile ordering"
 }
 
 test_codex_threads_model_and_effort() {
@@ -511,10 +516,10 @@ test_active_dispatch_profile_requires_explicit_harness_for_scout
 test_active_dispatch_profile_allows_explicit_harness
 test_active_dispatch_profile_allows_positional_harness
 test_active_dispatch_profile_allows_raw_launch_command
-test_raw_claude_enforces_unattended_profile
+test_raw_commands_cannot_bypass_claude_policy
 test_claude_threads_model_and_effort_after_auto_mode
-test_claude_rejects_haiku_without_launching
-test_claude_auto_mode_preserves_shell_quoted_profile_values
+test_claude_rejects_unsupported_models_without_launching
+test_claude_auto_mode_preserves_quoted_brief_path
 test_codex_threads_model_and_effort
 test_codex_omits_invalid_max_effort
 test_grok_threads_model_and_reasoning_effort

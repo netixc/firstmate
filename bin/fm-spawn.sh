@@ -56,11 +56,12 @@
 #   harness (config/secondmate-harness -> config/crew-harness -> own), so the
 #   secondmate-vs-crewmate split is DURABLE across every respawn (recovery,
 #   /updatefirstmate, restart). A bare adapter name (claude|codex|opencode|pi|grok)
-#   overrides it for this spawn (either kind); Claude also requires an explicit
-#   supported --model. A non-flag string containing whitespace is treated as a RAW
-#   launch command - the escape hatch for verifying new adapters. A raw Claude
-#   command must carry --permission-mode auto and a supported non-Haiku --model,
-#   and must not carry --dangerously-skip-permissions.
+#   overrides it for this spawn (either kind); Claude also requires --model opus,
+#   sonnet, claude-opus-*, or claude-sonnet-*. A non-flag string containing
+#   whitespace is treated as a RAW launch command - the escape hatch for verifying
+#   new adapters. Raw commands must not invoke Claude or carry
+#   --dangerously-skip-permissions; Claude launches use the verified adapter so its
+#   deterministic template owns permission policy.
 #   config/secondmate-harness may also carry an optional model and effort as extra
 #   whitespace-separated tokens ("<harness> [<model>] [<effort>]"). For a
 #   --secondmate spawn, those tokens apply only when this spawn also resolves its
@@ -440,30 +441,22 @@ launch_template() {
   esac
 }
 
-RAW_LAUNCH=0
-RAW_MODEL=
-RAW_PERMISSION_MODE=
 case "$ARG3" in
   *' '*)  # raw launch command (unverified-adapter escape hatch)
-    RAW_LAUNCH=1
     LAUNCH=$ARG3
     HARNESS=""
-    raw_value=
+    RAW_CLAUDE_COMMAND_PATTERN="(^|[[:space:];|&()'\"])([^[:space:];|&()'\"]*/)?claude([[:space:];|&()'\"]|$)"
+    case "$LAUNCH" in
+      *--dangerously-skip-permissions*)
+        echo "error: raw launch commands must not use --dangerously-skip-permissions" >&2
+        exit 1
+        ;;
+    esac
+    if [[ $LAUNCH =~ $RAW_CLAUDE_COMMAND_PATTERN ]]; then
+      echo "error: raw launch commands must not invoke Claude; use --harness claude with an explicit supported --model" >&2
+      exit 1
+    fi
     for word in $LAUNCH; do
-      if [ -n "$raw_value" ]; then
-        case "$raw_value" in
-          model) RAW_MODEL=$word ;;
-          permission) RAW_PERMISSION_MODE=$word ;;
-        esac
-        raw_value=
-        continue
-      fi
-      case "$word" in
-        --model) raw_value=model ;;
-        --model=*) RAW_MODEL=${word#--model=} ;;
-        --permission-mode) raw_value=permission ;;
-        --permission-mode=*) RAW_PERMISSION_MODE=${word#--permission-mode=} ;;
-      esac
       case "$word" in [A-Za-z_]*=*) continue ;; *) [ -n "$HARNESS" ] || HARNESS=$(basename "$word") ;; esac
     done
     ;;
@@ -518,27 +511,6 @@ if [ "$KIND" = secondmate ] && [ -z "$ARG3" ]; then
 fi
 
 if [ "$HARNESS" = claude ]; then
-  if [ "$RAW_LAUNCH" -eq 1 ]; then
-    case "$LAUNCH" in
-      *--dangerously-skip-permissions*)
-        echo "error: raw Claude launch commands must not use --dangerously-skip-permissions" >&2
-        exit 1
-        ;;
-    esac
-    RAW_MODEL=${RAW_MODEL#\'}
-    RAW_MODEL=${RAW_MODEL%\'}
-    RAW_MODEL=${RAW_MODEL#\"}
-    RAW_MODEL=${RAW_MODEL%\"}
-    RAW_PERMISSION_MODE=${RAW_PERMISSION_MODE#\'}
-    RAW_PERMISSION_MODE=${RAW_PERMISSION_MODE%\'}
-    RAW_PERMISSION_MODE=${RAW_PERMISSION_MODE#\"}
-    RAW_PERMISSION_MODE=${RAW_PERMISSION_MODE%\"}
-    [ "$RAW_PERMISSION_MODE" = auto ] || {
-      echo "error: raw Claude launch commands require --permission-mode auto" >&2
-      exit 1
-    }
-    MODEL=$RAW_MODEL
-  fi
   case "$MODEL" in
     ''|default)
       echo "error: Claude workers require an explicit supported model, such as Sonnet or Opus" >&2
@@ -548,7 +520,7 @@ if [ "$HARNESS" = claude ]; then
       echo "error: Claude auto permission mode is unavailable for Haiku; choose a model verified for unattended work, such as Sonnet or Opus" >&2
       exit 1
       ;;
-    *[Ss][Oo][Nn][Nn][Ee][Tt]*|*[Oo][Pp][Uu][Ss]*) ;;
+    opus|sonnet|claude-opus-?*|claude-sonnet-?*) ;;
     *)
       echo "error: unsupported Claude unattended model '$MODEL'; choose Sonnet or Opus" >&2
       exit 1

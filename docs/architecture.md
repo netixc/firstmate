@@ -164,10 +164,10 @@ The [`secondmate-provisioning` skill](../.agents/skills/secondmate-provisioning/
 
 Secondmate agents can run on a different verified harness than crewmates.
 `config/secondmate-harness` controls the primary's secondmate launch harness and may also carry optional model and effort tokens as `<harness> [<model>] [<effort>]` on the first non-empty, non-comment line.
-A bare non-Claude harness line remains harness-only; Claude requires an explicit supported non-Haiku model.
+A bare non-Claude harness line remains harness-only; Claude requires an explicit verified alias or full-name family listed in [configuration.md](configuration.md#harness-support).
 When the harness token is unset or `default`, launch falls back to `config/crew-harness`, then to the primary's own harness, and the model and effort tokens are ignored.
 Those optional tokens are re-read on every secondmate spawn or respawn and are overridden by explicit per-spawn `--model` or `--effort` flags.
-An explicit per-spawn harness or raw launch command does not inherit model or effort tokens from `config/secondmate-harness`; raw commands own those axes directly and raw Claude commands follow the validation contract in [configuration.md](configuration.md#harness-support).
+An explicit per-spawn harness or raw launch command does not inherit model or effort tokens from `config/secondmate-harness`; raw commands own those axes directly but cannot invoke Claude under the validation contract in [configuration.md](configuration.md#harness-support).
 `config/crew-harness` remains the crewmate harness and is inherited into secondmate homes.
 `config/crew-dispatch.json` is inherited too; secondmates use the same natural-language dispatch profiles when spawning their own crewmates.
 `config/backlog-backend` is inherited too; absent or `tasks-axi` selects the default tasks-axi backlog backend, while `manual` forces routine backlog updates to hand-editing across the fleet without disabling validated handoff delegation.

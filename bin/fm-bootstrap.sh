@@ -684,7 +684,7 @@ crew_dispatch_validate() {
         + (if (.default? | type) == "object" then [{h: .default.harness, m: .default.model}] else [] end))
       | map(select(.h == "claude"))
       | map(.m = (if (.m | type) == "string" then .m else "<missing>" end))
-      | map(select((.m | ascii_downcase | test("sonnet|opus")) | not))
+      | map(select((.m | test("^(opus|sonnet|claude-opus-.+|claude-sonnet-.+)$")) | not))
       | map("\(.h):\(.m)")
       | unique;
     if type != "object" then "top-level value must be an object"
