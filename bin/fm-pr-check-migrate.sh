@@ -488,22 +488,16 @@ quarantine_tree_repair_and_validate() {
   quarantine_dir_valid
 }
 
-MIGRATION_PROVIDER=
 MIGRATION_URL=
-MIGRATION_HOST=
 MIGRATION_PATH=
 MIGRATION_NUMBER=
 metadata_pr_is_canonical() {
   local meta=$1
-  MIGRATION_PROVIDER=
   MIGRATION_URL=
-  MIGRATION_HOST=
   MIGRATION_PATH=
   MIGRATION_NUMBER=
   fm_pr_metadata_identity_parse "$meta" || return 1
-  MIGRATION_PROVIDER=$FM_PR_META_PROVIDER
   MIGRATION_URL=$FM_PR_META_URL
-  MIGRATION_HOST=$FM_PR_META_HOST
   MIGRATION_PATH=$FM_PR_META_PATH
   MIGRATION_NUMBER=$FM_PR_META_NUMBER
 }
@@ -777,7 +771,7 @@ record_ambiguous_failure() {
 }
 
 canonical_repair_from_pending() {
-  local id=$1 meta data registration provider url host path number check
+  local id=$1 meta data registration url path number check
   meta="$STATE/$id.meta"
   data="$STATE/$id.pr-poll"
   registration="$STATE/$id.pr-poll-registration"
@@ -785,16 +779,14 @@ canonical_repair_from_pending() {
   [ ! -e "$check" ] && [ ! -L "$check" ] || return 1
   quarantined_artifact_exists "$id" check || return 1
   metadata_pr_is_canonical "$meta" || return 1
-  provider=$MIGRATION_PROVIDER
   url=$MIGRATION_URL
-  host=$MIGRATION_HOST
   path=$MIGRATION_PATH
   number=$MIGRATION_NUMBER
   quarantine_artifact "$data" "$id" data || return 1
   quarantine_artifact "$registration" "$id" registration || return 1
   [ ! -e "$data" ] && [ ! -L "$data" ] || return 1
   [ ! -e "$registration" ] && [ ! -L "$registration" ] || return 1
-  fm_pr_poll_prepare "$STATE" "$id" "$provider" "$url" "$host" "$path" "$number" "$TEMPLATE" || return 1
+  fm_pr_poll_prepare "$STATE" "$id" "$url" "$path" "$number" "$TEMPLATE" || return 1
   fm_pr_poll_publish_prepared || return 1
   canonical_terminal_success "$id"
 }
@@ -1032,9 +1024,7 @@ if migration_needed; then
       data="$STATE/$id.pr-poll"
       registration="$STATE/$id.pr-poll-registration"
       if metadata_pr_is_canonical "$meta"; then
-        provider=$MIGRATION_PROVIDER
         url=$MIGRATION_URL
-        host=$MIGRATION_HOST
         path=$MIGRATION_PATH
         number=$MIGRATION_NUMBER
         message="task $id: migration outcome tracking started before legacy poll handling"
@@ -1047,7 +1037,7 @@ if migration_needed; then
         if quarantine_artifact "$check" "$prefix" check \
           && quarantine_artifact "$data" "$prefix" data \
           && quarantine_artifact "$registration" "$prefix" registration \
-          && fm_pr_poll_prepare "$STATE" "$id" "$provider" "$url" "$host" "$path" "$number" "$TEMPLATE" \
+          && fm_pr_poll_prepare "$STATE" "$id" "$url" "$path" "$number" "$TEMPLATE" \
           && fm_pr_poll_publish_prepared \
           && complete_canonical_outcome "$id"; then
           :
