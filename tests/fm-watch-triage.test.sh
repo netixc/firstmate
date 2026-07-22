@@ -78,6 +78,22 @@ seen_sig() {
 
 reap() { kill "$1" 2>/dev/null || true; wait "$1" 2>/dev/null || true; }
 
+test_foreign_metadata_fails_before_watcher_mutation() {
+  local dir state fakebin out status
+  dir=$(make_case foreign-metadata); state="$dir/state"; fakebin="$dir/fakebin"
+  printf 'backend=tmux\nwindow=legacy:task\n' > "$state/foreign.meta"
+
+  out=$(PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state" "$WATCH" 2>&1)
+  status=$?
+
+  [ "$status" -ne 0 ] || fail "watcher accepted foreign provider metadata"
+  assert_contains "$out" "records a removed session provider" "watcher did not report the migration requirement"
+  assert_absent "$state/.watch.lock" "watcher acquired its lock before validating metadata"
+  assert_absent "$state/.last-heartbeat" "watcher mutated heartbeat state before validating metadata"
+  assert_absent "$state/.last-watcher-beat" "watcher mutated its beacon before validating metadata"
+  pass "foreign metadata stops watcher before cycle mutations"
+}
+
 # --- pure classifier predicates (fm-classify-lib.sh) ------------------------
 
 test_signal_reason_is_actionable_classifier() {
@@ -1270,6 +1286,7 @@ test_afk_paused_changed_pane_hands_off_plain_stale() {
   pass "AFK changed paused panes hand off plain stale identities for daemon-owned pause triage"
 }
 
+test_foreign_metadata_fails_before_watcher_mutation
 test_signal_reason_is_actionable_classifier
 test_stale_is_terminal_classifier
 test_scan_captain_relevant_statuses_classifier

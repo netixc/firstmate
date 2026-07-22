@@ -91,6 +91,25 @@ test_daemon_state_root_uses_fm_home() {
   pass "supervise daemon state root is scoped by FM_HOME"
 }
 
+test_foreign_metadata_failure_cleans_daemon_lifecycle() {
+  local dir state fakebin out status
+  dir=$(make_supercase daemon-foreign-metadata)
+  state="$dir/state"
+  fakebin="$dir/fakebin"
+  printf 'backend=tmux\nwindow=legacy:task\n' > "$state/foreign.meta"
+
+  out=$(PATH="$fakebin:$PATH" FM_HOME="$dir" FM_STATE_OVERRIDE="$state" \
+    FM_SUPERVISOR_TARGET="default:w1:p1" "$DAEMON" 2>&1)
+  status=$?
+
+  [ "$status" -ne 0 ] || fail "daemon accepted foreign provider metadata"
+  assert_contains "$out" "records a removed session provider" "daemon did not report the migration requirement"
+  assert_absent "$state/.supervise-daemon.lock" "daemon left its lock after metadata validation failed"
+  assert_absent "$state/.supervise-daemon.pid" "daemon left its pidfile after metadata validation failed"
+  assert_contains "$(cat "$state/.supervise-daemon.log")" "daemon shutting down" "daemon cleanup did not run after metadata validation failed"
+  pass "foreign metadata failure cleans daemon lifecycle state"
+}
+
 test_classify_routine_signal_self() {
   local dir state out
   dir=$(make_supercase classify-routine)
@@ -1647,6 +1666,7 @@ test_afk_start_refuses_when_flag_cannot_be_written
 test_afk_start_ignores_stale_pidfile_without_lock
 test_afk_start_reclaims_stale_daemon_lock_reused_pid
 test_daemon_state_root_uses_fm_home
+test_foreign_metadata_failure_cleans_daemon_lifecycle
 test_classify_routine_signal_self
 test_classify_terminal_signal_escalates
 test_classify_check_and_unknown_escalate

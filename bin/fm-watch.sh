@@ -679,6 +679,8 @@ if [ "${BASH_SOURCE[0]}" != "$0" ]; then
   return 0
 fi
 
+fm_backend_validate_meta_dir "$STATE" || exit 1
+
 # Before acquiring the watcher lock or enumerating any runnable check, replace
 # or quarantine checks created by older versions. The migration compares bytes
 # and reads data only; it never invokes legacy check files through Bash.
@@ -725,6 +727,8 @@ fm_pid_identity "$WATCHER_PID" > "$WATCH_LOCK/pid-identity" 2>/dev/null || true
 [ -e "$STATE/.last-heartbeat" ] || touch "$STATE/.last-heartbeat"
 
 while :; do
+  fm_backend_validate_meta_dir "$STATE" || exit 1
+
   # Self-eviction: if the singleton lock no longer names this process, a second
   # watcher has taken over (e.g. a transient duplicate from a racy arm). Stand
   # down so the rightful singleton continues alone. The EXIT trap's release
@@ -743,7 +747,7 @@ while :; do
   # parent reports, observe backend busy/idle turn completion, send one recovery
   # repost after grace, and escalate once if the recovery turn is also missed.
   # No conversation scraping; unresolved records are never silently expired.
-  fm_pending_reply_tick "$STATE" || true
+  fm_pending_reply_tick "$STATE" || exit 1
 
   # Slow per-task checks (firstmate writes these, e.g. a merged-PR poll).
   # Time-based via .last-check mtime so the cadence survives watcher restarts.

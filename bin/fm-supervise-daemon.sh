@@ -1249,15 +1249,9 @@ fm_super_main() {
     exit 1
   fi
 
-  local afk_status="off"
-  afk_active "$STATE" && afk_status="on"
-  log "daemon starting (pid $$); target=$TARGET; target_source=$target_source; afk=$afk_status; inject_skip='${FM_INJECT_SKIP:-$INJECT_SKIP_DEFAULT}'; stale_escalate=${FM_STALE_ESCALATE_SECS:-$STALE_ESCALATE_SECS_DEFAULT}s; batch=${FM_ESCALATE_BATCH_SECS:-$ESCALATE_BATCH_SECS_DEFAULT}s"
-  migrate_watcher_pause_markers "$STATE" || return 1
-
-  # --- shutdown: flush buffered escalations, reap child, release lock -------
   local WATCHER_PID="" CUR_TMP=""
   cleanup() {
-    trap - TERM INT
+    trap - EXIT TERM INT
     wedge_alarm_stop_active_notifier
     escalate_flush "$STATE" 2>/dev/null || true
     if [ -n "${WATCHER_PID:-}" ]; then
@@ -1270,9 +1264,14 @@ fm_super_main() {
     fm_lock_release "$LOCK" 2>/dev/null || true
     rm -f "$PIDFILE" 2>/dev/null || true
     log "daemon shutting down"
-    exit 0
   }
-  trap cleanup TERM INT
+  trap cleanup EXIT
+  trap 'exit 0' TERM INT
+
+  local afk_status="off"
+  afk_active "$STATE" && afk_status="on"
+  log "daemon starting (pid $$); target=$TARGET; target_source=$target_source; afk=$afk_status; inject_skip='${FM_INJECT_SKIP:-$INJECT_SKIP_DEFAULT}'; stale_escalate=${FM_STALE_ESCALATE_SECS:-$STALE_ESCALATE_SECS_DEFAULT}s; batch=${FM_ESCALATE_BATCH_SECS:-$ESCALATE_BATCH_SECS_DEFAULT}s"
+  migrate_watcher_pause_markers "$STATE" || exit 1
 
   # --- crash-loop guard -----------------------------------------------------
   local crash_times=() backoff_secs=$CRASH_NORMAL_SLEEP
@@ -1347,7 +1346,7 @@ fm_super_main() {
           continue
         fi
         log "wake: $reason"
-        handle_wake "$reason" "$STATE" || return 1
+        handle_wake "$reason" "$STATE" || exit 1
         trim_log
       fi
       start_watcher || continue
@@ -1361,7 +1360,7 @@ fm_super_main() {
     sleep 1
     if [ "$(_file_age "$STATE/.subsuper-last-housekeep")" -ge "${FM_HOUSEKEEPING_TICK:-$HOUSEKEEPING_TICK_DEFAULT}" ]; then
       _now > "$STATE/.subsuper-last-housekeep"
-      housekeeping "$STATE" || return 1
+      housekeeping "$STATE" || exit 1
     fi
   done
 }
