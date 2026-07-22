@@ -775,6 +775,11 @@ crew_dispatch_validate() {
   fi
 }
 
+if legacy_setting=$(fm_backend_legacy_setting_reason "$CONFIG"); then
+  echo "BACKEND_INVALID: $legacy_setting"
+  exit 0
+fi
+
 if [ "${1:-}" = "install" ]; then
   shift
   [ $# -gt 0 ] || { echo "usage: fm-bootstrap.sh install <tool>..." >&2; exit 1; }
@@ -816,9 +821,6 @@ if command -v tasks-axi >/dev/null 2>&1 && ! fm_tasks_axi_compatible; then
   echo "MISSING: tasks-axi (install: $(install_cmd tasks-axi))"
 fi
 gh auth status >/dev/null 2>&1 || echo "NEEDS_GH_AUTH"
-if legacy_setting=$(fm_backend_legacy_setting_reason "$CONFIG"); then
-  echo "BACKEND_INVALID: $legacy_setting"
-fi
 # Worktree-tangle check: the firstmate primary checkout (FM_ROOT) must sit on its
 # default branch, not a feature branch (see fm-tangle-lib.sh). Scoped to the
 # primary only; detached-HEAD worktrees and secondmate homes never trip it.

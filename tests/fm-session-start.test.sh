@@ -199,6 +199,7 @@ make_fake_herdr() {
   cat > "$fakebin/herdr" <<SH
 #!/usr/bin/env bash
 set -u
+[ -z "\${FM_FAKE_HERDR_LOG:-}" ] || printf '%s\n' "\$*" >> "\$FM_FAKE_HERDR_LOG"
 if [ "\${1:-}" = pane ] && [ "\${2:-}" = get ]; then
   [ "\${3:-}" = "$live" ] && exit 0
   exit 1
@@ -505,6 +506,31 @@ EOF
   assert_contains "$out" "endpoint: dead (Herdr window=sess:p-dead)" "dead Herdr endpoint not reported dead"
 
   pass "Herdr endpoint liveness is reported per task: alive for a live pane, dead for a gone one"
+}
+
+test_foreign_endpoint_metadata_requires_migration_without_probe() {
+  local rec root home fakebin out log
+  rec=$(new_world foreign-endpoint)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_claude "$fakebin"
+  make_fake_herdr "$fakebin" "p-foreign"
+  log="$home/herdr.log"
+
+  printf 'backend=tmux\nwindow=sess:p-foreign\nkind=ship\n' > "$home/state/task-foreign.meta"
+
+  out=$(FM_FAKE_HERDR_LOG="$log" run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+  assert_contains "$out" "endpoint: migration required ($home/state/task-foreign.meta records a removed session provider; retire or migrate that task before operating it with this Firstmate version)" \
+    "foreign endpoint metadata did not produce migration guidance"
+  assert_not_contains "$out" "endpoint: alive (Herdr window=sess:p-foreign)" \
+    "foreign endpoint was reported as live Herdr state"
+  assert_not_contains "$out" "endpoint: dead (Herdr window=sess:p-foreign)" \
+    "foreign endpoint was reported as dead Herdr state"
+  assert_absent "$log" "foreign endpoint metadata was probed through Herdr"
+
+  pass "session start reports foreign endpoint migration without a Herdr probe"
 }
 
 # --- composition: real scripts run, not reimplemented ------------------------
@@ -842,6 +868,7 @@ test_herdr_dependencies_follow_real_session_start
 test_status_tail_bounding
 test_orphan_status_logs_are_printed
 test_endpoint_liveness_herdr
+test_foreign_endpoint_metadata_requires_migration_without_probe
 test_composition_invokes_real_scripts
 test_backlog_compact_tasks_axi_omits_bodies_and_keeps_metadata
 test_backlog_compact_manual_backend_skips_indented_bodies

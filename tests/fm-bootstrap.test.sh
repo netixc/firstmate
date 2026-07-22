@@ -399,12 +399,14 @@ test_legacy_backend_setting_reports_migration() {
     FM_FAKE_TREEHOUSE_LEASE_HELP=1 "$ROOT/bin/fm-bootstrap.sh")
   [ "$out" = "BACKEND_INVALID: config/backend is obsolete; remove it because Herdr is Firstmate's only session provider" ] \
     || fail "legacy setting should produce one concrete migration instruction, got: $out"
+  assert_absent "$case_dir/home/state" "config/backend allowed bootstrap migration state to be created"
 
   rm -f "$case_dir/home/config/backend"
   out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$case_dir/home" FM_ROOT_OVERRIDE="$case_dir/home" \
     FM_BACKEND=tmux FM_FAKE_TREEHOUSE_LEASE_HELP=1 "$ROOT/bin/fm-bootstrap.sh")
   [ "$out" = "BACKEND_INVALID: FM_BACKEND is obsolete; unset it because Herdr is Firstmate's only session provider" ] \
     || fail "legacy environment setting should produce one concrete migration instruction, got: $out"
+  assert_absent "$case_dir/home/state" "FM_BACKEND allowed bootstrap migration state to be created"
   pass "bootstrap rejects removed provider settings with concrete migration instructions"
 }
 

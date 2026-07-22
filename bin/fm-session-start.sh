@@ -346,9 +346,12 @@ for meta in "$STATE"/*.meta; do
   cat "$meta"
 
   window=$(fm_meta_get "$meta" window)
-  target=$(fm_backend_target_of_meta "$meta" 2>/dev/null || true)
-  if [ -n "$window" ]; then
-    if fm_backend_target_exists "${target:-$window}" "fm-$id"; then
+  if ! provider_diagnostic=$(fm_backend_meta_is_herdr "$meta" 2>&1); then
+    provider_diagnostic=${provider_diagnostic#error: }
+    printf 'endpoint: migration required (%s)\n' "$provider_diagnostic"
+  elif [ -n "$window" ]; then
+    target=$(fm_backend_target_of_meta "$meta")
+    if fm_backend_target_exists "$target" "fm-$id"; then
       printf 'endpoint: alive (Herdr window=%s)\n' "$window"
     else
       printf 'endpoint: dead (Herdr window=%s)\n' "$window"
