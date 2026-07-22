@@ -113,6 +113,19 @@ test_operational_load_rejects_legacy_settings() {
   local home="$TMP_ROOT/legacy-settings" out status
   mkdir -p "$home/config" "$home/state"
 
+  out=$(FM_HOME="$home" bash -c '. "$2"; printf loaded' \
+    _ unrelated-consumer-argument "$ROOT/bin/fm-backend.sh" 2>&1)
+  status=$?
+  [ "$status" -eq 0 ] || fail "unrelated caller argument broke backend loading: $out"
+  [ "$out" = loaded ] || fail "unrelated caller argument changed backend loading: $out"
+
+  out=$(FM_HOME="$home" FM_BACKEND=tmux bash -c '. "$2"; printf reached' \
+    _ unrelated-consumer-argument "$ROOT/bin/fm-backend.sh" 2>&1)
+  status=$?
+  [ "$status" -ne 0 ] || fail "unrelated caller argument bypassed operational FM_BACKEND refusal"
+  [ "$out" = "error: FM_BACKEND is obsolete; unset it because Herdr is Firstmate's only session provider" ] \
+    || fail "inherited argument did not default to operational refusal: $out"
+
   out=$(FM_HOME="$home" FM_BACKEND=tmux bash -c '. "$1" operational; printf reached' \
     _ "$ROOT/bin/fm-backend.sh" 2>&1)
   status=$?

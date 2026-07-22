@@ -42,11 +42,13 @@ fm_backend_refuse_legacy_setting() {  # [config-dir]
   return 1
 }
 
-FM_BACKEND_LOAD_MODE=${1:-operational}
+case "${1:-}" in
+  operational|diagnostic|afk-recovery) FM_BACKEND_LOAD_MODE=$1 ;;
+  *) FM_BACKEND_LOAD_MODE=operational ;;
+esac
 case "$FM_BACKEND_LOAD_MODE" in
   operational) fm_backend_refuse_legacy_setting || exit 1 ;;
   diagnostic|afk-recovery) ;;
-  *) echo "error: invalid backend load mode" >&2; exit 2 ;;
 esac
 unset FM_BACKEND_LOAD_MODE
 
