@@ -1251,9 +1251,12 @@ fm_super_main() {
 
   local WATCHER_PID="" CUR_TMP=""
   cleanup() {
+    local status=$?
     trap - EXIT TERM INT
     wedge_alarm_stop_active_notifier
-    escalate_flush "$STATE" 2>/dev/null || true
+    if [ "$status" -eq 0 ]; then
+      escalate_flush "$STATE" 2>/dev/null || true
+    fi
     if [ -n "${WATCHER_PID:-}" ]; then
       kill "$WATCHER_PID" 2>/dev/null || true
       wait "$WATCHER_PID" 2>/dev/null || true
@@ -1264,6 +1267,7 @@ fm_super_main() {
     fm_lock_release "$LOCK" 2>/dev/null || true
     rm -f "$PIDFILE" 2>/dev/null || true
     log "daemon shutting down"
+    exit "$status"
   }
   trap cleanup EXIT
   trap 'exit 0' TERM INT
