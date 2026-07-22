@@ -7,7 +7,7 @@
 # (bin/fm-marker-lib.sh) when, and only when, the resolved target is a task
 # selector whose meta records kind=secondmate, so the secondmate can recognize
 # the request and route its reply via the status path. These tests pin that
-# behavior hermetically (stubbed tmux, no real agent):
+# behavior hermetically (stubbed Herdr, no real agent):
 #   1. Exact-id and stable-label kind=secondmate selectors prepend the marker.
 #   2. Exact-id and stable-label ordinary crewmate selectors stay unmarked.
 #   3. Explicit endpoints stay unmarked, with or without matching local meta.
@@ -25,42 +25,26 @@ SEND="$ROOT/bin/fm-send.sh"
 
 TMP_ROOT=$(fm_test_tmproot fm-send-marker)
 
-# A fake tmux that (a) records the literal text of every `send-keys -l` to
-# FM_SEND_LOG and (b) lets fm-send's submit path reach a clean "empty" verdict.
-# display-message yields a numeric cursor_y; capture-pane returns an empty
-# bordered composer so fm_tmux_composer_state reads "empty" (submit landed) on the
-# first Enter. Only the literal (-l) text is logged; Enter retries and --key sends
-# are not, so the log holds exactly what was typed into the composer.
+# A fake Herdr endpoint records only literal pane send-text payloads in
+# FM_SEND_LOG and lets the submit path reach a clean confirmation. Enter and
+# --key sends are not logged, so the log holds exactly what was typed.
 make_stubs() {  # <dir> -> echoes fakebin dir
   local dir=$1 fb="$1/fakebin"
   mkdir -p "$fb"
-  cat > "$fb/tmux" <<'SH'
+  cat > "$fb/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
-case "${1:-}" in
-  send-keys)
-    shift
-    literal=0
-    while [ $# -gt 0 ]; do
-      case "$1" in
-        -t) shift 2 ;;
-        -l) literal=1; shift ;;
-        *) break ;;
-      esac
-    done
-    if [ "$literal" = 1 ]; then
-      printf '%s' "${1:-}" >> "$FM_SEND_LOG"
-    fi
-    exit 0 ;;
-  display-message)
-    for a in "$@"; do case "$a" in *cursor_y*) printf '0\n'; exit 0 ;; esac; done
-    printf 'fakepane\n'; exit 0 ;;
-  capture-pane) printf '\xe2\x94\x82 \xe2\x94\x82\n'; exit 0 ;;
-  list-windows) exit 0 ;;
+case "${1:-} ${2:-}" in
+  "status --json") printf '{"client":{"protocol":16},"server":{"running":true}}\n' ;;
+  "pane get") printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "${3:-}" ;;
+  "agent get") printf '{"result":{"agent":{"agent_status":"working"}}}\n' ;;
+  "pane read") printf '│ > │\n' ;;
+  "pane send-text") printf '%s' "${4:-}" >> "$FM_SEND_LOG" ;;
+  "pane send-keys") ;;
 esac
 exit 0
 SH
-  chmod +x "$fb/tmux"
+  chmod +x "$fb/herdr"
   cat > "$fb/sleep" <<'SH'
 #!/usr/bin/env bash
 exit 0

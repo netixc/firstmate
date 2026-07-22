@@ -2,7 +2,7 @@
 # Behavior tests for fm-spawn.sh batch dispatch (`id=repo` pairs).
 #
 # These exercise argument routing only: each spawn attempt fails fast at the
-# missing-brief check, which is reached before any tmux/treehouse side effect, so
+# missing-brief check, which is reached before any Herdr/Treehouse side effect, so
 # the tests create no windows or worktrees. FM_SPAWN_NO_GUARD=1 keeps them off the
 # live watcher guard / state. Parser and path-scoping cases are table-driven; the
 # only behavior asserted on its own is "a multi-pair batch does not stop after the
@@ -14,7 +14,6 @@ set -u
 
 SPAWN="$ROOT/bin/fm-spawn.sh"
 TMP_ROOT=$(fm_test_tmproot fm-spawn-batch)
-export FM_BACKEND=tmux
 
 # Clear ambient firstmate overrides so the behavior test owns its environment.
 run_spawn() {
@@ -102,6 +101,33 @@ ROWS
   pass "projects/ paths are scoped through the firstmate home for single-task spawn"
 }
 
+test_legacy_provider_settings_refuse_before_spawn() {
+  local home="$TMP_ROOT/legacy-provider" out status
+  mkdir -p "$home/config"
+
+  out=$(FM_HOME="$home" FM_SPAWN_NO_GUARD=1 FM_BACKEND=tmux "$SPAWN" legacy-task projects/none 2>&1)
+  status=$?
+  [ "$status" -ne 0 ] || fail "FM_BACKEND should stop spawn"
+  [ "$out" = "error: FM_BACKEND is obsolete; unset it because Herdr is Firstmate's only session provider" ] \
+    || fail "FM_BACKEND refusal was not the first and only spawn result: $out"
+
+  printf '%s\n' zellij > "$home/config/backend"
+  out=$(FM_HOME="$home" FM_SPAWN_NO_GUARD=1 "$SPAWN" legacy-task projects/none 2>&1)
+  status=$?
+  [ "$status" -ne 0 ] || fail "config/backend should stop spawn"
+  [ "$out" = "error: config/backend is obsolete; remove it because Herdr is Firstmate's only session provider" ] \
+    || fail "config/backend refusal was not the first and only spawn result: $out"
+
+  rm "$home/config/backend"
+  out=$(FM_HOME="$home" FM_SPAWN_NO_GUARD=1 "$SPAWN" legacy-task projects/none --backend tmux 2>&1)
+  status=$?
+  [ "$status" -ne 0 ] || fail "removed --backend selection should stop spawn"
+  [ "$out" = "error: unknown option: --backend" ] \
+    || fail "removed --backend selection did not fail at argument parsing: $out"
+  pass "spawn rejects removed provider settings before launch work"
+}
+
 test_batch_dispatches_every_pair
 test_batch_mode_boundaries
 test_projects_path_scoping
+test_legacy_provider_settings_refuse_before_spawn

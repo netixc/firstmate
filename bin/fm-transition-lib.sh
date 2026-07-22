@@ -1,21 +1,20 @@
 #!/usr/bin/env bash
-# Shared, backend-neutral agent-state transition shape and supervision policy.
+# Shared Herdr agent-state transition shape and supervision policy.
 #
-# This library owns TWO contracts, deliberately backend-independent so any
-# push-capable session backend (herdr today, others later) reuses them instead
-# of re-deriving a private, per-status escalation hack:
+# This library owns two contracts shared by Herdr event producers and
+# supervision consumers so neither re-derives a private status policy:
 #
-#   1. The NORMALIZED TRANSITION RECORD - the ONE shape every backend's event
-#      stream is normalized into before any policy runs. A single TAB-separated
+#   1. The NORMALIZED TRANSITION RECORD - the one shape Herdr events use before
+#      any policy runs. A single TAB-separated
 #      line:
 #          <pane_id>\t<workspace_id>\t<from_status>\t<to_status>\t<agent>
 #      Only `to_status` is authoritative for the policy below; the other fields
-#      are identity/telemetry and MAY be empty when a backend cannot supply
-#      them. `from_status` in particular is empty for backends whose event
-#      carries only the new status (herdr's `pane.agent_status_changed` does
-#      not report the previous status, and its stream is edge-triggered, so
-#      each `to_status` IS itself a fresh edge); it exists in the shape for
-#      backends that DO report the prior state and for future edge diagnostics.
+#      are identity/telemetry and may be empty when Herdr cannot supply them.
+#      `from_status` in particular is empty because
+#      `pane.agent_status_changed` carries only the new status and does not
+#      report the previous status, and its stream is edge-triggered, so
+#      each `to_status` is itself a fresh edge; it remains in the shape for
+#      future edge diagnostics.
 #      Statuses use the shared agent-state vocabulary
 #      (idle|working|blocked|done|unknown), the same enum herdr's `agent get`
 #      and `pane.agent_status_changed` report.
@@ -24,11 +23,11 @@
 #      OWNER of the mapping from a normalized `to_status` to the supervision
 #      action a consumer must take. Every consumer READS this table; no
 #      consumer re-encodes the mapping. Adding or changing a status's action is
-#      a one-line edit here, and it changes every backend at once.
+#      a one-line edit here for every Herdr supervision consumer.
 #
-# The split is what keeps the escalation general rather than a herdr blocked
-# hack: a backend contributes only a wire->record normalizer and a stream
-# reader; the shape and the policy are shared. See bin/backends/herdr.sh
+# The split is what keeps the escalation general rather than a Herdr blocked
+# hack: Herdr contributes a wire->record normalizer and a stream reader, while
+# the shape and the policy are shared. See bin/backends/herdr.sh
 # (fm_backend_herdr_wait_transition) for the herdr producer and bin/fm-watch.sh
 # (the watcher's event-wait splice) for the consumer.
 

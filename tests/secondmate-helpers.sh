@@ -2,54 +2,72 @@
 # tests/secondmate-helpers.sh - shared fixtures and mocks for the secondmate
 # suites (fm-secondmate-lifecycle-e2e and fm-secondmate-safety).
 #
-# These mocks encode secondmate-lifecycle behavior (fake tmux that logs window
-# ops, fake treehouse that leases/returns homes, fake no-mistakes that records
+# These mocks encode secondmate-lifecycle behavior (fake Herdr endpoint
+# operations, fake treehouse that leases/returns homes, fake no-mistakes that records
 # init/doctor), so they live here rather than in the generic tests/lib.sh. The
 # generic git/identity/meta primitives come from lib.sh, which this file pulls in.
 
 # shellcheck source=tests/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-# A fake tmux (window ops are logged to FM_FAKE_TMUX_LOG, list-windows returns
-# FM_FAKE_TMUX_WINDOW, capture-pane echoes FM_FAKE_TMUX_CAPTURE) plus a fake
+# A fake Herdr endpoint (calls are logged to FM_FAKE_HERDR_LOG and pane reads
+# return FM_FAKE_HERDR_CAPTURE) plus a fake
 # treehouse (durable lease of FM_FAKE_TREEHOUSE_HOME, recording the lease holder
 # to FM_FAKE_TREEHOUSE_LEASE_FILE; `return` removes the target and lease unless
 # FM_FAKE_TREEHOUSE_RETURN_FAIL is set). Echoes the fakebin dir.
-make_fake_tmux() {
+make_fake_herdr() {
   local dir=$1 fakebin capture
   fakebin=$(fm_fakebin "$dir")
   capture="$dir/pane.txt"
-  printf 'idle prompt\n' > "$capture"
-  cat > "$fakebin/tmux" <<'SH'
+  printf '│ > │\n' > "$capture"
+  cat > "$fakebin/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
-case "${1:-}" in
-  has-session|new-session|new-window|send-keys|kill-window)
-    printf '%s\n' "$*" >> "$FM_FAKE_TMUX_LOG"
-    exit 0
+printf '%s\n' "$*" >> "${FM_FAKE_HERDR_LOG:-/dev/null}"
+capture=${FM_FAKE_HERDR_CAPTURE:-/dev/null}
+case "${1:-} ${2:-}" in
+  "status --json") printf '{"client":{"protocol":16,"version":"test"},"server":{"running":true}}\n' ;;
+  "session list") printf '{"sessions":[{"name":"default","default":true,"running":true,"socket_path":"/tmp/herdr-test.sock"}]}\n' ;;
+  "workspace list") printf '{"result":{"workspaces":[]}}\n' ;;
+  "workspace create")
+    printf '{"result":{"workspace":{"workspace_id":"ws1"},"tab":{"tab_id":"seed"},"root_pane":{"pane_id":"w1:seed"}}}\n'
     ;;
-  list-windows)
-    if [ -n "${FM_FAKE_TMUX_WINDOW:-}" ]; then
-      printf '%s\n' "$FM_FAKE_TMUX_WINDOW"
+  "tab list")
+    if [ -n "${FM_FAKE_HERDR_WINDOW:-}" ]; then
+      printf '{"result":{"tabs":[{"tab_id":"t1","workspace_id":"ws1","label":"%s"}]}}\n' "${FM_FAKE_HERDR_WINDOW#*:}"
+    else
+      printf '{"result":{"tabs":[]}}\n'
     fi
-    exit 0
     ;;
-  display-message)
-    printf 'firstmate\n'
-    exit 0
+  "tab create") printf '{"result":{"tab":{"tab_id":"t1"},"root_pane":{"pane_id":"w1:p1"}}}\n' ;;
+  "pane list") printf '{"result":{"panes":[{"pane_id":"w1:p1","tab_id":"t1","workspace_id":"ws1"}]}}\n' ;;
+  "pane get")
+    pane=${3:-w1:p1}
+    [ "${FM_FAKE_HERDR_PANE_ALIVE:-1}" = 1 ] || { printf '{"error":{"code":"pane_not_found"}}\n'; exit 1; }
+    printf '{"result":{"pane":{"pane_id":"%s","foreground_cwd":"%s"}}}\n' "$pane" "${FM_FAKE_TREEHOUSE_HOME:-${FM_FAKE_HERDR_CWD:-/tmp}}"
     ;;
-  capture-pane)
-    printf '%s\n' "$*" >> "$FM_FAKE_TMUX_LOG"
-    cat "$FM_FAKE_TMUX_CAPTURE"
-    exit 0
+  "agent get")
+    printf '{"result":{"agent":{"agent":"%s","agent_status":"%s"}}}\n' \
+      "${FM_FAKE_HERDR_AGENT:-claude}" "${FM_FAKE_HERDR_AGENT_STATUS:-working}"
     ;;
+  "pane read") cat "$capture" ;;
+  "pane send-text")
+    [ "${FM_FAKE_HERDR_FAIL_LITERAL:-0}" != 1 ] || exit 1
+    printf '%s\n' "${4:-}" >> "${FM_FAKE_HERDR_SENT:-${FM_FAKE_HERDR_LOG:-/dev/null}}"
+    ;;
+  "pane send-keys")
+    [ "${FM_FAKE_HERDR_FAIL_LITERAL:-0}" != 1 ] || exit 1
+    printf '[%s]\n' "${4:-}" >> "${FM_FAKE_HERDR_SENT:-${FM_FAKE_HERDR_LOG:-/dev/null}}"
+    ;;
+  "pane run"|"pane close"|"tab close") ;;
+  *) exit 1 ;;
 esac
-exit 1
+exit 0
 SH
   cat > "$fakebin/treehouse" <<'SH'
 #!/usr/bin/env bash
 set -u
-printf 'treehouse %s\n' "$*" >> "${FM_FAKE_TMUX_LOG:-/dev/null}"
+printf 'treehouse %s\n' "$*" >> "${FM_FAKE_HERDR_LOG:-/dev/null}"
 case "${1:-}" in
   get)
     # Durable lease: print only the worktree path to stdout (banners to stderr),
@@ -90,9 +108,9 @@ case "${1:-}" in
 esac
 exit 0
 SH
-  chmod +x "$fakebin/tmux"
+  chmod +x "$fakebin/herdr"
   chmod +x "$fakebin/treehouse"
-  : > "$dir/tmux.log"
+  : > "$dir/herdr.log"
   printf '%s\n' "$fakebin"
 }
 

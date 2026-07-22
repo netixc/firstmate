@@ -22,7 +22,7 @@ CI="$ROOT/.github/workflows/ci.yml"
 NM="$ROOT/.no-mistakes.yaml"
 INSTALLER="$ROOT/bin/fm-install-shellcheck.sh"
 # The authoritative file set the one owner must run.
-CANON='shellcheck --norc bin/*.sh bin/backends/*.sh tests/*.sh'
+CANON="exec \"\$SHELLCHECK\" --norc bin/*.sh bin/backends/*.sh tests/*.sh"
 # The pinned version, read from the single source (the one owner itself).
 REQUIRED=$("$LINT" --required-version)
 
@@ -45,7 +45,7 @@ test_owner_defines_canonical_set() {
   # that would hide findings CI fails on.
   assert_no_grep '--severity' "$LINT" "fm-lint.sh must not lower severity below the CI default"
   assert_no_grep '--exclude' "$LINT" "fm-lint.sh must not blanket-exclude checks CI enforces"
-  [ "$(grep -Fc 'exec shellcheck --norc' "$LINT")" -eq 2 ] || fail "both lint modes must ignore ambient ShellCheck configuration"
+  [ "$(grep -Fc "exec \"\$SHELLCHECK\" --norc" "$LINT")" -eq 2 ] || fail "both lint modes must ignore ambient ShellCheck configuration"
   pass "fm-lint.sh is the sole authoritative definition at CI-default severity"
 }
 
@@ -57,8 +57,9 @@ test_ci_invokes_the_owner() {
 }
 
 test_nomistakes_invokes_the_owner() {
-  grep -Fqx "  lint: 'bin/fm-lint.sh'" "$NM" || fail "no-mistakes commands.lint must map exactly to the one-owner script"
-  pass "no-mistakes pre-push lint calls the one-owner script"
+  grep -Fqx "  lint: 'bin/fm-lint.sh'" "$NM" \
+    || fail "no-mistakes commands.lint must remain exactly bin/fm-lint.sh"
+  pass "no-mistakes pre-push lint calls the self-provisioning one-owner script"
 }
 
 test_pins_an_explicit_version() {

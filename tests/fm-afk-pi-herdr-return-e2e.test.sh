@@ -50,7 +50,7 @@ cleanup() {
   trap - EXIT
   if [ "$DAEMON_STARTED" -eq 1 ]; then
     PATH="$FAKEBIN:$ORIGINAL_PATH" HERDR_SESSION="$SESSION" FM_HOME="$HOME_DIR" FM_STATE_OVERRIDE="$STATE" \
-      FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET="$PRIMARY_TARGET" \
+      FM_SUPERVISOR_TARGET="$PRIMARY_TARGET" \
       "$ROOT/bin/fm-afk-launch.sh" stop >/dev/null 2>&1 || true
   fi
   if ! "$LAB_HELPER" teardown "$SESSION"; then
@@ -175,7 +175,6 @@ CHILD_PANE=$(printf '%s' "$CHILD_OUT" | jq -r '.result.root_pane.pane_id')
 CHILD_TARGET="$SESSION:$CHILD_PANE"
 cat > "$STATE/repair-task.meta" <<EOF
 window=$CHILD_TARGET
-backend=herdr
 kind=ship
 mode=no-mistakes
 worktree=$PROJECT
@@ -191,7 +190,7 @@ cat > "$HOME_DIR/data/backlog.md" <<'EOF'
 EOF
 
 PATH="$FAKEBIN:$ORIGINAL_PATH" HERDR_SESSION="$SESSION" FM_HOME="$HOME_DIR" FM_STATE_OVERRIDE="$STATE" \
-  FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET="$PRIMARY_TARGET" FM_AFK_LAUNCH_ENTRY="$TMP_ROOT/daemon-entry" \
+  FM_SUPERVISOR_TARGET="$PRIMARY_TARGET" FM_AFK_LAUNCH_ENTRY="$TMP_ROOT/daemon-entry" \
   "$ROOT/bin/fm-afk-launch.sh" start >/dev/null
 DAEMON_STARTED=1
 for _ in $(seq 1 100); do [ -s "$STATE/.supervise-daemon.pid" ] && break; sleep 0.1; done
@@ -201,7 +200,7 @@ for _ in $(seq 1 100); do [ -s "$STATE/.supervise-daemon.pid" ] && break; sleep 
 # the live child emits blocked:, then wait through max-defer.
 "$LAB_HELPER" run "$SESSION" pane send-text "$PRIMARY_PANE" 'privacy safe human draft' >/dev/null
 sleep 0.5
-composer=$(PATH="$FAKEBIN:$ORIGINAL_PATH" HERDR_SESSION="$SESSION" fm_backend_composer_state herdr "$PRIMARY_TARGET")
+composer=$(PATH="$FAKEBIN:$ORIGINAL_PATH" HERDR_SESSION="$SESSION" fm_backend_composer_state "$PRIMARY_TARGET")
 [ "$composer" = pending ] || fail "real Pi draft did not classify pending (got $composer)"
 CHILD_CMD=$(printf "printf 'blocked [key=synthetic-dependency]: firstmate can refresh the synthetic token\\n' >> %q; exec sleep 120" "$STATE/repair-task.status")
 "$LAB_HELPER" run "$SESSION" pane run "$CHILD_PANE" "$CHILD_CMD" >/dev/null
@@ -222,7 +221,7 @@ pass "real Pi/Herdr pending composer refuses injection without forced submit and
 "$LAB_HELPER" run "$SESSION" pane send-keys "$PRIMARY_PANE" ctrl+c >/dev/null
 wait_for_idle || fail "real Pi did not return idle after clearing the draft"
 for _ in $(seq 1 80); do
-  composer=$(PATH="$FAKEBIN:$ORIGINAL_PATH" HERDR_SESSION="$SESSION" fm_backend_composer_state herdr "$PRIMARY_TARGET")
+  composer=$(PATH="$FAKEBIN:$ORIGINAL_PATH" HERDR_SESSION="$SESSION" fm_backend_composer_state "$PRIMARY_TARGET")
   [ "$composer" = empty ] && break
   sleep 0.1
 done
@@ -245,7 +244,7 @@ pass "real idle Pi/Herdr accepts one marked escalation promptly, verifies submit
 # captured byte-exact, then the public return owner must gate it on the blocker.
 wait_for_idle || fail "real Pi did not settle after the injected catch-up"
 for _ in $(seq 1 80); do
-  composer=$(PATH="$FAKEBIN:$ORIGINAL_PATH" HERDR_SESSION="$SESSION" fm_backend_composer_state herdr "$PRIMARY_TARGET")
+  composer=$(PATH="$FAKEBIN:$ORIGINAL_PATH" HERDR_SESSION="$SESSION" fm_backend_composer_state "$PRIMARY_TARGET")
   [ "$composer" = empty ] && break
   sleep 0.1
 done
@@ -260,7 +259,7 @@ assert_blocker_open 'before return catch-up'
 
 set +e
 RETURN_OUT=$(PATH="$FAKEBIN:$ORIGINAL_PATH" HERDR_SESSION="$SESSION" FM_ROOT_OVERRIDE="$PROJECT" FM_HOME="$HOME_DIR" FM_STATE_OVERRIDE="$STATE" \
-  FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET="$PRIMARY_TARGET" "$ROOT/bin/fm-afk-return.sh" begin 2>&1)
+  FM_SUPERVISOR_TARGET="$PRIMARY_TARGET" "$ROOT/bin/fm-afk-return.sh" begin 2>&1)
 RETURN_RC=$?
 set -e
 DAEMON_STARTED=0
@@ -283,15 +282,16 @@ PATH="$FAKEBIN:$ORIGINAL_PATH" HERDR_SESSION="$SESSION" FM_ROOT_OVERRIDE="$PROJE
 # A clean re-entry creates no stale delivery or alert, and an immediate return is
 # idempotently clear because the keyed blocker is resolved.
 PATH="$FAKEBIN:$ORIGINAL_PATH" HERDR_SESSION="$SESSION" FM_HOME="$HOME_DIR" FM_STATE_OVERRIDE="$STATE" \
-  FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET="$PRIMARY_TARGET" FM_AFK_LAUNCH_ENTRY="$TMP_ROOT/daemon-entry" \
+  FM_SUPERVISOR_TARGET="$PRIMARY_TARGET" FM_AFK_LAUNCH_ENTRY="$TMP_ROOT/daemon-entry" \
   "$ROOT/bin/fm-afk-launch.sh" start >/dev/null
 DAEMON_STARTED=1
 PATH="$FAKEBIN:$ORIGINAL_PATH" HERDR_SESSION="$SESSION" FM_ROOT_OVERRIDE="$PROJECT" FM_HOME="$HOME_DIR" FM_STATE_OVERRIDE="$STATE" \
-  FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET="$PRIMARY_TARGET" "$ROOT/bin/fm-afk-return.sh" begin >/dev/null \
+  FM_SUPERVISOR_TARGET="$PRIMARY_TARGET" "$ROOT/bin/fm-afk-return.sh" begin >/dev/null \
   || fail "clean away re-entry/return was not idempotent"
 DAEMON_STARTED=0
 [ "$(wc -l < "$NOTIFY_LOG" | tr -d ' ')" -eq 1 ] || fail "clean re-entry duplicated the historical wedge alert"
 pass "resolved return catch-up allows Bearings and a clean idempotent away re-entry"
 
+HERDR_VERSION=$($LAB_HELPER run "$SESSION" status --json | jq -r '.client.version // "unknown"')
 printf 'evidence: herdr=%s pi=%s target=%s inject-hex-prefix=%s notifier-count=1\n' \
-  "$(herdr --version)" "$(pi --version)" "$PRIMARY_TARGET" "${INJECT_HEX:0:6}"
+  "$HERDR_VERSION" "$(pi --version)" "$PRIMARY_TARGET" "${INJECT_HEX:0:6}"

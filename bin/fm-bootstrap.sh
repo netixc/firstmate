@@ -7,7 +7,7 @@
 #          Silent = all good.
 #          Lines: "MISSING: <tool> (install: <command>)",
 #                 "MISSING_MANUAL: <tool> (instructions: <url>)", "NEEDS_GH_AUTH",
-#                 "BACKEND_INVALID: <name> (known: <names>)",
+#                 "BACKEND_INVALID: config/backend is obsolete; remove it because Herdr is Firstmate's only session provider",
 #                 "CREW_DISPATCH: invalid config/crew-dispatch.json - <reason>",
 #                 "FLEET_SYNC: <repo>: skipped|recovered|STUCK: <detail>",
 #                 "PR_CHECK_MIGRATION: <private remediation>",
@@ -22,7 +22,7 @@
 #          an origin fetch) AND its loaded instruction surface (AGENTS.md, bin/,
 #          or .agents/skills/) actually changed, bootstrap immediately nudges it
 #          via FM_HOME=<active-home> bin/fm-send.sh fm-<id> so meta resolves the
-#          current backend target and the standard from-firstmate marker is
+#          current Herdr target and the standard from-firstmate marker is
 #          applied. A successful send prints one BOOTSTRAP_INFO line with the
 #          exact target and message sent; a failed send leaves an idempotent
 #          retry marker under state/.secondmate-nudge-pending/ and prints an
@@ -99,7 +99,7 @@ DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 # shellcheck source=bin/fm-x-lib.sh disable=SC1091
 . "$SCRIPT_DIR/fm-x-lib.sh"
 # shellcheck source=bin/fm-backend.sh disable=SC1091
-. "$SCRIPT_DIR/fm-backend.sh"
+. "$SCRIPT_DIR/fm-backend.sh" diagnostic
 
 fleet_sync_origin_backed_project_count() {
   local count proj
@@ -411,7 +411,7 @@ secondmate_sync() {
 
 secondmate_liveness_sweep() {
   # Idempotent secondmate liveness guarantee - SESSION START ONLY. A
-  # secondmate agent that has exited leaves its backend endpoint alive as a
+  # secondmate agent that has exited leaves its Herdr pane alive as a
   # bare shell; the session-start digest's "endpoint: alive" read
   # (fm_backend_target_exists, pane-PRESENCE only) reports that shell as
   # alive, so recovery never respawns it, and the watcher deliberately exempts
@@ -422,10 +422,9 @@ secondmate_liveness_sweep() {
   # with a recorded window=), run the deeper fm_backend_agent_alive probe
   # (bin/fm-backend.sh) and act only on a CONFIDENT verdict:
   #   alive   - no-op.
-  #   dead    - kill the stale endpoint first (best-effort; the tmux adapter
-  #             refuses to create a same-named window over a live one) then
-  #             respawn via the existing recovery path (bin/fm-spawn.sh <id>
-  #             --secondmate; secondmate-provisioning).
+  #   dead    - kill the stale endpoint first, then respawn via the existing
+  #             recovery path (bin/fm-spawn.sh <id> --secondmate;
+  #             secondmate-provisioning).
   #   unknown - NEVER acted on. A false-dead reading would spin up a DUPLICATE
   #             agent (two supervisors in one home); a false-alive reading
   #             merely leaves today's bug unfixed for one more sweep. The
@@ -441,7 +440,7 @@ secondmate_liveness_sweep() {
   # MID-SESSION is a harder follow-on needing a periodic liveness beacon -
   # explicitly out of scope here.
   [ -d "$STATE" ] || return 0
-  local meta id window harness backend target verdict out
+  local meta id window harness target verdict out
   SECONDMATE_RESPAWNED_IDS=""
   for meta in "$STATE"/*.meta; do
     [ -f "$meta" ] || continue
@@ -450,10 +449,12 @@ secondmate_liveness_sweep() {
     window=$(fm_meta_get "$meta" window)
     [ -n "$window" ] || continue
     harness=$(fm_meta_get "$meta" harness)
-    backend=$(fm_backend_of_meta "$meta")
-    target=$(fm_backend_target_of_meta "$meta")
-    [ -n "$target" ] || target="$window"
-    verdict=$(fm_backend_agent_alive "$backend" "$target" 2>/dev/null) || verdict="unknown"
+    if ! target=$(fm_backend_target_of_meta "$meta" 2>&1); then
+      target=${target#error: }
+      echo "SECONDMATE_LIVENESS: secondmate $id: skipped: $target"
+      continue
+    fi
+    verdict=$(fm_backend_agent_alive "$target" 2>/dev/null) || verdict="unknown"
     case "$harness" in
       claude|codex|opencode|pi|grok) ;;
       *) [ "$verdict" = dead ] && verdict=unknown ;;
@@ -462,7 +463,7 @@ secondmate_liveness_sweep() {
       alive)
         ;;
       dead)
-        fm_backend_kill "$backend" "$target" 2>/dev/null || true
+        fm_backend_kill "$target" 2>/dev/null || true
         if out=$(FM_SPAWN_NO_GUARD=1 "$FM_ROOT/bin/fm-spawn.sh" "$id" --secondmate 2>&1); then
           SECONDMATE_RESPAWNED_IDS="$SECONDMATE_RESPAWNED_IDS $id"
           :
@@ -471,7 +472,7 @@ secondmate_liveness_sweep() {
         fi
         ;;
       *)
-        echo "SECONDMATE_LIVENESS: secondmate $id: skipped: liveness probe inconclusive (backend=$backend)"
+        echo "SECONDMATE_LIVENESS: secondmate $id: skipped: Herdr liveness probe inconclusive"
         ;;
     esac
   done
@@ -480,8 +481,7 @@ secondmate_liveness_sweep() {
 
 install_cmd() {
   case "$1" in
-    tmux|node|git|gh|curl|jq|orca|zellij) echo "brew install $1  # or the platform's package manager" ;;
-    cmux) echo "brew install --cask cmux  # or see https://cmux.com" ;;
+    node|git|gh|curl|jq) echo "brew install $1  # or the platform's package manager" ;;
     treehouse) echo "curl -fsSL https://kunchenguid.github.io/treehouse/install.sh | sh" ;;
     no-mistakes) echo "curl -fsSL https://raw.githubusercontent.com/kunchenguid/no-mistakes/main/docs/install.sh | sh" ;;
     gh-axi|chrome-devtools-axi|lavish-axi) echo "npm install -g $1 && $1 setup hooks" ;;
@@ -506,19 +506,9 @@ missing_tool_diagnostic() {
   echo "MISSING: $tool (install: $(install_cmd "$tool"))"
 }
 
-# Required-tool detection follows the RESOLVED backend, not a one-size default:
-# a universal toolchain every home needs plus the backend-specific delta owned by
-# fm_backend_required_tools (bin/fm-backend.sh). So a herdr/zellij/cmux home is
-# never told tmux is missing, and only orca drops treehouse. A backend value with
-# no verified dependency set is reported before the universal checks continue.
+# Required tools combine the universal toolchain with Herdr, jq, and Treehouse.
 COMMON_TOOLS="node git gh no-mistakes gh-axi chrome-devtools-axi lavish-axi tasks-axi quota-axi"
-BACKEND=$(fm_backend_name)
-BACKEND_VALID=1
-if ! BACKEND_TOOLS=$(fm_backend_required_tools "$BACKEND"); then
-  BACKEND_VALID=0
-  BACKEND_TOOLS=""
-fi
-TOOLS="$BACKEND_TOOLS $COMMON_TOOLS"
+SESSION_TOOLS=$(fm_backend_required_tools)
 NO_MISTAKES_MIN_MAJOR=1
 NO_MISTAKES_MIN_MINOR=31
 NO_MISTAKES_MIN_PATCH=2
@@ -785,6 +775,11 @@ crew_dispatch_validate() {
   fi
 }
 
+if legacy_setting=$(fm_backend_legacy_setting_reason "$CONFIG"); then
+  echo "BACKEND_INVALID: $legacy_setting"
+  exit 0
+fi
+
 if [ "${1:-}" = "install" ]; then
   shift
   [ $# -gt 0 ] || { echo "usage: fm-bootstrap.sh install <tool>..." >&2; exit 1; }
@@ -809,21 +804,14 @@ if [ "${FM_BOOTSTRAP_DETECT_ONLY:-0}" != 1 ]; then
   "$SCRIPT_DIR/fm-pr-check-migrate.sh" || true
 fi
 
-if [ "$BACKEND_VALID" -eq 0 ]; then
-  echo "BACKEND_INVALID: $BACKEND (known: $FM_BACKEND_KNOWN)"
-fi
-for t in $BACKEND_TOOLS; do
-  fm_backend_required_tool_available "$BACKEND" "$t" \
+for t in $SESSION_TOOLS; do
+  fm_backend_required_tool_available "$t" \
     || missing_tool_diagnostic "$t"
 done
 for t in $COMMON_TOOLS; do
   command -v "$t" >/dev/null || missing_tool_diagnostic "$t"
 done
-# The treehouse lease-support upgrade check is only relevant when the resolved
-# backend actually requires treehouse (every backend except orca, which owns its
-# own worktrees); an orca home must not be told to upgrade a provider it never uses.
-if fm_backend_list_contains "$TOOLS" treehouse \
-  && command -v treehouse >/dev/null 2>&1 && ! treehouse_supports_lease; then
+if command -v treehouse >/dev/null 2>&1 && ! treehouse_supports_lease; then
   echo "MISSING: treehouse (install: $(install_cmd treehouse))"
 fi
 if command -v no-mistakes >/dev/null 2>&1 && ! no_mistakes_compatible; then

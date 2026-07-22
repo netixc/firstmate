@@ -94,7 +94,7 @@ test_refuses_unsafe_names() {
   fm_herdr_lab_validate_name arbitrary-session >/dev/null 2>&1 || status=$?
   expect_code 1 "$status" "non-lab prefix must be refused"
   fm_herdr_lab_validate_name fm-lab-safe-123 || fail "valid lab session name was refused"
-  generated=$(fm_herdr_lab_name fm-autodetect-smoke-concurrency-h3)
+  generated=$(fm_herdr_lab_name fm-herdr-only-concurrency-h3)
   fm_herdr_lab_validate_name "$generated" || fail "generated lab session name was refused"
   [ "${#generated}" -le 40 ] || fail "generated lab session name is too long for Herdr socket paths: $generated"
   pass "fm-herdr-lab: names fail closed and require the lab prefix"

@@ -26,11 +26,13 @@ make_fakebin() {  # <dir>
 [ "${FAKE_NM_SLEEP:-0}" = 1 ] && sleep 30
 exit 0
 SH
-  cat > "$fb/tmux" <<'SH'
+  cat > "$fb/herdr" <<'SH'
 #!/usr/bin/env bash
-case "${1:-}" in
-  display-message) case "$*" in *dead-*) exit 1 ;; *) printf '%%1\n' ;; esac ;;
-  capture-pane)
+case "${1:-} ${2:-}" in
+  "status --json") printf '{"client":{"protocol":16},"server":{"running":true}}\n' ;;
+  "pane get") case "${3:-}" in *dead-*) exit 1 ;; *) printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "${3:-}" ;; esac ;;
+  "agent get") printf '{"result":{"agent":{"agent_status":"idle"}}}\n' ;;
+  "pane read")
     case "$*" in
       *fm-domain-alpha*) printf 'stale terminal summary: Phase 7 started\n> \n' ;;
       *) printf 'all quiet\n> \n' ;;
@@ -65,7 +67,7 @@ SH
 echo "curl $*" >> "$NET_LOG"
 exit 1
 SH
-  chmod +x "$fb/no-mistakes" "$fb/tmux" "$fb/gh" "$fb/gh-axi" "$fb/curl"
+  chmod +x "$fb/no-mistakes" "$fb/herdr" "$fb/gh" "$fb/gh-axi" "$fb/curl"
   printf '%s\n' "$fb"
 }
 

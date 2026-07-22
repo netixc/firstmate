@@ -115,7 +115,7 @@ test_guard_warnings() {
   #       warning follows it, and the guidance is repair-after-drain (never the
   #       old conflicting "restart NOW first").
   #   (2) a fresh watcher and an empty queue: total silence.
-  local dir state err first banner_line queue_line
+  local dir state err first banner_line queue_line expected_fix
   dir=$(make_case guard)
   state="$dir/state"
   err="$dir/guard.err"
@@ -137,9 +137,15 @@ test_guard_warnings() {
   grep -F 'last beat: never' "$err" >/dev/null || fail "guard banner missing the beacon age"
   grep -F 'guarded operation WILL still run' "$err" >/dev/null || fail "guard banner missing generic continuation wording"
   ! grep -F 'requested message WILL still be sent' "$err" >/dev/null || fail "shared guard used send-specific continuation wording"
-  grep -F 'repair missing watcher supervision' "$err" >/dev/null || fail "guard banner missing the harness-aware fix command"
+  expected_fix=$(FM_ROOT_OVERRIDE="$dir" FM_STATE_OVERRIDE="$state" \
+    "$ROOT/bin/fm-supervision-instructions.sh" --queue-pending 1 --repair-line) \
+    || fail "could not render the authoritative harness-aware fix command"
+  case "$expected_fix" in
+    'After draining queued wakes, '*) ;;
+    *) fail "harness-aware fix command did not order repair after the drain: $expected_fix" ;;
+  esac
+  grep -F "$expected_fix" "$err" >/dev/null || fail "guard banner missing the harness-aware fix command"
   grep -F 'queued wakes pending - drain them' "$err" >/dev/null || fail "guard did not warn about pending queue"
-  grep -F 'After draining queued wakes, repair missing watcher supervision' "$err" >/dev/null || fail "guard did not order supervision repair after drain"
   ! grep -F 'Restart it NOW, before anything else' "$err" >/dev/null || fail "guard still gave conflicting restart-first instruction"
   ! grep -F 'as the harness-tracked background task' "$err" >/dev/null || fail "guard still printed the old universal background-task repair text"
   banner_line=$(grep -n 'WATCHER DOWN' "$err" | head -1 | cut -d: -f1)
@@ -437,14 +443,21 @@ test_watch_restart_rejects_reused_pid() {
 }
 
 test_watch_restart_attaches_to_healthy_peer() {
-  local dir state fakebin out peer identity armpid status i
+  local dir state fakebin out peer ready identity armpid status i
   dir=$(make_case restart-healthy-peer)
   state="$dir/state"
   fakebin="$dir/fakebin"
   out="$dir/restart.out"
   mark_pr_check_migration_complete "$state"
-  node -e 'process.on("SIGTERM", () => {}); setTimeout(() => {}, 300000)' &
+  ready="$dir/peer-ready"
+  node -e 'const fs = require("fs"); process.on("SIGTERM", () => {}); fs.writeFileSync(process.argv[1], "ready"); setTimeout(() => {}, 300000)' "$ready" &
   peer=$!
+  i=0
+  while [ "$i" -lt 80 ] && [ ! -s "$ready" ]; do
+    sleep 0.05
+    i=$((i + 1))
+  done
+  [ -s "$ready" ] || fail "TERM-resistant peer did not finish installing its signal handler"
   identity=$(FM_STATE_OVERRIDE="$state" bash -c '. "$1"; fm_pid_identity "$2"' _ "$LIB" "$peer") || fail "could not identify peer pid"
   mkdir "$state/.watch.lock"
   printf '%s\n' "$peer" > "$state/.watch.lock/pid"

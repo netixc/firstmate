@@ -108,10 +108,7 @@ init_changed_fixture_repo() {
     fm-pr-merge.test.sh \
     fm-pi-watch-extension.test.sh \
     fm-afk-return.test.sh \
-    fm-bearings-snapshot.test.sh \
-    fm-backend-cmux.test.sh \
-    fm-backend-zellij.test.sh \
-    fm-backend-orca.test.sh; do
+    fm-bearings-snapshot.test.sh; do
     printf '#!/usr/bin/env bash\n# tests/lib.sh\n' >"$repo/tests/$script"
     chmod +x "$repo/tests/$script"
   done
@@ -172,6 +169,19 @@ test_changed_dependency_selection_and_unmapped_failure() {
   assert_contains "$listed" "tests/fm-pi-watch-extension.test.sh" "Pi source selects watcher coverage"
   git -C "$repo" add .agents .claude .pi
   git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm non-bin-source-change
+
+  rm "$repo/.agents/skills/example/SKILL.md"
+  listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD)
+  assert_contains "$listed" "tests/fm-captain-translation-contract.test.sh" \
+    "deleted skill source selects contract coverage"
+  git -C "$repo" add .agents
+  git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm deleted-skill-change
+
+  rm "$repo/tests/fm-daemon.test.sh"
+  listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD)
+  [ -z "$listed" ] || fail "deleted test should not select a missing script: $listed"
+  git -C "$repo" add tests/fm-daemon.test.sh
+  git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm deleted-test-change
 
   printf '\n' >>"$repo/src/unmapped.ts"
   set +e

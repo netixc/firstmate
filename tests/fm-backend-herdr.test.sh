@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
-# tests/fm-backend-herdr.test.sh - fake-herdr-CLI unit tests for the herdr
-# session-provider adapter (bin/backends/herdr.sh), P2 of
-# data/fm-backend-design-d7 (herdr-addendum.md). Mirrors tests/fm-backend.test.sh's
-# fakebin/command-log convention, but herdr has no pre-refactor baseline to
-# diff against (it is new in this task), so these are direct behavior
-# assertions against a small, LOG-based, canned-response fake `herdr` + real
-# `jq` (jq itself is a real required tool for this backend, not faked).
+# tests/fm-backend-herdr.test.sh - fake-Herdr-CLI unit tests for Firstmate's
+# session-provider implementation.
+# These are direct behavior assertions against a small, log-based,
+# canned-response fake `herdr` plus real `jq`.
+# jq is a required production dependency and is not faked.
 # The real-binary smoke test lives in tests/fm-backend-herdr-smoke.test.sh,
 # gated on the herdr binary actually being installed.
 set -u
@@ -1198,23 +1196,24 @@ test_presentation_lock_insecure_namespace_falls_back() {
   pass "herdr presentation lock: insecure shared namespace refuses acquisition for flat fallback"
 }
 
-test_spawn_task_lock_covers_all_backend_creation_and_metadata_publication() {
-  local source wake_source acquire_pattern backend_pattern meta_pattern acquire_line backend_line meta_line
+test_spawn_task_lock_covers_herdr_creation_and_metadata_publication() {
+  local source wake_source acquire_pattern create_pattern meta_pattern acquire_line create_line meta_line
   source=$(cat "$ROOT/bin/fm-spawn.sh")
   wake_source=". \"\$SCRIPT_DIR/fm-wake-lib.sh\""
   acquire_pattern="fm_lock_try_acquire \"\$SPAWN_TASK_LOCK\""
-  backend_pattern="^case \"\$BACKEND\" in"
+  # shellcheck disable=SC2016 # Match the literal variable reference in fm-spawn.
+  create_pattern='fm_backend_herdr_container_ensure "$PROJ_ABS"'
   meta_pattern="} > \"\$STATE/\$ID.meta\""
   assert_contains "$source" "$wake_source" \
     "fm-spawn does not load the shared lock implementation"
   acquire_line=$(grep -n "$acquire_pattern" "$ROOT/bin/fm-spawn.sh" | head -1 | cut -d: -f1)
-  backend_line=$(grep -n "$backend_pattern" "$ROOT/bin/fm-spawn.sh" | tail -1 | cut -d: -f1)
+  create_line=$(grep -nF "$create_pattern" "$ROOT/bin/fm-spawn.sh" | tail -1 | cut -d: -f1)
   meta_line=$(grep -n "$meta_pattern" "$ROOT/bin/fm-spawn.sh" | tail -1 | cut -d: -f1)
-  [ -n "$acquire_line" ] && [ -n "$backend_line" ] && [ -n "$meta_line" ] \
-    || fail "could not locate the spawn lock, backend creation, and metadata publication"
-  [ "$acquire_line" -lt "$backend_line" ] && [ "$backend_line" -lt "$meta_line" ] \
-    || fail "the task lock does not span backend creation through metadata publication"
-  pass "fm-spawn: one task lock spans every backend creation path through metadata publication"
+  [ -n "$acquire_line" ] && [ -n "$create_line" ] && [ -n "$meta_line" ] \
+    || fail "could not locate the spawn lock, Herdr creation, and metadata publication"
+  [ "$acquire_line" -lt "$create_line" ] && [ "$create_line" -lt "$meta_line" ] \
+    || fail "the task lock does not span Herdr creation through metadata publication"
+  pass "fm-spawn: one task lock spans Herdr creation through metadata publication"
 }
 
 test_projected_spawn_disarms_cleanup_before_ambiguous_launch_submission() {
@@ -1261,7 +1260,6 @@ test_projected_abort_cleanup_holds_presentation_lock() {
     HERDR_PROJECTION_ABORT_SESSION=fmtest
     HERDR_PROJECTION_ABORT_TASK_PANE=w9:p2
     HERDR_PROJECTION_ABORT_SEEDED_PANE=w9:p1
-    ORCA_ABORT_CLEANUP=0
     SPAWN_TASK_LOCK_HELD=0
     spawn_abort_cleanup
   ' &
@@ -1668,7 +1666,7 @@ test_composer_state_pi_separator_requires_safe_native_identity() {
 
 # --- composer_state: unbordered (bare) composer rows -------------------------
 # Regression coverage for the away-mode redelivery-loop incident
-# (docs/herdr-backend.md "Incident (2026-07-07)"): real claude and codex
+# (docs/herdr-backend.md "Endpoint behavior"): real claude and codex
 # composer rows carry NO border glyph at all - the fixtures below are captured
 # verbatim (character-for-character) from a real herdr session running real
 # `claude`/`codex` (see the dated evidence entry). Before the fix these all
@@ -1824,7 +1822,7 @@ test_composer_state_codex_non_faint_same_text_is_pending() {
 # --- wait_for_working: the native agent-state poll-and-classify primitive ---
 # Direct unit coverage for fm_backend_herdr_wait_for_working, the helper
 # fm_backend_herdr_send_text_submit now uses instead of composer scraping
-# (docs/herdr-backend.md "Native agent-state submit confirmation").
+# (docs/herdr-backend.md "Endpoint behavior").
 
 test_wait_for_working_returns_busy_on_first_poll() {
   local dir log resp fb out calls
@@ -2081,9 +2079,9 @@ test_composer_state_guard_still_refuses_real_pending_text_after_submit_confirmat
   printf '  \xe2\x9d\xaf hello there this is a test message\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/fm-backend.sh"; fm_backend_composer_state herdr default:w1:p2' "$ROOT" )
+    bash -c '. "$0/bin/fm-backend.sh"; fm_backend_composer_state default:w1:p2' "$ROOT" )
   [ "$out" = pending ] || fail "the pre-injection empty-box guard must still refuse real unsubmitted composer text after this change, got '$out'"
-  pass "fm_backend_composer_state (herdr): the pre-injection empty-box guard still refuses a genuinely non-empty composer, unaffected by the submit-confirmation change"
+  pass "fm_backend_composer_state: the pre-injection empty-box guard still refuses a genuinely non-empty Herdr composer"
 }
 
 # A slow transition landing partway through a single Enter attempt's own
@@ -2133,65 +2131,29 @@ test_send_text_submit_unknown_on_capture_failure() {
   pass "fm_backend_herdr_send_text_submit: reports 'unknown' when the post-Enter agent-get read fails (never retries past an unreadable target)"
 }
 
-# --- fm-backend.sh dispatch wiring -------------------------------------------
-
-test_dispatch_routes_herdr_backend() {
-  fm_backend_validate herdr 2>/dev/null || fail "fm_backend_validate should accept herdr (P2 adds it to FM_BACKEND_KNOWN)"
-  pass "fm_backend_validate: herdr is a known backend (P2)"
-}
-
-test_dispatch_busy_state_unknown_for_tmux() {
-  # shellcheck source=bin/fm-backend.sh
-  . "$ROOT/bin/fm-backend.sh"
-  [ "$(fm_backend_busy_state tmux 'sess:win')" = unknown ] \
-    || fail "fm_backend_busy_state should report unknown for tmux (no native agent-state primitive; watcher falls back to regex)"
-  pass "fm_backend_busy_state: tmux (no native primitive) always reports unknown, preserving the P1 regex-only path"
-}
-
-test_dispatch_composer_state_routes_by_backend() {
-  # fm_backend_composer_state (the generic per-backend composer/pending-input
-  # classifier the away-mode daemon dispatches through - bin/fm-supervise-daemon.sh's
-  # pane_input_pending) must route to each backend's OWN named classifier with
-  # the target passed through unchanged, fall back to unknown for a backend with
-  # no named classifier (zellij), and unknown for an unrecognized backend name.
-  # Sourced-guards are pre-set so fm_backend_source no-ops and these stubs are
-  # never clobbered by the real per-backend files trying (and failing) a live call.
+test_shared_composer_state_calls_herdr_directly() {
   (
     # shellcheck source=bin/fm-backend.sh
     . "$ROOT/bin/fm-backend.sh"
-    _FM_BACKEND_TMUX_SOURCED=1
-    _FM_BACKEND_HERDR_SOURCED=1
-    _FM_BACKEND_ORCA_SOURCED=1
-    _FM_BACKEND_ZELLIJ_SOURCED=1
-    fm_tmux_composer_state() { [ "$1" = "sess:win" ] || fail "tmux composer_state got wrong target: $1"; printf 'pending'; }
-    fm_backend_herdr_composer_state() { [ "$1" = "default:w1:p2" ] || fail "herdr composer_state got wrong target: $1"; printf 'empty'; }
-    fm_backend_orca_composer_state() { [ "$1" = "term-1" ] || fail "orca composer_state got wrong target: $1"; printf 'empty'; }
-    [ "$(fm_backend_composer_state tmux sess:win)" = pending ] || fail "composer_state did not dispatch to the tmux classifier"
-    [ "$(fm_backend_composer_state herdr default:w1:p2)" = empty ] || fail "composer_state did not dispatch to the herdr classifier"
-    [ "$(fm_backend_composer_state orca term-1)" = empty ] || fail "composer_state did not dispatch to the orca classifier"
-    [ "$(fm_backend_composer_state zellij sess:win)" = unknown ] || fail "composer_state should report unknown for zellij (no named classifier yet)"
-    [ "$(fm_backend_composer_state bogus x)" = unknown ] || fail "composer_state should report unknown for an unrecognized backend"
-  ) || fail "composer_state dispatch subshell failed"
-  pass "fm_backend_composer_state dispatches tmux/herdr/orca to their named classifiers, unknown for zellij/unrecognized backends"
+    fm_backend_herdr_composer_state() {
+      [ "$1" = "default:w1:p2" ] || fail "Herdr composer state got wrong target: $1"
+      printf 'empty'
+    }
+    [ "$(fm_backend_composer_state default:w1:p2)" = empty ] \
+      || fail "shared composer state did not call Herdr directly"
+  ) || fail "Herdr composer-state wrapper subshell failed"
+  pass "fm_backend_composer_state calls Herdr directly"
 }
 
-test_scripts_route_explicit_target_through_meta_backend() {
+test_scripts_route_explicit_target_through_herdr() {
   local dir state log resp fb neutral out
   dir="$TMP_ROOT/script-explicit-target"; state="$dir/state"; mkdir -p "$state" "$dir/responses"
   log="$dir/log"; resp="$dir/responses"; : > "$log"
   neutral="$dir/neutral-root"; mkdir -p "$neutral"
-  fm_write_meta "$state/herdr-stale.meta" "window=default:w1:p2" "backend=herdr"
+  fm_write_meta "$state/herdr-stale.meta" "window=default:w1:p2"
   touch "$state/.last-watcher-beat"
   printf 'captured herdr pane\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
-  cat > "$fb/tmux" <<'SH'
-#!/usr/bin/env bash
-set -u
-printf 'tmux should not be used for a metadata-matched herdr target\n' >&2
-exit 42
-SH
-  chmod +x "$fb/tmux"
-
   out=$( PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$neutral" FM_STATE_OVERRIDE="$state" \
     FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     "$ROOT/bin/fm-peek.sh" default:w1:p2 5 2>/dev/null )
@@ -2207,7 +2169,7 @@ SH
   assert_contains "$(cat "$log")" $'\x1f''pane'$'\x1f''send-keys'$'\x1f''w1:p2'$'\x1f''escape' \
     "fm-send did not route the explicit stale target through herdr send-key"
 
-  pass "fm-peek/fm-send: explicit stale targets matching metadata use the recorded backend"
+  pass "fm-peek/fm-send: explicit stale targets matching metadata use Herdr"
 }
 
 # --- workspace lifecycle: reuse, no orphans, default-tab pruning -------------
@@ -2796,7 +2758,7 @@ test_presentation_session_lock_path_rejects_malformed_socket
 test_presentation_lock_malformed_socket_falls_back
 test_projection_order_rejects_malformed_socket
 test_presentation_lock_insecure_namespace_falls_back
-test_spawn_task_lock_covers_all_backend_creation_and_metadata_publication
+test_spawn_task_lock_covers_herdr_creation_and_metadata_publication
 test_projected_spawn_disarms_cleanup_before_ambiguous_launch_submission
 test_projected_abort_cleanup_holds_presentation_lock
 test_projection_recovery_is_read_only_and_refuses_live_duplicate_risk
@@ -2851,10 +2813,8 @@ test_composer_state_guard_still_refuses_real_pending_text_after_submit_confirmat
 test_send_text_submit_slow_transition_within_one_enter_needs_no_extra_enter
 test_send_text_submit_send_failed
 test_send_text_submit_unknown_on_capture_failure
-test_dispatch_routes_herdr_backend
-test_dispatch_busy_state_unknown_for_tmux
-test_dispatch_composer_state_routes_by_backend
-test_scripts_route_explicit_target_through_meta_backend
+test_shared_composer_state_calls_herdr_directly
+test_scripts_route_explicit_target_through_herdr
 test_normalize_event_leaves_from_empty
 test_escalation_marker_keys_like_watcher
 test_apply_transition_blocked_requires_commit_to_dedupe

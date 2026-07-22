@@ -97,7 +97,7 @@ CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 PRIMARY_HARNESS=$("$SCRIPT_DIR/fm-harness.sh" 2>/dev/null || printf unknown)
 
 # shellcheck source=bin/fm-backend.sh
-. "$SCRIPT_DIR/fm-backend.sh"
+. "$SCRIPT_DIR/fm-backend.sh" operational
 # shellcheck source=bin/fm-tasks-axi-lib.sh
 . "$SCRIPT_DIR/fm-tasks-axi-lib.sh"
 
@@ -346,13 +346,15 @@ for meta in "$STATE"/*.meta; do
   cat "$meta"
 
   window=$(fm_meta_get "$meta" window)
-  target=$(fm_backend_target_of_meta "$meta")
-  if [ -n "$window" ]; then
-    backend=$(fm_backend_of_meta "$meta")
-    if fm_backend_target_exists "$backend" "${target:-$window}" "fm-$id"; then
-      printf 'endpoint: alive (backend=%s window=%s)\n' "$backend" "$window"
+  if ! provider_diagnostic=$(fm_backend_meta_is_herdr "$meta" 2>&1); then
+    provider_diagnostic=${provider_diagnostic#error: }
+    printf 'endpoint: migration required (%s)\n' "$provider_diagnostic"
+  elif [ -n "$window" ]; then
+    target=$(fm_backend_target_of_meta "$meta")
+    if fm_backend_target_exists "$target" "fm-$id"; then
+      printf 'endpoint: alive (Herdr window=%s)\n' "$window"
     else
-      printf 'endpoint: dead (backend=%s window=%s)\n' "$backend" "$window"
+      printf 'endpoint: dead (Herdr window=%s)\n' "$window"
     fi
   else
     printf 'endpoint: unknown (no window recorded)\n'

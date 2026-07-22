@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# tests/fm-transition-lib.test.sh - unit tests for the shared, backend-neutral
+# tests/fm-transition-lib.test.sh - unit tests for the shared Herdr
 # normalized-transition shape and the single-owner status->action policy table
-# (bin/fm-transition-lib.sh). Pure functions, no backend required.
+# (bin/fm-transition-lib.sh). Pure functions, no live Herdr session required.
 set -u
 
 # shellcheck source=tests/lib.sh

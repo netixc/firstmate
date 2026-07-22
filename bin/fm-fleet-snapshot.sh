@@ -2,7 +2,7 @@
 # fm-fleet-snapshot.sh - read-only structured fleet snapshot.
 #
 # Output contract: `--json` prints one object with schema
-# `fm-fleet-snapshot.v1`.
+# `fm-fleet-snapshot.v2`.
 # The command is read-only: it does not acquire the session lock, drain wakes,
 # arm watchers, mutate backlog state, or write reports.
 #
@@ -122,7 +122,7 @@ validate_positive_bound FM_SNAPSHOT_REGISTRY_TIMEOUT "$FM_SNAPSHOT_REGISTRY_TIME
 
 # shellcheck source=bin/fm-backend.sh
 # shellcheck disable=SC1091
-. "$SCRIPT_DIR/fm-backend.sh"
+. "$SCRIPT_DIR/fm-backend.sh" operational
 # shellcheck source=bin/fm-classify-lib.sh
 # shellcheck disable=SC1091
 . "$SCRIPT_DIR/fm-classify-lib.sh"
@@ -365,11 +365,12 @@ backlog_json() {  # [<backlog-path>] - defaults to this home's $BACKLOG
 }
 
 task_json_lines() {
-  local meta id kind harness mode yolo project worktree home projects backend target status_log report_path
+  local meta id kind harness mode yolo project worktree home projects target status_log report_path
   local pr pr_source event_json current_json endpoint_exists agent_alive meta_json status_json report_json worktree_json home_json
   local last_event_raw current_state current_source pending_decision blocked_event report_present=0 pr_from_status
   local open_decisions_tsv open_decisions_json
 
+  fm_backend_validate_meta_dir "$STATE" || return 1
   for meta in "$STATE"/*.meta; do
     [ -e "$meta" ] || continue
     id=$(basename "$meta" .meta)
@@ -382,8 +383,7 @@ task_json_lines() {
     worktree=$(meta_value "$meta" worktree)
     home=$(meta_value "$meta" home)
     projects=$(meta_value "$meta" projects)
-    backend=$(fm_backend_of_meta "$meta")
-    target=$(fm_backend_target_of_meta "$meta")
+    target=$(fm_meta_get "$meta" window)
     status_log="$STATE/$id.status"
     report_path="$DATA/$id/report.md"
     pr=$(meta_value "$meta" pr)
@@ -436,7 +436,7 @@ task_json_lines() {
 
     endpoint_exists=null
     if [ -n "$target" ]; then
-      if fm_backend_target_exists "$backend" "$target" "fm-$id" >/dev/null 2>&1; then
+      if fm_backend_target_exists "$target" "fm-$id" >/dev/null 2>&1; then
         endpoint_exists=true
       else
         endpoint_exists=false
@@ -444,7 +444,7 @@ task_json_lines() {
     fi
     agent_alive=not_checked
     if [ "$kind" = secondmate ] && [ -n "$target" ]; then
-      agent_alive=$(fm_backend_agent_alive "$backend" "$target" 2>/dev/null || printf unknown)
+      agent_alive=$(fm_backend_agent_alive "$target" 2>/dev/null || printf unknown)
     fi
 
     [ -f "$report_path" ] && report_present=1 || report_present=0
@@ -464,7 +464,6 @@ task_json_lines() {
       --arg worktree "$worktree" \
       --arg home "$home" \
       --arg projects "$projects" \
-      --arg backend "$backend" \
       --arg target "$target" \
       --arg pr "$pr" \
       --arg pr_source "$pr_source" \
@@ -489,7 +488,6 @@ task_json_lines() {
         mode:($mode // ""),
         yolo:($yolo // ""),
         project:($project // ""),
-        backend:$backend,
         paths:{
           meta:$meta_path,
           status_log:$status_log,
@@ -898,8 +896,7 @@ BASH
 }
 
 terminal_evidence_json() {  # <parent-task-json> <event-note> <evidence-contradicts>
-  local task=$1 note=$2 evidence_contradicts=$3 backend target exists expected out rc clean bytes lines seen=false contradiction=false reason=''
-  backend=$(printf '%s' "$task" | jq -r '.backend // ""')
+  local task=$1 note=$2 evidence_contradicts=$3 target exists expected out rc clean bytes lines seen=false contradiction=false reason=''
   target=$(printf '%s' "$task" | jq -r '.endpoint.target // ""')
   exists=$(printf '%s' "$task" | jq -r '.endpoint.exists // "unknown"')
   expected=$(printf '%s' "$task" | jq -r '"fm-" + (.id // "")')
@@ -911,8 +908,8 @@ terminal_evidence_json() {  # <parent-task-json> <event-note> <evidence-contradi
   fi
   # shellcheck disable=SC2016 # Positional parameters expand inside the child bash, not here.
   out=$(run_timed "$FM_SNAPSHOT_TERMINAL_TIMEOUT" bash -c \
-    '. "$1"; fm_backend_capture "$2" "$3" "$4" "$5" | LC_ALL=C head -c "$6"; rc=${PIPESTATUS[0]}; [ "$rc" -eq 141 ] && rc=0; exit "$rc"' \
-    fm-terminal-capture "$SCRIPT_DIR/fm-backend.sh" "$backend" "$target" "$FM_SNAPSHOT_TERMINAL_LINES" "$expected" "$FM_SNAPSHOT_TERMINAL_BYTES" 2>/dev/null)
+    '. "$1"; fm_backend_capture "$2" "$3" "$4" | LC_ALL=C head -c "$5"; rc=${PIPESTATUS[0]}; [ "$rc" -eq 141 ] && rc=0; exit "$rc"' \
+    fm-terminal-capture "$SCRIPT_DIR/fm-backend.sh" "$target" "$FM_SNAPSHOT_TERMINAL_LINES" "$expected" "$FM_SNAPSHOT_TERMINAL_BYTES" 2>/dev/null)
   rc=$?
   if [ "$rc" -ne 0 ]; then
     [ "$rc" -eq 124 ] && reason="terminal capture timed out" || reason="terminal capture unavailable"
@@ -1237,7 +1234,7 @@ jq -n \
    def task_by_id($id): ($tasks[]? | select(.id == $id) | .) // null;
    def report_kind($id): (task_by_id($id).kind // backlog_by_id($id).kind // "scout");
    {
-     schema:"fm-fleet-snapshot.v1",
+     schema:"fm-fleet-snapshot.v2",
      generated:$generated,
      fm_home:$fm_home,
      roots:{fm_root:$fm_root,state:$state,data:$data,config:$config,projects:$projects},

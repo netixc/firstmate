@@ -2,14 +2,14 @@
 # Regression test for the fm-spawn.sh treehouse-get worktree-detection settle
 # loop (bin/fm-spawn.sh, the `for _ in $(seq 1 60)` loop after `treehouse get`).
 #
-# On some tmux/WSL setups a brand-new window's pane_current_path transiently
-# reports a stale, unrelated-but-real path on the very first poll, before the
+# A brand-new pane's foreground_cwd can transiently report a stale,
+# unrelated-but-real path on the first poll, before the
 # pane actually settles into the worktree treehouse get moved it to. That stale
 # path still passes the loop's "differs from the project" check and
 # validate_spawn_worktree's "is a real, distinct worktree" check (it IS a real
 # git checkout, just the wrong one), so a naive single-read loop silently
 # records the wrong worktree= in state/<id>.meta. This test simulates that
-# transient-then-settled pane_current_path sequence with a fake tmux and
+# transient-then-settled foreground_cwd sequence with a fake Herdr CLI and
 # asserts the recorded worktree resolves to the real, settled worktree, never
 # the stale first read.
 set -u
@@ -20,40 +20,38 @@ set -u
 SPAWN="$ROOT/bin/fm-spawn.sh"
 TMP_ROOT=$(fm_test_tmproot fm-spawn-worktree-settle)
 
-# make_settle_fakebin <dir> builds a fake tmux whose `#{pane_current_path}`
+# make_settle_fakebin <dir> builds a fake Herdr CLI whose pane-get foreground_cwd
 # query returns FM_FAKE_PANE_STALE for the first FM_FAKE_PANE_STALE_READS
 # calls, then FM_FAKE_PANE_PATH forever after - reproducing a pane that
 # transiently reports a stale cwd before settling into the real worktree.
 make_settle_fakebin() {
   local dir=$1 fakebin
   fakebin=$(fm_fakebin "$dir")
-  cat > "$fakebin/tmux" <<'SH'
+  cat > "$fakebin/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
-case "$*" in
-  *"#{pane_current_path}"*)
+case " $* " in
+  *' status --json '*) printf '%s\n' '{"client":{"version":"0.7.3","protocol":16},"server":{"running":true}}' ;;
+  *' workspace list '*) printf '%s\n' '{"result":{"workspaces":[{"workspace_id":"w1","label":"firstmate"}]}}' ;;
+  *' tab list '*) printf '%s\n' '{"result":{"tabs":[]}}' ;;
+  *' tab create '*) printf '%s\n' '{"result":{"tab":{"tab_id":"t1"},"root_pane":{"pane_id":"w1:p1"}}}' ;;
+  *' pane get '*)
     countfile="${FM_FAKE_PANE_COUNTFILE:?FM_FAKE_PANE_COUNTFILE unset}"
     n=0
     [ -f "$countfile" ] && n=$(cat "$countfile")
     n=$((n + 1))
     printf '%s\n' "$n" > "$countfile"
     if [ "$n" -le "${FM_FAKE_PANE_STALE_READS:-0}" ]; then
-      printf '%s\n' "${FM_FAKE_PANE_STALE:-}"
+      cwd=${FM_FAKE_PANE_STALE:-}
     else
-      printf '%s\n' "${FM_FAKE_PANE_PATH:-}"
+      cwd=${FM_FAKE_PANE_PATH:-}
     fi
-    exit 0
+    printf '{"result":{"pane":{"pane_id":"w1:p1","foreground_cwd":"%s"}}}\n' "$cwd"
     ;;
-esac
-case "${1:-}" in
-  display-message) printf 'firstmate\n'; exit 0 ;;
-  list-windows) exit 0 ;;
-  has-session|new-session|new-window|kill-window) exit 0 ;;
-  send-keys) exit 0 ;;
 esac
 exit 0
 SH
-  chmod +x "$fakebin/tmux"
+  chmod +x "$fakebin/herdr"
   fm_fake_exit0 "$fakebin" treehouse
   printf '%s\n' "$fakebin"
 }
@@ -93,7 +91,7 @@ run_settle_spawn() {
   FM_ROOT_OVERRIDE='' FM_HOME="$HOME_DIR" \
     FM_STATE_OVERRIDE="$HOME_DIR/state" FM_DATA_OVERRIDE="$HOME_DIR/data" \
     FM_PROJECTS_OVERRIDE="$HOME_DIR/projects" FM_CONFIG_OVERRIDE="$HOME_DIR/config" \
-    FM_SPAWN_NO_GUARD=1 TMUX="fake,1,0" \
+    FM_SPAWN_NO_GUARD=1 \
     FM_FAKE_PANE_PATH="$WT_DIR" FM_FAKE_PANE_STALE="$STALE_DIR" \
     FM_FAKE_PANE_STALE_READS="$STALE_READS" FM_FAKE_PANE_COUNTFILE="$COUNTFILE" \
     PATH="$FAKEBIN_DIR:$PATH" \

@@ -19,7 +19,7 @@
 #   state: <working|parked|done|blocked|paused|failed|unknown> · source: <run-step|pane|status-log|none> · <detail>
 #
 # Logic, in order:
-#   1. Resolve worktree + backend target + kind from state/<id>.meta.
+#   1. Resolve worktree + Herdr target + kind from state/<id>.meta.
 #   2. Matching no-mistakes run for this crew's branch AND current code identity,
 #      active or terminal (from `axi status`, or the coarse `no-mistakes runs`
 #      fallback)? Branch name alone is not enough: a historical run on a reused
@@ -40,7 +40,7 @@
 #      is flagged superseded. A genuinely parked run plus a needs-decision log
 #      agree, and are reported as parked.
 #   4. No run for this crew (pre-validation, or kind=scout): fall back to the
-#      recorded backend's pane busy state, then the status log's last line only
+#      recorded pane's busy state, then the status log's last line only
 #      when its verb maps to a recognized run-state. Decision-only events such as
 #      `resolved` never become current state or detail.
 #   5. Missing meta or torn-down worktree: report unknown · none. If no run is
@@ -56,10 +56,8 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 
-# shellcheck source=bin/fm-tmux-lib.sh
-. "$SCRIPT_DIR/fm-tmux-lib.sh"
 # shellcheck source=bin/fm-backend.sh
-. "$SCRIPT_DIR/fm-backend.sh"
+. "$SCRIPT_DIR/fm-backend.sh" operational
 # shellcheck source=bin/fm-classify-lib.sh
 . "$SCRIPT_DIR/fm-classify-lib.sh"
 
@@ -89,6 +87,7 @@ emit() {  # <state> <source> [detail]
 # --- meta resolution --------------------------------------------------------
 
 [ -f "$META" ] || emit unknown none "no metadata for $ID"
+fm_backend_meta_is_herdr "$META" || exit 1
 
 meta_value() {  # <key>
   grep "^$1=" "$META" 2>/dev/null | tail -1 | cut -d= -f2- || true
@@ -133,61 +132,28 @@ map_log_state() {  # <line>
 LOG_LINE=$(log_last_line || true)
 LOG_VERB=$(status_line_verb "$LOG_LINE")
 
-# pane_readable is consulted ONLY in the no-run fallback below. The run-step path
-# stays authoritative regardless of pane liveness - judge by the run-step, not the
-# shell - so a finished crew whose endpoint has closed still reports its run-step
-# state (e.g. done) instead of being masked as unknown. Backend-aware
-# (fm_backend_of_meta defaults absent backend= to tmux, the P1 contract): a
-# herdr task is read through fm_backend_capture instead of a bare tmux probe.
-TASK_BACKEND=$(fm_backend_of_meta "$META")
-BACKEND_TARGET=$(fm_backend_target_of_meta "$META")
+# pane_readable is consulted only in the no-run fallback below. The run-step
+# path stays authoritative regardless of pane liveness, so a finished crew
+# whose endpoint has closed still reports its run-step state.
+BACKEND_TARGET=$(fm_meta_get "$META" window)
 EXPECTED_LABEL="fm-$ID"
 pane_readable() {  # <target>
-  case "$TASK_BACKEND" in
-    tmux) tmux display-message -p -t "$1" '#{pane_id}' >/dev/null 2>&1 ;;
-    *) fm_backend_capture "$TASK_BACKEND" "$1" 1 "$EXPECTED_LABEL" >/dev/null 2>&1 ;;
-  esac
+  fm_backend_capture "$1" 1 "$EXPECTED_LABEL" >/dev/null 2>&1
 }
-# crew_pane_is_busy: the busy-signature fallback, backend-aware the same way -
-# fm_backend_busy_state's native semantic state (herdr's agent.get) when
-# available, else the shared tmux pane-regex reader (fm_pane_is_busy,
-# bin/fm-tmux-lib.sh) unchanged for tmux/unknown.
-#
-# `busy` alone is trusted outright. Both `idle` and unknown/unparseable fall
-# through to the shared tail-regex corroboration, NOT just unknown: herdr's
-# agent.get reports generation state ("working" while the model is streaming
-# a turn, "done"/"idle" once it is not - docs/herdr-backend.md "Busy state"),
-# which is a narrower signal than "this crew's turn/tool call is still in
-# progress". A crew blocked on its own long-running foreground tool call (e.g.
-# `no-mistakes axi run` without --yes, which blocks synchronously until a gate
-# or outcome - AGENTS.md section 7) is not generating for that whole span, so
-# agent.get can read idle/blocked (bin/backends/herdr.sh maps both to `idle`)
-# while the pane's own rendered text still shows the harness's busy banner
-# (BUSY_REGEX, e.g. "esc to interrupt") for the entire tool call, exactly like
-# tmux's regex-only reader would correctly report. Trusting herdr's `idle`
-# outright (skipping that corroboration) is what let a still-working crew read
-# as not-busy here, and - combined with a no-mistakes run-step lookup that also
-# missed attribution (see nm_runs_status_for_branch) - as not provably working in
-# fm-classify-lib.sh, triggering an immediate (non-wedge) stale wake instead of
-# the absorb-then-escalate path. A genuinely human-blocked agent (a permission
-# dialog, not mid-tool-call) does not render the busy banner, so this
-# corroboration does not mask that case: it stays correctly not-busy.
+
+# Herdr's semantic busy state is narrower than "the crew still has a foreground
+# tool call running". Trust native busy directly, but corroborate idle or
+# unknown against the harness's rendered busy footer before declaring the pane
+# idle. This preserves long-running no-mistakes and other foreground tool calls.
 crew_pane_is_busy() {  # <target>
-  case "$TASK_BACKEND" in
-    tmux) fm_pane_is_busy "$1" ;;
-    *)
-      local bs tail40
-      bs=$(fm_backend_busy_state "$TASK_BACKEND" "$1" 2>/dev/null)
-      case "$bs" in
-        busy) return 0 ;;
-        *)
-          tail40=$(fm_backend_capture "$TASK_BACKEND" "$1" 40 "$EXPECTED_LABEL" 2>/dev/null) || return 1
-          printf '%s' "$tail40" | grep -v '^[[:space:]]*$' | tail -6 \
-            | grep -qiE "${FM_BUSY_REGEX:-$FM_TMUX_BUSY_REGEX_DEFAULT}"
-          ;;
-      esac
-      ;;
+  local bs tail40
+  bs=$(fm_backend_busy_state "$1" 2>/dev/null)
+  case "$bs" in
+    busy) return 0 ;;
   esac
+  tail40=$(fm_backend_capture "$1" 40 "$EXPECTED_LABEL" 2>/dev/null) || return 1
+  printf '%s' "$tail40" | grep -v '^[[:space:]]*$' | tail -6 \
+    | grep -qiE "${FM_BUSY_REGEX:-$FM_BACKEND_BUSY_REGEX_DEFAULT}"
 }
 
 # --- no-mistakes run lookup (authoritative when a run matches this branch) --

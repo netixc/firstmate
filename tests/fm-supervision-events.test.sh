@@ -46,8 +46,8 @@ mkrec() {  # <pane_id> <status>
 # --- handle_push_transition: enqueue + wake for a non-paused blocked crew -----
 
 reset_state
-fm_write_meta "$STATE_DIR/tk1.meta" "window=default:wG:pQ" "backend=herdr" "kind=ship"
-handle_push_transition herdr default "$(mkrec wG:pQ blocked)"
+fm_write_meta "$STATE_DIR/tk1.meta" "window=default:wG:pQ" "kind=ship"
+handle_push_transition default "$(mkrec wG:pQ blocked)"
 [ -e "$STATE_DIR/.wake-queue" ] || fail "handle_push_transition should enqueue a wake for a blocked crew"
 grep -q 'stale' "$STATE_DIR/.wake-queue" || fail "the enqueued wake must be a stale record: $(cat "$STATE_DIR/.wake-queue")"
 grep -q 'default:wG:pQ' "$STATE_DIR/.wake-queue" || fail "the stale record must name the crew's window"
@@ -57,10 +57,10 @@ grep -q 'herdr: agent blocked' "$STATE_DIR/.wake-queue" || fail "the stale paylo
 pass "handle_push_transition: a blocked crew enqueues a stale wake naming its window and wakes the supervisor"
 
 reset_state
-fm_write_meta "$STATE_DIR/tk1.meta" "window=default:wG:pQ" "backend=herdr" "kind=ship"
+fm_write_meta "$STATE_DIR/tk1.meta" "window=default:wG:pQ" "kind=ship"
 (
   fm_wake_append() { return 1; }
-  handle_push_transition herdr default "$(mkrec wG:pQ blocked)"
+  handle_push_transition default "$(mkrec wG:pQ blocked)"
 ) >/dev/null 2>&1 || true
 [ ! -e "$STATE_DIR/.herdr-escalated-default_wG_pQ" ] || fail "a failed durable enqueue must leave the blocked edge eligible for reconnect reconciliation"
 pass "handle_push_transition: enqueue failure cannot commit the Herdr dedupe marker"
@@ -68,9 +68,9 @@ pass "handle_push_transition: enqueue failure cannot commit the Herdr dedupe mar
 # --- handle_push_transition: absorb (no wake, no enqueue) for a declared pause -
 
 reset_state
-fm_write_meta "$STATE_DIR/tk2.meta" "window=default:wG:pQ" "backend=herdr" "kind=ship"
+fm_write_meta "$STATE_DIR/tk2.meta" "window=default:wG:pQ" "kind=ship"
 printf 'paused: waiting on the upstream release\n' > "$STATE_DIR/tk2.status"
-handle_push_transition herdr default "$(mkrec wG:pQ blocked)"
+handle_push_transition default "$(mkrec wG:pQ blocked)"
 if [ -e "$STATE_DIR/.wake-queue" ] && grep -q 'stale' "$STATE_DIR/.wake-queue"; then
   fail "a declared-pause crew must NOT be fast-escalated: $(cat "$STATE_DIR/.wake-queue")"
 fi
@@ -81,10 +81,10 @@ pass "handle_push_transition: a declared-pause crew is absorbed (no fast wake), 
 # --- event_wait_or_sleep: secondmate windows are excluded from the pane list --
 
 reset_state
-fm_write_meta "$STATE_DIR/tk3.meta" "window=default:wG:pQ" "backend=herdr" "kind=ship"
-fm_write_meta "$STATE_DIR/sm1.meta" "window=default:wA:pS" "backend=herdr" "kind=secondmate"
+fm_write_meta "$STATE_DIR/tk3.meta" "window=default:wG:pQ" "kind=ship"
+fm_write_meta "$STATE_DIR/sm1.meta" "window=default:wA:pS" "kind=secondmate"
 fm_backend_events_capable() { return 0; }
-fm_backend_wait_transition() { shift 4; printf '%s\n' "$*" > "$TMP/panes"; return 1; }
+fm_backend_wait_transition() { shift 3; printf '%s\n' "$*" > "$TMP/panes"; return 1; }
 event_wait_or_sleep
 PANES=$(cat "$TMP/panes" 2>/dev/null || true)
 case "$PANES" in *"default:wG:pQ"*) : ;; *) fail "the ship window must be in the event pane list, got '$PANES'" ;; esac
@@ -92,7 +92,7 @@ case "$PANES" in *"default:wA:pS"*) fail "a kind=secondmate window must be EXCLU
 pass "event_wait_or_sleep: herdr windows go on the event pane list, but kind=secondmate endpoints are excluded"
 
 reset_state
-fm_write_meta "$STATE_DIR/tk3.meta" "window=default:wG:pQ" "backend=herdr" "kind=ship"
+fm_write_meta "$STATE_DIR/tk3.meta" "window=default:wG:pQ" "kind=ship"
 CAP_CALLS=0
 fm_backend_events_capable() { CAP_CALLS=$((CAP_CALLS + 1)); return 0; }
 fm_backend_wait_transition() {
@@ -104,20 +104,19 @@ event_wait_or_sleep
 [ "$CAP_CALLS" = 1 ] || fail "capability probe must be memoized across waits, got $CAP_CALLS calls"
 pass "event_wait_or_sleep: one cached capability probe owns validation across bounded waits"
 
-# --- event_wait_or_sleep: a tmux-only home never runs the event path ----------
+# --- event_wait_or_sleep: an empty fleet never runs the event path -----------
 
 reset_state
-fm_write_meta "$STATE_DIR/tk4.meta" "window=fmses:fm-tk4" "kind=ship"   # no backend= -> tmux
 fm_backend_wait_transition() { printf 'CALLED\n' > "$TMP/wtcalled"; return 1; }
 event_wait_or_sleep
-[ ! -e "$TMP/wtcalled" ] || fail "a tmux-only home must never invoke the event wait path"
-grep -q 'SLEEP' "$SLEEP_LOG" || fail "a tmux-only home must sleep POLL exactly as before"
+[ ! -e "$TMP/wtcalled" ] || fail "an empty fleet must never invoke the event wait path"
+grep -q 'SLEEP' "$SLEEP_LOG" || fail "an empty fleet must sleep POLL"
 pass "event_wait_or_sleep: a home with no push-capable window is inert (sleeps POLL, never touches the event path)"
 
 # --- event_wait_or_sleep: runtime failures disable the event path (fail-closed)
 
 reset_state
-fm_write_meta "$STATE_DIR/tk5.meta" "window=default:wG:pQ" "backend=herdr" "kind=ship"
+fm_write_meta "$STATE_DIR/tk5.meta" "window=default:wG:pQ" "kind=ship"
 EVENT_CAP_FAIL_MAX=2
 fm_backend_events_capable() { return 0; }
 fm_backend_wait_transition() { printf 'WT\n' >> "$TMP/wtcalls"; return 2; }

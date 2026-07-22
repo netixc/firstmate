@@ -16,13 +16,13 @@ The archived proof JSON below still records the Phase 2 proof-time flags (`produ
 
 | Field | Value |
 |---|---|
-| `run_id` | `fm-isolation-1784693155237-99474` |
-| `started_at` | `2026-07-22T04:05:55Z` |
-| `finished_at` | `2026-07-22T04:08:06Z` |
+| `run_id` | `fm-isolation-1784734118014-985459` |
+| `started_at` | `2026-07-22T15:28:38Z` |
+| `finished_at` | `2026-07-22T15:31:43Z` |
 | concurrency | **4** |
-| candidates | **30** |
+| candidates | **29** |
 | failed | **0** |
-| wall duration_ms | **131001** (~131.0s) |
+| wall duration_ms | **185908** (~185.9s) |
 | `production_sharding_enabled` | `False` |
 | `fm_test_run_jobs_enabled` | `False` |
 | host proof date | 2026-07-22 (UTC day of archive write) |
@@ -66,7 +66,6 @@ Sorted paths as selected by `bin/fm-test-isolation-proof.sh --list` at proof tim
 - `tests/fm-stow-contract.test.sh`
 - `tests/fm-supervision-instructions.test.sh`
 - `tests/fm-test-run.test.sh`
-- `tests/fm-tmux-submit-busy.test.sh`
 - `tests/fm-transition-lib.test.sh`
 - `tests/fm-x-mode.test.sh`
 
@@ -74,43 +73,42 @@ Sorted paths as selected by `bin/fm-test-isolation-proof.sh --list` at proof tim
 
 | duration_ms | exit | worker | script |
 |---:|---:|---:|---|
-| 38449 | 0 | 30 | `tests/fm-x-mode.test.sh` |
-| 35417 | 0 | 2 | `tests/fm-backend-herdr.test.sh` |
-| 29102 | 0 | 1 | `tests/fm-arm-pretool-check.test.sh` |
-| 21133 | 0 | 9 | `tests/fm-decision-hold-lifecycle.test.sh` |
-| 19896 | 0 | 8 | `tests/fm-crew-state.test.sh` |
-| 18610 | 0 | 5 | `tests/fm-cd-pretool-check.test.sh` |
-| 12517 | 0 | 13 | `tests/fm-herdr-lab.test.sh` |
-| 8939 | 0 | 19 | `tests/fm-pr-merge.test.sh` |
-| 6953 | 0 | 21 | `tests/fm-send-popup-settle.test.sh` |
-| 5963 | 0 | 12 | `tests/fm-grok-harness.test.sh` |
-| 4645 | 0 | 27 | `tests/fm-test-run.test.sh` |
-| 3524 | 0 | 22 | `tests/fm-send-settle.test.sh` |
-| 2803 | 0 | 6 | `tests/fm-composer-ghost.test.sh` |
-| 2552 | 0 | 28 | `tests/fm-tmux-submit-busy.test.sh` |
-| 2549 | 0 | 20 | `tests/fm-review-diff.test.sh` |
-| 1551 | 0 | 23 | `tests/fm-send-strict.test.sh` |
-| 1274 | 0 | 15 | `tests/fm-lint.test.sh` |
-| 1056 | 0 | 18 | `tests/fm-pi-primary-types.test.sh` |
-| 897 | 0 | 3 | `tests/fm-brief.test.sh` |
-| 874 | 0 | 10 | `tests/fm-dispatch-select.test.sh` |
-| 684 | 0 | 24 | `tests/fm-spawn-batch.test.sh` |
-| 348 | 0 | 11 | `tests/fm-ensure-agents-md.test.sh` |
-| 283 | 0 | 26 | `tests/fm-supervision-instructions.test.sh` |
-| 232 | 0 | 14 | `tests/fm-instruction-owners.test.sh` |
-| 201 | 0 | 16 | `tests/fm-nm-test-contract.test.sh` |
-| 104 | 0 | 29 | `tests/fm-transition-lib.test.sh` |
-| 90 | 0 | 4 | `tests/fm-captain-translation-contract.test.sh` |
-| 68 | 0 | 7 | `tests/fm-composer-lib.test.sh` |
-| 57 | 0 | 25 | `tests/fm-stow-contract.test.sh` |
-| 36 | 0 | 17 | `tests/fm-no-mistakes-ownership.test.sh` |
+| 84432 | 0 | 9 | `tests/fm-decision-hold-lifecycle.test.sh` |
+| 40523 | 0 | 1 | `tests/fm-arm-pretool-check.test.sh` |
+| 26807 | 0 | 29 | `tests/fm-x-mode.test.sh` |
+| 20588 | 0 | 5 | `tests/fm-cd-pretool-check.test.sh` |
+| 11267 | 0 | 2 | `tests/fm-backend-herdr.test.sh` |
+| 7329 | 0 | 27 | `tests/fm-test-run.test.sh` |
+| 7011 | 0 | 13 | `tests/fm-herdr-lab.test.sh` |
+| 6315 | 0 | 8 | `tests/fm-crew-state.test.sh` |
+| 4695 | 0 | 19 | `tests/fm-pr-merge.test.sh` |
+| 4318 | 0 | 12 | `tests/fm-grok-harness.test.sh` |
+| 2548 | 0 | 21 | `tests/fm-send-popup-settle.test.sh` |
+| 1427 | 0 | 24 | `tests/fm-spawn-batch.test.sh` |
+| 1164 | 0 | 23 | `tests/fm-send-strict.test.sh` |
+| 1036 | 0 | 20 | `tests/fm-review-diff.test.sh` |
+| 678 | 0 | 3 | `tests/fm-brief.test.sh` |
+| 556 | 0 | 22 | `tests/fm-send-settle.test.sh` |
+| 379 | 0 | 10 | `tests/fm-dispatch-select.test.sh` |
+| 248 | 0 | 11 | `tests/fm-ensure-agents-md.test.sh` |
+| 233 | 0 | 26 | `tests/fm-supervision-instructions.test.sh` |
+| 164 | 0 | 14 | `tests/fm-instruction-owners.test.sh` |
+| 137 | 0 | 16 | `tests/fm-nm-test-contract.test.sh` |
+| 82 | 0 | 28 | `tests/fm-transition-lib.test.sh` |
+| 73 | 0 | 15 | `tests/fm-lint.test.sh` |
+| 71 | 0 | 6 | `tests/fm-composer-ghost.test.sh` |
+| 67 | 0 | 4 | `tests/fm-captain-translation-contract.test.sh` |
+| 61 | 0 | 7 | `tests/fm-composer-lib.test.sh` |
+| 44 | 0 | 25 | `tests/fm-stow-contract.test.sh` |
+| 27 | 0 | 17 | `tests/fm-no-mistakes-ownership.test.sh` |
+| 22 | 0 | 18 | `tests/fm-pi-primary-types.test.sh` |
 
 ## Audit notes (why this set)
 
 Source families from the Phase 1 manifest and scout report §3.1:
 
 1. **pure-contract-unit** candidates audited from the Phase 1 family manifest, minus deliberate serial exclusions
-2. **Extra hermetic candidates** after static audit: fake backend, private git fixtures, stubbed network
+2. **Extra hermetic candidates** after static audit: fake Herdr endpoints, private git fixtures, stubbed network
 
 The harness pins this exact archived set and does not automatically admit later family additions.
 A candidate-set change requires a new audit and concurrent proof archive.
@@ -120,7 +118,7 @@ A candidate-set change requires a new audit and concurrent proof archive.
 | Script | Why included |
 |---|---|
 | `tests/fm-backend-herdr.test.sh` | Fake Herdr CLI + private temps; no real Herdr binary |
-| `tests/fm-send-strict.test.sh` | Fake tmux PATH shim; private `FM_HOME` |
+| `tests/fm-send-strict.test.sh` | Fake Herdr PATH shim; private `FM_HOME` |
 | `tests/fm-spawn-batch.test.sh` | Argument routing only; no real windows/worktrees |
 | `tests/fm-pr-merge.test.sh` | Fake `gh`/`gh-axi`; private state |
 | `tests/fm-review-diff.test.sh` | Local git fixtures via `fm_git_*`; no live forge |
@@ -135,11 +133,9 @@ High-signal classes:
 |---|---|---|
 | Process-holder pure unit | `fm-continuity-pretool-check` | Background `sleep 300` lock-holder process |
 | Watcher / wake / locks | `fm-watcher-lock`, `fm-wake-queue`, ... | Intentional process locks and daemon races |
-| AFK | `fm-afk-inject-e2e`, ... | Daemon lifecycle and inject path |
+| AFK | `fm-afk-inject-herdr-e2e`, ... | Daemon lifecycle and inject path |
 | Real Herdr | `fm-backend-herdr-smoke`, presentation e2e, ... | Named labs, session-global locks; Herdr lane is Phase 3+ |
-| Real tmux smoke | `fm-backend-tmux-smoke` | Real multiplexer server (even on private socket) |
 | Live harness opt-in | `fm-*-live-e2e` | Real interactive agents |
-| GUI backends | cmux smoke | Shared GUI app |
 | Gray-zone git/spawn | `fm-backend`, spawn settle/profile, teardown | Heavier worktree or lock-race matrices |
 | Watcher-adjacent forge security | `fm-pr-check-security` | `.watch.lock` / poll security surface |
 | Self | `fm-test-isolation-proof.test.sh` | Must not re-enter the concurrent matrix |

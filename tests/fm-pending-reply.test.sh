@@ -17,8 +17,8 @@
 #   8. Wrong-home reports are detected but do not silently acknowledge
 #   9. Direct unmarked captain input creates no expectation
 #  10. fm-send secondmate path embeds corr and creates durable pending records
-#  11. Backend busy/idle observation works through the shared busy abstraction
-#      used by Pi/Claude secondmate backends (no conversation scrape)
+#  11. Herdr busy/idle observation works through the shared endpoint abstraction
+#      used by Pi/Claude secondmates (no conversation scrape)
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -40,33 +40,28 @@ export FM_SEND_SETTLE=0
 make_stubs() {  # <dir> -> fakebin
   local dir=$1 fb="$1/fakebin"
   mkdir -p "$fb"
-  cat > "$fb/tmux" <<'SH'
+  cat > "$fb/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
-case "${1:-}" in
-  send-keys)
-    shift
-    literal=0
-    while [ $# -gt 0 ]; do
-      case "$1" in
-        -t) shift 2 ;;
-        -l) literal=1; shift ;;
-        *) break ;;
-      esac
-    done
-    if [ "$literal" = 1 ]; then
-      printf '%s' "${1:-}" >> "$FM_SEND_LOG"
+case " $* " in
+  *' status --json '*)
+    printf '%s\n' '{"client":{"version":"0.7.3","protocol":16},"server":{"running":true}}'
+    ;;
+  *' pane get '*) printf '%s\n' '{"result":{"pane":{"pane_id":"w1:p1"}}}' ;;
+  *' agent get '*)
+    if [ -e "$0.working" ]; then
+      printf '%s\n' '{"result":{"agent":{"agent":"codex","agent_status":"working"}}}'
+    else
+      printf '%s\n' '{"result":{"agent":{"agent":"codex","agent_status":"idle"}}}'
     fi
-    exit 0 ;;
-  display-message)
-    for a in "$@"; do case "$a" in *cursor_y*) printf '0\n'; exit 0 ;; esac; done
-    printf 'fakepane\n'; exit 0 ;;
-  capture-pane) printf '\xe2\x94\x82 \xe2\x94\x82\n'; exit 0 ;;
-  list-windows) exit 0 ;;
+    ;;
+  *' pane read '*) printf '\xe2\x94\x82 \xe2\x94\x82\n' ;;
+  *' pane send-text '*) printf '%s' "${4:-}" >> "$FM_SEND_LOG" ;;
+  *' pane send-keys '*) : > "$0.working" ;;
 esac
 exit 0
 SH
-  chmod +x "$fb/tmux"
+  chmod +x "$fb/herdr"
   cat > "$fb/sleep" <<'SH'
 #!/usr/bin/env bash
 exit 0
@@ -651,7 +646,7 @@ test_busy_idle_observation_via_backend_abstraction() {
   corr=$(fm_pending_reply_create "$home" "$state" "hibit" "backend turn")
   fm_pending_reply_mark_delivered "$state" "$corr"
   # Simulates Pi/Claude secondmate busy_state from fm_backend_busy_state without
-  # reading conversation text (herdr native idle/busy or tmux unknown fallback).
+  # reading conversation text (Herdr native idle/busy).
   fm_pending_reply_observe_busy "$state" "$corr" unknown
   [ -z "$(fm_pending_reply_get "$(fm_pending_reply_path "$state" "$corr")" request_turn_completed_epoch)" ] \
     || fail "unknown busy_state must not prove turn completion"
@@ -662,12 +657,10 @@ test_busy_idle_observation_via_backend_abstraction() {
   pass "backend busy/idle observation covers Pi/Claude paths without conversation scrape"
 }
 
-test_unknown_backend_state_uses_capture_fallback() {
-  local backend
-  for backend in tmux zellij; do
-    (
+test_unknown_herdr_state_uses_capture_fallback() {
+  (
       local home state corr rec sm_home
-      home=$(setup_parent "fallback-$backend")
+      home=$(setup_parent fallback-herdr)
       state="$home/state"
       sm_home="$home/sm"
       mkdir -p "$sm_home/state"
@@ -675,10 +668,9 @@ test_unknown_backend_state_uses_capture_fallback() {
       # These fixture overrides are intentionally scoped to the isolated subshell.
       # shellcheck disable=SC2030,SC2031
       export FM_PENDING_REPLY_NOW=10000
-      corr=$(fm_pending_reply_create "$home" "$state" "hibit" "$backend fallback")
+      corr=$(fm_pending_reply_create "$home" "$state" "hibit" "Herdr capture fallback")
       fm_pending_reply_mark_delivered "$state" "$corr"
       fm_write_secondmate_meta "$state/hibit.meta" "$sm_home" "session:fm-hibit"
-      [ "$backend" = tmux ] || printf 'backend=%s\n' "$backend" >> "$state/hibit.meta"
       fm_backend_busy_state() { printf 'unknown'; }
       fm_backend_capture() { printf '%s' "$FM_PENDING_TEST_CAPTURE"; }
       # Invoked indirectly through FM_PENDING_REPLY_SEND_HOOK.
@@ -691,13 +683,13 @@ test_unknown_backend_state_uses_capture_fallback() {
       fm_pending_reply_tick "$state"
       rec=$(fm_pending_reply_path "$state" "$corr")
       [ -z "$(fm_pending_reply_get "$rec" request_turn_completed_epoch)" ] \
-        || fail "$backend fallback must not accept stale idle before grace"
+        || fail "Herdr fallback must not accept stale idle before grace"
       # Continue advancing the subshell-local fixture clock.
       # shellcheck disable=SC2030,SC2031
       export FM_PENDING_REPLY_NOW=10010
       fm_pending_reply_tick "$state"
       [ "$(phase_of "$state" "$corr")" = recovery_sent ] \
-        || fail "$backend fallback idle should trigger recovery after grace"
+        || fail "Herdr fallback idle should trigger recovery after grace"
       export FM_PENDING_REPLY_NOW=10011
       export FM_PENDING_TEST_CAPTURE='Working...'
       fm_pending_reply_tick "$state"
@@ -705,10 +697,9 @@ test_unknown_backend_state_uses_capture_fallback() {
       export FM_PENDING_TEST_CAPTURE='idle footer'
       fm_pending_reply_tick "$state"
       [ "$(phase_of "$state" "$corr")" = escalated ] \
-        || fail "$backend capture busy-to-idle should complete recovery turn"
-    ) || fail "$backend unknown-state capture fallback failed"
-  done
-  pass "tmux and zellij unknown states use bounded capture fallback"
+        || fail "Herdr capture busy-to-idle should complete recovery turn"
+  ) || fail "Herdr unknown-state capture fallback failed"
+  pass "Herdr unknown states use the bounded capture fallback"
 }
 
 test_tick_skips_terminal_and_reuses_target_observation() {
@@ -741,7 +732,7 @@ test_tick_skips_terminal_and_reuses_target_observation() {
     fm_write_secondmate_meta "$state/resolved.meta" "$home/resolved" "sess:fm-resolved"
     fm_write_secondmate_meta "$state/escalated.meta" "$home/escalated" "sess:fm-escalated"
     fm_backend_busy_state() {
-      printf '%s\t%s\n' "$1" "$2" >> "$probe_log"
+      printf '%s\n' "$1" >> "$probe_log"
       printf 'busy'
     }
     fm_backend_capture() { fail "native busy observations should not capture"; }
@@ -889,7 +880,7 @@ test_fm_send_marked_secondmate_creates_pending_and_embeds_corr
 test_document_pointer_resolves
 test_helper_report_resolves
 test_busy_idle_observation_via_backend_abstraction
-test_unknown_backend_state_uses_capture_fallback
+test_unknown_herdr_state_uses_capture_fallback
 test_tick_skips_terminal_and_reuses_target_observation
 test_correlations_reuse_only_for_matching_open_task
 test_tick_end_to_end_missed_then_escalate

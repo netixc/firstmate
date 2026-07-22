@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
-# tests/fm-backend-herdr-smoke.test.sh - real herdr smoke test for the herdr
-# session-provider adapter (bin/backends/herdr.sh), P2 of
-# data/fm-backend-design-d7 (herdr-addendum.md), extended for the P3
-# workspace-per-home pass (AGENTS.md task herdr-sm-spaces-k4). Mirrors
-# tests/fm-backend-tmux-smoke.test.sh's structure: every other suite fakes the
-# CLI, this one talks to a REAL herdr server - but ALWAYS on a private, named,
+# tests/fm-backend-herdr-smoke.test.sh - real Herdr smoke test for Firstmate's
+# session-provider implementation, including the workspace-per-home contract.
+# Every other
+# suite fakes the CLI; this one talks to a REAL herdr server - but ALWAYS on a private, named,
 # throwaway HERDR_SESSION (never the default session), so it never touches a
 # captain's real herdr usage. Skips cleanly when herdr (or jq) is not
 # installed, so CI/dev machines without herdr are unaffected.
@@ -39,7 +37,6 @@ fm_herdr_lab_prepare "$SESSION" || fail "could not prepare isolated Herdr lab se
 
 # shellcheck source=bin/fm-backend.sh
 . "$ROOT/bin/fm-backend.sh"
-fm_backend_source herdr || fail "fm_backend_source herdr failed"
 
 # --- version gate + container ensure -----------------------------------------
 
@@ -49,7 +46,7 @@ pass "real herdr: version_check accepts the installed binary's protocol"
 # fm_backend_herdr_container_ensure now echoes
 # "<session>:<workspace_id>\t<seeded_default_tab_id>" (the second field empty
 # when the call ADOPTED a pre-existing workspace rather than creating a fresh
-# one - docs/herdr-backend.md "Default-tab prune"). Split on the guaranteed
+# one - docs/herdr-backend.md "Container model and durable routing"). Split on the guaranteed
 # single tab character; only fm_backend_herdr_create_task is ever allowed to
 # act on the seeded tab id, and only for the container that just created it.
 CONTAINER_RAW=$(fm_backend_herdr_container_ensure /tmp) || fail "container_ensure failed"
@@ -64,8 +61,8 @@ pass "real herdr: container_ensure starts the isolated session's server, creates
 
 # A second container_ensure must reuse (ADOPT) the same workspace (idempotent)
 # and report an EMPTY seeded tab id - the created-vs-adopted gate that fixes
-# the 2026-07-02 self-kill incident (docs/herdr-backend.md "Default-tab
-# prune"): only the call that actually just created a workspace may identify
+# the 2026-07-02 self-kill incident (docs/herdr-backend.md "Container model and
+# durable routing"): only the call that actually just created a workspace may identify
 # a tab as prunable.
 CONTAINER2_RAW=$(fm_backend_herdr_container_ensure /tmp) || fail "second container_ensure failed"
 CONTAINER2=${CONTAINER2_RAW%%$'\t'*}
@@ -106,8 +103,8 @@ pass "real herdr: create_task prunes the freshly-created workspace's seeded defa
 # each against its own independent throwaway tab.
 
 # --- restored-layout husk close-and-replace, against the REAL binary --------
-# (docs/herdr-backend.md "Known gaps" / "ID stability across a server
-# restart"). herdr persists and restores its whole session layout across a
+# (docs/herdr-backend.md "Container model and durable routing"). Herdr persists
+# and restores its whole session layout across a
 # server restart, and a restored fm-<id> task tab comes back a HUSK: a dead
 # pane, or (verified above and empirically in "ID stability") a plain
 # agent-less shell. Both throwaway tabs below are independent of $TAB_ID/
@@ -165,7 +162,7 @@ pass "real herdr: create_task closes and replaces a same-labeled tab whose pane 
 fm_backend_herdr_kill "$SESSION:$NEW_HUSK_PANE_ID"
 
 # --- workspace-per-home: a secondmate-shaped home gets its OWN space --------
-# (docs/herdr-backend.md "Task container shape", AGENTS.md task
+# (docs/herdr-backend.md "Container model and durable routing", AGENTS.md task
 # herdr-sm-spaces-k4). Reuses this suite's own isolated $SESSION - a SECOND,
 # distinct workspace inside the SAME session, never a second session. Placed
 # here (both workspaces' tabs still alive) so the restart-stability check

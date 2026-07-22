@@ -55,16 +55,14 @@ mkdir -p "$STATE"
 # shellcheck source=bin/fm-classify-lib.sh
 . "$SCRIPT_DIR/fm-classify-lib.sh"
 # The DEFAULT EVENT SOURCE: this watcher's poll loop over the pull primitives
-# (capture, recorded windows, backend busy-state, and the BUSY_REGEX fallback)
-# synthesizes the signal/stale/check/heartbeat wake vocabulary for backends with
-# no native event push. tmux always reports unknown busy-state, preserving the
-# original regex path. A push-capable backend (herdr) additionally replaces this
-# watcher's blind terminal sleep with a bounded wait on its native event stream
+# (capture, recorded windows, Herdr busy-state, and the BUSY_REGEX fallback)
+# synthesizes the signal/stale/check/heartbeat wake vocabulary. Herdr also
+# replaces this watcher's blind terminal sleep with a bounded wait on its native event stream
 # (event_wait_or_sleep below), so a crew entering `blocked` wakes its supervisor
 # sub-second; the poll loop stays live every cycle as the permanent fail-closed
 # backstop. See bin/fm-backend.sh and docs/herdr-backend.md.
 # shellcheck source=bin/fm-backend.sh
-. "$SCRIPT_DIR/fm-backend.sh"
+. "$SCRIPT_DIR/fm-backend.sh" operational
 # Shared normalized-transition accessors and the single-owner status->action
 # policy table, so the event-wait splice reads transition records the same way
 # the herdr subscriber writes them (bin/fm-transition-lib.sh).
@@ -153,11 +151,11 @@ TRIAGE_LOG_MAX_BYTES=${FM_WATCH_TRIAGE_LOG_MAX_BYTES:-262144}
 # connect/subscribe failure) before the push fast-path is disabled for the rest
 # of this watcher process and the loop reverts to pure polling (report section
 # 5c trigger 3: proven-unreliable-at-runtime). A watcher restart re-probes
-# capability, so a transient herdr hiccup self-heals on the next cycle chain.
+# capability, so a transient Herdr hiccup self-heals on the next cycle chain.
 EVENT_CAP_FAIL_MAX=${FM_EVENT_CAP_FAIL_MAX:-3}
 # Per-process memo for the push-capability probe (fm_backend_events_capable runs
 # a ~220KB `herdr api schema` read, too heavy to repeat every poll). Keyed by
-# "<backend>:<session>"; re-probed only when that key changes.
+# session; re-probed only when that key changes.
 _event_cap_key=""
 _event_cap_ok=0
 _event_cap_fails=0
@@ -187,16 +185,12 @@ hash_pane() {
 }
 
 # window_is_busy: 0 (busy) iff the task's harness is actively working. Prefers
-# a backend's native semantic busy state (fm_backend_busy_state - herdr's
-# agent.get; herdr-addendum "busy state" row, "the first backend where
-# fm_session_busy_state gets real semantics"); falls back to the existing
-# pane-tail regex ONLY when the backend reports unknown (tmux always does, so
-# its path is unchanged byte-for-byte). <tail40> is the same bounded capture
-# already read for hashing, so this adds no extra backend calls on the
-# regex-fallback path.
+# Herdr's native semantic busy state, falling back to the pane-tail regex only
+# when that state is unknown. <tail40> is the same bounded capture already read
+# for hashing, so this adds no extra Herdr call on the regex-fallback path.
 window_is_busy() {  # <window> <tail40>
   local w=$1 tail40=$2 bs
-  bs=$(fm_backend_busy_state "$(window_backend "$w")" "$w" 2>/dev/null)
+  bs=$(fm_backend_busy_state "$w" 2>/dev/null)
   case "$bs" in
     busy) return 0 ;;
     idle) return 1 ;;
@@ -218,21 +212,6 @@ window_kind() {
   echo unknown
 }
 
-# window_backend: the backend recorded in the meta whose window= matches <w>,
-# defaulting to tmux (absent backend= means tmux; the P1 compatibility
-# contract) when no matching meta carries the field, or none matches at all.
-window_backend() {
-  local w=$1 meta backend
-  meta=$(fm_backend_meta_for_window "$w" "$STATE" 2>/dev/null || true)
-  if [ -n "$meta" ]; then
-    backend=$(grep '^backend=' "$meta" | cut -d= -f2- || true)
-    [ -n "$backend" ] || backend=tmux
-    echo "$backend"
-    return 0
-  fi
-  echo tmux
-}
-
 window_label() {
   local w=$1 task
   task=$(window_to_task "$w" "$STATE")
@@ -241,9 +220,10 @@ window_label() {
 
 recorded_windows() {
   local meta w seen=
+  fm_backend_validate_meta_dir "$STATE" || return 1
   for meta in "$STATE"/*.meta; do
     [ -e "$meta" ] || continue
-    w=$(fm_backend_target_of_meta "$meta")
+    w=$(fm_meta_get "$meta" window)
     [ -n "$w" ] || continue
     case "$seen" in
       *"|$w|"*) continue ;;
@@ -375,7 +355,7 @@ pause_state_class() {  # <window> <task>
   fi
   if [ -e "$STATE/.paused-$key" ] && [ "$(age_of "$recheck_file")" -lt "$STALE_ESCALATE_SECS" ]; then
     if [ "$(window_kind "$win")" != secondmate ]; then
-      agent_alive=$(fm_backend_agent_alive "$(window_backend "$win")" "$win" 2>/dev/null) || agent_alive=unknown
+      agent_alive=$(fm_backend_agent_alive "$win" 2>/dev/null) || agent_alive=unknown
       if [ "$agent_alive" != dead ]; then
         rm -f "$recheck_file"
         printf 'none'
@@ -392,7 +372,7 @@ pause_state_class() {  # <window> <task>
     return
   fi
   if [ "$(window_kind "$win")" != secondmate ]; then
-    agent_alive=$(fm_backend_agent_alive "$(window_backend "$win")" "$win" 2>/dev/null) || agent_alive=unknown
+    agent_alive=$(fm_backend_agent_alive "$win" 2>/dev/null) || agent_alive=unknown
     if [ "$agent_alive" != dead ]; then
       rm -f "$recheck_file"
       printf 'none'
@@ -588,37 +568,37 @@ heartbeat_scan_finds_actionable() {
 }
 
 # event_wait_or_sleep: the terminal wait of each supervision cycle. For a home
-# with push-capable windows (herdr), it replaces the blind `sleep POLL` with a
-# bounded wait on the backend's native transition stream, so a crew going
+# with recorded windows, it replaces the blind `sleep POLL` with a bounded wait
+# on Herdr's native transition stream, so a crew going
 # `blocked` wakes the supervisor sub-second instead of after the stale-pane
-# wedge timer. For every other home - no push-capable window, backend not
-# capable, or the event path proven unreliable this process - it sleeps POLL,
-# byte-for-byte today's behavior. The poll loop above still runs every cycle, so
+# wedge timer. With no eligible window, an incapable protocol, or an event path
+# proven unreliable in this process, it sleeps POLL. The poll loop above still runs every cycle, so
 # this only ever SHORTENS latency; it can never drop an escalation (the poll
 # loop is the permanent fail-closed backstop). This preserves the single live
 # supervision cycle: the reader is a short-lived subprocess of THIS watcher, not
 # a second watcher, so every guard/beacon/arm/turn-end mechanism is unchanged.
 event_wait_or_sleep() {
-  local w b session first_backend="" first_session="" rec rc
+  local w session first_session="" rec rc recorded
   local windows=()
+  recorded=$(recorded_windows) || return 1
   while IFS= read -r w; do
-    b=$(window_backend "$w")
-    fm_backend_has_push "$b" || continue
+    [ -n "$w" ] || continue
     # Secondmate endpoints are supervised via status writes, not pane/agent
     # state (an idle or blocked secondmate agent pane is healthy by design), so
     # they are excluded from the fast escalation exactly as the stale loop skips
     # them.
     [ "$(window_kind "$w")" = secondmate ] && continue
     session=${w%%:*}
-    if [ -z "$first_backend" ]; then first_backend=$b; first_session=$session; fi
-    # One socket connection covers one backend+session; a home normally has a
-    # single herdr session. A window in a different backend/session stays on the
-    # poll path this cycle.
-    if [ "$b" != "$first_backend" ] || [ "$session" != "$first_session" ]; then
+    if [ -z "$first_session" ]; then first_session=$session; fi
+    # One socket connection covers one Herdr session. A window in a different
+    # session stays on the poll path this cycle.
+    if [ "$session" != "$first_session" ]; then
       continue
     fi
     windows+=("$w")
-  done < <(recorded_windows)
+  done <<EOF
+$recorded
+EOF
 
   if [ "${#windows[@]}" -eq 0 ]; then
     sleep "$POLL"
@@ -626,10 +606,10 @@ event_wait_or_sleep() {
   fi
 
   # Memoized capability probe (fm_backend_events_capable runs a heavy schema
-  # read); re-probed only when the backend/session key changes.
-  if [ "$_event_cap_key" != "$first_backend:$first_session" ]; then
-    _event_cap_key="$first_backend:$first_session"
-    if fm_backend_events_capable "$first_backend" "$first_session"; then
+  # read); re-probed only when the session changes.
+  if [ "$_event_cap_key" != "$first_session" ]; then
+    _event_cap_key="$first_session"
+    if fm_backend_events_capable "$first_session"; then
       _event_cap_ok=1
     else
       _event_cap_ok=0
@@ -641,12 +621,12 @@ event_wait_or_sleep() {
     return
   fi
 
-  rec=$(FM_BACKEND_EVENTS_CAPABILITY_CONFIRMED=1 fm_backend_wait_transition "$first_backend" "$first_session" "$POLL" "$STATE" "${windows[@]}")
+  rec=$(FM_BACKEND_EVENTS_CAPABILITY_CONFIRMED=1 fm_backend_wait_transition "$first_session" "$POLL" "$STATE" "${windows[@]}")
   rc=$?
   case "$rc" in
     0)
       _event_cap_fails=0
-      handle_push_transition "$first_backend" "$first_session" "$rec"
+      handle_push_transition "$first_session" "$rec"
       ;;
     2)
       # Event path unusable this cycle (connect/subscribe failure). Sleep the
@@ -665,7 +645,7 @@ event_wait_or_sleep() {
 }
 
 # handle_push_transition: act on a fresh actionable (blocked) transition record
-# the backend returned. Maps the pane back to its window and task, applies the
+# returned by Herdr. Maps the pane back to its window and task, applies the
 # declared-pause exemption (a crew waiting on a known external dependency is not
 # a surprise block - absorb it on the poll loop's long pause cadence instead),
 # and otherwise enqueues an immediate `stale` wake and wakes the supervisor. The
@@ -673,8 +653,8 @@ event_wait_or_sleep() {
 # diagnose") is exactly right for a blocked crew, and the drain/dedupe/guard
 # machinery already understands it (queued by key=window, so a later poll-path
 # stale for the same pane collapses on drain).
-handle_push_transition() {  # <backend> <session> <record>
-  local backend=$1 session=$2 record=$3 pane_id to window task reason
+handle_push_transition() {  # <session> <record>
+  local session=$1 record=$2 pane_id to window task reason
   pane_id=$(fm_transition_pane_id "$record")
   to=$(fm_transition_to_status "$record")
   [ -n "$pane_id" ] || { sleep 1; return; }
@@ -682,12 +662,12 @@ handle_push_transition() {  # <backend> <session> <record>
   task=$(window_to_task "$window" "$STATE")
   if status_is_paused "$(last_status_line "$STATE/$task.status")"; then
     triage_log "absorbed push $to (declared pause, awaiting external): $window"
-    fm_backend_commit_transition "$backend" "$STATE" "$session" "$record" || exit 1
+    fm_backend_commit_transition "$STATE" "$session" "$record" || exit 1
     return
   fi
   reason="stale: $window (herdr: agent $to - waiting on human, escalated immediately, not via wedge timer)"
   fm_wake_append stale "$window" "$reason" || exit 1
-  fm_backend_commit_transition "$backend" "$STATE" "$session" "$record" || exit 1
+  fm_backend_commit_transition "$STATE" "$session" "$record" || exit 1
   mark_surfaced "$STATE/$task.status"
   wake "$reason"
 }
@@ -698,6 +678,8 @@ handle_push_transition() {  # <backend> <session> <record>
 if [ "${BASH_SOURCE[0]}" != "$0" ]; then
   return 0
 fi
+
+fm_backend_validate_meta_dir "$STATE" || exit 1
 
 # Before acquiring the watcher lock or enumerating any runnable check, replace
 # or quarantine checks created by older versions. The migration compares bytes
@@ -745,6 +727,8 @@ fm_pid_identity "$WATCHER_PID" > "$WATCH_LOCK/pid-identity" 2>/dev/null || true
 [ -e "$STATE/.last-heartbeat" ] || touch "$STATE/.last-heartbeat"
 
 while :; do
+  fm_backend_validate_meta_dir "$STATE" || exit 1
+
   # Self-eviction: if the singleton lock no longer names this process, a second
   # watcher has taken over (e.g. a transient duplicate from a racy arm). Stand
   # down so the rightful singleton continues alone. The EXIT trap's release
@@ -763,7 +747,7 @@ while :; do
   # parent reports, observe backend busy/idle turn completion, send one recovery
   # repost after grace, and escalate once if the recovery turn is also missed.
   # No conversation scraping; unresolved records are never silently expired.
-  fm_pending_reply_tick "$STATE" || true
+  fm_pending_reply_tick "$STATE" || exit 1
 
   # Slow per-task checks (firstmate writes these, e.g. a merged-PR poll).
   # Time-based via .last-check mtime so the cadence survives watcher restarts.
@@ -884,7 +868,9 @@ EOF
   # signature means the crewmate finished, is waiting, or is wedged. Each distinct
   # stale hash is surfaced, absorbed, or timed toward escalation once (.stale-*
   # remembers the hash already classified).
+  RECORDED_WINDOWS=$(recorded_windows) || exit 1
   while IFS= read -r w; do
+    [ -n "$w" ] || continue
     kind=$(window_kind "$w")
     task=$(window_to_task "$w" "$STATE")
     key=${w//:/_}
@@ -897,7 +883,7 @@ EOF
     if [ "$kind" = secondmate ] && ! status_is_paused "$last"; then
       continue
     fi
-    tail40=$(fm_backend_capture "$(window_backend "$w")" "$w" 40 "$(window_label "$w")" 2>/dev/null) || continue
+    tail40=$(fm_backend_capture "$w" 40 "$(window_label "$w")" 2>/dev/null) || continue
     h=$(printf '%s' "$tail40" | hash_pane)
     key=$(printf '%s' "$w" | tr ':/.' '___')
     hf="$STATE/.hash-$key"
@@ -1034,7 +1020,9 @@ EOF
         [ -e "$pf" ] && clear_pause_tracking "$w"
       fi
     fi
-  done < <(recorded_windows)
+  done <<EOF
+$RECORDED_WINDOWS
+EOF
 
   # Heartbeat: the watcher runs a cheap fleet-scan at a regular cadence no matter
   # what. Time-based via .last-heartbeat mtime; interval doubles per consecutive
@@ -1071,5 +1059,5 @@ EOF
 
   # Terminal wait: a bounded native-event wait for push-capable homes (herdr),
   # else the blind poll sleep. See event_wait_or_sleep.
-  event_wait_or_sleep
+  event_wait_or_sleep || exit 1
 done

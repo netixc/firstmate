@@ -9,7 +9,7 @@
 # reporters, a self-cleaning temp root, fakebin/PATH-shim helpers, deterministic
 # git identity and fixture builders, state/<id>.meta writers, and the common
 # string/exit-code/file assertions. It deliberately does NOT bundle the
-# behavior-specific fake tmux/treehouse/no-mistakes mocks: those encode terminal
+# behavior-specific fake Herdr/treehouse/no-mistakes mocks: those encode endpoint
 # and lifecycle assumptions that differ per suite and belong with the tests that
 # own them.
 #
@@ -154,9 +154,9 @@ fm_write_meta() {
 # fm_write_secondmate_meta <file> <home> [window] [projects]: write the standard
 # kind=secondmate meta block used across the secondmate suites. window defaults
 # to firstmate:fm-<basename-of-home-dir's parent id>? No - window is explicit;
-# defaults to firstmate:fm-domain and projects to alpha to match the common case.
+# defaults to a canonical Herdr target and projects to alpha to match the common case.
 fm_write_secondmate_meta() {
-  local file=$1 home=$2 window=${3:-firstmate:fm-domain} projects=${4:-alpha}
+  local file=$1 home=$2 window=${3:-default:w1:p1} projects=${4:-alpha}
   fm_write_meta "$file" \
     "window=$window" \
     "worktree=$home" \
