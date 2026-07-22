@@ -8,9 +8,10 @@
 # script with no arguments.
 #   - CI:       .github/workflows/ci.yml installs the version this script prints
 #               via `--required-version`, then runs `bin/fm-lint.sh`.
-#   - Pre-push: .no-mistakes.yaml `commands.lint` runs `bin/fm-lint.sh`, so the
-#               no-mistakes gate runs the SAME shellcheck as CI. Without a
-#               configured commands.lint, that gate step never ran this
+#   - Pre-push: .no-mistakes.yaml `commands.lint` installs the pinned build into
+#               ignored local state, puts it on PATH, and runs `bin/fm-lint.sh`,
+#               so the no-mistakes gate runs the SAME shellcheck as CI. Without
+#               a configured commands.lint, that gate step never ran this
 #               deterministic shellcheck, so info-level findings were not
 #               surfaced locally before CI rejected them.
 #
