@@ -240,7 +240,7 @@ test_live_herdr_topology() (
 
   local HERDR_LAB_HELPER HERDR_LAB_SESSION home sleeper out captain_ws captain_tab captain_pane target
   local before during after workspaces_before workspaces_during workspaces_after daemon_target daemon_tab
-  HERDR_LAB_HELPER='/home/control/firstmate/bin/fm-herdr-lab.sh'
+  HERDR_LAB_HELPER="$ROOT/bin/fm-herdr-lab.sh"
   HERDR_LAB_SESSION=$("$HERDR_LAB_HELPER" name firstmate-herdr-only-backend) \
     || fail "could not generate a named Herdr lab session"
   trap '"$HERDR_LAB_HELPER" teardown "$HERDR_LAB_SESSION" >/dev/null 2>&1 || true' EXIT
