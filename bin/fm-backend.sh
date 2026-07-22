@@ -84,6 +84,14 @@ fm_backend_meta_is_herdr() {  # <meta-file>
   esac
 }
 
+fm_backend_validate_meta_dir() {  # <state-dir>
+  local state=$1 meta
+  for meta in "$state"/*.meta; do
+    [ -e "$meta" ] || continue
+    fm_backend_meta_is_herdr "$meta" || return 1
+  done
+}
+
 fm_backend_target_of_meta() {  # <meta-file>
   local meta=$1 window
   fm_backend_meta_is_herdr "$meta" || return 1

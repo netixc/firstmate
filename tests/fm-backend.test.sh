@@ -50,6 +50,22 @@ test_removed_provider_metadata_fails_closed() {
   pass "legacy alternative-provider metadata fails closed with migration guidance"
 }
 
+test_meta_directory_validation_stops_on_foreign_provider() {
+  local dir="$TMP_ROOT/meta-validation" out status
+  mkdir -p "$dir"
+  printf 'window=lab:pane-valid\n' > "$dir/valid.meta"
+  fm_backend_validate_meta_dir "$dir" \
+    || fail "provider-free metadata directory should validate"
+
+  printf 'backend=removed-provider\nwindow=foreign-target\n' > "$dir/foreign.meta"
+  out=$(fm_backend_validate_meta_dir "$dir" 2>&1)
+  status=$?
+  [ "$status" -ne 0 ] || fail "foreign provider metadata passed directory validation"
+  assert_contains "$out" "records a removed session provider" \
+    "directory validation omitted migration guidance"
+  pass "metadata directory validation stops on foreign providers"
+}
+
 test_explicit_target_is_preserved() {
   [ "$(fm_backend_resolve_selector named-session:pane-z "$STATE")" = "named-session:pane-z" ] \
     || fail "explicit Herdr target should pass through unchanged"
@@ -153,6 +169,7 @@ test_required_tools_are_herdr_only
 test_metadata_without_provider_resolves
 test_legacy_herdr_metadata_is_accepted
 test_removed_provider_metadata_fails_closed
+test_meta_directory_validation_stops_on_foreign_provider
 test_explicit_target_is_preserved
 test_missing_task_metadata_fails_closed
 test_bare_selector_uses_herdr_resolution

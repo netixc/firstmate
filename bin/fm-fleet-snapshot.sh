@@ -370,6 +370,7 @@ task_json_lines() {
   local last_event_raw current_state current_source pending_decision blocked_event report_present=0 pr_from_status
   local open_decisions_tsv open_decisions_json
 
+  fm_backend_validate_meta_dir "$STATE" || return 1
   for meta in "$STATE"/*.meta; do
     [ -e "$meta" ] || continue
     id=$(basename "$meta" .meta)
@@ -382,7 +383,7 @@ task_json_lines() {
     worktree=$(meta_value "$meta" worktree)
     home=$(meta_value "$meta" home)
     projects=$(meta_value "$meta" projects)
-    target=$(fm_backend_target_of_meta "$meta" 2>/dev/null || true)
+    target=$(fm_meta_get "$meta" window)
     status_log="$STATE/$id.status"
     report_path="$DATA/$id/report.md"
     pr=$(meta_value "$meta" pr)

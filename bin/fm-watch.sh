@@ -220,9 +220,10 @@ window_label() {
 
 recorded_windows() {
   local meta w seen=
+  fm_backend_validate_meta_dir "$STATE" || return 1
   for meta in "$STATE"/*.meta; do
     [ -e "$meta" ] || continue
-    w=$(fm_backend_target_of_meta "$meta" 2>/dev/null || true)
+    w=$(fm_meta_get "$meta" window)
     [ -n "$w" ] || continue
     case "$seen" in
       *"|$w|"*) continue ;;
@@ -577,9 +578,11 @@ heartbeat_scan_finds_actionable() {
 # supervision cycle: the reader is a short-lived subprocess of THIS watcher, not
 # a second watcher, so every guard/beacon/arm/turn-end mechanism is unchanged.
 event_wait_or_sleep() {
-  local w session first_session="" rec rc
+  local w session first_session="" rec rc recorded
   local windows=()
+  recorded=$(recorded_windows) || return 1
   while IFS= read -r w; do
+    [ -n "$w" ] || continue
     # Secondmate endpoints are supervised via status writes, not pane/agent
     # state (an idle or blocked secondmate agent pane is healthy by design), so
     # they are excluded from the fast escalation exactly as the stale loop skips
@@ -593,7 +596,9 @@ event_wait_or_sleep() {
       continue
     fi
     windows+=("$w")
-  done < <(recorded_windows)
+  done <<EOF
+$recorded
+EOF
 
   if [ "${#windows[@]}" -eq 0 ]; then
     sleep "$POLL"
@@ -859,7 +864,9 @@ EOF
   # signature means the crewmate finished, is waiting, or is wedged. Each distinct
   # stale hash is surfaced, absorbed, or timed toward escalation once (.stale-*
   # remembers the hash already classified).
+  RECORDED_WINDOWS=$(recorded_windows) || exit 1
   while IFS= read -r w; do
+    [ -n "$w" ] || continue
     kind=$(window_kind "$w")
     task=$(window_to_task "$w" "$STATE")
     key=${w//:/_}
@@ -1009,7 +1016,9 @@ EOF
         [ -e "$pf" ] && clear_pause_tracking "$w"
       fi
     fi
-  done < <(recorded_windows)
+  done <<EOF
+$RECORDED_WINDOWS
+EOF
 
   # Heartbeat: the watcher runs a cheap fleet-scan at a regular cadence no matter
   # what. Time-based via .last-heartbeat mtime; interval doubles per consecutive
@@ -1046,5 +1055,5 @@ EOF
 
   # Terminal wait: a bounded native-event wait for push-capable homes (herdr),
   # else the blind poll sleep. See event_wait_or_sleep.
-  event_wait_or_sleep
+  event_wait_or_sleep || exit 1
 done

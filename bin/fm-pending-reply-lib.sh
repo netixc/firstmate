@@ -927,6 +927,7 @@ fm_pending_reply_tick() {  # <state-dir>
   local -a observation_tasks=() observation_values=()
   dir=$(fm_pending_reply_dir "$state")
   [ -d "$dir" ] || return 0
+  fm_backend_validate_meta_dir "$state" || return 1
   for rec in "$dir"/*; do
     [ -f "$rec" ] || continue
     case "$(basename "$rec")" in
@@ -983,7 +984,7 @@ fm_pending_reply_tick() {  # <state-dir>
     busy=unknown
     sm_home=
     if [ -f "$meta" ]; then
-      target=$(fm_backend_target_of_meta "$meta" 2>/dev/null || true)
+      target=$(fm_meta_get "$meta" window)
       sm_home=$(fm_meta_get "$meta" home)
       if [ -n "$target" ]; then
         label="fm-$task_id"

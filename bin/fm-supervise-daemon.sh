@@ -443,9 +443,10 @@ reconcile_pause_tracking() {  # <window> <state> <last-status-line>
 
 migrate_watcher_pause_markers() {  # <state>
   local state=$1 meta win task key last watcher_key
+  fm_backend_validate_meta_dir "$state" || return 1
   for meta in "$state"/*.meta; do
     [ -e "$meta" ] || continue
-    win=$(fm_backend_target_of_meta "$meta")
+    win=$(fm_meta_get "$meta" window)
     [ -n "$win" ] || continue
     task=$(basename "$meta"); task=${task%.meta}
     key=$(_stale_key "$task")
@@ -860,7 +861,7 @@ _oldest_line_age() {  # <buf> -> seconds since the oldest buffered item first ar
 housekeeping() {  # <state>
   local state=$1 now due f key task win marker age last max_defer oldest pause_secs
   now=$(_now)
-  migrate_watcher_pause_markers "$state"
+  migrate_watcher_pause_markers "$state" || return 1
 
   # (1) batch flush
   if [ "${FM_ESCALATE_BATCH_SECS:-$ESCALATE_BATCH_SECS_DEFAULT}" -le 0 ]; then
@@ -977,11 +978,12 @@ housekeeping() {  # <state>
 # Find a recorded window target whose task id matches the marker key.
 window_for_task() {  # <task-key> [state]
   local key=$1 state=${2:-$(_state_root)} meta task w
+  fm_backend_validate_meta_dir "$state" || return 2
   for meta in "$state"/*.meta; do
     [ -e "$meta" ] || continue
     task=$(basename "$meta"); task=${task%.meta}
     [ "$(_stale_key "$task")" = "$key" ] || continue
-    w=$(fm_backend_target_of_meta "$meta" 2>/dev/null || true)
+    w=$(fm_meta_get "$meta" window)
     [ -n "$w" ] && { printf '%s' "$w"; return 0; }
   done
   return 1
@@ -1090,6 +1092,7 @@ is_wake_reason() {  # <reason>
 handle_wake() {  # <reason> <state>
   local reason=$1 state=$2 decision action distilled task last
   local kind="" arg=""
+  fm_backend_validate_meta_dir "$state" || return 1
   if should_force_self "$reason"; then
     log "wake force-self (FM_INJECT_SKIP): $reason"
     return
@@ -1249,7 +1252,7 @@ fm_super_main() {
   local afk_status="off"
   afk_active "$STATE" && afk_status="on"
   log "daemon starting (pid $$); target=$TARGET; target_source=$target_source; afk=$afk_status; inject_skip='${FM_INJECT_SKIP:-$INJECT_SKIP_DEFAULT}'; stale_escalate=${FM_STALE_ESCALATE_SECS:-$STALE_ESCALATE_SECS_DEFAULT}s; batch=${FM_ESCALATE_BATCH_SECS:-$ESCALATE_BATCH_SECS_DEFAULT}s"
-  migrate_watcher_pause_markers "$STATE"
+  migrate_watcher_pause_markers "$STATE" || return 1
 
   # --- shutdown: flush buffered escalations, reap child, release lock -------
   local WATCHER_PID="" CUR_TMP=""
@@ -1344,7 +1347,7 @@ fm_super_main() {
           continue
         fi
         log "wake: $reason"
-        handle_wake "$reason" "$STATE"
+        handle_wake "$reason" "$STATE" || return 1
         trim_log
       fi
       start_watcher || continue
@@ -1358,7 +1361,7 @@ fm_super_main() {
     sleep 1
     if [ "$(_file_age "$STATE/.subsuper-last-housekeep")" -ge "${FM_HOUSEKEEPING_TICK:-$HOUSEKEEPING_TICK_DEFAULT}" ]; then
       _now > "$STATE/.subsuper-last-housekeep"
-      housekeeping "$STATE"
+      housekeeping "$STATE" || return 1
     fi
   done
 }

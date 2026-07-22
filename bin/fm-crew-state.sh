@@ -87,6 +87,7 @@ emit() {  # <state> <source> [detail]
 # --- meta resolution --------------------------------------------------------
 
 [ -f "$META" ] || emit unknown none "no metadata for $ID"
+fm_backend_meta_is_herdr "$META" || exit 1
 
 meta_value() {  # <key>
   grep "^$1=" "$META" 2>/dev/null | tail -1 | cut -d= -f2- || true
@@ -134,7 +135,7 @@ LOG_VERB=$(status_line_verb "$LOG_LINE")
 # pane_readable is consulted only in the no-run fallback below. The run-step
 # path stays authoritative regardless of pane liveness, so a finished crew
 # whose endpoint has closed still reports its run-step state.
-BACKEND_TARGET=$(fm_backend_target_of_meta "$META" 2>/dev/null || true)
+BACKEND_TARGET=$(fm_meta_get "$META" window)
 EXPECTED_LABEL="fm-$ID"
 pane_readable() {  # <target>
   fm_backend_capture "$1" 1 "$EXPECTED_LABEL" >/dev/null 2>&1
