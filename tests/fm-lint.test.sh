@@ -57,7 +57,7 @@ test_ci_invokes_the_owner() {
 }
 
 test_nomistakes_invokes_the_owner() {
-  grep -Fqx '  lint: '\''bin/fm-install-shellcheck.sh .no-mistakes/bin && PATH="$PWD/.no-mistakes/bin:$PATH" bin/fm-lint.sh'\''' "$NM" \
+  grep -Fqx "  lint: 'bin/fm-install-shellcheck.sh .no-mistakes/bin && PATH=\"\$PWD/.no-mistakes/bin:\$PATH\" bin/fm-lint.sh'" "$NM" \
     || fail "no-mistakes commands.lint must install the pinned ShellCheck and run the one-owner script"
   pass "no-mistakes pre-push lint installs the pin and calls the one-owner script"
 }
