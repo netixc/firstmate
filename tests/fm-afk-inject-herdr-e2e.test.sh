@@ -1,17 +1,14 @@
 #!/usr/bin/env bash
 # tests/fm-afk-inject-herdr-e2e.test.sh - real-herdr end-to-end test for the
-# away-mode daemon's herdr transport (bin/fm-supervise-daemon.sh), the herdr
-# counterpart of tests/fm-afk-inject-e2e.test.sh's private-socket tmux e2e.
+# away-mode daemon's Herdr transport (bin/fm-supervise-daemon.sh).
 # Mirrors tests/fm-backend-herdr-smoke.test.sh and tests/herdr-test-safety.sh's
 # isolation patterns: everything runs on a throwaway, named, NEVER-default
 # HERDR_SESSION, torn down with herdr_safe_stop_and_delete. Skips cleanly when
 # herdr or jq is not installed.
 #
-# Unlike the tmux e2e (which redirects a bare `tmux` PATH shim to a private
-# socket), herdr already supports named-session isolation via --session, so no
-# PATH redirection is needed for the happy path - the daemon is simply pointed
-# at FM_SUPERVISOR_BACKEND=herdr, FM_SUPERVISOR_TARGET="<session>:<pane-id>",
-# and HERDR_SESSION="<the isolated session>". A thin herdr SHIM is still used,
+# Herdr supports named-session isolation via --session, so the daemon is pointed
+# at FM_SUPERVISOR_TARGET="<session>:<pane-id>" and
+# HERDR_SESSION="<the isolated session>". A thin Herdr shim is still used,
 # but only to simulate a swallowed Enter (Scenario B) - herdr's real CLI has no
 # built-in way to drop a keystroke, so the shim intercepts exactly one
 # `pane send-keys <pane> enter` call and forwards everything else to the real
@@ -20,14 +17,13 @@
 # The "supervisor pane" is a tiny deterministic bash loop (not a real harness
 # binary): it draws a bordered composer row ("│ > <buf> │") that exercises the
 # bordered branch of fm_backend_herdr_composer_state, and logs every submitted
-# line (hex + text + injection/user classification) - the same technique
-# tests/fm-afk-inject-e2e.test.sh uses for its tmux supervisor pane, so this
-# test asserts on submitted CONTENT, not pane appearance. It ALSO registers
+# line (hex + text + injection/user classification), so this test asserts on
+# submitted CONTENT, not pane appearance. It ALSO registers
 # itself as a real herdr agent via `herdr pane report-agent` and reports an
 # idle/working/idle cycle around each submission, because
 # fm_backend_herdr_send_text_submit's confirmation is native agent-state
 # (agent get), not composer content, since the 2026-07-07 incident fix
-# (docs/herdr-backend.md "Native agent-state submit confirmation") - a pane
+# (docs/herdr-backend.md "Endpoint behavior") - a pane
 # that only draws composer text without being a registered agent would read
 # agent_not_found forever and never confirm a submission.
 set -u
@@ -70,7 +66,6 @@ fm_herdr_lab_prepare "$SESSION" || fail "could not prepare isolated Herdr lab se
 # --- source the daemon (for afk_enter/afk_exit/FM_INJECT_MARK) + the backend -
 # shellcheck source=bin/fm-supervise-daemon.sh
 . "$DAEMON"
-fm_backend_source herdr || fail "fm_backend_source herdr failed"
 
 # --- build the isolated session's supervisor pane ----------------------------
 
@@ -116,10 +111,10 @@ for _ in $(seq 1 100); do
 done
 [ "$PANE_READY" = true ] || fail "the supervisor pane's shell did not become ready"
 
-# A second, independent live task tab in the same workspace, mirroring the tmux
-# e2e's fake fm-fake-c1 crewmate window - not required by scan_signals (which
+# A second, independent live task tab in the same workspace models the
+# fake fm-fake-c1 crewmate endpoint - not required by scan_signals (which
 # only watches state/*.status mtimes, no window/pane dependency), but kept for
-# parity so this test's shape matches the tmux e2e's.
+# parity so this test exercises a realistic multi-task workspace.
 FAKE_CREW_IDS=$(fm_backend_herdr_create_task "$CONTAINER" "fm-fake-c1" /tmp) \
   || fail "could not create the fake crewmate scratch tab"
 read -r _FAKE_TAB_ID FAKE_CREW_PANE_ID <<EOF
@@ -248,20 +243,20 @@ wait_daemon_started() {
   local label=${1:-daemon} start_line=${2:-0} i=0 new_log
   while [ "$i" -lt 30 ]; do
     new_log=$(tail -n +"$((start_line + 1))" "$STATE_DIR/.supervise-daemon.log" 2>/dev/null || true)
-    if printf '%s\n' "$new_log" | grep -q 'backend=herdr'; then
-      [ -f "$STATE_DIR/.supervise-daemon.pid" ] || fail "$label startup log recorded backend=herdr but no pid file was written"
-      kill -0 "$DAEMON_PID" 2>/dev/null || fail "$label exited after recording backend=herdr"
+    if printf '%s\n' "$new_log" | grep -q 'daemon starting'; then
+      [ -f "$STATE_DIR/.supervise-daemon.pid" ] || fail "$label startup log appeared but no pid file was written"
+      kill -0 "$DAEMON_PID" 2>/dev/null || fail "$label exited after recording startup"
       return 0
     fi
     if ! kill -0 "$DAEMON_PID" 2>/dev/null; then
       echo "daemon stderr:" >&2; cat "$STATE_DIR/daemon.err" >&2
-      fail "$label exited before recording backend=herdr: $(cat "$STATE_DIR/.supervise-daemon.log" 2>/dev/null)"
+      fail "$label exited before recording startup: $(cat "$STATE_DIR/.supervise-daemon.log" 2>/dev/null)"
     fi
     sleep 0.2
     i=$((i + 1))
   done
   echo "daemon stderr:" >&2; cat "$STATE_DIR/daemon.err" >&2
-  fail "$label did not record backend=herdr after 6s: $new_log"
+  fail "$label did not record startup after 6s: $new_log"
 }
 
 start_daemon() {
@@ -270,7 +265,6 @@ start_daemon() {
   PATH="$HERDR_SHIM_DIR:$PATH" \
   HERDR_SESSION="$SESSION" \
   FM_STATE_OVERRIDE="$STATE_DIR" \
-  FM_SUPERVISOR_BACKEND=herdr \
   FM_SUPERVISOR_TARGET="$SUPERVISOR_TARGET" \
   FM_ESCALATE_BATCH_SECS=0 \
   FM_HOUSEKEEPING_TICK=1 \
@@ -312,8 +306,7 @@ reset_state() {
 }
 
 # --- pane_input_pending environment self-check ------------------------------
-# Verify pane_input_pending (dispatched through fm_backend_composer_state for
-# backend=herdr) can detect typed text in THIS real herdr environment before
+# Verify pane_input_pending can detect typed text in THIS real Herdr environment before
 # trusting the scenarios below to prove anything.
 
 selfcheck_pane_input_pending() {
@@ -321,7 +314,7 @@ selfcheck_pane_input_pending() {
   fm_backend_herdr_send_literal "$SUPERVISOR_TARGET" "$check_text" \
     || fail "selfcheck: could not send literal text to the scratch pane"
   sleep 0.5
-  if PATH="$HERDR_SHIM_DIR:$PATH" pane_input_pending "$SUPERVISOR_TARGET" herdr; then
+  if PATH="$HERDR_SHIM_DIR:$PATH" pane_input_pending "$SUPERVISOR_TARGET"; then
     fm_backend_herdr_send_key "$SUPERVISOR_TARGET" Enter
     sleep 0.5
     return 0
@@ -464,7 +457,7 @@ test_scenario_c() {
 # A pending composer that NEVER clears (every Enter attempt leaves real text
 # behind) must never be silently swallowed: the daemon must alarm (write
 # state/.subsuper-inject-wedged) while preserving the buffered escalation, and
-# must never crash or hot-loop. Exercises fm_backend_composer_state(herdr, ...)
+# must never crash or hot-loop. Exercises fm_backend_composer_state(...)
 # reporting "pending" indefinitely through the REAL structural border reader.
 
 test_scenario_d_max_defer() {
@@ -480,7 +473,6 @@ test_scenario_d_max_defer() {
   PATH="$HERDR_SHIM_DIR:$PATH" \
   HERDR_SESSION="$SESSION" \
   FM_STATE_OVERRIDE="$STATE_DIR" \
-  FM_SUPERVISOR_BACKEND=herdr \
   FM_SUPERVISOR_TARGET="$SUPERVISOR_TARGET" \
   FM_ESCALATE_BATCH_SECS=99999 \
   FM_HOUSEKEEPING_TICK=1 \

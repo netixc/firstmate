@@ -9,8 +9,7 @@
 #
 # It does NOT:
 #   - compose production CI shard membership (fm-test-run.sh owns that partition)
-#   - run real Herdr, real default-server tmux, watcher lock races, AFK, live
-#     harnesses, or GUI backends
+#   - run real Herdr, watcher lock races, AFK, or live harnesses
 #
 # Usage:
 #   fm-test-isolation-proof.sh [--jobs N] [--json path] [--list]
@@ -83,7 +82,7 @@ now_ms() {
 }
 
 # Serial exclusions relative to the scout-proposed parallel pool (pure units,
-# fake backends, private git fixtures, stubbed network). Reasons are audit
+# stubbed endpoints, private git fixtures, and stubbed network). Reasons are audit
 # evidence; do not re-add a basename without clearing its reason.
 exclusion_reason() {
   case "$1" in
@@ -92,9 +91,6 @@ exclusion_reason() {
       ;;
     fm-test-isolation-proof.test.sh)
       printf '%s\n' 'isolation-proof harness contract itself; must not re-enter concurrent matrix'
-      ;;
-    fm-backend-tmux-smoke.test.sh)
-      printf '%s\n' 'real tmux on a private socket; keep exclusive of default-server contention class'
       ;;
     fm-backend.test.sh)
       printf '%s\n' 'old-vs-new main checkout diff fixture; gray-zone concurrent git/worktree cost'
@@ -114,7 +110,7 @@ exclusion_reason() {
     fm-watcher-lock.test.sh)
       printf '%s\n' 'watcher/wake/lock family; intentional process locks and daemon races'
       ;;
-    fm-afk-inject-e2e.test.sh|fm-afk-return.test.sh|fm-afk-inject-herdr-e2e.test.sh|\
+    fm-afk-return.test.sh|fm-afk-inject-herdr-e2e.test.sh|\
     fm-afk-launch.test.sh)
       printf '%s\n' 'AFK lifecycle / inject path; exclusive daemon and pane control'
       ;;
@@ -124,20 +120,11 @@ exclusion_reason() {
     fm-send-secondmate-marker-herdr-e2e.test.sh)
       printf '%s\n' 'live harness opt-in; never default parallel CI'
       ;;
-    fm-backend-autodetect-smoke.test.sh|fm-backend-herdr-eventwait-smoke.test.sh|\
+    fm-backend-herdr-eventwait-smoke.test.sh|\
     fm-backend-herdr-presentation-e2e.test.sh|fm-backend-herdr-prune-safety-e2e.test.sh|\
     fm-backend-herdr-respawn-idem-e2e.test.sh|fm-backend-herdr-smoke.test.sh|\
     fm-backend-herdr-workspace-per-home-e2e.test.sh)
       printf '%s\n' 'real Herdr-gated; Herdr lane is a later phase'
-      ;;
-    fm-backend-cmux.test.sh|fm-backend-cmux-smoke.test.sh)
-      printf '%s\n' 'cmux GUI backend; never parallel with another cmux mutator'
-      ;;
-    fm-backend-zellij.test.sh|fm-backend-zellij-smoke.test.sh)
-      printf '%s\n' 'zellij optional backend; keep out of pure parallel pool'
-      ;;
-    fm-backend-orca.test.sh)
-      printf '%s\n' 'orca backend surface; keep serial until dedicated isolation proof'
       ;;
     *)
       return 1
@@ -176,7 +163,6 @@ tests/fm-spawn-batch.test.sh
 tests/fm-stow-contract.test.sh
 tests/fm-supervision-instructions.test.sh
 tests/fm-test-run.test.sh
-tests/fm-tmux-submit-busy.test.sh
 tests/fm-transition-lib.test.sh
 tests/fm-x-mode.test.sh
 EOF
@@ -193,7 +179,6 @@ list_exclusions_for_report() {
   done <<'EOF'
 fm-continuity-pretool-check.test.sh
 fm-test-isolation-proof.test.sh
-fm-backend-tmux-smoke.test.sh
 fm-backend.test.sh
 fm-spawn-dispatch-profile.test.sh
 fm-spawn-worktree-settle.test.sh
@@ -201,9 +186,7 @@ fm-pr-check-security.test.sh
 fm-teardown.test.sh
 fm-watcher-lock.test.sh
 fm-wake-queue.test.sh
-fm-afk-inject-e2e.test.sh
 fm-backend-herdr-smoke.test.sh
-fm-backend-cmux-smoke.test.sh
 fm-pi-primary-live-e2e.test.sh
 EOF
 }
@@ -430,7 +413,7 @@ for script in "${CANDIDATES[@]}"; do
     export TMP="$work/tmp"
     # Clear ambient fleet overrides so candidates cannot share a live home.
     unset FM_HOME FM_STATE_OVERRIDE FM_DATA_OVERRIDE FM_ROOT_OVERRIDE \
-      FM_PROJECTS_OVERRIDE FM_CONFIG_OVERRIDE FM_BACKEND 2>/dev/null || true
+      FM_PROJECTS_OVERRIDE FM_CONFIG_OVERRIDE 2>/dev/null || true
     cd "$ROOT" || exit 1
     begin_ms=$(now_ms)
     bash "$script" >"$work/out/stdout" 2>"$work/out/stderr"

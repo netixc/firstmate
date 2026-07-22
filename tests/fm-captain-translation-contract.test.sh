@@ -12,7 +12,6 @@ AFK="$ROOT/.agents/skills/afk/SKILL.md"
 DECISION="$ROOT/.agents/skills/decision-hold-lifecycle/SKILL.md"
 RECOVERY="$ROOT/.agents/skills/stuck-crewmate-recovery/SKILL.md"
 HARNESS="$ROOT/.agents/skills/harness-adapters/SKILL.md"
-CODEXAPP="$ROOT/.agents/skills/firstmate-codexapp/SKILL.md"
 FMX="$ROOT/.agents/skills/fmx-respond/SKILL.md"
 UPDATE="$ROOT/.agents/skills/updatefirstmate/SKILL.md"
 
@@ -81,7 +80,7 @@ test_mapping_list_covers_high_risk_internal_families() {
     "done, failed, fix-review, checks-passed, cancelled, validation step, or pipeline state -> the concrete result" \
     "brief -> instructions" \
     "crewmate -> worker" \
-    "harness, backend, runtime, or adapter -> worker runtime or tool" \
+    "harness, session provider, runtime, or adapter -> worker runtime or tool" \
     "status file, metadata, state, task id, or raw path -> durable record"; do
     assert_contains "$contract" "$phrase" "section 9 mapping list is missing '$phrase'"
   done
@@ -103,7 +102,7 @@ test_verbatim_internal_evidence_is_rejected_from_chat() {
 test_outward_facing_skill_points_reference_section_9_owner() {
   assert_grep "using \`AGENTS.md\` section 9's captain-facing translation contract" "$BOOTSTRAP" \
     "bootstrap diagnostics do not reference section 9 at captain handoff"
-  assert_grep "Acknowledge** in \`AGENTS.md\` section 9 language" "$AFK" \
+  assert_grep "Acknowledge using \`AGENTS.md\` section 9 language" "$AFK" \
     "afk acknowledgement does not reference section 9"
   assert_grep "Captain, away mode is active; I will batch routine updates" "$AFK" \
     "afk acknowledgement lacks a local plain-English example"
@@ -117,8 +116,6 @@ test_outward_facing_skill_points_reference_section_9_owner() {
     "runtime fallback does not require the current-work fallback"
   assert_grep "Do not pause current work for that future-verification choice, and never launch an unverified adapter." "$HARNESS" \
     "runtime fallback permits waiting on future verification or launching an unverified adapter"
-  assert_grep "translate status prefixes and return-channel evidence through \`AGENTS.md\` section 9" "$CODEXAPP" \
-    "Codex Desktop result reporting does not reference section 9"
   assert_grep "It supplements \`AGENTS.md\` section 9; apply both, and this public-channel rule wins wherever it is stricter." "$FMX" \
     "X reply safety does not state that it supplements section 9"
   assert_grep "under \`AGENTS.md\` section 9 without firstmate's internal vocabulary" "$UPDATE" \
@@ -129,7 +126,7 @@ test_outward_facing_skill_points_reference_section_9_owner() {
 test_section_9_owner_is_not_duplicated_into_skills() {
   local duplicate_count file
   duplicate_count=0
-  for file in "$BOOTSTRAP" "$AFK" "$DECISION" "$RECOVERY" "$HARNESS" "$CODEXAPP" "$UPDATE"; do
+  for file in "$BOOTSTRAP" "$AFK" "$DECISION" "$RECOVERY" "$HARNESS" "$UPDATE"; do
     if grep -Fq "When evidence uses an internal label, rewrite it before sending:" "$file"; then
       duplicate_count=$((duplicate_count + 1))
     fi

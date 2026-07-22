@@ -1,196 +1,190 @@
 {
   "concurrency": 4,
-  "finished_at": "2026-07-22T04:08:06Z",
+  "finished_at": "2026-07-22T15:31:43Z",
   "fm_test_run_jobs_enabled": false,
   "kind": "isolation-proof",
   "production_sharding_enabled": false,
-  "run_id": "fm-isolation-1784693155237-99474",
+  "run_id": "fm-isolation-1784734118014-985459",
   "scripts": [
     {
-      "duration_ms": 29102,
+      "duration_ms": 40523,
       "exit": 0,
       "path": "tests/fm-arm-pretool-check.test.sh",
       "worker": 1
     },
     {
-      "duration_ms": 35417,
+      "duration_ms": 11267,
       "exit": 0,
       "path": "tests/fm-backend-herdr.test.sh",
       "worker": 2
     },
     {
-      "duration_ms": 897,
+      "duration_ms": 678,
       "exit": 0,
       "path": "tests/fm-brief.test.sh",
       "worker": 3
     },
     {
-      "duration_ms": 90,
+      "duration_ms": 67,
       "exit": 0,
       "path": "tests/fm-captain-translation-contract.test.sh",
       "worker": 4
     },
     {
-      "duration_ms": 18610,
+      "duration_ms": 20588,
       "exit": 0,
       "path": "tests/fm-cd-pretool-check.test.sh",
       "worker": 5
     },
     {
-      "duration_ms": 2803,
+      "duration_ms": 71,
       "exit": 0,
       "path": "tests/fm-composer-ghost.test.sh",
       "worker": 6
     },
     {
-      "duration_ms": 68,
+      "duration_ms": 61,
       "exit": 0,
       "path": "tests/fm-composer-lib.test.sh",
       "worker": 7
     },
     {
-      "duration_ms": 19896,
+      "duration_ms": 6315,
       "exit": 0,
       "path": "tests/fm-crew-state.test.sh",
       "worker": 8
     },
     {
-      "duration_ms": 21133,
+      "duration_ms": 84432,
       "exit": 0,
       "path": "tests/fm-decision-hold-lifecycle.test.sh",
       "worker": 9
     },
     {
-      "duration_ms": 874,
+      "duration_ms": 379,
       "exit": 0,
       "path": "tests/fm-dispatch-select.test.sh",
       "worker": 10
     },
     {
-      "duration_ms": 348,
+      "duration_ms": 248,
       "exit": 0,
       "path": "tests/fm-ensure-agents-md.test.sh",
       "worker": 11
     },
     {
-      "duration_ms": 5963,
+      "duration_ms": 4318,
       "exit": 0,
       "path": "tests/fm-grok-harness.test.sh",
       "worker": 12
     },
     {
-      "duration_ms": 12517,
+      "duration_ms": 7011,
       "exit": 0,
       "path": "tests/fm-herdr-lab.test.sh",
       "worker": 13
     },
     {
-      "duration_ms": 232,
+      "duration_ms": 164,
       "exit": 0,
       "path": "tests/fm-instruction-owners.test.sh",
       "worker": 14
     },
     {
-      "duration_ms": 1274,
+      "duration_ms": 73,
       "exit": 0,
       "path": "tests/fm-lint.test.sh",
       "worker": 15
     },
     {
-      "duration_ms": 201,
+      "duration_ms": 137,
       "exit": 0,
       "path": "tests/fm-nm-test-contract.test.sh",
       "worker": 16
     },
     {
-      "duration_ms": 36,
+      "duration_ms": 27,
       "exit": 0,
       "path": "tests/fm-no-mistakes-ownership.test.sh",
       "worker": 17
     },
     {
-      "duration_ms": 1056,
+      "duration_ms": 22,
       "exit": 0,
       "path": "tests/fm-pi-primary-types.test.sh",
       "worker": 18
     },
     {
-      "duration_ms": 8939,
+      "duration_ms": 4695,
       "exit": 0,
       "path": "tests/fm-pr-merge.test.sh",
       "worker": 19
     },
     {
-      "duration_ms": 2549,
+      "duration_ms": 1036,
       "exit": 0,
       "path": "tests/fm-review-diff.test.sh",
       "worker": 20
     },
     {
-      "duration_ms": 6953,
+      "duration_ms": 2548,
       "exit": 0,
       "path": "tests/fm-send-popup-settle.test.sh",
       "worker": 21
     },
     {
-      "duration_ms": 3524,
+      "duration_ms": 556,
       "exit": 0,
       "path": "tests/fm-send-settle.test.sh",
       "worker": 22
     },
     {
-      "duration_ms": 1551,
+      "duration_ms": 1164,
       "exit": 0,
       "path": "tests/fm-send-strict.test.sh",
       "worker": 23
     },
     {
-      "duration_ms": 684,
+      "duration_ms": 1427,
       "exit": 0,
       "path": "tests/fm-spawn-batch.test.sh",
       "worker": 24
     },
     {
-      "duration_ms": 57,
+      "duration_ms": 44,
       "exit": 0,
       "path": "tests/fm-stow-contract.test.sh",
       "worker": 25
     },
     {
-      "duration_ms": 283,
+      "duration_ms": 233,
       "exit": 0,
       "path": "tests/fm-supervision-instructions.test.sh",
       "worker": 26
     },
     {
-      "duration_ms": 4645,
+      "duration_ms": 7329,
       "exit": 0,
       "path": "tests/fm-test-run.test.sh",
       "worker": 27
     },
     {
-      "duration_ms": 2552,
+      "duration_ms": 82,
       "exit": 0,
-      "path": "tests/fm-tmux-submit-busy.test.sh",
+      "path": "tests/fm-transition-lib.test.sh",
       "worker": 28
     },
     {
-      "duration_ms": 104,
-      "exit": 0,
-      "path": "tests/fm-transition-lib.test.sh",
-      "worker": 29
-    },
-    {
-      "duration_ms": 38449,
+      "duration_ms": 26807,
       "exit": 0,
       "path": "tests/fm-x-mode.test.sh",
-      "worker": 30
+      "worker": 29
     }
   ],
-  "started_at": "2026-07-22T04:05:55Z",
+  "started_at": "2026-07-22T15:28:38Z",
   "summary": {
-    "duration_ms": 131001,
+    "duration_ms": 185908,
     "failed": 0,
-    "total": 30
+    "total": 29
   }
 }

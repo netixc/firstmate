@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/fm-wake-daemon-lifecycle-e2e.test.sh - the watcher + supervise-daemon
-# lifecycle, end to end, over one shared state root and a shimmed tmux:
+# lifecycle, end to end, over one shared state root and a fake Herdr endpoint:
 #
 #   routine status -> self-handled, queued
 #   terminal status written while the watcher is DOWN -> caught on restart (catch-up)
@@ -38,7 +38,7 @@ TMP_ROOT=$(fm_test_tmproot fm-wake-daemon-e2e)
 # daemon does the triage. This e2e exercises exactly that path, so it runs with
 # state/.afk present (which the daemon owns) to keep the watcher one-shot; the
 # always-on standalone triage is covered by fm-watch-triage.test.sh. fakebin
-# shadows tmux. Echoes nothing; the caller reads $out.
+# shadows Herdr. Echoes nothing; the caller reads $out.
 run_watcher_once() {
   local state=$1 fakebin=$2 out=$3
   mkdir -p "$state"
@@ -96,8 +96,9 @@ test_routine_then_terminal_after_restart() {
   sent="$dir/sent.log"; : > "$sent"
   : > "$dir/pane.txt"
   afk_enter "$state"
-  PATH="$fakebin:$PATH" FM_FAKE_TMUX_PANE_ALIVE=1 FM_FAKE_TMUX_SENT="$sent" \
-    FM_FAKE_TMUX_CAPTURE="$dir/pane.txt" FM_ESCALATE_BATCH_SECS=0 escalate_flush "$state" \
+  PATH="$fakebin:$PATH" FM_FAKE_HERDR_PANE_ALIVE=1 FM_FAKE_HERDR_TARGET="test:supervisor" \
+    FM_FAKE_HERDR_SENT="$sent" FM_FAKE_HERDR_CAPTURE="$dir/pane.txt" \
+    FM_SUPERVISOR_TARGET="test:supervisor" FM_ESCALATE_BATCH_SECS=0 escalate_flush "$state" \
     || fail "escalate_flush failed for the buffered digest"
   [ "$(grep -c '\[ENTER\]' "$sent")" -eq 1 ] || fail "buffered digest was not submitted exactly once"
   [ ! -s "$state/.subsuper-escalations" ] || fail "buffer not cleared after a successful flush"
@@ -112,6 +113,7 @@ test_stale_pane_transient_persistent_resume() {
   fakebin="$dir/fakebin"
   win="sess:fm-stale-w2"
   key=$(printf '%s' "stale-w2" | tr ':/.' '___')
+  printf 'window=%s\nkind=ship\n' "$win" > "$state/stale-w2.meta"
   printf 'working: compiling\n' > "$state/stale-w2.status"
 
   # Transient: first stale observation self-handles and records a marker.
@@ -127,7 +129,7 @@ test_stale_pane_transient_persistent_resume() {
   printf 'idle prompt $\n' > "$dir/pane.txt"
   echo $(( $(date +%s) - 500 )) > "$state/.subsuper-stale-$key"
   : > "$state/.subsuper-escalations" 2>/dev/null || true
-  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$win" FM_FAKE_TMUX_CAPTURE="$dir/pane.txt" \
+  PATH="$fakebin:$PATH" FM_FAKE_HERDR_WINDOW="$win" FM_FAKE_HERDR_CAPTURE="$dir/pane.txt" \
     FM_STATE_OVERRIDE="$state" FM_STALE_ESCALATE_SECS=240 housekeeping "$state"
   [ -s "$state/.subsuper-escalations" ] || fail "persistent stale did not escalate"
   [ ! -e "$state/.subsuper-stale-$key" ] || fail "stale marker not cleared after escalation"
@@ -138,7 +140,7 @@ test_stale_pane_transient_persistent_resume() {
   echo $(( $(date +%s) - 500 )) > "$state/.subsuper-stale-$key"
   printf 'Working...\n' > "$dir/pane.txt"
   : > "$state/.subsuper-escalations"
-  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$win" FM_FAKE_TMUX_CAPTURE="$dir/pane.txt" \
+  PATH="$fakebin:$PATH" FM_FAKE_HERDR_WINDOW="$win" FM_FAKE_HERDR_CAPTURE="$dir/pane.txt" \
     FM_STATE_OVERRIDE="$state" FM_STALE_ESCALATE_SECS=240 housekeeping "$state"
   [ ! -e "$state/.subsuper-stale-$key" ] || fail "resumed stale marker was not cleared"
   [ ! -s "$state/.subsuper-escalations" ] || fail "resumed (busy) stale was escalated"

@@ -2,8 +2,8 @@
 # Behavior tests for fm-spawn.sh concrete dispatch profile flags.
 #
 # These tests drive fm-spawn through meta writing and launch construction with a
-# fake tmux pane and a real isolated git worktree. The fake tmux captures the
-# literal launch command sent with `tmux send-keys -l`, so assertions pin the
+# fake Herdr pane and a real isolated git worktree. The fake Herdr CLI captures
+# the literal launch command sent with `pane send-text`, so assertions pin the
 # command firstmate would run without starting any real harness.
 set -u
 
@@ -16,32 +16,25 @@ TMP_ROOT=$(fm_test_tmproot fm-spawn-dispatch-profile)
 make_spawn_fakebin() {
   local dir=$1 fakebin
   fakebin=$(fm_fakebin "$dir")
-  cat > "$fakebin/tmux" <<'SH'
+  cat > "$fakebin/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
-case "$*" in
-  *"#{pane_current_path}"*) printf '%s\n' "${FM_FAKE_PANE_PATH:-}"; exit 0 ;;
-esac
-case "${1:-}" in
-  display-message) printf 'firstmate\n'; exit 0 ;;
-  list-windows) exit 0 ;;
-  has-session|new-session|new-window|kill-window) exit 0 ;;
-  send-keys)
+case " $* " in
+  *' status --json '*) printf '%s\n' '{"client":{"version":"0.7.3","protocol":16},"server":{"running":true}}' ;;
+  *' workspace list '*) printf '%s\n' '{"result":{"workspaces":[{"workspace_id":"w1","label":"firstmate"}]}}' ;;
+  *' workspace create '*) printf '%s\n' '{"result":{"workspace":{"workspace_id":"w1"},"tab":{"tab_id":"seed"},"root_pane":{"pane_id":"w1:p0"}}}' ;;
+  *' tab list '*) printf '%s\n' '{"result":{"tabs":[]}}' ;;
+  *' tab create '*) printf '%s\n' '{"result":{"tab":{"tab_id":"t1"},"root_pane":{"pane_id":"w1:p1"}}}' ;;
+  *' pane get '*) printf '{"result":{"pane":{"pane_id":"w1:p1","foreground_cwd":"%s"}}}\n' "${FM_FAKE_PANE_PATH:-}" ;;
+  *' pane send-text '*)
     if [ -n "${FM_FAKE_LAUNCH_LOG:-}" ]; then
-      prev=
-      for a in "$@"; do
-        if [ "$prev" = "-l" ]; then
-          printf '%s\n' "$a" >> "$FM_FAKE_LAUNCH_LOG"
-        fi
-        prev=$a
-      done
+      printf '%s\n' "${4:-}" >> "$FM_FAKE_LAUNCH_LOG"
     fi
-    exit 0
     ;;
 esac
 exit 0
 SH
-  chmod +x "$fakebin/tmux"
+  chmod +x "$fakebin/herdr"
   fm_fake_exit0 "$fakebin" treehouse
   printf '%s\n' "$fakebin"
 }
@@ -87,7 +80,7 @@ run_spawn() {
   FM_ROOT_OVERRIDE='' FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
-    FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$wt" TMUX="fake,1,0" \
+    FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$wt" \
     FM_FAKE_LAUNCH_LOG="$launchlog" GROK_HOME="$home/grok-home" PATH="$fakebin:$PATH" \
     "$SPAWN" "$@" 2>&1
 }

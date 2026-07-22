@@ -37,7 +37,6 @@ fm_herdr_lab_prepare "$SESSION" || fail "could not prepare the isolated Herdr la
 
 # shellcheck source=bin/fm-backend.sh
 . "$ROOT/bin/fm-backend.sh"
-fm_backend_source herdr || fail "fm_backend_source herdr failed"
 
 HERDR_VERSION=$(herdr --version 2>/dev/null | head -1)
 
@@ -68,7 +67,6 @@ SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/fm-evwait.XXXXXX")
 STATE="$SCRATCH/state"; mkdir -p "$STATE"
 cat > "$STATE/evwait1.meta" <<EOF
 window=$TARGET
-backend=herdr
 kind=ship
 EOF
 
@@ -118,7 +116,7 @@ export FM_ROOT_OVERRIDE="$ROOT"
 # shellcheck source=bin/fm-watch.sh
 . "$ROOT/bin/fm-watch.sh"
 wake() { return 0; }
-handle_push_transition herdr "$SESSION" "$REC"
+handle_push_transition "$SESSION" "$REC"
 [ -e "$STATE/.wake-queue" ] || fail "handle_push_transition did not create the wake queue"
 grep -q 'stale' "$STATE/.wake-queue" || fail "the wake queue must carry a stale record: $(cat "$STATE/.wake-queue")"
 grep -q "$TARGET" "$STATE/.wake-queue" || fail "the stale record must name the task window $TARGET"

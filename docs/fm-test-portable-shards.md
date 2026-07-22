@@ -8,7 +8,7 @@ The proven-isolated candidate set remains owned by `bin/fm-test-isolation-proof.
 
 | Input | Owner / source |
 |---|---|
-| Proven-isolated set (30 scripts) | `bin/fm-test-isolation-proof.sh --list` and `docs/fm-test-isolation-proof.md` |
+| Proven-isolated set (29 scripts) | `bin/fm-test-isolation-proof.sh --list` and `docs/fm-test-isolation-proof.md` |
 | Phase 1 serial durations | CI timing artifacts `fm-test-timing` from main after #825 / #832 / #834 |
 | Real-Herdr family | `bin/fm-test-run.sh --family real-herdr-gated` (dedicated required CI lane) |
 
@@ -30,7 +30,6 @@ Phase 1 averages used for balance (mean of available serial `duration_ms` across
 | 1234 | `tests/fm-spawn-batch.test.sh` |
 | 851 | `tests/fm-send-strict.test.sh` |
 | 791 | `tests/fm-review-diff.test.sh` |
-| 627 | `tests/fm-tmux-submit-busy.test.sh` |
 | 525 | `tests/fm-brief.test.sh` |
 | 321 | `tests/fm-composer-ghost.test.sh` |
 | 283 | `tests/fm-dispatch-select.test.sh` |
@@ -56,15 +55,15 @@ Shard execution order is longest-first so wall-clock tracks the balanced sum.
 | Lane | Script count | Sum of Phase 1 averages |
 |---|---:|---:|
 | `portable-parallel-1` | 15 | 64579 ms (~64.6 s) |
-| `portable-parallel-2` | 15 | 64579 ms (~64.6 s) |
-| imbalance | | 0 ms |
+| `portable-parallel-2` | 14 | 63952 ms (~64.0 s) |
+| imbalance | | 627 ms |
 
 Exact ordered membership is the heredoc lists in `bin/fm-test-run.sh` (`list_portable_parallel_1` / `list_portable_parallel_2`).
 
 ## Portable serial remainder
 
 `portable-serial` is every `tests/*.test.sh` that is neither proven-isolated nor `real-herdr-gated`.
-That keeps watcher, lock, AFK, real tmux, daemon, secondmate lifecycle, bootstrap, live-harness opt-in (default skip), GUI backends, and other stateful or unproven work serial.
+That keeps watcher, lock, AFK, daemon, secondmate lifecycle, bootstrap, live-harness opt-in (default skip), and other stateful or unproven work serial.
 Measured serial remainder wall (from the same Phase 1 artifacts, excluding Herdr) is about **13 minutes**.
 
 ## Coverage guard
@@ -103,5 +102,5 @@ Do not raise them as a substitute for green results, retries, or weaker assertio
 ## What this phase does not do
 
 - Does not expand the proven-isolated set without a new concurrent isolation proof.
-- Does not parallelize watcher, AFK, real Herdr, real tmux, or other stateful families.
+- Does not parallelize watcher, AFK, real Herdr, or other stateful families.
 - Does not start rollout verification; that waits until this PR is green and merged.

@@ -78,6 +78,16 @@ SH
 printf '%s\n' "$*" >> "$FM_TEST_GH_AXI_LOG"
 exit "${FM_TEST_GH_AXI_RC:-0}"
 SH
+  cat > "$fakebin/herdr" <<'SH'
+#!/usr/bin/env bash
+[ -z "${FM_FAKE_HERDR_LOG:-}" ] || printf '%s\n' "$*" >> "$FM_FAKE_HERDR_LOG"
+case " $* " in
+  *' status --json '*) printf '%s\n' '{"client":{"version":"0.7.3","protocol":16},"server":{"running":true}}' ;;
+  *' pane get '*) printf '%s\n' '{"result":{"pane":{"pane_id":"w1:p1"}}}' ;;
+  *' agent get '*) printf '%s\n' '{"error":{"code":"agent_not_found"}}'; exit 1 ;;
+esac
+exit 0
+SH
   # Plain glab, reproducing the real CLI's contract: its field output on stdout
   # and exit 0 on success, and a non-zero exit with no stdout on any failure.
   cat > "$fakebin/glab" <<'SH'
@@ -87,7 +97,7 @@ printf '%s\n' "$*" >> "$FM_TEST_GLAB_LOG"
 [ "${FM_TEST_GLAB_SLEEP:-0}" = 0 ] || sleep "$FM_TEST_GLAB_SLEEP"
 printf 'title:\tfixture merge request\nstate:\t%s\nauthor:\tsomeone\n' "${FM_TEST_GLAB_STATE:-opened}"
 SH
-  chmod +x "$fakebin/gh" "$fakebin/gh-axi" "$fakebin/glab"
+  chmod +x "$fakebin/gh" "$fakebin/gh-axi" "$fakebin/glab" "$fakebin/herdr"
   : > "$dir/gh.log"
   : > "$dir/gh-axi.log"
   : > "$dir/glab.log"
@@ -98,7 +108,6 @@ SH
 write_task_meta() {
   local dir=$1 id=${2:-task-a}
   fm_write_meta "$dir/home/state/$id.meta" \
-    "window=fm-$id" \
     "worktree=$dir/wt" \
     "project=$dir/project" \
     "kind=ship" \
@@ -108,7 +117,6 @@ write_task_meta() {
 write_poll_meta() {
   local state=$1 id=$2 url=$3
   fm_write_meta "$state/$id.meta" \
-    "window=fm-$id" \
     "pr=$url"
 }
 
@@ -567,11 +575,6 @@ test_valid_recording_and_merge_derivation() {
   fm_pr_poll_artifacts_valid "$dir/home/state" Task_A.1 "$POLL" \
     || fail "safe lifecycle-compatible task ID did not publish an authenticated poll"
   rm -rf "$dir/wt"
-  cat > "$dir/fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-exit 0
-SH
-  chmod 0700 "$dir/fakebin/tmux"
   touch "$dir/home/state/.last-watcher-beat"
   FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" PATH="$dir/fakebin:$BASE_PATH" \
     "$TEARDOWN" Task_A.1 --force > "$dir/teardown.out" 2> "$dir/teardown.err" \
@@ -592,11 +595,6 @@ SH
     printf 'reserved migration evidence\n' \
       > "$dir/home/state/.pr-check-quarantine/!noncanonical.check.evidence"
     chmod 0600 "$dir/home/state/.pr-check-quarantine/!noncanonical.check.evidence"
-    cat > "$dir/fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-exit 0
-SH
-    chmod 0700 "$dir/fakebin/tmux"
     touch "$dir/home/state/.last-watcher-beat"
     mkdir "$dir/home/state/$id.check.sh"
     set +e
@@ -1673,11 +1671,6 @@ test_complete_single_link_validation() {
   chmod 0600 "$state/.pr-check-quarantine/task-a.check.linked"
   alias="$dir/quarantine.alias"
   ln "$state/.pr-check-quarantine/task-a.check.linked" "$alias"
-  cat > "$fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-exit 0
-SH
-  chmod +x "$fakebin/tmux"
   touch "$state/.last-watcher-beat"
   set +e
   FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" PATH="$fakebin:$BASE_PATH" \
@@ -1827,11 +1820,6 @@ test_obligation_namespace_compatibility() {
     "project=$dir/project" \
     'kind=ship' \
     'mode=local-only'
-  cat > "$dir/fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-exit 0
-SH
-  chmod 0700 "$dir/fakebin/tmux"
   touch "$state/.last-watcher-beat"
   set +e
   FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" PATH="$dir/fakebin:$BASE_PATH" \
@@ -2310,19 +2298,12 @@ test_bootstrap_isolates_incomplete_poll_migration() {
     || fail "could not prepare healthy poll for migration isolation"
   fm_pr_poll_publish_prepared || fail "could not publish healthy poll for migration isolation"
   fm_write_meta "$state/secondmate-a.meta" \
-    'window=fm-secondmate-a' \
+    'window=invalid-target' \
     'kind=secondmate' \
-    'harness=codex' \
-    'backend=tmux'
+    'harness=codex'
   printf 'FMX_PAIRING_TOKEN=test-token\n' > "$dir/home/.env"
   mkdir -p "$dir/home/projects"
   fm_fake_exit0 "$fakebin" curl jq
-  cat > "$fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-case " $* " in
-  *' display-message '*) printf 'node\n' ;;
-esac
-SH
   cat > "$dir/root/bin/fm-fleet-sync.sh" <<'SH'
 #!/usr/bin/env bash
 : > "${FM_TEST_FLEET_MARKER:?}"
@@ -2332,7 +2313,7 @@ SH
 #!/usr/bin/env bash
 : > "${FM_TEST_X_POLL_MARKER:?}"
 SH
-  chmod +x "$fakebin/tmux" "$dir/root/bin/fm-fleet-sync.sh" "$dir/root/bin/fm-x-poll.sh"
+  chmod +x "$dir/root/bin/fm-fleet-sync.sh" "$dir/root/bin/fm-x-poll.sh"
 
   set +e
   FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/root" FM_TEST_FLEET_MARKER="$fleet_marker" \
@@ -2352,7 +2333,7 @@ SH
     "isolated bootstrap migration did not surface its incomplete status"
   assert_grep 'SECONDMATE_SYNC: secondmate secondmate-a: skipped:' "$dir/bootstrap.out" \
     "incomplete poll migration suppressed secondmate sync"
-  assert_grep 'SECONDMATE_LIVENESS: secondmate secondmate-a: skipped: liveness probe inconclusive' "$dir/bootstrap.out" \
+  assert_grep 'SECONDMATE_LIVENESS: secondmate secondmate-a: skipped: Herdr liveness probe inconclusive' "$dir/bootstrap.out" \
     "incomplete poll migration suppressed persistent supervisor recovery"
   assert_grep 'FMX: X mode on - relay poll armed' "$dir/bootstrap.out" \
     "incomplete poll migration suppressed X mention setup"
@@ -2395,6 +2376,10 @@ SH
     "registered custom check output did not wake the watcher"
   printf '%s\n' '#!/usr/bin/env bash' "printf '%s\\n' custom-replacement-ran" > "$state/b-custom.check.sh"
   chmod 0700 "$state/b-custom.check.sh"
+  printf '%s\n' '#!/usr/bin/env bash' "printf '%s\\n' trusted-wake" > "$state/z-wake.check.sh"
+  chmod 0700 "$state/z-wake.check.sh"
+  FM_HOME="$dir/home" "$REGISTER" z-wake >/dev/null \
+    || fail "could not register an independent trusted wake for replacement checks"
   rm -f "$state/.last-check" "$x_poll_marker"
   set +e
   FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/root" FM_TEST_X_POLL_MARKER="$x_poll_marker" \
@@ -2601,11 +2586,6 @@ test_teardown_removes_poll_artifacts() {
   chmod 0700 "$dir/home/state/.pr-check-quarantine"
   printf 'legacy\n' > "$dir/home/state/.pr-check-quarantine/task-a.check.abc123"
   chmod 0600 "$dir/home/state/.pr-check-quarantine/task-a.check.abc123"
-  cat > "$fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-exit 0
-SH
-  chmod +x "$fakebin/tmux"
   touch "$dir/home/state/.last-watcher-beat"
 
   FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" PATH="$fakebin:$BASE_PATH" \
@@ -2632,11 +2612,6 @@ SH
   printf 'noncanonical evidence\n' > "$dir/home/state/.pr-check-quarantine/!noncanonical.check.abc123"
   chmod 0600 "$dir/home/state/.pr-check-quarantine/invalid.check.abc123" \
     "$dir/home/state/.pr-check-quarantine/!noncanonical.check.abc123"
-  cat > "$fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-exit 0
-SH
-  chmod +x "$fakebin/tmux"
   touch "$dir/home/state/.last-watcher-beat"
 
   FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" PATH="$fakebin:$BASE_PATH" \
@@ -2664,15 +2639,9 @@ SH
     mkdir "$dir/home/state/task-a.$artifact"
     printf 'directory sentinel\n' > "$dir/home/state/task-a.$artifact/sentinel"
     printf 'counterpart sentinel\n' > "$dir/home/state/task-a.$counterpart"
-    cat > "$fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-printf '%s\n' "$*" >> "${FM_FAKE_TMUX_LOG:?}"
-exit 0
-SH
-    chmod +x "$fakebin/tmux"
     touch "$dir/home/state/.last-watcher-beat"
     set +e
-    FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" FM_FAKE_TMUX_LOG="$dir/tmux.log" \
+    FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" FM_FAKE_HERDR_LOG="$dir/herdr.log" \
       PATH="$fakebin:$BASE_PATH" "$TEARDOWN" task-a --force \
       > "$dir/teardown.out" 2> "$dir/teardown.err"
     rc=$?
@@ -2683,7 +2652,7 @@ SH
       || fail "teardown changed the directory-shaped $artifact"
     [ "$(cat "$dir/home/state/task-a.$counterpart")" = 'counterpart sentinel' ] \
       || fail "teardown removed the counterpart before $artifact refusal"
-    grep -F 'kill-window' "$dir/tmux.log" >/dev/null 2>&1 \
+    grep -F 'pane close' "$dir/herdr.log" >/dev/null 2>&1 \
       && fail "teardown killed the endpoint before $artifact refusal"
   done
 
@@ -2703,11 +2672,6 @@ SH
       printf 'external task artifact\n' > "$LINK_TARGET/task-a.check.protected"
       chmod 0640 "$LINK_TARGET/task-a.check.protected"
     fi
-    cat > "$fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-exit 0
-SH
-    chmod +x "$fakebin/tmux"
     touch "$dir/home/state/.last-watcher-beat"
     set +e
     FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" PATH="$fakebin:$BASE_PATH" \

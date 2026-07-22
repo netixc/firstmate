@@ -68,7 +68,7 @@ Firstmate adds this skill's load instruction to firstmate-repo briefs by hand in
 
 ## Compatibility and enforcement
 
-Before changing shared tracked behavior, review every affected supported primary harness and runtime backend rather than checking only the adapters active in the current fleet.
+Before changing shared tracked behavior, review every affected supported primary harness and Herdr lifecycle path rather than checking only the runtime active in the current fleet.
 Mark an axis not applicable only after inspecting its integration surface, and update the corresponding verification evidence when behavior changes.
 
 For critical safety, routing, startup, and supervision infrastructure, prefer deterministic and idempotent enforcement over relying on agent memory alone.

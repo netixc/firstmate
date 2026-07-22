@@ -66,9 +66,6 @@ _FM_PENDING_REPLY_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/n
 . "$_FM_PENDING_REPLY_LIB_DIR/fm-marker-lib.sh"
 # shellcheck source=bin/fm-backend.sh
 . "$_FM_PENDING_REPLY_LIB_DIR/fm-backend.sh"
-# shellcheck source=bin/fm-tmux-lib.sh
-. "$_FM_PENDING_REPLY_LIB_DIR/fm-tmux-lib.sh"
-
 FM_PENDING_REPLY_SCHEMA='fm-pending-reply.v1'
 FM_PENDING_REPLY_CORR_RE='corr=[A-Fa-f0-9]{16}'
 FM_PENDING_REPLY_GRACE_DEFAULT=120
@@ -573,16 +570,16 @@ fm_pending_reply_fallback_idle_eligible() {  # <record-path>
   [ "$age" -ge "$grace" ]
 }
 
-fm_pending_reply_backend_observation() {  # <backend> <target> [expected-label]
-  local backend=$1 target=$2 expected_label=${3-} native tail40
-  native=$(fm_backend_busy_state "$backend" "$target" 2>/dev/null || printf 'unknown')
+fm_pending_reply_endpoint_observation() {  # <target> [expected-label]
+  local target=$1 expected_label=${2-} native tail40
+  native=$(fm_backend_busy_state "$target" 2>/dev/null || printf 'unknown')
   case "$native" in
     busy|idle) printf '%s' "$native"; return 0 ;;
   esac
-  tail40=$(fm_backend_capture "$backend" "$target" 40 "$expected_label" 2>/dev/null) \
+  tail40=$(fm_backend_capture "$target" 40 "$expected_label" 2>/dev/null) \
     || { printf 'unknown'; return 0; }
   if printf '%s' "$tail40" | grep -v '^[[:space:]]*$' | tail -6 \
-    | grep -qiE "${FM_BUSY_REGEX:-$FM_TMUX_BUSY_REGEX_DEFAULT}"; then
+    | grep -qiE "${FM_BUSY_REGEX:-$FM_BACKEND_BUSY_REGEX_DEFAULT}"; then
     printf 'busy'
   else
     printf 'fallback-idle'
@@ -922,10 +919,10 @@ fm_pending_reply_tick_one() {  # <state-dir> <corr_id> <busy_state> [secondmate-
 }
 
 # Scan every pending record for this parent state. Safe to call every poll.
-# Never scrapes secondmate conversation; uses only parent status, backend busy
+# Never scrapes secondmate conversation; uses only parent status, Herdr busy
 # state, and optional secondmate-home wrong-home path checks.
 fm_pending_reply_tick() {  # <state-dir>
-  local state=$1 dir rec corr task_id phase delivered meta backend target label busy sm_home
+  local state=$1 dir rec corr task_id phase delivered meta target label busy sm_home
   local observation observation_task found i
   local -a observation_tasks=() observation_values=()
   dir=$(fm_pending_reply_dir "$state")
@@ -982,13 +979,11 @@ fm_pending_reply_tick() {  # <state-dir>
       awaiting_report|recovery_sent) ;;
       *) continue ;;
     esac
-    backend=tmux
     target=
     busy=unknown
     sm_home=
     if [ -f "$meta" ]; then
-      backend=$(fm_backend_of_meta "$meta")
-      target=$(fm_backend_target_of_meta "$meta")
+      target=$(fm_backend_target_of_meta "$meta" 2>/dev/null || true)
       sm_home=$(fm_meta_get "$meta" home)
       if [ -n "$target" ]; then
         label="fm-$task_id"
@@ -1002,7 +997,7 @@ fm_pending_reply_tick() {  # <state-dir>
           break
         done
         if [ "$found" = 0 ]; then
-          observation=$(fm_pending_reply_backend_observation "$backend" "$target" "$label")
+          observation=$(fm_pending_reply_endpoint_observation "$target" "$label")
           observation_tasks+=("$task_id")
           observation_values+=("$observation")
         fi

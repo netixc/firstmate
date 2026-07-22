@@ -13,8 +13,7 @@
 #     watcher ownership
 #   - status-tail bounding, default and FM_SESSION_START_STATUS_TAIL override
 #   - orphan status logs whose task meta has already disappeared
-#   - per-task endpoint-liveness lines for a live and a dead recorded target,
-#     tmux and herdr both
+#   - per-task Herdr endpoint-liveness lines for live and dead recorded targets
 #   - composition: the script invokes the real fm-lock.sh/fm-bootstrap.sh/
 #     fm-wake-drain.sh (their real, distinctive output appears verbatim), it
 #     does not reimplement their logic
@@ -53,7 +52,7 @@ new_world() {
 # test deliberately breaks one. Mirrors fm-bootstrap.test.sh's fixture.
 make_fake_toolchain() {
   local fakebin=$1
-  fm_fake_exit0 "$fakebin" tmux node gh-axi chrome-devtools-axi lavish-axi
+  fm_fake_exit0 "$fakebin" herdr jq node gh-axi chrome-devtools-axi lavish-axi
   cat > "$fakebin/gh" <<'SH'
 #!/usr/bin/env bash
 exit 0
@@ -189,31 +188,6 @@ esac
 exit 1
 SH
   chmod +x "$fakebin/ps"
-}
-
-# make_fake_tmux <fakebin> <live-target>: display-message succeeds only for
-# the given "session:window" target - the exact primitive
-# fm_backend_target_exists uses for a tmux endpoint liveness read.
-make_fake_tmux() {
-  local fakebin=$1 live=$2
-  cat > "$fakebin/tmux" <<SH
-#!/usr/bin/env bash
-set -u
-case "\${1:-}" in
-  display-message)
-    target=""
-    prev=""
-    for a in "\$@"; do
-      [ "\$prev" = "-t" ] && target="\$a"
-      prev="\$a"
-    done
-    [ "\$target" = "$live" ] && { printf '%%1\n'; exit 0; }
-    exit 1
-    ;;
-esac
-exit 1
-SH
-  chmod +x "$fakebin/tmux"
 }
 
 # make_fake_herdr <fakebin> <live-pane>: `herdr pane get <pane>` succeeds only
@@ -432,44 +406,22 @@ EOF
   pass "digest sections are ordered diagnostics-first, bulk-context-last"
 }
 
-test_herdr_backend_diagnostics_follow_real_session_start() {
-  local mode rec root home fakebin mask out
-  for mode in configured autodetected; do
-    rec=$(new_world "herdr-$mode")
-    IFS='|' read -r root home fakebin <<EOF
+test_herdr_dependencies_follow_real_session_start() {
+  local rec root home fakebin out
+  rec=$(new_world herdr-dependencies)
+  IFS='|' read -r root home fakebin <<EOF
 $rec
 EOF
-    make_fake_toolchain "$fakebin"
-    make_fake_ps_claude "$fakebin"
-    rm -f "$fakebin/tmux"
-    fm_fake_exit0 "$fakebin" herdr jq
-    printf '%s\n' manual > "$home/config/backlog-backend"
-    mask="$home/mask-tmux.bash"
-    cat > "$mask" <<'SH'
-command() {
-  if [ "${1:-}" = -v ] && [ "${2:-}" = tmux ]; then
-    return 1
-  fi
-  builtin command "$@"
-}
-SH
-    if [ "$mode" = configured ]; then
-      printf '%s\n' herdr > "$home/config/backend"
-      out=$(TMUX='' HERDR_ENV='' BASH_ENV="$mask" run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
-      assert_not_contains "$out" "NOTICE: auto-detected herdr runtime" \
-        "an explicit Herdr home should not be reported as auto-detected"
-    else
-      out=$(TMUX='' HERDR_ENV=1 BASH_ENV="$mask" run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
-      assert_contains "$out" "NOTICE: auto-detected herdr runtime (HERDR_ENV=1)" \
-        "session start did not preserve the Herdr runtime auto-detection fallback"
-    fi
-    assert_contains "$out" "SESSION START - $home" "the real session-start path did not run in the throwaway home"
-    assert_not_contains "$out" "MISSING: tmux" "Herdr session start falsely required masked tmux"
-    assert_not_contains "$out" "MISSING: herdr" "Herdr session start missed its available session CLI"
-    assert_not_contains "$out" "MISSING: jq" "Herdr session start missed its available JSON dependency"
-    assert_not_contains "$out" "MISSING: treehouse" "Herdr session start missed its available worktree provider"
-  done
-  pass "session start: configured and auto-detected Herdr homes never require tmux"
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_claude "$fakebin"
+  printf '%s\n' manual > "$home/config/backlog-backend"
+  out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+  assert_contains "$out" "SESSION START - $home" "the real session-start path did not run in the throwaway home"
+  assert_not_contains "$out" "MISSING: herdr" "session start missed its available Herdr CLI"
+  assert_not_contains "$out" "MISSING: jq" "session start missed Herdr's JSON dependency"
+  assert_not_contains "$out" "MISSING: treehouse" "session start missed its available worktree provider"
+  assert_not_contains "$out" "auto-detected" "session start still advertises removed provider detection"
+  pass "session start follows the unconditional Herdr dependency contract"
 }
 
 # --- status tail bounding -----------------------------------------------------
@@ -482,7 +434,7 @@ $rec
 EOF
   make_fake_toolchain "$fakebin"
   make_fake_ps_claude "$fakebin"
-  make_fake_tmux "$fakebin" "fm-sess:live"
+  make_fake_herdr "$fakebin" live
 
   printf 'window=fm-sess:live\nkind=ship\n' > "$home/state/task-a.meta"
   printf 'working: step 1\nworking: step 2\nworking: step 3\nworking: step 4\nworking: step 5\nworking: step 6\nworking: step 7\n' \
@@ -533,27 +485,7 @@ EOF
   pass "orphan status logs are printed once with bounded tails"
 }
 
-# --- endpoint liveness: tmux and herdr, live and dead ------------------------
-
-test_endpoint_liveness_tmux() {
-  local rec root home fakebin out
-  rec=$(new_world liveness-tmux)
-  IFS='|' read -r root home fakebin <<EOF
-$rec
-EOF
-  make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
-  make_fake_tmux "$fakebin" "fm-sess:live-window"
-
-  printf 'window=fm-sess:live-window\nkind=ship\n' > "$home/state/task-live.meta"
-  printf 'window=fm-sess:dead-window\nkind=ship\n' > "$home/state/task-dead.meta"
-
-  out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
-  assert_contains "$out" "endpoint: alive (backend=tmux window=fm-sess:live-window)" "live tmux endpoint not reported alive"
-  assert_contains "$out" "endpoint: dead (backend=tmux window=fm-sess:dead-window)" "dead tmux endpoint not reported dead"
-
-  pass "tmux endpoint liveness is reported per task: alive for a live window, dead for a gone one"
-}
+# --- Herdr endpoint liveness: live and dead ---------------------------------
 
 test_endpoint_liveness_herdr() {
   local rec root home fakebin out
@@ -565,14 +497,14 @@ EOF
   make_fake_ps_claude "$fakebin"
   make_fake_herdr "$fakebin" "p-live"
 
-  printf 'window=sess:p-live\nkind=ship\nbackend=herdr\n' > "$home/state/task-live.meta"
-  printf 'window=sess:p-dead\nkind=ship\nbackend=herdr\n' > "$home/state/task-dead.meta"
+  printf 'window=sess:p-live\nkind=ship\n' > "$home/state/task-live.meta"
+  printf 'window=sess:p-dead\nkind=ship\n' > "$home/state/task-dead.meta"
 
   out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
-  assert_contains "$out" "endpoint: alive (backend=herdr window=sess:p-live)" "live herdr endpoint not reported alive"
-  assert_contains "$out" "endpoint: dead (backend=herdr window=sess:p-dead)" "dead herdr endpoint not reported dead"
+  assert_contains "$out" "endpoint: alive (Herdr window=sess:p-live)" "live Herdr endpoint not reported alive"
+  assert_contains "$out" "endpoint: dead (Herdr window=sess:p-dead)" "dead Herdr endpoint not reported dead"
 
-  pass "herdr endpoint liveness is reported per task: alive for a live pane, dead for a gone one"
+  pass "Herdr endpoint liveness is reported per task: alive for a live pane, dead for a gone one"
 }
 
 # --- composition: real scripts run, not reimplemented ------------------------
@@ -906,10 +838,9 @@ EOF
 test_context_digest_absent_empty_present
 test_lock_refusal_read_only_path
 test_output_ordering_diagnostics_lead
-test_herdr_backend_diagnostics_follow_real_session_start
+test_herdr_dependencies_follow_real_session_start
 test_status_tail_bounding
 test_orphan_status_logs_are_printed
-test_endpoint_liveness_tmux
 test_endpoint_liveness_herdr
 test_composition_invokes_real_scripts
 test_backlog_compact_tasks_axi_omits_bodies_and_keeps_metadata

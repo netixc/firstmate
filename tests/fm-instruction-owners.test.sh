@@ -103,7 +103,7 @@ test_generic_effort_fallback_respects_precedence() {
 }
 
 test_shared_authoring_requirements_are_owned() {
-  assert_grep "review every affected supported primary harness and runtime backend" "$CODING" \
+  assert_grep "review every affected supported primary harness and Herdr lifecycle path" "$CODING" \
     "coding guidance lost the supported compatibility matrix review"
   assert_grep "prefer deterministic and idempotent enforcement over relying on agent memory alone" "$CODING" \
     "coding guidance lost deterministic idempotent enforcement"
@@ -163,8 +163,8 @@ test_state_startup_and_ordinary_recovery_placement() {
     "stuck-crewmate-recovery lacks the dead ordinary direct-report procedure"
   assert_grep "treehouse status" "$RECOVERY" \
     "ordinary recovery lost treehouse inventory inspection"
-  assert_grep "recorded \`orca_worktree_id=\` and \`terminal=\`" "$RECOVERY" \
-    "ordinary recovery lost Orca inventory inspection"
+  assert_grep "recorded Herdr task's isolated worktree" "$RECOVERY" \
+    "ordinary recovery lost Herdr worktree inventory inspection"
   assert_grep "session-start digest reports an ordinary direct report's endpoint dead or its metadata has no window" "$AGENTS" \
     "AGENTS.md does not trigger ordinary dead-report recovery"
   pass "state, startup, and ordinary recovery have focused owners and triggers"
@@ -175,7 +175,7 @@ test_compressed_agents_owner_map() {
     "AGENTS.md lost the state-layout owner pointer"
   assert_grep 'header is the single owner of composed commands, ordering, and digest contents' "$AGENTS" \
     "AGENTS.md lost the session-start owner pointer"
-  assert_grep '`docs/configuration.md` owns dispatch-profile and runtime-backend schemas' "$AGENTS" \
+  assert_grep '`docs/configuration.md` owns dispatch-profile and Herdr endpoint schemas' "$AGENTS" \
     "AGENTS.md lost the dispatch-schema owner pointer"
   assert_grep 'That skill owns registry syntax, delivery-mode selection' "$AGENTS" \
     "AGENTS.md lost the project-management owner pointer"

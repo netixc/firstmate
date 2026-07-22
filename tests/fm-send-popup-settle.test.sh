@@ -6,8 +6,8 @@
 # for a leading `$<skill>` invocation (e.g. `$no-mistakes`). Submitting before the
 # popup settles lets it swallow the Enter, so the line never submits. fm-send
 # absorbs this by pausing `settle` seconds AFTER typing and BEFORE the (retried)
-# Enter - the first sleep fm_tmux_submit_core makes. These tests pin the
-# settle-SELECTION matrix hermetically (stubbed tmux + sleep, no real agent):
+# Enter - the first sleep the Herdr submit primitive makes. These tests pin the
+# settle-selection matrix hermetically with stubbed Herdr and sleep commands:
 #
 #   /...            -> 1.2  (universal; `/` only starts a command, never plain text)
 #   $... to codex   -> 1.2  (scoped: codex opens a `$<skill>` popup)
@@ -16,11 +16,11 @@
 #                            -> non-codex safe default)
 #   plain text      -> 0.3  (fast path)
 #
-# The popup-settle is the FIRST sleep recorded: fm_tmux_submit_core types the text,
+# The popup-settle is the FIRST sleep recorded: the Herdr primitive types the text,
 # then `sleep "$settle"`, then the Enter-retry loop (sleep 0.4 each) and finally
 # fm-send's own post-submit FM_SEND_SETTLE pause. So tail-vs-head matters: this
 # suite asserts on the HEAD sleep, distinct from fm-send-settle.test.sh which pins
-# the TAIL (post-submit) pause. The retried Enter in fm_tmux_submit_core remains the
+# the TAIL (post-submit) pause. The retried Enter remains the
 # real safety net; this settle is only the optimization that lets the popup clear so
 # the first Enter lands.
 #
@@ -38,26 +38,23 @@ SEND="$ROOT/bin/fm-send.sh"
 
 TMP_ROOT=$(fm_test_tmproot fm-send-popup-settle)
 
-# Same stub shape as fm-send-settle.test.sh: a fake tmux that drives the submit
-# path to a clean "empty" verdict on the first Enter, and a fake sleep that records
+# A fake Herdr CLI drives the submit path to a clean "empty" verdict on the first Enter,
+# and a fake sleep records
 # every requested duration (one per line) into FM_SLEEP_LOG instead of sleeping.
 make_stubs() {  # <dir> -> echoes fakebin dir
   local dir=$1 fb="$1/fakebin"
   mkdir -p "$fb"
-  cat > "$fb/tmux" <<'SH'
+  cat > "$fb/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
-case "${1:-}" in
-  send-keys) exit 0 ;;
-  display-message)
-    for a in "$@"; do case "$a" in *cursor_y*) printf '0\n'; exit 0 ;; esac; done
-    printf 'fakepane\n'; exit 0 ;;
-  capture-pane) printf '\xe2\x94\x82 \xe2\x94\x82\n'; exit 0 ;;
-  list-windows) exit 0 ;;
+case "${1:-} ${2:-}" in
+  "status --json") printf '{"client":{"protocol":16},"server":{"running":true}}\n' ;;
+  "agent get") printf '{"result":{"agent":{"agent_status":"working"}}}\n' ;;
+  "pane read") printf '\xe2\x94\x82 \xe2\x94\x82\n' ;;
 esac
 exit 0
 SH
-  chmod +x "$fb/tmux"
+  chmod +x "$fb/herdr"
   cat > "$fb/sleep" <<'SH'
 #!/usr/bin/env bash
 printf '%s\n' "${1:-}" >> "$FM_SLEEP_LOG"
@@ -69,7 +66,7 @@ SH
 
 # first_settle <expected> <label> <harness|--explicit> <message> [selector-form]: build a fresh
 # home, send <message> to a target whose meta records <harness> (or to a bare
-# session:window with NO meta when --explicit), and assert the FIRST recorded sleep
+# session:pane with NO meta when --explicit), and assert the FIRST recorded sleep
 # (the popup-settle) equals <expected>. FM_SEND_SETTLE=0 strips the trailing
 # post-submit pause so the log holds only the popup-settle plus the 0.4 Enter wait,
 # keeping the head assertion crisp. FM_ROOT_OVERRIDE points at a non-repo dir so
@@ -78,7 +75,7 @@ SH
 first_settle() {  # <expected> <label> <harness|--explicit> <message> [selector-form]
   local expected=$1 label=$2 harness=$3 msg=$4
   local selector_form=${5:-legacy}
-  local dir fb log home target rc first meta_id
+  local dir fb log home target rc first meta_id err
   dir="$TMP_ROOT/case-$RANDOM"; mkdir -p "$dir/state"
   fb=$(make_stubs "$dir"); log="$dir/sleep.log"; home="$dir"
   if [ "$harness" = --explicit ]; then
@@ -100,10 +97,11 @@ first_settle() {  # <expected> <label> <harness|--explicit> <message> [selector-
     fm_write_meta "$home/state/$meta_id.meta" "window=sess:win" "harness=$harness"
   fi
   : > "$log"
+  err="$dir/send.err"
   env FM_SEND_SETTLE=0 PATH="$fb:$PATH" \
     FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SLEEP_LOG="$log" \
-    "$SEND" "$target" "$msg" 2>/dev/null; rc=$?
-  expect_code 0 "$rc" "$label: send should succeed"
+    "$SEND" "$target" "$msg" 2>"$err"; rc=$?
+  [ "$rc" -eq 0 ] || fail "$label: send should succeed: $(cat "$err")"
   first=$(head -1 "$log")
   [ "$first" = "$expected" ] || fail "$label: expected popup-settle $expected, got '$first'"$'\n'"--- sleeps ---"$'\n'"$(cat "$log")"
   pass "fm-send popup-settle: $label -> ${expected}s"

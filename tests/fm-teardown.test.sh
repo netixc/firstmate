@@ -63,7 +63,7 @@ export REAL_GIT_FOR_TEST
 
 # Build a fresh sandbox for one test case. Sets up:
 #   $CASE/state/        - firstmate state dir (with a fresh watcher beacon)
-#   $CASE/fakebin/      - mocks for treehouse, tmux (PATH-prepended by caller)
+#   $CASE/fakebin/      - mocks for Treehouse and Herdr (PATH-prepended by caller)
 #   $CASE/origin.git/   - bare upstream repo (so the project clone has origin)
 #   $CASE/project/      - clone of origin; acts as the firstmate project dir
 #   $CASE/wt/           - a worktree of the project (the task worktree)
@@ -81,9 +81,11 @@ make_case() {
 # `treehouse return --force <wt>`: succeed silently.
 exit 0
 SH
-  cat > "$fakebin/tmux" <<'SH'
+  cat > "$fakebin/herdr" <<'SH'
 #!/usr/bin/env bash
-# tmux kill-window etc.: succeed silently.
+case " $* " in
+  *' status --json '*) printf '%s\n' '{"server":{"running":true}}' ;;
+esac
 exit 0
 SH
   # Default gh-axi mock: no PR is associated with the branch, and viewing any PR
@@ -105,7 +107,7 @@ case "${1:-} ${2:-}" in
 esac
 exit 0
 SH
-  chmod +x "$fakebin/treehouse" "$fakebin/tmux" "$fakebin/gh-axi" "$fakebin/gh"
+  chmod +x "$fakebin/treehouse" "$fakebin/herdr" "$fakebin/gh-axi" "$fakebin/gh"
 
   # Bare origin so the clone has an `origin` remote and origin/HEAD.
   git init -q --bare "$case_dir/origin.git"
@@ -155,7 +157,7 @@ SH
 write_meta() {
   local case_dir=$1 mode=$2 kind=$3
   fm_write_meta "$case_dir/state/task-x1.meta" \
-    "window=fm-task-x1" \
+    "window=default:w1:p1" \
     "worktree=$case_dir/wt" \
     "project=$case_dir/project" \
     "kind=$kind" \
@@ -1248,9 +1250,11 @@ test_herdr_teardown_clears_escalation_marker() {
   write_meta "$case_dir" local-only ship
   sed -i.bak 's/^window=.*/window=default:wG:pQ/' "$case_dir/state/task-x1.meta"
   rm -f "$case_dir/state/task-x1.meta.bak"
-  printf '%s\n' 'backend=herdr' >> "$case_dir/state/task-x1.meta"
   cat > "$case_dir/fakebin/herdr" <<'SH'
 #!/usr/bin/env bash
+case " $* " in
+  *' status --json '*) printf '%s\n' '{"server":{"running":true}}' ;;
+esac
 exit 0
 SH
   chmod +x "$case_dir/fakebin/herdr"
@@ -1268,7 +1272,6 @@ configure_herdr_projection_teardown_case() {  # <case-dir>
   sed -i.bak 's/^window=.*/window=fmtest:w1:p2/' "$case_dir/state/task-x1.meta"
   rm -f "$case_dir/state/task-x1.meta.bak"
   printf '%s\n' \
-    'backend=herdr' \
     'herdr_session=fmtest' \
     'herdr_workspace_id=w1' \
     'herdr_tab_id=w1:t2' \

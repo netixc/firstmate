@@ -2,7 +2,7 @@
 # Print the tail of a crewmate endpoint (bounded, for cheap diagnosis).
 # Usage: fm-peek.sh <target> [lines=40]
 #   <target> may be an exact task id, a legacy fm-<id> task label resolved
-#   through this home's state/<id>.meta, or an explicit backend target.
+#   through this home's state/<id>.meta, or an explicit Herdr target.
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -19,7 +19,6 @@ RAW_TARGET=$1
 T=$(fm_backend_resolve_selector "$RAW_TARGET" "$STATE")
 N=${2:-40}
 
-BACKEND=$(fm_backend_of_selector "$RAW_TARGET" "$T" "$STATE")
 EXPECTED_LABEL=$(fm_backend_expected_label_of_selector "$RAW_TARGET" "$STATE")
 
-fm_backend_capture "$BACKEND" "$T" "$N" "$EXPECTED_LABEL"
+fm_backend_capture "$T" "$N" "$EXPECTED_LABEL"

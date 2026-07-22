@@ -92,7 +92,7 @@ jobs:
           path: ${{ runner.temp }}/fm-test/fm-test-timing-portable-parallel-2.json
           if-no-files-found: warn
 
-  # Required portable serial remainder: watcher, lock, AFK, tmux, daemon,
+  # Required portable serial remainder: watcher, lock, AFK, daemon,
   # ambiguous, and other stateful tests. Real Herdr stays in tests-herdr.
   tests-portable-serial:
     name: Behavior portable serial
@@ -110,14 +110,6 @@ jobs:
           set -eu
           bin/fm-install-shellcheck.sh "$RUNNER_TEMP/bin"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Require tmux for e2e tests
-        run: |
-          set -eu
-          command -v tmux >/dev/null || {
-            echo "::error::tmux is required for real afk injection e2e coverage"
-            exit 1
-          }
-          tmux -V
       - name: Install tasks-axi for backlog-handoff delegation
         run: |
           set -eu
@@ -169,7 +161,7 @@ jobs:
         run: |
           set -eu
           # Several real-herdr-gated E2E scripts require treehouse for spawn
-          # worktree acquisition (presentation, workspace-per-home, autodetect).
+          # worktree acquisition (presentation and workspace-per-home).
           bin/fm-install-treehouse.sh "$RUNNER_TEMP/bin"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Assert Herdr pin and protocol floor

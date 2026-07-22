@@ -2,7 +2,7 @@
 # tests/fm-backend-herdr-prune-safety-e2e.test.sh - isolated real-herdr
 # regression test for the 2026-07-02 self-kill incident and its fix
 # (bin/backends/herdr.sh's created-vs-adopted default-tab-prune gate; see
-# docs/herdr-backend.md "Default-tab prune" / the incident writeup there).
+# docs/herdr-backend.md "Container model and durable routing").
 #
 # Reproduces the exact collision shape against a private, throwaway
 # HERDR_SESSION (never the captain's default): a startup-workspace-shaped
@@ -45,7 +45,6 @@ fm_herdr_lab_prepare "$SESSION" || fail "could not prepare isolated Herdr lab se
 
 # shellcheck source=bin/fm-backend.sh
 . "$ROOT/bin/fm-backend.sh"
-fm_backend_source herdr || fail "fm_backend_source herdr failed"
 
 fm_backend_herdr_version_check || fail "version_check failed against the real installed herdr"
 

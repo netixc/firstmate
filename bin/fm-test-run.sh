@@ -125,7 +125,7 @@ family_for_basename() {
     fm-install-herdr.test.sh|fm-nm-test-contract.test.sh|fm-no-mistakes-ownership.test.sh|\
     fm-pi-primary-types.test.sh|\
     fm-send-popup-settle.test.sh|fm-send-settle.test.sh|fm-stow-contract.test.sh|\
-    fm-supervision-instructions.test.sh|fm-tmux-submit-busy.test.sh|fm-transition-lib.test.sh|\
+    fm-supervision-instructions.test.sh|fm-transition-lib.test.sh|\
     fm-test-run.test.sh|fm-test-isolation-proof.test.sh)
       printf '%s\n' pure-contract-unit
       ;;
@@ -135,7 +135,7 @@ family_for_basename() {
     fm-watcher-lock.test.sh)
       printf '%s\n' watcher-wake-lock
       ;;
-    fm-afk-inject-herdr-e2e.test.sh|fm-afk-launch.test.sh|fm-backend-autodetect-smoke.test.sh|\
+    fm-afk-inject-herdr-e2e.test.sh|fm-afk-launch.test.sh|\
     fm-backend-herdr-eventwait-smoke.test.sh|fm-backend-herdr-presentation-e2e.test.sh|\
     fm-backend-herdr-prune-safety-e2e.test.sh|fm-backend-herdr-respawn-idem-e2e.test.sh|\
     fm-backend-herdr-smoke.test.sh|fm-backend-herdr-workspace-per-home-e2e.test.sh)
@@ -157,29 +157,20 @@ family_for_basename() {
     fm-send-secondmate-marker-herdr-e2e.test.sh)
       printf '%s\n' live-harness-optin
       ;;
-    fm-backend-herdr.test.sh|fm-backend-tmux-smoke.test.sh|fm-backend.test.sh|\
+    fm-backend-herdr.test.sh|fm-backend.test.sh|\
     fm-send-strict.test.sh|fm-spawn-batch.test.sh|fm-spawn-dispatch-profile.test.sh|\
     fm-spawn-worktree-settle.test.sh)
-      printf '%s\n' backend-dispatch
+      printf '%s\n' herdr-session
       ;;
     fm-pr-check-security.test.sh|fm-pr-merge.test.sh|fm-review-diff.test.sh|\
     fm-teardown.test.sh|fm-x-mode.test.sh)
       printf '%s\n' pr-forge
       ;;
-    fm-afk-inject-e2e.test.sh|fm-afk-return.test.sh)
+    fm-afk-return.test.sh)
       printf '%s\n' afk
       ;;
     fm-bearings-snapshot.test.sh|fm-fleet-snapshot-view.test.sh)
       printf '%s\n' snapshot-bearings
-      ;;
-    fm-backend-cmux.test.sh|fm-backend-cmux-smoke.test.sh)
-      printf '%s\n' cmux
-      ;;
-    fm-backend-zellij.test.sh|fm-backend-zellij-smoke.test.sh)
-      printf '%s\n' zellij
-      ;;
-    fm-backend-orca.test.sh)
-      printf '%s\n' orca
       ;;
     *)
       printf '%s\n' unclassified
@@ -191,7 +182,6 @@ expected_gate_skip_for_family() {
   case "$1" in
     real-herdr-gated) printf '%s\n' herdr ;;
     live-harness-optin) printf '%s\n' optin-env ;;
-    cmux|zellij|orca) printf '%s\n' optional-binary ;;
     snapshot-bearings) printf '%s\n' optional-binary ;;
     *) printf '%s\n' none ;;
   esac
@@ -205,13 +195,10 @@ real-herdr-gated
 secondmate
 session-bootstrap
 live-harness-optin
-backend-dispatch
+herdr-session
 pr-forge
 afk
 snapshot-bearings
-cmux
-zellij
-orca
 unclassified
 EOF
 }
@@ -257,7 +244,6 @@ tests/fm-spawn-batch.test.sh
 tests/fm-stow-contract.test.sh
 tests/fm-supervision-instructions.test.sh
 tests/fm-test-run.test.sh
-tests/fm-tmux-submit-busy.test.sh
 tests/fm-transition-lib.test.sh
 tests/fm-x-mode.test.sh
 EOF
@@ -297,7 +283,6 @@ tests/fm-crew-state.test.sh
 tests/fm-grok-harness.test.sh
 tests/fm-spawn-batch.test.sh
 tests/fm-send-strict.test.sh
-tests/fm-tmux-submit-busy.test.sh
 tests/fm-composer-ghost.test.sh
 tests/fm-send-settle.test.sh
 tests/fm-supervision-instructions.test.sh
@@ -343,7 +328,7 @@ select_lane() {
       ;;
     portable-serial)
       # Everything in the complete suite that is not proven-isolated and not
-      # real-herdr-gated. Watcher/lock/AFK/tmux/daemon/ambiguous/stateful work
+      # real-herdr-gated. Watcher/lock/AFK/daemon/ambiguous/stateful work
       # stays here, serial only.
       while IFS= read -r s; do
         [ -n "$s" ] || continue
@@ -604,7 +589,7 @@ families_for_changed_path() {
       ;;
     tests/fm-backend-herdr-eventwait.test.py)
       printf '%s\n' real-herdr-gated
-      printf '%s\n' backend-dispatch
+      printf '%s\n' herdr-session
       ;;
     tests/*.test.sh)
       # A single test file change selects only that script via basename family
@@ -616,23 +601,11 @@ families_for_changed_path() {
       ;;
     bin/backends/herdr*|bin/fm-herdr-lab.sh|tests/herdr-test-safety.sh)
       printf '%s\n' real-herdr-gated
-      printf '%s\n' backend-dispatch
+      printf '%s\n' herdr-session
       printf '%s\n' pure-contract-unit
       ;;
-    bin/backends/zellij*|tests/zellij-test-safety.sh)
-      printf '%s\n' zellij
-      printf '%s\n' backend-dispatch
-      ;;
-    bin/backends/cmux*|tests/cmux-test-safety.sh)
-      printf '%s\n' cmux
-      printf '%s\n' backend-dispatch
-      ;;
-    bin/backends/orca*|bin/backends/tmux.sh)
-      printf '%s\n' backend-dispatch
-      printf '%s\n' orca
-      ;;
-    bin/fm-backend.sh|bin/fm-backend-hometag-lib.sh)
-      printf '%s\n' backend-dispatch
+    bin/fm-backend.sh)
+      printf '%s\n' herdr-session
       printf '%s\n' real-herdr-gated
       ;;
     bin/fm-watch*|bin/fm-wake*|\
@@ -664,7 +637,7 @@ families_for_changed_path() {
       ;;
     bin/fm-spawn.sh|bin/fm-send.sh|bin/fm-dispatch-select.sh|bin/fm-harness.sh|\
     bin/fm-peek.sh|bin/fm-composer*)
-      printf '%s\n' backend-dispatch
+      printf '%s\n' herdr-session
       printf '%s\n' pure-contract-unit
       ;;
     bin/fm-bearings-snapshot.sh|bin/fm-fleet-snapshot.sh|bin/fm-fleet-view.sh)
@@ -679,7 +652,7 @@ families_for_changed_path() {
     bin/fm-lint.sh|bin/fm-install-shellcheck.sh|\
     bin/fm-brief.sh|bin/fm-ensure-agents-md.sh|bin/fm-crew-state.sh|\
     bin/fm-decision-hold.sh|bin/fm-supervision*|bin/fm-transition-lib.sh|\
-    bin/fm-tmux-lib.sh|bin/fm-marker-lib.sh|bin/fm-tasks-axi-lib.sh|\
+    bin/fm-marker-lib.sh|bin/fm-tasks-axi-lib.sh|\
     bin/fm-primary-scope-lib.sh|bin/fm-project-mode.sh|bin/fm-promote.sh|\
     bin/fm-ff-lib.sh|bin/fm-gotmp*|bin/*pretool*)
       printf '%s\n' pure-contract-unit
@@ -1334,7 +1307,7 @@ else
       export TMPDIR="$work/tmp"
       export TMP="$work/tmp"
       unset FM_HOME FM_STATE_OVERRIDE FM_DATA_OVERRIDE FM_ROOT_OVERRIDE \
-        FM_PROJECTS_OVERRIDE FM_CONFIG_OVERRIDE FM_BACKEND 2>/dev/null || true
+        FM_PROJECTS_OVERRIDE FM_CONFIG_OVERRIDE 2>/dev/null || true
       cd "$ROOT" || exit 1
       begin_ms=$(now_ms)
       bash "$script" >"$work/output" 2>&1
