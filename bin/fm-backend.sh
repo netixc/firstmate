@@ -42,6 +42,14 @@ fm_backend_refuse_legacy_setting() {  # [config-dir]
   return 1
 }
 
+FM_BACKEND_LOAD_MODE=${1:-operational}
+case "$FM_BACKEND_LOAD_MODE" in
+  operational) fm_backend_refuse_legacy_setting || exit 1 ;;
+  diagnostic|afk-recovery) ;;
+  *) echo "error: invalid backend load mode" >&2; exit 2 ;;
+esac
+unset FM_BACKEND_LOAD_MODE
+
 # Herdr's CLI and JSON parser provide the endpoint, while Treehouse provides
 # isolated task worktrees.
 fm_backend_required_tools() {

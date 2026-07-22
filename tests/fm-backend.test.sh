@@ -6,7 +6,7 @@ set -u
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 # shellcheck source=bin/fm-backend.sh
-. "$ROOT/bin/fm-backend.sh"
+. "$ROOT/bin/fm-backend.sh" operational
 
 TMP_ROOT=$(fm_test_tmproot fm-backend-tests)
 STATE="$TMP_ROOT/state"
@@ -109,6 +109,33 @@ test_wrappers_call_herdr_implementation_directly() {
   pass "shared endpoint wrappers call the Herdr implementation directly"
 }
 
+test_operational_load_rejects_legacy_settings() {
+  local home="$TMP_ROOT/legacy-settings" out status
+  mkdir -p "$home/config" "$home/state"
+
+  out=$(FM_HOME="$home" FM_BACKEND=tmux bash -c '. "$1" operational; printf reached' \
+    _ "$ROOT/bin/fm-backend.sh" 2>&1)
+  status=$?
+  [ "$status" -ne 0 ] || fail "operational backend load accepted FM_BACKEND"
+  [ "$out" = "error: FM_BACKEND is obsolete; unset it because Herdr is Firstmate's only session provider" ] \
+    || fail "operational FM_BACKEND refusal was not immediate: $out"
+
+  printf '%s\n' zellij > "$home/config/backend"
+  out=$(FM_HOME="$home" bash -c '. "$1" operational; printf reached' \
+    _ "$ROOT/bin/fm-backend.sh" 2>&1)
+  status=$?
+  [ "$status" -ne 0 ] || fail "operational backend load accepted config/backend"
+  [ "$out" = "error: config/backend is obsolete; remove it because Herdr is Firstmate's only session provider" ] \
+    || fail "operational config/backend refusal was not immediate: $out"
+
+  out=$(FM_HOME="$home" FM_BACKEND=tmux "$ROOT/bin/fm-send.sh" missing hello 2>&1)
+  status=$?
+  [ "$status" -ne 0 ] || fail "fm-send accepted FM_BACKEND"
+  [ "$out" = "error: FM_BACKEND is obsolete; unset it because Herdr is Firstmate's only session provider" ] \
+    || fail "fm-send did work before the shared refusal: $out"
+  pass "operational backend loading rejects legacy provider settings"
+}
+
 test_required_tools_are_herdr_only
 test_metadata_without_provider_resolves
 test_legacy_herdr_metadata_is_accepted
@@ -117,3 +144,4 @@ test_explicit_target_is_preserved
 test_missing_task_metadata_fails_closed
 test_bare_selector_uses_herdr_resolution
 test_wrappers_call_herdr_implementation_directly
+test_operational_load_rejects_legacy_settings

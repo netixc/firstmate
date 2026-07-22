@@ -161,6 +161,37 @@ test_native_lifecycle_uses_no_terminal() {
   pass "harness-native supervision shares lifecycle state without manufacturing a terminal"
 }
 
+test_legacy_setting_allows_only_bounded_recovery() {
+  local home="$TMP_ROOT/legacy-setting-recovery" out status
+  mkdir -p "$home/config"
+  printf '%s\n' tmux > "$home/config/backend"
+
+  out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$LAUNCH" start-native 2>&1)
+  status=$?
+  [ "$status" -ne 0 ] || fail "legacy setting allowed away-mode start"
+  assert_contains "$out" "config/backend is obsolete" "away-mode start omitted migration guidance"
+  assert_absent "$home/state" "refused away-mode start created lifecycle state"
+
+  mkdir -p "$home/state"
+  : > "$home/state/.afk"
+  printf '%s\n' $'none\t-\tnative' > "$home/state/.afk-daemon-terminal"
+  FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$LAUNCH" stop >/dev/null 2>&1 \
+    || fail "legacy native away record could not be stopped under an obsolete setting"
+  assert_absent "$home/state/.afk" "bounded legacy recovery retained away mode"
+  assert_absent "$home/state/.afk-daemon-terminal" "bounded legacy recovery retained its record"
+
+  : > "$home/state/.afk"
+  printf '%s\n' $'tmux\tforeign-session\towned' > "$home/state/.afk-daemon-terminal"
+  out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$LAUNCH" reconcile 2>&1)
+  status=$?
+  [ "$status" -ne 0 ] || fail "foreign away record was accepted by recovery"
+  assert_contains "$out" "uses removed session provider 'tmux'" \
+    "foreign away recovery omitted migration guidance"
+  [ -e "$home/state/.afk" ] || fail "foreign away recovery cleared away mode"
+  [ -e "$home/state/.afk-daemon-terminal" ] || fail "foreign away recovery removed its record"
+  pass "obsolete settings permit only valid Herdr/native away recovery"
+}
+
 test_stop_signals_daemon_before_clearing_afk() {
   local home="$TMP_ROOT/stop-order" marker="$TMP_ROOT/afk-at-term" pid lock identity
   mkdir -p "$home/state"
@@ -264,6 +295,7 @@ test_exact_close_and_absence_verification
 test_create_publishes_exact_ids_before_run
 test_failed_entry_rolls_back_away_state
 test_native_lifecycle_uses_no_terminal
+test_legacy_setting_allows_only_bounded_recovery
 test_stop_signals_daemon_before_clearing_afk
 test_reused_pid_is_never_signaled
 test_live_herdr_topology

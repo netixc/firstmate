@@ -51,7 +51,10 @@ FM_AFK_LAUNCH_LOCK="$FM_AFK_LAUNCH_STATE/.afk-launch.lock"
 FM_AFK_LAUNCH_WS_LABEL="firstmate-afk-daemon"
 
 # shellcheck source=bin/fm-backend.sh
-. "$FM_AFK_LAUNCH_DIR/fm-backend.sh"
+case "${1:-start}" in
+  stop|reconcile) . "$FM_AFK_LAUNCH_DIR/fm-backend.sh" afk-recovery ;;
+  *) . "$FM_AFK_LAUNCH_DIR/fm-backend.sh" operational ;;
+esac
 # shellcheck source=bin/fm-supervisor-target-lib.sh
 . "$FM_AFK_LAUNCH_DIR/fm-supervisor-target-lib.sh"
 # fm-afk-start.sh provides the daemon-lock liveness helpers and
