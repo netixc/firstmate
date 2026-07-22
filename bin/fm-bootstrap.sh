@@ -449,8 +449,11 @@ secondmate_liveness_sweep() {
     window=$(fm_meta_get "$meta" window)
     [ -n "$window" ] || continue
     harness=$(fm_meta_get "$meta" harness)
-    target=$(fm_backend_target_of_meta "$meta" 2>/dev/null || true)
-    [ -n "$target" ] || target="$window"
+    if ! target=$(fm_backend_target_of_meta "$meta" 2>&1); then
+      target=${target#error: }
+      echo "SECONDMATE_LIVENESS: secondmate $id: skipped: $target"
+      continue
+    fi
     verdict=$(fm_backend_agent_alive "$target" 2>/dev/null) || verdict="unknown"
     case "$harness" in
       claude|codex|opencode|pi|grok) ;;
@@ -813,8 +816,8 @@ if command -v tasks-axi >/dev/null 2>&1 && ! fm_tasks_axi_compatible; then
   echo "MISSING: tasks-axi (install: $(install_cmd tasks-axi))"
 fi
 gh auth status >/dev/null 2>&1 || echo "NEEDS_GH_AUTH"
-if [ -e "$CONFIG/backend" ] || [ -L "$CONFIG/backend" ]; then
-  echo "BACKEND_INVALID: config/backend is obsolete; remove it because Herdr is Firstmate's only session provider"
+if legacy_setting=$(fm_backend_legacy_setting_reason "$CONFIG"); then
+  echo "BACKEND_INVALID: $legacy_setting"
 fi
 # Worktree-tangle check: the firstmate primary checkout (FM_ROOT) must sit on its
 # default branch, not a feature branch (see fm-tangle-lib.sh). Scoped to the

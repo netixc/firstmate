@@ -22,6 +22,26 @@ FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 # shellcheck disable=SC2034 # Sourced consumers read this shared default.
 FM_BACKEND_BUSY_REGEX_DEFAULT='esc (to )?interrupt|Working\.\.\.|Ctrl\+c:cancel'
 
+fm_backend_legacy_setting_reason() {  # [config-dir]
+  local config=${1:-$FM_HOME/config}
+  if [ "${FM_BACKEND+x}" = x ]; then
+    printf '%s' "FM_BACKEND is obsolete; unset it because Herdr is Firstmate's only session provider"
+    return 0
+  fi
+  if [ -e "$config/backend" ] || [ -L "$config/backend" ]; then
+    printf '%s' "config/backend is obsolete; remove it because Herdr is Firstmate's only session provider"
+    return 0
+  fi
+  return 1
+}
+
+fm_backend_refuse_legacy_setting() {  # [config-dir]
+  local reason
+  reason=$(fm_backend_legacy_setting_reason "${1:-$FM_HOME/config}") || return 0
+  echo "error: $reason" >&2
+  return 1
+}
+
 # Herdr's CLI and JSON parser provide the endpoint, while Treehouse provides
 # isolated task worktrees.
 fm_backend_required_tools() {

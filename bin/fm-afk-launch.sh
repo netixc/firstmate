@@ -147,14 +147,39 @@ fm_afk_launch_flag_write() {
 # The workspace id documents the non-visible container but never authorizes a
 # broad workspace close. Returns 1 when no record exists.
 fm_afk_launch_record_read() {
-  local record
+  local field_count legacy_provider record
   FM_AFK_REC_TARGET=""; FM_AFK_REC_WORKSPACE=""
   [ -f "$FM_AFK_LAUNCH_RECORD" ] || return 1
   record=$(cat "$FM_AFK_LAUNCH_RECORD" 2>/dev/null) || record=""
-  IFS=$'\t' read -r FM_AFK_REC_TARGET FM_AFK_REC_WORKSPACE \
-    < "$FM_AFK_LAUNCH_RECORD" || true
-  if ! printf '%s\n' "$record" | awk -F '\t' 'NF != 2 { bad=1 } END { exit !(NR == 1 && !bad) }' \
-    || [ -z "$FM_AFK_REC_TARGET" ] || [ -z "$FM_AFK_REC_WORKSPACE" ]; then
+  field_count=$(printf '%s\n' "$record" | awk -F '\t' 'NR == 1 { fields=NF } END { if (NR == 1) print fields; else print 0 }')
+  case "$field_count" in
+    2)
+      IFS=$'\t' read -r FM_AFK_REC_TARGET FM_AFK_REC_WORKSPACE \
+        < "$FM_AFK_LAUNCH_RECORD" || true
+      ;;
+    3)
+      IFS=$'\t' read -r legacy_provider FM_AFK_REC_TARGET FM_AFK_REC_WORKSPACE \
+        < "$FM_AFK_LAUNCH_RECORD" || true
+      case "$legacy_provider" in
+        herdr) ;;
+        none)
+          if [ "$FM_AFK_REC_TARGET" != - ] || [ "$FM_AFK_REC_WORKSPACE" != native ]; then
+            fm_afk_launch_log "daemon terminal record is malformed; refusing to act on it"
+            return 2
+          fi
+          ;;
+        *)
+          fm_afk_launch_log "daemon terminal record uses removed session provider '$legacy_provider'; stop it with the previous Firstmate version or migrate the record before continuing"
+          return 2
+          ;;
+      esac
+      ;;
+    *)
+      fm_afk_launch_log "daemon terminal record is malformed; refusing to act on it"
+      return 2
+      ;;
+  esac
+  if [ -z "$FM_AFK_REC_TARGET" ] || [ -z "$FM_AFK_REC_WORKSPACE" ]; then
     fm_afk_launch_log "daemon terminal record is malformed; refusing to act on it"
     return 2
   fi

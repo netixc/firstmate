@@ -399,7 +399,33 @@ test_legacy_backend_setting_reports_migration() {
     FM_FAKE_TREEHOUSE_LEASE_HELP=1 "$ROOT/bin/fm-bootstrap.sh")
   [ "$out" = "BACKEND_INVALID: config/backend is obsolete; remove it because Herdr is Firstmate's only session provider" ] \
     || fail "legacy setting should produce one concrete migration instruction, got: $out"
-  pass "bootstrap rejects the removed config/backend selector with a concrete migration instruction"
+
+  rm -f "$case_dir/home/config/backend"
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$case_dir/home" FM_ROOT_OVERRIDE="$case_dir/home" \
+    FM_BACKEND=tmux FM_FAKE_TREEHOUSE_LEASE_HELP=1 "$ROOT/bin/fm-bootstrap.sh")
+  [ "$out" = "BACKEND_INVALID: FM_BACKEND is obsolete; unset it because Herdr is Firstmate's only session provider" ] \
+    || fail "legacy environment setting should produce one concrete migration instruction, got: $out"
+  pass "bootstrap rejects removed provider settings with concrete migration instructions"
+}
+
+test_foreign_secondmate_metadata_is_never_probed() {
+  local fixture root home fakebin out log
+  fixture=$(make_routine_bootstrap_fixture "$TMP_ROOT/foreign-secondmate-meta")
+  root=${fixture%%|*}
+  fixture=${fixture#*|}
+  home=${fixture%%|*}
+  fakebin=${fixture#*|}
+  log="$TMP_ROOT/foreign-secondmate-meta/herdr.log"
+  printf '%s\n' 'backend=tmux' >> "$home/state/sm.meta"
+
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$root" \
+    FM_FAKE_TREEHOUSE_LEASE_HELP=1 FM_FAKE_HERDR_LOG="$log" \
+    "$ROOT/bin/fm-bootstrap.sh")
+  assert_contains "$out" "SECONDMATE_LIVENESS: secondmate sm: skipped: $home/state/sm.meta records a removed session provider; retire or migrate that task before operating it with this Firstmate version" \
+    "foreign secondmate metadata should produce migration guidance"
+  assert_not_contains "$(cat "$log" 2>/dev/null || true)" "pane close" \
+    "foreign secondmate endpoint was closed through Herdr"
+  pass "bootstrap never routes foreign secondmate metadata through Herdr"
 }
 
 test_fleet_sync_timeout_scales_with_origin_backed_project_count() {
@@ -525,6 +551,7 @@ make_routine_bootstrap_fixture() {
   add_real_jq "$fakebin"
 cat > "$fakebin/herdr" <<'SH'
 #!/usr/bin/env bash
+[ -z "${FM_FAKE_HERDR_LOG:-}" ] || printf '%s\n' "$*" >> "$FM_FAKE_HERDR_LOG"
 case " $* " in
   *' status --json '*)
     printf '%s\n' '{"client":{"version":"0.7.3","protocol":16},"server":{"running":true}}'
@@ -660,6 +687,7 @@ test_fleet_sync_timeout_empty_override_uses_default
 test_fleet_sync_timeout_is_computed_before_launch
 test_routine_bootstrap_confirmations_are_silent
 test_routine_bootstrap_contract_runs_under_system_bash
+test_foreign_secondmate_metadata_is_never_probed
 test_bootstrap_info_is_no_load_and_actionable_lines_trigger
 test_crew_dispatch_active_rules_are_verbose_bootstrap_info
 test_crew_dispatch_validation

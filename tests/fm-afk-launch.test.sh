@@ -33,7 +33,7 @@ test_clear_stale_artifacts_preserves_queue() {
 }
 
 test_record_contract_is_herdr_or_native_only() {
-  local home="$TMP_ROOT/records"
+  local home="$TMP_ROOT/records" out
   mkdir -p "$home/state"
   FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" bash -c '
     . "$1"
@@ -47,15 +47,29 @@ test_record_contract_is_herdr_or_native_only() {
     [ "$FM_AFK_REC_WORKSPACE" = native ]
   ' _ "$LAUNCH" || fail "valid Herdr/native records did not round-trip"
 
+  printf 'herdr\tlab:w1:p2\tws-daemon\n' > "$home/state/.afk-daemon-terminal"
+  FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" bash -c '
+    . "$1"
+    fm_afk_launch_record_read
+    [ "$FM_AFK_REC_TARGET" = "lab:w1:p2" ]
+    [ "$FM_AFK_REC_WORKSPACE" = "ws-daemon" ]
+  ' _ "$LAUNCH" || fail "legacy Herdr record was not normalized"
+  printf 'none\t-\tnative\n' > "$home/state/.afk-daemon-terminal"
+  FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" bash -c '
+    . "$1"
+    fm_afk_launch_record_read
+    [ "$FM_AFK_REC_TARGET" = - ]
+    [ "$FM_AFK_REC_WORKSPACE" = native ]
+  ' _ "$LAUNCH" || fail "legacy native record was not normalized"
+
   printf 'legacy-provider\tlegacy-session\towned\n' > "$home/state/.afk-daemon-terminal"
-  if FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" bash -c '
+  out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" bash -c '
     . "$1"
     ! fm_afk_launch_record_read
-  ' _ "$LAUNCH"; then
-    pass "away terminal records accept only exact Herdr targets or the native sentinel"
-  else
-    fail "a legacy provider record was accepted"
-  fi
+  ' _ "$LAUNCH" 2>&1)
+  assert_contains "$out" "uses removed session provider 'legacy-provider'" \
+    "foreign away record did not provide migration guidance"
+  pass "away terminal records accept current and valid legacy Herdr/native shapes only"
 }
 
 test_exact_close_and_absence_verification() {
@@ -151,7 +165,7 @@ test_stop_signals_daemon_before_clearing_afk() {
   local home="$TMP_ROOT/stop-order" marker="$TMP_ROOT/afk-at-term" pid lock identity
   mkdir -p "$home/state"
   : > "$home/state/.afk"
-  printf '%s\n' $'-\tnative' > "$home/state/.afk-daemon-terminal"
+  printf '%s\n' $'none\t-\tnative' > "$home/state/.afk-daemon-terminal"
   bash -c '
     trap "if [ -f \"$1/state/.afk\" ]; then echo present > \"$2\"; else echo absent > \"$2\"; fi; exit 0" TERM
     while :; do sleep 0.1; done
