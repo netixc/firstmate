@@ -51,8 +51,8 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-${FM_ROOT:-$FM_BACKEND_HERDR_ROOT}}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 
 # Shared composer-content classifier (empty|pending|unknown, and the fleet-wide
-# dead-shell-vs-agent-composer rule). Owned by bin/fm-composer-lib.sh, reused by
-# every backend so the decision cannot drift.
+# dead-shell-vs-agent-composer rule). Owned by bin/fm-composer-lib.sh so Herdr
+# consumers cannot drift.
 # shellcheck source=bin/fm-composer-lib.sh
 . "$FM_BACKEND_HERDR_ROOT/bin/fm-composer-lib.sh"
 

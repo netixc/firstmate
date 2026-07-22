@@ -23,11 +23,11 @@
 #      OWNER of the mapping from a normalized `to_status` to the supervision
 #      action a consumer must take. Every consumer READS this table; no
 #      consumer re-encodes the mapping. Adding or changing a status's action is
-#      a one-line edit here, and it changes every backend at once.
+#      a one-line edit here for every Herdr supervision consumer.
 #
-# The split is what keeps the escalation general rather than a herdr blocked
-# hack: a backend contributes only a wire->record normalizer and a stream
-# reader; the shape and the policy are shared. See bin/backends/herdr.sh
+# The split is what keeps the escalation general rather than a Herdr blocked
+# hack: Herdr contributes a wire->record normalizer and a stream reader, while
+# the shape and the policy are shared. See bin/backends/herdr.sh
 # (fm_backend_herdr_wait_transition) for the herdr producer and bin/fm-watch.sh
 # (the watcher's event-wait splice) for the consumer.
 

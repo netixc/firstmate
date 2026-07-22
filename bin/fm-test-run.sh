@@ -593,13 +593,16 @@ families_for_changed_path() {
       ;;
     tests/*.test.sh)
       # A single test file change selects only that script via basename family
-      # resolution in the caller; emit a marker family of __script__
-      printf '%s\n' "__script__:$(basename "$path")"
+      # resolution in the caller; deleted tests need no replacement execution.
+      if [ -f "$ROOT/$path" ]; then
+        printf '%s\n' "__script__:$(basename "$path")"
+      fi
       ;;
     bin/fm-test-run.sh|bin/fm-test-isolation-proof.sh)
       printf '%s\n' pure-contract-unit
       ;;
-    bin/backends/herdr*|bin/fm-herdr-lab.sh|tests/herdr-test-safety.sh)
+    bin/backends/*|bin/fm-backend-hometag-lib.sh|bin/fm-tmux-lib.sh|\
+    bin/fm-herdr-lab.sh|tests/herdr-test-safety.sh)
       printf '%s\n' real-herdr-gated
       printf '%s\n' herdr-session
       printf '%s\n' pure-contract-unit
@@ -665,7 +668,7 @@ families_for_changed_path() {
     docs/fm-test-isolation-proof.json)
       printf '%s\n' pure-contract-unit
       ;;
-    .github/*|.tasks.toml|AGENTS.md|CLAUDE.md|CONTRIBUTING.md|\
+    .agents/skills/*|.github/*|.tasks.toml|AGENTS.md|CLAUDE.md|CONTRIBUTING.md|\
     docs/configuration.md|docs/supervision-protocols/*)
       printf '%s\n' pure-contract-unit
       ;;
@@ -678,7 +681,7 @@ families_for_changed_path() {
         || printf '%s\n' "__unmapped__:$path"
       ;;
     tests/*)
-      printf '%s\n' "__unmapped__:$path"
+      [ ! -e "$ROOT/$path" ] || printf '%s\n' "__unmapped__:$path"
       ;;
     README.md|LICENSE|assets/*|docs/*|.gitignore)
       ;;

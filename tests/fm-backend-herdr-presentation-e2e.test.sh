@@ -291,6 +291,10 @@ lab() {
   PATH="$HERDR_ORIGINAL_PATH" "$HERDR_LAB_HELPER" run "$HERDR_LAB_SESSION" "$@"
 }
 
+INITIAL_WORKSPACE_LABELS=$(lab workspace list | jq -r '.result.workspaces[]?.label') \
+  || fail "could not record the lab's pre-existing human workspaces"
+INITIAL_WORKSPACE_COUNT=$(printf '%s\n' "$INITIAL_WORKSPACE_LABELS" | awk 'NF { count += 1 } END { print count + 0 }')
+
 focus_snapshot() {
   local list row workspace tab tabs
   list=$(lab workspace list) || fail "could not read the active workspace for focus instrumentation"
@@ -681,8 +685,11 @@ remember_meta_worktree "$ORDER_B_META" >/dev/null
 ORDER_LIST=$(lab workspace list) || fail "could not inspect concurrent presentation ordering"
 CREATED_LABELS=$(projection_labels_from_log "$PROJECTION_ORDER_START")
 EXPECTED_LABELS=$(printf 'firstmate\n%s\n%s\n2ndmate-alpha\n2ndmate-bravo' "$PROJECTED_LABEL" "$CREATED_LABELS")
+if [ -n "$INITIAL_WORKSPACE_LABELS" ]; then
+  EXPECTED_LABELS=$(printf '%s\n%s' "$INITIAL_WORKSPACE_LABELS" "$EXPECTED_LABELS")
+fi
 ACTUAL_LABELS=$(printf '%s' "$ORDER_LIST" | jq -r '.result.workspaces[].label')
-[ "$ACTUAL_LABELS" = "$EXPECTED_LABELS" ] || fail "workspace order was not firstmate, stable primary block, secondmates: $ACTUAL_LABELS"
+[ "$ACTUAL_LABELS" = "$EXPECTED_LABELS" ] || fail "workspace order did not preserve human spaces before the stable firstmate block and secondmates: $ACTUAL_LABELS"
 PRIMARY_IDS=$(printf '%s' "$ORDER_LIST" | jq -r '
   .result.workspaces[]
   | select((.label | startswith("└ ")) or (.label | startswith("firstmate/")))
@@ -692,7 +699,10 @@ MOVE_TARGETS=$(cut -f2 "$MOVE_CALL_LOG")
 [ "$MOVE_TARGETS" = "$PRIMARY_IDS" ] \
   || fail "workspace.move targeted something other than each exact current projected-create id"
 MOVE_INDEXES=$(cut -f3 "$MOVE_CALL_LOG")
-[ "$MOVE_INDEXES" = $'1\n2\n3' ] \
+[ "$MOVE_INDEXES" = "$(printf '%s\n%s\n%s' \
+  "$((INITIAL_WORKSPACE_COUNT + 1))" \
+  "$((INITIAL_WORKSPACE_COUNT + 2))" \
+  "$((INITIAL_WORKSPACE_COUNT + 3))")" ] \
   || fail "concurrent primary workers did not append stably to the contiguous block: $MOVE_INDEXES"
 SECOND_ORDER_AFTER=$(printf '%s' "$ORDER_LIST" | jq -r '.result.workspaces[] | select(.label | startswith("2ndmate-")) | .workspace_id')
 [ "$SECOND_ORDER_AFTER" = "$SECOND_ORDER_BEFORE" ] \
@@ -844,7 +854,11 @@ for ROUND in 1 2 3; do
   wait "$WAVE_B_TEARDOWN_PID" || fail "focus wave $ROUND teardown B failed"
   assert_focus_is "$CAPTAIN_FOCUS" "focus wave $ROUND concurrent teardowns"
   WAVE_REMAINING=$(lab workspace list | jq -r '.result.workspaces[].label')
-  [ "$WAVE_REMAINING" = $'firstmate\n2ndmate-alpha\n2ndmate-bravo' ] \
+  WAVE_REMAINING_EXPECTED=$(printf 'firstmate\n2ndmate-alpha\n2ndmate-bravo')
+  if [ -n "$INITIAL_WORKSPACE_LABELS" ]; then
+    WAVE_REMAINING_EXPECTED=$(printf '%s\n%s' "$INITIAL_WORKSPACE_LABELS" "$WAVE_REMAINING_EXPECTED")
+  fi
+  [ "$WAVE_REMAINING" = "$WAVE_REMAINING_EXPECTED" ] \
     || fail "focus wave $ROUND cleanup left a projected workspace behind: $WAVE_REMAINING"
 done
 pass "real Herdr lab: three repeated concurrent create/order/cleanup waves have zero active workspace or tab drift"

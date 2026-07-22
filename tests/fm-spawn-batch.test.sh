@@ -117,6 +117,13 @@ test_legacy_provider_settings_refuse_before_spawn() {
   [ "$status" -ne 0 ] || fail "config/backend should stop spawn"
   [ "$out" = "error: config/backend is obsolete; remove it because Herdr is Firstmate's only session provider" ] \
     || fail "config/backend refusal was not the first and only spawn result: $out"
+
+  rm "$home/config/backend"
+  out=$(FM_HOME="$home" FM_SPAWN_NO_GUARD=1 "$SPAWN" legacy-task projects/none --backend tmux 2>&1)
+  status=$?
+  [ "$status" -ne 0 ] || fail "removed --backend selection should stop spawn"
+  [ "$out" = "error: unknown option: --backend" ] \
+    || fail "removed --backend selection did not fail at argument parsing: $out"
   pass "spawn rejects removed provider settings before launch work"
 }
 

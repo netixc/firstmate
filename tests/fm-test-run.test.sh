@@ -170,6 +170,19 @@ test_changed_dependency_selection_and_unmapped_failure() {
   git -C "$repo" add .agents .claude .pi
   git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm non-bin-source-change
 
+  rm "$repo/.agents/skills/example/SKILL.md"
+  listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD)
+  assert_contains "$listed" "tests/fm-captain-translation-contract.test.sh" \
+    "deleted skill source selects contract coverage"
+  git -C "$repo" add .agents
+  git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm deleted-skill-change
+
+  rm "$repo/tests/fm-daemon.test.sh"
+  listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD)
+  [ -z "$listed" ] || fail "deleted test should not select a missing script: $listed"
+  git -C "$repo" add tests/fm-daemon.test.sh
+  git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm deleted-test-change
+
   printf '\n' >>"$repo/src/unmapped.ts"
   set +e
   (cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD) >"$tmp/out" 2>"$tmp/err"
