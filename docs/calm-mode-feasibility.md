@@ -70,12 +70,12 @@ The classifier recognizes only these authoritative Firstmate forms:
 | Session-start nudge | `.pi/extensions/fm-primary-turnend-guard.ts` via `bin/fm-sessionstart-nudge.sh` | Exact complete nudge text; Pi already sends it as a non-displayed custom message. |
 | Watcher notification | `.pi/extensions/fm-primary-pi-watch.ts` | Exact `FIRSTMATE WATCHER WAKE: ` prefix plus the complete stable drain suffix and non-empty wake content. |
 | Turn-end guard | `.pi/extensions/fm-primary-turnend-guard.ts` | Exact complete guard paragraph plus non-empty guard diagnostics. |
-| Away supervisor | `bin/fm-supervise-daemon.sh` | Leading U+2063 `FM_INJECT_MARK`, which normal terminal typing cannot produce. |
+| Operational input | Firstmate injectors | U+2063 followed by the exact `FIRSTMATE_OP: ` prefix, or the legacy U+2063 `Supervisor escalate (` shape. |
 | From-firstmate request | `bin/fm-marker-lib.sh` through `bin/fm-send.sh` | Exact `[fm-from-firstmate]` plus U+2063 marker and non-empty request content. |
 | Pi launch brief | `bin/fm-spawn.sh` | Per-process `FM_FIRSTMATE_PI_LAUNCH_BRIEF` path identifies the exact unchanged positional brief content after the launch shell's standard trailing-newline removal; the match is consumed once. |
 
 Positive fixtures cover every form in that table.
-Near-miss fixtures cover the visible watcher phrase without its suffix, a modified drain instruction, a guard-like captain question, visible marker labels without U+2063, an unmarked supervisor phrase, the session-start wording without its authoritative punctuation, and launch-brief text without the per-process origin.
+Near-miss fixtures cover the visible watcher phrase without its suffix, a modified drain instruction, a guard-like captain question, visible marker labels without U+2063, unrelated U+2063-prefixed captain input, malformed operational prefixes, an unmarked supervisor phrase, the session-start wording without its authoritative punctuation, and launch-brief text without the per-process origin.
 
 Synthetic inputs that would otherwise render as user rows are rerouted only at Pi input presentation time.
 Their full text is persisted in a non-displayed custom message that Pi converts back to an ordinary user message for provider context, and a TUI-only custom entry restores stock user styling while Calm is off.

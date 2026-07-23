@@ -44,6 +44,8 @@ const FIRSTMATE_TURNEND_PREFIX =
   "The watcher cycle is missing, failed, or unhealthy. " +
   "Follow the harness recovery instruction below before ending the turn.\n\n";
 const FM_INJECT_MARK = "\u2063";
+const FIRSTMATE_OPERATIONAL_PREFIX = `${FM_INJECT_MARK}FIRSTMATE_OP: `;
+const FIRSTMATE_LEGACY_AWAY_PREFIX = `${FM_INJECT_MARK}Supervisor escalate (`;
 const FM_FROMFIRST_MARK = "[fm-from-firstmate]\u2063";
 
 export const FIRSTMATE_SYNTHETIC_CONTEXT_TYPE = "firstmate-synthetic-input";
@@ -105,7 +107,12 @@ export function classifyFirstmateSyntheticInput(
 ): FirstmateSyntheticKind | undefined {
   if (launchBriefContent !== undefined && content === launchBriefContent) return "launch-brief";
   if (content === FIRSTMATE_SESSIONSTART_NUDGE) return "session-start";
-  if (content.startsWith(FM_INJECT_MARK)) return "away-supervisor";
+  if (
+    content.startsWith(FIRSTMATE_OPERATIONAL_PREFIX) ||
+    content.startsWith(FIRSTMATE_LEGACY_AWAY_PREFIX)
+  ) {
+    return "away-supervisor";
+  }
   if (content.startsWith(FM_FROMFIRST_MARK) && content.length > FM_FROMFIRST_MARK.length) {
     return "from-firstmate";
   }

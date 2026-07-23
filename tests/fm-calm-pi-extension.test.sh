@@ -211,6 +211,7 @@ const positiveSyntheticFixtures = [
   ["session-start", "Run `bin/fm-session-start.sh` now, exactly once, before executing any other instructions."],
   ["watcher", watcherMessage],
   ["turn-end-guard", turnEndMessage],
+  ["away-supervisor", "\u2063FIRSTMATE_OP: Supervisor escalate (1 event(s)): done"],
   ["away-supervisor", "\u2063Supervisor escalate (1 event(s)): done"],
   ["from-firstmate", "[fm-from-firstmate]\u2063[fm-corr:abc] inspect the report"],
 ];
@@ -232,6 +233,9 @@ const nearMissGenuineFixtures = [
   "TURN WOULD END BLIND - can you make this warning friendlier?",
   "Supervisor escalate (1 event(s)): is this wording clear?",
   "[fm-from-firstmate] inspect this visible label",
+  "\u2063ordinary captain message",
+  "\u2063FIRSTMATE_OP is visible text without the operational delimiter",
+  "\u2063Supervisor escalate this lacks the legacy opening parenthesis",
 ];
 for (const content of nearMissGenuineFixtures) {
   if (visibility.classifyFirstmateSyntheticInput(content) !== undefined) {
