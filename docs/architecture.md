@@ -69,7 +69,7 @@ The watcher and daemon share `bin/fm-classify-lib.sh` for captain-relevant statu
 Terminal verbs remain captain-relevant, while a nonterminal progress verb cannot become terminal merely because its prose contains a legacy free-text token such as `merged`; bare legacy free-text lines remain compatible.
 The always-on watcher also uses that library's absorb classification on no-verb signals and first-sighting stale panes before status-log terminality is trusted, while the daemon maintains distinct wedge and declared-pause recheck cadences.
 In away mode, seen-status dedupe does not clear possible-wedge aging for nonterminal progress, so housekeeping still re-escalates an unchanged idle pane at the configured bound.
-The daemon escalates captain-relevant events, plus a bounded recheck for a declared pause that remains idle, as one batched, single-line digest prefixed with a terminal-safe U+2063 sentinel marker so firstmate can tell daemon injections apart from real messages.
+The daemon escalates captain-relevant events, plus a bounded recheck for a declared pause that remains idle, as one batched, single-line digest using the `/afk` skill's terminal-safe operational prefix so firstmate can tell daemon injections apart from real messages.
 Its supervisor injection path targets Firstmate's Herdr pane, with `FM_SUPERVISOR_TARGET` available as an exact override.
 Pane existence, busy checks, composer checks, capture, and verified submit route through `bin/fm-backend.sh` to Herdr's native state and ANSI-aware structural composer classifier.
 Composer-content classification has one shared owner, `bin/fm-composer-lib.sh`.

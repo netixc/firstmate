@@ -1,7 +1,7 @@
 ---
 name: afk
 description: >-
-  Enter away-mode supervision when the captain invokes /afk, says they are going afk, `state/.afk` exists, an incoming message starts with `FM_INJECT_MARK`, or any `state/.subsuper-*` marker is involved.
+  Enter away-mode supervision when the captain invokes /afk, says they are going afk, `state/.afk` exists, an incoming message starts with the current operational prefix or a legacy bare `FM_INJECT_MARK`, or any `state/.subsuper-*` marker is involved.
   It sets a durable away-mode flag so the sub-supervisor daemon can self-handle routine wakes and escalate captain-relevant events plus bounded declared-external-wait rechecks as batched digests during walk-away stretches, then exits automatically when any real unmarked message returns firstmate to full per-wake responsiveness.
 user-invocable: true
 metadata:
@@ -32,25 +32,26 @@ The daemon injects only while `state/.afk` exists.
 
 ## Return lifecycle
 
-The first genuine unmarked message is the return signal.
+The first message without the current operational prefix or a legacy bare marker is the return signal.
 Run `bin/fm-afk-return.sh` before acting on that message.
 The script owns ordered daemon shutdown, durable wake drain, escalation and wedge evidence, and the return catch-up gate.
 If it reports a firstmate-actionable blocker, resolve or durably reclassify it, close any decision key with `resolved [key=...]`, and run `bin/fm-afk-return.sh check`.
 Resume the emitted supervision protocol while blocker handling proceeds so the gate never creates a blind wait.
 Do not perform ordinary captain work until the check succeeds.
 
-A message beginning with `FM_INJECT_MARK` is a daemon escalation, so remain away and process it.
+A message beginning with the current operational prefix (`FM_OPERATIONAL_PREFIX`, U+2063 INVISIBLE SEPARATOR followed by `FIRSTMATE_OP: `), or a legacy bare `FM_INJECT_MARK`, is a daemon escalation, so remain away and process it.
 Re-invoking `/afk` refreshes the flag and remains away.
 Bias ambiguous input toward return because a present captain takes precedence over token savings.
 
 Away mode changes notification cadence, not approval authority.
 Merges, decisions, destructive actions, and security-sensitive actions retain their normal owners.
 
-## Sentinel and injection contract
+## Operational prefix and injection contract
 
-The daemon prefixes every injection with `FM_INJECT_MARK`, the U+2063 invisible separator.
-The marker is carried in the typed message so it works consistently across verified worker runtimes.
-`strip_injection_marker` removes it before classification or relay.
+The daemon prefixes every current injection with `FM_OPERATIONAL_PREFIX`: `FM_INJECT_MARK`, the U+2063 invisible separator, followed by the stable `FIRSTMATE_OP: ` label.
+The bare `FM_INJECT_MARK` form remains accepted for legacy daemon escalations during rollout.
+The operational prefix is carried in the typed message so it works consistently across verified worker runtimes.
+`strip_injection_marker` removes the current operational prefix or legacy bare marker before classification or relay.
 
 Before every injection, the daemon uses the Herdr-only operations in `bin/fm-backend.sh` to require all of these:
 
@@ -85,7 +86,7 @@ The daemon wraps `fm-watch.sh`, classifies each wake in bash, and self-handles r
 - A `heartbeat` is self-handled while the daemon's cheap fleet scan provides the catch-all.
 - Unknown or uncertain input escalates fail-safe.
 
-Escalations batch for up to `FM_ESCALATE_BATCH_SECS` and flush as one single-line marked digest.
+Escalations batch for up to `FM_ESCALATE_BATCH_SECS` and flush as one single-line digest with the current operational prefix.
 Embedded newlines are collapsed before injection.
 Seen-status markers deduplicate signal, stale, and scan paths without suppressing wedge aging for unchanged nonterminal work.
 The portable identity-backed lock prevents duplicate daemons.
