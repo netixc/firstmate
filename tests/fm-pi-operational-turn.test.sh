@@ -377,6 +377,72 @@ EOF
   pass "Pi session claim: timeout escalation reaps the complete process tree"
 }
 
+test_session_claim_runtime_cleanup_reaps_the_process_tree() {
+  local repo home exit_repo exit_home out status descendant
+  repo="$TMP_ROOT/claim-shutdown-root"
+  home="$TMP_ROOT/claim-shutdown-home"
+  mkdir -p "$home/state" "$home/config"
+  install_fixture "$repo" fm-primary-turnend-guard.ts
+  install_session_start_fixture "$repo" timeout
+  write_guard "$repo" 0
+  out=$(REPO="$repo" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" node --input-type=module 2>&1 <<'EOF'
+import { existsSync, readFileSync } from "node:fs";
+const { createFakePi, loadExtension } = await import(`${process.env.REPO}/fake-pi.mjs`);
+const { pi, dispatch } = createFakePi();
+await loadExtension(`${process.env.REPO}/.pi/extensions/fm-primary-turnend-guard.ts`, pi);
+const pending = dispatch("session_start", { type: "session_start", reason: "startup" });
+for (let index = 0; index < 100; index += 1) {
+  if (existsSync(`${process.env.FM_HOME}/state/session-start-descendant`)) break;
+  await new Promise((resolve) => setTimeout(resolve, 10));
+}
+await dispatch("session_shutdown", { type: "session_shutdown" });
+await pending;
+const descendant = Number(readFileSync(`${process.env.FM_HOME}/state/session-start-descendant`, "utf8").trim());
+try {
+  process.kill(descendant, 0);
+  throw new Error(`session-start descendant ${descendant} survived session shutdown`);
+} catch (error) {
+  if ((error).message?.includes("survived session shutdown")) throw error;
+}
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "Pi session shutdown must reap the active session-start process tree"
+  [ -z "$out" ] || fail "session shutdown cleanup test printed output: $out"
+
+  exit_repo="$TMP_ROOT/claim-exit-root"
+  exit_home="$TMP_ROOT/claim-exit-home"
+  mkdir -p "$exit_home/state" "$exit_home/config"
+  install_fixture "$exit_repo" fm-primary-turnend-guard.ts
+  install_session_start_fixture "$exit_repo" timeout
+  write_guard "$exit_repo" 0
+  out=$(REPO="$exit_repo" FM_HOME="$exit_home" FM_ROOT_OVERRIDE="$exit_repo" node --input-type=module 2>&1 <<'EOF'
+import { existsSync } from "node:fs";
+const { createFakePi, loadExtension } = await import(`${process.env.REPO}/fake-pi.mjs`);
+const { pi, dispatch } = createFakePi();
+await loadExtension(`${process.env.REPO}/.pi/extensions/fm-primary-turnend-guard.ts`, pi);
+void dispatch("session_start", { type: "session_start", reason: "startup" });
+for (let index = 0; index < 100; index += 1) {
+  if (existsSync(`${process.env.FM_HOME}/state/session-start-descendant`)) break;
+  await new Promise((resolve) => setTimeout(resolve, 10));
+}
+process.exit(0);
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "Pi process exit must reap the active session-start process tree"
+  [ -z "$out" ] || fail "process-exit cleanup test printed output: $out"
+  descendant=$(sed -n '1p' "$exit_home/state/session-start-descendant")
+  for _ in $(seq 1 100); do
+    kill -0 "$descendant" 2>/dev/null || break
+    sleep 0.01
+  done
+  if kill -0 "$descendant" 2>/dev/null; then
+    fail "process-exit cleanup left session-start descendant $descendant alive"
+  fi
+  pass "Pi session claim: shutdown and process exit reap the active process tree"
+}
+
 test_session_claim_autorun_can_be_disabled() {
   local repo home out status
   repo="$TMP_ROOT/claim-off-root"
@@ -815,6 +881,7 @@ test_session_claim_runs_before_any_answer_completes
 test_session_claim_arms_one_initial_cycle
 test_session_claim_failure_falls_back_to_the_advisory_nudge
 test_session_claim_timeout_reaps_the_process_tree
+test_session_claim_runtime_cleanup_reaps_the_process_tree
 test_session_claim_autorun_can_be_disabled
 test_signal_and_stale_while_busy_coalesce_into_one_turn
 test_records_queued_after_the_drain_get_exactly_one_more_turn

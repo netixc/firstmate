@@ -53,6 +53,7 @@ const sessionStartTimeoutMs = positiveInteger("FM_PI_SESSION_START_TIMEOUT_MS", 
 const sessionStartKillGraceMs = positiveInteger("FM_PI_SESSION_START_KILL_GRACE_MS", 5000);
 
 let sessionStartLifecycle: Promise<void> | null = null;
+let sessionStartGroupPid: number | null = null;
 
 function positiveInteger(name: string, fallback: number): number {
   const value = Number(process.env[name]);
@@ -119,6 +120,13 @@ function signalProcessGroup(pid: number, signal: NodeJS.Signals): void {
   }
 }
 
+function killActiveSessionStart(): void {
+  const pid = sessionStartGroupPid;
+  if (!pid) return;
+  signalProcessGroup(pid, "SIGKILL");
+  sessionStartGroupPid = null;
+}
+
 function wait(milliseconds: number): Promise<void> {
   return new Promise((resolveWait) => setTimeout(resolveWait, milliseconds));
 }
@@ -135,6 +143,8 @@ function runSessionStart(): Promise<SessionStartResult> {
       detached: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
+    const childPid = child.pid ?? null;
+    sessionStartGroupPid = childPid;
     let stdout = "";
     let stderr = "";
     let settled = false;
@@ -146,6 +156,7 @@ function runSessionStart(): Promise<SessionStartResult> {
     const finish = (result: SessionStartResult): void => {
       if (settled) return;
       settled = true;
+      if (sessionStartGroupPid === childPid) sessionStartGroupPid = null;
       clearTimeout(timer);
       resolveResult(result);
     };
@@ -243,6 +254,10 @@ function runCdCheck(command: string): Promise<{ code: number; stderr: string }> 
 export default function (pi: ExtensionAPI) {
   const coordinator: OperationalTurnCoordinator = installOperationalTurnCoordinator(pi, state);
   registerOperationalEscalationPresentation(pi);
+  const cleanupOnProcessExit = (): void => {
+    killActiveSessionStart();
+  };
+  process.once("exit", cleanupOnProcessExit);
   // Identity of the queued records the last operational follow-up was sent for.
   let lastQueueFingerprint = "";
 
@@ -355,6 +370,11 @@ export default function (pi: ExtensionAPI) {
       sessionStartLifecycle = claimSession(nudge).catch(() => {});
     }
     await sessionStartLifecycle;
+  });
+
+  pi.on?.("session_shutdown", () => {
+    killActiveSessionStart();
+    process.off("exit", cleanupOnProcessExit);
   });
 
   pi.on("tool_call", async (event) => {
