@@ -70,9 +70,101 @@ export type OperationalTurnCoordinator = {
   retryLimit: number;
 };
 
-export const OPERATIONAL_ACTION_COMMAND_PATTERN =
-  /fm-wake-drain\.sh|fm-session-start\.sh|fm-watch-arm\.sh/;
+const OPERATIONAL_ACTION_COMMANDS = new Set([
+  "fm-wake-drain.sh",
+  "fm-session-start.sh",
+  "fm-watch-arm.sh",
+]);
 export const OPERATIONAL_ACTION_TOOL = "fm_watch_arm_pi";
+
+function shellCommandSegments(command: string): string[][] {
+  const segments: string[][] = [];
+  let words: string[] = [];
+  let word = "";
+  let quote = "";
+  let escaped = false;
+  const finishWord = (): void => {
+    if (!word) return;
+    words.push(word);
+    word = "";
+  };
+  const finishSegment = (): void => {
+    finishWord();
+    if (words.length) segments.push(words);
+    words = [];
+  };
+  for (let index = 0; index < command.length; index += 1) {
+    const character = command[index];
+    if (escaped) {
+      word += character;
+      escaped = false;
+      continue;
+    }
+    if (quote) {
+      if (character === quote) {
+        quote = "";
+      } else if (character === "\\" && quote === "\"") {
+        escaped = true;
+      } else {
+        word += character;
+      }
+      continue;
+    }
+    if (character === "'" || character === "\"") {
+      quote = character;
+      continue;
+    }
+    if (character === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (character === "#" && !word) {
+      while (index < command.length && command[index] !== "\n") index += 1;
+      finishSegment();
+      continue;
+    }
+    if (/\s/.test(character)) {
+      finishWord();
+      if (character === "\n") finishSegment();
+      continue;
+    }
+    if (";&|()".includes(character)) {
+      finishSegment();
+      continue;
+    }
+    word += character;
+  }
+  finishSegment();
+  return segments;
+}
+
+function commandBasename(command: string): string {
+  return command.slice(command.lastIndexOf("/") + 1);
+}
+
+function segmentInvokesOperationalAction(words: string[]): boolean {
+  let index = 0;
+  while (index < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index])) index += 1;
+  while (["!", "if", "then", "elif", "else", "do", "while", "until", "command", "exec"].includes(words[index] ?? "")) {
+    index += 1;
+  }
+  if (words[index] === "env") {
+    index += 1;
+    while (index < words.length && (/^-/.test(words[index]) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index]))) {
+      index += 1;
+    }
+  }
+  const executable = commandBasename(words[index] ?? "");
+  if (OPERATIONAL_ACTION_COMMANDS.has(executable)) return true;
+  if (!["bash", "sh"].includes(executable)) return false;
+  index += 1;
+  while (index < words.length && /^-/.test(words[index])) index += 1;
+  return OPERATIONAL_ACTION_COMMANDS.has(commandBasename(words[index] ?? ""));
+}
+
+export function commandInvokesOperationalAction(command: string): boolean {
+  return shellCommandSegments(command).some(segmentInvokesOperationalAction);
+}
 
 function positiveInteger(name: string, fallback: number): number {
   const value = Number(process.env[name]);
@@ -150,11 +242,9 @@ export function installOperationalTurnCoordinator(
     };
   });
 
-  // Observe the operational actions an operational turn is required to perform.
-  // Returning nothing keeps this observer out of Pi's tool-blocking merge, so it
-  // can never weaken the PreToolUse seatbelts registered beside it.
-  pi.on("tool_call", (event) => {
+  pi.on("tool_result", (event) => {
     if (!state.active || state.actionPerformed) return;
+    if (event.isError) return;
     if (event.toolName === OPERATIONAL_ACTION_TOOL) {
       state.actionPerformed = true;
       publish();
@@ -162,7 +252,7 @@ export function installOperationalTurnCoordinator(
     }
     if (event.toolName !== "bash") return;
     const command = String((event.input as { command?: unknown })?.command ?? "");
-    if (!OPERATIONAL_ACTION_COMMAND_PATTERN.test(command)) return;
+    if (!commandInvokesOperationalAction(command)) return;
     state.actionPerformed = true;
     publish();
   });

@@ -844,8 +844,8 @@ SH
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
-// Pi keeps a handler LIST per event, so the shared operational-turn observer
-// and the PreToolUse seatbelt both receive tool_call.
+// Pi keeps a handler LIST per event, so the coordinator and the PreToolUse
+// seatbelt can observe their respective lifecycle events.
 const handlers = new Map();
 let prompts = 0;
 const dispatch = async (event, payload) => {
@@ -870,6 +870,15 @@ const pi = {
     // The forced follow-up turn does the operational work it was asked for, so
     // the settle owner has no failed delivery to retry.
     await dispatch("tool_call", { type: "tool_call", toolName: "bash", input: { command: "bin/fm-wake-drain.sh" } });
+    await dispatch("tool_result", {
+      type: "tool_result",
+      toolCallId: "fixture-bash",
+      toolName: "bash",
+      input: { command: "bin/fm-wake-drain.sh" },
+      content: [],
+      details: undefined,
+      isError: false,
+    });
     await dispatch("agent_settled", { type: "agent_settled" });
   },
 };
@@ -936,6 +945,15 @@ const pi = {
     attempts += 1;
     if (attempts === 1) throw new Error("synthetic delivery failure");
     await dispatch("tool_call", { type: "tool_call", toolName: "bash", input: { command: "bin/fm-wake-drain.sh" } });
+    await dispatch("tool_result", {
+      type: "tool_result",
+      toolCallId: "fixture-bash",
+      toolName: "bash",
+      input: { command: "bin/fm-wake-drain.sh" },
+      content: [],
+      details: undefined,
+      isError: false,
+    });
     await dispatch("agent_settled", { type: "agent_settled" });
   },
 };

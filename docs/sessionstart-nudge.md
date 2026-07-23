@@ -42,7 +42,7 @@ The claim contract is:
 - The subprocess is a direct child of the Pi process, so `bin/fm-lock.sh`'s ancestry walk records the Pi harness pid exactly as a model-driven run would.
 - Lock refusal stays owned by `bin/fm-session-start.sh`. A home another live session holds is reported read-only inside the digest rather than claimed a second time, and no watcher cycle is armed.
 - The complete digest is delivered as a `display:false` custom message carrying the `session-start` operational kind, so it enters model context without starting a turn that would race Pi's positional prompt. It tells the model the lifecycle already ran and must not be repeated.
-- `agent_settled` awaits the pending claim, bounded by `FM_PI_SESSION_START_SETTLE_WAIT_MS` (default 30000), so no captain-facing turn can settle before the runtime has claimed the session.
+- Pi's awaited `session_start` dispatch does not return until the pending claim completes, and `agent_settled` awaits the same lifecycle without a shorter bound, so captain work can neither begin nor settle before the runtime has claimed the session.
 - After a successful claim the extension asks for one initial watcher cycle over the shared event bus, and only when `bin/fm-turnend-guard.sh` still reports supervision missing. `startArm()` stays the single owner of ownership checks and singleton behavior, so a repeated request is the same `watcher: unchanged` no-op a redundant tool call is.
 - A failed lifecycle degrades to the previous advisory instruction plus the concrete failure, and `FM_PI_SESSION_START_AUTORUN=0` restores the advisory-only path outright. `FM_PI_SESSION_START_TIMEOUT_MS` (default 600000) bounds the subprocess.
 

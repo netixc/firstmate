@@ -50,7 +50,6 @@ const marker = `${state}/.pi-turnend-extension-loaded`;
 const extensionVersion = `sha256:${createHash("sha256").update(readFileSync(extensionFile)).digest("hex")}`;
 const sessionStartAutorun = process.env.FM_PI_SESSION_START_AUTORUN !== "0";
 const sessionStartTimeoutMs = positiveInteger("FM_PI_SESSION_START_TIMEOUT_MS", 600000);
-const sessionStartSettleWaitMs = positiveInteger("FM_PI_SESSION_START_SETTLE_WAIT_MS", 30000);
 
 let sessionStartLifecycle: Promise<void> | null = null;
 
@@ -195,17 +194,6 @@ function runCdCheck(command: string): Promise<{ code: number; stderr: string }> 
   return runChecker("fm-cd-pretool-check.sh", command);
 }
 
-function boundedWait(pending: Promise<void>, timeoutMs: number): Promise<void> {
-  return new Promise((resolveWait) => {
-    const timer = setTimeout(resolveWait, timeoutMs);
-    timer.unref();
-    void pending.then(() => {
-      clearTimeout(timer);
-      resolveWait();
-    });
-  });
-}
-
 export default function (pi: ExtensionAPI) {
   const coordinator: OperationalTurnCoordinator = installOperationalTurnCoordinator(pi, state);
   registerOperationalEscalationPresentation(pi);
@@ -301,21 +289,26 @@ export default function (pi: ExtensionAPI) {
     pi.events?.emit?.(FIRSTMATE_ARM_REQUEST_EVENT, { reason: "session-start" });
   }
 
-  pi.on?.("session_start", (event) => {
+  pi.on?.("session_start", async (event) => {
     const reason = String((event as { reason?: unknown }).reason ?? "");
     const nudge = ["startup", "new", "resume"].includes(reason) ? runSessionstartNudge() : "";
     markLoaded();
-    if (!nudge) return;
+    if (!nudge) {
+      if (sessionStartLifecycle) await sessionStartLifecycle;
+      return;
+    }
     if (!sessionStartAutorun) {
       deliverSessionStartContext(nudge);
       return;
     }
     // Exactly one lifecycle per Pi runtime: a second session_start in the same
     // process (a replacement or reload) never starts a second claim.
-    if (sessionStartLifecycle) return;
-    // Never let a claim failure become an unhandled rejection that could take
-    // the whole Pi runtime down; a failed claim is reported, not fatal.
-    sessionStartLifecycle = claimSession(nudge).catch(() => {});
+    if (!sessionStartLifecycle) {
+      // Never let a claim failure become an unhandled rejection that could take
+      // the whole Pi runtime down; a failed claim is reported, not fatal.
+      sessionStartLifecycle = claimSession(nudge).catch(() => {});
+    }
+    await sessionStartLifecycle;
   });
 
   pi.on("tool_call", async (event) => {
@@ -383,7 +376,7 @@ export default function (pi: ExtensionAPI) {
   pi.on("agent_settled", async (_event, ctx) => {
     // No captain-facing turn settles before this Pi runtime has claimed the
     // session, so the claim can never lose a race with the first answer.
-    if (sessionStartLifecycle) await boundedWait(sessionStartLifecycle, sessionStartSettleWaitMs);
+    if (sessionStartLifecycle) await sessionStartLifecycle;
 
     if (coordinator.isActive()) {
       const settlement = coordinator.settle();

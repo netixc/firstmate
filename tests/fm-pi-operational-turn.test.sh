@@ -75,8 +75,21 @@ export function createFakePi() {
     }
     return result;
   };
-  const toolCall = (command) =>
-    dispatch("tool_call", { type: "tool_call", toolName: "bash", input: { command } });
+  const toolCall = async (command, isError = false) => {
+    const result = await dispatch("tool_call", { type: "tool_call", toolName: "bash", input: { command } });
+    if (!result?.block) {
+      await dispatch("tool_result", {
+        type: "tool_result",
+        toolCallId: "fixture-bash",
+        toolName: "bash",
+        input: { command },
+        content: [],
+        details: undefined,
+        isError,
+      });
+    }
+    return result;
+  };
   const settle = () => dispatch("agent_settled", { type: "agent_settled" });
   return { pi, ctx, state, handlers, dispatch, toolCall, settle };
 }
@@ -158,6 +171,7 @@ SH
     cat > "$repo/bin/fm-session-start.sh" <<'SH'
 #!/usr/bin/env bash
 set -u
+sleep "${FM_SESSION_START_FIXTURE_DELAY:-0}"
 file="${FM_HOME:?}/state/session-start-count"
 count=0
 [ ! -f "$file" ] || count=$(sed -n '1p' "$file")
@@ -197,16 +211,17 @@ test_session_claim_runs_before_any_answer_completes() {
   install_fixture "$repo" fm-primary-turnend-guard.ts
   install_session_start_fixture "$repo" ok
   write_guard "$repo" 0
-  out=$(REPO="$repo" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" node --input-type=module 2>&1 <<'EOF'
+  out=$(REPO="$repo" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_SESSION_START_FIXTURE_DELAY=0.12 node --input-type=module 2>&1 <<'EOF'
 import { existsSync, readFileSync } from "node:fs";
 const { createFakePi, loadExtension } = await import(`${process.env.REPO}/fake-pi.mjs`);
 const { pi, state, dispatch, settle } = createFakePi();
 await loadExtension(`${process.env.REPO}/.pi/extensions/fm-primary-turnend-guard.ts`, pi);
 
+const startedAt = Date.now();
 await dispatch("session_start", { type: "session_start", reason: "startup" });
+if (Date.now() - startedAt < 100) throw new Error("session_start returned before the claim lifecycle completed");
 // A resumed runtime raising session_start twice must not start a second claim.
 await dispatch("session_start", { type: "session_start", reason: "resume" });
-await settle();
 
 const countFile = `${process.env.FM_HOME}/state/session-start-count`;
 if (!existsSync(countFile)) throw new Error("the Pi runtime answered without claiming the session");
@@ -226,6 +241,7 @@ if (!delivered.message.content.includes("FIXTURE DIGEST LINE ONE")
 if (!delivered.message.content.includes("Do not run it again")) {
   throw new Error("the claim did not tell the model session start already ran");
 }
+await settle();
 EOF
 )
   status=$?
@@ -587,6 +603,53 @@ EOF
   pass "Pi operational turns: a performed wake drain settles the latch without a retry"
 }
 
+test_only_successful_executed_actions_count_as_delivery() {
+  local repo home out status
+  repo="$TMP_ROOT/action-proof-root"
+  home="$TMP_ROOT/action-proof-home"
+  mkdir -p "$home/state" "$home/config"
+  install_fixture "$repo" fm-primary-turnend-guard.ts
+  install_session_start_fixture "$repo" ok
+  write_guard "$repo" 2
+  out=$(REPO="$repo" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_PI_SESSION_START_AUTORUN=0 node --input-type=module 2>&1 <<'EOF'
+const { createFakePi, loadExtension } = await import(`${process.env.REPO}/fake-pi.mjs`);
+const { pi, state, dispatch, settle, toolCall } = createFakePi();
+await loadExtension(`${process.env.REPO}/.pi/extensions/fm-primary-turnend-guard.ts`, pi);
+let deliveries = 0;
+state.deliver = async () => {
+  deliveries += 1;
+  if (deliveries === 1) {
+    await toolCall("echo fm-wake-drain.sh");
+    await toolCall("printf 'remember bin/fm-session-start.sh\\n'");
+    await toolCall("echo checked # bin/fm-wake-drain.sh");
+    await dispatch("tool_call", {
+      type: "tool_call",
+      toolName: "bash",
+      input: { command: "bin/fm-watch-arm.sh" },
+    });
+    await toolCall("bin/fm-wake-drain.sh", true);
+    await settle();
+    return;
+  }
+  await toolCall("bin/fm-wake-drain.sh");
+  await settle();
+};
+await settle();
+if (state.prompts.length !== 3) {
+  throw new Error(`expected failed-action retry plus guard continuation, saw ${state.prompts.length} deliveries`);
+}
+if (!state.prompts[1].content.includes("OPERATIONAL DELIVERY NOT CARRIED OUT")) {
+  throw new Error("non-actions incorrectly satisfied operational action accounting");
+}
+if (state.notifications.length !== 0) throw new Error("the successful retry escalated");
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "only a successful executed operational action may satisfy delivery"
+  [ -z "$out" ] || fail "successful-action proof test printed output: $out"
+  pass "Pi operational turns: echoes, mentions, blocked calls, and errors do not count"
+}
+
 test_a_drain_that_never_clears_the_queue_stops_renotifying() {
   local repo home out status
   repo="$TMP_ROOT/stall-root"
@@ -688,6 +751,7 @@ test_records_queued_after_the_drain_get_exactly_one_more_turn
 test_continuity_failure_survives_coalescing
 test_repeating_the_previous_answer_is_a_failed_delivery
 test_performed_action_counts_as_delivery
+test_only_successful_executed_actions_count_as_delivery
 test_a_drain_that_never_clears_the_queue_stops_renotifying
 test_calm_keeps_one_compact_operational_boundary
 test_plain_marker_quotation_stays_a_genuine_captain_message

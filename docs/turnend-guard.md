@@ -66,13 +66,13 @@ That warning uses `bin/fm-supervision-instructions.sh --repair-line`, so it poin
 `.pi/extensions/fm-primary-turnend-guard.ts` owns Pi's `agent_settled`, so it is the single place that settles the shared single-flight latch owned by `docs/watcher-continuity.md`.
 Its settle order is fixed:
 
-1. Await the pending session claim, bounded, so the guard predicate never reads a pre-claim home. `docs/sessionstart-nudge.md` owns that claim.
+1. Await the complete pending session claim, so the guard predicate never reads a pre-claim home. `docs/sessionstart-nudge.md` owns that claim.
 2. If an operational turn was in flight, settle it and decide exactly one outcome.
 3. Otherwise, or after a settled watcher turn that needed nothing further, run the shared guard predicate as before. A settled `turn-end-guard` turn returns instead, which is the unchanged one-forced-continuation loop guard.
 
 Step 2 is action accounting, not answer counting.
-A turn that repeats its previous captain-facing final is indistinguishable from any other answer, so the coordinator instead records whether the required action ran: a `bash` call matching `fm-wake-drain.sh`, `fm-session-start.sh`, or `fm-watch-arm.sh`, or the named `fm_watch_arm_pi` repair tool.
-That observer returns nothing from `tool_call`, so it can never weaken the PreToolUse seatbelts registered beside it.
+A turn that repeats its previous captain-facing final is indistinguishable from any other answer, so the coordinator instead records whether a successful tool result proves the required action ran: an executable `bash` command position naming `fm-wake-drain.sh`, `fm-session-start.sh`, or `fm-watch-arm.sh`, or the named `fm_watch_arm_pi` repair tool.
+The observer ignores command mentions, echoed filenames, blocked calls, and error results.
 
 - Action performed, nothing outstanding: settle quietly. The durable queue is the authority on "outstanding", so coalesced ordinary wakes the drain already handled do not earn another turn.
 - Action performed, records queued after the drain or a carried continuity failure: exactly one more follow-up.
