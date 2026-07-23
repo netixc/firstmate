@@ -148,8 +148,10 @@ reset_fakes() {
   FM_FAKE_HERDR_MISSING=0
   FM_FAKE_HERDR_AGENT_STATUS=""
   FM_FAKE_CI_LOGS=""
+  FM_FAKE_SUBMITTED_HEAD=""
   export FM_FAKE_AXI_STATUS FM_FAKE_AXI_STATUS_RUN FM_FAKE_RUNS_LIST FM_FAKE_HERDR_BUSY FM_FAKE_HERDR_MISSING
   export FM_FAKE_HERDR_BUSY FM_FAKE_HERDR_MISSING FM_FAKE_HERDR_AGENT_STATUS FM_FAKE_CI_LOGS
+  export FM_FAKE_SUBMITTED_HEAD
 }
 
 # --- run-object fixtures (TOON, as `no-mistakes axi status` emits) -----------
@@ -166,6 +168,37 @@ run:
   steps[2]{step,status,findings,duration_ms}:
     intent,completed,0,0
     review,running,0,0
+EOF
+}
+
+# Active run whose pipeline tip is NOT in the crew object database (production
+# isolation: fixes live only under the no-mistakes worktree). branch_sync
+# records the worker tip at submission via submitted_head / local.head.
+# FM_FAKE_RUN_HEAD must be an unresolvable object id; FM_FAKE_SUBMITTED_HEAD the
+# crew worktree HEAD (or a deliberate mismatch for negative cases).
+run_running_pipeline_isolated() {  # <branch>
+  cat <<EOF
+run:
+  id: "01RUN"
+  branch: $1
+  status: running
+  head: "${FM_FAKE_RUN_HEAD:-0000000000000000000000000000000000000001}"
+  pr: ""
+  findings: none
+  steps[2]{step,status,findings,duration_ms}:
+    intent,completed,0,0
+    review,running,0,0
+branch_sync:
+  state: pipeline_owned
+  local:
+    branch: $1
+    head: ${FM_FAKE_SUBMITTED_HEAD:-}
+    clean: true
+  pipeline:
+    run: "01RUN"
+    status: running
+    submitted_head: ${FM_FAKE_SUBMITTED_HEAD:-}
+    current_head: ${FM_FAKE_RUN_HEAD:-0000000000000000000000000000000000000001}
 EOF
 }
 
@@ -1156,6 +1189,9 @@ test_historical_same_branch_rewritten_head_not_current() {
 
 # Head-binding: an active pipeline whose run head is a descendant of the local
 # tip (fix commits on the same history) remains current.
+# Note: this fixture leaves the fix commit object in the crew ODB (reset --hard
+# does not purge it). Production isolation is covered by
+# test_pipeline_isolated_head_submitted_matches, which uses an unresolvable head.
 test_active_run_descendant_fix_head_remains_current() {
   reset_fakes
   local d base_head fix_head out
@@ -1174,6 +1210,79 @@ test_active_run_descendant_fix_head_remains_current() {
   assert_contains "$out" "source: run-step" "descendant pipeline fix head remains run-step"
   assert_contains "$out" "state: working" "active fixing run remains working"
   pass "active run with valid descendant fix head remains current"
+}
+
+# Pipeline isolation: run.head is not in the crew ODB, but branch_sync proves
+# the pipeline was submitted from this tip -> still attribute the run-step.
+test_pipeline_isolated_head_submitted_matches() {
+  reset_fakes
+  local d base_head out
+  d=$(new_case pipeline-isolated-match)
+  make_repo_on_branch "$d/wt" fm/feat-isol
+  base_head=$(git -C "$d/wt" rev-parse HEAD)
+  make_fakebin "$d" >/dev/null
+  fm_write_meta "$d/state/isol.meta" "window=fm:fm-isol" "worktree=$d/wt" "kind=ship"
+  # Trailing resolved: would yield unknown if attribution failed.
+  printf 'resolved: [key=example] decision closed\n' > "$d/state/isol.status"
+  FM_FAKE_RUN_HEAD="0000000000000000000000000000000000000001"
+  FM_FAKE_SUBMITTED_HEAD="$base_head"
+  FM_FAKE_AXI_STATUS="$(run_running_pipeline_isolated fm/feat-isol)"
+  FM_FAKE_HERDR_BUSY=0
+  # Confirm the pipeline tip is truly absent from the crew ODB.
+  if git -C "$d/wt" rev-parse --verify "${FM_FAKE_RUN_HEAD}^{commit}" >/dev/null 2>&1; then
+    fail "fixture run head unexpectedly resolvable in crew worktree"
+  fi
+  out=$(run_crew_state "$d" isol)
+  assert_contains "$out" "source: run-step" "isolated pipeline head with matching submitted tip is run-step"
+  assert_contains "$out" "state: working" "active isolated pipeline run remains working"
+  assert_not_contains "$out" "source: none" "must not fall through to unknown when submitted matches"
+  pass "pipeline-isolated run head attributes via matching submitted_head"
+}
+
+# Same unresolvable head, but submitted tip is a different commit still in the
+# ODB (or missing) -> reject; fall through to status-log safely.
+test_pipeline_isolated_head_submitted_mismatch() {
+  reset_fakes
+  local d base_head other_head out
+  d=$(new_case pipeline-isolated-mismatch)
+  make_repo_on_branch "$d/wt" fm/feat-isol-bad
+  base_head=$(git -C "$d/wt" rev-parse HEAD)
+  git -C "$d/wt" commit -q --allow-empty -m 'other tip still in odb'
+  other_head=$(git -C "$d/wt" rev-parse HEAD)
+  git -C "$d/wt" reset -q --hard "$base_head"
+  make_fakebin "$d" >/dev/null
+  fm_write_meta "$d/state/isolbad.meta" "window=fm:fm-isolbad" "worktree=$d/wt" "kind=ship"
+  printf 'working: stage 2 after unrelated historical run\n' > "$d/state/isolbad.status"
+  FM_FAKE_RUN_HEAD="0000000000000000000000000000000000000001"
+  FM_FAKE_SUBMITTED_HEAD="$other_head"
+  FM_FAKE_AXI_STATUS="$(run_running_pipeline_isolated fm/feat-isol-bad)"
+  FM_FAKE_RUNS_LIST=""
+  FM_FAKE_HERDR_BUSY=0
+  out=$(run_crew_state "$d" isolbad)
+  assert_not_contains "$out" "source: run-step" "mismatched submitted tip must not use run-step"
+  assert_contains "$out" "source: status-log" "falls back after submitted tip mismatch"
+  assert_contains "$out" "state: working" "status-log working: remains current"
+  pass "pipeline-isolated run with mismatched submitted_head is rejected"
+}
+
+# Unresolvable head and no branch_sync block (older CLI) -> conservative reject.
+test_pipeline_isolated_head_without_branch_sync_rejected() {
+  reset_fakes
+  local d out
+  d=$(new_case pipeline-isolated-nosync)
+  make_repo_on_branch "$d/wt" fm/feat-isol-nosync
+  make_fakebin "$d" >/dev/null
+  fm_write_meta "$d/state/isolns.meta" "window=fm:fm-isolns" "worktree=$d/wt" "kind=ship"
+  printf 'working: current stage still in progress\n' > "$d/state/isolns.status"
+  FM_FAKE_RUN_HEAD="0000000000000000000000000000000000000001"
+  FM_FAKE_AXI_STATUS="$(run_running fm/feat-isol-nosync)"
+  FM_FAKE_RUNS_LIST=""
+  FM_FAKE_HERDR_BUSY=0
+  out=$(run_crew_state "$d" isolns)
+  assert_not_contains "$out" "source: run-step" "unresolvable head without branch_sync must not attribute"
+  assert_contains "$out" "source: status-log" "falls back when branch_sync absent"
+  assert_contains "$out" "state: working" "status-log remains current without branch_sync"
+  pass "unresolvable run head without branch_sync is rejected"
 }
 
 # Head-binding: local work that advanced past the run head invalidates the run.
@@ -1260,6 +1369,9 @@ test_not_provably_working_when_stopped
 test_usage_error
 test_historical_same_branch_rewritten_head_not_current
 test_active_run_descendant_fix_head_remains_current
+test_pipeline_isolated_head_submitted_matches
+test_pipeline_isolated_head_submitted_mismatch
+test_pipeline_isolated_head_without_branch_sync_rejected
 test_local_advanced_past_run_head_invalidates
 test_missing_run_head_falls_back_to_current_state
 

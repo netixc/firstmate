@@ -26,8 +26,14 @@
 #      branch whose head was rewritten or diverged must not be attributed.
 #      A run matches when its head equals the worktree HEAD, or the worktree HEAD
 #      is an ancestor of the run head (pipeline fix commits advanced the run on
-#      the same line of history). Local work that advanced past the run head, or
-#      diverged from it, invalidates attribution.
+#      the same line of history and those objects are still resolvable here).
+#      When run.head is not in this worktree's object database (common: no-mistakes
+#      keeps fix commits only in its isolated pipeline worktree), match only if
+#      branch_sync proves the pipeline was submitted from this tip
+#      (submitted_head or branch_sync.local.head equals worktree HEAD). Missing
+#      branch_sync or a mismatched submitted tip rejects the run - never
+#      branch-only attribution. Local work that advanced past a resolvable run
+#      head, or diverged from it, invalidates attribution.
 #      The run-step is AUTHORITATIVE: running/fixing -> working, ci -> working,
 #      awaiting_approval/fix_review -> parked (with gate findings), terminal
 #      passed/checks-passed -> done, failed/cancelled -> failed. EXCEPT: while
@@ -374,26 +380,55 @@ nm_runs_status_for_branch() {  # <branch>
 # scratch worktree); with no branch there is no run to attribute to this crew.
 CREW_BRANCH=$(git -C "$WT" symbolic-ref --quiet --short HEAD 2>/dev/null || true)
 
+# Worker tip recorded in axi status branch_sync when the pipeline was submitted
+# (or the local head still attached to that run). Empty when the schema is old
+# or the block is missing - callers must not invent identity from branch alone.
+nm_branch_sync_submitted_tip() {
+  local s
+  s=$(strip_quotes "$(nm_field submitted_head)")
+  if [ -n "$s" ]; then
+    printf '%s' "$s"
+    return 0
+  fi
+  # Layouts that nest head under branch_sync.local without submitted_head.
+  # Prefer that local head over pipeline.current_head / run.head.
+  s=$(printf '%s\n' "$RUN_OUT" | sed -n \
+    '/^[[:space:]]*local:[[:space:]]*$/,/^[[:space:]]*pipeline:/{
+      s/^[[:space:]]*head:[[:space:]]*//p
+    }' | head -1)
+  s=$(strip_quotes "$s")
+  [ -n "$s" ] && printf '%s' "$s"
+}
+
 # 0 if the active axi-status run's head field matches this worktree's code
 # identity. Branch match is a precondition (caller). Rules:
 #   - missing/empty head field: cannot bind; reject the run
 #   - equal commits (short or full SHA): match
-#   - worktree HEAD is an ancestor of run head: match (pipeline fix commits on
-#     the same history advanced the run tip)
+#   - worktree HEAD is an ancestor of a resolvable run head: match (pipeline fix
+#     commits on the same history advanced the run tip and objects are local)
 #   - run head is a strict ancestor of worktree HEAD: no match (local work
 #     advanced outside the run)
-#   - diverged / run head not in this worktree: no match (rewritten branch tip)
+#   - resolvable run head diverged from worktree HEAD: no match
+#   - run head not resolvable here: match only when branch_sync submitted tip
+#     (submitted_head or local.head) equals worktree HEAD; otherwise no match
 nm_run_head_matches_worktree() {
-  local run_head local_full run_full
+  local run_head local_full run_full submitted tip_full
   run_head=$(strip_quotes "$(nm_field head)")
   [ -n "$run_head" ] || return 1
   local_full=$(git -C "$WT" rev-parse HEAD 2>/dev/null) || return 1
-  run_full=$(git -C "$WT" rev-parse --verify "${run_head}^{commit}" 2>/dev/null) || return 1
-  [ "$run_full" = "$local_full" ] && return 0
-  if git -C "$WT" merge-base --is-ancestor "$local_full" "$run_full" 2>/dev/null; then
-    return 0
+  if run_full=$(git -C "$WT" rev-parse --verify "${run_head}^{commit}" 2>/dev/null); then
+    [ "$run_full" = "$local_full" ] && return 0
+    if git -C "$WT" merge-base --is-ancestor "$local_full" "$run_full" 2>/dev/null; then
+      return 0
+    fi
+    return 1
   fi
-  return 1
+  # Pipeline isolation: run.head often exists only under ~/.no-mistakes/worktrees.
+  # Accept only when branch_sync proves submission from this tip.
+  submitted=$(nm_branch_sync_submitted_tip)
+  [ -n "$submitted" ] || return 1
+  tip_full=$(git -C "$WT" rev-parse --verify "${submitted}^{commit}" 2>/dev/null) || return 1
+  [ "$tip_full" = "$local_full" ]
 }
 
 # Coarse runs-list rows are "<status> <branch> <short-sha> ...". 0 if the short
