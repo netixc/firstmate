@@ -384,15 +384,25 @@ CREW_BRANCH=$(git -C "$WT" symbolic-ref --quiet --short HEAD 2>/dev/null || true
 # (or the local head still attached to that run). Empty when the schema is old
 # or the block is missing - callers must not invent identity from branch alone.
 nm_branch_sync_submitted_tip() {
-  local s
-  s=$(strip_quotes "$(nm_field submitted_head)")
+  local sync s
+  sync=$(printf '%s\n' "$RUN_OUT" | awk '
+    /^[^[:space:]]/ {
+      if (in_sync) exit
+      in_sync = ($0 ~ /^branch_sync:[[:space:]]*$/)
+    }
+    in_sync { print }
+  ')
+  [ -n "$sync" ] || return 0
+  s=$(printf '%s\n' "$sync" | sed -n \
+    's/^[[:space:]]*submitted_head:[[:space:]]*//p' | head -1)
+  s=$(strip_quotes "$s")
   if [ -n "$s" ]; then
     printf '%s' "$s"
     return 0
   fi
   # Layouts that nest head under branch_sync.local without submitted_head.
   # Prefer that local head over pipeline.current_head / run.head.
-  s=$(printf '%s\n' "$RUN_OUT" | sed -n \
+  s=$(printf '%s\n' "$sync" | sed -n \
     '/^[[:space:]]*local:[[:space:]]*$/,/^[[:space:]]*pipeline:/{
       s/^[[:space:]]*head:[[:space:]]*//p
     }' | head -1)

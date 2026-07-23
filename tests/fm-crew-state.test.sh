@@ -1268,9 +1268,10 @@ test_pipeline_isolated_head_submitted_mismatch() {
 # Unresolvable head and no branch_sync block (older CLI) -> conservative reject.
 test_pipeline_isolated_head_without_branch_sync_rejected() {
   reset_fakes
-  local d out
+  local d base_head out unscoped
   d=$(new_case pipeline-isolated-nosync)
   make_repo_on_branch "$d/wt" fm/feat-isol-nosync
+  base_head=$(git -C "$d/wt" rev-parse HEAD)
   make_fakebin "$d" >/dev/null
   fm_write_meta "$d/state/isolns.meta" "window=fm:fm-isolns" "worktree=$d/wt" "kind=ship"
   printf 'working: current stage still in progress\n' > "$d/state/isolns.status"
@@ -1282,6 +1283,17 @@ test_pipeline_isolated_head_without_branch_sync_rejected() {
   assert_not_contains "$out" "source: run-step" "unresolvable head without branch_sync must not attribute"
   assert_contains "$out" "source: status-log" "falls back when branch_sync absent"
   assert_contains "$out" "state: working" "status-log remains current without branch_sync"
+  for unscoped in \
+    "submitted_head: $base_head" \
+    "local:
+  head: $base_head
+pipeline:"; do
+    FM_FAKE_AXI_STATUS="$(run_running fm/feat-isol-nosync)
+$unscoped"
+    out=$(run_crew_state "$d" isolns)
+    assert_not_contains "$out" "source: run-step" "unscoped submitted tip must not attribute"
+    assert_contains "$out" "source: status-log" "unscoped submitted tip falls back"
+  done
   pass "unresolvable run head without branch_sync is rejected"
 }
 
