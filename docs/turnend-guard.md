@@ -57,8 +57,32 @@ Their adapters fail open at the hook boundary to avoid corrupting a user session
 Those forced user-role prompts use the canonical `turn-end-guard` operational kind after the U+2063 `FIRSTMATE_OP: ` prefix so Ahoy cannot mistake them for captain-authored boundaries.
 Each adapter carries its own in-process or environment loop guard so the forced follow-up does not recursively schedule another follow-up.
 Pi keeps that latch active across every internal tool turn and clears it only when the generated guard follow-up reaches `agent_settled`, or immediately when follow-up delivery fails.
+On Pi that latch is now the shared operational-turn coordinator described below, so the guard and the watcher bridge cannot each queue their own turn for the same stretch of supervision work.
 If a passive adapter cannot call its SDK method, cannot find `grok`, or cannot recover the Grok session id, it fails open and relies on the pull-based `fm-guard.sh` warning at the next fleet command.
 That warning uses `bin/fm-supervision-instructions.sh --repair-line`, so it points back to the active harness protocol instead of hardcoding one background-arm command.
+
+## Pi operational-turn settle ownership
+
+`.pi/extensions/fm-primary-turnend-guard.ts` owns Pi's `agent_settled`, so it is the single place that settles the shared single-flight latch owned by `docs/watcher-continuity.md`.
+Its settle order is fixed:
+
+1. Await the complete pending session claim, so the guard predicate never reads a pre-claim home. `docs/sessionstart-nudge.md` owns that claim.
+2. If an operational turn was in flight, settle it and decide exactly one outcome.
+3. Otherwise, or after a settled watcher turn that needed nothing further, run the shared guard predicate as before. A settled `turn-end-guard` turn returns instead, which is the unchanged one-forced-continuation loop guard.
+
+Step 2 is action accounting, not answer counting.
+A turn that repeats its previous captain-facing final is indistinguishable from any other answer, so the coordinator instead records whether a successful tool result proves the required action ran: an executable `bash` command position naming `fm-wake-drain.sh`, `fm-session-start.sh`, or `fm-watch-arm.sh`, or the named `fm_watch_arm_pi` repair tool with `details.ok=true`.
+The observer ignores command mentions, echoed filenames, blocked calls, and error results.
+
+- Action performed, nothing outstanding: settle quietly. The durable queue is the authority on "outstanding", so coalesced ordinary wakes the drain already handled do not earn another turn.
+- Action performed, records queued after the drain or a carried continuity failure: exactly one more follow-up.
+- No action: one bounded retry naming the failed delivery, controlled by `FM_PI_OPERATIONAL_RETRY_LIMIT` (default 1).
+- Retry exhausted: stop delivering. A compact `firstmate-operational-escalation` row is appended and `ctx.ui.notify` warns, so the captain sees why supervision stopped retrying rather than another duplicate answer. Queued records stay queued for the next watcher wake or guard alarm.
+- Same records still queued after a drain: stop re-notifying and escalate the same way. A drain that leaves the queue unchanged will never clear it, and re-delivering on an unchanging queue is the one shape that could loop without bound even while every turn does perform its action.
+
+Calm hides noisy operational payloads, so it keeps one compact `operational-boundary` row per delivery instead.
+Without it, a follow-up turn renders as a second consecutive assistant answer with no visible cause; outside calm the payload row is already visible and the boundary renders nothing.
+The escalation row is visible in every presentation mode.
 
 ## Empirical Validation
 
@@ -149,6 +173,7 @@ No Herdr command was issued and no fleet state was touched; the experiment wrote
 
 ## Tests
 
+`tests/fm-pi-operational-turn.test.sh` owns the Pi settle-ownership regressions: the deterministic claim, exactly-once claim and arm, coalescing, action accounting, bounded failure, and the calm provenance boundary.
 `tests/fm-turnend-guard.test.sh` covers the shared predicate, primary scoping (including a secondmate's own home being guarded like the main primary while its child worktrees stay exempt), `FM_HOME` and `FM_STATE_OVERRIDE` precedence, Pi logical-run latch behavior for no-tool and multi-tool runs, fail-open behavior without `jq`, tracked hook registration for all five harnesses, and the Grok adapter's forced-resume loop guard and permission-mode regression.
 The default behavior suite does not invoke live language-model harnesses.
 `FM_PI_LIVE_E2E=1 tests/fm-pi-primary-live-e2e.test.sh` opts into the isolated interactive Pi regression recorded above.

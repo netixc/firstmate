@@ -22,6 +22,7 @@ install_pi_watch_extension_fixture() {
   cp "$EXT" "$repo/.pi/extensions/fm-primary-pi-watch.ts"
   cp "$ROOT/.pi/extensions/lib/fm-calm-visibility.ts" "$repo/.pi/extensions/lib/fm-calm-visibility.ts"
   cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$repo/.pi/extensions/lib/fm-operational-input.ts"
+  cp "$ROOT/.pi/extensions/lib/fm-operational-turn.ts" "$repo/.pi/extensions/lib/fm-operational-turn.ts"
   mkdir -p "$repo/bin"
   cp "$ROOT/bin/fm-operational-input.sh" "$repo/bin/fm-operational-input.sh"
   chmod +x "$repo/bin/fm-operational-input.sh"
@@ -664,14 +665,17 @@ if (rows().length !== 2) throw new Error(`unretired arm overlapped before fallba
 if (!prompts[0]?.includes("original wake")) throw new Error(`missing original fallback: ${prompts.join(" | ")}`);
 writeFileSync(process.env.FM_RELEASE_FILE, "release\n");
 for (let i = 0; i < 500; i += 1) {
-  if (rows().length >= 3 && (process.env.FM_LATE_KIND !== "actionable" || prompts.some((message) => message.includes("late wake")))) break;
+  if (rows().length >= 3) break;
   await new Promise((resolve) => setTimeout(resolve, 10));
 }
+await new Promise((resolve) => setTimeout(resolve, 60));
 if (rows().length !== 3) throw new Error(`late close did not restore one successor: ${rows().join(" | ")}`);
-if (process.env.FM_LATE_KIND === "actionable") {
-  if (prompts.length !== 2 || !prompts[1].includes("late wake")) throw new Error(`late actionable close was not delivered: ${prompts.join(" | ")}`);
-} else if (prompts.length !== 1) {
-  throw new Error(`late non-actionable close sent an extra wake: ${prompts.join(" | ")}`);
+// Single flight: the first fallback is still an unsettled operational turn, so a
+// late ordinary wake coalesces behind it instead of queueing a second turn. Its
+// durable queue record is untouched and the settle owner delivers one combined
+// follow-up afterwards (tests/fm-pi-operational-turn.test.sh).
+if (prompts.length !== 1) {
+  throw new Error(`late ${process.env.FM_LATE_KIND} close queued a second operational turn: ${prompts.join(" | ")}`);
 }
 writeFileSync(process.env.FM_STOP_FILE, "stop\n");
 await new Promise((resolve) => setTimeout(resolve, 80));

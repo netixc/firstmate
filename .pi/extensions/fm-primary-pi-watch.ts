@@ -13,6 +13,12 @@ import {
   FIRSTMATE_CALM_PRESENTATION_EVENT,
 } from "./lib/fm-calm-visibility.ts";
 import { encodeFirstmateOperationalInput } from "./lib/fm-operational-input.ts";
+import {
+  FIRSTMATE_ARM_REQUEST_EVENT,
+  installOperationalTurnCoordinator,
+  operationalMessageMustSurvive,
+  type OperationalTurnCoordinator,
+} from "./lib/fm-operational-turn.ts";
 
 type ArmResult = {
   ok: boolean;
@@ -179,6 +185,18 @@ export default function (pi: ExtensionAPI) {
     !calmPresentation.stockExportRendering &&
     !calmTranscriptClassIsVisible(itemClass);
 
+  const coordinator: OperationalTurnCoordinator = installOperationalTurnCoordinator(pi, state);
+
+  // The deterministic session claim owns the first cycle: when the turn-end
+  // extension has just run bin/fm-session-start.sh and the shared turn-end
+  // predicate still reports supervision missing, it asks for exactly one initial
+  // arm here instead of relying on the model to call fm_watch_arm_pi. startArm()
+  // stays the single owner of ownership checks and singleton behavior, so a
+  // repeated request is the same "unchanged" no-op a redundant tool call is.
+  pi.events?.on?.(FIRSTMATE_ARM_REQUEST_EVENT, () => {
+    startArm();
+  });
+
   function stopArm(): void {
     stopping = true;
     if (retryTimer) clearTimeout(retryTimer);
@@ -192,12 +210,27 @@ export default function (pi: ExtensionAPI) {
   };
   process.once("exit", cleanupOnProcessExit);
 
+  // Single-flight wake delivery. While one operational follow-up is queued or in
+  // progress, another wake never queues a second turn: the durable wake queue
+  // already preserves every record for the drain the operational turn performs,
+  // and only extension-generated continuity failures - which no queue record can
+  // replay - are retained for the settle owner to deliver.
   async function sendWake(message: string): Promise<void> {
-    const content = encodeFirstmateOperationalInput(
-      "watcher",
-      `FIRSTMATE WATCHER WAKE: ${message}\n\nRun bin/fm-wake-drain.sh first and handle the queued wake. Watcher continuity is extension-owned.`,
-    );
-    await pi.sendUserMessage(content, { deliverAs: "followUp" });
+    if (!coordinator.claim("watcher")) {
+      if (operationalMessageMustSurvive(message)) coordinator.defer(message);
+      return;
+    }
+    try {
+      const content = encodeFirstmateOperationalInput(
+        "watcher",
+        `FIRSTMATE WATCHER WAKE: ${message}\n\nRun bin/fm-wake-drain.sh first and handle the queued wake. Watcher continuity is extension-owned.`,
+      );
+      await pi.sendUserMessage(content, { deliverAs: "followUp" });
+    } catch (error) {
+      // A wake that never reached the model must not hold the latch shut.
+      coordinator.settle();
+      throw error;
+    }
   }
 
   function surfaceFailure(message: string): void {

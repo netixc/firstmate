@@ -3,6 +3,12 @@
 # primary whose current harness session has not already acquired the home lock.
 # Every silence and error path exits 0 because Claude SessionStart exit 2 blocks
 # session initialization.
+#
+# On Pi this output is a GATE, not just an instruction: .pi/extensions/
+# fm-primary-turnend-guard.ts runs bin/fm-session-start.sh itself whenever this
+# wrapper prints, and stays inert when it stays silent. Silence therefore has to
+# keep meaning "not a primary, or this runtime already claimed the home".
+# docs/sessionstart-nudge.md owns that contract.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

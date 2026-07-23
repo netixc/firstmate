@@ -113,6 +113,7 @@ test_rendering_and_session_lifecycle() {
   cp "$EXT" "$fixture/fm-calm.ts"
   cp "$VISIBILITY" "$fixture/lib/fm-calm-visibility.ts"
   cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$fixture/lib/fm-operational-input.ts"
+  cp "$ROOT/.pi/extensions/lib/fm-operational-turn.ts" "$fixture/lib/fm-operational-turn.ts"
   cp "$WATCH_EXT" "$fixture/fm-primary-pi-watch.ts"
   ln -s "$PI_PACKAGE_DIR" "$fixture/node_modules/@earendil-works/pi-coding-agent"
   ln -s "$PI_PACKAGE_DIR/node_modules/@earendil-works/pi-tui" "$fixture/node_modules/@earendil-works/pi-tui"
@@ -204,7 +205,11 @@ if (
 
 for (const itemClass of visibility.CALM_TRANSCRIPT_CLASSES) {
   const visible = visibility.calmTranscriptClassIsVisible(itemClass);
-  const expected = itemClass === "genuine-user-prompt" || itemClass === "genuine-agent-response";
+  // operational-boundary is the compact provenance row calm keeps so an
+  // operational follow-up turn never reads as a second unexplained answer.
+  const expected = itemClass === "genuine-user-prompt"
+    || itemClass === "genuine-agent-response"
+    || itemClass === "operational-boundary";
   if (visible !== expected) {
     throw new Error(`Calm allowlist classified ${itemClass} as visible=${visible}`);
   }
@@ -470,7 +475,8 @@ const launchBriefResult = await inputHandler({
 }, commandContext);
 if (
   launchBriefResult?.action !== "handled" ||
-  appendedEntries.length !== 1 ||
+  appendedEntries.length !== 2 ||
+  appendedEntries[1].customType !== "firstmate-operational-boundary" ||
   sentMessages.length !== 1 ||
   sentMessages[0].message.details.kind !== "launch-brief" ||
   sentMessages[0].message.content !== launchBrief
@@ -485,7 +491,7 @@ const repeatedBriefResult = await inputHandler({
 }, commandContext);
 if (
   repeatedBriefResult?.action !== "continue" ||
-  appendedEntries.length !== 1 ||
+  appendedEntries.length !== 2 ||
   sentMessages.length !== 1
 ) {
   throw new Error("consumed launch origin hid a later genuine matching prompt");
@@ -498,7 +504,7 @@ const syntheticResult = await inputHandler({
 }, commandContext);
 if (
   syntheticResult?.action !== "handled" ||
-  appendedEntries.length !== 2 ||
+  appendedEntries.length !== 4 ||
   sentMessages.length !== 2
 ) {
   throw new Error("known Firstmate synthetic input was not rerouted through controllable delivery");
@@ -533,7 +539,7 @@ const nearMissResult = await inputHandler({
 }, commandContext);
 if (
   nearMissResult?.action !== "continue" ||
-  appendedEntries.length !== 2 ||
+  appendedEntries.length !== 4 ||
   sentMessages.length !== 2
 ) {
   throw new Error("genuine near-miss input was intercepted");
@@ -632,30 +638,40 @@ const activeSyntheticResult = await inputHandler({
 }, commandContext);
 if (
   activeSyntheticResult?.action !== "handled" ||
-  appendedEntries.length !== 3 ||
+  appendedEntries.length !== 6 ||
   sentMessages.length !== 3
 ) {
   throw new Error("synthetic input received while Calm was active was not delivered");
 }
 const activePresentationComponent = new CustomEntryComponent(
-  appendedEntries[2],
+  appendedEntries[4],
   presentationRenderer,
 );
 activePresentationComponent.setExpanded(expanded);
 if (
   activePresentationComponent.hasContent() ||
   activePresentationComponent.render(100).length !== 0 ||
-  mountedPresentationComponents.length !== 3 ||
+  mountedPresentationComponents.length !== 4 ||
   mountedPresentationComponents[2].hasContent() ||
   mountedPresentationComponents[2].render(100).length !== 0
 ) {
   throw new Error("synthetic input received while Calm was active left a row or blank gap");
 }
+// Calm hides the payload but must keep one compact provenance boundary, so an
+// operational follow-up turn never reads as a second unexplained answer.
+const boundaryRenderer = entryRenderers.get("firstmate-operational-boundary");
+if (!boundaryRenderer) throw new Error("operational boundary renderer was not registered");
+if (
+  !mountedPresentationComponents[3].hasContent() ||
+  !mountedPresentationComponents[3].render(100).join("\n").includes("firstmate watcher follow-up")
+) {
+  throw new Error("Calm hid the operational follow-up boundary as well as its payload");
+}
 
 for (const { baseline } of rows) baseline.setExpanded(expanded);
 await calmCommand.handler("", commandContext);
 if (
-  mountedPresentationComponents.length !== 3 ||
+  mountedPresentationComponents.length !== 4 ||
   !mountedPresentationComponents.some((component) =>
     component.render(100).join("\n").includes("/tmp/active-probe.status")
   )
@@ -742,6 +758,7 @@ test_interactive_terminal_e2e() {
   cp "$EXT" "$project/.pi/extensions/fm-calm.ts"
   cp "$VISIBILITY" "$project/.pi/extensions/lib/fm-calm-visibility.ts"
   cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$project/.pi/extensions/lib/fm-operational-input.ts"
+  cp "$ROOT/.pi/extensions/lib/fm-operational-turn.ts" "$project/.pi/extensions/lib/fm-operational-turn.ts"
   cp "$WATCH_EXT" "$project/.pi/extensions/fm-primary-pi-watch.ts"
   cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$project/.pi/extensions/fm-primary-turnend-guard.ts"
   cp \

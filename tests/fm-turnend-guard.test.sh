@@ -772,7 +772,8 @@ test_pi_extension_forces_followup() {
   assert_contains "$content" 'sendUserMessage' "pi extension must force a follow-up turn"
   assert_contains "$content" 'encodeFirstmateOperationalInput' "pi extension must use the typed operational-input constructor"
   assert_contains "$content" 'deliverAs: "followUp"' "pi extension must queue the follow-up safely"
-  assert_contains "$content" 'guardFollowupActive' "pi extension must carry a logical-run loop guard"
+  assert_contains "$content" 'installOperationalTurnCoordinator' "pi extension must carry a logical-run loop guard"
+  assert_contains "$content" 'if (settlement.kind === "turn-end-guard") return;' "pi extension must keep one forced continuation per guard alarm"
   assert_not_contains "$content" 'skipNextTurnEnd' "pi extension kept the internal-turn loop guard"
   assert_contains "$content" 'watcher cycle is missing, failed, or unhealthy' "pi extension must identify a blind turn as watcher recovery"
   assert_contains "$content" 'harness recovery instruction below' "pi extension must delegate recovery action to the shared guard line"
@@ -786,16 +787,47 @@ test_pi_extension_forces_followup() {
   pass ".pi primary extension: agent_settled forces one follow-up through the shared guard"
 }
 
+install_pi_guard_extension_fixture() {  # <repo>
+  local repo=$1
+  mkdir -p \
+    "$repo/.pi/extensions/lib" \
+    "$repo/bin" \
+    "$repo/node_modules/@earendil-works/pi-coding-agent" \
+    "$repo/node_modules/@earendil-works/pi-tui"
+  cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$repo/.pi/extensions/fm-primary-turnend-guard.ts"
+  cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$repo/.pi/extensions/lib/fm-operational-input.ts"
+  cp "$ROOT/.pi/extensions/lib/fm-operational-turn.ts" "$repo/.pi/extensions/lib/fm-operational-turn.ts"
+  cp "$ROOT/bin/fm-operational-input.sh" "$repo/bin/fm-operational-input.sh"
+  cat > "$repo/node_modules/@earendil-works/pi-coding-agent/package.json" <<'JSON'
+{"name":"@earendil-works/pi-coding-agent","type":"module","exports":"./index.js"}
+JSON
+  cat > "$repo/node_modules/@earendil-works/pi-coding-agent/index.js" <<'JS'
+export function getMarkdownTheme() { return {}; }
+export class UserMessageComponent {
+  constructor(content) { this.content = content; }
+  render() { return [this.content]; }
+  invalidate() {}
+}
+JS
+  cat > "$repo/node_modules/@earendil-works/pi-tui/package.json" <<'JSON'
+{"name":"@earendil-works/pi-tui","type":"module","exports":"./index.js"}
+JSON
+  cat > "$repo/node_modules/@earendil-works/pi-tui/index.js" <<'JS'
+export class Text {
+  constructor(content) { this.content = content; }
+  render() { return [this.content]; }
+}
+JS
+}
+
 test_pi_extension_injects_once_per_logical_agent_run() {
   local repo home ext log out status
   repo="$TMP_ROOT/pi-logical-run-root"
   home="$TMP_ROOT/pi-logical-run-home"
   ext="$repo/.pi/extensions/fm-primary-turnend-guard.ts"
   log="$TMP_ROOT/pi-logical-run-guard.log"
-  mkdir -p "$repo/.pi/extensions/lib" "$repo/bin" "$home/state"
-  cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$ext"
-  cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$repo/.pi/extensions/lib/fm-operational-input.ts"
-  cp "$ROOT/bin/fm-operational-input.sh" "$repo/bin/fm-operational-input.sh"
+  mkdir -p "$home/state"
+  install_pi_guard_extension_fixture "$repo"
   cat > "$repo/bin/fm-turnend-guard.sh" <<'SH'
 #!/usr/bin/env bash
 cat >/dev/null
@@ -812,11 +844,21 @@ SH
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
+// Pi keeps a handler LIST per event, so the coordinator and the PreToolUse
+// seatbelt can observe their respective lifecycle events.
 const handlers = new Map();
 let prompts = 0;
+const dispatch = async (event, payload) => {
+  for (const handler of handlers.get(event) ?? []) await handler(payload, { ui: { notify() {} } });
+};
 const pi = {
+  events: { emit() {}, on() {} },
+  appendEntry() {},
+  registerEntryRenderer() {},
   on(event, handler) {
-    handlers.set(event, handler);
+    const list = handlers.get(event) ?? [];
+    list.push(handler);
+    handlers.set(event, list);
   },
   async sendUserMessage(message, options) {
     prompts += 1;
@@ -825,22 +867,33 @@ const pi = {
     if (!message.includes("watcher cycle is missing, failed, or unhealthy")) throw new Error(`guard prompt omitted recovery-only state: ${message}`);
     if (message.includes("Resume supervision according to the session-start operating block")) throw new Error(`guard prompt used ordinary continuity: ${message}`);
     if (options?.deliverAs !== "followUp") throw new Error("guard prompt was not a follow-up");
-    await handlers.get("agent_settled")?.({ type: "agent_settled" }, {});
+    // The forced follow-up turn does the operational work it was asked for, so
+    // the settle owner has no failed delivery to retry.
+    await dispatch("tool_call", { type: "tool_call", toolName: "bash", input: { command: "bin/fm-wake-drain.sh" } });
+    await dispatch("tool_result", {
+      type: "tool_result",
+      toolCallId: "fixture-bash",
+      toolName: "bash",
+      input: { command: "bin/fm-wake-drain.sh" },
+      content: [],
+      details: undefined,
+      isError: false,
+    });
+    await dispatch("agent_settled", { type: "agent_settled" });
   },
 };
 const mod = await import(pathToFileURL(process.env.PLUGIN).href);
 mod.default(pi);
 if (handlers.has("turn_end")) throw new Error("guard still treats internal Pi turns as logical runs");
-const settled = handlers.get("agent_settled");
-if (!settled) throw new Error("agent_settled handler was not registered");
+if (!handlers.has("agent_settled")) throw new Error("agent_settled handler was not registered");
 
-await settled({ type: "agent_settled" }, {});
+await dispatch("agent_settled", { type: "agent_settled" });
 if (prompts !== 1) throw new Error(`no-tool run injected ${prompts} follow-ups`);
 
 for (let i = 0; i < 3; i += 1) {
-  await handlers.get("turn_end")?.({ type: "turn_end", turnIndex: i }, {});
+  await dispatch("turn_end", { type: "turn_end", turnIndex: i });
 }
-await settled({ type: "agent_settled" }, {});
+await dispatch("agent_settled", { type: "agent_settled" });
 if (prompts !== 2) throw new Error(`multi-tool run produced ${prompts - 1} follow-ups`);
 
 const guardRuns = readFileSync(process.env.FM_GUARD_LOG, "utf8").trim().split("\n").length;
@@ -858,10 +911,8 @@ test_pi_extension_retries_after_followup_delivery_failure() {
   repo="$TMP_ROOT/pi-delivery-failure-root"
   home="$TMP_ROOT/pi-delivery-failure-home"
   ext="$repo/.pi/extensions/fm-primary-turnend-guard.ts"
-  mkdir -p "$repo/.pi/extensions/lib" "$repo/bin" "$home/state"
-  cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$ext"
-  cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$repo/.pi/extensions/lib/fm-operational-input.ts"
-  cp "$ROOT/bin/fm-operational-input.sh" "$repo/bin/fm-operational-input.sh"
+  mkdir -p "$home/state"
+  install_pi_guard_extension_fixture "$repo"
   cat > "$repo/bin/fm-turnend-guard.sh" <<'SH'
 #!/usr/bin/env bash
 cat >/dev/null
@@ -878,21 +929,38 @@ import { pathToFileURL } from "node:url";
 
 const handlers = new Map();
 let attempts = 0;
+const dispatch = async (event, payload) => {
+  for (const handler of handlers.get(event) ?? []) await handler(payload, { ui: { notify() {} } });
+};
 const pi = {
+  events: { emit() {}, on() {} },
+  appendEntry() {},
+  registerEntryRenderer() {},
   on(event, handler) {
-    handlers.set(event, handler);
+    const list = handlers.get(event) ?? [];
+    list.push(handler);
+    handlers.set(event, list);
   },
   async sendUserMessage() {
     attempts += 1;
     if (attempts === 1) throw new Error("synthetic delivery failure");
-    await handlers.get("agent_settled")?.({ type: "agent_settled" }, {});
+    await dispatch("tool_call", { type: "tool_call", toolName: "bash", input: { command: "bin/fm-wake-drain.sh" } });
+    await dispatch("tool_result", {
+      type: "tool_result",
+      toolCallId: "fixture-bash",
+      toolName: "bash",
+      input: { command: "bin/fm-wake-drain.sh" },
+      content: [],
+      details: undefined,
+      isError: false,
+    });
+    await dispatch("agent_settled", { type: "agent_settled" });
   },
 };
 const mod = await import(pathToFileURL(process.env.PLUGIN).href);
 mod.default(pi);
-const settled = handlers.get("agent_settled");
-await settled({ type: "agent_settled" }, {});
-await settled({ type: "agent_settled" }, {});
+await dispatch("agent_settled", { type: "agent_settled" });
+await dispatch("agent_settled", { type: "agent_settled" });
 if (attempts !== 2) throw new Error(`expected delivery retry, saw ${attempts} attempts`);
 EOF
 )

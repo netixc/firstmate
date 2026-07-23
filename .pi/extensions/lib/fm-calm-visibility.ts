@@ -3,6 +3,7 @@ import {
   type ExtensionAPI,
   UserMessageComponent,
 } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import {
   classifyFirstmateOperationalText,
   encodeFirstmateOperationalInput,
@@ -30,18 +31,24 @@ export const CALM_TRANSCRIPT_CLASSES = [
   "project-trust-warning",
   "synthetic-user",
   "synthetic-assistant",
+  "operational-boundary",
   "unknown",
 ] as const;
 
 export type CalmTranscriptClass = (typeof CALM_TRANSCRIPT_CLASSES)[number];
 
+// Calm hides the noisy operational payload but keeps its boundary. Without that
+// boundary, a model turn started by a hidden operational input renders as a
+// second consecutive assistant answer with no visible cause.
 const CALM_VISIBLE_CLASSES = new Set<CalmTranscriptClass>([
   "genuine-user-prompt",
   "genuine-agent-response",
+  "operational-boundary",
 ]);
 
 export const FIRSTMATE_SYNTHETIC_CONTEXT_TYPE = "firstmate-synthetic-input";
 export const FIRSTMATE_SYNTHETIC_PRESENTATION_TYPE = "firstmate-synthetic-input-presentation";
+export const FIRSTMATE_OPERATIONAL_BOUNDARY_TYPE = "firstmate-operational-boundary";
 export const FIRSTMATE_CALM_PRESENTATION_EVENT = "firstmate:calm-presentation";
 export const FIRSTMATE_PI_LAUNCH_BRIEF_ENV = "FM_FIRSTMATE_PI_LAUNCH_BRIEF";
 
@@ -72,6 +79,20 @@ type SyntheticDeliveryOptions = {
 type FirstmateSyntheticPresentation = {
   content: string;
   kind: FirstmateSyntheticKind;
+};
+
+type FirstmateOperationalBoundary = {
+  kind: FirstmateSyntheticKind;
+};
+
+const OPERATIONAL_BOUNDARY_LABELS: Record<FirstmateSyntheticKind, string> = {
+  "session-start": "session start",
+  watcher: "watcher follow-up",
+  "turn-end-guard": "supervision check",
+  "away-supervisor": "away-mode escalation",
+  "from-firstmate": "firstmate message",
+  "launch-brief": "launch brief",
+  "legacy-operational": "operational follow-up",
 };
 
 let calm = false;
@@ -139,6 +160,20 @@ export function registerFirstmateSyntheticPresentation(pi: ExtensionAPI): void {
   );
 }
 
+export function registerFirstmateOperationalBoundary(pi: ExtensionAPI): void {
+  pi.registerEntryRenderer<FirstmateOperationalBoundary>(
+    FIRSTMATE_OPERATIONAL_BOUNDARY_TYPE,
+    (entry) => {
+      // Outside calm the full operational row is already on screen, so the
+      // compact boundary would duplicate it.
+      if (!calmPresentationHides("synthetic-user")) return undefined;
+      const kind = entry.data?.kind;
+      const label = (kind && OPERATIONAL_BOUNDARY_LABELS[kind]) || "operational follow-up";
+      return new Text(`- firstmate ${label} -`, 0, 0);
+    },
+  );
+}
+
 export function deliverFirstmateSyntheticInput(
   pi: ExtensionAPI,
   content: string,
@@ -157,6 +192,9 @@ export function deliverFirstmateSyntheticInput(
   } finally {
     mountingSyntheticPresentation = false;
   }
+  // One visible row either way: calm hides the payload row above and shows this
+  // compact boundary, plain presentation shows the payload and hides this.
+  pi.appendEntry<FirstmateOperationalBoundary>(FIRSTMATE_OPERATIONAL_BOUNDARY_TYPE, { kind });
   if (mountForRedraw) options.redrawPresentation?.();
   pi.sendMessage(
     {

@@ -1,7 +1,9 @@
 # Native session-start nudge
 
 AGENTS.md section 3 remains the single authoritative behavioral contract for session start.
-The tracked native adapters are an enforcement layer that injects one instruction and never runs the digest, lock acquisition, bootstrap sweeps, wake drain, or supervision arm itself.
+The tracked native adapters are an enforcement layer.
+Claude, Codex, OpenCode, and Grok inject one instruction and never run the digest, lock acquisition, bootstrap sweeps, wake drain, or supervision arm themselves.
+Pi is the one transport that executes `bin/fm-session-start.sh` directly, because relying on model obedience there caused a real monitoring outage; see "Pi: deterministic claim rather than advisory nudge" below.
 The payload starts with U+2063 and the stable `FIRSTMATE_OP: ` label, carries the current `session-start` protocol kind, and retains exactly ``Run `bin/fm-session-start.sh` now, exactly once, before executing any other instructions.`` as its body.
 The Ahoy skill owns the rule that this explicitly marked operational input is never a captain-authored session boundary.
 
@@ -23,8 +25,27 @@ Every path exits 0, including malformed state and adapter errors, because Claude
 | Claude | `.claude/settings.json` registers `SessionStart` for `startup`, `resume`, and `clear`, excludes `compact`, and invokes the wrapper through `CLAUDE_PROJECT_DIR`. | Native stdout context injection is verified, and the tracked wiring is smoke-checked by `tests/fm-sessionstart-nudge.test.sh`. |
 | Codex | `.codex/hooks.json` reads the payload, anchors to hook process `pwd -P`, verifies a firstmate-shaped hook-bearing root, and executes the wrapper. | Native stdout context injection is verified on Codex 0.144.4. |
 | OpenCode | `.opencode/plugins/fm-primary-sessionstart-nudge.js` listens for `session.created`, runs the wrapper once per session id, and calls `client.session.promptAsync` only when the wrapper prints a nudge. | Verified in the interactive TUI on OpenCode 1.17.18 and intentionally fail-open in headless `opencode run`. |
-| Pi | `.pi/extensions/fm-primary-turnend-guard.ts` handles `session_start` reasons `startup`, `new`, and `resume`, then injects the wrapper output with `pi.sendMessage`. | The custom message enters model context without racing an initial positional prompt, and the changed extension passes strict TypeScript checking on Pi 0.80.10. |
+| Pi | `.pi/extensions/fm-primary-turnend-guard.ts` handles `session_start` reasons `startup`, `new`, and `resume`. When the wrapper prints a nudge it RUNS `bin/fm-session-start.sh` itself and injects the complete digest with `pi.sendMessage`. | The custom message enters model context without racing an initial positional prompt, and the changed extension passes strict TypeScript checking on Pi 0.81.1. |
 | Grok | `.grok/hooks/fm-primary-sessionstart-nudge.json` registers a project `SessionStart` hook and invokes the wrapper through inline-defaulted `${GROK_WORKSPACE_ROOT:-}`. | The project event fires on Grok 0.2.103, but hook stdout does not reach model context, so this path is documented fail-open. |
+
+## Pi: deterministic claim rather than advisory nudge
+
+Every other harness transport injects an instruction and relies on the model to obey it.
+On Pi that reliance was the earliest divergence in the 2026-07-23 monitoring outage: a replacement runtime persisted the correct nudge, answered the next captain prompt without running session start, and left the home unclaimed for about nineteen minutes.
+
+The Pi transport therefore executes the lifecycle instead of only asking for it.
+`bin/fm-sessionstart-nudge.sh` remains the single owner of "is this a genuine primary whose current harness session has not claimed the home lock"; the extension acts only when that wrapper prints a nudge, so gate agents, unmarked linked worktrees, plain checkouts, and an already-claimed runtime stay untouched.
+
+The claim contract is:
+
+- Exactly one `bin/fm-session-start.sh` per Pi runtime. A second `session_start` event in the same process - a replacement or reload - never starts a second lifecycle.
+- The subprocess is a direct child of the Pi process, so `bin/fm-lock.sh`'s ancestry walk records the Pi harness pid exactly as a model-driven run would.
+- Lock refusal stays owned by `bin/fm-session-start.sh`. A home another live session holds is reported read-only inside the digest rather than claimed a second time, and no watcher cycle is armed.
+- The complete digest is delivered as a `display:false` custom message carrying the `session-start` operational kind, so it enters model context without starting a turn that would race Pi's positional prompt. It tells the model the lifecycle already ran and must not be repeated.
+- Pi's awaited `session_start` dispatch does not return until the pending claim completes, and `agent_settled` awaits the same lifecycle without a shorter bound, so captain work can neither begin nor settle before the runtime has claimed the session.
+- The extension retains the active detached process-group identity and synchronously kills that group from both Pi `session_shutdown` and the process-exit fallback, so runtime replacement cannot orphan startup mutations.
+- After a successful claim the extension asks for one initial watcher cycle over the shared event bus, and only when `bin/fm-turnend-guard.sh` still reports supervision missing. `startArm()` stays the single owner of ownership checks and singleton behavior, so a repeated request is the same `watcher: unchanged` no-op a redundant tool call is.
+- A failed lifecycle degrades to the previous advisory instruction plus the concrete failure, and `FM_PI_SESSION_START_AUTORUN=0` restores the advisory-only path outright. `FM_PI_SESSION_START_TIMEOUT_MS` (default 600000) bounds normal execution; on timeout the extension signals the detached process group, escalates after `FM_PI_SESSION_START_KILL_GRACE_MS` (default 5000), and awaits confirmed group exit before returning.
 
 The OpenCode nudge runs only on `session.created`.
 The watcher-arm and turn-end guard plugins run later on `session.idle`, and the turn-end guard continues to let the watcher coordinator act first, so the three plugins do not race for one lifecycle event.
@@ -130,6 +151,38 @@ Codex 0.144.6 was inspected as not affected for the same hook-context reason; `c
 Grok 0.2.106 remains not applicable because its project `SessionStart` stdout still does not enter model context, as the 2026-07-17 validation above proves.
 A fresh Grok run was attempted on 2026-07-22 but stopped at `402 Payment Required: Grok Build usage balance exhausted`, so no stronger live claim is made.
 
+## Pi 0.81.1 isolated claim evidence on 2026-07-24
+
+Every run below used a throwaway primary-shaped repository, an isolated `PI_CODING_AGENT_SESSION_DIR`, and an isolated `FM_HOME`.
+The captain's live home, lock, watcher, queue, and Pi session were never touched.
+The existing shared Pi credential store was reused without copying credential bytes, and the model was pinned to `openai-codex/gpt-5.6-sol` at low thinking.
+The fixture `bin/fm-session-start.sh` calls the real `bin/fm-lock.sh` and prints `PI_CONTINUITY_DIGEST_SENTINEL`, so the claim is proven end to end without running fleet-mutating sweeps.
+
+Reproduction of the defect, using the advisory-only transport that `FM_PI_SESSION_START_AUTORUN=0` still selects.
+`--tools read` removes the model's ability to obey, which is the deterministic form of the incident's "the model ignored the hidden instruction":
+
+```sh
+pi --print --approve --no-session --no-context-files --no-extensions \
+  -e .pi/extensions/fm-primary-turnend-guard.ts --no-skills --tools read \
+  --model openai-codex/gpt-5.6-sol --thinking low 'Reply with exactly ANSWER_A.'
+```
+
+Observed: the assistant final `ANSWER_A` completed and `state/session-start-count` was absent.
+A captain-facing answer finished with the home unclaimed, which is the 2026-07-23 monitoring outage in miniature.
+A first attempt with `--tools bash` did claim the session, which is exactly why obedience is not a guarantee: the same transport passes or fails depending on what the model chooses to do.
+
+Verification of the fix, same isolated shape, tracked extension unchanged from this branch:
+
+```sh
+pi --print --approve --no-session --no-context-files --no-extensions \
+  -e .pi/extensions/fm-primary-turnend-guard.ts --no-skills --tools read \
+  --model openai-codex/gpt-5.6-sol --thinking low 'Quote the session-start sentinel you were given.'
+```
+
+Observed output was ``PI_CONTINUITY_DIGEST_SENTINEL count=1``.
+`state/session-start-count` was `1`, and the real `bin/fm-lock.sh` recorded a holder whose `ps -o comm=` was `pi`, proving the extension-spawned lifecycle claims the Pi harness process and not a transient subshell.
+`tests/fm-pi-primary-live-e2e.test.sh` now owns that regression; `FM_PI_LIVE_E2E=1 FM_PI_LIVE_E2E_ONLY=continuity` runs the continuity sections alone.
+
 ## Regression coverage
 
 `tests/fm-sessionstart-nudge.test.sh` proves wrapper silence for both gate signals, an unmarked linked worktree, a missing state directory, and an already-owned lock.
@@ -139,3 +192,4 @@ It also verifies tracked wrapper registration for Claude, Codex, OpenCode, Pi, a
 `tests/fm-pi-primary-live-e2e.test.sh` sends the exact legacy startup and bare-marker away-mode rows through a persistent model transcript, invokes Ahoy, and contrasts both with unrelated-marker and altered-startup captain near misses.
 `tests/fm-pi-primary-live-e2e.test.sh` and `tests/fm-opencode-primary-live-e2e.test.sh` also exercise their genuine native startup paths with first-message and later-message Ahoy regressions.
 `tests/fm-turnend-guard.test.sh`, `tests/fm-pi-watch-extension.test.sh`, and `tests/fm-daemon.test.sh` cover marked guard, monitoring, and away-mode delivery without changing their behavior.
+`tests/fm-pi-operational-turn.test.sh` proves one guarded lifecycle per Pi runtime with the complete digest in context, exactly one extension-owned initial cycle, the advisory fallback after a failed claim, and the `FM_PI_SESSION_START_AUTORUN=0` escape hatch.
