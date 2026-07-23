@@ -61,12 +61,14 @@ An ordinary user prompt may quote or reuse watcher, guard, startup, or superviso
 
 `.pi/extensions/lib/fm-calm-visibility.ts` owns the allowlist-style transcript policy and delivery into Pi's structured hidden context entries.
 `bin/fm-operational-input.sh` owns current cross-language operational-input construction and parsing, while the thin Pi adapter lives at `.pi/extensions/lib/fm-operational-input.ts`.
-Only `genuine-user-prompt` and `genuine-agent-response` are policy-visible.
+`genuine-user-prompt`, `genuine-agent-response`, and the compact `operational-boundary` are policy-visible.
 Every other audited class is policy-hidden even when Pi currently lacks a supported renderer for enforcing that result.
+The boundary is the deliberate exception that preserves the provenance of a model turn started by a hidden operational input without revealing its payload.
 
 Current session-start, watcher, turn-end guard, away supervisor, and launch-brief inputs use the versioned kind carried after the landed U+2063 `FIRSTMATE_OP: ` prefix.
 The established leading `[fm-from-firstmate]` plus U+2063 routing carrier remains current and is parsed as `from-firstmate` through the same owner so running secondmate charters remain compatible.
-Pi persists the resulting exact kind in both the presentation entry and the non-displayed context message.
+For inputs routed through the shared presentation delivery, Pi persists the resulting exact kind in both the presentation entry and the non-displayed context message.
+Session-start context stays on its non-displayed, non-turn-triggering custom-message path and retains the exact kind there without adding a presentation entry.
 A landed untyped `FIRSTMATE_OP` input is retained as `legacy-operational` rather than having a subtype inferred from its body.
 Narrow pre-protocol parsing for the exact startup line, watcher and guard shapes, and bare-marker away escalation is isolated from the current parser.
 The per-process `FM_FIRSTMATE_PI_LAUNCH_BRIEF` binding remains only as compatibility for a raw launch created before typed launch instructions.
@@ -76,7 +78,7 @@ Near-miss fixtures cover quoted operational content, ASCII-only labels, arbitrar
 
 Synthetic inputs that would otherwise render as user rows are rerouted only at Pi input presentation time.
 Their full text is persisted in a non-displayed custom message that Pi converts back to an ordinary user message for provider context, and a TUI-only custom entry restores stock user styling while Calm is off.
-The session-start nudge already uses a non-displayed custom message at its authoritative source, so it remains on that existing hidden presentation path while retaining model context and session persistence.
+The session-start context uses a non-displayed custom message at its authoritative source, so it remains on that hidden presentation path while retaining model context and session persistence.
 The custom-entry host omits the complete row when the renderer returns undefined under Calm, including its normally conditional leading spacer.
 Cycling tool expansion and restoring its original value rebuilds those custom entries and leaves final `Ctrl+O` state unchanged.
 Exported and shared HTML retain genuine user prompts, genuine assistant responses, and ordinary tool rendering, while omitting the synthetic presentation entry and hidden context message at the documented Pi 0.81.1 exporter boundary.
@@ -98,6 +100,7 @@ The test fixture enumerates every class below through the centralized policy, an
 | `skill-invocation` | `SkillInvocationMessageComponent` plus parsed user text | Unsupported boundary; remains visible. |
 | `custom-message` | `CustomMessageComponent` when `display` is true | Firstmate's known synthetic context messages use `display: false`; arbitrary extension messages remain an unsupported boundary. |
 | `custom-entry` | `CustomEntryComponent` with a registered renderer | Firstmate's synthetic presentation entry is mounted synchronously, rebuilt to zero children without a residual spacer, and restored by the ordinary expansion redraw; arbitrary extension entries remain an unsupported boundary. |
+| `operational-boundary` | Firstmate `CustomEntryComponent` paired with a synthetic operational delivery | Visible as one compact provenance row under Calm; renders nothing outside Calm because the full operational payload row is already visible there. |
 | `compaction-summary` | `CompactionSummaryMessageComponent` | Unsupported boundary; remains visible. |
 | `branch-summary` | `BranchSummaryMessageComponent` | Unsupported boundary; remains visible. |
 | `working-status` | `WorkingStatusIndicator` | Hidden through `setWorkingVisible(false)`. |
@@ -105,7 +108,7 @@ The test fixture enumerates every class below through the centralized policy, an
 | `system-notice` | `showStatus`, `showError`, compaction, retry, and startup warning rows | Unsupported boundary; remains visible. |
 | `cache-notice` | Non-persisted cache-miss `Text` row | Unsupported boundary; remains visible. |
 | `project-trust-warning` | Non-persisted startup `Text` row | Unsupported boundary; remains visible. |
-| `synthetic-user` | Firstmate extension `sendUserMessage`, terminal-injected input, Firstmate-generated Pi positional brief, or the already non-displayed session-start nudge | Forms that ordinarily render as user rows are rerouted to hidden context plus a gapless controllable presentation entry; the session-start nudge retains its existing non-displayed custom-message path. |
+| `synthetic-user` | Firstmate extension `sendUserMessage`, terminal-injected input, Firstmate-generated Pi positional brief, or the non-displayed session-start context | Forms that ordinarily render as user rows are rerouted to hidden context plus a gapless controllable presentation entry; session-start context retains its non-displayed custom-message path. |
 | `synthetic-assistant` | No authoritative Firstmate source found | Policy-hidden, but Pi exposes no generic assistant-role renderer. |
 | `unknown` | Future or unclassified transcript component | Policy-hidden, but no generic renderer exists; never claimed as covered. |
 

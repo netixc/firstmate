@@ -43,8 +43,8 @@ Codex retains its bounded foreground checkpoint protocol.
 Grok retains its tracked background-task notification protocol.
 No adapter starts a replacement with shell `&`.
 
-The existing turn-end guard implementation and adapters are unchanged.
-They remain the final backstop rather than the normal continuity mechanism.
+The shared shell guard and non-Pi adapters are unchanged.
+They remain the final backstop rather than the normal continuity mechanism; Pi's changed settle adapter is owned by `docs/turnend-guard.md`.
 
 ## Arm-layer cycle contract
 

@@ -1,11 +1,11 @@
 // Firstmate's single-flight coordinator for Pi operational follow-up turns.
 //
-// Every operational wake Firstmate delivers to a Pi primary - a watcher wake, a
-// turn-end guard repair, a session-start digest - arrives as a queued follow-up,
-// and Pi documents that each queued follow-up starts another agent turn. Without
+// Every operational follow-up Firstmate delivers to a Pi primary - a watcher
+// wake or turn-end guard repair - starts another agent turn. Without
 // coordination, N wakes produce N turns, and a model that answers an operational
 // turn by repeating its previous captain-facing final turns those extra turns
-// into consecutive duplicate answers.
+// into consecutive duplicate answers. Session-start context deliberately uses a
+// non-triggering custom message instead and does not enter this delivery path.
 //
 // This coordinator makes two guarantees:
 //
