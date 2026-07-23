@@ -63,14 +63,14 @@ An ordinary user prompt beginning with `FIRSTMATE WATCHER WAKE:` but lacking the
 Only `genuine-user-prompt` and `genuine-agent-response` are policy-visible.
 Every other audited class is policy-hidden even when Pi currently lacks a supported renderer for enforcing that result.
 
-The classifier recognizes only these authoritative Firstmate forms:
+The classifier recognizes only these current or rollout-compatible Firstmate forms:
 
-| Form | Authoritative source | Classification evidence |
+| Form | Source or compatibility origin | Classification evidence |
 | --- | --- | --- |
-| Session-start nudge | `.pi/extensions/fm-primary-turnend-guard.ts` via `bin/fm-sessionstart-nudge.sh` | Exact complete nudge text; Pi already sends it as a non-displayed custom message. |
-| Watcher notification | `.pi/extensions/fm-primary-pi-watch.ts` | Exact `FIRSTMATE WATCHER WAKE: ` prefix plus the complete stable drain suffix and non-empty wake content. |
-| Turn-end guard | `.pi/extensions/fm-primary-turnend-guard.ts` | Exact complete guard paragraph plus non-empty guard diagnostics. |
-| Operational input | Firstmate injectors | U+2063 followed by the exact `FIRSTMATE_OP: ` prefix, or the legacy U+2063 `Supervisor escalate (` shape. |
+| Legacy unmarked session-start nudge | Earlier `bin/fm-sessionstart-nudge.sh` output | Exact complete pre-operational-prefix nudge text. |
+| Legacy unmarked watcher notification | Earlier `.pi/extensions/fm-primary-pi-watch.ts` output | Exact `FIRSTMATE WATCHER WAKE: ` prefix plus the complete stable drain suffix and non-empty wake content. |
+| Legacy unmarked turn-end guard | Earlier `.pi/extensions/fm-primary-turnend-guard.ts` output | Exact complete guard paragraph plus non-empty guard diagnostics. |
+| Current operational input or legacy away supervisor | Firstmate injectors | U+2063 followed by the exact `FIRSTMATE_OP: ` prefix, or the legacy U+2063 `Supervisor escalate (` shape. |
 | From-firstmate request | `bin/fm-marker-lib.sh` through `bin/fm-send.sh` | Exact `[fm-from-firstmate]` plus U+2063 marker and non-empty request content. |
 | Pi launch brief | `bin/fm-spawn.sh` | Per-process `FM_FIRSTMATE_PI_LAUNCH_BRIEF` path identifies the exact unchanged positional brief content after the launch shell's standard trailing-newline removal; the match is consumed once. |
 
