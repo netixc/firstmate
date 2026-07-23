@@ -29,6 +29,7 @@ import {
   deliverFirstmateSyntheticInput,
   FIRSTMATE_CALM_PRESENTATION_EVENT,
   FIRSTMATE_PI_LAUNCH_BRIEF_ENV,
+  registerFirstmateOperationalBoundary,
   registerFirstmateSyntheticPresentation,
   setCalmPresentation,
   setCalmStockExportRendering,
@@ -82,6 +83,7 @@ export default function (pi: ExtensionAPI) {
   };
 
   registerFirstmateSyntheticPresentation(pi);
+  registerFirstmateOperationalBoundary(pi);
 
   function registerBuiltIn<TParams extends TSchema, TDetails, TState>(
     factory: DefinitionFactory<TParams, TDetails, TState>,
@@ -137,7 +139,10 @@ export default function (pi: ExtensionAPI) {
       return shell;
     };
 
-    pi.registerTool({
+    // Explicit type arguments: Pi 0.81.1 widened the inferred details type on
+    // registerTool, so inference would check the wrapper's renderResult against
+    // AgentToolResult<unknown> instead of this definition's own details type.
+    pi.registerTool<TParams, TDetails, TState>({
       ...original,
       renderShell: "self",
 
@@ -219,8 +224,8 @@ export default function (pi: ExtensionAPI) {
     ctx.ui.setHiddenThinkingLabel();
     ctx.ui.setStatus("firstmate-calm", undefined);
     removeTerminalInputHandler?.();
-    removeTerminalInputHandler = ctx.ui.onTerminalInput((data) => {
-      if (!getKeybindings().matches(data, "tui.input.submit")) return;
+    removeTerminalInputHandler = ctx.ui.onTerminalInput((data): undefined => {
+      if (!getKeybindings().matches(data, "tui.input.submit")) return undefined;
 
       const input = ctx.ui.getEditorText().trim();
       if (
@@ -228,7 +233,7 @@ export default function (pi: ExtensionAPI) {
         input !== "/export" &&
         !input.startsWith("/export ")
       ) {
-        return;
+        return undefined;
       }
 
       exportRendering = true;

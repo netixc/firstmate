@@ -18,9 +18,8 @@ fail() {
 }
 
 command -v pi >/dev/null 2>&1 || fail "pi not found"
-command -v tmux >/dev/null 2>&1 || fail "tmux not found"
 
-TMUX=$(command -v tmux)
+TMUX=$(command -v tmux || true)
 SOCKET="fm-pi-live-e2e-$$"
 SESSION=pi-live-e2e
 LAB="$ROOT/.pi-live-e2e.$$"
@@ -177,6 +176,7 @@ run_native_ahoy_regressions() {
   git init -q "$AHOY_PROJECT"
   cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$AHOY_PROJECT/.pi/extensions/"
   cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$AHOY_PROJECT/.pi/extensions/lib/"
+  cp "$ROOT/.pi/extensions/lib/fm-operational-turn.ts" "$AHOY_PROJECT/.pi/extensions/lib/"
   cp \
     "$ROOT/bin/fm-sessionstart-nudge.sh" \
     "$ROOT/bin/fm-primary-scope-lib.sh" \
@@ -244,14 +244,219 @@ run_native_ahoy_regressions() {
     || fail "Pi native later-message Ahoy reran session start"
 }
 
+# Session-continuity regressions for the two proven Pi primary defects. They run
+# against real Pi runtimes with an isolated PI_CODING_AGENT_SESSION_DIR and an
+# isolated FM_HOME, and never touch the captain's live home, lock, or session.
+build_continuity_repo() {  # <repo>
+  local repo=$1
+  mkdir -p "$repo/.pi/extensions/lib" "$repo/bin"
+  git init -q "$repo"
+  printf '# Pi continuity regression fixture\n' > "$repo/AGENTS.md"
+  cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" \
+     "$ROOT/.pi/extensions/fm-primary-pi-watch.ts" \
+     "$ROOT/.pi/extensions/fm-calm.ts" \
+     "$repo/.pi/extensions/"
+  cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" \
+     "$ROOT/.pi/extensions/lib/fm-operational-turn.ts" \
+     "$ROOT/.pi/extensions/lib/fm-calm-visibility.ts" \
+     "$repo/.pi/extensions/lib/"
+  cp "$ROOT/bin/fm-sessionstart-nudge.sh" \
+     "$ROOT/bin/fm-primary-scope-lib.sh" \
+     "$ROOT/bin/fm-gate-refuse-lib.sh" \
+     "$ROOT/bin/fm-operational-input.sh" \
+     "$ROOT/bin/fm-lock.sh" \
+     "$repo/bin/"
+  chmod +x "$repo/bin/fm-sessionstart-nudge.sh" "$repo/bin/fm-operational-input.sh" "$repo/bin/fm-lock.sh"
+  # Fixture session start: the real ancestry-walking lock plus a marked digest,
+  # so the claim is proven end to end without running fleet-mutating sweeps.
+  # shellcheck disable=SC2016 # Variables expand in the generated script, not this test shell.
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'set -u' \
+    'file="${FM_HOME:?}/state/session-start-count"' \
+    'count=0' \
+    '[ ! -f "$file" ] || count=$(sed -n "1p" "$file")' \
+    'count=$((count + 1))' \
+    'printf "%s\n" "$count" > "$file"' \
+    'root="$(cd "$(dirname "$0")/.." && pwd)"' \
+    '"$root/bin/fm-lock.sh" >/dev/null 2>&1 || true' \
+    'holder=$(sed -n "1p" "${FM_HOME}/state/.lock" 2>/dev/null || true)' \
+    'ps -o comm= -p "${holder:-0}" 2>/dev/null | tr -d " " > "${FM_HOME}/state/lock-holder-comm"' \
+    'printf "PI_CONTINUITY_DIGEST_SENTINEL count=%s\n" "$count"' \
+    > "$repo/bin/fm-session-start.sh"
+  printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$repo/bin/fm-arm-pretool-check.sh"
+  cp "$repo/bin/fm-arm-pretool-check.sh" "$repo/bin/fm-cd-pretool-check.sh"
+  printf '%s\n' '#!/usr/bin/env bash' 'cat >/dev/null' 'exit 0' > "$repo/bin/fm-turnend-guard.sh"
+  printf '%s\n' '#!/usr/bin/env bash' 'printf "drained: 0 record(s)\n"' > "$repo/bin/fm-wake-drain.sh"
+  chmod +x "$repo"/bin/*.sh
+}
+
+run_session_claim_regression() {
+  local repo="$LAB/continuity-claim" home="$LAB/continuity-claim-home" out count holder
+  mkdir -p "$home/state" "$home/config"
+  build_continuity_repo "$repo"
+  # --tools read makes model obedience impossible, which is exactly the state the
+  # incident recorded: nothing but the extension can claim the session.
+  out=$(
+    cd "$repo" &&
+      FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" \
+      PI_CODING_AGENT_SESSION_DIR="$LAB/continuity-claim-sessions" \
+        pi --print --approve --no-session --no-context-files --no-extensions \
+          -e .pi/extensions/fm-primary-turnend-guard.ts \
+          --no-skills --tools read \
+          --model openai-codex/gpt-5.6-sol --thinking low \
+          'Quote the session-start sentinel you were given.'
+  ) || fail "Pi session-claim regression exited nonzero: $out"
+  [ -n "$out" ] || fail "Pi produced no captain-facing answer, so claim ordering is untested"
+  count=$(sed -n '1p' "$home/state/session-start-count" 2>/dev/null || printf 'ABSENT')
+  [ "$count" = 1 ] || fail "Pi runtime claimed the session $count time(s) instead of exactly once"
+  holder=$(sed -n '1p' "$home/state/lock-holder-comm" 2>/dev/null || printf 'ABSENT')
+  [ "$holder" = pi ] || fail "the home lock does not name the Pi harness process: $holder"
+  printf '%s\n' "$out" | grep -Fq PI_CONTINUITY_DIGEST_SENTINEL \
+    || fail "the complete session-start digest did not reach model context: $out"
+}
+
+run_single_flight_regression() {
+  local repo="$LAB/continuity-flight" home="$LAB/continuity-flight-home"
+  local sessions="$LAB/continuity-flight-sessions" driver="$LAB/rpc-drive.mjs" session_file summary
+  mkdir -p "$home/state" "$home/config" "$sessions"
+  build_continuity_repo "$repo"
+  # shellcheck disable=SC2016 # Variables expand in the generated script, not this test shell.
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'set -u' \
+    'counter="${FM_HOME:?}/state/arm-count"' \
+    'n=0' \
+    '[ ! -f "$counter" ] || n=$(sed -n "1p" "$counter")' \
+    'n=$((n + 1))' \
+    'printf "%s\n" "$n" > "$counter"' \
+    'printf "watcher: attached fixture arm %s\n" "$n"' \
+    'if [ "$n" -le 2 ]; then' \
+    '  sleep 1' \
+    '  printf "signal: continuity wake %s\n" "$n"' \
+    '  exit 0' \
+    'fi' \
+    'trap "exit 0" TERM INT' \
+    'for _ in $(seq 1 600); do sleep 0.1; done' \
+    > "$repo/bin/fm-watch-arm.sh"
+  chmod +x "$repo/bin/fm-watch-arm.sh"
+  printf '1784835678\t710\tsignal\talpha\tdone: alpha\n1784835679\t711\tstale\tbeta\tstale 900s\n' \
+    > "$home/state/.wake-queue"
+  # shellcheck disable=SC2016 # Variables expand in the generated script, not this test shell.
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'set -u' \
+    ': > "${FM_HOME:?}/state/.wake-queue"' \
+    'printf "drained: 2 record(s) seq 710 711\n"' \
+    > "$repo/bin/fm-wake-drain.sh"
+  chmod +x "$repo/bin/fm-wake-drain.sh"
+
+  cat > "$driver" <<'JS'
+import { spawn } from "node:child_process";
+const [, , cwd, prompt, ...piArgs] = process.argv;
+const child = spawn("pi", ["--mode", "rpc", ...piArgs], { cwd, env: process.env, stdio: ["pipe", "pipe", "inherit"] });
+let buffer = "";
+let lastEventAt = Date.now();
+child.stdout.on("data", (chunk) => {
+  buffer += chunk.toString();
+  let index;
+  while ((index = buffer.indexOf("\n")) >= 0) {
+    const line = buffer.slice(0, index).replace(/\r$/, "");
+    buffer = buffer.slice(index + 1);
+    if (line.trim()) lastEventAt = Date.now();
+  }
+});
+await new Promise((resolve) => setTimeout(resolve, 3000));
+child.stdin.write(`${JSON.stringify({ id: "p1", type: "prompt", message: prompt })}\n`);
+await new Promise((resolve) => {
+  const timer = setInterval(() => {
+    if (Date.now() - lastEventAt > 25000) {
+      clearInterval(timer);
+      resolve();
+    }
+  }, 500);
+});
+child.kill("SIGTERM");
+await new Promise((resolve) => setTimeout(resolve, 1000));
+process.exit(0);
+JS
+
+  (
+    cd "$repo" &&
+      FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" PI_CODING_AGENT_SESSION_DIR="$sessions" \
+        node "$driver" "$repo" \
+          'Use the fm_watch_arm_pi tool once to start supervision, then reply with exactly PI_FLIGHT_ANSWER.' \
+          --approve --no-context-files --no-extensions \
+          -e .pi/extensions/fm-primary-turnend-guard.ts \
+          -e .pi/extensions/fm-calm.ts \
+          -e .pi/extensions/fm-primary-pi-watch.ts \
+          --model openai-codex/gpt-5.6-sol --thinking low
+  ) || fail "Pi single-flight RPC regression could not run"
+
+  session_file=$(find "$sessions" -name '*.jsonl' | head -1)
+  [ -n "$session_file" ] || fail "the isolated Pi session file was not written"
+  summary=$(node -e '
+const { readFileSync } = require("node:fs");
+const rows = [];
+for (const line of readFileSync(process.argv[1], "utf8").split("\n")) {
+  if (!line.trim()) continue;
+  let entry;
+  try { entry = JSON.parse(line); } catch { continue; }
+  if (entry.type === "custom") { rows.push({ kind: "presentation", customType: entry.customType }); continue; }
+  if (entry.type === "custom_message") { rows.push({ kind: "context", customType: entry.customType }); continue; }
+  if (entry.type !== "message") continue;
+  const message = entry.message ?? {};
+  if (message.role === "assistant") {
+    const text = (message.content ?? []).filter((b) => b.type === "text").map((b) => b.text).join("").trim();
+    rows.push({ kind: "assistant", text });
+    continue;
+  }
+  if (message.role === "toolResult") rows.push({ kind: "toolResult" });
+}
+const finals = rows.map((row, index) => ({ ...row, index })).filter((row) => row.kind === "assistant" && row.text);
+let repeats = 0;
+for (let i = 1; i < finals.length; i += 1) {
+  if (finals[i].text !== finals[i - 1].text) continue;
+  const between = rows.slice(finals[i - 1].index + 1, finals[i].index);
+  if (between.some((row) => row.kind === "context")) repeats += 1;
+}
+console.log(JSON.stringify({
+  wakeContext: rows.filter((row) => row.kind === "context" && row.customType === "firstmate-synthetic-input").length,
+  boundaries: rows.filter((row) => row.kind === "presentation" && row.customType === "firstmate-operational-boundary").length,
+  repeatedFinals: repeats,
+}));
+' "$session_file")
+  printf '%s' "$summary" | grep -q '"repeatedFinals":0' \
+    || fail "Pi repeated an assistant final separated only by hidden operational input: $summary"
+  printf '%s' "$summary" | grep -q '"wakeContext":1' \
+    || fail "two actionable closes did not coalesce into one operational delivery: $summary"
+  printf '%s' "$summary" | grep -q '"boundaries":1' \
+    || fail "the operational delivery left no compact provenance boundary: $summary"
+  [ ! -s "$home/state/.wake-queue" ] \
+    || fail "durable wake records survived the operational turn: $(cat "$home/state/.wake-queue")"
+  [ "$(sed -n '1p' "$home/state/arm-count")" -ge 3 ] \
+    || fail "extension-owned successor continuity did not survive coalescing"
+}
+
 mkdir -p "$LAB"
+run_session_claim_regression
+run_single_flight_regression
+# Each live section costs real model turns. FM_PI_LIVE_E2E_ONLY=continuity runs
+# just the session-continuity sections when re-verifying that behavior alone;
+# the default remains the complete regression.
+if [ "${FM_PI_LIVE_E2E_ONLY:-}" = continuity ]; then
+  printf 'ok - Pi %s live E2E covered the deterministic session claim and single-flight operational turns\n' "$PI_VERSION"
+  exit 0
+fi
 git clone -q "$ROOT" "$PROJECT"
 run_ahoy_transcript_regressions
 run_native_ahoy_regressions
+[ -n "$TMUX" ] || fail "tmux not found for the interactive Pi continuity section"
 mkdir -p "$PROJECT/.pi/extensions/lib"
 cp "$ROOT/.pi/extensions/fm-primary-pi-watch.ts" "$PROJECT/.pi/extensions/fm-primary-pi-watch.ts"
 cp "$ROOT/.pi/extensions/lib/fm-calm-visibility.ts" "$PROJECT/.pi/extensions/lib/fm-calm-visibility.ts"
 cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$PROJECT/.pi/extensions/lib/fm-operational-input.ts"
+cp "$ROOT/.pi/extensions/lib/fm-operational-turn.ts" "$PROJECT/.pi/extensions/lib/fm-operational-turn.ts"
 cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$PROJECT/.pi/extensions/fm-primary-turnend-guard.ts"
 cp "$ROOT/bin/fm-watch-arm.sh" "$PROJECT/bin/fm-watch-arm.sh"
 cp "$ROOT/bin/fm-operational-input.sh" "$PROJECT/bin/fm-operational-input.sh"

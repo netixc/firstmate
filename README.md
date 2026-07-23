@@ -105,6 +105,7 @@ For Grok, `--trust` is needed once per clone so project hooks and the turn-end g
 For Pi, approve the project trust prompt once per clone on first launch so the tracked `.pi/extensions/*.ts` files auto-load.
 Every Pi session starts with calm mode off; `/calm` is a session-local conversation-focused transcript toggle.
 While active, it uses Pi's supported presentation APIs to hide the live working row, collapsed thinking labels, all seven built-in tool shells, the Firstmate watcher tool shell, and canonically typed Firstmate operational inputs.
+It keeps one compact boundary row per hidden operational input, so a turn that a watcher follow-up started never reads as a second unexplained answer.
 Every injected input remains in model context and session storage.
 Inputs that ordinarily render as user rows use a TUI-only custom entry so Calm can hide and restore their presentation without changing delivery; the session-start nudge remains on its existing non-displayed custom-message path.
 Toggling off restores ordinary rendering, and `Ctrl+O` expansion behavior stays unchanged.
