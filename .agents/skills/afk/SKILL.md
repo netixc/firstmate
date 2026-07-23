@@ -48,7 +48,7 @@ Merges, decisions, destructive actions, and security-sensitive actions retain th
 
 ## Operational prefix and injection contract
 
-The daemon prefixes every current injection with `FM_OPERATIONAL_PREFIX`: `FM_INJECT_MARK`, the U+2063 invisible separator, followed by the stable `FIRSTMATE_OP: ` label.
+The daemon constructs every current injection as the `away-supervisor` kind owned by `bin/fm-operational-input.sh`, beginning with `FM_OPERATIONAL_PREFIX`: `FM_INJECT_MARK`, the U+2063 invisible separator, followed by the stable `FIRSTMATE_OP: ` label.
 The bare `FM_INJECT_MARK` form remains accepted for legacy daemon escalations during rollout.
 The operational prefix is carried in the typed message so it works consistently across verified worker runtimes.
 `strip_injection_marker` removes the current operational prefix or legacy bare marker before classification or relay.
