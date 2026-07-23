@@ -71,7 +71,7 @@ Its settle order is fixed:
 3. Otherwise, or after a settled watcher turn that needed nothing further, run the shared guard predicate as before. A settled `turn-end-guard` turn returns instead, which is the unchanged one-forced-continuation loop guard.
 
 Step 2 is action accounting, not answer counting.
-A turn that repeats its previous captain-facing final is indistinguishable from any other answer, so the coordinator instead records whether a successful tool result proves the required action ran: an executable `bash` command position naming `fm-wake-drain.sh`, `fm-session-start.sh`, or `fm-watch-arm.sh`, or the named `fm_watch_arm_pi` repair tool.
+A turn that repeats its previous captain-facing final is indistinguishable from any other answer, so the coordinator instead records whether a successful tool result proves the required action ran: an executable `bash` command position naming `fm-wake-drain.sh`, `fm-session-start.sh`, or `fm-watch-arm.sh`, or the named `fm_watch_arm_pi` repair tool with `details.ok=true`.
 The observer ignores command mentions, echoed filenames, blocked calls, and error results.
 
 - Action performed, nothing outstanding: settle quietly. The durable queue is the authority on "outstanding", so coalesced ordinary wakes the drain already handled do not earn another turn.

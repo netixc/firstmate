@@ -167,6 +167,19 @@ install_session_start_fixture() {  # <repo> <mode>
 printf 'fixture session start refused\n' >&2
 exit 3
 SH
+  elif [ "$mode" = timeout ]; then
+    cat > "$repo/bin/fm-session-start.sh" <<'SH'
+#!/usr/bin/env bash
+set -u
+trap '' TERM
+(
+  trap '' TERM
+  printf '%s\n' "$BASHPID" > "${FM_HOME:?}/state/session-start-descendant"
+  sleep 2
+  printf 'escaped\n' > "${FM_HOME}/state/session-start-sentinel"
+) &
+wait
+SH
   else
     cat > "$repo/bin/fm-session-start.sh" <<'SH'
 #!/usr/bin/env bash
@@ -323,6 +336,45 @@ EOF
   expect_code 0 "$status" "a failed Pi session claim must fall back to the advisory nudge"
   [ -z "$out" ] || fail "claim-failure test printed output: $out"
   pass "Pi session claim: a failed lifecycle degrades to the advisory instruction"
+}
+
+test_session_claim_timeout_reaps_the_process_tree() {
+  local repo home out status
+  repo="$TMP_ROOT/claim-timeout-root"
+  home="$TMP_ROOT/claim-timeout-home"
+  mkdir -p "$home/state" "$home/config"
+  install_fixture "$repo" fm-primary-turnend-guard.ts
+  install_session_start_fixture "$repo" timeout
+  write_guard "$repo" 0
+  out=$(REPO="$repo" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_PI_SESSION_START_TIMEOUT_MS=100 \
+    FM_PI_SESSION_START_KILL_GRACE_MS=50 node --input-type=module 2>&1 <<'EOF'
+import { existsSync, readFileSync } from "node:fs";
+const { createFakePi, loadExtension } = await import(`${process.env.REPO}/fake-pi.mjs`);
+const { pi, state, dispatch } = createFakePi();
+await loadExtension(`${process.env.REPO}/.pi/extensions/fm-primary-turnend-guard.ts`, pi);
+const startedAt = Date.now();
+await dispatch("session_start", { type: "session_start", reason: "startup" });
+if (Date.now() - startedAt < 140) throw new Error("timeout returned before process-tree escalation");
+const descendant = Number(readFileSync(`${process.env.FM_HOME}/state/session-start-descendant`, "utf8").trim());
+try {
+  process.kill(descendant, 0);
+  throw new Error(`session-start descendant ${descendant} survived timeout`);
+} catch (error) {
+  if ((error).message?.includes("survived timeout")) throw error;
+}
+if (existsSync(`${process.env.FM_HOME}/state/session-start-sentinel`)) {
+  throw new Error("session-start descendant mutated state after timeout");
+}
+if (state.messages.length !== 1
+  || !state.messages[0].message.content.includes("process tree was terminated")) {
+  throw new Error("the confirmed timeout was not delivered to model context");
+}
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "a timed-out Pi session claim must reap its complete process tree"
+  [ -z "$out" ] || fail "session claim timeout test printed output: $out"
+  pass "Pi session claim: timeout escalation reaps the complete process tree"
 }
 
 test_session_claim_autorun_can_be_disabled() {
@@ -622,6 +674,15 @@ state.deliver = async () => {
     await toolCall("echo fm-wake-drain.sh");
     await toolCall("printf 'remember bin/fm-session-start.sh\\n'");
     await toolCall("echo checked # bin/fm-wake-drain.sh");
+    await dispatch("tool_result", {
+      type: "tool_result",
+      toolCallId: "fixture-arm",
+      toolName: "fm_watch_arm_pi",
+      input: {},
+      content: [],
+      details: { ok: false, message: "watcher: read-only" },
+      isError: false,
+    });
     await dispatch("tool_call", {
       type: "tool_call",
       toolName: "bash",
@@ -631,7 +692,15 @@ state.deliver = async () => {
     await settle();
     return;
   }
-  await toolCall("bin/fm-wake-drain.sh");
+  await dispatch("tool_result", {
+    type: "tool_result",
+    toolCallId: "fixture-arm",
+    toolName: "fm_watch_arm_pi",
+    input: {},
+    content: [],
+    details: { ok: true, message: "watcher: started" },
+    isError: false,
+  });
   await settle();
 };
 await settle();
@@ -647,7 +716,7 @@ EOF
   status=$?
   expect_code 0 "$status" "only a successful executed operational action may satisfy delivery"
   [ -z "$out" ] || fail "successful-action proof test printed output: $out"
-  pass "Pi operational turns: echoes, mentions, blocked calls, and errors do not count"
+  pass "Pi operational turns: unsuccessful repairs, mentions, blocked calls, and errors do not count"
 }
 
 test_a_drain_that_never_clears_the_queue_stops_renotifying() {
@@ -745,6 +814,7 @@ test_plain_marker_quotation_stays_a_genuine_captain_message() {
 test_session_claim_runs_before_any_answer_completes
 test_session_claim_arms_one_initial_cycle
 test_session_claim_failure_falls_back_to_the_advisory_nudge
+test_session_claim_timeout_reaps_the_process_tree
 test_session_claim_autorun_can_be_disabled
 test_signal_and_stale_while_busy_coalesce_into_one_turn
 test_records_queued_after_the_drain_get_exactly_one_more_turn

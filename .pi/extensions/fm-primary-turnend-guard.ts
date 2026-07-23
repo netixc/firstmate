@@ -50,6 +50,7 @@ const marker = `${state}/.pi-turnend-extension-loaded`;
 const extensionVersion = `sha256:${createHash("sha256").update(readFileSync(extensionFile)).digest("hex")}`;
 const sessionStartAutorun = process.env.FM_PI_SESSION_START_AUTORUN !== "0";
 const sessionStartTimeoutMs = positiveInteger("FM_PI_SESSION_START_TIMEOUT_MS", 600000);
+const sessionStartKillGraceMs = positiveInteger("FM_PI_SESSION_START_KILL_GRACE_MS", 5000);
 
 let sessionStartLifecycle: Promise<void> | null = null;
 
@@ -102,6 +103,26 @@ function runSessionstartNudge(): string {
   return result.stdout.trim();
 }
 
+function processGroupAlive(pid: number): boolean {
+  try {
+    process.kill(-pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+function signalProcessGroup(pid: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(-pid, signal);
+  } catch {
+  }
+}
+
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolveWait) => setTimeout(resolveWait, milliseconds));
+}
+
 // Run the guarded session-start lifecycle exactly as a model-driven turn would:
 // one `bin/fm-session-start.sh` subprocess whose ancestry is this Pi process, so
 // bin/fm-lock.sh records this harness pid. The script owns lock refusal, so a
@@ -111,11 +132,17 @@ function runSessionStart(): Promise<SessionStartResult> {
   return new Promise((resolveResult) => {
     const child = spawn(`${root}/bin/fm-session-start.sh`, [], {
       cwd: root,
+      detached: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
     let stderr = "";
     let settled = false;
+    let timedOut = false;
+    let resolveClosed: () => void = () => {};
+    const closed = new Promise<void>((resolveChildClosed) => {
+      resolveClosed = resolveChildClosed;
+    });
     const finish = (result: SessionStartResult): void => {
       if (settled) return;
       settled = true;
@@ -123,8 +150,24 @@ function runSessionStart(): Promise<SessionStartResult> {
       resolveResult(result);
     };
     const timer = setTimeout(() => {
-      child.kill("SIGTERM");
-      finish({ ok: false, digest: stdout, failure: `bin/fm-session-start.sh did not finish within ${sessionStartTimeoutMs}ms` });
+      timedOut = true;
+      const pid = child.pid;
+      if (!pid) {
+        finish({ ok: false, digest: stdout, failure: `bin/fm-session-start.sh did not finish within ${sessionStartTimeoutMs}ms` });
+        return;
+      }
+      signalProcessGroup(pid, "SIGTERM");
+      void (async () => {
+        await wait(sessionStartKillGraceMs);
+        if (processGroupAlive(pid)) signalProcessGroup(pid, "SIGKILL");
+        await closed;
+        while (processGroupAlive(pid)) await wait(25);
+        finish({
+          ok: false,
+          digest: stdout,
+          failure: `bin/fm-session-start.sh did not finish within ${sessionStartTimeoutMs}ms; its process tree was terminated`,
+        });
+      })();
     }, sessionStartTimeoutMs);
     timer.unref();
     child.stdout.on("data", (chunk: Buffer) => {
@@ -134,9 +177,12 @@ function runSessionStart(): Promise<SessionStartResult> {
       stderr += chunk.toString();
     });
     child.on("error", (error: Error) => {
+      resolveClosed();
       finish({ ok: false, digest: "", failure: `bin/fm-session-start.sh could not start: ${error.message}` });
     });
     child.on("close", (code: number | null) => {
+      resolveClosed();
+      if (timedOut) return;
       if (code === 0 && stdout.trim()) {
         finish({ ok: true, digest: stdout.replace(/\n+$/, ""), failure: "" });
         return;

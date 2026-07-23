@@ -246,6 +246,7 @@ export function installOperationalTurnCoordinator(
     if (!state.active || state.actionPerformed) return;
     if (event.isError) return;
     if (event.toolName === OPERATIONAL_ACTION_TOOL) {
+      if ((event.details as { ok?: unknown } | undefined)?.ok !== true) return;
       state.actionPerformed = true;
       publish();
       return;
