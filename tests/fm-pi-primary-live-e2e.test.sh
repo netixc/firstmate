@@ -122,7 +122,7 @@ run_ahoy_case() {
     cd "$PROJECT" &&
       pi --print --approve --no-session --no-context-files --no-extensions \
         --no-skills --skill .agents/skills --tools read \
-        --model openai-codex/gpt-5.6-sol --thinking low \
+        --model openai-codex/gpt-5.6-sol --thinking medium \
         "$preceding" "/ahoy"
   ) || status=$?
   [ "$status" -eq 0 ] || fail "Pi Ahoy $label case exited $status: $out"
@@ -258,6 +258,8 @@ build_continuity_repo() {  # <repo>
      "$repo/.pi/extensions/"
   cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" \
      "$ROOT/.pi/extensions/lib/fm-operational-turn.ts" \
+     "$ROOT/.pi/extensions/lib/fm-calm-assistant-layout.ts" \
+     "$ROOT/.pi/extensions/lib/fm-calm-operational-user-layout.ts" \
      "$ROOT/.pi/extensions/lib/fm-calm-visibility.ts" \
      "$repo/.pi/extensions/lib/"
   cp "$ROOT/bin/fm-sessionstart-nudge.sh" \

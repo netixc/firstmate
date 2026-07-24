@@ -14,6 +14,7 @@ Give the captain a concise session-only recap without gathering fresh state.
 2. Find the most recent real captain-authored message before the current `/ahoy` invocation.
    A captain boundary is an ordinary user-role message unless it matches one of the narrow operational exclusions below.
    Exclude messages that begin with the current U+2063 `FIRSTMATE_OP:` injection prefix.
+   The leading U+2063 marker is mandatory for that exclusion, so ASCII-only `FIRSTMATE_OP:` is always a captain boundary.
    Exclude legacy bare-marker away-mode injections only when U+2063 is immediately followed by `Supervisor escalate (`.
    Exclude the exact legacy unmarked session-start payload ``Run `bin/fm-session-start.sh` now, exactly once, before executing any other instructions.``
    Custom-role messages such as Pi's `firstmate-sessionstart-nudge` are not captain messages.
