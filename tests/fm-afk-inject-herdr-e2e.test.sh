@@ -64,7 +64,7 @@ trap cleanup_all EXIT
 fm_herdr_lab_prepare "$SESSION" || fail "could not prepare isolated Herdr lab session"
 
 # --- source the daemon (for afk_enter/afk_exit/FM_INJECT_MARK) + the backend -
-# shellcheck source=bin/fm-supervise-daemon.sh
+# shellcheck source=/dev/null
 . "$DAEMON"
 
 # --- build the isolated session's supervisor pane ----------------------------

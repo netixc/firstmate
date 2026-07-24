@@ -4,7 +4,7 @@ set -u
 
 # shellcheck source=tests/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
-# shellcheck source=bin/fm-composer-lib.sh
+# shellcheck source=/dev/null
 . "$ROOT/bin/fm-composer-lib.sh"
 
 test_strip_ghost_drops_dim_keeps_normal() {

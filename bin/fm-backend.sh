@@ -14,7 +14,9 @@ FM_BACKEND_DEFAULT_ROOT="$(cd "$FM_BACKEND_LIB_DIR/.." && pwd)"
 FM_ROOT="${FM_ROOT_OVERRIDE:-${FM_ROOT:-$FM_BACKEND_DEFAULT_ROOT}}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 
-# shellcheck source=bin/backends/herdr.sh
+# The adapter is its own canonical lint root (bin/backends/*.sh), so stop static
+# source following here rather than importing its AST into every consumer.
+# shellcheck source=/dev/null
 . "$FM_BACKEND_LIB_DIR/backends/herdr.sh"
 
 # Harness busy footers used only to corroborate Herdr's semantic agent state

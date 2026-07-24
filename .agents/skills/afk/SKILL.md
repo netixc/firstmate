@@ -45,6 +45,7 @@ Bias ambiguous input toward return because a present captain takes precedence ov
 
 Away mode changes notification cadence, not approval authority.
 Merges, decisions, destructive actions, and security-sensitive actions retain their normal owners.
+An ask-user finding keeps the configured authority and exceptions `AGENTS.md` section 7 owns, decided through `ask-user-authority`; the daemon only batches the notification.
 
 ## Operational prefix and injection contract
 
