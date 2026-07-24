@@ -66,9 +66,11 @@ Projection is attempted only when the pre-create layout is unambiguous and the t
 Firstmate journals the exact projection id and created workspace before mutating layout.
 Create, ordering, focus restoration, and cleanup serialize through a machine-private session lock whose ownership and mode are validated before use.
 If projection, ordering, or focus restoration is ambiguous, Firstmate keeps the worker alive and records enough state for conservative recovery.
+After the exact projected workspace converges to one task tab and pane, Firstmate atomically upgrades the journal from version 1 to a version 2 restart binding recording the exact home, session, workspace, tab, pane, and parent identities.
+On a same-identity restart, that version 2 binding replaces only its own fully bound, agent-free husk in place under the session lock - creating the replacement tab first, closing the old pane focus-preservingly, then advancing the journal atomically - and every ambiguous binding, missing pane, or uncertain focus snapshot falls back to the ordinary flat home workspace without mutation.
 Cleanup closes only exact recorded ids and refuses any action that could close the captain's active tab or disturb an unverified focus snapshot.
-Stale or malformed journals are quarantined rather than guessed from labels.
-Secondmate homes inherit the flag under the `secondmate-provisioning` contract.
+Stale or malformed journals are quarantined rather than guessed from labels; `bin/backends/herdr.sh`'s reclaim comments own the exact same-identity checks.
+Secondmate homes inherit the flag under the `secondmate-provisioning` contract, and a secondmate child reclaims only under its exact bound home and parent.
 
 ## Away-mode supervision
 
