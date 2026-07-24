@@ -54,7 +54,7 @@ Every spawn version-gates the installed `herdr` protocol, requires `jq`, and ref
 There is no provider-selection configuration or environment variable.
 Task metadata records `window=<session>:<pane-id>`, `herdr_session=`, `herdr_workspace_id=`, `herdr_tab_id=`, and `herdr_pane_id=`.
 Metadata from an older Firstmate version may retain `backend=herdr`; readers accept that harmless marker but refuse any other legacy provider marker and require the task to be retired or migrated before operation.
-The session-start secondmate sweep uses Herdr's registered-agent state to classify endpoints as `alive`, `dead`, or `unknown` without guessing from shell process names.
+The session-start secondmate sweep uses the recovery-grade `fm_backend_agent_state` contract owned by `bin/fm-backend.sh` instead of guessing from shell process names.
 
 Task selectors for `fm-peek.sh`, `fm-send.sh`, and `fm-crew-state.sh` resolve centrally through `fm_backend_resolve_selector`.
 A selector containing `:` is passed through as an explicit Herdr endpoint escape hatch.
