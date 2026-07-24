@@ -39,7 +39,11 @@ The seeded default tab is pruned only when its exact id came from the response t
 `bin/backends/herdr.sh` owns protocol checks, workspace and tab lifecycle, bounded capture, send and submit confirmation, semantic busy state, composer classification, event waiting, agent liveness, focus-safe presentation operations, and exact endpoint cleanup.
 Consumers call the shared functions without a provider argument.
 
-Herdr's registered-agent state supplies confident `alive`, `dead`, and `unknown` liveness for secondmate recovery.
+Herdr's registered-agent state supplies recovery-grade liveness for the session-start secondmate sweep through `fm_backend_agent_state`.
+Rather than adding a second classifier, `fm_backend_herdr_agent_state` wraps the already-verified `fm_backend_herdr_pane_agent_state`: a structurally gone pane becomes `missing`, a restored agent-less shell becomes `dead`, a registered agent becomes `alive`, and an unexpected or failed read becomes `unreadable`.
+Only `dead` and `missing` authorize a relaunch, so an unreadable probe can never produce a duplicate supervisor.
+The comment above `fm_backend_agent_state` in `bin/fm-backend.sh` is the single owner of that state contract, and `fm_backend_herdr_agent_alive` keeps the older three-state `alive`/`dead`/`unknown` view for callers that do not need to distinguish a missing endpoint from an existing husk.
+That mapping needed no new empirical verification because `fm_backend_herdr_pane_agent_state`'s states are already verified above, both at the unit level and, for `no-agent`, against the real binary through the respawn-idempotency end-to-end test.
 The watcher uses semantic agent state first and falls back to bounded captured output when a foreground tool temporarily makes native state inconclusive.
 Protocol-16 sessions may subscribe to `pane.agent_status_changed` for immediate blocked transitions; connection, schema, or repeated runtime failure falls back to polling.
 
@@ -55,16 +59,18 @@ Bounded capture internally compensates for Herdr builds whose `pane read --lines
 ## Optional disposable single-task presentation spaces
 
 The local presence flag `config/herdr-presentation-spaces` enables a default-off visual projection for newly spawned work.
-It does not change task identity, endpoint authority, worktree ownership, durable routing, recovery, or teardown gates.
+It does not change task identity, endpoint authority, worktree ownership, durable routing, or the authority and safety gates for recovery and teardown.
 The task still has one authoritative pane and one metadata record.
 
-Projection is attempted only when the pre-create layout is unambiguous and the target task is new.
-Firstmate journals the exact projection id and created workspace before mutating layout.
+Initial projection is attempted only when the pre-create layout is unambiguous and the target task is new.
+Firstmate journals the projection attempt before mutating layout.
 Create, ordering, focus restoration, and cleanup serialize through a machine-private session lock whose ownership and mode are validated before use.
 If projection, ordering, or focus restoration is ambiguous, Firstmate keeps the worker alive and records enough state for conservative recovery.
+After the exact projected workspace converges to one task tab and pane, Firstmate atomically upgrades the journal from version 1 to a version 2 restart binding recording the exact home, session, workspace, tab, pane, and parent identities.
+On a same-identity restart, that version 2 binding replaces only its own fully bound, agent-free husk in place under the session lock - creating the replacement tab first, closing the old pane focus-preservingly, then advancing the journal atomically - and every ambiguous binding, missing pane, or uncertain focus snapshot falls back to the ordinary flat home workspace without mutation.
 Cleanup closes only exact recorded ids and refuses any action that could close the captain's active tab or disturb an unverified focus snapshot.
-Stale or malformed journals are quarantined rather than guessed from labels.
-Secondmate homes inherit the flag under the `secondmate-provisioning` contract.
+Stale or malformed journals are quarantined rather than guessed from labels; `bin/backends/herdr.sh`'s reclaim comments own the exact same-identity checks.
+Secondmate homes inherit the flag under the `secondmate-provisioning` contract, and a secondmate child reclaims only under its exact bound home and parent.
 
 ## Away-mode supervision
 

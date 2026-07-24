@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Event-level regressions for Pi primary-session continuity: the deterministic
 # session claim, the single-flight operational-turn latch, action accounting,
-# and the compact provenance boundary. Every case runs against a fake Pi that
+# and operational-input provenance. Every case runs against a fake Pi that
 # dispatches handler LISTS the way Pi's extension runner does, in a throwaway
 # primary-shaped repo and home; nothing here can reach the active firstmate home.
 set -u
@@ -823,46 +823,6 @@ EOF
 
 # --- provenance --------------------------------------------------------------
 
-test_calm_keeps_one_compact_operational_boundary() {
-  local repo home out status
-  repo="$TMP_ROOT/boundary-root"
-  home="$TMP_ROOT/boundary-home"
-  mkdir -p "$home/state" "$home/config"
-  install_fixture "$repo" fm-calm.ts
-  out=$(REPO="$repo" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" node --input-type=module 2>&1 <<'EOF'
-const { createFakePi } = await import(`${process.env.REPO}/fake-pi.mjs`);
-const visibility = await import(`${process.env.REPO}/.pi/extensions/lib/fm-calm-visibility.ts`);
-const { pi, state } = createFakePi();
-visibility.registerFirstmateOperationalBoundary(pi);
-
-const boundary = state.renderers.get("firstmate-operational-boundary");
-if (!boundary) throw new Error("the operational boundary renderer was not registered");
-const entry = { data: { kind: "watcher" } };
-
-visibility.setCalmPresentation(false);
-if (boundary(entry) !== undefined) {
-  throw new Error("calm-off duplicated the payload row with a boundary row");
-}
-
-visibility.setCalmPresentation(true);
-const row = boundary(entry);
-if (!row) throw new Error("calm hid the operational boundary as well as the payload");
-const text = row.render(80).join("\n");
-if (!text.includes("firstmate watcher follow-up")) {
-  throw new Error(`the calm boundary does not name the operational cause: ${text}`);
-}
-if (text.includes("FIRSTMATE WATCHER WAKE") || text.length > 80) {
-  throw new Error(`the calm boundary is not compact: ${text}`);
-}
-visibility.setCalmPresentation(false);
-EOF
-)
-  status=$?
-  expect_code 0 "$status" "calm must keep one compact operational boundary"
-  [ -z "$out" ] || fail "boundary test printed output: $out"
-  pass "Pi provenance: calm keeps a compact operational boundary and calm-off keeps the payload row"
-}
-
 test_plain_marker_quotation_stays_a_genuine_captain_message() {
   local classified status
   # The privacy boundary the fix must preserve: an ordinary captain message that
@@ -890,5 +850,4 @@ test_repeating_the_previous_answer_is_a_failed_delivery
 test_performed_action_counts_as_delivery
 test_only_successful_executed_actions_count_as_delivery
 test_a_drain_that_never_clears_the_queue_stops_renotifying
-test_calm_keeps_one_compact_operational_boundary
 test_plain_marker_quotation_stays_a_genuine_captain_message

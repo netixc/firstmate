@@ -27,7 +27,7 @@ PROJECT="$LAB/project"
 AHOY_PROJECT="$LAB/ahoy-project"
 HOME_DIR="$LAB/fmhome"
 PI_VERSION=$(pi --version)
-# shellcheck source=bin/fm-operational-input.sh
+# shellcheck source=/dev/null
 . "$ROOT/bin/fm-operational-input.sh"
 # shellcheck disable=SC2016 # Backticks are literal prompt markup.
 LEGACY_START='Run `bin/fm-session-start.sh` now, exactly once, before executing any other instructions.'
@@ -122,7 +122,7 @@ run_ahoy_case() {
     cd "$PROJECT" &&
       pi --print --approve --no-session --no-context-files --no-extensions \
         --no-skills --skill .agents/skills --tools read \
-        --model openai-codex/gpt-5.6-sol --thinking low \
+        --model openai-codex/gpt-5.6-sol --thinking medium \
         "$preceding" "/ahoy"
   ) || status=$?
   [ "$status" -eq 0 ] || fail "Pi Ahoy $label case exited $status: $out"
@@ -258,6 +258,8 @@ build_continuity_repo() {  # <repo>
      "$repo/.pi/extensions/"
   cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" \
      "$ROOT/.pi/extensions/lib/fm-operational-turn.ts" \
+     "$ROOT/.pi/extensions/lib/fm-calm-assistant-layout.ts" \
+     "$ROOT/.pi/extensions/lib/fm-calm-operational-user-layout.ts" \
      "$ROOT/.pi/extensions/lib/fm-calm-visibility.ts" \
      "$repo/.pi/extensions/lib/"
   cp "$ROOT/bin/fm-sessionstart-nudge.sh" \
@@ -411,6 +413,15 @@ for (const line of readFileSync(process.argv[1], "utf8").split("\n")) {
     rows.push({ kind: "assistant", text });
     continue;
   }
+  if (message.role === "user") {
+    const text = typeof message.content === "string"
+      ? message.content
+      : (message.content ?? []).filter((b) => b.type === "text").map((b) => b.text).join("");
+    // Calm hides operational user rows at presentation only, so a delivered
+    // wake stays an ordinary user message carrying the canonical envelope.
+    if (text.startsWith(process.argv[2])) rows.push({ kind: "operational" });
+    continue;
+  }
   if (message.role === "toolResult") rows.push({ kind: "toolResult" });
 }
 const finals = rows.map((row, index) => ({ ...row, index })).filter((row) => row.kind === "assistant" && row.text);
@@ -418,20 +429,17 @@ let repeats = 0;
 for (let i = 1; i < finals.length; i += 1) {
   if (finals[i].text !== finals[i - 1].text) continue;
   const between = rows.slice(finals[i - 1].index + 1, finals[i].index);
-  if (between.some((row) => row.kind === "context")) repeats += 1;
+  if (between.some((row) => row.kind === "operational")) repeats += 1;
 }
 console.log(JSON.stringify({
-  wakeContext: rows.filter((row) => row.kind === "context" && row.customType === "firstmate-synthetic-input").length,
-  boundaries: rows.filter((row) => row.kind === "presentation" && row.customType === "firstmate-operational-boundary").length,
+  wakeContext: rows.filter((row) => row.kind === "operational").length,
   repeatedFinals: repeats,
 }));
-' "$session_file")
+' "$session_file" "$FM_OPERATIONAL_PREFIX")
   printf '%s' "$summary" | grep -q '"repeatedFinals":0' \
     || fail "Pi repeated an assistant final separated only by hidden operational input: $summary"
   printf '%s' "$summary" | grep -q '"wakeContext":1' \
     || fail "two actionable closes did not coalesce into one operational delivery: $summary"
-  printf '%s' "$summary" | grep -q '"boundaries":1' \
-    || fail "the operational delivery left no compact provenance boundary: $summary"
   [ ! -s "$home/state/.wake-queue" ] \
     || fail "durable wake records survived the operational turn: $(cat "$home/state/.wake-queue")"
   [ "$(sed -n '1p' "$home/state/arm-count")" -ge 3 ] \
@@ -453,7 +461,10 @@ run_ahoy_transcript_regressions
 run_native_ahoy_regressions
 [ -n "$TMUX" ] || fail "tmux not found for the interactive Pi continuity section"
 mkdir -p "$PROJECT/.pi/extensions/lib"
+cp "$ROOT/.pi/extensions/fm-calm.ts" "$PROJECT/.pi/extensions/fm-calm.ts"
 cp "$ROOT/.pi/extensions/fm-primary-pi-watch.ts" "$PROJECT/.pi/extensions/fm-primary-pi-watch.ts"
+cp "$ROOT/.pi/extensions/lib/fm-calm-assistant-layout.ts" "$PROJECT/.pi/extensions/lib/fm-calm-assistant-layout.ts"
+cp "$ROOT/.pi/extensions/lib/fm-calm-operational-user-layout.ts" "$PROJECT/.pi/extensions/lib/fm-calm-operational-user-layout.ts"
 cp "$ROOT/.pi/extensions/lib/fm-calm-visibility.ts" "$PROJECT/.pi/extensions/lib/fm-calm-visibility.ts"
 cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$PROJECT/.pi/extensions/lib/fm-operational-input.ts"
 cp "$ROOT/.pi/extensions/lib/fm-operational-turn.ts" "$PROJECT/.pi/extensions/lib/fm-operational-turn.ts"
@@ -465,7 +476,7 @@ chmod +x "$PROJECT/bin/fm-operational-input.sh"
 mkdir -p "$HOME_DIR/state" "$HOME_DIR/config"
 
 "$TMUX" -L "$SOCKET" new-session -d -s "$SESSION" -c "$PROJECT" \
-  "env FM_HOME='$HOME_DIR' FM_ROOT_OVERRIDE='$PROJECT' FM_POLL=1 FM_SIGNAL_GRACE=0 FM_HEARTBEAT=600 bash -lc 'printf \"%s\\n\" \"\$\$\" > \"\$FM_HOME/state/.lock\"; pi --approve --no-session --no-context-files --no-extensions -e .pi/extensions/fm-primary-turnend-guard.ts -e .pi/extensions/fm-primary-pi-watch.ts --model openai-codex/gpt-5.6-sol --thinking low; rc=\$?; printf \"PI_EXIT=%s\\n\" \"\$rc\"; sleep 300'"
+  "env FM_HOME='$HOME_DIR' FM_ROOT_OVERRIDE='$PROJECT' FM_POLL=1 FM_SIGNAL_GRACE=0 FM_HEARTBEAT=600 bash -lc 'printf \"%s\\n\" \"\$\$\" > \"\$FM_HOME/state/.lock\"; pi --approve --no-session --no-context-files --no-extensions -e .pi/extensions/fm-calm.ts -e .pi/extensions/fm-primary-turnend-guard.ts -e .pi/extensions/fm-primary-pi-watch.ts --model openai-codex/gpt-5.6-sol --thinking low; rc=\$?; printf \"PI_EXIT=%s\\n\" \"\$rc\"; sleep 300'"
 
 i=0
 while [ "$i" -lt 120 ]; do
@@ -477,6 +488,28 @@ done
 [ -f "$HOME_DIR/state/.pi-watch-extension-loaded" ] || fail "Pi watcher extension did not load"
 wait_for_text "(openai-codex)" 120 || fail "Pi did not reach its ready composer"
 sleep 1
+
+send_prompt "/calm"
+sleep 0.2
+send_prompt "Reply exactly CALM_LIVE_WORKING_VISIBLE"
+i=0
+while [ "$i" -lt 240 ]; do
+  pane=$(capture)
+  if printf '%s\n' "$pane" | grep -Fq "Working..."; then
+    break
+  fi
+  sleep 0.05
+  i=$((i + 1))
+done
+printf '%s\n' "$pane" | grep -Fq "Working..." \
+  || fail "Calm hid Pi's built-in Working row on the credentialed provider path"
+wait_for_exact_line "CALM_LIVE_WORKING_VISIBLE" 120 \
+  || fail "Pi did not settle the Calm Working-row provider probe"
+pane=$(capture)
+printf '%s\n' "$pane" | grep -Fq "calm transcript" \
+  && fail "Calm added a persistent Calm status row on the credentialed provider path"
+send_prompt "/calm"
+sleep 0.2
 
 : > "$HOME_DIR/state/pi-e2e.meta"
 send_prompt "Start supervision with fm_watch_arm_pi and never use bash to arm supervision. After the watcher wake arrives, run bin/fm-wake-drain.sh and reply exactly HANDLED."
@@ -516,4 +549,4 @@ wait_for_text "PI_EXIT=0" 60 || fail "Pi did not exit cleanly"
 wait_pid_dead "$watcher_pid" || fail "watcher child survived clean Pi exit"
 wait_pid_dead "$arm_pid" || fail "arm child survived clean Pi exit"
 
-printf 'ok - Pi %s live E2E covered native Ahoy first/later messages, legacy transcripts, near misses, and watcher continuity\n' "$PI_VERSION"
+printf 'ok - Pi %s live E2E covered native Calm Working visibility, Ahoy first/later messages, legacy transcripts, near misses, and watcher continuity\n' "$PI_VERSION"

@@ -104,7 +104,11 @@ FM_PI_LIVE_E2E=1 FM_PI_LIVE_E2E_ONLY=continuity tests/fm-pi-primary-live-e2e.tes
 ```
 
 Observed result: `ok - Pi 0.81.1 live E2E covered the deterministic session claim and single-flight operational turns`.
-The isolated session file held exactly one `firstmate-synthetic-input` context message and one `firstmate-operational-boundary` row for the two closes, zero assistant finals repeated across an operational input, an empty durable wake queue after the single operational turn drained both seeded records, and a fixture arm count of at least three proving extension-owned successor continuity survived the coalescing.
+The isolated session file held exactly one operational delivery for the two closes, zero assistant finals repeated across an operational input, an empty durable wake queue after the single operational turn drained both seeded records, and a fixture arm count of at least three proving extension-owned successor continuity survived the coalescing.
+
+The delivery shape that assertion reads changed when this repository integrated `kunchenguid/firstmate` on 2026-07-24.
+That integration removed Calm's input interception, so an operational delivery is no longer a `firstmate-synthetic-input` context message paired with a presentation entry: it stays an ordinary user message carrying the canonical `bin/fm-operational-input.sh` envelope, hidden at presentation only by the Pi 0.81.1 adapter that [`docs/calm-mode-feasibility.md`](calm-mode-feasibility.md) owns.
+The single-flight contract this section verifies is unchanged, and the live assertion now counts those envelope-carrying user messages instead; the count itself has not been re-observed on a credentialed run since the integration.
 
 ## Regression coverage
 

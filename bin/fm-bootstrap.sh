@@ -15,7 +15,7 @@
 #                 "SECONDMATE_SYNC: secondmate <id>: skipped: <reason>",
 #                 "NUDGE_SECONDMATES: secondmate <id>: send failed: <reason>",
 #                 "BOOTSTRAP_INFO: nudged fm-<id> with '<message>'",
-#                 "SECONDMATE_LIVENESS: secondmate <id>: skipped: <reason>|respawn failed: <reason>",
+#                 "SECONDMATE_LIVENESS: secondmate <id>: skipped: <reason>|respawn failed after <cause>: <reason>",
 #                 "FMX: X mode on ..." or "FMX: X mode off ...".
 #          When a RUNNING secondmate worktree is fast-forwarded to firstmate's
 #          own current default-branch commit (a purely LOCAL fast-forward, never
@@ -35,11 +35,12 @@
 #          diagnostics for divergent shared captain-preference copies;
 #          no-op/current and successful updates stay quiet.
 #          SECONDMATE_LIVENESS lines report only actionable failures from the
-#          deeper agent-liveness verdict (bin/fm-backend.sh's
-#          fm_backend_agent_alive, distinct from endpoint pane-presence):
-#          skipped means the probe could not confidently classify the endpoint,
-#          and respawn failed means relaunch did not complete. Already-live and
-#          successfully respawned secondmates are silent.
+#          recovery-grade state owned by bin/fm-backend.sh's
+#          fm_backend_agent_state: skipped distinguishes an existing ambiguous
+#          process, an unreadable target, and an unverified backend; respawn
+#          failed names whether the endpoint was missing or agent-less.
+#          Already-live and successfully relaunched secondmates are silent
+#          unless FM_BOOTSTRAP_VERBOSE_FACTS=1 requests BOOTSTRAP_INFO facts.
 #          A TANGLE line means the firstmate primary checkout (FM_ROOT) is stranded
 #          on a feature branch instead of its default branch - a crewmate's work
 #          landed in the primary instead of its own worktree; restore it per the line.
@@ -411,37 +412,33 @@ secondmate_sync() {
 }
 
 secondmate_liveness_sweep() {
-  # Idempotent secondmate liveness guarantee - SESSION START ONLY. A
-  # secondmate agent that has exited leaves its Herdr pane alive as a
-  # bare shell; the session-start digest's "endpoint: alive" read
-  # (fm_backend_target_exists, pane-PRESENCE only) reports that shell as
-  # alive, so recovery never respawns it, and the watcher deliberately exempts
-  # secondmates from stale-pane detection (an idle secondmate pane is healthy
-  # by design). Evidence 2026-07-07: every secondmate in this fleet was found
-  # as a dead zsh shell, invisible to every existing check. This sweep closes
-  # the gap deterministically: for every LIVE secondmate meta (kind=secondmate
-  # with a recorded window=), run the deeper fm_backend_agent_alive probe
-  # (bin/fm-backend.sh) and act only on a CONFIDENT verdict:
-  #   alive   - no-op.
-  #   dead    - kill the stale endpoint first, then respawn via the existing
-  #             recovery path (bin/fm-spawn.sh <id> --secondmate;
-  #             secondmate-provisioning).
-  #   unknown - NEVER acted on. A false-dead reading would spin up a DUPLICATE
-  #             agent (two supervisors in one home); a false-alive reading
-  #             merely leaves today's bug unfixed for one more sweep. The
-  #             worse direction is guarded by never treating anything less
-  #             than a confident dead reading as license to respawn.
-  # A meta with no recorded window= at all is left to the existing "meta with
-  # no window" recovery path (AGENTS.md section 5 / secondmate-provisioning);
-  # there is no endpoint here for this probe to read.
-  # Naturally scoped to the primary: a secondmate's own state/ never holds
-  # kind=secondmate metas (secondmates never spawn secondmates), so this
-  # sweep is a silent no-op there, exactly like secondmate_sync above.
-  # Scope: session start (reboot/restart) only. A secondmate dying
-  # MID-SESSION is a harder follow-on needing a periodic liveness beacon -
-  # explicitly out of scope here.
+  # Idempotent secondmate liveness guarantee - SESSION START ONLY. The detailed
+  # state machine and its only recovery-authorizing states are owned by
+  # fm_backend_agent_state (bin/fm-backend.sh).
+  #
+  # A secondmate agent that has exited leaves its Herdr pane alive as a bare
+  # shell; the session-start digest's "endpoint: alive" read
+  # (fm_backend_target_exists, pane-PRESENCE only) reports that shell as alive,
+  # so recovery never respawns it, and the watcher deliberately exempts
+  # secondmates from stale-pane detection (an idle secondmate pane is healthy by
+  # design). Evidence 2026-07-07: every secondmate in this fleet was found as a
+  # dead zsh shell, invisible to every existing check.
+  #
+  # A recorded endpoint that is structurally gone was equally invisible, because
+  # the earlier bare-shell sweep only recognized the husk. `missing` now
+  # authorizes recovery alongside `dead`, while duplicate prevention is
+  # unchanged: an `unreadable` probe is NEVER acted on, because a false-dead
+  # reading would spin up a DUPLICATE agent (two supervisors in one home),
+  # whereas a false-alive reading merely leaves the gap unfixed for one sweep.
+  #
+  # A meta with no recorded window remains owned by the existing "meta with no
+  # window" recovery path (AGENTS.md section 5 / secondmate-provisioning).
+  # Secondmate homes never contain kind=secondmate meta, so this is naturally a
+  # primary-only no-op there, exactly like secondmate_sync above. Mid-session
+  # liveness remains explicitly out of scope and needs a separate periodic
+  # signal.
   [ -d "$STATE" ] || return 0
-  local meta id window harness target verdict out
+  local meta id window harness target agent_state out cause
   SECONDMATE_RESPAWNED_IDS=""
   for meta in "$STATE"/*.meta; do
     [ -f "$meta" ] || continue
@@ -450,27 +447,47 @@ secondmate_liveness_sweep() {
     window=$(fm_meta_get "$meta" window)
     [ -n "$window" ] || continue
     harness=$(fm_meta_get "$meta" harness)
+    # Fails closed on a meta that records a removed session provider, so a
+    # foreign endpoint string is never handed to the Herdr classifier.
     if ! target=$(fm_backend_target_of_meta "$meta" 2>&1); then
       target=${target#error: }
       echo "SECONDMATE_LIVENESS: secondmate $id: skipped: $target"
       continue
     fi
-    verdict=$(fm_backend_agent_alive "$target" 2>/dev/null) || verdict="unknown"
+    agent_state=$(fm_backend_agent_state "$target" 2>/dev/null) || agent_state=unreadable
     case "$harness" in
       claude|codex|opencode|pi|grok) ;;
-      *) [ "$verdict" = dead ] && verdict=unknown ;;
-    esac
-    case "$verdict" in
-      alive)
+      *)
+        case "$agent_state" in dead|missing) agent_state=unverified-harness ;; esac
         ;;
-      dead)
-        fm_backend_kill "$target" 2>/dev/null || true
+    esac
+    case "$agent_state" in
+      alive)
+        if [ "${FM_BOOTSTRAP_VERBOSE_FACTS:-0}" = 1 ]; then
+          echo "BOOTSTRAP_INFO: secondmate $id already live"
+        fi
+        ;;
+      dead|missing)
+        if [ "$agent_state" = dead ]; then
+          cause="confirmed agent absence on existing endpoint"
+          fm_backend_kill "$target" 2>/dev/null || true
+        else
+          cause="recorded endpoint confidently missing"
+        fi
         if out=$(FM_SPAWN_NO_GUARD=1 "$FM_ROOT/bin/fm-spawn.sh" "$id" --secondmate 2>&1); then
           SECONDMATE_RESPAWNED_IDS="$SECONDMATE_RESPAWNED_IDS $id"
-          :
+          if [ "${FM_BOOTSTRAP_VERBOSE_FACTS:-0}" = 1 ]; then
+            echo "BOOTSTRAP_INFO: secondmate $id relaunched after $cause"
+          fi
         else
-          echo "SECONDMATE_LIVENESS: secondmate $id: respawn failed: $(first_line "$out")"
+          echo "SECONDMATE_LIVENESS: secondmate $id: respawn failed after $cause: $(first_line "$out")"
         fi
+        ;;
+      unverified-harness)
+        echo "SECONDMATE_LIVENESS: secondmate $id: skipped: recorded harness '$harness' is unverified for recovery"
+        ;;
+      unreadable)
+        echo "SECONDMATE_LIVENESS: secondmate $id: skipped: endpoint probe unreadable"
         ;;
       *)
         echo "SECONDMATE_LIVENESS: secondmate $id: skipped: Herdr liveness probe inconclusive"

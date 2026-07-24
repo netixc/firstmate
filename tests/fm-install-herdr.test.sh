@@ -41,6 +41,93 @@ test_herdr_installer_pins_exact_version_and_checksums() {
   pass "Herdr installer pins exact version, asset, checksum, and protocol floor"
 }
 
+make_herdr_installer_fakebin() {
+  local tmp=$1 fakebin
+  fakebin=$(fm_fakebin "$tmp")
+
+  cat > "$fakebin/uname" <<'SH'
+#!/usr/bin/env bash
+case "$1" in
+  -s) printf 'Linux\n' ;;
+  -m) printf 'x86_64\n' ;;
+  *) exit 2 ;;
+esac
+SH
+  cat > "$fakebin/curl" <<'SH'
+#!/usr/bin/env bash
+count=0
+[ ! -f "$CURL_COUNT" ] || count=$(cat "$CURL_COUNT")
+count=$((count + 1))
+printf '%s\n' "$count" > "$CURL_COUNT"
+[ "$count" -gt "$CURL_FAILURES" ] || exit 35
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "-o" ]; then
+    cat > "$2" <<'EOF'
+#!/usr/bin/env bash
+case "${1:-}" in
+  --version) printf 'herdr 0.7.4\n' ;;
+  status) printf '{"client":{"protocol":16}}\n' ;;
+  *) exit 2 ;;
+esac
+EOF
+    exit 0
+  fi
+  shift
+done
+exit 2
+SH
+  cat > "$fakebin/sha256sum" <<'SH'
+#!/usr/bin/env bash
+printf 'bc0fc02d4ba500f9cac2353a43e67fe036785ecca6eb55378e050fac3c103059  %s\n' "$1"
+SH
+  cat > "$fakebin/jq" <<'SH'
+#!/usr/bin/env bash
+printf '16\n'
+SH
+  cat > "$fakebin/sleep" <<'SH'
+#!/usr/bin/env bash
+exit 0
+SH
+  chmod +x "$fakebin/uname" "$fakebin/curl" "$fakebin/sha256sum" "$fakebin/jq" "$fakebin/sleep"
+  printf '%s\n' "$fakebin"
+}
+
+test_herdr_installer_retries_transient_download_failure() {
+  local tmp fakebin destination out
+  tmp=$(fm_test_tmproot fm-herdr-download-retry)
+  fakebin=$(make_herdr_installer_fakebin "$tmp")
+  destination="$tmp/bin"
+
+  out=$(CURL_COUNT="$tmp/curl-count" CURL_FAILURES=1 PATH="$fakebin:$PATH" \
+    "$HERDR_INSTALL" "$destination" 2>&1) \
+    || fail "Herdr installer did not recover from a transient download failure"$'\n'"$out"
+  [ "$(cat "$tmp/curl-count")" -eq 2 ] \
+    || fail "Herdr installer did not retry exactly once after recovery"
+  assert_contains "$out" "download attempt 1 failed; retrying" \
+    "Herdr installer did not disclose its retry"
+  [ -x "$destination/herdr" ] || fail "Herdr installer did not install after retrying"
+  pass "Herdr installer retries a transient download failure"
+}
+
+test_herdr_installer_bounds_persistent_download_failures() {
+  local tmp fakebin destination out rc
+  tmp=$(fm_test_tmproot fm-herdr-download-bounded)
+  fakebin=$(make_herdr_installer_fakebin "$tmp")
+  destination="$tmp/bin"
+
+  set +e
+  out=$(CURL_COUNT="$tmp/curl-count" CURL_FAILURES=99 PATH="$fakebin:$PATH" \
+    "$HERDR_INSTALL" "$destination" 2>&1)
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || fail "Herdr installer accepted a persistently failed download"
+  [ "$(cat "$tmp/curl-count")" -eq 3 ] \
+    || fail "Herdr installer did not stop after three download attempts"
+  assert_contains "$out" "download failed after 3 attempts" \
+    "Herdr installer did not report its bounded retry exhaustion"
+  pass "Herdr installer bounds persistent download failures"
+}
+
 test_treehouse_installer_pins_exact_version_and_checksums() {
   assert_grep 'FM_TREEHOUSE_CI_VERSION=2.0.1' "$TREEHOUSE_INSTALL" \
     "Treehouse installer must pin the suite-verified 2.0.1 release"
@@ -101,6 +188,8 @@ test_ci_wires_installers_and_required_lane() {
 }
 
 test_herdr_installer_pins_exact_version_and_checksums
+test_herdr_installer_retries_transient_download_failure
+test_herdr_installer_bounds_persistent_download_failures
 test_treehouse_installer_pins_exact_version_and_checksums
 test_cleanup_only_targets_job_owned_lab_sessions
 test_ci_wires_installers_and_required_lane

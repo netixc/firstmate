@@ -37,6 +37,15 @@ if [ ! -f "$META" ] || [ -L "$META" ] || [ "$(fm_pr_file_link_count "$META")" !=
   exit 1
 fi
 
+# A prior exact merged result may have queued its durable wake immediately
+# before interruption.
+# Finish only its identity-bound receipt before publishing a replacement poll.
+fm_pr_poll_retirement_recover_one "$STATE" "$ID" "$SCRIPT_DIR/fm-pr-poll.sh" || {
+  echo "error: pending PR poll retirement could not be validated" >&2
+  exit 1
+}
+
+
 # Neutralize any pre-fix poll before recording or arming this task. The
 # migration never executes legacy artifacts and holds watcher exclusion while
 # it quarantines or rebuilds them.

@@ -71,6 +71,7 @@ add_sm_worktree() {
   {
     printf 'window=default:w1:p1\n'
     printf 'kind=secondmate\n'
+    printf 'harness=codex\n'
     printf 'home=%s/%s\n' "$w" "$id"
   } > "$w/home/state/$id.meta"
 }
