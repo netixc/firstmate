@@ -214,7 +214,21 @@ fm_backend_target_exists() {  # <target> [expected-label]
   fm_backend_herdr_cli "$session" pane get "$pane" >/dev/null 2>&1
 }
 
-# Confident agent-process liveness, distinct from pane presence.
+# fm_backend_agent_state: the single recovery-grade agent/endpoint state
+# contract, deliberately richer than fm_backend_target_exists's cheap
+# pane-presence read. It prints exactly one of:
+#   alive      - a verified harness agent is running.
+#   dead       - the endpoint exists but confidently has no agent.
+#   missing    - the recorded endpoint is authoritatively absent.
+#   unreadable - a target or inventory read failed or contradicted itself.
+# Only `dead` and `missing` license recovery.
+fm_backend_agent_state() {  # <target>
+  fm_backend_herdr_agent_state "$1"
+}
+
+# Backward-compatible three-state view, distinct from pane presence. An
+# authoritatively missing endpoint is confidently not a live agent, while an
+# unreadable result stays unknown.
 fm_backend_agent_alive() {  # <target>
   fm_backend_herdr_agent_alive "$1"
 }

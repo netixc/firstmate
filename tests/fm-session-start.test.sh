@@ -27,6 +27,12 @@ set -u
 SESSION_START="$ROOT/bin/fm-session-start.sh"
 BASE_PATH=${FM_TEST_BASE_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
 TMP_ROOT=$(fm_test_tmproot fm-session-start-tests)
+SESSION_START_SECOND_MATE_ID="fmtest-sm-${TMP_ROOT##*.}"
+SESSION_START_SECOND_MATE_TMP="/tmp/fm-$SESSION_START_SECOND_MATE_ID"
+SESSION_START_HERDR_SECOND_MATE_ID="fmtest-herdr-${TMP_ROOT##*.}"
+SESSION_START_HERDR_SECOND_MATE_TMP="/tmp/fm-$SESSION_START_HERDR_SECOND_MATE_ID"
+FM_TEST_CLEANUP_DIRS+=("$TMP_ROOT" "$SESSION_START_SECOND_MATE_TMP" "$SESSION_START_HERDR_SECOND_MATE_TMP")
+trap fm_test_cleanup EXIT
 fm_git_identity fmtest fmtest@example.invalid
 
 # --- world builders ----------------------------------------------------------
@@ -190,6 +196,82 @@ SH
   chmod +x "$fakebin/ps"
 }
 
+
+make_fake_herdr_secondmate_recovery() {
+  local fakebin=$1
+  cat > "$fakebin/herdr" <<'SH'
+#!/usr/bin/env bash
+set -u
+log=${FM_FAKE_HERDR_LOG:?}
+state=${FM_FAKE_HERDR_STATE:?}
+mate_id=${FM_FAKE_SECOND_MATE_ID:?}
+killed="${state}.killed"
+spawned="${state}.spawned"
+printf '%s\n' "$*" >> "$log"
+case "${1:-} ${2:-}" in
+  "status --json")
+    printf '%s\n' '{"client":{"protocol":16,"version":"test"},"server":{"running":true}}'
+    ;;
+  "session list")
+    printf '%s\n' '{"sessions":[{"name":"default","running":true,"socket_path":"/tmp/herdr-test.sock"}]}'
+    ;;
+  "workspace list")
+    printf '{"result":{"workspaces":[{"workspace_id":"ws1","label":"2ndmate-%s"}]}}\n' "$mate_id"
+    ;;
+  "tab list")
+    if [ -e "$spawned" ]; then
+      printf '{"result":{"tabs":[{"tab_id":"t-new","workspace_id":"ws1","label":"fm-%s"}]}}\n' "$mate_id"
+    elif [ -e "$killed" ]; then
+      printf '%s\n' '{"result":{"tabs":[]}}'
+    else
+      printf '{"result":{"tabs":[{"tab_id":"t-old","workspace_id":"ws1","label":"fm-%s"}]}}\n' "$mate_id"
+    fi
+    ;;
+  "tab create")
+    : > "$spawned"
+    printf '%s\n' '{"result":{"tab":{"tab_id":"t-new"},"root_pane":{"pane_id":"p-new"}}}'
+    ;;
+  "pane list")
+    if [ -e "$spawned" ]; then
+      printf '%s\n' '{"result":{"panes":[{"pane_id":"p-new","tab_id":"t-new"}]}}'
+    elif [ ! -e "$killed" ]; then
+      printf '%s\n' '{"result":{"panes":[{"pane_id":"p-old","tab_id":"t-old"}]}}'
+    else
+      printf '%s\n' '{"result":{"panes":[]}}'
+    fi
+    ;;
+  "pane get")
+    pane=${3:-}
+    if [ "$pane" = p-new ] && [ -e "$spawned" ]; then
+      printf '%s\n' '{"result":{"pane":{"pane_id":"p-new"}}}'
+    elif [ "$pane" = p-old ] && [ ! -e "$killed" ]; then
+      printf '%s\n' '{"result":{"pane":{"pane_id":"p-old"}}}'
+    else
+      printf '%s\n' '{"error":{"code":"pane_not_found"}}' >&2
+      exit 1
+    fi
+    ;;
+  "agent get")
+    if [ "${3:-}" = p-new ] && [ -e "$spawned" ]; then
+      printf '%s\n' '{"result":{"agent":{"agent_status":"idle"}}}'
+    else
+      printf '%s\n' '{"error":{"code":"agent_not_found"}}' >&2
+      exit 1
+    fi
+    ;;
+  "pane close")
+    [ "${3:-}" = p-old ] && : > "$killed"
+    ;;
+  "pane run"|"pane send-text"|"pane send-keys"|"tab close")
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+exit 0
+SH
+  chmod +x "$fakebin/herdr"
+}
 # make_fake_herdr <fakebin> <live-pane>: `herdr pane get <pane>` succeeds only
 # for the given pane id - the exact primitive fm_backend_target_exists uses
 # for a herdr endpoint liveness read. No version/server-start calls: a
@@ -221,6 +303,51 @@ run_session_start() {
   env -u CLAUDECODE -u PI_CODING_AGENT -u GROK_AGENT \
     FM_HOME="$home" FM_ROOT_OVERRIDE="$root" PATH="$path" \
     "$SESSION_START"
+}
+
+prepare_session_start_herdr_secondmate() {
+  local name=$1 rec root home fakebin w mate log state id=$SESSION_START_HERDR_SECOND_MATE_ID
+  rec=$(new_world "$name")
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  w=${root%/root}
+  mate="$w/secondmate-$id"
+  log="$w/herdr.log"
+  state="$w/herdr.state"
+  mkdir -p "$mate/bin" "$mate/data" "$mate/state" "$mate/config" "$mate/projects"
+  printf '%s\n' "$id" > "$mate/.fm-secondmate-home"
+  printf '# Firstmate\n' > "$mate/AGENTS.md"
+  printf 'Second mate charter.\n' > "$mate/data/charter.md"
+  printf '%s\n' pi > "$home/config/secondmate-harness"
+  printf '%s\n' manual > "$home/config/backlog-backend"
+  touch "$home/state/.last-watcher-beat"
+  {
+    printf 'window=default:p-old\n'
+    printf 'kind=secondmate\n'
+    printf 'harness=pi\n'
+    printf 'home=%s\n' "$mate"
+    printf 'herdr_session=default\n'
+    printf 'herdr_workspace_id=ws1\n'
+    printf 'herdr_tab_id=t-old\n'
+    printf 'herdr_pane_id=p-old\n'
+  } > "$home/state/$id.meta"
+  ln -s "$ROOT/bin" "$root/bin"
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_claude "$fakebin"
+  make_fake_herdr_secondmate_recovery "$fakebin"
+  # make_fake_toolchain stubs jq to a no-op, which would blind the Herdr agent
+  # classifier to its own JSON. This fixture needs the real parser.
+  rm -f "$fakebin/jq"
+  : > "$log"
+  printf '%s|%s|%s|%s|%s|%s\n' "$root" "$home" "$fakebin" "$mate" "$log" "$state"
+}
+
+run_session_start_herdr_secondmate() {
+  local root=$1 home=$2 fakebin=$3 mate=$4 log=$5 state=$6
+  FM_FAKE_HERDR_LOG="$log" FM_FAKE_HERDR_STATE="$state" \
+    FM_FAKE_SECOND_MATE_ID="$SESSION_START_HERDR_SECOND_MATE_ID" \
+    run_session_start "$home" "$root" "$fakebin:$BASE_PATH"
 }
 
 hash_file_for_test() {
@@ -486,8 +613,72 @@ EOF
   pass "orphan status logs are printed once with bounded tails"
 }
 
-# --- Herdr endpoint liveness: live and dead ---------------------------------
+# --- session-start secondmate recovery boundary -----------------------------
 
+test_session_start_relaunches_herdr_husk_secondmate() {
+  local rec root home fakebin mate log state out
+  rec=$(prepare_session_start_herdr_secondmate secondmate-herdr-husk)
+  IFS='|' read -r root home fakebin mate log state <<EOF
+$rec
+EOF
+
+  out=$(run_session_start_herdr_secondmate "$root" "$home" "$fakebin" "$mate" "$log" "$state")
+
+  assert_not_contains "$out" "SECONDMATE_LIVENESS:" "successful Herdr husk recovery should stay non-actionable"
+  assert_contains "$(cat "$log")" "pane close p-old" "session start did not close the confirmed Herdr husk"
+  assert_contains "$(cat "$log")" "tab create" "session start did not relaunch the Herdr secondmate"
+  assert_contains "$out" "endpoint: alive (Herdr window=default:p-new)" \
+    "the later fleet read did not confirm the relaunched Herdr endpoint"
+  assert_grep 'herdr_pane_id=p-new' "$home/state/$SESSION_START_HERDR_SECOND_MATE_ID.meta" \
+    "the real respawn path did not record the replacement Herdr pane"
+  pass "session start: a confirmed Herdr husk is closed and relaunched"
+}
+
+
+test_session_start_relaunches_missing_herdr_secondmate() {
+  local rec root home fakebin mate log state out
+  rec=$(prepare_session_start_herdr_secondmate secondmate-herdr-missing)
+  IFS='|' read -r root home fakebin mate log state <<EOF
+$rec
+EOF
+  # Pre-kill the recorded endpoint so the probe sees a structurally gone pane
+  # (`missing`) rather than an agent-less husk (`dead`). Before the recovery-grade
+  # classifier landed, only the husk shape was recognized and this secondmate
+  # stayed down.
+  : > "$state.killed"
+
+  out=$(run_session_start_herdr_secondmate "$root" "$home" "$fakebin" "$mate" "$log" "$state")
+
+  assert_not_contains "$out" "SECONDMATE_LIVENESS:" "a successful missing-endpoint relaunch should stay non-actionable"
+  assert_not_contains "$(cat "$log")" "pane close p-old" "an authoritatively missing endpoint must not be closed first"
+  assert_contains "$(cat "$log")" "tab create" "session start did not relaunch the missing Herdr secondmate"
+  assert_grep 'herdr_pane_id=p-new' "$home/state/$SESSION_START_HERDR_SECOND_MATE_ID.meta" \
+    "the real respawn path did not record the replacement Herdr pane"
+  pass "session start: an authoritatively missing Herdr endpoint is relaunched without a close"
+}
+
+test_session_start_preserves_unreadable_herdr_endpoint() {
+  local rec root home fakebin mate log state out
+  rec=$(prepare_session_start_herdr_secondmate secondmate-herdr-unreadable)
+  IFS='|' read -r root home fakebin mate log state <<EOF
+$rec
+EOF
+  # An unparsable recorded endpoint cannot be classified. Duplicate prevention
+  # requires that this NEVER licenses a respawn: a false-dead reading would put
+  # two supervisors in one home.
+  sed -i.bak 's|^window=.*|window=invalid-target|' "$home/state/$SESSION_START_HERDR_SECOND_MATE_ID.meta"
+  rm -f "$home/state/$SESSION_START_HERDR_SECOND_MATE_ID.meta.bak"
+
+  out=$(run_session_start_herdr_secondmate "$root" "$home" "$fakebin" "$mate" "$log" "$state")
+
+  assert_contains "$out" "SECONDMATE_LIVENESS: secondmate $SESSION_START_HERDR_SECOND_MATE_ID: skipped: endpoint probe unreadable" \
+    "an unreadable endpoint probe was not reported as skipped"
+  assert_not_contains "$(cat "$log")" "tab create" "an unreadable probe must never respawn a second supervisor"
+  assert_not_contains "$(cat "$log")" "pane close" "an unreadable probe must never close the recorded endpoint"
+  pass "session start: an unreadable Herdr endpoint is preserved, never duplicated"
+}
+
+# --- Herdr endpoint liveness: live and dead ---------------------------------
 test_endpoint_liveness_herdr() {
   local rec root home fakebin out
   rec=$(new_world liveness-herdr)
@@ -865,6 +1056,9 @@ test_context_digest_absent_empty_present
 test_lock_refusal_read_only_path
 test_output_ordering_diagnostics_lead
 test_herdr_dependencies_follow_real_session_start
+test_session_start_relaunches_herdr_husk_secondmate
+test_session_start_relaunches_missing_herdr_secondmate
+test_session_start_preserves_unreadable_herdr_endpoint
 test_status_tail_bounding
 test_orphan_status_logs_are_printed
 test_endpoint_liveness_herdr

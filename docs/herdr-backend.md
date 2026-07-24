@@ -39,7 +39,11 @@ The seeded default tab is pruned only when its exact id came from the response t
 `bin/backends/herdr.sh` owns protocol checks, workspace and tab lifecycle, bounded capture, send and submit confirmation, semantic busy state, composer classification, event waiting, agent liveness, focus-safe presentation operations, and exact endpoint cleanup.
 Consumers call the shared functions without a provider argument.
 
-Herdr's registered-agent state supplies confident `alive`, `dead`, and `unknown` liveness for secondmate recovery.
+Herdr's registered-agent state supplies recovery-grade liveness for the session-start secondmate sweep through `fm_backend_agent_state`.
+Rather than adding a second classifier, `fm_backend_herdr_agent_state` wraps the already-verified `fm_backend_herdr_pane_agent_state`: a structurally gone pane becomes `missing`, a restored agent-less shell becomes `dead`, a registered agent becomes `alive`, and an unexpected or failed read becomes `unreadable`.
+Only `dead` and `missing` authorize a relaunch, so an unreadable probe can never produce a duplicate supervisor.
+The comment above `fm_backend_agent_state` in `bin/fm-backend.sh` is the single owner of that state contract, and `fm_backend_herdr_agent_alive` keeps the older three-state `alive`/`dead`/`unknown` view for callers that do not need to distinguish a missing endpoint from an existing husk.
+That mapping needed no new empirical verification because `fm_backend_herdr_pane_agent_state`'s states are already verified above, both at the unit level and, for `no-agent`, against the real binary through the respawn-idempotency end-to-end test.
 The watcher uses semantic agent state first and falls back to bounded captured output when a foreground tool temporarily makes native state inconclusive.
 Protocol-16 sessions may subscribe to `pane.agent_status_changed` for immediate blocked transitions; connection, schema, or repeated runtime failure falls back to polling.
 

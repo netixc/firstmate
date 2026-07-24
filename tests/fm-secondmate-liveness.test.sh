@@ -114,35 +114,66 @@ run_bootstrap() {  # <world> <agent-state> [harness]
     "$ROOT/bin/fm-bootstrap.sh" 2>&1
 }
 
-test_sweep_respawns_only_confident_dead() {
+test_agent_state_separates_missing_from_husk() {
+  local state out
+  # fm_backend_agent_state is the detailed owner: a structurally gone pane is
+  # `missing`, an agent-less husk is `dead`, and neither is collapsed until the
+  # compatibility view asks for it.
+  for state in dead no-agent live unknown; do
+    out=$(PANE_STATE="$state" bash -c '
+      . "$1/bin/fm-backend.sh"
+      fm_backend_herdr_pane_agent_state() { printf "%s" "$PANE_STATE"; }
+      fm_backend_agent_state "lab:w1:p1"
+    ' _ "$ROOT")
+    case "$state:$out" in
+      dead:missing|no-agent:dead|live:alive|unknown:unreadable) ;;
+      *) fail "Herdr pane state '$state' mapped to unexpected agent state '$out'" ;;
+    esac
+  done
+  out=$(bash -c '. "$1/bin/fm-backend.sh"; fm_backend_agent_state malformed' _ "$ROOT")
+  [ "$out" = unreadable ] || fail "malformed Herdr target should be unreadable, got '$out'"
+  pass "Herdr agent state separates a missing endpoint from an agent-less husk"
+}
+
+test_sweep_recovers_only_dead_or_missing() {
   local world out calls
-  world=$(make_bootstrap_world dead)
-  out=$(run_bootstrap "$world" dead)
+  # An agent-less husk still occupies the endpoint, so it is closed first.
+  world=$(make_bootstrap_world husk)
+  out=$(run_bootstrap "$world" no-agent)
   calls=$(cat "$world/herdr.log")
-  assert_contains "$calls" "pane close w1:p1" "confirmed-dead endpoint was not closed before respawn"
-  assert_contains "$(cat "$world/spawn.log")" "sm1 --secondmate" "confirmed-dead secondmate was not respawned"
-  assert_not_contains "$out" "SECONDMATE_LIVENESS:" "successful respawn should stay silent"
+  assert_contains "$calls" "pane close w1:p1" "confirmed husk was not closed before respawn"
+  assert_contains "$(cat "$world/spawn.log")" "sm1 --secondmate" "confirmed husk secondmate was not respawned"
+  assert_not_contains "$out" "SECONDMATE_LIVENESS:" "successful husk respawn should stay silent"
+
+  # An authoritatively missing endpoint has nothing to close; closing it would
+  # be an operation on a pane that is already gone.
+  world=$(make_bootstrap_world missing)
+  out=$(run_bootstrap "$world" dead)
+  assert_contains "$(cat "$world/spawn.log")" "sm1 --secondmate" "missing secondmate endpoint was not relaunched"
+  assert_not_contains "$(cat "$world/herdr.log")" "pane close" "a missing endpoint must not be closed"
+  assert_not_contains "$out" "SECONDMATE_LIVENESS:" "successful missing-endpoint relaunch should stay silent"
 
   world=$(make_bootstrap_world alive)
   out=$(run_bootstrap "$world" live)
   [ ! -s "$world/spawn.log" ] || fail "live secondmate was respawned"
   assert_not_contains "$(cat "$world/herdr.log")" "pane close" "live secondmate endpoint was closed"
 
-  world=$(make_bootstrap_world unknown)
+  # Duplicate prevention: an unreadable probe never licenses a respawn.
+  world=$(make_bootstrap_world unreadable)
   out=$(run_bootstrap "$world" unknown)
-  assert_contains "$out" "SECONDMATE_LIVENESS: secondmate sm1: skipped: Herdr liveness probe inconclusive" \
-    "inconclusive Herdr liveness was not surfaced"
-  [ ! -s "$world/spawn.log" ] || fail "inconclusive secondmate was respawned"
-  assert_not_contains "$(cat "$world/herdr.log")" "pane close" "inconclusive endpoint was closed"
-  pass "session-start sweep respawns only a confidently dead Herdr secondmate"
+  assert_contains "$out" "SECONDMATE_LIVENESS: secondmate sm1: skipped: endpoint probe unreadable" \
+    "unreadable Herdr liveness was not surfaced"
+  [ ! -s "$world/spawn.log" ] || fail "unreadable secondmate was respawned"
+  assert_not_contains "$(cat "$world/herdr.log")" "pane close" "unreadable endpoint was closed"
+  pass "session-start sweep recovers only confidently dead or missing Herdr secondmates"
 }
 
 test_unverified_harness_never_authorizes_respawn() {
   local world out
   world=$(make_bootstrap_world unverified custom-agent)
   out=$(run_bootstrap "$world" dead custom-agent)
-  assert_contains "$out" "SECONDMATE_LIVENESS: secondmate sm1: skipped: Herdr liveness probe inconclusive" \
-    "unverified harness did not force an inconclusive verdict"
+  assert_contains "$out" "SECONDMATE_LIVENESS: secondmate sm1: skipped: recorded harness 'custom-agent' is unverified for recovery" \
+    "unverified harness did not force a distinct non-recovering verdict"
   [ ! -s "$world/spawn.log" ] || fail "unverified harness authorized respawn"
   assert_not_contains "$(cat "$world/herdr.log")" "pane close" "unverified harness authorized endpoint cleanup"
   pass "an unverified runtime harness cannot turn a dead-looking pane into respawn authority"
@@ -163,6 +194,7 @@ test_detect_only_skips_liveness_mutation() {
 }
 
 test_agent_alive_maps_herdr_state
-test_sweep_respawns_only_confident_dead
+test_agent_state_separates_missing_from_husk
+test_sweep_recovers_only_dead_or_missing
 test_unverified_harness_never_authorizes_respawn
 test_detect_only_skips_liveness_mutation

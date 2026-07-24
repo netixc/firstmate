@@ -2323,7 +2323,7 @@ SH
     "isolated bootstrap migration did not surface its incomplete status"
   assert_grep 'SECONDMATE_SYNC: secondmate secondmate-a: skipped:' "$dir/bootstrap.out" \
     "incomplete poll migration suppressed secondmate sync"
-  assert_grep 'SECONDMATE_LIVENESS: secondmate secondmate-a: skipped: Herdr liveness probe inconclusive' "$dir/bootstrap.out" \
+  assert_grep 'SECONDMATE_LIVENESS: secondmate secondmate-a: skipped: endpoint probe unreadable' "$dir/bootstrap.out" \
     "incomplete poll migration suppressed persistent supervisor recovery"
   assert_grep 'FMX: X mode on - relay poll armed' "$dir/bootstrap.out" \
     "incomplete poll migration suppressed X mention setup"

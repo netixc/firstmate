@@ -91,7 +91,7 @@ It owns task endpoint creation, bounded capture, text and key sends, current-pat
 There is no runtime selection or provider dispatch.
 The watcher consults Herdr's semantic agent state for stale detection and corroborates inconclusive non-busy readings with captured-output signatures.
 For capable sessions, the watcher replaces its terminal sleep with a bounded native event wait that immediately surfaces `blocked`; [herdr-backend.md](herdr-backend.md) owns the capability gates and verification evidence.
-The deeper session-start registered-agent liveness probe is separate from the busy-state poll and drives conservative secondmate recovery.
+The deeper session-start registered-agent liveness probe is separate from the busy-state poll and drives conservative secondmate recovery: it is a recovery-grade classifier that distinguishes a live agent, a confirmed agent-less endpoint, an authoritatively missing endpoint, and an unreadable read.
 Herdr's durable default container shape is workspace-per-home plus tab-per-task: the primary home uses workspace label `firstmate`, secondmate homes use `2ndmate-<secondmate-id>`, and recovery/list-live scopes to the current `FM_HOME`'s workspace.
 Its optional default-off presentation projection may place one clean new task in a disposable workspace without changing endpoint authority or lifecycle ownership; [`docs/herdr-backend.md`](herdr-backend.md#optional-disposable-single-task-presentation-spaces) owns that conditional design.
 
@@ -247,7 +247,7 @@ The mechanics are owned by the `/updatefirstmate` skill and firstmate's operatin
 
 Fleet state lives in Herdr, no-mistakes run records, status event logs, local markdown under `data/` including `data/captain.md`, `data/captain-shared.md`, and `data/learnings.md`, and persistent secondmate homes.
 Respawning after a server-restored layout closes and replaces confirmed no-agent or dead task-tab husks instead of requiring manual tab cleanup.
-At session start, confirmed-dead secondmate agent endpoints are closed and relaunched through the same secondmate spawn path, while ambiguous liveness reads are left untouched to avoid duplicate supervisors.
+At session start, confirmed agent-less secondmate endpoints are closed and relaunched through the same secondmate spawn path, authoritatively missing endpoints are relaunched directly, and unreadable liveness reads are left untouched to avoid duplicate supervisors.
 Use `/stow` before an intentional reset when the conversation may hold durable knowledge that has not yet been written to disk; after that, the next firstmate session can reconcile and carry on.
 
 ## Development notes
