@@ -59,11 +59,11 @@ Bounded capture internally compensates for Herdr builds whose `pane read --lines
 ## Optional disposable single-task presentation spaces
 
 The local presence flag `config/herdr-presentation-spaces` enables a default-off visual projection for newly spawned work.
-It does not change task identity, endpoint authority, worktree ownership, durable routing, recovery, or teardown gates.
+It does not change task identity, endpoint authority, worktree ownership, durable routing, or the authority and safety gates for recovery and teardown.
 The task still has one authoritative pane and one metadata record.
 
-Projection is attempted only when the pre-create layout is unambiguous and the target task is new.
-Firstmate journals the exact projection id and created workspace before mutating layout.
+Initial projection is attempted only when the pre-create layout is unambiguous and the target task is new.
+Firstmate journals the projection attempt before mutating layout.
 Create, ordering, focus restoration, and cleanup serialize through a machine-private session lock whose ownership and mode are validated before use.
 If projection, ordering, or focus restoration is ambiguous, Firstmate keeps the worker alive and records enough state for conservative recovery.
 After the exact projected workspace converges to one task tab and pane, Firstmate atomically upgrades the journal from version 1 to a version 2 restart binding recording the exact home, session, workspace, tab, pane, and parent identities.
