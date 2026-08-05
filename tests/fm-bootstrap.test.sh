@@ -951,7 +951,7 @@ ROWS
 }
 
 test_herdr_mirror_remote_route_gate() {
-  local case_dir fakebin out plugin_root
+  local case_dir fakebin out plugin_root platform expected_digest
 
   case_dir="$TMP_ROOT/herdr-mirror-local-route"
   mkdir -p "$case_dir/home/config" "$case_dir/home/data"
@@ -1003,21 +1003,28 @@ if [ "\${1:-}" = plugin ] && [ "\${2:-}" = list ]; then
 fi
 exit 64
 SH
-  cat > "$fakebin/uname" <<'SH'
+  platform="$(uname -s)-$(uname -m)"
+  case "$platform" in
+    Darwin-arm64|Darwin-aarch64)
+      expected_digest=08483f7533f8097392c34ef4bd7d40fc2425ea0609bcfbf65d2bcae82c7bcdb4
+      ;;
+    Darwin-x86_64|Darwin-amd64)
+      expected_digest=abd5eb373712d5764ef10a394812d052cc198c28859fd2339c4390c956541745
+      ;;
+    Linux-arm64|Linux-aarch64)
+      expected_digest=3af127b615199dfcca59613d898200f352747747dc152e8f3010921e44999dbe
+      ;;
+    Linux-x86_64|Linux-amd64)
+      expected_digest=640f32f4c93c9ae5c01057cb4a04980c6615faff5f7224ad5d7487dff41229f7
+      ;;
+    *) fail "unsupported Herdr Mirror test platform: $platform" ;;
+  esac
+  cat > "$fakebin/shasum" <<SH
 #!/usr/bin/env bash
-case "${1:-}" in
-  '') printf '%s\n' Darwin ;;
-  -s) printf '%s\n' Darwin ;;
-  -m) printf '%s\n' arm64 ;;
-  *) exit 64 ;;
-esac
-SH
-  cat > "$fakebin/shasum" <<'SH'
-#!/usr/bin/env bash
-printf '%s  %s\n' 08483f7533f8097392c34ef4bd7d40fc2425ea0609bcfbf65d2bcae82c7bcdb4 "${@: -1}"
+printf '%s  %s\n' '$expected_digest' "\${@: -1}"
 SH
   ln -s "$fakebin/shasum" "$fakebin/sha256sum"
-  chmod +x "$fakebin/herdr" "$fakebin/uname" "$fakebin/shasum"
+  chmod +x "$fakebin/herdr" "$fakebin/shasum"
   out=$(PATH="$fakebin:$BASE_PATH" HOME="$case_dir/home" FM_HOME="$case_dir/home" \
     FM_ROOT_OVERRIDE="$case_dir/home" FM_FAKE_TREEHOUSE_LEASE_HELP=1 \
     FM_HERDR_MIRROR_CLI_LINK="$case_dir/home/.local/bin/herdr-mirror" "$ROOT/bin/fm-bootstrap.sh")
