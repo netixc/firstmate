@@ -32,12 +32,12 @@ set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-FM_HERDR_MIRROR_VERSION=0.1.16
+FM_HERDR_MIRROR_VERSION=0.1.17
 FM_HERDR_MIRROR_TAG="v${FM_HERDR_MIRROR_VERSION}"
 FM_HERDR_MIRROR_SOURCE=netixc/herdr-mirror
 FM_HERDR_MIRROR_OWNER=netixc
 FM_HERDR_MIRROR_REPO=herdr-mirror
-FM_HERDR_MIRROR_COMMIT=a569217ae59166470aa6a1fc0bbca2dea196af64
+FM_HERDR_MIRROR_COMMIT=9889986fe361f6d70fef8d610cd3caff6fef10c3
 FM_HERDR_MIRROR_PLUGIN_ID=mirror
 
 HERDR_BIN=${FM_HERDR_MIRROR_HERDR_BIN:-}
@@ -68,16 +68,16 @@ resolve_herdr() {
 expected_sha256() {
   case "$(uname -s)-$(uname -m)" in
     Darwin-arm64|Darwin-aarch64)
-      printf '%s\n' 08483f7533f8097392c34ef4bd7d40fc2425ea0609bcfbf65d2bcae82c7bcdb4
+      printf '%s\n' d8160c069817818fc5750907926943ed0b7647013baff941568f0e19cb3fa360
       ;;
     Darwin-x86_64|Darwin-amd64)
-      printf '%s\n' abd5eb373712d5764ef10a394812d052cc198c28859fd2339c4390c956541745
+      printf '%s\n' dceed46cf4299b5d756b49f20d58a00dce72d2a7fe2b64885087f0b6232c500f
       ;;
     Linux-arm64|Linux-aarch64)
-      printf '%s\n' 3af127b615199dfcca59613d898200f352747747dc152e8f3010921e44999dbe
+      printf '%s\n' 94d60bf93d1cfc8de83c73d1580520de6e0ae74476a497f7a1cffa73d715a357
       ;;
     Linux-x86_64|Linux-amd64)
-      printf '%s\n' 640f32f4c93c9ae5c01057cb4a04980c6615faff5f7224ad5d7487dff41229f7
+      printf '%s\n' de20a4c9e713f00b9a131bee646a08a5943a8111fba4e93e9fa70ecd61781b33
       ;;
     *) return 1 ;;
   esac
