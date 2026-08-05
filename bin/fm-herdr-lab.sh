@@ -7,6 +7,7 @@
 #   fm-herdr-lab.sh prepare <session>
 #   fm-herdr-lab.sh provision <session>
 #   fm-herdr-lab.sh run <session> <herdr arguments...>
+#   fm-herdr-lab.sh client <session>
 #   fm-herdr-lab.sh stop <session>
 #   fm-herdr-lab.sh teardown <session>
 #
@@ -17,6 +18,9 @@
 # The run command rejects caller-supplied --session flags, any leading option
 # before the subcommand, all session lifecycle operations, and every server
 # operation.
+# The client command requires the helper's ownership tripwire, freshly confirms
+# the named session is non-default, and launches the full Herdr TUI with the
+# session selection constructed by this helper rather than ambient authority.
 # Session stop is available only through guarded stop or teardown, and session
 # delete is available only through teardown.
 # Both paths perform a fresh refuse-default check immediately before each
@@ -118,6 +122,18 @@ fm_herdr_lab_refuse_if_default() { # <session>
   [ "$flag" = false ] && return 0
   fm_herdr_lab_error "refusing destructive call for '$name': session is absent or default (default=${flag:-<not found>})"
   return 1
+}
+
+fm_herdr_lab_client() { # <session>
+  local name=$1 tripwire
+  fm_herdr_lab_validate_name "$name" || return 1
+  tripwire=$(fm_herdr_lab_tripwire_path "$name")
+  [ -f "$tripwire" ] || {
+    fm_herdr_lab_error "missing fleet-state tripwire for '$name'; refusing full client"
+    return 1
+  }
+  fm_herdr_lab_refuse_if_default "$name" || return 1
+  fm_herdr_lab_raw "$name"
 }
 
 fm_herdr_lab_cli() { # <session> <herdr arguments...>
@@ -299,7 +315,11 @@ fm_herdr_lab_name() { # <label>
 }
 
 fm_herdr_lab_usage() {
-  sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  awk '
+    NR == 1 { next }
+    /^#/ { sub(/^# ?/, ""); print; next }
+    { exit }
+  ' "${BASH_SOURCE[0]}"
 }
 
 fm_herdr_lab_main() {
@@ -321,6 +341,10 @@ fm_herdr_lab_main() {
       [ "$#" -ge 3 ] || { fm_herdr_lab_usage >&2; return 2; }
       shift
       fm_herdr_lab_cli "$@"
+      ;;
+    client)
+      [ "$#" -eq 2 ] || { fm_herdr_lab_usage >&2; return 2; }
+      fm_herdr_lab_client "$2"
       ;;
     stop)
       [ "$#" -eq 2 ] || { fm_herdr_lab_usage >&2; return 2; }

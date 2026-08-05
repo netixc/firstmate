@@ -27,6 +27,7 @@ for arg in "$@"; do
 done
 [ "${previous:-}" = --session ] || { echo "fake herdr: missing trailing --session" >&2; exit 90; }
 session=$last
+[ "${HERDR_SESSION:-}" = "$session" ] || { echo "fake herdr: ambient session does not match explicit session" >&2; exit 94; }
 default_socket=$(cat "$state/default-socket")
 lab_state=absent
 [ ! -f "$state/$session" ] || lab_state=$(cat "$state/$session")
@@ -98,6 +99,44 @@ test_refuses_unsafe_names() {
   fm_herdr_lab_validate_name "$generated" || fail "generated lab session name was refused"
   [ "${#generated}" -le 40 ] || fail "generated lab session name is too long for Herdr socket paths: $generated"
   pass "fm-herdr-lab: names fail closed and require the lab prefix"
+}
+
+test_guarded_client_executable_interface() {
+  local name="fm-lab-client-$$" status=0 line_count help
+  : > "$FAKE_LOG"
+
+  help=$("$ROOT/bin/fm-herdr-lab.sh" --help) || fail "helper --help failed"
+  printf '%s\n' "$help" | grep -F 'fm-herdr-lab.sh client <session>' >/dev/null \
+    || fail "helper help omitted the guarded full-client command"
+
+  HERDR_SESSION=fm-lab-ambient run_with_fake "$ROOT/bin/fm-herdr-lab.sh" client default >/dev/null 2>&1 || status=$?
+  expect_code 1 "$status" "client must refuse the literal default session"
+  status=0
+  HERDR_SESSION=default run_with_fake "$ROOT/bin/fm-herdr-lab.sh" client arbitrary-session >/dev/null 2>&1 || status=$?
+  expect_code 1 "$status" "client must refuse a non-lab session name"
+  status=0
+  HERDR_SESSION=default run_with_fake "$ROOT/bin/fm-herdr-lab.sh" client "$name" >/dev/null 2>&1 || status=$?
+  expect_code 1 "$status" "client must refuse an unowned lab without a tripwire"
+  line_count=$(wc -l < "$FAKE_LOG" | tr -d ' ')
+  [ "$line_count" -eq 0 ] || fail "unsafe client names or missing ownership reached Herdr"
+
+  run_with_fake "$ROOT/bin/fm-herdr-lab.sh" provision "$name" || fail "executable provision failed for client fixture"
+  : > "$FAKE_LOG"
+  HERDR_SESSION=default run_with_fake "$ROOT/bin/fm-herdr-lab.sh" client "$name" >/dev/null || fail "guarded full client failed"
+  line_count=$(wc -l < "$FAKE_LOG" | tr -d ' ')
+  [ "$line_count" -eq 2 ] || fail "guarded client did not perform exactly one fresh identity check before launch"
+  [ "$(sed -n '1p' "$FAKE_LOG")" = "session list --json --session $name" ] \
+    || fail "guarded client did not freshly verify the exact named lab"
+  [ "$(sed -n '2p' "$FAKE_LOG")" = "--session $name" ] \
+    || fail "full client was not launched with only the helper-constructed session selection"
+
+  HERDR_SESSION=default run_with_fake "$ROOT/bin/fm-herdr-lab.sh" run "$name" workspace list >/dev/null \
+    || fail "existing executable run command regressed"
+  [ "$(sed -n '3p' "$FAKE_LOG")" = "workspace list --session $name" ] \
+    || fail "existing run command lost exact session scoping"
+  run_with_fake "$ROOT/bin/fm-herdr-lab.sh" teardown "$name" || fail "existing executable teardown command regressed"
+  [ "$(cat "$FAKE_STATE/$name")" = deleted ] || fail "executable teardown did not delete the client fixture"
+  pass "fm-herdr-lab: guarded full client is executable, owned, non-default, and exactly scoped"
 }
 
 test_provision_run_and_guarded_teardown() {
@@ -235,6 +274,7 @@ SH
 }
 
 test_refuses_unsafe_names
+test_guarded_client_executable_interface
 test_provision_run_and_guarded_teardown
 test_missing_tripwire_blocks_destruction
 test_changed_default_trips_after_teardown
