@@ -5,8 +5,9 @@
 # BOOTSTRAP_INFO fact, or completed bootstrap no-action fact and is silent when
 # all is well. firstmate consumes the exact 'MISSING: treehouse (install: ...)',
 # 'MISSING: tasks-axi (install: ...)', 'MISSING: quota-axi (install: ...)',
-# 'MISSING: gh-axi (install: ...)', 'MISSING: lavish-axi (install: ...)', and
-# 'BOOTSTRAP_INFO: ...' lines, so those contracts are pinned verbatim. The cases
+# 'MISSING: gh-axi (install: ...)', 'MISSING: lavish-axi (install: ...)',
+# 'MISSING: herdr-mirror (install: ...)', and 'BOOTSTRAP_INFO: ...' lines, so
+# those contracts are pinned verbatim. The cases
 # are table-driven over the inputs that vary: whether `treehouse get --help`
 # advertises --lease, which (if any) tasks-axi version is on PATH, whether
 # tasks-axi update advertises --archive-body, whether its mv help advertises
@@ -949,6 +950,43 @@ ROWS
   pass "bootstrap validates crew-dispatch.json and reports malformed or unverified configs"
 }
 
+test_herdr_mirror_remote_route_gate() {
+  local case_dir fakebin out
+
+  case_dir="$TMP_ROOT/herdr-mirror-local-route"
+  mkdir -p "$case_dir/home/config" "$case_dir/home/data"
+  printf '%s\n' manual > "$case_dir/home/config/backlog-backend"
+  printf -- '- local - local route (home: /tmp/local-home; scope: local; projects: p; added 2026-08-05)\n' \
+    > "$case_dir/home/data/secondmates.md"
+  fakebin=$(make_fake_toolchain "$case_dir")
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$case_dir/home" FM_ROOT_OVERRIDE="$case_dir/home" \
+    FM_FAKE_TREEHOUSE_LEASE_HELP=1 "$ROOT/bin/fm-bootstrap.sh")
+  [ -z "$out" ] || fail "a local-only route should not activate Herdr Mirror management, got: $out"
+
+  case_dir="$TMP_ROOT/herdr-mirror-remote-route"
+  mkdir -p "$case_dir/home/config" "$case_dir/home/data"
+  printf '%s\n' manual > "$case_dir/home/config/backlog-backend"
+  printf -- '- remote - remote route (host: remote-alias; root: /srv/firstmate; home: /srv/home; scope: remote; projects: p; added 2026-08-05)\n' \
+    > "$case_dir/home/data/secondmates.md"
+  fakebin=$(make_fake_toolchain "$case_dir")
+  add_real_jq "$fakebin"
+  fm_fake_exit0 "$fakebin" curl
+  cat > "$fakebin/herdr" <<'SH'
+#!/usr/bin/env bash
+if [ "${1:-}" = plugin ] && [ "${2:-}" = list ]; then
+  printf '%s\n' '{"id":"cli:plugin","result":{"plugins":[],"type":"plugin_list"}}'
+  exit 0
+fi
+exit 64
+SH
+  chmod +x "$fakebin/herdr"
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$case_dir/home" FM_ROOT_OVERRIDE="$case_dir/home" \
+    FM_FAKE_TREEHOUSE_LEASE_HELP=1 "$ROOT/bin/fm-bootstrap.sh")
+  [ "$out" = 'MISSING: herdr-mirror (install: bin/fm-herdr-mirror.sh install)' ] \
+    || fail "a registered remote route should report the missing managed mirror, got: $out"
+  pass "bootstrap relevance-gates Herdr Mirror on registered remote second mates"
+}
+
 test_bootstrap_reporting
 test_no_mistakes_min_version
 test_gh_axi_min_version
@@ -964,6 +1002,7 @@ test_cmux_bundled_cli_satisfies_dependency
 test_unknown_backend_reports_invalid_configuration
 test_json_backends_require_jq_not_tmux
 test_treehouse_lease_check_follows_resolved_backend
+test_herdr_mirror_remote_route_gate
 test_fleet_sync_timeout_scales_with_origin_backed_project_count
 test_fleet_sync_timeout_floor_preserves_small_fleets
 test_fleet_sync_timeout_explicit_override_wins

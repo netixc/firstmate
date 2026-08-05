@@ -70,6 +70,10 @@
 #          X mode is OPTIONAL and inert unless FM_HOME/.env has a non-empty
 #          FMX_PAIRING_TOKEN. When opted in, bootstrap requires curl+jq, writes
 #          the relay poll shim and 30s cadence config, and prints an FMX line.
+#          Herdr Mirror is OPTIONAL and required only when data/secondmates.md
+#          contains a valid registered remote route. Bootstrap detects its
+#          pinned plugin, release binary, and CLI link, then routes approved
+#          installation or updates through bin/fm-herdr-mirror.sh.
 #          Fleet sync fetches, fast-forwards safe default-branch states, reports
 #          recovered and STUCK clone drift, and prunes gone local branches; it is
 #          bounded by FM_FLEET_SYNC_BOOTSTRAP_TIMEOUT when it is a non-empty
@@ -656,6 +660,7 @@ install_cmd() {
     no-mistakes) echo "curl -fsSL https://raw.githubusercontent.com/kunchenguid/no-mistakes/main/docs/install.sh | sh" ;;
     gh-axi|chrome-devtools-axi|lavish-axi) echo "npm install -g $1 && $1 setup hooks" ;;
     tasks-axi|quota-axi) echo "npm install -g $1" ;;
+    herdr-mirror) echo "bin/fm-herdr-mirror.sh install" ;;
     *) return 1 ;;
   esac
 }
@@ -1004,7 +1009,11 @@ if [ "${1:-}" = "install" ]; then
     fi
     cmd=${cmd%%  #*}
     echo "installing $t: $cmd"
-    eval "$cmd"
+    if [ "$t" = herdr-mirror ]; then
+      "$SCRIPT_DIR/fm-herdr-mirror.sh" install
+    else
+      eval "$cmd"
+    fi
   done
   exit 0
 fi
@@ -1028,6 +1037,29 @@ done
 for t in $COMMON_TOOLS; do
   command -v "$t" >/dev/null || missing_tool_diagnostic "$t"
 done
+# Herdr Mirror is an optional, relevance-gated managed tool. A valid registered
+# remote second-mate route is the narrow existing opt-in because it is the only
+# Firstmate feature whose local operator view benefits from remote mirroring.
+# Local-only fleets never pay this dependency cost. Herdr and jq are needed to
+# inspect the global plugin registration; curl is needed only when the plugin or
+# its release binary actually needs installation, repair, or an update.
+if [ -x "$SCRIPT_DIR/fm-herdr-mirror.sh" ] \
+  && "$SCRIPT_DIR/fm-herdr-mirror.sh" required "$DATA/secondmates.md"; then
+  herdr_mirror_detect_ready=1
+  for t in herdr jq; do
+    if ! command -v "$t" >/dev/null 2>&1; then
+      if ! fm_backend_list_contains "$TOOLS" "$t"; then
+        missing_tool_diagnostic "$t"
+      fi
+      herdr_mirror_detect_ready=0
+    fi
+  done
+  if [ "$herdr_mirror_detect_ready" -eq 1 ] \
+    && ! "$SCRIPT_DIR/fm-herdr-mirror.sh" check; then
+    command -v curl >/dev/null 2>&1 || missing_tool_diagnostic curl
+    missing_tool_diagnostic herdr-mirror
+  fi
+fi
 # The treehouse lease-support upgrade check is only relevant when the resolved
 # backend actually requires treehouse (every backend except orca, which owns its
 # own worktrees); an orca home must not be told to upgrade a provider it never uses.

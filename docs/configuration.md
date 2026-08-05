@@ -295,6 +295,12 @@ Orca provides both the task worktree and terminal endpoint (see "Runtime backend
 A herdr, zellij, or cmux home is therefore never told `tmux` is missing, and the `treehouse` durable-lease upgrade check runs only for the backends that actually use treehouse.
 When `config/crew-dispatch.json` exists, bootstrap also requires `jq` for dispatch profile validation.
 When X mode is opted in, bootstrap also requires `curl` and `jq` before arming the relay poll shim.
+Herdr Mirror is another relevance-gated tool and is activated only when `data/secondmates.md` contains a valid registered remote route.
+That existing route registration is the opt-in because remote second-mate operation is the only Firstmate feature that benefits from a local mirrored Herdr view; homes with no remote routes are never asked to install it.
+For a relevant home, bootstrap detects the pinned `netixc/herdr-mirror` GitHub plugin, its published release binary, and the `~/.local/bin/herdr-mirror` entrypoint.
+An absent, partial, wrong-source, outdated, or integrity-mismatched installation reports `MISSING: herdr-mirror (install: bin/fm-herdr-mirror.sh install)` and is changed only after the normal current-session approval.
+The approved installer uses Herdr's supported pinned-ref reinstall path, verifies the installed binary against the published release digest, safely converges an absent CLI link, and never writes Herdr Mirror host configuration or any Herdr session configuration.
+[`bin/fm-herdr-mirror.sh`](../bin/fm-herdr-mirror.sh) owns the exact supported version, source commit, release digests, detection contract, and user-owned-path refusals.
 `tasks-axi` and `quota-axi` are required bootstrap tools in every profile, the same class as `lavish-axi`.
 An absent or incompatible `tasks-axi` reports `MISSING: tasks-axi (install: npm install -g tasks-axi)`; when `config/backlog-backend` is not `manual` and compatible `tasks-axi` is on `PATH`, bootstrap stays silent and firstmate uses its verbs for routine backlog mutations, otherwise it hand-edits `data/backlog.md` until installation is approved and completed.
 An absent or incompatible `gh-axi` reports `MISSING: gh-axi (install: npm install -g gh-axi && gh-axi setup hooks)`.
