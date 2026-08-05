@@ -16,6 +16,7 @@
 #
 # Usage:
 #   fm-herdr-mirror.sh required <secondmate-registry>
+#   fm-herdr-mirror.sh check-plugin
 #   fm-herdr-mirror.sh check
 #   fm-herdr-mirror.sh status
 #   fm-herdr-mirror.sh install
@@ -23,9 +24,10 @@
 # `required` succeeds only when data/secondmates.md contains a valid registered
 # remote route. Bootstrap uses that existing registration as the narrow opt-in:
 # homes with only local second mates, or no second mates, never need the tool.
-# `check` is silent and succeeds only when plugin, binary, source pin, and CLI
-# link are current. `install` is the consent-gated convergence action called by
-# fm-bootstrap.sh after approval; reruns are safe and preserve user-owned state.
+# `check-plugin` is silent and succeeds when plugin, binary, and source pin are
+# current. `check` also requires the CLI link. `install` is the consent-gated
+# convergence action called by fm-bootstrap.sh after approval; reruns are safe
+# and preserve user-owned state.
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -45,7 +47,7 @@ PLUGIN_BINARY=
 FM_HERDR_MIRROR_REASON=
 
 usage() {
-  printf 'usage: fm-herdr-mirror.sh required <secondmate-registry> | check | status | install\n' >&2
+  printf 'usage: fm-herdr-mirror.sh required <secondmate-registry> | check-plugin | check | status | install\n' >&2
   exit 2
 }
 
@@ -219,6 +221,7 @@ remote_route_registered() {
   [ -f "$registry" ] && [ ! -L "$registry" ] || return 1
   # shellcheck source=bin/fm-secondmate-registry-lib.sh disable=SC1091
   . "$SCRIPT_DIR/fm-secondmate-registry-lib.sh"
+  secondmate_registry_validate_bindings "$registry" secondmate_registry_path_key || return 1
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in '- '*) ;; *) continue ;; esac
     secondmate_registry_parse_line "$line" || continue
@@ -232,6 +235,10 @@ case "$command" in
   required)
     [ "$#" -eq 2 ] || usage
     remote_route_registered "$2"
+    ;;
+  check-plugin)
+    [ "$#" -eq 1 ] || usage
+    plugin_current
     ;;
   check)
     [ "$#" -eq 1 ] || usage

@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Behavior tests for the relevance-gated Herdr Mirror manager.
 #
-# These tests drive its public required/check/install/status interface through a
-# fake Herdr plugin CLI. They cover route relevance, version/source/update
-# decisions, release-binary integrity, idempotence, partial-install recovery,
-# and the boundary that preserves user-owned config, plugins, and CLI paths.
+# These tests drive its public required/check-plugin/check/install/status
+# interface through a fake Herdr plugin CLI. They cover route relevance,
+# version/source/update decisions, release-binary integrity, idempotence,
+# partial-install recovery, and the boundary that preserves user-owned config,
+# plugins, and CLI paths.
 set -u
 
 # shellcheck source=tests/lib.sh disable=SC1091
@@ -157,6 +158,9 @@ test_remote_route_relevance_gate() {
   printf -- '- remote - remote route (host: remote-alias; root: /srv/firstmate; home: /srv/home; scope: remote; projects: p; added 2026-08-05)\n' >> "$registry"
   "$MANAGER" required "$registry" >/dev/null 2>&1 \
     || fail "a valid registered remote route did not enable Herdr Mirror management"
+  printf -- '- unsafe - unsafe remote route (host: unsafe@alias; root: relative/root; home: relative/home; scope: remote; projects: p; added 2026-08-05)\n' >> "$registry"
+  "$MANAGER" required "$registry" >/dev/null 2>&1 \
+    && fail "an invalid remote registry enabled Herdr Mirror management"
   pass "Herdr Mirror management is gated on a valid registered remote route"
 }
 
@@ -215,6 +219,8 @@ test_partial_binary_and_link_recovery() {
 
   link_case=$(new_case partial-link)
   seed_plugin "$link_case" 0.1.16 netixc herdr-mirror "$PINNED_COMMIT" current
+  run_manager "$link_case" check-plugin \
+    || fail "a current plugin with only its CLI link missing failed plugin detection"
   run_manager "$link_case" check >/dev/null 2>&1 \
     && fail "a current plugin with no CLI link passed detection"
   run_manager "$link_case" install >/dev/null \

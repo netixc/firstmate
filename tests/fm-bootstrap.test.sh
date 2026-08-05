@@ -951,7 +951,7 @@ ROWS
 }
 
 test_herdr_mirror_remote_route_gate() {
-  local case_dir fakebin out
+  local case_dir fakebin out plugin_root
 
   case_dir="$TMP_ROOT/herdr-mirror-local-route"
   mkdir -p "$case_dir/home/config" "$case_dir/home/data"
@@ -984,6 +984,45 @@ SH
     FM_FAKE_TREEHOUSE_LEASE_HELP=1 "$ROOT/bin/fm-bootstrap.sh")
   [ "$out" = 'MISSING: herdr-mirror (install: bin/fm-herdr-mirror.sh install)' ] \
     || fail "a registered remote route should report the missing managed mirror, got: $out"
+
+  case_dir="$TMP_ROOT/herdr-mirror-link-only"
+  plugin_root="$case_dir/plugin-root"
+  mkdir -p "$case_dir/home/config" "$case_dir/home/data" "$plugin_root/target/release"
+  printf '%s\n' manual > "$case_dir/home/config/backlog-backend"
+  printf -- '- remote - remote route (host: remote-alias; root: /srv/firstmate; home: /srv/home; scope: remote; projects: p; added 2026-08-05)\n' \
+    > "$case_dir/home/data/secondmates.md"
+  printf '%s\n' release-v0.1.16 > "$plugin_root/target/release/herdr-mirror"
+  chmod 755 "$plugin_root/target/release/herdr-mirror"
+  fakebin=$(make_fake_toolchain "$case_dir")
+  add_real_jq "$fakebin"
+  cat > "$fakebin/herdr" <<SH
+#!/usr/bin/env bash
+if [ "\${1:-}" = plugin ] && [ "\${2:-}" = list ]; then
+  printf '%s\n' '{"id":"cli:plugin","result":{"plugins":[{"plugin_id":"mirror","version":"0.1.16","enabled":false,"plugin_root":"$plugin_root","source":{"kind":"github","owner":"netixc","repo":"herdr-mirror","resolved_commit":"a569217ae59166470aa6a1fc0bbca2dea196af64","managed_path":"$plugin_root"}}],"type":"plugin_list"}}'
+  exit 0
+fi
+exit 64
+SH
+  cat > "$fakebin/uname" <<'SH'
+#!/usr/bin/env bash
+case "${1:-}" in
+  '') printf '%s\n' Darwin ;;
+  -s) printf '%s\n' Darwin ;;
+  -m) printf '%s\n' arm64 ;;
+  *) exit 64 ;;
+esac
+SH
+  cat > "$fakebin/shasum" <<'SH'
+#!/usr/bin/env bash
+printf '%s  %s\n' 08483f7533f8097392c34ef4bd7d40fc2425ea0609bcfbf65d2bcae82c7bcdb4 "${@: -1}"
+SH
+  ln -s "$fakebin/shasum" "$fakebin/sha256sum"
+  chmod +x "$fakebin/herdr" "$fakebin/uname" "$fakebin/shasum"
+  out=$(PATH="$fakebin:$BASE_PATH" HOME="$case_dir/home" FM_HOME="$case_dir/home" \
+    FM_ROOT_OVERRIDE="$case_dir/home" FM_FAKE_TREEHOUSE_LEASE_HELP=1 \
+    FM_HERDR_MIRROR_CLI_LINK="$case_dir/home/.local/bin/herdr-mirror" "$ROOT/bin/fm-bootstrap.sh")
+  [ "$out" = 'MISSING: herdr-mirror (install: bin/fm-herdr-mirror.sh install)' ] \
+    || fail "a link-only repair should not require curl, got: $out"
   pass "bootstrap relevance-gates Herdr Mirror on registered remote second mates"
 }
 

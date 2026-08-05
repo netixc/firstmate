@@ -1056,7 +1056,9 @@ if [ -x "$SCRIPT_DIR/fm-herdr-mirror.sh" ] \
   done
   if [ "$herdr_mirror_detect_ready" -eq 1 ] \
     && ! "$SCRIPT_DIR/fm-herdr-mirror.sh" check; then
-    command -v curl >/dev/null 2>&1 || missing_tool_diagnostic curl
+    if ! "$SCRIPT_DIR/fm-herdr-mirror.sh" check-plugin; then
+      command -v curl >/dev/null 2>&1 || missing_tool_diagnostic curl
+    fi
     missing_tool_diagnostic herdr-mirror
   fi
 fi
