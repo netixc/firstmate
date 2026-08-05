@@ -36,6 +36,13 @@ Linux uses the same queue and worker protocol without the Aqua-session requireme
 The remote account must provide the required toolchain, the selected worker runtime, the selected session backend, and credentials that work on that host.
 Project origin URLs recorded by the primary must be reachable from the remote account because projects are cloned on that host rather than copied from the primary.
 
+Registering the first remote second-mate route also opts the primary home into Firstmate's local Herdr Mirror management on its next session start.
+Removing the last remote route makes later bootstrap runs stop requiring it.
+The [Toolchain section](configuration.md#toolchain) owns bootstrap's relevance, detection, install, repair, and update behavior.
+Firstmate does not generate `~/.config/herdr-mirror/hosts.toml`, because host keys, SSH targets, aliases, addresses, and mirroring behavior are user-owned configuration.
+Create and maintain those entries with the [Herdr Mirror project guidance](https://github.com/netixc/herdr-mirror); a reinstall preserves them, Herdr's plugin config and state, unrelated plugins, credentials, and Herdr session names.
+Firstmate also leaves an already running Herdr server alone, so after a first install or update use Herdr's documented config reload or restart at a convenient time to activate the refreshed plugin in that server.
+
 ## Non-interactive tool contract
 
 No login or interactive shell ever runs on the remote host, so `~/.profile`, `~/.bashrc`, and `~/.zshrc` never contribute to the runtime `PATH`.
