@@ -991,14 +991,14 @@ SH
   printf '%s\n' manual > "$case_dir/home/config/backlog-backend"
   printf -- '- remote - remote route (host: remote-alias; root: /srv/firstmate; home: /srv/home; scope: remote; projects: p; added 2026-08-05)\n' \
     > "$case_dir/home/data/secondmates.md"
-  printf '%s\n' release-v0.1.16 > "$plugin_root/target/release/herdr-mirror"
+  printf '%s\n' release-v0.1.17 > "$plugin_root/target/release/herdr-mirror"
   chmod 755 "$plugin_root/target/release/herdr-mirror"
   fakebin=$(make_fake_toolchain "$case_dir")
   add_real_jq "$fakebin"
   cat > "$fakebin/herdr" <<SH
 #!/usr/bin/env bash
 if [ "\${1:-}" = plugin ] && [ "\${2:-}" = list ]; then
-  printf '%s\n' '{"id":"cli:plugin","result":{"plugins":[{"plugin_id":"mirror","version":"0.1.16","enabled":false,"plugin_root":"$plugin_root","source":{"kind":"github","owner":"netixc","repo":"herdr-mirror","resolved_commit":"a569217ae59166470aa6a1fc0bbca2dea196af64","managed_path":"$plugin_root"}}],"type":"plugin_list"}}'
+  printf '%s\n' '{"id":"cli:plugin","result":{"plugins":[{"plugin_id":"mirror","version":"0.1.17","enabled":false,"plugin_root":"$plugin_root","source":{"kind":"github","owner":"netixc","repo":"herdr-mirror","resolved_commit":"9889986fe361f6d70fef8d610cd3caff6fef10c3","managed_path":"$plugin_root"}}],"type":"plugin_list"}}'
   exit 0
 fi
 exit 64
@@ -1006,16 +1006,16 @@ SH
   platform="$(uname -s)-$(uname -m)"
   case "$platform" in
     Darwin-arm64|Darwin-aarch64)
-      expected_digest=08483f7533f8097392c34ef4bd7d40fc2425ea0609bcfbf65d2bcae82c7bcdb4
+      expected_digest=d8160c069817818fc5750907926943ed0b7647013baff941568f0e19cb3fa360
       ;;
     Darwin-x86_64|Darwin-amd64)
-      expected_digest=abd5eb373712d5764ef10a394812d052cc198c28859fd2339c4390c956541745
+      expected_digest=dceed46cf4299b5d756b49f20d58a00dce72d2a7fe2b64885087f0b6232c500f
       ;;
     Linux-arm64|Linux-aarch64)
-      expected_digest=3af127b615199dfcca59613d898200f352747747dc152e8f3010921e44999dbe
+      expected_digest=94d60bf93d1cfc8de83c73d1580520de6e0ae74476a497f7a1cffa73d715a357
       ;;
     Linux-x86_64|Linux-amd64)
-      expected_digest=640f32f4c93c9ae5c01057cb4a04980c6615faff5f7224ad5d7487dff41229f7
+      expected_digest=de20a4c9e713f00b9a131bee646a08a5943a8111fba4e93e9fa70ecd61781b33
       ;;
     *) fail "unsupported Herdr Mirror test platform: $platform" ;;
   esac

@@ -15,7 +15,8 @@ set -u
 MANAGER="$ROOT/bin/fm-herdr-mirror.sh"
 TMP_ROOT=$(fm_test_tmproot fm-herdr-mirror-tests)
 BASE_PATH=${FM_TEST_BASE_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
-PINNED_COMMIT=a569217ae59166470aa6a1fc0bbca2dea196af64
+PINNED_COMMIT=9889986fe361f6d70fef8d610cd3caff6fef10c3
+OLD_COMMIT=a569217ae59166470aa6a1fc0bbca2dea196af64
 
 new_case() {
   local case_dir="$TMP_ROOT/$1" fakebin real_jq
@@ -28,22 +29,28 @@ new_case() {
   ln -s "$real_jq" "$fakebin/jq"
   fm_fake_exit0 "$fakebin" git curl
 
+  printf '%s\n' Darwin > "$case_dir/state/uname-s"
+  printf '%s\n' arm64 > "$case_dir/state/uname-m"
+  printf '%s\n' d8160c069817818fc5750907926943ed0b7647013baff941568f0e19cb3fa360 \
+    > "$case_dir/state/asset-digest"
   cat > "$fakebin/uname" <<'SH'
 #!/usr/bin/env bash
+state=${FM_FAKE_MIRROR_STATE:?}
 case "${1:-}" in
-  -s) printf '%s\n' Darwin ;;
-  -m) printf '%s\n' arm64 ;;
-  *) printf '%s\n' Darwin ;;
+  -s) cat "$state/uname-s" ;;
+  -m) cat "$state/uname-m" ;;
+  *) cat "$state/uname-s" ;;
 esac
 SH
   chmod +x "$fakebin/uname"
 
   cat > "$fakebin/shasum" <<'SH'
 #!/usr/bin/env bash
+state=${FM_FAKE_MIRROR_STATE:?}
 file=
 for arg in "$@"; do file=$arg; done
-if [ -f "$file" ] && grep -qx 'release-v0.1.16' "$file"; then
-  printf '%s  %s\n' '08483f7533f8097392c34ef4bd7d40fc2425ea0609bcfbf65d2bcae82c7bcdb4' "$file"
+if [ -f "$file" ] && grep -qx 'release-v0.1.17' "$file"; then
+  printf '%s  %s\n' "$(cat "$state/asset-digest")" "$file"
 else
   printf '%064d  %s\n' 0 "$file"
 fi
@@ -77,13 +84,13 @@ if [ "${1:-}" = plugin ] && [ "${2:-}" = install ]; then
   [ ! -f "$state/install-count" ] || count=$(cat "$state/install-count")
   printf '%s\n' "$((count + 1))" > "$state/install-count"
   mkdir -p "$root/target/release"
-  printf '%s\n' release-v0.1.16 > "$root/target/release/herdr-mirror"
+  printf '%s\n' release-v0.1.17 > "$root/target/release/herdr-mirror"
   chmod 755 "$root/target/release/herdr-mirror"
   : > "$state/installed"
-  printf '%s\n' 0.1.16 > "$state/version"
+  printf '%s\n' 0.1.17 > "$state/version"
   printf '%s\n' netixc > "$state/owner"
   printf '%s\n' herdr-mirror > "$state/repo"
-  printf '%s\n' a569217ae59166470aa6a1fc0bbca2dea196af64 > "$state/commit"
+  printf '%s\n' 9889986fe361f6d70fef8d610cd3caff6fef10c3 > "$state/commit"
   exit 0
 fi
 printf 'unexpected fake herdr invocation: %s\n' "$*" >&2
@@ -104,7 +111,7 @@ seed_plugin() { # <case> <version> <owner> <repo> <commit> <binary-state>
   printf '%s\n' "$commit" > "$state/commit"
   rm -f "$root/target/release/herdr-mirror"
   case "$binary_state" in
-    current) printf '%s\n' release-v0.1.16 > "$root/target/release/herdr-mirror" ;;
+    current) printf '%s\n' release-v0.1.17 > "$root/target/release/herdr-mirror" ;;
     corrupt) printf '%s\n' tampered > "$root/target/release/herdr-mirror" ;;
     absent) return 0 ;;
     *) fail "unknown binary state: $binary_state" ;;
@@ -178,7 +185,7 @@ test_absent_install_and_idempotence_preserve_user_state() {
     || fail "a newly installed plugin did not pass detection"
   [ "$(readlink "$case_dir/home/.local/bin/herdr-mirror")" = "$case_dir/plugin-root/target/release/herdr-mirror" ] \
     || fail "the managed CLI link does not target the release binary"
-  assert_grep 'plugin install --ref a569217ae59166470aa6a1fc0bbca2dea196af64 --yes netixc/herdr-mirror' "$case_dir/state/install.log" \
+  assert_grep 'plugin install --ref 9889986fe361f6d70fef8d610cd3caff6fef10c3 --yes netixc/herdr-mirror' "$case_dir/state/install.log" \
     "install did not use the pinned supported Herdr plugin interface"
   [ "$(cat "$case_dir/state/install-count")" = 1 ] || fail "the first install count is wrong"
 
@@ -191,25 +198,41 @@ test_absent_install_and_idempotence_preserve_user_state() {
 }
 
 test_outdated_source_and_version_update() {
-  local case_dir
-  case_dir=$(new_case outdated)
-  seed_plugin "$case_dir" 0.1.15 other herdr-mirror deadbeef current
-  ln -s "$case_dir/plugin-root/target/release/herdr-mirror" "$case_dir/home/.local/bin/herdr-mirror"
-  run_manager "$case_dir" check >/dev/null 2>&1 \
-    && fail "an outdated unsupported plugin passed detection"
-  run_manager "$case_dir" install >/dev/null \
-    || fail "an outdated plugin did not update"
-  [ "$(cat "$case_dir/state/version")" = 0.1.16 ] || fail "the plugin version did not update"
-  [ "$(cat "$case_dir/state/commit")" = "$PINNED_COMMIT" ] || fail "the plugin source commit did not converge"
-  run_manager "$case_dir" check || fail "the updated plugin did not pass detection"
-  assert_user_state_preserved "$case_dir"
-  pass "outdated version and source converge to the supported release"
+  local version_case source_case
+  version_case=$(new_case outdated-version)
+  seed_plugin "$version_case" 0.1.16 netixc herdr-mirror "$PINNED_COMMIT" current
+  ln -s "$version_case/plugin-root/target/release/herdr-mirror" \
+    "$version_case/home/.local/bin/herdr-mirror"
+  run_manager "$version_case" check >/dev/null 2>&1 \
+    && fail "v0.1.16 passed current-release detection"
+  run_manager "$version_case" install >/dev/null \
+    || fail "v0.1.16 did not update"
+  [ "$(cat "$version_case/state/version")" = 0.1.17 ] || fail "the plugin version did not update"
+  [ "$(cat "$version_case/state/commit")" = "$PINNED_COMMIT" ] \
+    || fail "the plugin source commit did not converge"
+  run_manager "$version_case" check || fail "the updated plugin did not pass detection"
+
+  source_case=$(new_case outdated-source)
+  seed_plugin "$source_case" 0.1.17 netixc herdr-mirror "$OLD_COMMIT" current
+  ln -s "$source_case/plugin-root/target/release/herdr-mirror" \
+    "$source_case/home/.local/bin/herdr-mirror"
+  run_manager "$source_case" check >/dev/null 2>&1 \
+    && fail "the old source commit passed current-release detection"
+  run_manager "$source_case" install >/dev/null \
+    || fail "the old source commit did not update"
+  [ "$(cat "$source_case/state/commit")" = "$PINNED_COMMIT" ] \
+    || fail "the old source commit did not converge"
+  run_manager "$source_case" check || fail "the source-updated plugin did not pass detection"
+
+  assert_user_state_preserved "$version_case"
+  assert_user_state_preserved "$source_case"
+  pass "v0.1.16 and the old source commit converge to the supported release"
 }
 
 test_partial_binary_and_link_recovery() {
   local missing_case link_case
   missing_case=$(new_case partial-binary)
-  seed_plugin "$missing_case" 0.1.16 netixc herdr-mirror "$PINNED_COMMIT" absent
+  seed_plugin "$missing_case" 0.1.17 netixc herdr-mirror "$PINNED_COMMIT" absent
   run_manager "$missing_case" check >/dev/null 2>&1 \
     && fail "a plugin with no binary passed detection"
   run_manager "$missing_case" install >/dev/null \
@@ -218,7 +241,7 @@ test_partial_binary_and_link_recovery() {
     || fail "the missing binary did not trigger one supported reinstall"
 
   link_case=$(new_case partial-link)
-  seed_plugin "$link_case" 0.1.16 netixc herdr-mirror "$PINNED_COMMIT" current
+  seed_plugin "$link_case" 0.1.17 netixc herdr-mirror "$PINNED_COMMIT" current
   run_manager "$link_case" check-plugin \
     || fail "a current plugin with only its CLI link missing failed plugin detection"
   run_manager "$link_case" check >/dev/null 2>&1 \
@@ -236,7 +259,7 @@ test_partial_binary_and_link_recovery() {
 test_corrupt_binary_is_reinstalled() {
   local case_dir
   case_dir=$(new_case corrupt)
-  seed_plugin "$case_dir" 0.1.16 netixc herdr-mirror "$PINNED_COMMIT" corrupt
+  seed_plugin "$case_dir" 0.1.17 netixc herdr-mirror "$PINNED_COMMIT" corrupt
   ln -s "$case_dir/plugin-root/target/release/herdr-mirror" "$case_dir/home/.local/bin/herdr-mirror"
   run_manager "$case_dir" check >/dev/null 2>&1 \
     && fail "a binary with the wrong release digest passed detection"
@@ -248,10 +271,29 @@ test_corrupt_binary_is_reinstalled() {
   pass "release digest mismatch triggers a supported reinstall"
 }
 
+test_all_platform_release_digests_are_accepted() {
+  local os arch digest label case_dir
+  while IFS='|' read -r os arch digest label; do
+    case_dir=$(new_case "platform-$label")
+    printf '%s\n' "$os" > "$case_dir/state/uname-s"
+    printf '%s\n' "$arch" > "$case_dir/state/uname-m"
+    printf '%s\n' "$digest" > "$case_dir/state/asset-digest"
+    seed_plugin "$case_dir" 0.1.17 netixc herdr-mirror "$PINNED_COMMIT" current
+    run_manager "$case_dir" check-plugin \
+      || fail "$label did not accept its v0.1.17 release digest"
+  done <<'PLATFORMS'
+Darwin|aarch64|d8160c069817818fc5750907926943ed0b7647013baff941568f0e19cb3fa360|darwin-aarch64
+Darwin|x86_64|dceed46cf4299b5d756b49f20d58a00dce72d2a7fe2b64885087f0b6232c500f|darwin-x86_64
+Linux|aarch64|94d60bf93d1cfc8de83c73d1580520de6e0ae74476a497f7a1cffa73d715a357|linux-aarch64
+Linux|x86_64|de20a4c9e713f00b9a131bee646a08a5943a8111fba4e93e9fa70ecd61781b33|linux-x86_64
+PLATFORMS
+  pass "every supported platform accepts its v0.1.17 release digest"
+}
+
 test_user_owned_cli_path_is_never_overwritten() {
   local case_dir before rc out
   case_dir=$(new_case user-cli)
-  seed_plugin "$case_dir" 0.1.16 netixc herdr-mirror "$PINNED_COMMIT" current
+  seed_plugin "$case_dir" 0.1.17 netixc herdr-mirror "$PINNED_COMMIT" current
   printf '%s\n' 'operator-owned command' > "$case_dir/home/.local/bin/herdr-mirror"
   before=$(cat "$case_dir/home/.local/bin/herdr-mirror")
   set +e
@@ -274,6 +316,7 @@ test_absent_install_and_idempotence_preserve_user_state
 test_outdated_source_and_version_update
 test_partial_binary_and_link_recovery
 test_corrupt_binary_is_reinstalled
+test_all_platform_release_digests_are_accepted
 test_user_owned_cli_path_is_never_overwritten
 
 printf '# all fm-herdr-mirror tests passed\n'
