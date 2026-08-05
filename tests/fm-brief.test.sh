@@ -387,6 +387,12 @@ test_herdr_lab_contract_is_explicit_and_complete() {
     "Herdr lab brief missing helper-owned session naming"
   assert_grep "\"\$HERDR_LAB_HELPER\" provision \"\$HERDR_LAB_SESSION\"" "$brief" \
     "Herdr lab brief missing helper-owned provisioning"
+  assert_grep "\"\$HERDR_LAB_HELPER\" client \"\$HERDR_LAB_SESSION\"" "$brief" \
+    "Herdr lab brief missing the guarded full-client entry point"
+  assert_grep "Direct full-client \`herdr\` invocation is forbidden" "$brief" \
+    "Herdr lab brief must forbid bypassing the guarded client"
+  assert_grep "constructs the session selection instead of trusting ambient \`HERDR_SESSION\`" "$brief" \
+    "Herdr lab brief missing helper-owned full-client session selection"
   assert_grep "\"\$HERDR_LAB_HELPER\" teardown \"\$HERDR_LAB_SESSION\"" "$brief" \
     "Herdr lab brief missing helper-owned teardown"
   assert_grep "required trailing \`--session \"\$HERDR_LAB_SESSION\"\`" "$brief" \
