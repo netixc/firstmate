@@ -200,7 +200,7 @@ test_absent_install_and_idempotence_preserve_user_state() {
 test_outdated_source_and_version_update() {
   local version_case source_case
   version_case=$(new_case outdated-version)
-  seed_plugin "$version_case" 0.1.16 netixc herdr-mirror "$OLD_COMMIT" current
+  seed_plugin "$version_case" 0.1.16 netixc herdr-mirror "$PINNED_COMMIT" current
   ln -s "$version_case/plugin-root/target/release/herdr-mirror" \
     "$version_case/home/.local/bin/herdr-mirror"
   run_manager "$version_case" check >/dev/null 2>&1 \
