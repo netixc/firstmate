@@ -37,9 +37,8 @@ The remote account must provide the required toolchain, the selected worker runt
 Project origin URLs recorded by the primary must be reachable from the remote account because projects are cloned on that host rather than copied from the primary.
 
 Registering the first remote second-mate route also opts the primary home into Firstmate's local Herdr Mirror management on its next session start.
-This is deliberately narrower than requiring the plugin for every Herdr user, and removing the last remote route makes later bootstrap runs stop requiring it.
-When relevant, bootstrap detects the pinned `netixc/herdr-mirror` plugin, its integrity-verified release binary, and the `~/.local/bin/herdr-mirror` entrypoint, then offers the normal approval-gated install or update through `bin/fm-herdr-mirror.sh`.
-Herdr itself remains a separately installed prerequisite, and bootstrap reports its public installation guidance when the local CLI is absent.
+Removing the last remote route makes later bootstrap runs stop requiring it.
+The [Toolchain section](configuration.md#toolchain) owns bootstrap's relevance, detection, install, repair, and update behavior.
 Firstmate does not generate `~/.config/herdr-mirror/hosts.toml`, because host keys, SSH targets, aliases, addresses, and mirroring behavior are user-owned configuration.
 Create and maintain those entries with the [Herdr Mirror project guidance](https://github.com/netixc/herdr-mirror); a reinstall preserves them, Herdr's plugin config and state, unrelated plugins, credentials, and Herdr session names.
 Firstmate also leaves an already running Herdr server alone, so after a first install or update use Herdr's documented config reload or restart at a convenient time to activate the refreshed plugin in that server.
