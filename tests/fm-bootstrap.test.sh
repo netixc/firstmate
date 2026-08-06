@@ -499,35 +499,12 @@ SH
   pass "bootstrap requires git with an install instruction"
 }
 
-test_orca_backend_gates_orca_tool_only_when_selected() {
-  local case_dir fakebin out missing_orca
-  missing_orca="MISSING: orca (install: brew install orca  # or the platform's package manager)"
-
-  case_dir="$TMP_ROOT/orca-backend-selected"
-  mkdir -p "$case_dir/home/config"
-  printf '%s\n' manual > "$case_dir/home/config/backlog-backend"
-  printf '%s\n' orca > "$case_dir/home/config/backend"
-  fakebin=$(make_fake_toolchain "$case_dir")
-  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$case_dir/home" FM_ROOT_OVERRIDE="$case_dir/home" \
-    FM_FAKE_TREEHOUSE_LEASE_HELP=1 "$ROOT/bin/fm-bootstrap.sh")
-  [ "$out" = "$missing_orca" ] || fail "backend=orca should require only the Orca-specific missing tool, got: $out"
-
-  case_dir="$TMP_ROOT/orca-backend-not-selected"
-  mkdir -p "$case_dir/home/config"
-  printf '%s\n' manual > "$case_dir/home/config/backlog-backend"
-  fakebin=$(make_fake_toolchain "$case_dir")
-  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$case_dir/home" FM_ROOT_OVERRIDE="$case_dir/home" \
-    FM_FAKE_TREEHOUSE_LEASE_HELP=1 "$ROOT/bin/fm-bootstrap.sh")
-  assert_not_contains "$out" "MISSING: orca" "bootstrap should not require orca unless backend=orca is selected"
-  pass "bootstrap: backend=orca gates the Orca CLI without requiring it on the default backend"
-}
-
-# Add only the selected runtime dependency to an otherwise complete toolchain.
-make_fake_toolchain_for_backend() {  # <case-dir> <backend-cli>
-  local dir=$1 cli=$2 fakebin
+# Add Herdr to an otherwise complete toolchain.
+make_fake_toolchain_for_herdr() {  # <case-dir>
+  local dir=$1 fakebin
   fakebin=$(make_fake_toolchain "$dir")
-  rm -f "$fakebin/herdr" "$fakebin/orca"
-  fm_fake_exit0 "$fakebin" "$cli"
+  rm -f "$fakebin/herdr"
+  fm_fake_exit0 "$fakebin" herdr
   printf '%s\n' "$fakebin"
 }
 
@@ -536,11 +513,11 @@ test_default_herdr_dependencies_are_complete() {
   case_dir="$TMP_ROOT/herdr-complete"
   mkdir -p "$case_dir/home/config"
   printf '%s\n' manual > "$case_dir/home/config/backlog-backend"
-  fakebin=$(make_fake_toolchain_for_backend "$case_dir" herdr)
+  fakebin=$(make_fake_toolchain_for_herdr "$case_dir")
   out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$case_dir/home" FM_ROOT_OVERRIDE="$case_dir/home" \
     FM_FAKE_TREEHOUSE_LEASE_HELP=1 "$ROOT/bin/fm-bootstrap.sh")
   [ -z "$out" ] || fail "the complete default Herdr toolchain should be silent, got: $out"
-  pass "bootstrap: the absent backend selection uses the complete Herdr dependency set"
+  pass "bootstrap: the complete Herdr dependency set is required"
 }
 
 test_default_herdr_gates_its_cli() {
@@ -553,8 +530,8 @@ test_default_herdr_gates_its_cli() {
   out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$case_dir/home" FM_ROOT_OVERRIDE="$case_dir/home" \
     FM_FAKE_TREEHOUSE_LEASE_HELP=1 "$ROOT/bin/fm-bootstrap.sh")
   assert_contains "$out" "MISSING_MANUAL: herdr (instructions: https://herdr.dev)" \
-    "the default backend should require the Herdr CLI"
-  pass "bootstrap: the default backend reports missing Herdr with manual guidance"
+    "Firstmate should require the Herdr CLI"
+  pass "bootstrap: missing Herdr is reported with manual guidance"
 }
 
 test_herdr_install_requires_manual_action() {
@@ -567,26 +544,12 @@ test_herdr_install_requires_manual_action() {
   pass "bootstrap: Herdr manual-install guidance is never executed as a shell command"
 }
 
-test_unknown_backend_reports_invalid_configuration() {
-  local case_dir fakebin out
-  case_dir="$TMP_ROOT/unknown-backend"
-  mkdir -p "$case_dir/home/config"
-  printf '%s\n' manual > "$case_dir/home/config/backlog-backend"
-  printf '%s\n' bogus > "$case_dir/home/config/backend"
-  fakebin=$(make_fake_toolchain "$case_dir")
-  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$case_dir/home" FM_ROOT_OVERRIDE="$case_dir/home" \
-    FM_FAKE_TREEHOUSE_LEASE_HELP=1 "$ROOT/bin/fm-bootstrap.sh")
-  assert_contains "$out" "BACKEND_INVALID: bogus (supported: herdr orca)" \
-    "bootstrap should report the unsupported resolved backend and current choices"
-  pass "bootstrap: unsupported backend values stop with the current supported choices"
-}
-
 test_herdr_requires_jq() {
   local case_dir fakebin bash_env out
   case_dir="$TMP_ROOT/herdr-missing-jq"
   mkdir -p "$case_dir/home/config"
   printf '%s\n' manual > "$case_dir/home/config/backlog-backend"
-  fakebin=$(make_fake_toolchain_for_backend "$case_dir" herdr)
+  fakebin=$(make_fake_toolchain_for_herdr "$case_dir")
   rm -f "$fakebin/jq"
   bash_env="$case_dir/no-jq.bash"
   cat > "$bash_env" <<'SH'
@@ -601,34 +564,17 @@ SH
   pass "bootstrap: Herdr requires jq for structured runtime output"
 }
 
-test_treehouse_lease_check_follows_resolved_backend() {
+test_treehouse_lease_check_is_required() {
   local case_dir fakebin out
-  # A treehouse that lacks durable --lease support is only a problem for a backend
-  # that actually uses treehouse. Orca owns its own worktrees, so an old treehouse
-  # must NOT trip MISSING: treehouse under backend=orca...
-  case_dir="$TMP_ROOT/orca-old-treehouse"
-  mkdir -p "$case_dir/home/config"
-  printf '%s\n' manual > "$case_dir/home/config/backlog-backend"
-  printf '%s\n' orca > "$case_dir/home/config/backend"
-  fakebin=$(make_fake_toolchain "$case_dir")
-  rm -f "$fakebin/herdr"
-  fm_fake_exit0 "$fakebin" orca
-  # FM_FAKE_TREEHOUSE_LEASE_HELP unset: the fake treehouse advertises NO --lease.
-  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$case_dir/home" FM_ROOT_OVERRIDE="$case_dir/home" \
-    "$ROOT/bin/fm-bootstrap.sh")
-  [ -z "$out" ] || fail "backend=orca must not require treehouse (even lease-less) , got: $out"
-
-  # ...but the same lease-less treehouse IS a problem for a session-provider
-  # backend that relies on treehouse for worktrees.
   case_dir="$TMP_ROOT/herdr-old-treehouse"
   mkdir -p "$case_dir/home/config"
   printf '%s\n' manual > "$case_dir/home/config/backlog-backend"
-  printf '%s\n' herdr > "$case_dir/home/config/backend"
-  fakebin=$(make_fake_toolchain_for_backend "$case_dir" herdr)
+  fakebin=$(make_fake_toolchain_for_herdr "$case_dir")
+  # FM_FAKE_TREEHOUSE_LEASE_HELP unset: the fake Treehouse advertises no --lease.
   out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$case_dir/home" FM_ROOT_OVERRIDE="$case_dir/home" \
     "$ROOT/bin/fm-bootstrap.sh")
-  assert_contains "$out" "MISSING: treehouse" "backend=herdr must still require treehouse with durable lease support"
-  pass "bootstrap: the treehouse lease check follows the resolved backend's worktree provider"
+  assert_contains "$out" "MISSING: treehouse" "Herdr tasks require Treehouse with durable lease support"
+  pass "bootstrap requires Treehouse lease support"
 }
 
 test_fleet_sync_timeout_scales_with_origin_backed_project_count() {
@@ -781,7 +727,7 @@ run_routine_bootstrap_fixture() {
   fixture=${fixture#*|}
   home=${fixture%%|*}
   fakebin=${fixture#*|}
-  PATH="$fakebin:$BASE_PATH" FM_BACKEND=herdr FM_HOME="$home" FM_ROOT_OVERRIDE="$root" \
+  PATH="$fakebin:$BASE_PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$root" \
     FM_FAKE_TREEHOUSE_LEASE_HELP=1 \
     "$shell" "$ROOT/bin/fm-bootstrap.sh"
 }
@@ -963,13 +909,11 @@ test_lavish_axi_min_version
 test_tasks_axi_min_version
 test_quota_axi_min_version
 test_git_is_required_with_supported_install_instruction
-test_orca_backend_gates_orca_tool_only_when_selected
 test_default_herdr_dependencies_are_complete
 test_default_herdr_gates_its_cli
 test_herdr_install_requires_manual_action
-test_unknown_backend_reports_invalid_configuration
 test_herdr_requires_jq
-test_treehouse_lease_check_follows_resolved_backend
+test_treehouse_lease_check_is_required
 test_herdr_mirror_remote_route_gate
 test_fleet_sync_timeout_scales_with_origin_backed_project_count
 test_fleet_sync_timeout_floor_preserves_small_fleets

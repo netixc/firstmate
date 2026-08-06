@@ -34,7 +34,7 @@ BASE_PATH=${FM_TEST_BASE_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
 fm_git_identity fmtest fmtest@example.com
 
 TMP_ROOT=$(fm_test_tmproot fm-secondmate-sync)
-export FM_BACKEND=herdr
+export
 
 # --- world builders --------------------------------------------------------
 
@@ -665,7 +665,7 @@ SH
     pass "T8b nudge selector herdr respawn skipped without jq"
     return
   fi
-  out=$(PATH="$herdrfb:$toolchain:$BASE_PATH" HERDR_ENV=1 FM_BACKEND=herdr \
+  out=$(PATH="$herdrfb:$toolchain:$BASE_PATH" HERDR_ENV=1 \
     FM_SEND_SETTLE=0 \
     FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
     "$ROOT/bin/fm-bootstrap.sh" 2>/dev/null)

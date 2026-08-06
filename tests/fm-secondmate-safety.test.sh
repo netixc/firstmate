@@ -11,7 +11,7 @@ set -u
 . "$(dirname "${BASH_SOURCE[0]}")/secondmate-helpers.sh"
 
 TMP_ROOT=$(fm_test_tmproot fm-secondmate-safety)
-export FM_BACKEND=herdr
+export
 
 file_mode() {
   if [ "$(uname)" = Darwin ]; then

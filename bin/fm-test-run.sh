@@ -201,9 +201,6 @@ family_for_basename() {
     fm-bearings-snapshot.test.sh|fm-fleet-snapshot-view.test.sh)
       printf '%s\n' snapshot-bearings
       ;;
-    fm-backend-orca.test.sh)
-      printf '%s\n' orca
-      ;;
     *)
       printf '%s\n' unclassified
       ;;
@@ -214,7 +211,6 @@ expected_gate_skip_for_family() {
   case "$1" in
     real-herdr-gated) printf '%s\n' herdr ;;
     live-harness-optin) printf '%s\n' optin-env ;;
-    orca) printf '%s\n' optional-binary ;;
     snapshot-bearings) printf '%s\n' optional-binary ;;
     *) printf '%s\n' none ;;
   esac
@@ -232,7 +228,6 @@ backend-dispatch
 pr-forge
 afk
 snapshot-bearings
-orca
 unclassified
 EOF
 }
@@ -358,7 +353,6 @@ tests/fm-afk-pi-herdr-return-e2e.test.sh 42
 tests/fm-afk-return.test.sh 1105
 tests/fm-ask-user-authority.test.sh 68
 tests/fm-backend-herdr-focus-flash-e2e.test.sh 21
-tests/fm-backend-orca.test.sh 12041
 tests/fm-backend.test.sh 16370
 tests/fm-backlog-handoff.test.sh 2786
 tests/fm-bearings-snapshot.test.sh 60103
@@ -831,10 +825,6 @@ families_for_changed_path() {
       printf '%s\n' session-bootstrap
       printf '%s\n' real-herdr-gated
       printf '%s\n' backend-dispatch
-      ;;
-    bin/backends/orca*)
-      printf '%s\n' backend-dispatch
-      printf '%s\n' orca
       ;;
     bin/fm-backend.sh)
       printf '%s\n' backend-dispatch

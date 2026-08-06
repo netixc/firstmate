@@ -7,7 +7,6 @@
 #          Silent = all good.
 #          Lines: "MISSING: <tool> (install: <command>)",
 #                 "MISSING_MANUAL: <tool> (instructions: <url>)", "NEEDS_GH_AUTH",
-#                 "BACKEND_INVALID: <name> (supported: <names>)",
 #                 "STARTUP_MEMORY_BUDGET: invalid config/startup-memory-budget - <reason>",
 #                 "CREW_DISPATCH: invalid config/crew-dispatch.json - <reason>",
 #                 "FLEET_SYNC: <repo>: skipped|recovered|STUCK: <detail>",
@@ -506,7 +505,7 @@ secondmate_liveness_sweep() {
   # primary-only no-op there. Mid-session liveness remains explicitly out of
   # scope and requires a separate periodic signal.
   [ -d "$STATE" ] || return 0
-  local meta id window harness backend target agent_state out cause remote_host remote_rc readiness_reason route_out remote_backend
+  local meta id window harness backend target agent_state out cause remote_host remote_rc readiness_reason
   SECONDMATE_RESPAWNED_IDS=""
   for meta in "$STATE"/*.meta; do
     [ -f "$meta" ] || continue
@@ -547,24 +546,6 @@ secondmate_liveness_sweep() {
       agent_state=$(printf '%s\n' "$out" | tail -1)
       case "$agent_state" in
         alive)
-          if route_out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh route "$id" < /dev/null 2>/dev/null); then
-            remote_rc=0
-          else
-            remote_rc=$?
-          fi
-          if [ "$remote_rc" -eq 255 ]; then
-            echo "SECONDMATE_LIVENESS: secondmate $id: skipped: remote host unavailable or endpoint route unknown; route preserved on $remote_host"
-            continue
-          fi
-          if [ "$remote_rc" -ne 0 ]; then
-            echo "SECONDMATE_LIVENESS: secondmate $id: skipped: alive remote endpoint route is unreadable on $remote_host; inspect and migrate or retire it explicitly"
-            continue
-          fi
-          remote_backend=$(printf '%s\n' "$route_out" | sed -n 's/^backend=//p' | tail -1)
-          if [ "$remote_backend" != herdr ]; then
-            echo "SECONDMATE_LIVENESS: secondmate $id: skipped: alive remote endpoint is recorded on backend '${remote_backend:-missing}'; migrate or retire it explicitly"
-            continue
-          fi
           [ "${FM_BOOTSTRAP_VERBOSE_FACTS:-0}" != 1 ] || echo "BOOTSTRAP_INFO: remote secondmate $id already live (host=$remote_host)"
           ;;
         dead|missing)
@@ -654,7 +635,7 @@ secondmate_handoff_detect() {
 
 install_cmd() {
   case "$1" in
-    node|git|gh|curl|jq|orca) echo "brew install $1  # or the platform's package manager" ;;
+    node|git|gh|curl|jq) echo "brew install $1  # or the platform's package manager" ;;
     treehouse) echo "curl -fsSL https://kunchenguid.github.io/treehouse/install.sh | sh" ;;
     no-mistakes) echo "curl -fsSL https://raw.githubusercontent.com/kunchenguid/no-mistakes/main/docs/install.sh | sh" ;;
     gh-axi|chrome-devtools-axi|lavish-axi) echo "npm install -g $1 && $1 setup hooks" ;;
@@ -680,18 +661,11 @@ missing_tool_diagnostic() {
   echo "MISSING: $tool (install: $(install_cmd "$tool"))"
 }
 
-# Required-tool detection follows the resolved backend: a universal toolchain
-# plus the backend-specific delta owned by fm_backend_required_tools.
-# Orca drops Treehouse because it owns the task worktree.
-# A backend value with no dependency set is reported before universal checks continue.
+# Required-tool detection combines the universal toolchain with Herdr and
+# Treehouse, which own task endpoints and isolated worktrees respectively.
 COMMON_TOOLS="node git gh no-mistakes gh-axi chrome-devtools-axi lavish-axi tasks-axi quota-axi"
-BACKEND=$(fm_backend_name)
-BACKEND_VALID=1
-if ! BACKEND_TOOLS=$(fm_backend_required_tools "$BACKEND"); then
-  BACKEND_VALID=0
-  BACKEND_TOOLS=""
-fi
-TOOLS="$BACKEND_TOOLS $COMMON_TOOLS"
+RUNTIME_TOOLS=$(fm_backend_required_tools herdr)
+TOOLS="$RUNTIME_TOOLS $COMMON_TOOLS"
 NO_MISTAKES_MIN=1.31.2
 # AXI-FAMILY FLOOR POLICY. Every axi-family floor is the CURRENT LATEST published
 # version of that tool, captain-bumped periodically to keep the whole fleet on the
@@ -1025,11 +999,8 @@ if [ "${FM_BOOTSTRAP_DETECT_ONLY:-0}" != 1 ]; then
   startup_memory_budget_setup
 fi
 
-if [ "$BACKEND_VALID" -eq 0 ]; then
-  echo "BACKEND_INVALID: $BACKEND (supported: $FM_BACKEND_KNOWN)"
-fi
-for t in $BACKEND_TOOLS; do
-  fm_backend_required_tool_available "$BACKEND" "$t" \
+for t in $RUNTIME_TOOLS; do
+  fm_backend_required_tool_available herdr "$t" \
     || missing_tool_diagnostic "$t"
 done
 for t in $COMMON_TOOLS; do
@@ -1060,11 +1031,9 @@ if [ -x "$SCRIPT_DIR/fm-herdr-mirror.sh" ] \
     missing_tool_diagnostic herdr-mirror
   fi
 fi
-# The treehouse lease-support upgrade check is only relevant when the resolved
-# backend actually requires treehouse (every backend except orca, which owns its
-# own worktrees); an orca home must not be told to upgrade a provider it never uses.
-if fm_backend_list_contains "$TOOLS" treehouse \
-  && command -v treehouse >/dev/null 2>&1 && ! treehouse_supports_lease; then
+# The Treehouse lease-support upgrade check protects task and secondmate
+# worktree allocation.
+if command -v treehouse >/dev/null 2>&1 && ! treehouse_supports_lease; then
   echo "MISSING: treehouse (install: $(install_cmd treehouse))"
 fi
 if command -v no-mistakes >/dev/null 2>&1 && ! tool_version_at_least no-mistakes "$NO_MISTAKES_MIN"; then

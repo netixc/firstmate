@@ -3321,7 +3321,7 @@ test_send_text_submit_unknown_on_capture_failure() {
 # --- fm-backend.sh dispatch wiring -------------------------------------------
 
 test_dispatch_routes_herdr_backend() {
-  fm_backend_validate herdr 2>/dev/null || fail "fm_backend_validate should accept herdr (P2 adds it to FM_BACKEND_KNOWN)"
+  fm_backend_validate herdr 2>/dev/null || fail "fm_backend_validate should accept the Herdr runtime"
   pass "fm_backend_validate: Herdr is a supported backend"
 }
 

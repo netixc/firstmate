@@ -213,9 +213,8 @@ window_kind() {
   echo unknown
 }
 
-# window_backend: require a supported backend identity on the metadata whose
-# endpoint matches <w>. Missing, stale, and unsupported records are never
-# reinterpreted as the current default.
+# window_backend: require the Herdr runtime identity on the metadata whose
+# endpoint matches <w>. Missing or stale records are never reinterpreted.
 window_backend() {
   local w=$1 meta backend
   meta=$(fm_backend_meta_for_window "$w" "$STATE" 2>/dev/null || true)
@@ -225,9 +224,9 @@ window_backend() {
       printf '%s\n' "$backend"
       return 0
     fi
-    echo "error: endpoint '$w' has an unsupported backend identity '${backend:-missing}' (supported: $FM_BACKEND_KNOWN)" >&2
+    echo "error: endpoint '$w' does not identify the Herdr runtime (recorded: ${backend:-missing})" >&2
   else
-    echo "error: endpoint '$w' has no current backend metadata (supported: $FM_BACKEND_KNOWN)" >&2
+    echo "error: endpoint '$w' has no current Herdr runtime metadata" >&2
   fi
   return 1
 }

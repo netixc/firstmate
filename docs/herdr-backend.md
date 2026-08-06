@@ -1,13 +1,13 @@
 # Herdr runtime backend
 
-Herdr is Firstmate's automatic and default agent-native terminal backend with native per-pane agent state and push events.
+Herdr is Firstmate's sole agent-native task runtime with native per-pane agent state and push events.
 Firstmate requires Herdr protocol 14 or newer; broad backend verification covers versions 0.7.1, 0.7.3, 0.7.4, and 0.7.5, while the presentation-projection suite is additionally verified on 0.8.0 protocol 19 and protocol-16 features remain gated by availability.
 Herdr provides the terminal session while Treehouse continues to provide task worktrees.
-[`configuration.md`](configuration.md#runtime-backend-configbackend--fm_backend) owns shared backend selection and metadata semantics.
+[`configuration.md`](configuration.md#task-runtime) owns shared runtime metadata and selector semantics.
 
 ## Setup
 
-Firstmate uses Herdr automatically unless Orca is explicitly selected.
+Firstmate uses Herdr for every task endpoint.
 
 Prerequisites:
 
@@ -19,8 +19,7 @@ Prerequisites:
 Herdr is dual-licensed AGPL-3.0-or-later or commercial.
 Firstmate invokes its CLI as a separate process.
 
-An absent backend selection resolves to Herdr without inspecting the surrounding terminal environment.
-Local `config/backend` containing `herdr`, `FM_BACKEND=herdr`, and an explicit per-task request remain valid.
+Herdr launch never depends on ambient terminal-runtime detection or a local selection setting.
 A remote second-mate agent always runs on Herdr, and [`remote-secondmates.md`](remote-secondmates.md) owns that requirement and host readiness.
 
 Spawn stops before creating a Herdr container or acquiring a task worktree when `herdr`, `jq`, or the protocol floor is unavailable.
@@ -70,7 +69,7 @@ Each new crewmate or scout is placed in a disposable one-task workspace by defau
 A home opts out by writing `off` into local gitignored `config/herdr-presentation-spaces`.
 An absent file, an empty file, and the value `on` all keep the projection enabled, values are compared with whitespace stripped and case ignored, and an unrecognized value warns and keeps the projection enabled rather than failing a spawn over a purely visual setting.
 The empty file is the historical presence-based opt-in form, so every home that had already enabled the projection stays enabled with no migration step, and no previously enabled home can be turned off by the default.
-A home that never created the file gains the projection at its next Herdr spawn; that flip is deliberate, and it reaches only the Herdr backend because no other runtime backend has a projection path.
+A home that never created the file gains the projection at its next Herdr spawn; that flip is deliberate, and it reaches every task because Herdr is the sole runtime.
 The setting is inherited into secondmate homes through the normal configuration-convergence owner, and the default needs no special convergence: the primary's absent file and the secondmate's absent file both mean on, so leaving the default converges a secondmate to the same default rather than turning it off, and only an explicit primary `off` propagates the opt-out.
 A secondmate agent itself always stays in its ordinary parent workspace; only children launched by that home are eligible.
 An unconverged opt-out keeps the default projection in that home until convergence.

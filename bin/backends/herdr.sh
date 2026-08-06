@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bin/backends/herdr.sh - the default Herdr session-provider adapter.
+# bin/backends/herdr.sh - the Herdr task-runtime adapter.
 #
 # Design: data/fm-backend-design-d7/herdr-addendum.md ("Interface mapping",
 # decisions D1-D6) and the empirical verification recorded in
@@ -55,7 +55,7 @@
 # is deliberately excluded from that path.
 #
 # Requires: herdr (CLI + socket), jq (JSON parsing). Bootstrap detects these
-# through fm_backend_required_tools only when herdr is the resolved backend;
+# through fm_backend_required_tools as part of the required Herdr runtime;
 # this adapter also gates them again before spawning.
 
 # FM_HOME fallback: every real caller (fm-spawn.sh, fm-peek.sh, fm-send.sh,

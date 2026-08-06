@@ -102,7 +102,7 @@ test_stale_backend_metadata_is_rejected() {
     "$SEND" stale hello 2>&1)
   status=$?
   [ "$status" -ne 0 ] || fail "stale backend metadata should be rejected"
-  assert_contains "$out" "supported: herdr orca" "stale backend rejection did not name current choices"
+  assert_contains "$out" "Firstmate requires Herdr" "stale runtime rejection did not name Herdr"
   assert_no_grep 'TEXT:hello' "$log" "stale backend metadata still dispatched text"
   pass "fm-send: stale backend values are rejected without reinterpretation"
 }

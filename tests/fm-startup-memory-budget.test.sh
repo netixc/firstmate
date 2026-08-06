@@ -79,7 +79,7 @@ new_bootstrap_world() {
 
 run_bootstrap() {
   local root=$1 home=$2 fakebin=$3
-  PATH="$fakebin:$BASE_PATH" FM_BACKEND=herdr FM_HOME="$home" FM_ROOT_OVERRIDE="$root" \
+  PATH="$fakebin:$BASE_PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$root" \
     "$BOOTSTRAP"
 }
 

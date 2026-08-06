@@ -352,7 +352,6 @@ EOF
   printf '%s\n' "$id" > "$mate/.fm-secondmate-home"
   printf '# Firstmate\n' > "$mate/AGENTS.md"
   printf 'Second mate charter.\n' > "$mate/data/charter.md"
-  printf '%s\n' herdr > "$home/config/backend"
   printf '%s\n' pi > "$home/config/secondmate-harness"
   printf '%s\n' manual > "$home/config/backlog-backend"
   touch "$home/state/.last-watcher-beat"
@@ -380,7 +379,7 @@ EOF
 
 run_session_start_herdr_secondmate() {
   local root=$1 home=$2 fakebin=$3 mate=$4 log=$5 state=$6
-  FM_BACKEND=herdr FM_FAKE_HERDR_LOG="$log" FM_FAKE_HERDR_STATE="$state" \
+  FM_FAKE_HERDR_LOG="$log" FM_FAKE_HERDR_STATE="$state" \
     FM_FAKE_SECOND_MATE_ID="$SESSION_START_HERDR_SECOND_MATE_ID" \
     run_session_start "$home" "$root" "$fakebin:$BASE_PATH"
 }
@@ -712,11 +711,10 @@ EOF
   printf '%s\n' manual > "$home/config/backlog-backend"
   out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
   assert_contains "$out" "SESSION START - $home" "the real session-start path did not run"
-  assert_not_contains "$out" "BACKEND_INVALID" "the absent backend selection did not resolve to Herdr"
   assert_not_contains "$out" "MISSING: herdr" "session start missed its available Herdr CLI"
   assert_not_contains "$out" "MISSING: jq" "session start missed its available JSON dependency"
   assert_not_contains "$out" "MISSING: treehouse" "session start missed its available worktree provider"
-  pass "session start: an absent backend selection uses the complete Herdr toolchain"
+  pass "session start uses the complete Herdr toolchain"
 }
 
 # --- status tail bounding -----------------------------------------------------

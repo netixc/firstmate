@@ -2,20 +2,19 @@
 # Send one line of literal text to a crewmate endpoint, then Enter.
 # Usage: fm-send.sh <target> <text...>
 #   <target> may be an exact task id, a legacy fm-<id> task label resolved
-#   through this home's state/<id>.meta, or an explicit well-formed backend
+#   through this home's state/<id>.meta, or an explicit well-formed Herdr
 #   target. fm-send refuses unresolved guesses because a "successful" send to
 #   the wrong endpoint is worse than a loud failure.
 # Special keys instead of text: fm-send.sh <target> --key Enter
 # Herdr supports Escape, Enter, and C-c.
-# Orca currently supports Enter and C-c only and rejects Escape.
 #
 # Text submission is verified: the line is typed ONCE, then Enter is sent and
-# retried (Enter only, never retyped) until the target backend confirms a
+# retried (Enter only, never retyped) until Herdr confirms a
 # submit or reports an inconclusive send. If a swallowed Enter is positively
 # confirmed, fm-send exits NON-ZERO so the caller knows the steer did not land
 # instead of silently leaving an unsubmitted instruction.
-# Submission dispatches through the target's recorded backend and uses the
-# backend's own composer and submit confirmation.
+# Submission uses the target's recorded Herdr identity, composer, and submit
+# confirmation.
 # Tune with FM_SEND_RETRIES (default 3) / FM_SEND_SLEEP (0.4).
 # Slash commands, and codex `$...` skill invocations resolved through harness
 # meta, get a longer pre-Enter settle so completion popups do not swallow Enter.
@@ -25,7 +24,7 @@
 # from-firstmate carrier owned by bin/fm-operational-input.sh so the secondmate
 # routes its reply via its status file or a status-pointed doc instead of
 # stranding it in chat the main firstmate never reads. A crewmate/scout target,
-# an explicit backend-target escape-hatch target, and the --key path are never
+# an explicit Herdr-target escape-hatch target, and the --key path are never
 # marked - their behavior is unchanged.
 #
 # Parent-owned pending-reply expectation: every newly marked secondmate request

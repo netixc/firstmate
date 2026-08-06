@@ -77,7 +77,6 @@ cat > "$PARENT/data/projects.md" <<EOF
 - alpha [direct-PR] - alpha project (added 2026-08-02)
 EOF
 printf 'codex\n' > "$PARENT/config/secondmate-harness"
-printf 'herdr\n' > "$PARENT/config/backend"
 printf 'primary harness defaults\n' > "$PARENT/config/crew-harness"
 
 cat > "$FAKEBIN/fake-ssh" <<'SH'
@@ -162,10 +161,9 @@ if [ "${FM_FAKE_SSH_MODE:-normal}" = doctor-fixable ] \
   exit 0
 fi
 case "${FM_FAKE_SSH_MODE:-normal}:$command_name:$command_rel" in
-  launch-nonherdr-route:fm-remote-secondmate-control.sh:*)
+  launch-missing-session-route:fm-remote-secondmate-control.sh:*)
     [ "$_command_action" = launch ] || exit 93
     printf 'schema=fm-remote-secondmate-control.v1\n'
-    printf 'backend=stale-runtime\n'
     printf 'target=firstmate:fm-ios\n'
     printf 'harness=codex\n'
     exit 0
@@ -173,7 +171,6 @@ case "${FM_FAKE_SSH_MODE:-normal}:$command_name:$command_rel" in
   launch-default-session-route:fm-remote-secondmate-control.sh:*)
     [ "$_command_action" = launch ] || exit 93
     printf 'schema=fm-remote-secondmate-control.v1\n'
-    printf 'backend=herdr\n'
     printf 'target=default:w1:p2\n'
     printf 'herdr_session=default\n'
     printf 'harness=codex\n'
@@ -448,8 +445,8 @@ EOF
 remote_env "$ROOT/bin/fm-home-seed.sh" validate >/dev/null || fail "mixed local and remote registry validation failed"
 pass "mixed local and remote routes validate without migration"
 
-# Launch on the remote home's own configured backend. Parent metadata records
-# host placement separately from that backend and arms the reply source.
+# Launch in the remote home's dedicated Herdr session.
+# Parent metadata records host placement and arms the reply source.
 printf 'pi\n' > "$PARENT/config/crew-harness"
 launches_before_inherit=0
 [ ! -f "$HERDR_LOG" ] || launches_before_inherit=$(grep -c '^tab create' "$HERDR_LOG" || true)
@@ -463,9 +460,8 @@ launches_after_inherit=0
   || fail "remote spawn reached launch after ambiguous partial inheritance"
 assert_absent "$PARENT/state/ios.meta" "failed remote inheritance published launch metadata"
 out=$(remote_env "$ROOT/bin/fm-spawn.sh" ios --secondmate)
-assert_contains "$out" 'remote=remote-mac backend=herdr' "remote spawn did not report separate host and backend dimensions"
+assert_contains "$out" 'remote=remote-mac' "remote spawn did not report the host placement"
 assert_grep 'remote_host=remote-mac' "$PARENT/state/ios.meta" "parent metadata omitted the remote host"
-assert_grep 'remote_backend=herdr' "$PARENT/state/ios.meta" "parent metadata omitted the remote-local backend"
 assert_grep 'remote_herdr_session=fm-remote' "$PARENT/state/ios.meta" "parent metadata omitted the pinned remote Herdr session"
 assert_grep 'remote_target=fm-remote:' "$PARENT/state/ios.meta" "parent metadata did not record an fm-remote endpoint"
 assert_grep 'herdr_session=fm-remote' "$REMOTE_HOME/state/parent-route/ios.meta" "remote metadata did not record the pinned Herdr session"
@@ -480,7 +476,7 @@ publish_healthy_watcher_identity "$PARENT/state" "$PARENT" "$ROOT/bin/fm-watch.s
 # without the rendered-output fallback an unsupported endpoint might have needed.
 [ "$(remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh observe ios)" = idle ] \
   || fail "remote endpoint delivery observation did not execute on its own host"
-pass "remote spawn launches on the remote-local backend and records a host-qualified route"
+pass "remote spawn launches in the pinned Herdr session and records a host-qualified route"
 
 remote_route_meta="$REMOTE_HOME/state/parent-route/ios.meta"
 cp "$remote_route_meta" "$TMP_ROOT/remote-ios-before-default-session.meta"
@@ -499,7 +495,7 @@ if remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh route ios
   || remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh capture ios >/dev/null 2>&1 \
   || remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh observe ios >/dev/null 2>&1 \
   || remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh retire ios --force >/dev/null 2>&1 \
-  || remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh launch ios codex - - herdr >/dev/null 2>&1; then
+  || remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh launch ios codex - - >/dev/null 2>&1; then
   fail "legacy default-session metadata remained operational"
 fi
 cmp -s "$TMP_ROOT/herdr-before-default-session.log" "$HERDR_LOG" \
@@ -516,22 +512,22 @@ awk -v pane="$legacy_pane" '
 cmp -s "$TMP_ROOT/herdr-before-default-session.log" "$HERDR_LOG" \
   || fail "mismatched fm-remote target caused a Herdr operation"
 mv -f "$TMP_ROOT/remote-ios-before-default-session.meta" "$remote_route_meta"
-pass "legacy and mismatched remote endpoints fail closed before backend access"
+pass "legacy and mismatched remote endpoints stop before Herdr access"
 
-cp "$PARENT/state/ios.meta" "$TMP_ROOT/parent-ios-before-nonherdr.meta"
-cp "$PARENT/data/secondmates.md" "$TMP_ROOT/registry-before-nonherdr.md"
+cp "$PARENT/state/ios.meta" "$TMP_ROOT/parent-ios-before-missing-session.meta"
+cp "$PARENT/data/secondmates.md" "$TMP_ROOT/registry-before-missing-session.md"
 set +e
-FM_FAKE_SSH_MODE=launch-nonherdr-route remote_env "$ROOT/bin/fm-spawn.sh" ios --secondmate \
-  > "$TMP_ROOT/spawn-nonherdr-route.out" 2>&1
-nonherdr_parent_rc=$?
+FM_FAKE_SSH_MODE=launch-missing-session-route remote_env "$ROOT/bin/fm-spawn.sh" ios --secondmate \
+  > "$TMP_ROOT/spawn-missing-session-route.out" 2>&1
+missing_session_parent_rc=$?
 set -e
-[ "$nonherdr_parent_rc" -ne 0 ] || fail "parent accepted a non-herdr remote launch route"
-assert_grep "remote launch returned backend 'stale-runtime', expected herdr" "$TMP_ROOT/spawn-nonherdr-route.out" \
-  "parent refusal did not name the returned remote backend"
-cmp -s "$TMP_ROOT/parent-ios-before-nonherdr.meta" "$PARENT/state/ios.meta" \
-  || fail "parent rewrote its endpoint metadata after a non-herdr route refusal"
-cmp -s "$TMP_ROOT/registry-before-nonherdr.md" "$PARENT/data/secondmates.md" \
-  || fail "parent removed or changed the registry route after a non-herdr route refusal"
+[ "$missing_session_parent_rc" -ne 0 ] || fail "parent accepted a remote launch route without the pinned Herdr session"
+assert_grep "remote launch returned Herdr session 'missing', expected 'fm-remote'" "$TMP_ROOT/spawn-missing-session-route.out" \
+  "parent refusal did not name the missing pinned Herdr session"
+cmp -s "$TMP_ROOT/parent-ios-before-missing-session.meta" "$PARENT/state/ios.meta" \
+  || fail "parent rewrote its endpoint metadata after a missing-session route refusal"
+cmp -s "$TMP_ROOT/registry-before-missing-session.md" "$PARENT/data/secondmates.md" \
+  || fail "parent removed or changed the registry route after a missing-session route refusal"
 
 set +e
 FM_FAKE_SSH_MODE=launch-default-session-route remote_env "$ROOT/bin/fm-spawn.sh" ios --secondmate \
@@ -541,7 +537,7 @@ set -e
 [ "$default_session_parent_rc" -ne 0 ] || fail "parent accepted an interactive default-session remote route"
 assert_grep "remote launch returned Herdr session 'default', expected 'fm-remote'" "$TMP_ROOT/spawn-default-session-route.out" \
   "parent refusal did not name the default session"
-cmp -s "$TMP_ROOT/parent-ios-before-nonherdr.meta" "$PARENT/state/ios.meta" \
+cmp -s "$TMP_ROOT/parent-ios-before-missing-session.meta" "$PARENT/state/ios.meta" \
   || fail "parent rewrote its endpoint metadata after a default-session route refusal"
 
 remote_route_meta="$REMOTE_HOME/state/parent-route/ios.meta"
@@ -557,21 +553,21 @@ EOF
 cp "$remote_route_meta" "$TMP_ROOT/remote-ios-legacy-before-refusal.meta"
 printf 'fm-ios|%s\n' "$REMOTE_HOME" > "$STALE_RUNTIME_STATE"
 set +e
-remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh launch ios codex - - herdr \
+remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh launch ios codex - - \
   > "$TMP_ROOT/stale-alive-refusal.out" 2>&1
 stale_alive_rc=$?
 set -e
 [ "$stale_alive_rc" -ne 0 ] || fail "remote control reused an alive unsupported endpoint"
-assert_grep "unsupported backend 'stale-runtime' (supported: herdr orca)" "$TMP_ROOT/stale-alive-refusal.out" \
-  "remote refusal did not reject the stale backend with the current supported choices"
+assert_grep "endpoint metadata is invalid" "$TMP_ROOT/stale-alive-refusal.out" \
+  "remote refusal did not reject the stale runtime identity"
 cmp -s "$TMP_ROOT/remote-ios-legacy-before-refusal.meta" "$remote_route_meta" \
   || fail "remote refusal changed the unsupported endpoint metadata"
 assert_present "$STALE_RUNTIME_STATE" "remote refusal killed the alive unsupported endpoint"
-cmp -s "$TMP_ROOT/registry-before-nonherdr.md" "$PARENT/data/secondmates.md" \
+cmp -s "$TMP_ROOT/registry-before-missing-session.md" "$PARENT/data/secondmates.md" \
   || fail "remote legacy refusal removed or changed the registry route"
 mv -f "$TMP_ROOT/remote-ios-before-legacy.meta" "$remote_route_meta"
 rm -f "$STALE_RUNTIME_STATE"
-pass "non-herdr remote endpoints are refused without changing either route"
+pass "stale remote runtime identities are refused without changing either route"
 
 rm -f "$TMP_ROOT/inherit.entered" "$TMP_ROOT/inherit.release" "$TMP_ROOT/inherit.payload"
 cat > "$PARENT/data/captain-shared.md" <<'EOF'
@@ -821,7 +817,7 @@ stale_state_before=$(cat "$STALE_RUNTIME_STATE")
 launches_before_legacy=$(grep -c '^tab create' "$HERDR_LOG" || true)
 BOOT_LEGACY=$(remote_env "$ROOT/bin/fm-bootstrap.sh")
 assert_contains "$BOOT_LEGACY" "SECONDMATE_LIVENESS: secondmate ios: skipped: remote endpoint state is unverified on remote-mac" \
-  "liveness accepted an alive legacy remote backend"
+  "liveness accepted an alive stale runtime identity"
 cmp -s "$TMP_ROOT/remote-ios-liveness-legacy.meta" "$remote_route_meta" \
   || fail "liveness rewrote the alive unsupported endpoint metadata"
 cmp -s "$TMP_ROOT/parent-ios-before-liveness-legacy.meta" "$PARENT/state/ios.meta" \
@@ -835,7 +831,7 @@ launches_after_legacy=$(grep -c '^tab create' "$HERDR_LOG" || true)
   || fail "liveness relaunched an alive unsupported endpoint"
 mv -f "$TMP_ROOT/remote-ios-before-liveness-legacy.meta" "$remote_route_meta"
 rm -f "$STALE_RUNTIME_STATE"
-pass "startup reports alive legacy backends without changing their routes"
+pass "startup reports alive stale runtime identities without changing their routes"
 
 # Host loss maps to unknown/unavailable and never creates a local replacement.
 launches_before=$(grep -c '^tab create' "$HERDR_LOG" || true)

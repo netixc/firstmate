@@ -2,10 +2,9 @@
 
 Audience: maintainer verification.
 
-Active maintainer evidence for Firstmate's supported runtime backends.
-Current product behavior is documented in [`configuration.md`](../configuration.md), [`herdr-backend.md`](../herdr-backend.md), and [`orca-backend.md`](../orca-backend.md).
-Herdr is the sole automatic and default backend.
-Orca is explicit-only.
+Active maintainer evidence for Firstmate's Herdr task runtime.
+Current product behavior is documented in [`configuration.md`](../configuration.md) and [`herdr-backend.md`](../herdr-backend.md).
+Herdr is the sole task runtime.
 
 ## Herdr
 
@@ -296,50 +295,3 @@ FM_AFK_PI_HERDR_E2E=1 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
 
 Observed guarantees: pending composer input refused injection and raised one alert; idle Pi accepted one marked escalation; the return gate refused ordinary work while a live blocker remained; resolving the blocker allowed the return flow.
 The dedicated Herdr daemon workspace topology is covered by `tests/fm-afk-launch.test.sh` and preserves the captain tab's pane count.
-
-## Orca
-
-Real readiness was verified against `/usr/local/bin/orca` with `/Applications/Orca.app` bundle version 1.4.116.
-
-```sh
-orca status --json
-```
-
-Observed fields:
-
-```text
-result.runtime.reachable=true
-result.runtime.state=ready
-```
-
-`orca terminal create --json` returned `result.terminal.handle`.
-`orca worktree create` returned `result.worktree.id` and `result.worktree.path`.
-Speculative bare ids and nested terminal fields were deliberately rejected.
-
-```sh
-tests/fm-backend-orca.test.sh
-tests/fm-backend.test.sh
-tests/fm-bootstrap.test.sh
-```
-
-The fake-Orca suite covers readiness, registration, create response parsing, metadata routing, popup-safe submit, and path-matched release refusal.
-
-## Codex App host tools
-
-A reusable Desktop host-tool smoke ran on 2026-07-06 against Codex Desktop bundle version 26.623.101652, build 4674, bundle id `com.openai.codex`.
-Local paths and task-specific ids are intentionally not retained here.
-
-The host-tool sequence was:
-
-1. list a saved project;
-2. create a Desktop-owned worktree thread;
-3. recover and read the thread while active and after completion;
-4. verify the thread appended a Firstmate status line and wrote its report;
-5. send a follow-up to the same thread;
-6. read the completed follow-up;
-7. archive the exact thread;
-8. read the archived transcript with state `notLoaded`.
-
-Observed guarantee: a Desktop-owned thread can write Firstmate lifecycle files when the prompt provides an authorized absolute path, and create, send, read, and archive work at the Desktop host-tool layer.
-The missing guarantee remains a supported shell-callable bridge that lets Firstmate perform those operations against the same visible Desktop endpoint.
-App-server partial methods and raw socket experiments do not satisfy that bridge contract.

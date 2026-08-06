@@ -33,7 +33,7 @@ After setup, every other command verifies Firstmate's account-owned remote job w
 On macOS the worker is `dev.firstmate.remote-job`, an Aqua-scoped LaunchAgent at `~/Library/LaunchAgents/dev.firstmate.remote-job.plist` with logs under `~/Library/Logs/`.
 After that bootstrap every non-doctor `fm-on.sh` target runs through that worker in the remote account's GUI session, never in the SSH process or a Herdr pane.
 Linux uses the same queue and worker protocol without the Aqua-session requirement.
-The remote account must provide the required toolchain, the selected worker runtime, the selected session backend, and credentials that work on that host.
+The remote account must provide the required toolchain, Herdr, and credentials that work on that host.
 Project origin URLs recorded by the primary must be reachable from the remote account because projects are cloned on that host rather than copied from the primary.
 
 Registering the first remote second-mate route also opts the primary home into Firstmate's local Herdr Mirror management on its next session start.
@@ -152,7 +152,7 @@ An explicit request for any other backend is refused rather than honored, and th
 An existing remote endpoint recorded in another Herdr session, including `default`, is classified as unverified and left untouched; launch, liveness recovery, control, and retirement refuse it until an operator explicitly migrates it instead of attempting a live cutover.
 A launch after a host has drifted out of readiness fails with the doctor's own gap text instead of leaving a half-created endpoint.
 Raw launch commands are not accepted for remote secondmates.
-Orca remains unsupported for secondmate launch on the remote host.
+Remote secondmates run in the dedicated `fm-remote` Herdr session.
 
 Startup liveness recovery relaunches a dead or missing remote second mate through this same command, so recovery passes the same readiness gate rather than a weaker one.
 
