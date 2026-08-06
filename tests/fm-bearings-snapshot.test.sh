@@ -11,7 +11,7 @@ set -u
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 # Live fixture records use the current Herdr metadata contract unless a case
-# supplies another backend explicitly.
+# already supplies its runtime identity explicitly.
 fm_write_meta_base() {
   local file=$1 kv
   shift

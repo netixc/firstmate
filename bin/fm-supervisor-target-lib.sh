@@ -20,14 +20,3 @@ discover_supervisor_target() {
   fi
   return 1
 }
-
-# discover_supervisor_backend: Herdr is the sole supported supervisor backend.
-# An explicit value is returned for validation so a stale setting is rejected
-# clearly by the caller rather than silently reinterpreted.
-discover_supervisor_backend() {
-  if [ -n "${FM_SUPERVISOR_BACKEND:-}" ]; then
-    printf '%s' "$FM_SUPERVISOR_BACKEND"
-    return 0
-  fi
-  printf 'herdr'
-}

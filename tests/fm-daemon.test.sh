@@ -31,7 +31,7 @@ test_afk_start_refuses_when_flag_cannot_be_written() {
   state="$dir/state"
   mkdir -p "$state/.afk"
 
-  out=$(FM_STATE_OVERRIDE="$state" FM_SUPERVISOR_BACKEND=unsupported "$AFK_START" 2>&1)
+  out=$(FM_STATE_OVERRIDE="$state" "$AFK_START" 2>&1)
   status=$?
 
   [ "$status" -ne 0 ] || fail "fm-afk-start.sh should fail when state/.afk cannot be written"
@@ -46,12 +46,12 @@ test_afk_start_ignores_stale_pidfile_without_lock() {
   state="$dir/state"
   printf '%s\n' "$$" > "$state/.supervise-daemon.pid"
 
-  out=$(FM_STATE_OVERRIDE="$state" FM_SUPERVISOR_BACKEND=unsupported "$AFK_START" 2>&1)
+  out=$(FM_STATE_OVERRIDE="$state" FM_SUPERVISOR_TARGET=missing "$AFK_START" 2>&1)
   status=$?
 
   [ "$status" -ne 0 ] || fail "fm-afk-start.sh should attempt daemon startup instead of trusting a pidfile-only live pid"
   assert_contains "$out" "starting supervise daemon" "fm-afk-start.sh did not attempt daemon startup"
-  assert_contains "$out" "unsupported supervisor backend 'unsupported'" "daemon startup did not reach backend validation"
+  assert_contains "$out" "supervisor target 'missing' does not resolve" "daemon startup did not reach target validation"
   assert_not_contains "$out" "daemon already running" "fm-afk-start.sh trusted a stale pidfile-only live pid"
   pass "fm-afk-start.sh ignores stale pidfile-only live pids"
 }
@@ -66,12 +66,12 @@ test_afk_start_reclaims_stale_daemon_lock_reused_pid() {
   printf '%s\n' "$$" > "$lock/pid"
   printf '%s\n' "stale daemon identity" > "$lock/pid-identity"
 
-  out=$(FM_STATE_OVERRIDE="$state" FM_SUPERVISOR_BACKEND=unsupported "$AFK_START" 2>&1)
+  out=$(FM_STATE_OVERRIDE="$state" FM_SUPERVISOR_TARGET=missing "$AFK_START" 2>&1)
   status=$?
 
   [ "$status" -ne 0 ] || fail "fm-afk-start.sh should attempt daemon startup after rejecting a reused-pid lock"
   assert_contains "$out" "starting supervise daemon" "fm-afk-start.sh did not attempt daemon startup after rejecting the stale lock"
-  assert_contains "$out" "unsupported supervisor backend 'unsupported'" "daemon startup did not reach backend validation after stale lock cleanup"
+  assert_contains "$out" "supervisor target 'missing' does not resolve" "daemon startup did not reach target validation after stale lock cleanup"
   assert_not_contains "$out" "daemon already running" "fm-afk-start.sh trusted a stale daemon lock with a reused pid"
   assert_not_contains "$out" "another fm-supervise-daemon is already running" "daemon singleton lock still trusted the reused pid"
   pass "fm-afk-start.sh reclaims stale daemon locks whose live pid identity no longer matches"
@@ -1506,7 +1506,7 @@ test_inject_wedge_alarm_fires_active_alert_without_status_flash() {
   escalate_add "$state" "needs-decision: pick A"
   WEDGE_ALARM_LAST_EPOCH=0
   FM_WEDGE_ALARM_LOG="$log" FM_STATE_OVERRIDE="$state" \
-    FM_WEDGE_ALARM_CHANNEL=osascript FM_SUPERVISOR_BACKEND=herdr \
+    FM_WEDGE_ALARM_CHANNEL=osascript \
     inject_wedge_alarm "$state" 30600
   [ -s "$state/.subsuper-inject-wedged" ] || fail "inject_wedge_alarm did not write the durable marker"
   grep -F 'osascript' "$log" >/dev/null || fail "inject_wedge_alarm did not emit the active alert without a status flash: $(cat "$log")"
@@ -1522,10 +1522,10 @@ test_inject_wedge_alarm_throttles_when_marker_cannot_be_written() {
   chmod u-w "$state"
   WEDGE_ALARM_LAST_EPOCH=0
   LOG="$daemon_log" FM_WEDGE_ALARM_LOG="$log" FM_MAX_DEFER_SECS=600 \
-    FM_WEDGE_ALARM_CHANNEL=osascript FM_SUPERVISOR_BACKEND=herdr \
+    FM_WEDGE_ALARM_CHANNEL=osascript \
     inject_wedge_alarm "$state" 30600
   LOG="$daemon_log" FM_WEDGE_ALARM_LOG="$log" FM_MAX_DEFER_SECS=600 \
-    FM_WEDGE_ALARM_CHANNEL=osascript FM_SUPERVISOR_BACKEND=herdr \
+    FM_WEDGE_ALARM_CHANNEL=osascript \
     inject_wedge_alarm "$state" 30615
   chmod u+w "$state"
   [ ! -e "$state/.subsuper-inject-wedged" ] || fail "wedge marker unexpectedly persisted in an unwritable state directory"
@@ -1590,20 +1590,6 @@ test_fm_send_exits_nonzero_on_pending_submit() {
 # --- Herdr supervisor discovery ---------------------------------------------
 # The daemon defaults to Herdr and requires either an explicit target or the
 # exact endpoint identity Herdr injects into the running Firstmate process.
-
-test_discover_supervisor_backend_precedence() {
-  local out
-  out=$(FM_SUPERVISOR_BACKEND=herdr discover_supervisor_backend)
-  [ "$out" = herdr ] || fail "explicit FM_SUPERVISOR_BACKEND override was not honored: $out"
-
-  out=$(FM_SUPERVISOR_BACKEND='' discover_supervisor_backend)
-  [ "$out" = herdr ] || fail "an absent supervisor backend should default to Herdr: $out"
-
-  out=$(FM_SUPERVISOR_BACKEND=unsupported discover_supervisor_backend)
-  [ "$out" = unsupported ] || fail "an unsupported explicit value must remain available for validation: $out"
-
-  pass "discover_supervisor_backend: explicit values are preserved and absence defaults to Herdr"
-}
 
 test_discover_supervisor_target_herdr() {
   local out
@@ -1688,7 +1674,7 @@ test_inject_msg_herdr_busy_guard_defers() {
     pane_is_busy() { return 0; }
     fm_backend_composer_state() { fail "composer_state should not be consulted once the busy-guard already deferred"; }
     fm_backend_send_text_submit() { fail "send_text_submit should not run when the busy-guard defers"; }
-    if FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET="default:w1:p2" inject_msg "hello" "$state"; then
+    if FM_SUPERVISOR_TARGET="default:w1:p2" inject_msg "hello" "$state"; then
       fail "inject_msg should defer (return non-zero) when the herdr supervisor pane is busy"
     fi
   ) || fail "herdr busy-guard inject_msg subshell failed"
@@ -1705,7 +1691,7 @@ test_inject_msg_herdr_composer_guard_defers() {
     pane_is_busy() { return 1; }
     fm_backend_composer_state() { [ "$1" = herdr ] && [ "$2" = "default:w1:p2" ] || fail "unexpected composer_state args: $1 $2"; printf 'pending'; }
     fm_backend_send_text_submit() { fail "send_text_submit should not run when the composer-guard defers"; }
-    if FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET="default:w1:p2" inject_msg "hello" "$state"; then
+    if FM_SUPERVISOR_TARGET="default:w1:p2" inject_msg "hello" "$state"; then
       fail "inject_msg should defer when the herdr composer has pending input"
     fi
   ) || fail "herdr composer-guard inject_msg subshell failed"
@@ -1721,7 +1707,7 @@ test_inject_msg_herdr_pane_gone_defers() {
     fm_backend_target_exists() { return 1; }
     pane_is_busy() { fail "busy guard should not be consulted once the pane-exists check already failed"; }
     fm_backend_send_text_submit() { fail "send_text_submit should not run when the pane does not exist"; }
-    if FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET="default:w1:gone" inject_msg "hello" "$state"; then
+    if FM_SUPERVISOR_TARGET="default:w1:gone" inject_msg "hello" "$state"; then
       fail "inject_msg should defer when the herdr target does not exist"
     fi
   ) || fail "herdr pane-gone inject_msg subshell failed"
@@ -1742,7 +1728,7 @@ test_inject_msg_herdr_submits_through_backend_dispatch() {
       case "$3" in *"hello"*) : ;; *) fail "digest text missing from send_text_submit: $3" ;; esac
       printf 'empty'
     }
-    FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET="default:w1:p2" inject_msg "hello" "$state" \
+    FM_SUPERVISOR_TARGET="default:w1:p2" inject_msg "hello" "$state" \
       || fail "inject_msg should succeed when send_text_submit confirms empty"
   ) || fail "herdr successful-submit inject_msg subshell failed"
   pass "inject_msg: dispatches busy-guard/composer-guard/submit through the herdr backend and succeeds on a confirmed empty composer"
@@ -1763,7 +1749,7 @@ test_inject_msg_defers_on_dead_shell_unknown() {
     pane_is_busy() { return 1; }
     fm_backend_composer_state() { printf 'unknown'; }
     fm_backend_send_text_submit() { fail "send_text_submit must NOT run when the composer is a dead shell (unknown)"; }
-    if FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET="default:w1:p2" inject_msg "hello" "$state"; then
+    if FM_SUPERVISOR_TARGET="default:w1:p2" inject_msg "hello" "$state"; then
       fail "inject_msg should defer (never inject) when the composer reads unknown (dead shell / unreadable)"
     fi
   ) || fail "dead-shell inject_msg subshell failed"
@@ -1780,7 +1766,7 @@ test_inject_msg_defers_on_unrecognized_composer_state() {
     pane_is_busy() { return 1; }
     fm_backend_composer_state() { printf 'future-state'; }
     fm_backend_send_text_submit() { fail "send_text_submit must not run for an unrecognized composer state"; }
-    if FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET="default:w1:p2" inject_msg "hello" "$state"; then
+    if FM_SUPERVISOR_TARGET="default:w1:p2" inject_msg "hello" "$state"; then
       fail "inject_msg should defer on an unrecognized composer state"
     fi
   ) || fail "unrecognized composer-state inject_msg subshell failed"
@@ -1873,7 +1859,6 @@ test_inject_wedge_alarm_throttles_when_marker_cannot_be_written
 test_fm_send_exits_nonzero_on_confirmed_swallow
 test_fm_send_exits_nonzero_on_initial_send_failure
 test_fm_send_exits_nonzero_on_pending_submit
-test_discover_supervisor_backend_precedence
 test_discover_supervisor_target_herdr
 test_pane_is_busy_herdr_native_busy_state
 test_primary_busy_guard_is_harness_scoped

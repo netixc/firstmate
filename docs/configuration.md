@@ -73,13 +73,11 @@ The local `config/herdr-presentation-spaces` file opts a home out of Herdr's def
 For normal Herdr operations, `HERDR_SESSION` selects the named session, but destructive test cleanup must use the guarded lab helper described in that guide.
 `config/herdr-presentation-spaces` is inherited into secondmate homes under the primary-authoritative contract owned by `secondmate-provisioning`.
 
-## Away-mode supervisor backend (FM_SUPERVISOR_BACKEND / FM_SUPERVISOR_TARGET)
+## Away-mode supervisor target (FM_SUPERVISOR_TARGET)
 
 The `/afk` sub-supervisor injects escalation digests into Firstmate's own Herdr pane independently of an individual task's backend.
-Herdr is the sole supported supervisor backend.
 `FM_SUPERVISOR_TARGET=<session>:<pane-id>` overrides target discovery.
 Without that override, `HERDR_ENV=1` plus `HERDR_PANE_ID` identifies the pane and `HERDR_SESSION` defaults to `default`.
-`FM_SUPERVISOR_BACKEND` may explicitly contain `herdr`; every other value is rejected instead of being reinterpreted.
 When no authoritative target is available, away-mode launch refuses rather than guessing a pane.
 
 ## Away-mode wedge alarm channels (config/wedge-alarm)
@@ -536,7 +534,6 @@ FM_SEND_SLEEP=0.4       # seconds between fm-send submit checks
 FM_SEND_SETTLE=1        # seconds fm-send waits after a successful text submit; 0 disables
 FM_PENDING_REPLY_GRACE_SECS=120   # seconds after marked-request delivery before a completed turn without a correlated parent report is eligible for its one recovery repost
 # sub-supervisor (bin/fm-supervise-daemon.sh); presence-gated via /afk
-FM_SUPERVISOR_BACKEND=             # optional supervisor backend override; herdr is the only supported value
 FM_SUPERVISOR_TARGET=              # optional exact Herdr <session>:<pane-id>; otherwise uses HERDR_ENV/HERDR_PANE_ID
 FM_INJECT_SKIP=heartbeat           # |-prefixes force-self-handled bypassing classification; empty disables
 FM_ESCALATE_BATCH_SECS=90          # buffer window for batched escalation digests; 0 = flush immediately

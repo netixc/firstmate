@@ -8,8 +8,8 @@
 #
 # herdr already supports named-session isolation via --session, so no
 # PATH redirection is needed for the happy path - the daemon is simply pointed
-# at FM_SUPERVISOR_BACKEND=herdr, FM_SUPERVISOR_TARGET="<session>:<pane-id>",
-# and HERDR_SESSION="<the isolated session>". A thin herdr SHIM is still used,
+# at FM_SUPERVISOR_TARGET="<session>:<pane-id>" and
+# HERDR_SESSION="<the isolated session>". A thin herdr SHIM is still used,
 # but only to simulate a swallowed Enter (Scenario B) - herdr's real CLI has no
 # built-in way to drop a keystroke, so the shim intercepts exactly one
 # `pane send-keys <pane> enter` call and forwards everything else to the real
@@ -272,7 +272,6 @@ start_daemon() {
   PATH="$HERDR_SHIM_DIR:$PATH" \
   HERDR_SESSION="$SESSION" \
   FM_STATE_OVERRIDE="$STATE_DIR" \
-  FM_SUPERVISOR_BACKEND=herdr \
   FM_SUPERVISOR_TARGET="$SUPERVISOR_TARGET" \
   FM_ESCALATE_BATCH_SECS=0 \
   FM_HOUSEKEEPING_TICK=1 \
@@ -482,7 +481,6 @@ test_scenario_d_max_defer() {
   PATH="$HERDR_SHIM_DIR:$PATH" \
   HERDR_SESSION="$SESSION" \
   FM_STATE_OVERRIDE="$STATE_DIR" \
-  FM_SUPERVISOR_BACKEND=herdr \
   FM_SUPERVISOR_TARGET="$SUPERVISOR_TARGET" \
   FM_ESCALATE_BATCH_SECS=99999 \
   FM_HOUSEKEEPING_TICK=1 \

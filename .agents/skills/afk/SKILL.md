@@ -164,8 +164,7 @@ the operational prefix lets firstmate distinguish it from a real captain message
 - **Portable singleton lock** - the daemon uses `fm-wake-lib.sh` rather than a platform-specific lock tool.
 - **Dedupe** - signal, stale, and scan paths share seen-status markers without suppressing possible-wedge aging for nonterminal progress.
 - **Supervisor discovery** - `FM_SUPERVISOR_TARGET` wins, then `HERDR_ENV=1` plus `HERDR_PANE_ID` identifies the exact pane under `${HERDR_SESSION:-default}`.
-  Herdr is the only supported `FM_SUPERVISOR_BACKEND` value.
-  Missing target identity or any other backend value refuses at startup rather than guessing.
+  Missing target identity refuses at startup rather than guessing.
 
 ## Stale-artifact lifecycle
 
