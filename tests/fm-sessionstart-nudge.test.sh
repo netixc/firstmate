@@ -355,6 +355,40 @@ test_run_reports_a_failed_session_start_as_digest_text() {
   pass "run wrapper: a session start that cannot take the lock still opens the session and says so"
 }
 
+test_codex_sessionstart_hook_runs_without_jq() {
+  local settings command root fakebin payload out status=0
+  settings="$ROOT/.codex/hooks.json"
+  command=$(jq -r '.hooks.SessionStart[0].hooks[0].command // empty' "$settings")
+  [ -n "$command" ] || fail "SessionStart hook command is missing from .codex/hooks.json"
+  root="$TMP_ROOT/codex-hook-no-jq"
+  fakebin=$(fm_fakebin "$TMP_ROOT/codex-hook-no-jq-bin")
+  mkdir -p "$root/bin" "$root/.codex"
+  : > "$root/AGENTS.md"
+  cp "$settings" "$root/.codex/hooks.json"
+  cat > "$root/bin/fm-sessionstart-run.sh" <<'SH'
+#!/usr/bin/env bash
+command -v jq >/dev/null 2>&1 && exit 91
+printf 'runner-payload='
+cat
+SH
+  chmod +x "$root/bin/fm-sessionstart-run.sh"
+  cat > "$fakebin/bash" <<'SH'
+#!/bin/sh
+if [ "${1:-}" = "-lc" ]; then
+  shift
+  exec /bin/bash -c "$@"
+fi
+exec /bin/bash "$@"
+SH
+  chmod +x "$fakebin/bash"
+  ln -s "$(command -v cat)" "$fakebin/cat"
+  payload='{"hook_event_name":"SessionStart","source":"startup"}'
+  out=$(printf '%s' "$payload" | (cd "$root" && PATH="$fakebin" /bin/bash -c "$command") 2>&1) || status=$?
+  expect_code 0 "$status" "Codex SessionStart hook without jq"
+  [ "$out" = "runner-payload=$payload" ] || fail "Codex SessionStart hook did not forward its payload without jq: $out"
+  pass ".codex/hooks.json: SessionStart reaches the bootstrap runner without jq"
+}
+
 test_genuine_primary_nudges
 test_gate_env_is_silent
 test_gate_common_dir_is_silent
@@ -371,6 +405,7 @@ test_run_reads_source_from_the_hook_payload
 test_run_unknown_source_takes_the_helm
 test_run_gate_and_scope_are_silent
 test_run_reports_a_failed_session_start_as_digest_text
+test_codex_sessionstart_hook_runs_without_jq
 test_pi_large_sessionstart_digest_is_delivered_loudly
 
 echo "# fm-sessionstart-nudge.test.sh: all assertions passed"
