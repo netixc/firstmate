@@ -155,6 +155,13 @@ fm_afk_launch_entry_cmd() {
 
 fm_afk_launch_record_write() {  # <backend> <target> <extra>
   local pending
+  case "$1" in
+    herdr|none) ;;
+    *)
+      fm_afk_launch_log "unsupported daemon terminal backend '$1' (supported: herdr)"
+      return 2
+      ;;
+  esac
   mkdir -p "$FM_AFK_LAUNCH_STATE" || return 1
   pending=$(mktemp "$FM_AFK_LAUNCH_STATE/.afk-daemon-terminal.pending.XXXXXX") || return 1
   printf '%s\t%s\t%s\n' "$1" "$2" "$3" > "$pending" || { rm -f "$pending"; return 1; }
