@@ -945,8 +945,11 @@ families_for_changed_path() {
     README.md|LICENSE|assets/*|docs/*|.gitignore)
       ;;
     *)
-      families_for_test_reference "$path" \
-        || printf '%s\n' "__unmapped__:$path"
+      # A deleted source has no implementation left to map. Present sources
+      # still fail closed below when no maintained test references them.
+      if ! families_for_test_reference "$path"; then
+        [ ! -e "$path" ] || printf '%s\n' "__unmapped__:$path"
+      fi
       ;;
   esac
 }

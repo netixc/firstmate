@@ -124,6 +124,8 @@ init_changed_fixture_repo() {
   : >"$repo/.pi/extensions/fm-primary-pi-watch.ts"
   : >"$repo/.pi/extensions/fm-primary-turnend-guard.ts"
   : >"$repo/src/unmapped.ts"
+  : >"$repo/src/referenced.ts"
+  printf '# src/referenced.ts\n' >>"$repo/tests/fm-brief.test.sh"
   git -C "$repo" init -q
   git -C "$repo" add .
   git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm baseline
@@ -169,6 +171,18 @@ test_changed_dependency_selection_and_unmapped_failure() {
   git -C "$repo" add .agents .claude .pi
   git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm non-bin-source-change
 
+  git -C "$repo" rm -q src/referenced.ts
+  listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD)
+  assert_contains "$listed" "tests/fm-brief.test.sh" "deleted referenced source selects its maintained test"
+  git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm referenced-source-removal
+
+  git -C "$repo" rm -q src/unmapped.ts
+  listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD)
+  [ -z "$listed" ] || fail "deleted unmapped source must not select unrelated tests: $listed"
+  git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm source-removal
+
+  mkdir -p "$repo/src"
+  : >"$repo/src/unmapped.ts"
   printf '\n' >>"$repo/src/unmapped.ts"
   set +e
   (cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD) >"$tmp/out" 2>"$tmp/err"
@@ -178,7 +192,7 @@ test_changed_dependency_selection_and_unmapped_failure() {
   grep -Fq 'no changed-test mapping for source path: src/unmapped.ts' "$tmp/err" \
     || fail "unmapped changed source failure is not actionable: $(cat "$tmp/err")"
   rm -rf "$tmp"
-  pass "changed selection covers dependents and fails closed for unmapped source"
+  pass "changed selection covers dependents, permits deleted sources, and fails closed for present unmapped source"
 }
 
 test_empty_selection_emits_summary() {
