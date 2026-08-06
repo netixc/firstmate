@@ -185,6 +185,7 @@ Enabled primary-session turn-end guard integrations are tracked as repo-level ho
 Primary-session watcher wake protocols are rendered at session start by [`bin/fm-supervision-instructions.sh`](../bin/fm-supervision-instructions.sh) from [`docs/supervision-protocols/`](supervision-protocols/).
 Claude's Stop `asyncRewake` hook owns tokenless re-arm cycles, Grok uses background-notify cycles, Codex uses bounded foreground checkpoints, and Pi uses its two tracked primary extensions.
 `config/crew-harness` is a local, gitignored file containing one adapter name for crewmate and scout launches.
+Both static harness configuration files reject any adapter outside the four supported values above.
 When it is absent or contains `default`, crewmates mirror the firstmate's own harness.
 `config/secondmate-harness` is a separate local, gitignored file containing the adapter the primary uses to launch secondmate agents, optionally followed by model and effort tokens on the same line.
 The first non-empty, non-comment line is parsed as `<harness> [<model>] [<effort>]`.
