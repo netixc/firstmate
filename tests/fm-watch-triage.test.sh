@@ -473,6 +473,33 @@ test_unsupported_backend_identity_stops_watch() {
   pass "unsupported watcher metadata stops with the current supported backend choices"
 }
 
+test_remote_secondmate_metadata_stays_off_local_watch_paths() {
+  local dir state fakebin out err pid window
+  dir=$(make_case remote-secondmate); state="$dir/state"; fakebin="$dir/fakebin"
+  out="$dir/watch.out"; err="$dir/watch.err"; window="test:fm-missing"
+  printf 'window=remote:ios\nkind=secondmate\nremote_host=remote-mac\nremote_backend=herdr\nremote_target=fm-remote:w1:p1\n' > "$state/ios.meta"
+
+  PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state" FM_POLL=1 FM_SIGNAL_GRACE=1 \
+    FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" 2> "$err" &
+  pid=$!
+  if ! wait_live "$pid" 30; then
+    wait "$pid" 2>/dev/null || true
+    fail "watcher sent remote secondmate metadata through a local backend path: $(cat "$err")"
+  fi
+  [ ! -s "$err" ] || { reap "$pid"; fail "watcher reported a local backend error for remote metadata: $(cat "$err")"; }
+  reap "$pid"
+
+  printf 'window=%s\nkind=ship\n' "$window" > "$state/missing.meta"
+  if PATH="$fakebin:$PATH" FM_FAKE_HERDR_WINDOW="$window" FM_STATE_OVERRIDE="$state" \
+    FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 \
+    "$WATCH" > "$out" 2> "$err"; then
+    fail "watcher accepted missing local backend metadata"
+  fi
+  grep -F "unsupported backend identity 'missing' (supported: herdr orca)" "$err" >/dev/null \
+    || fail "watcher did not reject missing local backend metadata: $(cat "$err")"
+  pass "remote secondmate metadata bypasses local watch paths without weakening local validation"
+}
+
 # --- stale pane, STALE terminal status overridden by an active run: absorbed ---
 # Regression for the 2026-07 herdr false-surface incidents: a crew's own status
 # log gets no new entry once firstmate hands it to a no-mistakes validation
@@ -1831,6 +1858,7 @@ test_working_note_not_working_surfaced
 test_actionable_signal_surfaced
 test_terminal_stale_surfaced
 test_unsupported_backend_identity_stops_watch
+test_remote_secondmate_metadata_stays_off_local_watch_paths
 test_stale_terminal_status_overridden_by_active_run
 test_nonterminal_stale_provably_working_absorbed_then_escalated
 test_wedge_escalation_marks_demand_deep_inspection_after_threshold

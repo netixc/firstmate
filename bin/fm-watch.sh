@@ -246,9 +246,11 @@ window_label() {
 }
 
 recorded_windows() {
-  local meta w seen=
+  local meta remote_host w seen=
   for meta in "$STATE"/*.meta; do
     [ -e "$meta" ] || continue
+    remote_host=$(fm_meta_get "$meta" remote_host)
+    [ -n "$remote_host" ] && continue
     w=$(fm_backend_target_of_meta "$meta")
     [ -n "$w" ] || continue
     case "$seen" in
