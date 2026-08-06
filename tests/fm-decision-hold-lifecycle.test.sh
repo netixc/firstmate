@@ -27,7 +27,17 @@ make_home() {  # <name>
 ## Done
 EOF
   fakebin=$(fm_fakebin "$home")
-  fm_fake_exit0 "$fakebin" tmux treehouse no-mistakes gh gh-axi
+  fm_fake_exit0 "$fakebin" treehouse no-mistakes gh gh-axi
+  cat > "$fakebin/herdr" <<'SH'
+#!/usr/bin/env bash
+case "${1:-} ${2:-}" in
+  'status --json') printf '{"client":{"version":"0.7.5","protocol":16},"server":{"running":true}}\n' ;;
+  'session list') printf '{"sessions":[{"name":"firstmate","running":true,"socket_path":"/tmp/fm-decision-hold.sock"}]}\n' ;;
+  'pane get') printf '{"error":{"code":"pane_not_found"}}\n'; exit 1 ;;
+  *) exit 0 ;;
+esac
+SH
+  chmod +x "$fakebin/herdr"
   printf '%s\n' "$home"
 }
 
@@ -110,12 +120,18 @@ run_decisions() {  # <home> <command args...>
 write_origin_meta() {  # <home> <id> [kind]
   local home=$1 id=$2 kind=${3:-scout}
   fm_write_meta "$home/state/$id.meta" \
+    "backend=herdr" \
     "window=firstmate:fm-$id" \
+    "endpoint_task_id=$id" \
     "worktree=$home/projects/missing-$id" \
     "project=$home/projects/sample" \
     "harness=codex" \
     "kind=$kind" \
-    "mode=$kind"
+    "mode=$kind" \
+    "herdr_session=firstmate" \
+    "herdr_workspace_id=w1" \
+    "herdr_tab_id=w1:t1" \
+    "herdr_pane_id=fm-$id"
 }
 
 test_structured_holds_survive_teardown_and_route_resolution() {
@@ -426,7 +442,17 @@ test_secondmate_hold_stays_in_authoritative_home() {
 ## Done
 EOF
   fakebin=$(fm_fakebin "$mate")
-  fm_fake_exit0 "$fakebin" tmux treehouse no-mistakes gh gh-axi
+  fm_fake_exit0 "$fakebin" treehouse no-mistakes gh gh-axi
+  cat > "$fakebin/herdr" <<'SH'
+#!/usr/bin/env bash
+case "${1:-} ${2:-}" in
+  'status --json') printf '{"client":{"version":"0.7.5","protocol":16},"server":{"running":true}}\n' ;;
+  'session list') printf '{"sessions":[{"name":"firstmate","running":true,"socket_path":"/tmp/fm-decision-hold-mate.sock"}]}\n' ;;
+  'pane get') printf '{"error":{"code":"pane_not_found"}}\n'; exit 1 ;;
+  *) exit 0 ;;
+esac
+SH
+  chmod +x "$fakebin/herdr"
   origin=sample-mate-review
   mkdir -p "$mate/data/$origin"
   tasks_in "$mate" add "$origin" "Investigate secondmate sample" --kind scout --repo sample --start >/dev/null

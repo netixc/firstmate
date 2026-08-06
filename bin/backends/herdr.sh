@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# bin/backends/herdr.sh - the herdr session-provider adapter (EXPERIMENTAL).
+# bin/backends/herdr.sh - the default Herdr session-provider adapter.
 #
 # Design: data/fm-backend-design-d7/herdr-addendum.md ("Interface mapping",
 # decisions D1-D6) and the empirical verification recorded in
 # data/fm-backend-design-d7/herdr-verification-p2.md (real herdr v0.7.1,
 # protocol 14, macOS aarch64), refined by docs/herdr-backend.md's
 # "workspace-per-home" pass (AGENTS.md task herdr-sm-spaces-k4). Herdr is a
-# session provider ONLY (D3): the worktree provider stays treehouse, exactly
-# like tmux. Sourced only through bin/fm-backend.sh's fm_backend_source in
-# normal operation; the unit tests source it directly, so the FM_HOME fallback
+# session provider only (D3): Treehouse remains the worktree provider.
+# Sourced only through bin/fm-backend.sh's fm_backend_source in normal
+# operation; unit tests source it directly, so the FM_HOME fallback
 # below keeps that path sane without fm-backend.sh's preamble.
 #
 # Default container shape (D4, decided empirically - see
@@ -26,7 +26,6 @@
 # focus, and agent-absence checks all agree under the session lock.
 # Every ambiguous recovered launch uses the default flat home workspace when
 # duplicate-agent risk is independently absent.
-# Target resolution stays parallel to the tmux adapter in both layouts.
 # Projected create, move, and cleanup operations capture the named session's
 # exact active workspace and tab. On Herdr 0.7.5, an explicit close that
 # empties a non-focused workspace moves focus to that workspace's neighbor
@@ -45,7 +44,7 @@
 # remainder is the whole pane id - fm_backend_herdr_parse_target splits on the
 # first colon only). This is the value stored in a herdr task's meta window=
 # field and is what fm_backend_resolve_selector already returns unchanged for
-# exact task-id, legacy fm-<id>, and explicit backend-target forms (that
+# exact task-id, fm-<id>, and explicit backend-target forms (that
 # function has no herdr-specific logic; it just returns meta's window=
 # verbatim).
 #
@@ -224,10 +223,9 @@ fm_backend_herdr_version_check() {
   return 0
 }
 
-# fm_backend_herdr_session: resolve which named herdr session this normal
-# spawn/op uses. HERDR_SESSION mirrors tmux's $TMUX ambient-selection for
-# adapter workspace/tab/pane operations: an operator (or firstmate's own
-# isolated test harness) sets it explicitly; absent means herdr's own
+# fm_backend_herdr_session: resolve which named Herdr session a normal
+# spawn or operation uses. An operator or isolated test harness may set
+# HERDR_SESSION explicitly; absent means Herdr's own
 # "default" session. Do not use HERDR_SESSION alone for destructive test
 # cleanup; tests/herdr-test-safety.sh documents and guards that path.
 fm_backend_herdr_session() {
@@ -1234,11 +1232,10 @@ fm_backend_herdr_projection_order_best_effort() {  # <session> <created-workspac
   return 0
 }
 
-# fm_backend_herdr_server_ensure: start the herdr server for <session>
-# headless (no TUI client) if not already running, mirroring tmux's `tmux
-# has-session || tmux new-session -d`. Verified: a bare socket CLI call does
-# NOT auto-start the server, so this must run before any workspace/tab/pane
-# call. Bounded poll for the server to report running.
+# fm_backend_herdr_server_ensure: start the Herdr server for <session>
+# headless (no TUI client) if it is not already running.
+# A bare socket CLI call does not auto-start the server, so this must run before
+# any workspace, tab, or pane call. Bounded poll for the server to report running.
 fm_backend_herdr_server_ensure() {  # <session>
   local session=$1 running out i
   running=$(fm_backend_herdr_cli "$session" status --json 2>/dev/null | jq -r '.server.running // false' 2>/dev/null)
@@ -1316,11 +1313,10 @@ fm_backend_herdr_workspace_find() {  # <session>
 #
 # Returns:
 #   0 - one exact, self-consistent launcher pane/tab/workspace in <session>.
-#   2 - this process is NOT running in a herdr pane (no HERDR_PANE_ID at all),
-#       so there is no launcher workspace to inherit and the caller falls back
-#       to its per-home container. HERDR_ENV=1 on its own is only a backend
-#       SELECTION marker (bin/fm-backend.sh's fm_backend_detect), never a
-#       parent binding - herdr always injects the pane id alongside it.
+#   2 - this process is not running in a Herdr pane (no HERDR_PANE_ID at all),
+#       so there is no launcher workspace to inherit and the caller uses its
+#       per-home container. HERDR_ENV=1 on its own is never a parent binding;
+#       Herdr always injects the pane id alongside it.
 #   1 - a launcher pane IS claimed but its binding is missing, stale,
 #       contradictory, or belongs to another herdr session. The caller must
 #       refuse before creating or publishing any worker endpoint rather than
@@ -1713,9 +1709,9 @@ fm_backend_herdr_tab_is_husk() {  # <session> <pane_id>
   esac
 }
 
-# fm_backend_herdr_agent_state: recovery-grade state for the same session-start
-# sweep as the tmux classifier. It reuses the husk classifier rather than
-# creating a second Herdr state machine: a structurally gone pane is `missing`,
+# fm_backend_herdr_agent_state: recovery-grade state for the session-start
+# sweep. It reuses the husk classifier rather than creating a second Herdr
+# state machine: a structurally gone pane is `missing`,
 # a confirmed agent-less pane is `dead`, a registered agent is `alive`, and an
 # unexpected or failed API read is `unreadable`.
 fm_backend_herdr_agent_state() {  # <target>
@@ -1729,20 +1725,9 @@ fm_backend_herdr_agent_state() {  # <target>
   esac
 }
 
-# Backward-compatible three-state view for callers that only need a yes/no
-# agent verdict. The detailed state contract is owned by fm_backend_agent_state.
-fm_backend_herdr_agent_alive() {  # <target>
-  case "$(fm_backend_herdr_agent_state "$1")" in
-    alive) printf 'alive' ;;
-    dead|missing) printf 'dead' ;;
-    *) printf 'unknown' ;;
-  esac
-}
-
 # fm_backend_herdr_create_task: create the task's tab (one pane) in
-# <container> ("session:workspace_id"). Herdr does NOT enforce label
-# uniqueness itself (verified: two tabs can share a label), so the duplicate
-# check is ours, mirroring tmux's manual check.
+# <container> ("session:workspace_id"). Herdr does not enforce label
+# uniqueness itself, so Firstmate performs the duplicate check.
 #
 # A same-labeled tab already existing no longer means an automatic refusal:
 # herdr persists and restores its whole session layout (workspaces/tabs/
@@ -2304,9 +2289,8 @@ fm_backend_herdr_target_ready() {  # <target>
   fm_backend_herdr_server_ensure "$FM_BACKEND_HERDR_SESSION" || return 1
 }
 
-# fm_backend_herdr_current_path: the live FOREGROUND process's cwd, or empty on
-# any error. Mirrors tmux's pane_current_path poll used for worktree-path
-# discovery after `treehouse get`.
+# fm_backend_herdr_current_path: the live foreground process's cwd, or empty on
+# any error, used for worktree-path discovery after `treehouse get`.
 #
 # Verified pitfall: `pane get`'s `.result.pane.cwd` is the pane's cwd AT
 # CREATION TIME - the top-level shell's cwd - and does NOT update when that
@@ -2322,19 +2306,16 @@ fm_backend_herdr_current_path() {  # <target>
     | jq -r '.result.pane.foreground_cwd // empty' 2>/dev/null
 }
 
-# fm_backend_herdr_send_text_line: send one line of TEXT then submit,
-# ATOMICALLY - mirrors tmux's `send-keys -t T text Enter`. Used for the fixed
-# spawn-time commands (treehouse get, the GOTMPDIR export). `pane run` types
-# the command and submits it in one call (verified).
+# fm_backend_herdr_send_text_line: send and submit one line of text atomically.
+# Used for fixed spawn-time commands such as treehouse acquisition and
+# environment exports. `pane run` types and submits the command in one call.
 fm_backend_herdr_send_text_line() {  # <target> <text>
   fm_backend_herdr_target_ready "$1" || return 1
   fm_backend_herdr_cli "$FM_BACKEND_HERDR_SESSION" pane run "$FM_BACKEND_HERDR_PANE" "$2" >/dev/null 2>&1
 }
 
-# fm_backend_herdr_send_literal: send TEXT as literal, UNSUBMITTED input - the
-# caller sends Enter separately. Mirrors tmux's `send-keys -t T -l text`.
-# Verified: `pane send-text` does NOT auto-submit (contrary to the addendum's
-# original guess); it behaves exactly like tmux's `-l` literal send.
+# fm_backend_herdr_send_literal: send text as literal, unsubmitted input.
+# The caller sends Enter separately because `pane send-text` does not submit.
 fm_backend_herdr_send_literal() {  # <target> <text>
   fm_backend_herdr_target_ready "$1" || return 1
   fm_backend_herdr_cli "$FM_BACKEND_HERDR_SESSION" pane send-text "$FM_BACKEND_HERDR_PANE" "$2" >/dev/null 2>&1
@@ -2354,8 +2335,7 @@ fm_backend_herdr_normalize_key() {  # <key>
   esac
 }
 
-# fm_backend_herdr_send_key: one named special key. Mirrors fm-send.sh's --key
-# path (tmux's `send-keys -t T key`).
+# fm_backend_herdr_send_key: send one named special key for fm-send.sh --key.
 fm_backend_herdr_send_key() {  # <target> <key>
   fm_backend_herdr_target_ready "$1" || return 1
   local key
@@ -2363,9 +2343,7 @@ fm_backend_herdr_send_key() {  # <target> <key>
   fm_backend_herdr_cli "$FM_BACKEND_HERDR_SESSION" pane send-keys "$FM_BACKEND_HERDR_PANE" "$key" >/dev/null 2>&1
 }
 
-# fm_backend_herdr_capture: bounded plain-text pane capture. Mirrors
-# fm-peek.sh's/fm-watch.sh's `tmux capture-pane -p -t T -S -N`. --source recent
-# is the closest herdr analogue to tmux's scrollback-bounded capture.
+# fm_backend_herdr_capture: bounded plain-text pane capture.
 #
 # Verified CLI quirk (herdr-verification-p2.md "pane read --lines bug", v0.7.1):
 # `pane read --source recent --lines N` returns COMPLETELY EMPTY output when N
@@ -2406,8 +2384,8 @@ fm_backend_herdr_strip_ansi() {  # <text>
 
 # fm_backend_herdr_composer_state: classify the composer's own row as
 # empty|pending|unknown, scanning a generous tail-window capture of <target>.
-# herdr's CLI exposes no cursor-row primitive (unlike tmux's #{cursor_y}), so
-# this locates the composer structurally, recognizing THREE shapes and keeping
+# Herdr's CLI exposes no cursor-row primitive, so this locates the composer
+# structurally, recognizing three shapes and keeping
 # whichever match comes LAST (scanning forward), so a shape earlier in
 # scrollback/a popup can never outrank the real (bottom-anchored) composer:
 #
@@ -2465,10 +2443,9 @@ fm_backend_herdr_strip_ansi() {  # <text>
 # de-emphasis styling, and the classifier extracts real typed content with the
 # shared fm_composer_strip_ghost (bin/fm-composer-lib.sh), which drops dim/faint
 # runs (claude's rotating prompt suggestion, codex's idle suggestion after the
-# bare `›` prompt) AND dark/muted truecolor foreground runs (grok's placeholder),
-# while keeping non-de-emphasised real typed input. This is the same owner the
-# tmux adapter routes through, so the two backends cannot drift (task
-# afk-herdr-false-pending); it superseded a herdr-only faint byte-pattern check
+# bare `›` prompt) and dark/muted truecolor foreground runs (grok's placeholder),
+# while keeping non-de-emphasised real typed input. This superseded a Herdr-only
+# faint byte-pattern check
 # that recognized only codex's bold-wrapped bare prompt and missed claude's own
 # dim ghost - the overnight away-mode injection wedge on the primary claude pane.
 FM_BACKEND_HERDR_COMPOSER_LINES=${FM_BACKEND_HERDR_COMPOSER_LINES:-20}
@@ -2660,9 +2637,8 @@ EOF
 # (Enter only, never retyped) until herdr's NATIVE agent-state (agent get)
 # confirms a real turn started. Verified hazard (herdr-verification-p2.md
 # "slash/$ autocomplete popup"): a `/`- or `$`-prefixed send opens a
-# completion popup within ~0.1s, exactly like tmux's claude/codex popups, so
-# the caller's <settle> before the first Enter matters here the same way it
-# does for tmux.
+# completion popup within about 0.1 seconds, so the caller's <settle> before
+# the first Enter matters.
 #
 # Confirmation signal (rewritten for the 2026-07-07 incident below;
 # superseded a composer-content read that itself replaced a delta-based check
@@ -2743,9 +2719,8 @@ fm_backend_herdr_send_text_submit() {  # <target> <text> <retries> <enter-sleep>
   done
 }
 
-# fm_backend_herdr_kill: remove the task's pane, best-effort (mirrors
-# tmux-kill-window's `|| true` contract). Verified: closing a tab's only pane
-# closes the tab too, so a separate tab close is unnecessary.
+# fm_backend_herdr_kill: remove the task's pane best-effort.
+# Closing a tab's only pane closes the tab too, so a separate tab close is unnecessary.
 # When the close would empty a non-focused workspace, Herdr 0.7.5's explicit
 # close moves focus to that workspace's neighbor with no restore anywhere in
 # this path, so the kill follows the same focus-safe removal plan as
@@ -2882,11 +2857,9 @@ fm_backend_herdr_agent_status_raw() {  # <session> <pane_id>
   printf '%s' "$out" | jq -r '.result.agent.agent_status // empty' 2>/dev/null
 }
 
-# fm_backend_herdr_busy_state: semantic busy state from herdr's native
-# agent-state detection (agent.get), the "first backend where fm_session_busy_state
-# gets real semantics" per the design report. See
-# fm_backend_herdr_classify_agent_status for the status->busy/idle/unknown
-# mapping.
+# fm_backend_herdr_busy_state: semantic busy state from Herdr's native
+# agent-state API. See fm_backend_herdr_classify_agent_status for the
+# status-to-busy/idle/unknown mapping.
 fm_backend_herdr_busy_state() {  # <target>
   fm_backend_herdr_target_ready "$1" || { printf 'unknown'; return 0; }
   fm_backend_herdr_classify_agent_status \
@@ -2980,12 +2953,10 @@ fm_backend_herdr_pane_for_tab() {  # <session> <workspace_id> <tab_id>
     '.result.panes[]? | select(.tab_id == $tab) | .pane_id' 2>/dev/null | head -1
 }
 
-# fm_backend_herdr_resolve_bare_selector: the live-tab-listing fallback for an
-# ad hoc selector with no meta (mirrors tmux's list-windows grep). Searches
-# every RUNNING named herdr session (herdr session list) for a tab whose label
-# matches <name>, since herdr sessions are not addressed by one ambient
-# server the way a single tmux server is. Rare path in practice (herdr tasks
-# normally carry meta), best-effort.
+# fm_backend_herdr_resolve_bare_selector: resolve an ad hoc selector with no
+# metadata by searching every running named Herdr session for a tab whose label
+# matches <name>. This is a rare, best-effort path because tasks normally carry
+# exact endpoint metadata.
 fm_backend_herdr_resolve_bare_selector() {  # <name>
   local name=$1 sessions session tabs tab_id wsid pane_id
   sessions=$(herdr session list --json 2>/dev/null | jq -r '.sessions[]? | select(.running == true) | .name' 2>/dev/null)

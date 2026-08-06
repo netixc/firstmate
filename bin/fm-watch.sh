@@ -213,19 +213,23 @@ window_kind() {
   echo unknown
 }
 
-# window_backend: the backend recorded in the meta whose window= matches <w>,
-# defaulting to tmux (absent backend= means tmux; the P1 compatibility
-# contract) when no matching meta carries the field, or none matches at all.
+# window_backend: require a supported backend identity on the metadata whose
+# endpoint matches <w>. Missing, stale, and unsupported records are never
+# reinterpreted as the current default.
 window_backend() {
   local w=$1 meta backend
   meta=$(fm_backend_meta_for_window "$w" "$STATE" 2>/dev/null || true)
   if [ -n "$meta" ]; then
-    backend=$(grep '^backend=' "$meta" | cut -d= -f2- || true)
-    [ -n "$backend" ] || backend=tmux
-    echo "$backend"
-    return 0
+    backend=$(fm_backend_of_meta "$meta")
+    if fm_backend_is_known "$backend"; then
+      printf '%s\n' "$backend"
+      return 0
+    fi
+    echo "error: endpoint '$w' has an unsupported backend identity '${backend:-missing}' (supported: $FM_BACKEND_KNOWN)" >&2
+  else
+    echo "error: endpoint '$w' has no current backend metadata (supported: $FM_BACKEND_KNOWN)" >&2
   fi
-  echo tmux
+  return 1
 }
 
 window_harness() {
@@ -242,9 +246,11 @@ window_label() {
 }
 
 recorded_windows() {
-  local meta w seen=
+  local meta remote_host w seen=
   for meta in "$STATE"/*.meta; do
     [ -e "$meta" ] || continue
+    remote_host=$(fm_meta_get "$meta" remote_host)
+    [ -n "$remote_host" ] && continue
     w=$(fm_backend_target_of_meta "$meta")
     [ -n "$w" ] || continue
     case "$seen" in
@@ -636,7 +642,7 @@ event_wait_or_sleep() {
   local w b session first_backend="" first_session="" rec rc
   local windows=()
   while IFS= read -r w; do
-    b=$(window_backend "$w")
+    b=$(window_backend "$w") || exit 1
     fm_backend_has_push "$b" || continue
     # Secondmate endpoints are supervised via status writes, not pane/agent
     # state (an idle or blocked secondmate agent pane is healthy by design), so
@@ -936,7 +942,8 @@ EOF
     if [ "$kind" = secondmate ] && ! status_is_paused "$last"; then
       continue
     fi
-    tail40=$(fm_backend_capture "$(window_backend "$w")" "$w" 40 "$(window_label "$w")" 2>/dev/null) || continue
+    backend=$(window_backend "$w") || exit 1
+    tail40=$(fm_backend_capture "$backend" "$w" 40 "$(window_label "$w")" 2>/dev/null) || continue
     h=$(printf '%s' "$tail40" | hash_pane)
     key=$(printf '%s' "$w" | tr ':/.' '___')
     hf="$STATE/.hash-$key"

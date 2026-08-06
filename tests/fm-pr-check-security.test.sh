@@ -27,6 +27,60 @@ REAL_STAT=$(command -v stat)
 REAL_CHMOD=$(command -v chmod)
 REAL_BASENAME=$(command -v basename)
 
+write_dead_herdr() {  # <path>
+  cat > "$1" <<'SH'
+#!/usr/bin/env bash
+case "${1:-} ${2:-}" in
+  'status --json') printf '{"client":{"version":"0.7.5","protocol":16},"server":{"running":true}}\n' ;;
+  'session list') printf '{"sessions":[{"name":"firstmate","running":true,"socket_path":"/tmp/fm-pr-security.sock"},{"name":"default","running":true,"socket_path":"/tmp/fm-pr-security-default.sock"}]}\n' ;;
+  'pane get') printf '{"error":{"code":"pane_not_found"}}\n'; exit 1 ;;
+  *) exit 0 ;;
+esac
+SH
+  chmod 0700 "$1"
+}
+
+write_healthy_herdr() {  # <path>
+  cat > "$1" <<'SH'
+#!/usr/bin/env bash
+case "${1:-} ${2:-}" in
+  'status --json') printf '{"client":{"version":"0.7.5","protocol":16},"server":{"running":true}}\n' ;;
+  'session list') printf '{"sessions":[{"name":"firstmate","running":true,"socket_path":"/tmp/fm-pr-security.sock"},{"name":"default","running":true,"socket_path":"/tmp/fm-pr-security-default.sock"}]}\n' ;;
+  'pane get') printf '{"result":{"pane":{"pane_id":"%s","tab_id":"w1:t1","workspace_id":"w1"}}}\n' "${3:-}" ;;
+  'agent get') printf '{"result":{"agent":{"agent_status":"working"}}}\n' ;;
+  'pane read') printf '╭────╮\n│ >  │\n╰────╯\n' ;;
+  *) exit 0 ;;
+esac
+SH
+  chmod 0700 "$1"
+}
+
+# Task records in this suite predate unconditional endpoint identity.
+# Normalize any local task-bound record to a complete Herdr endpoint so teardown
+# tests exercise the current cleanup contract rather than an obsolete default.
+fm_write_meta() {  # <file> <key=value> ...
+  local file=$1 kv backend='' endpoint='' window='' session pane workspace
+  shift
+  : > "$file"
+  for kv in "$@"; do
+    printf '%s\n' "$kv" >> "$file"
+    case "$kv" in
+      backend=*) backend=${kv#backend=} ;;
+      endpoint_task_id=*) endpoint=${kv#endpoint_task_id=} ;;
+      window=*) window=${kv#window=} ;;
+    esac
+  done
+  [ -n "$endpoint" ] || return 0
+  [ -z "$backend" ] || [ "$backend" = herdr ] || return 0
+  [ -n "$backend" ] || printf 'backend=herdr\n' >> "$file"
+  session=${window%%:*}
+  pane=${window#*:}
+  [ "$pane" != "$window" ] || { session=default; pane=w1:p1; printf 'window=default:w1:p1\n' >> "$file"; }
+  case "$pane" in *:*) workspace=${pane%%:*} ;; *) workspace=w1 ;; esac
+  printf 'herdr_session=%s\nherdr_workspace_id=%s\nherdr_tab_id=%s:t1\nherdr_pane_id=%s\n' \
+    "$session" "$workspace" "$workspace" "$pane" >> "$file"
+}
+
 file_mode() {
   if [ "$(uname)" = Darwin ]; then
     stat -f %Lp "$1"
@@ -88,6 +142,7 @@ printf '%s\n' "$*" >> "$FM_TEST_GLAB_LOG"
 printf 'title:\tfixture merge request\nstate:\t%s\nauthor:\tsomeone\n' "${FM_TEST_GLAB_STATE:-opened}"
 SH
   chmod +x "$fakebin/gh" "$fakebin/gh-axi" "$fakebin/glab"
+  write_healthy_herdr "$fakebin/herdr"
   : > "$dir/gh.log"
   : > "$dir/gh-axi.log"
   : > "$dir/glab.log"
@@ -578,11 +633,7 @@ test_valid_recording_and_merge_derivation() {
   fm_pr_poll_artifacts_valid "$dir/home/state" Task_A.1 "$POLL" \
     || fail "safe lifecycle-compatible task ID did not publish an authenticated poll"
   rm -rf "$dir/wt"
-  cat > "$dir/fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-exit 0
-SH
-  chmod 0700 "$dir/fakebin/tmux"
+  write_dead_herdr "$dir/fakebin/herdr"
   touch "$dir/home/state/.last-watcher-beat"
   FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" PATH="$dir/fakebin:$BASE_PATH" \
     "$TEARDOWN" Task_A.1 --force > "$dir/teardown.out" 2> "$dir/teardown.err" \
@@ -604,11 +655,7 @@ SH
     printf 'reserved migration evidence\n' \
       > "$dir/home/state/.pr-check-quarantine/!noncanonical.check.evidence"
     chmod 0600 "$dir/home/state/.pr-check-quarantine/!noncanonical.check.evidence"
-    cat > "$dir/fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-exit 0
-SH
-    chmod 0700 "$dir/fakebin/tmux"
+    write_dead_herdr "$dir/fakebin/herdr"
     touch "$dir/home/state/.last-watcher-beat"
     mkdir "$dir/home/state/$id.check.sh"
     set +e
@@ -644,7 +691,7 @@ SH
 run_watcher_bounded() {
   local home=$1 fakebin=$2 check_interval=${FM_TEST_CHECK_INTERVAL:-0} watch_root=${FM_TEST_WATCH_ROOT:-$ROOT}
   shift 2
-  perl -e 'my $pid=fork; die unless defined $pid; if (!$pid) { exec @ARGV } local $SIG{ALRM}=sub { kill "TERM", $pid; waitpid $pid, 0; exit 124 }; alarm 10; waitpid $pid, 0; alarm 0; exit($? >> 8)' \
+  perl -e 'my $pid=fork; die unless defined $pid; if (!$pid) { exec @ARGV } local $SIG{ALRM}=sub { kill "TERM", $pid; waitpid $pid, 0; exit 124 }; alarm($ENV{FM_TEST_WATCH_TIMEOUT} || 10); waitpid $pid, 0; alarm 0; exit($? >> 8)' \
     env FM_HOME="$home" FM_ROOT_OVERRIDE="$watch_root" FM_CHECK_INTERVAL="$check_interval" FM_CHECK_TIMEOUT=1 \
       FM_POLL=0.02 FM_HEARTBEAT=999999 FM_SIGNAL_GRACE=0 PATH="$fakebin:$BASE_PATH" "$WATCH" "$@"
 }
@@ -814,13 +861,14 @@ SH
     [ "$i" -lt 100 ] || fail "atomic publication did not reach staged check"
 
     set +e
-    FM_TEST_GH_STATE=MERGED run_watcher_bounded "$dir/home" "$dir/fakebin" > "$dir/watch.out" 2> "$dir/watch.err"
+    FM_TEST_GH_STATE=MERGED FM_TEST_WATCH_TIMEOUT=30 \
+      run_watcher_bounded "$dir/home" "$dir/fakebin" > "$dir/watch.out" 2> "$dir/watch.err"
     rc=$?
     set -e
     wait "$direct_pid" || fail "concurrent direct arming failed"
-    [ "$rc" -eq 0 ] || fail "concurrent watcher did not complete"
+    [ "$rc" -eq 0 ] || fail "concurrent watcher did not complete (rc=$rc): $(cat "$dir/watch.err")"
     grep -q '^check: .*: merged$' "$dir/watch.out" || fail "concurrent watcher never saw complete poll"
-    [ ! -s "$dir/watch.err" ] || fail "concurrent watcher observed a partial artifact error"
+    [ ! -s "$dir/watch.err" ] || fail "concurrent watcher observed a partial artifact error: $(cat "$dir/watch.err")"
     if [ -e "$dir/home/state/task-a.check.sh" ]; then
       cmp -s "$POLL" "$dir/home/state/task-a.check.sh" || fail "concurrent publication check bytes changed"
       [ "$(file_mode "$dir/home/state/task-a.check.sh")" = 600 ] || fail "concurrent check mode was not private"
@@ -1690,11 +1738,11 @@ test_complete_single_link_validation() {
   chmod 0600 "$state/.pr-check-quarantine/task-a.check.linked"
   alias="$dir/quarantine.alias"
   ln "$state/.pr-check-quarantine/task-a.check.linked" "$alias"
-  cat > "$fakebin/tmux" <<'SH'
+  cat > "$fakebin/herdr" <<'SH'
 #!/usr/bin/env bash
 exit 0
 SH
-  chmod +x "$fakebin/tmux"
+  chmod +x "$fakebin/herdr"
   touch "$state/.last-watcher-beat"
   set +e
   FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" PATH="$fakebin:$BASE_PATH" \
@@ -1845,11 +1893,7 @@ test_obligation_namespace_compatibility() {
     "project=$dir/project" \
     'kind=ship' \
     'mode=local-only'
-  cat > "$dir/fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-exit 0
-SH
-  chmod 0700 "$dir/fakebin/tmux"
+  write_dead_herdr "$dir/fakebin/herdr"
   touch "$state/.last-watcher-beat"
   set +e
   FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" PATH="$dir/fakebin:$BASE_PATH" \
@@ -2327,19 +2371,26 @@ test_bootstrap_isolates_incomplete_poll_migration() {
   fm_pr_poll_prepare "$state" z-healthy github https://github.com/o/r/pull/13 github.com o/r 13 "$POLL" \
     || fail "could not prepare healthy poll for migration isolation"
   fm_pr_poll_publish_prepared || fail "could not publish healthy poll for migration isolation"
-  fm_write_meta "$state/secondmate-a.meta" \
-    'window=firstmate:fm-secondmate-a' \
-    'kind=secondmate' \
-    'harness=codex' \
-    'backend=tmux'
+  fm_write_secondmate_meta "$state/secondmate-a.meta" "$dir/secondmate-home" \
+    'firstmate:fm-secondmate-a' alpha codex
   printf 'FMX_PAIRING_TOKEN=test-token\n' > "$dir/home/.env"
   mkdir -p "$dir/home/projects"
   fm_fake_exit0 "$fakebin" curl jq
-  cat > "$fakebin/tmux" <<'SH'
+  cat > "$fakebin/herdr" <<'SH'
 #!/usr/bin/env bash
-case " $* " in
-  *' list-windows '*) printf 'fm-secondmate-a\n' ;;
-  *' display-message '*) printf 'node\n' ;;
+case "${1:-} ${2:-}" in
+  'status --json') printf '{"client":{"version":"0.7.5","protocol":16},"server":{"running":true}}\n' ;;
+  'session list') printf '{"sessions":[{"name":"firstmate","running":true,"socket_path":"/tmp/fm-pr-security-isolation.sock"}]}\n' ;;
+  'pane get') printf '{"result":{"pane":{"pane_id":"%s","tab_id":"w1:t1","workspace_id":"w1"}}}\n' "${3:-}" ;;
+  'agent get')
+    if [ -n "${FM_TEST_HERDR_UNREADABLE_ONCE:-}" ] && [ ! -e "$FM_TEST_HERDR_UNREADABLE_ONCE" ]; then
+      : > "$FM_TEST_HERDR_UNREADABLE_ONCE"
+      printf 'not-json\n'
+    else
+      printf '{"result":{"agent":{"agent_status":"working"}}}\n'
+    fi
+    ;;
+  *) exit 0 ;;
 esac
 SH
   cat > "$dir/root/bin/fm-fleet-sync.sh" <<'SH'
@@ -2351,10 +2402,11 @@ SH
 #!/usr/bin/env bash
 : > "${FM_TEST_X_POLL_MARKER:?}"
 SH
-  chmod +x "$fakebin/tmux" "$dir/root/bin/fm-fleet-sync.sh" "$dir/root/bin/fm-x-poll.sh"
+  chmod +x "$fakebin/herdr" "$dir/root/bin/fm-fleet-sync.sh" "$dir/root/bin/fm-x-poll.sh"
 
   set +e
   FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/root" FM_TEST_FLEET_MARKER="$fleet_marker" \
+    FM_TEST_HERDR_UNREADABLE_ONCE="$dir/herdr-agent-probed" \
     PATH="$fakebin:$BASE_PATH" "$ROOT/bin/fm-bootstrap.sh" > "$dir/bootstrap.out" 2> "$dir/bootstrap.err"
   rc=$?
   set -e
@@ -2371,7 +2423,7 @@ SH
     "isolated bootstrap migration did not surface its incomplete status"
   assert_grep 'SECONDMATE_SYNC: secondmate secondmate-a: skipped:' "$dir/bootstrap.out" \
     "incomplete poll migration suppressed secondmate sync"
-  assert_grep 'SECONDMATE_LIVENESS: secondmate secondmate-a: skipped: existing endpoint has ambiguous agent process' "$dir/bootstrap.out" \
+  assert_grep 'SECONDMATE_LIVENESS: secondmate secondmate-a: skipped: endpoint probe unreadable (backend=herdr)' "$dir/bootstrap.out" \
     "incomplete poll migration suppressed persistent supervisor recovery"
   assert_grep 'FMX: X mode on - relay poll armed' "$dir/bootstrap.out" \
     "incomplete poll migration suppressed X mention setup"
@@ -2414,10 +2466,14 @@ SH
     "registered custom check output did not wake the watcher"
   printf '%s\n' '#!/usr/bin/env bash' "printf '%s\\n' custom-replacement-ran" > "$state/b-custom.check.sh"
   chmod 0700 "$state/b-custom.check.sh"
+  write_poll_meta "$state" z-custom-driver https://github.com/o/r/pull/14
+  fm_pr_poll_prepare "$state" z-custom-driver github https://github.com/o/r/pull/14 github.com o/r 14 "$POLL" \
+    || fail "could not prepare the custom-replacement completion poll"
+  fm_pr_poll_publish_prepared || fail "could not publish the custom-replacement completion poll"
   rm -f "$state/.last-check" "$x_poll_marker"
   set +e
   FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/root" FM_TEST_X_POLL_MARKER="$x_poll_marker" \
-    FM_TEST_GH_STATE=OPEN FM_POLL=0 FM_CHECK_INTERVAL=0 FM_SIGNAL_GRACE=0 \
+    FM_TEST_GH_STATE=MERGED FM_POLL=0 FM_CHECK_INTERVAL=0 FM_SIGNAL_GRACE=0 \
     PATH="$fakebin:$BASE_PATH" "$WATCH" > "$dir/watch-custom-replaced.out" 2> "$dir/watch-custom-replaced.err"
   rc=$?
   set -e
@@ -2431,10 +2487,14 @@ SH
     || fail "marker-aware scan did not quarantine the replaced custom check"
   printf '%s\n' '#!/usr/bin/env bash' "printf '%s\\n' forged-x-ran" > "$state/x-watch.check.sh"
   chmod 0700 "$state/x-watch.check.sh"
+  write_poll_meta "$state" z-x-driver https://github.com/o/r/pull/15
+  fm_pr_poll_prepare "$state" z-x-driver github https://github.com/o/r/pull/15 github.com o/r 15 "$POLL" \
+    || fail "could not prepare the X-replacement completion poll"
+  fm_pr_poll_publish_prepared || fail "could not publish the X-replacement completion poll"
   rm -f "$state/.last-check" "$x_poll_marker"
   set +e
   FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/root" FM_TEST_X_POLL_MARKER="$x_poll_marker" \
-    FM_TEST_GH_STATE=OPEN FM_POLL=0 FM_CHECK_INTERVAL=0 FM_SIGNAL_GRACE=0 \
+    FM_TEST_GH_STATE=MERGED FM_POLL=0 FM_CHECK_INTERVAL=0 FM_SIGNAL_GRACE=0 \
     PATH="$fakebin:$BASE_PATH" "$WATCH" > "$dir/watch-replaced.out" 2> "$dir/watch-replaced.err"
   rc=$?
   set -e
@@ -2621,11 +2681,7 @@ test_teardown_removes_poll_artifacts() {
   chmod 0700 "$dir/home/state/.pr-check-quarantine"
   printf 'legacy\n' > "$dir/home/state/.pr-check-quarantine/task-a.check.abc123"
   chmod 0600 "$dir/home/state/.pr-check-quarantine/task-a.check.abc123"
-  cat > "$fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-exit 0
-SH
-  chmod +x "$fakebin/tmux"
+  write_dead_herdr "$fakebin/herdr"
   touch "$dir/home/state/.last-watcher-beat"
 
   FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" PATH="$fakebin:$BASE_PATH" \
@@ -2646,19 +2702,15 @@ SH
     "worktree=$dir/missing-worktree" \
     "project=$dir/project" \
     'kind=ship' \
-    'mode=local-only' \
-    'pr=https://github.com/o/r/pull/18'
+    'mode=local-only'
+  printf 'pr=https://github.com/o/r/pull/18\n' >> "$dir/home/state/task-a.meta"
   seed_canonical_poll "$dir" task-a https://github.com/o/r/pull/18
   fm_pr_poll_snapshot_capture "$dir/home/state" task-a "$POLL" \
     || fail "could not snapshot teardown receipt fixture"
   fm_pr_poll_retirement_publish "$dir/home/state" task-a "$POLL" merged \
     || fail "could not publish teardown receipt fixture"
   rm -f "$dir/home/state/task-a.check.sh"
-  cat > "$fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-exit 0
-SH
-  chmod +x "$fakebin/tmux"
+  write_dead_herdr "$fakebin/herdr"
   touch "$dir/home/state/.last-watcher-beat"
   FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" PATH="$fakebin:$BASE_PATH" \
     "$TEARDOWN" task-a --force > "$dir/teardown.out" 2> "$dir/teardown.err" \
@@ -2681,11 +2733,7 @@ SH
   printf 'noncanonical evidence\n' > "$dir/home/state/.pr-check-quarantine/!noncanonical.check.abc123"
   chmod 0600 "$dir/home/state/.pr-check-quarantine/invalid.check.abc123" \
     "$dir/home/state/.pr-check-quarantine/!noncanonical.check.abc123"
-  cat > "$fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-exit 0
-SH
-  chmod +x "$fakebin/tmux"
+  write_dead_herdr "$fakebin/herdr"
   touch "$dir/home/state/.last-watcher-beat"
 
   FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" PATH="$fakebin:$BASE_PATH" \
@@ -2714,15 +2762,15 @@ SH
     mkdir "$dir/home/state/task-a.$artifact"
     printf 'directory sentinel\n' > "$dir/home/state/task-a.$artifact/sentinel"
     printf 'counterpart sentinel\n' > "$dir/home/state/task-a.$counterpart"
-    cat > "$fakebin/tmux" <<'SH'
+    cat > "$fakebin/herdr" <<'SH'
 #!/usr/bin/env bash
-printf '%s\n' "$*" >> "${FM_FAKE_TMUX_LOG:?}"
+printf '%s\n' "$*" >> "${FM_FAKE_HERDR_LOG:?}"
 exit 0
 SH
-    chmod +x "$fakebin/tmux"
+    chmod +x "$fakebin/herdr"
     touch "$dir/home/state/.last-watcher-beat"
     set +e
-    FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" FM_FAKE_TMUX_LOG="$dir/tmux.log" \
+    FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" FM_FAKE_HERDR_LOG="$dir/herdr.log" \
       PATH="$fakebin:$BASE_PATH" "$TEARDOWN" task-a --force \
       > "$dir/teardown.out" 2> "$dir/teardown.err"
     rc=$?
@@ -2733,8 +2781,7 @@ SH
       || fail "teardown changed the directory-shaped $artifact"
     [ "$(cat "$dir/home/state/task-a.$counterpart")" = 'counterpart sentinel' ] \
       || fail "teardown removed the counterpart before $artifact refusal"
-    grep -F 'kill-window' "$dir/tmux.log" >/dev/null 2>&1 \
-      && fail "teardown killed the endpoint before $artifact refusal"
+    [ ! -s "$dir/herdr.log" ] || fail "teardown touched the endpoint before $artifact refusal"
   done
 
   for kind in regular dangling directory; do
@@ -2754,11 +2801,11 @@ SH
       printf 'external task artifact\n' > "$LINK_TARGET/task-a.check.protected"
       chmod 0640 "$LINK_TARGET/task-a.check.protected"
     fi
-    cat > "$fakebin/tmux" <<'SH'
+    cat > "$fakebin/herdr" <<'SH'
 #!/usr/bin/env bash
 exit 0
 SH
-    chmod +x "$fakebin/tmux"
+    chmod +x "$fakebin/herdr"
     touch "$dir/home/state/.last-watcher-beat"
     set +e
     FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" PATH="$fakebin:$BASE_PATH" \
@@ -2978,7 +3025,7 @@ test_persistent_secondmate_retirement_is_poll_only() {
     "project=$dir/project" \
     'kind=secondmate' \
     'mode=secondmate' \
-    'backend=tmux' \
+    'backend=herdr' \
     "home=$dir/secondmate-home" \
     'pr=https://github.com/o/r/pull/2' \
     'pr_head=0123456789abcdef0123456789abcdef01234567'

@@ -65,9 +65,14 @@ validate_home() { # <id> [allow-absent]
 meta_path() { printf '%s/%s.meta\n' "$CONTROL_STATE" "$1"; }
 
 remote_endpoint_load() {
-  local id=$1 herdr_session
+  local id=$1 herdr_session recorded_backend
   REMOTE_ENDPOINT_ERROR=
   REMOTE_ENDPOINT_META=$(meta_path "$id")
+  recorded_backend=$(fm_backend_of_meta "$REMOTE_ENDPOINT_META")
+  if ! fm_backend_is_known "$recorded_backend"; then
+    REMOTE_ENDPOINT_ERROR="remote secondmate $id endpoint has unsupported backend '$recorded_backend' (supported: $FM_BACKEND_KNOWN)"
+    return 1
+  fi
   if ! fm_backend_validate_task_endpoint "$REMOTE_ENDPOINT_META" "$id" 2>/dev/null; then
     REMOTE_ENDPOINT_ERROR="remote secondmate $id endpoint metadata is invalid; refusing access until it is explicitly migrated"
     return 1

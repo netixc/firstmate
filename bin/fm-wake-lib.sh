@@ -131,7 +131,7 @@ fm_watcher_healthy() {
 #               and exits on its wake, so it runs only BETWEEN turns. Mid-turn a
 #               fresh beacon with no live watcher process is the healthy state.
 #   persistent  every other harness (codex foreground checkpoint, opencode/pi/grok
-#               background arm, tmux, unknown): the watcher runs as a tracked live
+#               background arm, unknown): the watcher runs as a tracked live
 #               process, so a live identity-matched pid is the real liveness signal.
 # FM_SUPERVISION_MODEL overrides detection (tests, and callers that already know
 # the harness). Otherwise bin/fm-harness.sh is the single detection owner, so this

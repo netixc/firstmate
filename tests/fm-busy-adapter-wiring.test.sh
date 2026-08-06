@@ -2,7 +2,7 @@
 # Behavior tests for the per-adapter semantic busy-state wiring that
 # bin/fm-spawn.sh installs under the contract owned by bin/fm-busy-lib.sh.
 #
-# These tests run the REAL fm-spawn against a fake tmux pane and an isolated
+# These tests run the REAL fm-spawn against a fake Herdr pane and an isolated
 # git worktree, then drive the generated adapter artifact (the Pi extension,
 # the OpenCode plugin) in a plain Node host, so the artifact, the real
 # bin/fm-busy-event.sh writer, and the real classifier are exercised together
@@ -21,20 +21,21 @@ TMP_ROOT=$(fm_test_tmproot fm-busy-adapter-wiring)
 make_spawn_fakebin() {
   local dir=$1 fakebin
   fakebin=$(fm_fakebin "$dir")
-  cat > "$fakebin/tmux" <<'SH'
+  cat > "$fakebin/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
-case "$*" in
-  *"#{pane_current_path}"*) printf '%s\n' "${FM_FAKE_PANE_PATH:-}"; exit 0 ;;
+case "${1:-} ${2:-}" in
+  'status --json') printf '{"client":{"version":"0.7.5","protocol":16},"server":{"running":true}}\n' ;;
+  'session list') exit 1 ;;
+  'workspace list') printf '{"result":{"workspaces":[{"workspace_id":"w1","label":"firstmate"}]}}\n' ;;
+  'tab list') printf '{"result":{"tabs":[]}}\n' ;;
+  'tab create') printf '{"result":{"tab":{"tab_id":"w1:t1"},"root_pane":{"pane_id":"w1:p1"}}}\n' ;;
+  'pane get') printf '{"result":{"pane":{"pane_id":"w1:p1","tab_id":"w1:t1","workspace_id":"w1","foreground_cwd":"%s"}}}\n' "${FM_FAKE_PANE_PATH:-}" ;;
+  'pane run'|'pane send-text'|'pane send-keys'|'pane close') ;;
+  *) exit 0 ;;
 esac
-case "${1:-}" in
-  display-message) printf 'firstmate\n'; exit 0 ;;
-  list-windows) exit 0 ;;
-  has-session|new-session|new-window|kill-window|send-keys) exit 0 ;;
-esac
-exit 0
 SH
-  chmod +x "$fakebin/tmux"
+  chmod +x "$fakebin/herdr"
   fm_fake_exit0 "$fakebin" treehouse pi opencode claude codex
   printf '%s\n' "$fakebin"
 }
@@ -65,7 +66,7 @@ run_spawn() {  # <home> <wt> <fakebin> <spawn-args...>
   FM_ROOT_OVERRIDE='' FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
-    FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$wt" TMUX="fake,1,0" \
+    FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$wt" \
     GROK_HOME="$home/grok-home" PATH="$fakebin:$PATH" \
     "$SPAWN" "$@" 2>&1
 }
@@ -78,7 +79,7 @@ EOF
 }
 
 classify() {  # <harness> <id> <state-dir>
-  fm_busy_classify tmux fake:w "$1" "$2" "$3"
+  fm_busy_classify herdr default:w1:p1 "$1" "$2" "$3"
 }
 
 # drive_pi_ext <ext-path> <mode>: load the generated Pi extension in a plain
@@ -322,7 +323,7 @@ test_codex_unverified_until_a_semantic_source_exists() {
   assert_contains "$out" 'spawned '"$id"' harness=codex' "codex spawn did not complete normally"
   out=$(classify codex "$id" "$state")
   [ "$out" = "unknown codex-unverified" ] || fail "codex must classify 'unknown codex-unverified', got '$out'"
-  out=$(fm_busy_classify tmux fake:w codex "$id" "$state" '• Working (6s • esc to interrupt)')
+  out=$(fm_busy_classify herdr default:w1:p1 codex "$id" "$state" '• Working (6s • esc to interrupt)')
   [ "$out" = "unknown codex-unverified" ] || fail "codex must not fall back to footer text, got '$out'"
   pass "codex classifies unknown until a semantic source is verified, never idle or footer-matched"
 }
@@ -335,9 +336,9 @@ test_kimi_and_grok_install_no_unverified_wiring() {
     || fail "standalone kimi must trust no semantic source until it is verified"
   [ -z "$(fm_busy_sources_for_harness grok)" ] \
     || fail "grok must trust no semantic source while its structured path is unverified"
-  out=$(fm_busy_classify tmux fake:w kimi gate-k "$state" '🌒 · thinking')
+  out=$(fm_busy_classify herdr default:w1:p1 kimi gate-k "$state" '🌒 · thinking')
   [ "$out" = "unknown kimi-unverified" ] || fail "kimi must classify unknown, not from its spinner, got '$out'"
-  out=$(fm_busy_classify tmux fake:w grok gate-g "$state" 'Ctrl+c:cancel')
+  out=$(fm_busy_classify herdr default:w1:p1 grok gate-g "$state" 'Ctrl+c:cancel')
   [ "$out" = "busy grok-regex" ] || fail "grok must classify through its isolated fallback, got '$out'"
   pass "kimi and grok install no unverified semantic wiring and classify through their own gates"
 }

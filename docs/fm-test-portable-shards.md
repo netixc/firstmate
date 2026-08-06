@@ -5,35 +5,34 @@
 
 ## Verification inputs
 
-The current candidate timings came from the 2026-07-29 concurrent proof recorded in [fm-test-isolation-proof.md](fm-test-isolation-proof.md).
-The proof ran 24 candidates with four workers and no failures.
+The current candidate timings came from the 2026-08-06 concurrent proof recorded in [fm-test-isolation-proof.md](fm-test-isolation-proof.md).
+The proof ran 23 candidates with four workers and no failures.
 
 | duration_ms | script |
 |---:|---|
-| 52939 | `tests/fm-x-mode.test.sh` |
-| 48294 | `tests/fm-backend-herdr.test.sh` |
-| 46788 | `tests/fm-arm-pretool-check.test.sh` |
-| 34207 | `tests/fm-cd-pretool-check.test.sh` |
-| 30771 | `tests/fm-decision-hold-lifecycle.test.sh` |
-| 25365 | `tests/fm-crew-state.test.sh` |
-| 15674 | `tests/fm-test-run.test.sh` |
-| 15422 | `tests/fm-herdr-lab.test.sh` |
-| 9065 | `tests/fm-composer-ghost.test.sh` |
-| 8564 | `tests/fm-pr-merge.test.sh` |
-| 6251 | `tests/fm-grok-harness.test.sh` |
-| 5644 | `tests/fm-send-popup-settle.test.sh` |
-| 5237 | `tests/fm-lint.test.sh` |
-| 4816 | `tests/fm-tmux-submit-busy.test.sh` |
-| 2945 | `tests/fm-pi-primary-types.test.sh` |
-| 2911 | `tests/fm-send-settle.test.sh` |
-| 2875 | `tests/fm-review-diff.test.sh` |
-| 2747 | `tests/fm-send-strict.test.sh` |
-| 2224 | `tests/fm-brief.test.sh` |
-| 855 | `tests/fm-spawn-batch.test.sh` |
-| 703 | `tests/fm-supervision-instructions.test.sh` |
-| 581 | `tests/fm-ensure-agents-md.test.sh` |
-| 248 | `tests/fm-transition-lib.test.sh` |
-| 64 | `tests/fm-composer-lib.test.sh` |
+| 74427 | `tests/fm-x-mode.test.sh` |
+| 71456 | `tests/fm-backend-herdr.test.sh` |
+| 52335 | `tests/fm-arm-pretool-check.test.sh` |
+| 37959 | `tests/fm-decision-hold-lifecycle.test.sh` |
+| 37646 | `tests/fm-cd-pretool-check.test.sh` |
+| 30731 | `tests/fm-crew-state.test.sh` |
+| 29957 | `tests/fm-test-run.test.sh` |
+| 13588 | `tests/fm-herdr-lab.test.sh` |
+| 12903 | `tests/fm-pr-merge.test.sh` |
+| 8589 | `tests/fm-grok-harness.test.sh` |
+| 5960 | `tests/fm-lint.test.sh` |
+| 5642 | `tests/fm-send-popup-settle.test.sh` |
+| 5632 | `tests/fm-review-diff.test.sh` |
+| 4119 | `tests/fm-send-settle.test.sh` |
+| 2571 | `tests/fm-send-strict.test.sh` |
+| 2355 | `tests/fm-brief.test.sh` |
+| 1659 | `tests/fm-spawn-batch.test.sh` |
+| 690 | `tests/fm-ensure-agents-md.test.sh` |
+| 666 | `tests/fm-supervision-instructions.test.sh` |
+| 188 | `tests/fm-transition-lib.test.sh` |
+| 138 | `tests/fm-composer-ghost.test.sh` |
+| 127 | `tests/fm-composer-lib.test.sh` |
+| 50 | `tests/fm-pi-primary-types.test.sh` |
 
 ## Parallel lanes
 
@@ -41,16 +40,16 @@ The two parallel lanes use longest-processing-time assignment from those measure
 
 | Lane | Script count | Estimated duration |
 |---|---:|---:|
-| `portable-parallel-1` | 11 | 162436 ms (~162.4 s) |
-| `portable-parallel-2` | 13 | 162754 ms (~162.8 s) |
-| imbalance | | 318 ms |
+| `portable-parallel-1` | 11 | 202901 ms (~202.9 s) |
+| `portable-parallel-2` | 12 | 196487 ms (~196.5 s) |
+| imbalance | | 6414 ms |
 
 `bin/fm-test-run.sh` contains the exact ordered memberships in `list_portable_parallel_1` and `list_portable_parallel_2`.
 
 ## Portable serial remainder
 
 `portable-serial` includes every `tests/*.test.sh` that is neither proven-isolated nor `real-herdr-gated`.
-It keeps watcher, lock, AFK, real tmux, daemon, secondmate lifecycle, bootstrap, live-harness opt-in, GUI-backend, and other unproven work serial.
+It keeps watcher, lock, AFK, daemon, secondmate lifecycle, bootstrap, live-harness opt-in, GUI-backend, and other unproven work serial.
 Membership is derived rather than enumerated, so a newly added test lands here by default.
 
 ## Portable serial CI shards

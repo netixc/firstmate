@@ -6,6 +6,22 @@ set -u
 # shellcheck disable=SC1091
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
+# Live fixture records use the current Herdr metadata contract unless a case
+# supplies another backend explicitly.
+fm_write_meta_base() {
+  local file=$1 kv
+  shift
+  : > "$file"
+  for kv in "$@"; do printf '%s\n' "$kv" >> "$file"; done
+}
+fm_write_meta() {
+  local file=$1 kv has_backend=0
+  shift
+  for kv in "$@"; do case "$kv" in backend=*) has_backend=1 ;; esac; done
+  fm_write_meta_base "$file" "$@"
+  [ "$has_backend" = 1 ] || printf 'backend=herdr\n' >> "$file"
+}
+
 SNAPSHOT="$ROOT/bin/fm-fleet-snapshot.sh"
 VIEW="$ROOT/bin/fm-fleet-view.sh"
 TMP_ROOT=$(fm_test_tmproot fm-fleet-snapshot)
@@ -19,40 +35,18 @@ make_fakebin() {  # <dir>
 #!/usr/bin/env bash
 exit 0
 SH
-  cat > "$fb/tmux" <<'SH'
+  cat > "$fb/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
-target=""
-prev=""
-for arg in "$@"; do
-  if [ "$prev" = "-t" ]; then target=$arg; fi
-  prev=$arg
-done
-case "${1:-}" in
-  list-windows)
-    sed -n 's/^window=[^:]*://p' "${FM_HOME:?}"/state/*.meta
-    ;;
-  display-message)
-    case "$*" in
-      *pane_current_command*)
-        case "$target" in
-          *dead-secondmate*) printf 'zsh\n' ;;
-          *) printf 'codex\n' ;;
-        esac
-        ;;
-      *) printf '%%1\n' ;;
-    esac
-    ;;
-  capture-pane)
-    case "$target" in
-      *ship-task*|*active-secondmate*) printf 'work in progress\nesc to interrupt\n' ;;
-      *) printf 'all quiet\n> \n' ;;
-    esac
-    ;;
+case "${1:-} ${2:-}" in
+  'status --json') printf '{"client":{"version":"0.7.5","protocol":16},"server":{"running":true}}\n' ;;
+  'pane get') printf '{"result":{"pane":{"pane_id":"%s","foreground_cwd":"/tmp"}}}\n' "${3:-}" ;;
+  'pane read') case "$*" in *ship-task*|*active-secondmate*) printf 'work in progress\nesc to interrupt\n' ;; *) printf 'all quiet\n> \n' ;; esac ;;
+  'agent get') case "$*" in *dead-secondmate*) printf '{"error":{"code":"agent_not_found"}}\n'; exit 1 ;; *) printf '{"result":{"agent":{"agent_status":"idle"}}}\n' ;; esac ;;
+  *) exit 0 ;;
 esac
-exit 0
 SH
-  chmod +x "$fb/no-mistakes" "$fb/tmux"
+  chmod +x "$fb/no-mistakes" "$fb/herdr"
   printf '%s\n' "$fb"
 }
 
@@ -122,10 +116,10 @@ EOF
     "home=$home/secondmate-home" \
     "projects=alpha, beta, gamma, "
   printf 'working: watching delegated scope\n' > "$home/state/secondmate-task.status"
-  fm_write_meta "$home/state/cmux-task.meta" \
-    "backend=cmux" \
+  fm_write_meta "$home/state/orca-task.meta" \
+    "backend=orca" \
     "window=workspace:surface" \
-    "worktree=$home/projects/missing-cmux" \
+    "worktree=$home/projects/missing-orca" \
     "project=alpha" \
     "harness=codex" \
     "kind=ship" \
@@ -159,7 +153,7 @@ test_fixture_snapshot_json() {
   out=$(PATH="$fakebin:$PATH" FM_HOME="$home" "$SNAPSHOT" --json)
   printf '%s' "$out" | jq -e . >/dev/null || fail "snapshot must be valid JSON"
   ids=$(printf '%s' "$out" | jq -r '.tasks | map(.id) | join(",")')
-  [ "$ids" = "cmux-task,scout-task,secondmate-task,ship-task" ] \
+  [ "$ids" = "orca-task,scout-task,secondmate-task,ship-task" ] \
     || fail "task ordering must be stable by id, got $ids"
   printf '%s' "$out" | jq -e '
     .tasks[] | select(.id == "ship-task")
@@ -182,11 +176,11 @@ test_fixture_snapshot_json() {
       and (.actions.watch | contains("do not routinely fm-peek"))
   ' >/dev/null || fail "secondmate return-channel guidance missing"
   printf '%s' "$out" | jq -e '
-    .tasks[] | select(.id == "cmux-task")
-    | .backend == "cmux"
+    .tasks[] | select(.id == "orca-task")
+    | .backend == "orca"
       and .paths.worktree.present == false
       and .current_state.state == "unknown"
-  ' >/dev/null || fail "cmux missing-file row missing"
+  ' >/dev/null || fail "Orca missing-file row missing"
   printf '%s' "$out" | jq -e '
     [.backlog.records[] | select(.state == "queued")] | length == 2
   ' >/dev/null || fail "queued canonical and unstructured backlog records missing"
@@ -551,7 +545,7 @@ EOF
       and .paths.report.present == true
   ' >/dev/null || fail "bold task did not join to override-backed backlog and report"
   view=$(PATH="$fakebin:$PATH" FM_HOME="$home" FM_DATA_OVERRIDE="$data" FM_PROJECTS_OVERRIDE="$projects" "$VIEW")
-  assert_contains "$view" "| bold-task | done / status-log | scout | alpha | tmux | present | $data/bold-task/report.md" \
+  assert_contains "$view" "| bold-task | done / status-log | scout | alpha | herdr | present | $data/bold-task/report.md" \
     "view should render bold in-flight row from snapshot"
   assert_contains "$view" "| blocked-reason | Blocked Reason | beta | ship | queued-comma - waits on queued-comma | - |" \
     "view should render blocked reason without title metadata"
@@ -568,7 +562,7 @@ test_view_renders_snapshot() {
   write_fixture "$home"
   fakebin=$(make_fakebin "$home")
   view=$(PATH="$fakebin:$PATH" FM_HOME="$home" "$VIEW")
-  assert_contains "$view" "| ship-task | working / pane | ship | alpha | tmux | present | https://github.com/kunchenguid/firstmate/pull/9" \
+  assert_contains "$view" "| ship-task | working / pane | ship | alpha | herdr | present | https://github.com/kunchenguid/firstmate/pull/9" \
     "view should render ship row from snapshot"
   assert_contains "$view" "| queued-task | Queued Task | alpha | ship | ship-task | -" \
     "view should render queued backlog row"
@@ -576,7 +570,7 @@ test_view_renders_snapshot() {
     "view should render done backlog row"
   assert_contains "$view" "bin/fm-send.sh fm-secondmate-task" \
     "view should show secondmate send guidance"
-  assert_contains "$view" "| secondmate-task | working / status-log | secondmate | $home/secondmate-home | tmux | present / alive |" \
+  assert_contains "$view" "| secondmate-task | working / status-log | secondmate | $home/secondmate-home | herdr | present / alive |" \
     "view should show secondmate endpoint agent liveness"
   assert_not_contains "$view" "fm-peek.sh fm-secondmate-task" \
     "view must not tell firstmate to routinely peek secondmates"
@@ -586,20 +580,14 @@ test_view_renders_snapshot() {
 test_view_renders_dead_secondmate_agent_status() {
   local home fakebin view
   home=$(make_home dead-secondmate)
-  fm_write_meta "$home/state/dead-secondmate.meta" \
-    "window=firstmate:fm-dead-secondmate" \
-    "project=$home/secondmate-home" \
-    "harness=codex" \
-    "kind=secondmate" \
-    "mode=secondmate" \
-    "home=$home/secondmate-home" \
-    "projects=alpha, beta"
+  fm_write_secondmate_meta "$home/state/dead-secondmate.meta" \
+    "$home/secondmate-home" "firstmate:fm-dead-secondmate" "alpha, beta" codex
   printf 'working: watching delegated scope\n' > "$home/state/dead-secondmate.status"
   fakebin=$(make_fakebin "$home")
   view=$(PATH="$fakebin:$PATH" FM_HOME="$home" "$VIEW")
-  assert_contains "$view" "| dead-secondmate | unknown / none | secondmate | $home/secondmate-home | tmux | present / dead |" \
+  assert_contains "$view" "| dead-secondmate | unknown / none | secondmate | $home/secondmate-home | herdr | present / dead |" \
     "view should distinguish a present secondmate endpoint from a dead agent"
-  assert_contains "$view" "| dead-secondmate | unknown / none | secondmate | $home/secondmate-home | tmux | present / dead | - | $home/secondmate-home (absent) |" \
+  assert_contains "$view" "| dead-secondmate | unknown / none | secondmate | $home/secondmate-home | herdr | present / dead | - | $home/secondmate-home (absent) |" \
     "view should show a recorded missing secondmate home path"
   pass "fleet view renders secondmate agent liveness"
 }

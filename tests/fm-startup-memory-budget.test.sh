@@ -55,17 +55,8 @@ case "${1:-}:${2:-}" in
   mv:--help) printf '%s\n' 'usage: tasks-axi mv <id> [<id>...]' ;;
 esac
 SH
-  cat > "$fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-[ -z "${FM_FAKE_TMUX_LOG:-}" ] || printf '%s\n' "$*" >> "$FM_FAKE_TMUX_LOG"
-case "$*" in
-  *display-message*'#{pane_current_command}'*) printf '%s\n' codex ;;
-  *display-message*'#{pane_id}'*) printf '%s\n' '%1' ;;
-  *display-message*'#{cursor_y}'*) printf '%s\n' 0 ;;
-  *capture-pane*) printf '\n' ;;
-esac
-exit 0
-SH
+  fm_fake_herdr_terminal "$fakebin"
+  ln -s "$(command -v jq)" "$fakebin/jq"
   chmod +x "$fakebin"/*
   printf '%s\n' "$fakebin"
 }
@@ -88,7 +79,7 @@ new_bootstrap_world() {
 
 run_bootstrap() {
   local root=$1 home=$2 fakebin=$3
-  PATH="$fakebin:$BASE_PATH" FM_BACKEND=tmux FM_HOME="$home" FM_ROOT_OVERRIDE="$root" \
+  PATH="$fakebin:$BASE_PATH" FM_BACKEND=herdr FM_HOME="$home" FM_ROOT_OVERRIDE="$root" \
     "$BOOTSTRAP"
 }
 
@@ -220,10 +211,18 @@ new_propagation_world() {
   printf '%s\n' sm > "$sm/.fm-secondmate-home"
   mkdir -p "$sm/config" "$sm/data" "$sm/state" "$sm/projects"
   {
+    printf 'backend=herdr\n'
     printf 'window=firstmate:fm-sm\n'
+    printf 'endpoint_task_id=sm\n'
+    printf 'worktree=%s\n' "$sm"
+    printf 'project=%s\n' "$sm"
     printf 'kind=secondmate\n'
     printf 'harness=codex\n'
     printf 'home=%s\n' "$sm"
+    printf 'herdr_session=firstmate\n'
+    printf 'herdr_workspace_id=w1\n'
+    printf 'herdr_tab_id=w1:t1\n'
+    printf 'herdr_pane_id=fm-sm\n'
   } > "$home/state/sm.meta"
   printf '%s|%s|%s\n' "$root" "$home" "$sm"
 }
@@ -243,7 +242,7 @@ latest_reread_instruction() {
 run_config_push() {
   local root=$1 home=$2 fakebin=$3 log=$4
   PATH="$fakebin:$BASE_PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$root" FM_SEND_SETTLE=0 \
-    FM_FAKE_TMUX_LOG="$log" "$CONFIG_PUSH"
+    FM_FAKE_HERDR_LOG="$log" FM_FAKE_HERDR_CAPTURE="$log.capture" FM_BACKEND_HERDR_SUBMIT_MIN_SLEEP=0 "$CONFIG_PUSH"
 }
 
 test_primary_budget_converges_with_exact_reread_and_safe_failures() {
@@ -255,7 +254,8 @@ test_primary_budget_converges_with_exact_reread_and_safe_failures() {
   home=${rec%%|*}
   sm=${rec#*|}
   fakebin=$(make_fake_toolchain "$world")
-  log="$world/tmux.log"
+  log="$world/herdr.log"
+  printf '╭────╮\n│ >  │\n╰────╯\n' > "$log.capture"
 
   printf '321\n' > "$home/config/startup-memory-budget"
   out=$(run_config_push "$root" "$home" "$fakebin" "$log")

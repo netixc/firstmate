@@ -21,8 +21,7 @@ SSH_COUNT="$TMP_ROOT/ssh.count"
 DOCTOR_LOG="$TMP_ROOT/doctor.log"
 HERDR_STATE="$TMP_ROOT/remote-herdr.state"
 HERDR_LOG="$TMP_ROOT/remote-herdr.log"
-TMUX_LOG="$TMP_ROOT/remote-tmux.log"
-TMUX_STATE="$TMP_ROOT/remote-tmux.state"
+STALE_RUNTIME_STATE="$TMP_ROOT/stale-runtime.state"
 CLAIMS="$TMP_ROOT/claims"
 mkdir -p "$PARENT/data" "$PARENT/state" "$PARENT/config" "$PARENT/projects" "$REMOTE_ROOT" "$CLAIMS"
 cleanup() {
@@ -50,49 +49,6 @@ trap cleanup EXIT
   cd "$ROOT" || exit
   tar --exclude=.git --exclude=.no-mistakes --exclude=data --exclude=state --exclude=config -cf - .
 ) | (cd "$REMOTE_ROOT" && tar -xf -)
-cat > "$REMOTE_ROOT/bin/tmux" <<SH
-#!/usr/bin/env bash
-set -u
-log='$TMUX_LOG'
-state='$TMUX_STATE'
-fail_send='$TMP_ROOT/tmux-send-fail'
-printf '%s\n' "\$*" >> "\$log"
-case "\${1:-}" in
-  has-session|new-session|set-window-option) exit 0 ;;
-  list-windows)
-    [ -f "\$state" ] || exit 0
-    name=\$(cut -d'|' -f1 "\$state")
-    case "\$*" in *'#{session_name}:#{window_name}'*) printf 'firstmate:%s\n' "\$name" ;; *) printf '%s\n' "\$name" ;; esac
-    exit 0
-    ;;
-  new-window)
-    name=; cwd=
-    while [ "\$#" -gt 0 ]; do
-      case "\$1" in -n) shift; name=\$1 ;; -c) shift; cwd=\$1 ;; esac
-      shift
-    done
-    printf '%s|%s\n' "\$name" "\$cwd" > "\$state"
-    printf '@1\n'
-    exit 0
-    ;;
-  display-message)
-    case "\$*" in
-      *'#{pane_current_path}'*) cut -d'|' -f2- "\$state" ;;
-      *'#{pane_current_command}'*) printf 'codex\n' ;;
-      *'#{cursor_y}'*) printf '0\n' ;;
-      *'#S'*) printf 'firstmate\n' ;;
-      *) printf '%%1\n' ;;
-    esac
-    exit 0
-    ;;
-  capture-pane) printf '\n'; exit 0 ;;
-  send-keys) [ ! -f "\$fail_send" ] || exit 1; exit 0 ;;
-  kill-window) rm -f -- "\$state"; exit 0 ;;
-  list-panes) printf 'codex\n'; exit 0 ;;
-esac
-exit 0
-SH
-chmod +x "$REMOTE_ROOT/bin/tmux"
 install_remote_herdr_fixture "$REMOTE_ROOT" "$HERDR_STATE" "$HERDR_LOG" \
   "$TMP_ROOT/herdr-send-fail" "$TMP_ROOT/herdr.sock"
 git -C "$REMOTE_ROOT" init -q -b main
@@ -121,7 +77,7 @@ cat > "$PARENT/data/projects.md" <<EOF
 - alpha [direct-PR] - alpha project (added 2026-08-02)
 EOF
 printf 'codex\n' > "$PARENT/config/secondmate-harness"
-printf 'tmux\n' > "$PARENT/config/backend"
+printf 'herdr\n' > "$PARENT/config/backend"
 printf 'primary harness defaults\n' > "$PARENT/config/crew-harness"
 
 cat > "$FAKEBIN/fake-ssh" <<'SH'
@@ -209,7 +165,7 @@ case "${FM_FAKE_SSH_MODE:-normal}:$command_name:$command_rel" in
   launch-nonherdr-route:fm-remote-secondmate-control.sh:*)
     [ "$_command_action" = launch ] || exit 93
     printf 'schema=fm-remote-secondmate-control.v1\n'
-    printf 'backend=tmux\n'
+    printf 'backend=stale-runtime\n'
     printf 'target=firstmate:fm-ios\n'
     printf 'harness=codex\n'
     exit 0
@@ -521,7 +477,7 @@ publish_healthy_watcher_identity "$PARENT/state" "$PARENT" "$ROOT/bin/fm-watch.s
 [ "$(remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh state ios)" = alive ] \
   || fail "remote endpoint was not projected alive from its own host"
 # Herdr reports a native agent state, so the delivery observation resolves
-# without the rendered-output fallback a tmux endpoint needs.
+# without the rendered-output fallback an unsupported endpoint might have needed.
 [ "$(remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh observe ios)" = idle ] \
   || fail "remote endpoint delivery observation did not execute on its own host"
 pass "remote spawn launches on the remote-local backend and records a host-qualified route"
@@ -570,7 +526,7 @@ FM_FAKE_SSH_MODE=launch-nonherdr-route remote_env "$ROOT/bin/fm-spawn.sh" ios --
 nonherdr_parent_rc=$?
 set -e
 [ "$nonherdr_parent_rc" -ne 0 ] || fail "parent accepted a non-herdr remote launch route"
-assert_grep "remote launch returned backend 'tmux', expected herdr" "$TMP_ROOT/spawn-nonherdr-route.out" \
+assert_grep "remote launch returned backend 'stale-runtime', expected herdr" "$TMP_ROOT/spawn-nonherdr-route.out" \
   "parent refusal did not name the returned remote backend"
 cmp -s "$TMP_ROOT/parent-ios-before-nonherdr.meta" "$PARENT/state/ios.meta" \
   || fail "parent rewrote its endpoint metadata after a non-herdr route refusal"
@@ -596,25 +552,25 @@ worktree=$REMOTE_HOME
 project=$REMOTE_ROOT
 harness=codex
 kind=secondmate
-backend=tmux
+backend=stale-runtime
 EOF
 cp "$remote_route_meta" "$TMP_ROOT/remote-ios-legacy-before-refusal.meta"
-printf 'fm-ios|%s\n' "$REMOTE_HOME" > "$TMUX_STATE"
+printf 'fm-ios|%s\n' "$REMOTE_HOME" > "$STALE_RUNTIME_STATE"
 set +e
 remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh launch ios codex - - herdr \
-  > "$TMP_ROOT/legacy-alive-refusal.out" 2>&1
-legacy_alive_rc=$?
+  > "$TMP_ROOT/stale-alive-refusal.out" 2>&1
+stale_alive_rc=$?
 set -e
-[ "$legacy_alive_rc" -ne 0 ] || fail "remote control reused an alive legacy tmux endpoint"
-assert_grep "endpoint is recorded on backend 'tmux', expected 'herdr'" "$TMP_ROOT/legacy-alive-refusal.out" \
-  "remote refusal did not name the endpoint's recorded backend"
+[ "$stale_alive_rc" -ne 0 ] || fail "remote control reused an alive unsupported endpoint"
+assert_grep "unsupported backend 'stale-runtime' (supported: herdr orca)" "$TMP_ROOT/stale-alive-refusal.out" \
+  "remote refusal did not reject the stale backend with the current supported choices"
 cmp -s "$TMP_ROOT/remote-ios-legacy-before-refusal.meta" "$remote_route_meta" \
-  || fail "remote refusal changed the legacy endpoint metadata"
-assert_present "$TMUX_STATE" "remote refusal killed the alive legacy endpoint"
+  || fail "remote refusal changed the unsupported endpoint metadata"
+assert_present "$STALE_RUNTIME_STATE" "remote refusal killed the alive unsupported endpoint"
 cmp -s "$TMP_ROOT/registry-before-nonherdr.md" "$PARENT/data/secondmates.md" \
   || fail "remote legacy refusal removed or changed the registry route"
 mv -f "$TMP_ROOT/remote-ios-before-legacy.meta" "$remote_route_meta"
-rm -f "$TMUX_STATE"
+rm -f "$STALE_RUNTIME_STATE"
 pass "non-herdr remote endpoints are refused without changing either route"
 
 rm -f "$TMP_ROOT/inherit.entered" "$TMP_ROOT/inherit.release" "$TMP_ROOT/inherit.payload"
@@ -857,28 +813,28 @@ worktree=$REMOTE_HOME
 project=$REMOTE_ROOT
 harness=codex
 kind=secondmate
-backend=tmux
+backend=stale-runtime
 EOF
 cp "$remote_route_meta" "$TMP_ROOT/remote-ios-liveness-legacy.meta"
-printf 'fm-ios|%s\n' "$REMOTE_HOME" > "$TMUX_STATE"
-tmux_state_before=$(cat "$TMUX_STATE")
+printf 'fm-ios|%s\n' "$REMOTE_HOME" > "$STALE_RUNTIME_STATE"
+stale_state_before=$(cat "$STALE_RUNTIME_STATE")
 launches_before_legacy=$(grep -c '^tab create' "$HERDR_LOG" || true)
 BOOT_LEGACY=$(remote_env "$ROOT/bin/fm-bootstrap.sh")
 assert_contains "$BOOT_LEGACY" "SECONDMATE_LIVENESS: secondmate ios: skipped: remote endpoint state is unverified on remote-mac" \
   "liveness accepted an alive legacy remote backend"
 cmp -s "$TMP_ROOT/remote-ios-liveness-legacy.meta" "$remote_route_meta" \
-  || fail "liveness rewrote the alive legacy endpoint metadata"
+  || fail "liveness rewrote the alive unsupported endpoint metadata"
 cmp -s "$TMP_ROOT/parent-ios-before-liveness-legacy.meta" "$PARENT/state/ios.meta" \
-  || fail "liveness rewrote the parent route metadata for an alive legacy endpoint"
+  || fail "liveness rewrote the parent route metadata for an alive unsupported endpoint"
 cmp -s "$TMP_ROOT/registry-before-liveness-legacy.md" "$PARENT/data/secondmates.md" \
-  || fail "liveness changed the registry route for an alive legacy endpoint"
-[ "$(cat "$TMUX_STATE")" = "$tmux_state_before" ] \
-  || fail "liveness changed or killed the alive legacy endpoint"
+  || fail "liveness changed the registry route for an alive unsupported endpoint"
+[ "$(cat "$STALE_RUNTIME_STATE")" = "$stale_state_before" ] \
+  || fail "liveness changed or killed the alive unsupported endpoint"
 launches_after_legacy=$(grep -c '^tab create' "$HERDR_LOG" || true)
 [ "$launches_before_legacy" -eq "$launches_after_legacy" ] \
-  || fail "liveness relaunched an alive legacy endpoint"
+  || fail "liveness relaunched an alive unsupported endpoint"
 mv -f "$TMP_ROOT/remote-ios-before-liveness-legacy.meta" "$remote_route_meta"
-rm -f "$TMUX_STATE"
+rm -f "$STALE_RUNTIME_STATE"
 pass "startup reports alive legacy backends without changing their routes"
 
 # Host loss maps to unknown/unavailable and never creates a local replacement.
@@ -968,7 +924,7 @@ while [ ! -f "$TMP_ROOT/handoff.entered" ]; do
   [ "$handoff_wait" -le 250 ] || fail "handoff lock holder never acquired the route lock"
   sleep 0.02
 done
-rm -f "$TMUX_STATE" "$TMP_ROOT/launch.entered" "$TMP_ROOT/launch.release"
+rm -f "$STALE_RUNTIME_STATE" "$TMP_ROOT/launch.entered" "$TMP_ROOT/launch.release"
 FM_FAKE_SSH_MODE=launch-block remote_env "$ROOT/bin/fm-spawn.sh" ios --secondmate \
   > "$TMP_ROOT/spawn-retirement.out" 2>&1 &
 spawn_retirement_pid=$!

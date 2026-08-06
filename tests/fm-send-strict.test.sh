@@ -1,199 +1,114 @@
 #!/usr/bin/env bash
-# fm-send strict target resolution.
-#
-# A send that cannot be tied to a recorded task/lane or to an explicit
-# well-formed backend target must fail loudly. These tests pin the historical
-# silent-fallback failures: missing FM_HOME, unresolved selectors, prefixless
-# herdr pane ids, dead explicit endpoints, and the healthy exact/fm-id paths.
+# Strict selector and backend routing tests for fm-send.
 set -u
 
 # shellcheck source=tests/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-SEND="$ROOT/bin/fm-send.sh"
 TMP_ROOT=$(fm_test_tmproot fm-send-strict)
+SEND="$ROOT/bin/fm-send.sh"
 
-make_stubs() {  # <dir> -> echoes fakebin dir
-  local dir=$1 fb="$1/fakebin"
-  mkdir -p "$fb"
-  cat > "$fb/tmux" <<'SH'
-#!/usr/bin/env bash
-set -u
-case "${1:-}" in
-  send-keys)
-    shift
-    literal=0
-    target=
-    while [ $# -gt 0 ]; do
-      case "$1" in
-        -t) target=$2; shift 2 ;;
-        -l) literal=1; shift ;;
-        *) break ;;
-      esac
-    done
-    printf 'send-keys target=%s literal=%s arg=%s\n' "$target" "$literal" "${1:-}" >> "$FM_TMUX_LOG"
-    exit 0 ;;
-  display-message)
-    target=
-    cursor=0
-    while [ $# -gt 0 ]; do
-      case "$1" in
-        -t) target=$2; shift 2 ;;
-        *cursor_y*) cursor=1; shift ;;
-        *) shift ;;
-      esac
-    done
-    if [ -n "${FM_FAKE_TMUX_DEAD_TARGET:-}" ] && [ "$target" = "$FM_FAKE_TMUX_DEAD_TARGET" ]; then
-      exit 1
-    fi
-    [ "$cursor" = 1 ] && { printf '1\n'; exit 0; }
-    printf '%%1\n'
-    exit 0 ;;
-  capture-pane)
-    printf '╭────╮\n│    │\n╰────╯\n'
-    exit 0 ;;
-  list-windows)
-    printf 'foreign:%s\n' "${FM_FAKE_TMUX_WINDOW:-fm-lost}"
-    exit 0 ;;
-esac
-exit 0
-SH
-  chmod +x "$fb/tmux"
-  cat > "$fb/herdr" <<'SH'
-#!/usr/bin/env bash
-set -u
-printf '%s\n' "$*" >> "$FM_HERDR_LOG"
-case "${1:-} ${2:-}" in
-  "status --json") printf '{"client":{"version":"0.7.5","protocol":16},"server":{"running":true}}\n' ;;
-  "pane get") printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "${3:-}" ;;
-  "pane send-keys") : ;;
-esac
-SH
-  chmod +x "$fb/herdr"
-  cat > "$fb/sleep" <<'SH'
-#!/usr/bin/env bash
-exit 0
-SH
-  chmod +x "$fb/sleep"
-  printf '%s\n' "$fb"
+make_world() {  # <name>
+  local dir="$TMP_ROOT/$1" home fb
+  home="$dir/home"
+  mkdir -p "$home/state" "$home/config"
+  fb=$(fm_fakebin "$dir")
+  fm_fake_herdr_terminal "$fb"
+  printf '╭────╮\n│ >  │\n╰────╯\n' > "$dir/capture"
+  printf '%s\n%s\n%s\n' "$dir" "$home" "$fb"
 }
 
-setup_home() {  # <name> -> echoes home dir
-  local home="$TMP_ROOT/$1-$RANDOM"
-  mkdir -p "$home/state"
-  printf '%s\n' "$home"
+write_herdr_meta() {  # <home> <id> [backend]
+  local home=$1 id=$2 backend=${3:-herdr}
+  cat > "$home/state/$id.meta" <<EOF_META
+backend=$backend
+endpoint_task_id=$id
+window=default:w1:p1
+worktree=/tmp/$id-worktree
+project=/tmp/$id-project
+harness=claude
+herdr_session=default
+herdr_workspace_id=w1
+herdr_tab_id=w1:t1
+herdr_pane_id=w1:p1
+EOF_META
 }
 
-test_exact_lane_id_send_still_works() {
-  local dir fb home err log rc got
-  dir="$TMP_ROOT/exact"; mkdir -p "$dir"
-  fb=$(make_stubs "$dir"); home=$(setup_home exact); err="$dir/send.err"; log="$dir/tmux.log"; : > "$log"
-  fm_write_meta "$home/state/mpf-lane-m8.meta" "window=sess:fm-mpf-lane-m8" "kind=ship"
-
-  PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" FM_TMUX_LOG="$log" FM_SEND_SETTLE=0 \
-    "$SEND" mpf-lane-m8 "lost dispatch" >/dev/null 2>"$err"; rc=$?
-  expect_code 0 "$rc" "exact task id send should succeed when metadata exists"
-  got=$(cat "$log")
-  assert_contains "$got" "target=sess:fm-mpf-lane-m8 literal=1 arg=lost dispatch" "exact id should type literal text to the meta target"
-  assert_contains "$got" "target=sess:fm-mpf-lane-m8 literal=0 arg=Enter" "exact id should submit with Enter"
-  pass "fm-send strict: exact task/lane ids resolve through home metadata"
+test_task_selector_routes_exact_herdr_endpoint() {
+  local values dir home fb log
+  values=$(make_world exact)
+  dir=$(printf '%s\n' "$values" | sed -n '1p')
+  home=$(printf '%s\n' "$values" | sed -n '2p')
+  fb=$(printf '%s\n' "$values" | sed -n '3p')
+  log="$dir/log"; : > "$log"
+  write_herdr_meta "$home" exact
+  PATH="$fb:$PATH" FM_HOME="$home" FM_FAKE_HERDR_LOG="$log" FM_FAKE_HERDR_CAPTURE="$dir/capture" \
+    FM_SEND_SETTLE=0 FM_BACKEND_HERDR_SUBMIT_MIN_SLEEP=0 "$SEND" exact "ship it" >/dev/null
+  assert_grep 'TEXT:ship it' "$log" "fm-send did not type the requested text"
+  assert_grep 'KEY:enter' "$log" "fm-send did not submit Enter"
+  pass "fm-send: task selectors route to their exact Herdr endpoint"
 }
 
-test_unset_fm_home_fails() {
-  local dir fb err log rc
-  dir="$TMP_ROOT/nohome"; mkdir -p "$dir"
-  fb=$(make_stubs "$dir"); err="$dir/send.err"; log="$dir/tmux.log"; : > "$log"
-
-  env -u FM_HOME PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$dir" FM_TMUX_LOG="$log" FM_SEND_SETTLE=0 \
-    "$SEND" sess:win "hello" >/dev/null 2>"$err"; rc=$?
-  [ "$rc" -ne 0 ] || fail "unset FM_HOME should fail"
-  assert_contains "$(cat "$err")" "FM_HOME is not set" "unset FM_HOME diagnostic should be explicit"
-  [ ! -s "$log" ] || fail "unset FM_HOME still attempted a send"$'\n'"$(cat "$log")"
-  pass "fm-send strict: unset FM_HOME fails before target resolution"
+test_explicit_herdr_endpoint_is_supported() {
+  local values dir home fb log
+  values=$(make_world explicit)
+  dir=$(printf '%s\n' "$values" | sed -n '1p')
+  home=$(printf '%s\n' "$values" | sed -n '2p')
+  fb=$(printf '%s\n' "$values" | sed -n '3p')
+  log="$dir/log"; : > "$log"
+  PATH="$fb:$PATH" FM_HOME="$home" FM_FAKE_HERDR_LOG="$log" FM_FAKE_HERDR_CAPTURE="$dir/capture" \
+    FM_SEND_SETTLE=0 "$SEND" lab:w9:p7 --key Escape >/dev/null
+  assert_grep 'KEY:escape' "$log" "explicit endpoint key did not route through Herdr"
+  pass "fm-send: an explicit Herdr endpoint remains available for out-of-home targets"
 }
 
-test_unresolvable_target_does_not_tmux_fallback() {
-  local dir fb home err log rc
-  dir="$TMP_ROOT/unresolved"; mkdir -p "$dir"
-  fb=$(make_stubs "$dir"); home=$(setup_home unresolved); err="$dir/send.err"; log="$dir/tmux.log"; : > "$log"
-
-  PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" FM_TMUX_LOG="$log" FM_FAKE_TMUX_WINDOW=lost-target FM_SEND_SETTLE=0 \
-    "$SEND" lost-target "hello" >/dev/null 2>"$err"; rc=$?
-  [ "$rc" -ne 0 ] || fail "unresolvable target should fail"
-  assert_contains "$(cat "$err")" "not resolvable" "unresolvable diagnostic should be loud"
-  assert_contains "$(cat "$err")" "metadata window/terminal lookup" "unresolvable diagnostic should name the attempted lookup"
-  assert_contains "$(cat "$err")" "backend=none" "unresolvable diagnostic should name that no backend was assumed"
-  [ ! -s "$log" ] || fail "unresolvable target fell through to tmux send"$'\n'"$(cat "$log")"
-  pass "fm-send strict: unresolvable selectors do not fall back to tmux"
+test_missing_home_is_refused() {
+  local values dir fb out status
+  values=$(make_world missing-home)
+  dir=$(printf '%s\n' "$values" | sed -n '1p')
+  fb=$(printf '%s\n' "$values" | sed -n '3p')
+  out=$(env -u FM_HOME PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$dir" "$SEND" exact hello 2>&1)
+  status=$?
+  [ "$status" -ne 0 ] || fail "fm-send should require an explicit Firstmate home"
+  assert_contains "$out" "FM_HOME is not set" "missing-home refusal was unclear"
+  pass "fm-send: missing Firstmate home is refused before endpoint lookup"
 }
 
-test_prefixless_herdr_pane_id_fails() {
-  local dir fb home err log rc
-  dir="$TMP_ROOT/herdr-pane"; mkdir -p "$dir"
-  fb=$(make_stubs "$dir"); home=$(setup_home herdr); err="$dir/send.err"; log="$dir/tmux.log"; : > "$log"
-  fm_write_meta "$home/state/nudge.meta" \
-    "window=default:wB:p2" "backend=herdr" "herdr_session=default" "herdr_pane_id=wB:p2" "kind=ship"
-
-  PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" FM_TMUX_LOG="$log" FM_SEND_SETTLE=0 \
-    "$SEND" wB:p2 "nudge" >/dev/null 2>"$err"; rc=$?
-  [ "$rc" -ne 0 ] || fail "prefixless herdr pane id should fail"
-  assert_contains "$(cat "$err")" "matches herdr_pane_id" "herdr pane diagnostic should name the meta match"
-  assert_contains "$(cat "$err")" "expected <herdr-session>:<pane-id>" "herdr pane diagnostic should show expected shape"
-  assert_contains "$(cat "$err")" "default:wB:p2" "herdr pane diagnostic should show the canonical target"
-  [ ! -s "$log" ] || fail "prefixless herdr pane id fell through to tmux send"$'\n'"$(cat "$log")"
-  pass "fm-send strict: prefixless herdr pane ids are rejected before tmux fallback"
+test_missing_task_metadata_has_no_live_label_fallback() {
+  local values dir home fb log out status
+  values=$(make_world missing-meta)
+  dir=$(printf '%s\n' "$values" | sed -n '1p')
+  home=$(printf '%s\n' "$values" | sed -n '2p')
+  fb=$(printf '%s\n' "$values" | sed -n '3p')
+  log="$dir/log"; : > "$log"
+  out=$(PATH="$fb:$PATH" FM_HOME="$home" FM_FAKE_HERDR_LOG="$log" FM_FAKE_HERDR_CAPTURE="$dir/capture" \
+    FM_FAKE_HERDR_BARE_LABEL=fm-lost "$SEND" fm-lost hello 2>&1)
+  status=$?
+  [ "$status" -ne 0 ] || fail "fm-<id> without durable metadata should be refused"
+  assert_contains "$out" "no metadata for fm-lost" "missing metadata refusal was unclear"
+  assert_no_grep 'TEXT:hello' "$log" "missing task metadata still dispatched text"
+  pass "fm-send: task-shaped selectors never fall back to an unrelated live label"
 }
 
-test_unmatched_single_colon_target_must_exist() {
-  local dir fb home err log rc
-  dir="$TMP_ROOT/dead-explicit"; mkdir -p "$dir"
-  fb=$(make_stubs "$dir"); home=$(setup_home deadexplicit); err="$dir/send.err"; log="$dir/tmux.log"; : > "$log"
-
-  PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" FM_TMUX_LOG="$log" FM_FAKE_TMUX_DEAD_TARGET=sess:missing FM_SEND_SETTLE=0 \
-    "$SEND" sess:missing "hello" >/dev/null 2>"$err"; rc=$?
-  [ "$rc" -ne 0 ] || fail "dead explicit tmux-shaped target should fail"
-  assert_contains "$(cat "$err")" "not a live tmux endpoint" "dead explicit target diagnostic should name the assumed backend"
-  assert_contains "$(cat "$err")" "backend=tmux" "dead explicit target diagnostic should name the tried backend"
-  [ ! -s "$log" ] || fail "dead explicit target still attempted a send"$'\n'"$(cat "$log")"
-  pass "fm-send strict: unmatched single-colon explicit targets must verify live before sending"
+test_stale_backend_metadata_is_rejected() {
+  local values dir home fb log out status
+  values=$(make_world stale-backend)
+  dir=$(printf '%s\n' "$values" | sed -n '1p')
+  home=$(printf '%s\n' "$values" | sed -n '2p')
+  fb=$(printf '%s\n' "$values" | sed -n '3p')
+  log="$dir/log"; : > "$log"
+  write_herdr_meta "$home" stale stale-runtime
+  out=$(PATH="$fb:$PATH" FM_HOME="$home" FM_FAKE_HERDR_LOG="$log" FM_FAKE_HERDR_CAPTURE="$dir/capture" \
+    "$SEND" stale hello 2>&1)
+  status=$?
+  [ "$status" -ne 0 ] || fail "stale backend metadata should be rejected"
+  assert_contains "$out" "supported: herdr orca" "stale backend rejection did not name current choices"
+  assert_no_grep 'TEXT:hello' "$log" "stale backend metadata still dispatched text"
+  pass "fm-send: stale backend values are rejected without reinterpretation"
 }
 
-test_fm_prefixed_herdr_session_is_an_explicit_target() {
-  local dir fb home err log herdr_log rc
-  dir="$TMP_ROOT/fm-remote-explicit"; mkdir -p "$dir"
-  fb=$(make_stubs "$dir"); home=$(setup_home fmremote); err="$dir/send.err"; log="$dir/tmux.log"; herdr_log="$dir/herdr.log"
-  : > "$log"
-  : > "$herdr_log"
-
-  PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" FM_TMUX_LOG="$log" FM_HERDR_LOG="$herdr_log" FM_SEND_SETTLE=0 \
-    "$SEND" fm-remote:w1:p2 --key Enter >/dev/null 2>"$err"; rc=$?
-  expect_code 0 "$rc" "an fm-prefixed Herdr session target should be accepted as explicit"
-  assert_grep 'pane get w1:p2 --session fm-remote' "$herdr_log" "fm-prefixed Herdr target was not verified in its session"
-  assert_grep 'pane send-keys w1:p2 enter --session fm-remote' "$herdr_log" "fm-prefixed Herdr target was not sent its key in its session"
-  assert_no_grep '--session default' "$herdr_log" "fm-prefixed Herdr target fell back to the default session"
-  pass "fm-send strict: fm-prefixed Herdr sessions remain explicit backend targets"
-}
-
-test_healthy_fm_id_send_still_works() {
-  local dir fb home err log rc got
-  dir="$TMP_ROOT/healthy"; mkdir -p "$dir"
-  fb=$(make_stubs "$dir"); home=$(setup_home healthy); err="$dir/send.err"; log="$dir/tmux.log"; : > "$log"
-  fm_write_meta "$home/state/lane-ok.meta" "window=sess:fm-lane-ok" "kind=ship" "harness=codex"
-
-  PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" FM_TMUX_LOG="$log" FM_SEND_SETTLE=0 \
-    "$SEND" fm-lane-ok "hello captain" >/dev/null 2>"$err"; rc=$?
-  expect_code 0 "$rc" "healthy fm-id send should succeed"
-  got=$(cat "$log")
-  assert_contains "$got" "target=sess:fm-lane-ok literal=1 arg=hello captain" "healthy send should type literal text to the meta target"
-  assert_contains "$got" "target=sess:fm-lane-ok literal=0 arg=Enter" "healthy send should submit with Enter"
-  assert_contains "$(cat "$err")" "requested message WILL still be sent" "fm-send guard banner should keep send-specific continuation wording"
-  pass "fm-send strict: healthy fm-<id> sends still type once and submit"
-}
-
-test_exact_lane_id_send_still_works
-test_unset_fm_home_fails
-test_unresolvable_target_does_not_tmux_fallback
-test_prefixless_herdr_pane_id_fails
-test_unmatched_single_colon_target_must_exist
-test_fm_prefixed_herdr_session_is_an_explicit_target
-test_healthy_fm_id_send_still_works
+test_task_selector_routes_exact_herdr_endpoint
+test_explicit_herdr_endpoint_is_supported
+test_missing_home_is_refused
+test_missing_task_metadata_has_no_live_label_fallback
+test_stale_backend_metadata_is_rejected

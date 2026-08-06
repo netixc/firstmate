@@ -134,8 +134,7 @@ run_manager() { # <case> <command...>
 run_bootstrap_install() { # <case>
   local case_dir=$1
   (
-    unset TMUX TMUX_PANE HERDR_ENV HERDR_PANE_ID HERDR_SESSION HERDR_SOCKET_PATH \
-      CMUX_WORKSPACE_ID CMUX_SURFACE_ID CMUX_SOCKET_PATH CMUX_TAB_ID CMUX_PANEL_ID 2>/dev/null || true
+    unset HERDR_ENV HERDR_PANE_ID HERDR_SESSION HERDR_SOCKET_PATH 2>/dev/null || true
     PATH="$case_dir/fakebin:$BASE_PATH" \
       HOME="$case_dir/home" \
       FM_HERDR_MIRROR_HERDR_BIN="$case_dir/fakebin/herdr" \

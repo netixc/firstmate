@@ -24,107 +24,60 @@ trap cleanup_kimi_harness EXIT
 make_spawn_fakebin() {
   local dir=$1 fakebin
   fakebin=$(fm_fakebin "$dir")
-  cat > "$fakebin/tmux" <<'SH'
+  cat > "$fakebin/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
-printf '%s\n' "$*" >> "$FM_FAKE_TMUX_CALL_LOG"
+printf '%s\n' "$*" >> "$FM_FAKE_HERDR_CALL_LOG"
 state=$(cat "$FM_FAKE_KIMI_STATE" 2>/dev/null || true)
 fake_screen() {
   case "$state" in
-    ready)
-      printf 'Welcome to Kimi Code!\ncontext: 0%% (0/256k)\n╭────────────────────────────────╮\n│ >                              │\n╰────────────────────────────────╯\n'
-      ;;
-    pointer-typed)
-      printf 'context: 0%% (0/256k)\n╭────────────────────────────────╮\n│ > Read the brief and follow it │\n│                                │\n╰────────────────────────────────╯\n'
-      ;;
-    delivered)
-      printf '✨ Read the brief at %s and follow it exactly.\ncontext: 1%% (2k/256k)\n╭────────────────────────────────╮\n│ >                              │\n╰────────────────────────────────╯\n' "$FM_FAKE_BRIEF_REAL"
-      ;;
-    *)
-      printf 'shell starting\n$ \n'
-      ;;
+    ready) printf 'Welcome to Kimi Code!\ncontext: 0%% (0/256k)\n╭────────────────────────────────╮\n│ >                              │\n╰────────────────────────────────╯\n' ;;
+    pointer-typed) printf 'context: 0%% (0/256k)\n╭────────────────────────────────╮\n│ > Read the brief and follow it │\n│                                │\n╰────────────────────────────────╯\n' ;;
+    delivered) printf '✨ Read the brief at %s and follow it exactly.\ncontext: 1%% (2k/256k)\n╭────────────────────────────────╮\n│ >                              │\n╰────────────────────────────────╯\n' "$FM_FAKE_BRIEF_REAL" ;;
+    *) printf 'shell starting\n$ \n' ;;
   esac
 }
-fake_cursor_y() {
-  case "$state" in
-    pointer-typed) printf '3\n' ;;
-    ready|delivered) printf '3\n' ;;
-    *) printf '1\n' ;;
-  esac
-}
-case "$*" in
-  *"#{pane_current_path}"*) printf '%s\n' "$FM_FAKE_PANE_PATH"; exit 0 ;;
-  *"#{cursor_y}"*) fake_cursor_y; exit 0 ;;
-esac
-case "${1:-}" in
-  display-message) printf 'firstmate\n'; exit 0 ;;
-  list-windows) exit 0 ;;
-  has-session|new-session|new-window|kill-window) exit 0 ;;
-  send-keys)
-    prev=
-    literal=
-    for arg in "$@"; do
-      if [ "$prev" = -l ]; then literal=$arg; break; fi
-      prev=$arg
-    done
-    if [ -n "$literal" ]; then
-      case "$literal" in
-        *' --auto')
-          printf '%s\n' "$literal" >> "$FM_FAKE_LAUNCH_LOG"
-          printf 'launched\n' > "$FM_FAKE_KIMI_STATE"
-          ;;
-        *)
-          printf '%s\n' "$literal" >> "$FM_FAKE_POINTER_LOG"
-          printf 'pointer-typed\n' > "$FM_FAKE_KIMI_STATE"
-          ;;
-      esac
-      exit 0
+case "${1:-} ${2:-}" in
+  'status --json') printf '{"client":{"version":"0.7.5","protocol":16},"server":{"running":true}}\n' ;;
+  'session list') printf '{"sessions":[{"name":"default","running":true,"socket_path":"/tmp/fm-kimi-harness.sock"}]}\n' ;;
+  'workspace list') printf '{"result":{"workspaces":[{"workspace_id":"w1","label":"firstmate"}]}}\n' ;;
+  'tab list') printf '{"result":{"tabs":[]}}\n' ;;
+  'tab create') printf '{"result":{"tab":{"tab_id":"w1:t1"},"root_pane":{"pane_id":"w1:p1"}}}\n' ;;
+  'pane get')
+    if [ -f "${FM_FAKE_HERDR_CLOSED:-/dev/null}" ]; then
+      printf '{"error":{"code":"pane_not_found"}}\n'
+      exit 1
     fi
-    case " $* " in
-      *' Enter '*)
-        case "$state" in
-          launched)
-            if [ "${FM_FAKE_KIMI_READY:-yes}" = yes ]; then
-              printf 'ready\n' > "$FM_FAKE_KIMI_STATE"
-            fi
-            ;;
-          pointer-typed)
-            if [ "${FM_FAKE_KIMI_DELIVERY:-yes}" = yes ]; then
-              if [ "${FM_FAKE_KIMI_SWALLOW_FIRST:-no}" = yes ] \
-                 && [ ! -f "$FM_FAKE_KIMI_SWALLOWED" ]; then
-                : > "$FM_FAKE_KIMI_SWALLOWED"
-              else
-                printf 'delivered\n' > "$FM_FAKE_KIMI_STATE"
-              fi
-            else
-              printf 'ready\n' > "$FM_FAKE_KIMI_STATE"
-            fi
-            ;;
-        esac
+    printf '{"result":{"pane":{"pane_id":"w1:p1","tab_id":"w1:t1","workspace_id":"w1","foreground_cwd":"%s"}}}\n' "$FM_FAKE_PANE_PATH"
+    ;;
+  'pane run') ;;
+  'pane send-text')
+    literal=${4:-}
+    case "$literal" in
+      *' --auto') printf '%s\n' "$literal" >> "$FM_FAKE_LAUNCH_LOG"; printf 'launched\n' > "$FM_FAKE_KIMI_STATE" ;;
+      *) printf '%s\n' "$literal" >> "$FM_FAKE_POINTER_LOG"; printf 'pointer-typed\n' > "$FM_FAKE_KIMI_STATE" ;;
+    esac
+    ;;
+  'pane send-keys')
+    case "${4:-}:$state" in
+      enter:launched) [ "${FM_FAKE_KIMI_READY:-yes}" != yes ] || printf 'ready\n' > "$FM_FAKE_KIMI_STATE" ;;
+      enter:pointer-typed)
+        if [ "${FM_FAKE_KIMI_DELIVERY:-yes}" = yes ]; then
+          if [ "${FM_FAKE_KIMI_SWALLOW_FIRST:-no}" = yes ] && [ ! -f "$FM_FAKE_KIMI_SWALLOWED" ]; then : > "$FM_FAKE_KIMI_SWALLOWED"; else printf 'delivered\n' > "$FM_FAKE_KIMI_STATE"; fi
+        else
+          printf 'ready\n' > "$FM_FAKE_KIMI_STATE"
+        fi
         ;;
     esac
-    exit 0
     ;;
-  capture-pane)
-    start= end= prev=
-    for arg in "$@"; do
-      case "$prev" in
-        -S) start=$arg ;;
-        -E) end=$arg ;;
-      esac
-      case "$arg" in -S|-E) prev=$arg ;; *) prev= ;; esac
-    done
-    case "$start:$end" in
-      *[!0-9:]*|'':*|*:'') fake_screen ;;
-      *) fake_screen | awk -v start="$start" -v end="$end" \
-           'NR - 1 >= start && NR - 1 <= end' ;;
-    esac
-    exit 0
-    ;;
+  'pane read') fake_screen ;;
+  'agent get') printf '{"result":{"agent":{"agent_status":"idle"}}}\n' ;;
+  'pane close') : > "${FM_FAKE_HERDR_CLOSED:?}" ;;
+  'tab close') ;;
+  *) exit 0 ;;
 esac
-exit 0
 SH
-  chmod +x "$fakebin/tmux"
+  chmod +x "$fakebin/herdr"
   fm_fake_exit0 "$fakebin" treehouse gh-axi gh
   fm_fake_exit0 "$fakebin" kimi
   ln -s "$JQ_BIN" "$fakebin/jq"
@@ -139,6 +92,7 @@ make_spawn_case() {
   wt="$case_dir/wt"
   fakebin=$(make_spawn_fakebin "$case_dir/fake")
   mkdir -p "$home/data/$id" "$home/projects" "$home/state" "$home/config" "$home/.kimi-code"
+  printf 'off\n' > "$home/config/herdr-presentation-spaces"
   printf '# Kimi test config\ndefault_model = "test"\n' > "$home/.kimi-code/config.toml"
   printf 'brief for kimi\n' > "$home/data/$id/brief.md"
   printf 'kimi\n' > "$home/config/crew-harness"
@@ -147,7 +101,7 @@ make_spawn_case() {
   : > "$case_dir/launch.log"
   : > "$case_dir/pointer.log"
   : > "$case_dir/kimi.state"
-  : > "$case_dir/tmux-calls.log"
+  : > "$case_dir/herdr-calls.log"
   printf '%s\n' "$case_dir|$home|$proj|$wt|$fakebin"
 }
 
@@ -157,13 +111,14 @@ run_spawn() {
   HOME="$home" FM_ROOT_OVERRIDE='' FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
-    FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$wt" TMUX="fake,1,0" \
+    FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$wt" \
     FM_FAKE_LAUNCH_LOG="$case_dir/launch.log" \
     FM_FAKE_POINTER_LOG="$case_dir/pointer.log" \
     FM_FAKE_KIMI_STATE="$case_dir/kimi.state" \
     FM_FAKE_KIMI_SWALLOWED="$case_dir/kimi.swallowed" \
     FM_FAKE_KIMI_SWALLOW_FIRST="${FM_FAKE_KIMI_SWALLOW_FIRST:-no}" \
-    FM_FAKE_TMUX_CALL_LOG="$case_dir/tmux-calls.log" \
+    FM_FAKE_HERDR_CALL_LOG="$case_dir/herdr-calls.log" \
+    FM_FAKE_HERDR_CLOSED="$home/state/$id.herdr-closed" \
     FM_FAKE_BRIEF_REAL="$(cd "$home/data/$id" && pwd -P)/brief.md" \
     FM_KIMI_READY_POLLS=2 FM_KIMI_DELIVERY_POLLS=2 FM_KIMI_POLL_INTERVAL=0 \
     PATH="$fakebin:$BASE_PATH" \
@@ -207,7 +162,7 @@ test_kimi_launch_then_send_is_verified() {
   assert_grep 'effort=high' "$meta" "kimi meta did not retain the unsupported effort axis"
   assert_grep "tasktmp=$task_tmp" "$meta" "kimi meta did not record its task temp root"
   assert_present "$task_tmp/gotmp" "kimi spawn did not create its Go temp directory"
-  assert_grep "export GOTMPDIR=$task_tmp/gotmp" "$CASE_DIR/tmux-calls.log" \
+  assert_grep "export GOTMPDIR=$task_tmp/gotmp" "$CASE_DIR/herdr-calls.log" \
     "kimi spawn did not export its Go temp directory into the pane"
   assert_grep 'BEGIN FIRSTMATE KIMI TURN-END HOOK' "$HOME_DIR/.kimi-code/config.toml" \
     "kimi spawn did not install its guarded global hook region"
@@ -409,14 +364,14 @@ test_kimi_spawn_refuses_unsafe_global_config_before_pane_creation() {
   out=$(run_spawn "$CASE_DIR" "$HOME_DIR" "$PROJ_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$id") || rc=$?
   [ "$rc" -ne 0 ] || fail "Kimi spawn accepted malformed global config"
   assert_contains "$out" "malformed TOML" "Kimi spawn omitted the concrete config refusal"
-  if grep -Eq '(^| )new-(session|window)( |$)' "$CASE_DIR/tmux-calls.log"; then
-    fail "unsafe Kimi config refusal created a tmux container or pane"
+  if grep -Eq '(^| )new-(session|window)( |$)' "$CASE_DIR/herdr-calls.log"; then
+    fail "unsafe Kimi config refusal created a Herdr container or pane"
   fi
   pass "fm-spawn: unsafe Kimi global config refuses before pane creation"
 }
 
 test_kimi_teardown_removes_pointer_and_registry_token() {
-  local id rec out rc token
+  local id rec out rc token teardown_out
   id=kimi-teardown-z8
   rec=$(make_spawn_case teardown "$id")
   read_spawn_record "$rec"
@@ -425,11 +380,15 @@ test_kimi_teardown_removes_pointer_and_registry_token() {
   expect_code 0 "$rc" "Kimi spawn should succeed before teardown"
   token=$(sed -n 's/^token=//p' "$WT_DIR/.fm-kimi-turnend")
 
-  HOME="$HOME_DIR" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$HOME_DIR" \
+  teardown_out=$(HOME="$HOME_DIR" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$HOME_DIR" \
     FM_STATE_OVERRIDE="$HOME_DIR/state" FM_DATA_OVERRIDE="$HOME_DIR/data" \
     FM_PROJECTS_OVERRIDE="$HOME_DIR/projects" FM_CONFIG_OVERRIDE="$HOME_DIR/config" \
-    FM_SPAWN_NO_GUARD=1 PATH="$FAKEBIN_DIR:$BASE_PATH" \
-    "$TEARDOWN" "$id" --force >/dev/null 2>&1 || fail "Kimi teardown failed"
+    FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$WT_DIR" \
+    FM_FAKE_HERDR_CALL_LOG="$CASE_DIR/herdr-calls.log" \
+    FM_FAKE_HERDR_CLOSED="$HOME_DIR/state/$id.herdr-closed" \
+    FM_FAKE_KIMI_STATE="$CASE_DIR/kimi.state" FM_FAKE_BRIEF_REAL="$HOME_DIR/data/$id/brief.md" \
+    PATH="$FAKEBIN_DIR:$BASE_PATH" \
+    "$TEARDOWN" "$id" --force 2>&1) || fail "Kimi teardown failed: $teardown_out"
   assert_absent "$WT_DIR/.fm-kimi-turnend" "Kimi token pointer survived teardown"
   assert_absent "$HOME_DIR/.kimi-code/fm-turn-end.d/$token" "Kimi registry token survived teardown"
   assert_absent "$HOME_DIR/state/$id.kimi-turnend-token" "Kimi token state survived teardown"
@@ -466,8 +425,8 @@ test_kimi_missing_binary_refuses_before_pane_creation() {
   [ "$rc" -ne 0 ] || fail "missing Kimi executable should refuse the spawn"
   assert_contains "$out" "searched PATH for 'kimi'" "missing Kimi diagnostic omitted PATH"
   assert_contains "$out" "fallback '$fallback'" "missing Kimi diagnostic omitted expanded fallback"
-  if grep -Eq '(^| )new-(session|window)( |$)' "$CASE_DIR/tmux-calls.log"; then
-    fail "missing Kimi executable created a tmux container or pane"
+  if grep -Eq '(^| )new-(session|window)( |$)' "$CASE_DIR/herdr-calls.log"; then
+    fail "missing Kimi executable created a Herdr container or pane"
   fi
   pass "fm-spawn: missing Kimi executable refuses before pane creation"
 }
@@ -566,50 +525,25 @@ SH
 }
 
 test_kimi_busy_signature_is_scoped_to_spinner_lines() {
-  local capture
-  # shellcheck source=/dev/null
-  . "$ROOT/bin/fm-tmux-lib.sh"
-  unset FM_BUSY_REGEX
-  capture="$TMP_ROOT/busy-pane"
-  tmux() {
-    case "${1:-}" in
-      capture-pane) cat "$capture" ;;
-      *) return 0 ;;
-    esac
-  }
-  # These fixtures reproduce the observed spinner shape rather than byte-exact
-  # transcriptions. Leading whitespace is deliberately varied; separator whitespace
-  # follows the captured contract.
   local phase
+  # shellcheck source=/dev/null
+  . "$ROOT/bin/fm-busy-lib.sh"
+  unset FM_BUSY_REGEX
   for phase in 🌑 🌒 🌓 🌔 🌕 🌖 🌗 🌘; do
-    printf '  %s · Tip: Kimi is working\n│ > │\n' "$phase" > "$capture"
-    fm_pane_is_busy fake kimi || fail "Kimi spinner phase $phase was not recognized as busy"
+    printf '  %s · Tip: Kimi is working\n' "$phase" \
+      | fm_busy_lines_match kimi \
+      || fail "Kimi spinner phase $phase was not recognized as busy"
   done
-  printf 'ordinary response ending with 🌕\n│ > │\n' > "$capture"
-  if fm_pane_is_busy fake kimi; then
+  if printf 'ordinary response ending with 🌕\n' | fm_busy_lines_match kimi; then
     fail "a moon outside Kimi's spinner-line shape was misread as busy"
   fi
-  printf '🌕 Full moon details\n│ > │\n' > "$capture"
-  if fm_pane_is_busy fake kimi; then
-    fail "moon-led Kimi output without the middot separator was misread as busy"
+  if printf '  🌗 · Tip: plugins\n' | fm_busy_lines_match codex; then
+    fail "Kimi's spinner signature leaked into another harness"
   fi
-  printf '  🌗 · Tip: /plugins: manage plugins ...\n│ > │\n' > "$capture"
-  if fm_pane_is_busy fake codex; then
-    fail "Kimi's real spinner signature leaked into another harness"
-  fi
-  printf 'tip: ctrl+c: cancel\n│ > │\n' > "$capture"
-  if fm_pane_is_busy fake kimi; then
-    fail "kimi's independently rotating idle tip was misread as busy"
-  fi
-  printf 'Ctrl+c:cancel\n│ > │\n' > "$capture"
-  if fm_pane_is_busy fake kimi; then
+  if printf 'Ctrl+c:cancel\n' | fm_busy_lines_match kimi; then
     fail "Grok's exact busy token leaked into Kimi's harness-scoped matcher"
   fi
-  printf 'auto  K2.7 Coding thinking  /some/path\n│ > │\n' > "$capture"
-  if fm_pane_is_busy fake kimi; then
-    fail "Kimi's idle thinking-effort status label was misread as busy"
-  fi
-  pass "busy detection: real Kimi moon-plus-middot captures require its harness while idle labels stay idle"
+  pass "busy detection: Kimi's moon-plus-middot spinner requires its own harness"
 }
 
 test_watcher_never_classifies_kimi_from_its_spinner() (
@@ -631,7 +565,7 @@ test_watcher_never_classifies_kimi_from_its_spinner() (
   if window_is_busy fake "$busy_capture"; then
     fail "fm-watch classified a Kimi task busy from its spinner instead of unknown"
   fi
-  [ "$(fm_busy_classify tmux fake kimi kimi-watch "$state" "$busy_capture")" = "unknown kimi-unverified" ] \
+  [ "$(fm_busy_classify herdr default:w1:p1 kimi kimi-watch "$state" "$busy_capture")" = "unknown kimi-unverified" ] \
     || fail "a Kimi task must classify unknown kimi-unverified"
   printf 'window=fake\nharness=codex\n' > "$state/kimi-watch.meta"
   if window_is_busy fake "$busy_capture"; then

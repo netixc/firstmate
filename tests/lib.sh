@@ -9,7 +9,7 @@
 # reporters, a self-cleaning temp root, fakebin/PATH-shim helpers, deterministic
 # git identity and fixture builders, state/<id>.meta writers, and the common
 # string/exit-code/file assertions. It deliberately does NOT bundle the
-# behavior-specific fake tmux/treehouse/no-mistakes mocks: those encode terminal
+# behavior-specific fake runtime/treehouse/no-mistakes mocks: those encode terminal
 # and lifecycle assumptions that differ per suite and belong with the tests that
 # own them.
 #
@@ -33,6 +33,11 @@ FM_TEST_LIB_SOURCED=1
 # the boundary against the real hazard is unaffected. tests/fm-gate-refuse.test.sh
 # strips this to verify real refusal.
 export FM_GATE_REFUSE_BYPASS=1
+
+# Portable tests must not inherit the operator's live Herdr endpoint identity.
+# Cases that exercise launcher ancestry set these values explicitly after
+# sourcing this helper.
+unset HERDR_ENV HERDR_PANE_ID HERDR_TAB_ID HERDR_WORKSPACE_ID HERDR_SOCKET_PATH HERDR_SESSION 2>/dev/null || true
 
 # Resolve the repo root from this library's own location. Consumed by sourcing
 # test files, not by this library, so it reads as "unused" here.
@@ -187,6 +192,80 @@ SH
   chmod +x "$fakebin/$tool"
 }
 
+# fm_fake_herdr_terminal <fakebin>: install a hermetic Herdr terminal stub.
+# The caller may set FM_FAKE_HERDR_LOG, FM_FAKE_HERDR_CAPTURE,
+# FM_FAKE_HERDR_AGENT_STATUS, FM_FAKE_HERDR_SWALLOW_FILE, and
+# FM_FAKE_HERDR_PANE_ALIVE to drive send, capture, and liveness outcomes.
+fm_fake_herdr_terminal() {
+  local fakebin=$1
+  cat > "$fakebin/herdr" <<'SH'
+#!/usr/bin/env bash
+set -u
+log=${FM_FAKE_HERDR_LOG:-/dev/null}
+capture=${FM_FAKE_HERDR_CAPTURE:-/dev/null}
+printf '%s\n' "$*" >> "$log"
+write_composer() {
+  printf '╭────────────╮\n│ > %s │\n╰────────────╯\n' "$1" > "$capture"
+}
+case "${1:-} ${2:-}" in
+  'status --json')
+    printf '{"client":{"version":"0.7.5","protocol":16},"server":{"running":true}}\n'
+    ;;
+  'session list')
+    if [ -n "${FM_FAKE_HERDR_BARE_LABEL:-}" ]; then
+      printf '{"sessions":[{"name":"default","running":true}]}\n'
+    else
+      exit 1
+    fi
+    ;;
+  'tab list')
+    if [ -n "${FM_FAKE_HERDR_BARE_LABEL:-}" ]; then
+      printf '{"result":{"tabs":[{"tab_id":"w1:t1","workspace_id":"w1","label":"%s"}]}}\n' "$FM_FAKE_HERDR_BARE_LABEL"
+    else
+      printf '{"result":{"tabs":[]}}\n'
+    fi
+    ;;
+  'pane list')
+    printf '{"result":{"panes":[{"pane_id":"w1:p1","tab_id":"w1:t1"}]}}\n'
+    ;;
+  'pane get')
+    [ "${FM_FAKE_HERDR_PANE_ALIVE:-1}" = 1 ] || exit 1
+    pane=${3:-w1:p1}
+    printf '{"result":{"pane":{"pane_id":"%s","tab_id":"w1:t1","workspace_id":"w1","foreground_cwd":"%s"}}}\n' "$pane" "${FM_FAKE_HERDR_PANE_PATH:-/tmp}"
+    ;;
+  'pane read')
+    [ "${FM_FAKE_HERDR_PANE_ALIVE:-1}" = 1 ] || exit 1
+    cat "$capture" 2>/dev/null
+    ;;
+  'pane send-text')
+    [ "${FM_FAKE_HERDR_SEND_FAIL:-0}" != 1 ] || exit 1
+    printf 'TEXT:%s\n' "${4:-}" >> "$log"
+    write_composer "${4:-}"
+    ;;
+  'pane send-keys')
+    key=${4:-}
+    printf 'KEY:%s\n' "$key" >> "$log"
+    if [ "$key" = enter ]; then
+      if [ -n "${FM_FAKE_HERDR_SWALLOW_FILE:-}" ] && [ -f "$FM_FAKE_HERDR_SWALLOW_FILE" ]; then
+        [ "${FM_FAKE_HERDR_SWALLOW_PERSIST:-0}" = 1 ] || rm -f "$FM_FAKE_HERDR_SWALLOW_FILE"
+      else
+        write_composer ''
+      fi
+    fi
+    ;;
+  'agent get')
+    case "${FM_FAKE_HERDR_AGENT_STATUS:-working}" in
+      missing) exit 1 ;;
+      none) printf '{"error":{"code":"agent_not_found"}}\n' ;;
+      *) printf '{"result":{"agent":{"agent_status":"%s"}}}\n' "$FM_FAKE_HERDR_AGENT_STATUS" ;;
+    esac
+    ;;
+  *) exit 0 ;;
+esac
+SH
+  chmod +x "$fakebin/herdr"
+}
+
 # --- deterministic git identity and fixtures --------------------------------
 
 # fm_git_identity [name] [email]: export a fixed author/committer identity so
@@ -240,12 +319,15 @@ fm_write_meta() {
 
 # fm_write_secondmate_meta <file> <home> [window] [projects] [harness]: write the
 # standard kind=secondmate meta block used across the secondmate suites. Window
-# defaults to firstmate:fm-<id>, projects defaults to alpha, and harness defaults
+# defaults to firstmate:w1:p-<id>, projects defaults to alpha, and harness defaults
 # to echo to match the common case.
 fm_write_secondmate_meta() {
   local file=$1 home=$2 id window projects=${4:-alpha} harness=${5:-echo}
+  local session pane
   id=$(basename "$file" .meta)
-  window=${3:-firstmate:fm-$id}
+  window=${3:-firstmate:w1:p-$id}
+  session=${window%%:*}
+  pane=${window#*:}
   fm_write_meta "$file" \
     "window=$window" \
     "endpoint_task_id=$id" \
@@ -256,7 +338,12 @@ fm_write_secondmate_meta() {
     "mode=secondmate" \
     "yolo=off" \
     "home=$home" \
-    "projects=$projects"
+    "projects=$projects" \
+    "backend=herdr" \
+    "herdr_session=$session" \
+    "herdr_workspace_id=w1" \
+    "herdr_tab_id=w1:t1" \
+    "herdr_pane_id=$pane"
 }
 
 # --- common assertions ------------------------------------------------------

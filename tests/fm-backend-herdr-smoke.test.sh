@@ -2,9 +2,8 @@
 # tests/fm-backend-herdr-smoke.test.sh - real herdr smoke test for the herdr
 # session-provider adapter (bin/backends/herdr.sh), P2 of
 # data/fm-backend-design-d7 (herdr-addendum.md), extended for the P3
-# workspace-per-home pass (AGENTS.md task herdr-sm-spaces-k4). Mirrors
-# tests/fm-backend-tmux-smoke.test.sh's structure: every other suite fakes the
-# CLI, this one talks to a REAL herdr server - but ALWAYS on a private, named,
+# workspace-per-home pass (AGENTS.md task herdr-sm-spaces-k4).
+# Every other adapter suite fakes the CLI, while this one talks to a real Herdr server only on a private, named,
 # throwaway HERDR_SESSION (never the default session), so it never touches a
 # captain's real herdr usage. Skips cleanly when herdr (or jq) is not
 # installed, so CI/dev machines without herdr are unaffected.
