@@ -318,8 +318,8 @@ test_launcher_identity_absent_when_herdr_env_alone_is_set() {
   ( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" HERDR_ENV=1 \
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_launcher_identity fmtest' "$ROOT" )
   status=$?
-  expect_code 2 "$status" "HERDR_ENV=1 alone is a backend-selection marker, not a parent binding"
-  pass "fm_backend_herdr_launcher_identity: HERDR_ENV=1 without a pane id selects the backend but binds no parent"
+  expect_code 2 "$status" "HERDR_ENV=1 alone identifies the runtime environment, not an exact parent binding"
+  pass "fm_backend_herdr_launcher_identity: HERDR_ENV=1 without a pane id binds no parent"
 }
 
 test_launcher_identity_resolves_the_exact_pane_tab_and_workspace() {

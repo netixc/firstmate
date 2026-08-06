@@ -90,7 +90,7 @@ exclusion_reason() {
       printf '%s\n' 'isolation-proof harness contract itself; must not re-enter concurrent matrix'
       ;;
     fm-backend.test.sh)
-      printf '%s\n' 'runtime selection and dispatch fixture; gray-zone concurrent process cost'
+      printf '%s\n' 'Herdr identity validation and dispatch fixture; gray-zone concurrent process cost'
       ;;
     fm-spawn-dispatch-profile.test.sh|fm-spawn-worktree-settle.test.sh|fm-trace-context-spawn.test.sh)
       printf '%s\n' 'real isolated git worktrees plus spawn settle loops; gray zone until dedicated proof'
