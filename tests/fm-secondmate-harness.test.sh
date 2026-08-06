@@ -806,10 +806,13 @@ test_spawned_secondmate_uses_its_harness_supervision_model() {
     fm_write_meta "$sm/state/task.meta" "window=firstmate:fm-task" "kind=ship"
     touch "$sm/state/.last-watcher-beat"
     fakebin="$w/herdr-sm/fakebin"
-    mkdir -p "$w/neutral-root"
+    # Point the guard at the fixture home, not at whatever checkout this suite
+    # happens to be running from. The guard also reports a tangled primary
+    # checkout, so without this the branch a contributor is working on decides
+    # whether this assertion passes.
     cat > "$fakebin/$harness" <<SH
 #!/usr/bin/env bash
-FM_ROOT_OVERRIDE='$w/neutral-root' "$ROOT/bin/fm-guard.sh"
+FM_ROOT_OVERRIDE='$sm' "$ROOT/bin/fm-guard.sh"
 SH
     chmod +x "$fakebin/$harness"
     launch=$(cat "$launchlog")
