@@ -27,6 +27,17 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 
+validate_configured_harness() {
+  local harness=$1 source=$2
+  case "$harness" in
+    claude|codex|grok|pi) return 0 ;;
+    *)
+      printf "error: unsupported harness '%s' in %s; expected claude, codex, grok, or pi\n" "$harness" "$source" >&2
+      return 1
+      ;;
+  esac
+}
+
 detect_own() {
   # Layer 1: environment markers for verified harnesses.
   # Keep marker detection before ancestry detection as an explicit precedence rule.
@@ -70,7 +81,12 @@ detect_own() {
 resolve_crew() {
   local crew=
   [ -f "$CONFIG/crew-harness" ] && crew=$(tr -d '[:space:]' < "$CONFIG/crew-harness" || true)
-  if [ -z "$crew" ] || [ "$crew" = "default" ]; then detect_own; else echo "$crew"; fi
+  if [ -z "$crew" ] || [ "$crew" = "default" ]; then
+    detect_own
+    return
+  fi
+  validate_configured_harness "$crew" config/crew-harness || return 1
+  printf '%s\n' "$crew"
 }
 
 # Print the first non-empty, non-comment line of config/secondmate-harness
@@ -115,7 +131,12 @@ secondmate_field() {
 resolve_secondmate() {
   local sm
   sm=$(secondmate_field 1)
-  if [ -z "$sm" ] || [ "$sm" = "default" ]; then resolve_crew; else echo "$sm"; fi
+  if [ -z "$sm" ] || [ "$sm" = "default" ]; then
+    resolve_crew
+    return
+  fi
+  validate_configured_harness "$sm" config/secondmate-harness || return 1
+  printf '%s\n' "$sm"
 }
 
 # Print the optional model token (2nd field) from config/secondmate-harness, or
@@ -125,6 +146,7 @@ resolve_secondmate_model() {
   local sm
   sm=$(secondmate_field 1)
   [ -n "$sm" ] && [ "$sm" != "default" ] || return 0
+  validate_configured_harness "$sm" config/secondmate-harness || return 1
   secondmate_field 2
 }
 
@@ -134,6 +156,7 @@ resolve_secondmate_effort() {
   local sm
   sm=$(secondmate_field 1)
   [ -n "$sm" ] && [ "$sm" != "default" ] || return 0
+  validate_configured_harness "$sm" config/secondmate-harness || return 1
   secondmate_field 3
 }
 

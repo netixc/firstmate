@@ -98,6 +98,31 @@ ROWS
   pass "A1 fm-harness.sh secondmate resolves the fallback chain; crew mode unchanged"
 }
 
+test_unsupported_configured_harnesses() {
+  local label file value mode source case_dir cfg out rc n
+  n=0
+  while IFS='^' read -r label file value mode source; do
+    [ -n "$label" ] || continue
+    n=$((n + 1))
+    case_dir="$TMP_ROOT/unsupported-$n"
+    cfg="$case_dir/config"
+    mkdir -p "$cfg"
+    printf '%s\n' "$value" > "$cfg/$file"
+    rc=0
+    out=$(CLAUDECODE=1 FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh" "$mode" 2>&1) || rc=$?
+    [ "$rc" -ne 0 ] || fail "$label: unsupported harness was accepted"
+    assert_contains "$out" "unsupported harness 'bogus'" "$label: rejection did not name the value"
+    assert_contains "$out" "$source" "$label: rejection did not name the source"
+  done <<'ROWS'
+crew override^crew-harness^bogus^crew^config/crew-harness
+secondmate override^secondmate-harness^bogus^secondmate^config/secondmate-harness
+secondmate model lookup^secondmate-harness^bogus model^secondmate-model^config/secondmate-harness
+secondmate effort lookup^secondmate-harness^bogus model high^secondmate-effort^config/secondmate-harness
+secondmate fallback to crew^crew-harness^bogus^secondmate^config/crew-harness
+ROWS
+  pass "A2 fm-harness.sh rejects unsupported configured harnesses in every resolver mode"
+}
+
 # ===========================================================================
 # C) fm-harness.sh secondmate-model / secondmate-effort token resolution
 # ===========================================================================
@@ -539,7 +564,7 @@ test_spawn_unverified_secondmate_harness_refused() {
     "$ROOT/bin/fm-spawn.sh" sm "$sm" --secondmate >/dev/null 2>"$err" || rc=$?
 
   [ "$rc" -ne 0 ] || fail "unverified: spawn should have failed"
-  assert_contains "$(cat "$err")" "no launch template for harness 'bogus'" \
+  assert_contains "$(cat "$err")" "unsupported harness 'bogus'" \
     "unverified: error names the rejected harness"
   assert_contains "$(cat "$err")" "config/secondmate-harness" \
     "unverified: error names the secondmate-harness source"
@@ -2338,6 +2363,7 @@ SH
 }
 
 test_harness_resolution
+test_unsupported_configured_harnesses
 test_secondmate_model_effort_tokens
 test_pi_detection_and_session_lock_identity
 test_dash_leading_process_names_are_basename_operands
