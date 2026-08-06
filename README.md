@@ -116,9 +116,9 @@ The preference persists for the effective Firstmate home, and toggling it off re
 > alright merge it
 ```
 
-### Runtime backends
+### Task runtime
 
-Herdr is automatic and the default.
+Herdr is Firstmate's sole task runtime.
 Setup guides are linked in [Documentation](#documentation) below.
 
 ## How It Works

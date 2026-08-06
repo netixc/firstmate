@@ -220,7 +220,7 @@ test_version_check_refuses_missing_herdr() {
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_version_check' "$ROOT" 2>&1 )
   status=$?
   [ "$status" -ne 0 ] || fail "version_check should refuse when herdr is not installed"
-  assert_contains "$out" "not installed" "version_check did not report herdr as missing"
+  assert_contains "$out" "Herdr runtime requires the 'herdr' CLI" "version_check did not report the Herdr runtime requirement"
   pass "fm_backend_herdr_version_check: refuses loudly when herdr is not installed"
 }
 
