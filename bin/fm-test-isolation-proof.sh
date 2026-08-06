@@ -90,7 +90,7 @@ exclusion_reason() {
       printf '%s\n' 'isolation-proof harness contract itself; must not re-enter concurrent matrix'
       ;;
     fm-backend.test.sh)
-      printf '%s\n' 'runtime selection and dispatch fixture; gray-zone concurrent process cost'
+      printf '%s\n' 'Herdr identity validation and dispatch fixture; gray-zone concurrent process cost'
       ;;
     fm-spawn-dispatch-profile.test.sh|fm-spawn-worktree-settle.test.sh|fm-trace-context-spawn.test.sh)
       printf '%s\n' 'real isolated git worktrees plus spawn settle loops; gray zone until dedicated proof'
@@ -124,9 +124,6 @@ exclusion_reason() {
     fm-backend-herdr-respawn-idem-e2e.test.sh|fm-backend-herdr-smoke.test.sh|\
     fm-backend-herdr-workspace-per-home-e2e.test.sh|fm-herdr-session-cleanup-e2e.test.sh)
       printf '%s\n' 'real Herdr-gated; Herdr lane is a later phase'
-      ;;
-    fm-backend-orca.test.sh)
-      printf '%s\n' 'orca backend surface; keep serial until dedicated isolation proof'
       ;;
     *)
       return 1
@@ -409,7 +406,7 @@ for script in "${CANDIDATES[@]}"; do
     export TMP="$work/tmp"
     # Clear ambient fleet overrides so candidates cannot share a live home.
     unset FM_HOME FM_STATE_OVERRIDE FM_DATA_OVERRIDE FM_ROOT_OVERRIDE \
-      FM_PROJECTS_OVERRIDE FM_CONFIG_OVERRIDE FM_BACKEND 2>/dev/null || true
+      FM_PROJECTS_OVERRIDE FM_CONFIG_OVERRIDE 2>/dev/null || true
     cd "$ROOT" || exit 1
     begin_ms=$(now_ms)
     bash "$script" >"$work/out/stdout" 2>"$work/out/stderr"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # bin/fm-composer-lib.sh - the one fleet-wide owner of composer-content
-# classification, shared by the Herdr and Orca runtime adapters.
+# classification for Herdr task panes.
 #
 # WHY THIS EXISTS (task fm-composer-shellglyph-safety): the four adapters each
 # carried their own copy of the "is this composer row empty / pending / not an
@@ -36,17 +36,14 @@
 # byte-pattern check missed claude's own dim ghost (its prompt glyph is not
 # bold-wrapped) and no adapter covered grok's truecolor placeholder at all.
 #
-# Each adapter still owns its own CAPTURE and structural row-finding, because
-# those use genuinely different primitives (Herdr's ANSI tail scan and Orca's
-# plain read-screen). Once an adapter has a
-# candidate composer row it hands the RAW styled row to
+# Herdr owns capture and structural row-finding through its ANSI tail scan.
+# Once it has a candidate composer row it hands the RAW styled row to
 # fm_composer_strip_ghost for the real-typed-content extraction, strips the box
 # borders, trims, and hands the result plus a <bordered> flag to
 # fm_composer_classify_content for the shared
-# empty|pending|unknown verdict. Orca reads a plain, unstyled screen so
-# they have no ghost styling to strip and rely on the idle-placeholder match
-# below. Re-sourcing is a cheap idempotent redefinition, so this file needs no
-# include guard.
+# empty|pending|unknown verdict.
+# Re-sourcing is a cheap idempotent redefinition, so this file needs no include
+# guard.
 
 # fm_composer_strip_ansi: drop every CSI escape sequence, leaving plain text.
 # Used for STRUCTURAL row/shape detection, where ghost text must be KEPT so the

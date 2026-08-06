@@ -66,9 +66,6 @@
 #          FM_SUPERVISOR_TARGET     exact Herdr "<session>:<pane-id>" target.
 #                                   When unset, HERDR_ENV=1 plus HERDR_PANE_ID
 #                                   identifies the running Firstmate pane.
-#          FM_SUPERVISOR_BACKEND    optional explicit backend value.
-#                                   Herdr is the sole supported value; stale or
-#                                   unsupported values are rejected.
 #          FM_INJECT_SKIP           |-prefixes force-self-handle bypassing
 #                                   classification (default "heartbeat"); empty
 #                                   disables. Use sparingly: it overrides the
@@ -149,8 +146,7 @@ FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 # shellcheck source=bin/fm-classify-lib.sh
 . "$FM_DAEMON_DIR/fm-classify-lib.sh"
 
-# Supervisor-pane discovery (discover_supervisor_target and
-# discover_supervisor_backend). Shared with the script-owned away launcher
+# Supervisor-pane discovery (discover_supervisor_target). Shared with the script-owned away launcher
 # (bin/fm-afk-launch.sh) so the captain-pane resolution has exactly one owner.
 # shellcheck source=bin/fm-supervisor-target-lib.sh
 . "$FM_DAEMON_DIR/fm-supervisor-target-lib.sh"
@@ -161,8 +157,6 @@ FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 . "$FM_DAEMON_DIR/fm-busy-lib.sh"
 
 # --- tunables ---------------------------------------------------------------
-# Herdr is the sole verified supervisor transport.
-FM_SUPERVISOR_SUPPORTED_BACKENDS="herdr"
 INJECT_SKIP_DEFAULT="heartbeat"
 STALE_ESCALATE_SECS_DEFAULT=240
 ESCALATE_BATCH_SECS_DEFAULT=90
@@ -293,9 +287,9 @@ _collapse_newlines() {  # <text>
   printf '%s' "$s"
 }
 
-# discover_supervisor_target / discover_supervisor_backend are owned by
-# bin/fm-supervisor-target-lib.sh (sourced above). fm_super_main below calls
-# them exactly as before; the away launcher reuses the identical resolution to
+# discover_supervisor_target is owned by bin/fm-supervisor-target-lib.sh
+# (sourced above). fm_super_main below calls it, and the away launcher reuses
+# the identical resolution to
 # pass the captain pane in as FM_SUPERVISOR_TARGET.
 
 # --- classification helpers (PURE: no side effects, testable) ---------------
@@ -1075,9 +1069,8 @@ inject_msg() {  # <message> [state]
   fm_operational_input_encode away-supervisor "$msg" encoded || return 1
   msg=$encoded
   target="${FM_SUPERVISOR_TARGET:-}"
-  # Dispatch through the shared backend owner and default to Herdr in sourced
-  # test contexts that have not run startup discovery.
-  backend="${FM_SUPERVISOR_BACKEND:-herdr}"
+  # Dispatch through the shared backend owner.
+  backend=herdr
   fm_backend_target_exists "$backend" "$target" || return 1
   # (3) Busy-guard: never inject into an in-use supervisor pane.
   if pane_is_busy "$target" "$backend"; then
@@ -1276,24 +1269,7 @@ fm_super_main() {
   echo "$$" > "$PIDFILE"
   fm_pid_identity "${BASHPID:-$$}" > "$LOCK/pid-identity" 2>/dev/null || true
 
-  # Resolve and validate the sole supervisor backend before target discovery.
-  local discovered_backend backend_source
-  backend_source="FM_SUPERVISOR_BACKEND"
-  if [ -z "${FM_SUPERVISOR_BACKEND:-}" ]; then
-    backend_source="default(herdr)"
-  fi
-  discovered_backend=$(discover_supervisor_backend) || true
-  FM_SUPERVISOR_BACKEND="$discovered_backend"
-  local BACKEND="$FM_SUPERVISOR_BACKEND"
-
-  # Refuse an unsupported supervisor backend before any runtime call.
-  if ! fm_backend_list_contains "$FM_SUPERVISOR_SUPPORTED_BACKENDS" "$BACKEND"; then
-    echo "error: unsupported supervisor backend '$BACKEND' (supported: $FM_SUPERVISOR_SUPPORTED_BACKENDS)" >&2
-    log "startup failed: unsupported supervisor backend '$BACKEND' (source=$backend_source)"
-    fm_lock_release "$LOCK" 2>/dev/null || true
-    rm -f "$PIDFILE" 2>/dev/null || true
-    exit 1
-  fi
+  local BACKEND=herdr
 
   # --- auto-discover the supervisor target (the pane running firstmate) -----
   # Priority: FM_SUPERVISOR_TARGET override, then the injected Herdr pane id.
@@ -1325,7 +1301,7 @@ fm_super_main() {
 
   local afk_status="off"
   afk_active "$STATE" && afk_status="on"
-  log "daemon starting (pid $$); target=$TARGET; target_source=$target_source; backend=$BACKEND; backend_source=$backend_source; afk=$afk_status; inject_skip='${FM_INJECT_SKIP:-$INJECT_SKIP_DEFAULT}'; stale_escalate=${FM_STALE_ESCALATE_SECS:-$STALE_ESCALATE_SECS_DEFAULT}s; batch=${FM_ESCALATE_BATCH_SECS:-$ESCALATE_BATCH_SECS_DEFAULT}s"
+  log "daemon starting (pid $$); target=$TARGET; target_source=$target_source; backend=$BACKEND; afk=$afk_status; inject_skip='${FM_INJECT_SKIP:-$INJECT_SKIP_DEFAULT}'; stale_escalate=${FM_STALE_ESCALATE_SECS:-$STALE_ESCALATE_SECS_DEFAULT}s; batch=${FM_ESCALATE_BATCH_SECS:-$ESCALATE_BATCH_SECS_DEFAULT}s"
   migrate_watcher_pause_markers "$STATE"
 
   # --- shutdown: flush buffered escalations, reap child, release lock -------

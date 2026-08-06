@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bin/backends/herdr.sh - the default Herdr session-provider adapter.
+# bin/backends/herdr.sh - the Herdr task-runtime adapter.
 #
 # Design: data/fm-backend-design-d7/herdr-addendum.md ("Interface mapping",
 # decisions D1-D6) and the empirical verification recorded in
@@ -55,7 +55,7 @@
 # is deliberately excluded from that path.
 #
 # Requires: herdr (CLI + socket), jq (JSON parsing). Bootstrap detects these
-# through fm_backend_required_tools only when herdr is the resolved backend;
+# through fm_backend_required_tools as part of the required Herdr runtime;
 # this adapter also gates them again before spawning.
 
 # FM_HOME fallback: every real caller (fm-spawn.sh, fm-peek.sh, fm-send.sh,
@@ -196,8 +196,8 @@ fm_backend_herdr_cli() {  # <session> <herdr-subcommand-and-args...>
 
 # fm_backend_herdr_tool_check: refuse loudly if herdr or jq is missing.
 fm_backend_herdr_tool_check() {
-  command -v herdr >/dev/null 2>&1 || { echo "error: backend=herdr selected but the 'herdr' CLI is not installed (https://herdr.dev) (dual-licensed AGPL-3.0-or-later/commercial)" >&2; return 1; }
-  command -v jq >/dev/null 2>&1 || { echo "error: backend=herdr selected but 'jq' is not installed (required to parse herdr's JSON output)" >&2; return 1; }
+  command -v herdr >/dev/null 2>&1 || { echo "error: the Herdr runtime requires the 'herdr' CLI (https://herdr.dev) (dual-licensed AGPL-3.0-or-later/commercial)" >&2; return 1; }
+  command -v jq >/dev/null 2>&1 || { echo "error: the Herdr runtime requires 'jq' to parse JSON output" >&2; return 1; }
   return 0
 }
 
@@ -217,7 +217,7 @@ fm_backend_herdr_version_check() {
       ;;
   esac
   if [ "$protocol" -lt "$FM_BACKEND_HERDR_MIN_PROTOCOL" ]; then
-    echo "error: herdr protocol $protocol (version ${version:-unknown}) is older than the verified minimum $FM_BACKEND_HERDR_MIN_PROTOCOL; update herdr (herdr update) before using backend=herdr" >&2
+    echo "error: herdr protocol $protocol (version ${version:-unknown}) is older than the verified minimum $FM_BACKEND_HERDR_MIN_PROTOCOL; update herdr (herdr update) before running Firstmate" >&2
     return 1
   fi
   return 0

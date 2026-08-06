@@ -14,7 +14,7 @@ The tracked code root contains the shared instruction, skill, documentation, wor
 `state/` holds volatile runtime records such as task metadata, append-only status events, endpoint signals, watcher and wake-queue coordination, away-mode state, generated X-mode artifacts, private secondmate config-reread generations with their retry and quarantine state, and parent-owned secondmate pending-reply records under `state/pending-replies/` (`bin/fm-pending-reply-lib.sh`).
 `config/` holds local gitignored operating choices, and `projects/` holds the local project clones that Firstmate reads but changes only through the narrow guarded and concrete captain-approved exceptions in `AGENTS.md`.
 
-`bin/fm-spawn.sh` owns the base task-metadata fields it emits, while the runtime-backend section below owns backend-specific fields and selector interpretation.
+`bin/fm-spawn.sh` owns the base task-metadata fields it emits, while the task-runtime section below owns Herdr-specific fields and selector interpretation.
 The producing PR and X helpers own the fields they append, `bin/fm-classify-lib.sh` owns status-event vocabulary, and `bin/fm-crew-state.sh` owns current-state reconciliation.
 Wake, watcher, away-mode, and X-specific state mechanics remain with their named scripts and reference sections rather than being duplicated into one exhaustive state tree here.
 
@@ -45,34 +45,24 @@ Set the local, gitignored `config/backlog-backend` file to `manual` to force man
 Absent or `tasks-axi` selects the default tasks-axi backend.
 The file format is unchanged in both modes; tasks-axi and manual edits produce the same `## In flight`, `## Queued`, and `## Done` sections.
 
-## Runtime backend (config/backend / FM_BACKEND)
+## Task runtime
 
-Herdr is the sole automatic and default runtime backend.
-Orca remains supported only when explicitly selected for an individual task or through `FM_BACKEND=orca` or local gitignored `config/backend` containing `orca`.
-A per-task `--backend` authorized for that task wins, followed by `FM_BACKEND`, then the first non-empty line of `config/backend`, then Herdr.
-There is no runtime environment detection and no alternate fallback.
-The only supported values are `herdr` and `orca`; every other value is rejected with a current error naming those choices.
+Herdr is Firstmate's sole task runtime, and Treehouse provides every task worktree.
+A spawn requires the Herdr CLI, `jq`, compatible Treehouse, and the protocol floor enforced by the adapter.
+A missing dependency or readiness refusal stops the task launch.
 [`herdr-backend.md`](herdr-backend.md) owns Herdr setup and safety limits.
-[`orca-backend.md`](orca-backend.md) owns explicit Orca setup and limits.
-`codex-app` is not accepted; [`codex-app-backend.md`](codex-app-backend.md) owns that boundary.
 
-Herdr provides the task session while Treehouse provides the task worktree.
-A Herdr spawn requires the Herdr CLI, `jq`, compatible Treehouse, and the protocol floor enforced by the adapter.
-Orca owns both the worktree and terminal endpoint, requires a ready Orca runtime, and does not support secondmate spawns.
-A selected backend's missing dependency or readiness refusal is terminal for that task and is never retried on another backend.
-
-Every new task records `backend=` and `endpoint_task_id=`.
-Metadata with a missing or unsupported `backend=` value is stale and is refused rather than migrated or reinterpreted.
-A Herdr task records `window=<session>:<pane-id>`, `herdr_session=`, `herdr_workspace_id=`, `herdr_tab_id=`, and `herdr_pane_id=`.
-An Orca task records `window=fm-<id>`, `terminal=`, and `orca_worktree_id=`.
+Every new task records `backend=herdr` and `endpoint_task_id=`.
+The fixed runtime marker is a cleanup identity guard, not a selection surface.
+Metadata with a missing or different `backend=` value is stale and is refused rather than migrated or reinterpreted.
+A task records `window=<session>:<pane-id>`, `herdr_session=`, `herdr_workspace_id=`, `herdr_tab_id=`, and `herdr_pane_id=`.
 `fm-teardown.sh <id>` validates the complete metadata-only endpoint identity before runtime dispatch or cleanup mutation.
-Missing, empty, duplicate, malformed, backend-inconsistent, or task-mismatched endpoint records are preserved and refused.
+Missing, empty, duplicate, malformed, runtime-inconsistent, or task-mismatched endpoint records are preserved and refused.
 
 Task selectors for `fm-peek.sh`, `fm-send.sh`, and `fm-crew-state.sh` resolve centrally through `fm_backend_resolve_selector`.
 A selector containing `:` is an explicit Herdr endpoint escape hatch.
 Otherwise an exact task id matching `state/<id>.meta` wins before the `fm-<id>` selector form.
-A metadata-routed selector returns `terminal=` for Orca and `window=` for Herdr.
-Matching explicit targets can recover their recorded backend from metadata.
+A metadata-routed selector returns `window=`.
 Only metadata-routed task selectors carry secondmate-marker and harness context.
 These sentences are the single owner of the task-selector vocabulary.
 
@@ -81,21 +71,19 @@ These sentences are the single owner of the task-selector vocabulary.
 The local `config/herdr-presentation-spaces` file opts a home out of Herdr's default-on disposable single-task projection.
 [`herdr-backend.md`](herdr-backend.md#presentation-spaces) owns accepted values, safety limits, and cleanup.
 For normal Herdr operations, `HERDR_SESSION` selects the named session, but destructive test cleanup must use the guarded lab helper described in that guide.
-`config/backend` and `config/herdr-presentation-spaces` are inherited into secondmate homes under the primary-authoritative contract owned by `secondmate-provisioning`.
+`config/herdr-presentation-spaces` is inherited into secondmate homes under the primary-authoritative contract owned by `secondmate-provisioning`.
 
-## Away-mode supervisor backend (FM_SUPERVISOR_BACKEND / FM_SUPERVISOR_TARGET)
+## Away-mode supervisor target (FM_SUPERVISOR_TARGET)
 
-The `/afk` sub-supervisor injects escalation digests into Firstmate's own Herdr pane independently of an individual task's backend.
-Herdr is the sole supported supervisor backend.
+The `/afk` sub-supervisor injects escalation digests into Firstmate's own Herdr pane independently of individual task endpoints.
 `FM_SUPERVISOR_TARGET=<session>:<pane-id>` overrides target discovery.
 Without that override, `HERDR_ENV=1` plus `HERDR_PANE_ID` identifies the pane and `HERDR_SESSION` defaults to `default`.
-`FM_SUPERVISOR_BACKEND` may explicitly contain `herdr`; every other value is rejected instead of being reinterpreted.
 When no authoritative target is available, away-mode launch refuses rather than guessing a pane.
 
 ## Away-mode wedge alarm channels (config/wedge-alarm)
 
 When away-mode injection wedges past `FM_MAX_DEFER_SECS`, the sub-supervisor raises a loud, rate-limited alarm.
-Beyond the durable `state/.subsuper-inject-wedged` marker, it attempts a configured backend-independent active alert that can reach the captain even when every pane is unreadable.
+Beyond the durable `state/.subsuper-inject-wedged` marker, it attempts a configured pane-independent active alert that can reach the captain even when every pane is unreadable.
 `config/wedge-alarm` (local, gitignored) lists channel directives, one per non-empty, non-comment line; every listed non-`off` channel fires, best-effort.
 `FM_WEDGE_ALARM_CHANNEL` overrides the file with a single directive.
 Directives are `off` (a position-independent kill switch that disables every active alert), `auto`/`default`, `osascript` (macOS Notification Center banner), `herdr` (herdr UI notification), and `command:<cmd>` (run `<cmd>` via `sh -c`, summary on `$1` and stdin).
@@ -266,17 +254,13 @@ Secondmate homes inherit this file from the primary, so a secondmate's own crewm
 
 On session start the first mate detects what its required toolchain is missing or too old and lists each problem with either an exact install command or manual instructions.
 It installs automatically supported tools only after you say go; manual-only tools remain for you to install from the printed instructions.
-Required tools come in two parts: a universal toolchain every home needs regardless of backend, and a per-backend delta that follows the runtime backend actually resolved for this home.
+Required tools combine the universal toolchain with Herdr and Treehouse.
 The universal toolchain is node, git, gh with GitHub auth via `gh auth login`, no-mistakes v1.31.2 or newer, compatible gh-axi, chrome-devtools-axi, compatible lavish-axi, compatible tasks-axi per "Backlog backend" above, and compatible quota-axi.
 [`bin/fm-bootstrap.sh`](../bin/fm-bootstrap.sh) owns the axi-family floor policy and the gh-axi and lavish-axi floors, while [`bin/fm-tasks-axi-lib.sh`](../bin/fm-tasks-axi-lib.sh) and [`bin/fm-quota-axi-lib.sh`](../bin/fm-quota-axi-lib.sh) hold their own tools' floor constants.
-This section is the single owner of that universal toolchain list; backend guides' prerequisites point here and add only their backend-specific tools.
+This section is the single owner of that universal toolchain list; the Herdr guide points here for prerequisites.
 In that list, no-mistakes runs the validation pipeline, gh-axi, chrome-devtools-axi, and lavish-axi cover GitHub, browser, and rich-review operations, and tasks-axi plus quota-axi back backlog mutations and quota-aware array dispatch.
-The per-backend delta follows `FM_BACKEND`, then `config/backend`, then default Herdr, so a home is never told to install an inactive backend's tools.
-That delta is owned by `fm_backend_required_tools` in `bin/fm-backend.sh`.
-Herdr requires `herdr`, `jq`, and Treehouse.
-Explicit Orca requires only `orca` because Orca owns the worktree and terminal.
-An unsupported resolved value emits `BACKEND_INVALID` with the supported choices and blocks dispatch without fallback.
-The Treehouse durable-lease upgrade check runs only for Herdr.
+The Herdr and Treehouse dependency set is owned by `fm_backend_required_tools` in `bin/fm-backend.sh`.
+Herdr requires `herdr`, `jq`, and Treehouse, including Treehouse durable-lease support.
 When `config/crew-dispatch.json` exists, bootstrap also requires `jq` for dispatch profile validation.
 When X mode is opted in, bootstrap also requires `curl` and `jq` before arming the relay poll shim.
 Herdr Mirror is another relevance-gated tool and is activated only when `data/secondmates.md` contains a valid registered remote route.
@@ -473,7 +457,6 @@ FM_DATA_OVERRIDE=        # alternate data dir, mainly for tests
 FM_PROJECTS_OVERRIDE=    # alternate projects dir, mainly for tests
 FM_CONFIG_OVERRIDE=      # alternate config dir, mainly for tests
 FM_PROC_ROOT_OVERRIDE=   # alternate /proc root for Linux process-identity reads in fm-wake-lib.sh and fm-teardown.sh, mainly for tests
-FM_BACKEND=             # optional runtime override for new spawns; supported values are herdr and explicit-only orca
 FM_TRACE_CONTEXT=       # optional trace-context override; see "Trace context propagation"
 HERDR_SESSION=default  # herdr-only: named session for normal backend ops; not enough for destructive cleanup (docs/herdr-backend.md)
 FM_BACKEND_HERDR_COMPOSER_LINES=20  # herdr-only: tail lines scanned by composer-state guard/fallback paths; idle-baseline submit confirmation uses agent-state
@@ -482,8 +465,6 @@ FM_BACKEND_HERDR_BARE_PROMPT_RE='^(❯|›)'  # herdr-only: verified agent glyph
 FM_BACKEND_HERDR_PI_COMPOSER_MAX_LINES=8  # herdr-only: maximum rows admitted between Pi's native-identity-corroborated separator pair; taller or ambiguous candidates stay unknown (docs/herdr-backend.md "Composer and injection safety")
 FM_BACKEND_HERDR_SUBMIT_POLLS=6  # herdr-only: agent-state samples spread across each Enter attempt's budget when confirming a submit (docs/herdr-backend.md "Current transport behavior")
 FM_BACKEND_HERDR_SUBMIT_MIN_SLEEP=0.6  # herdr-only: minimum per-Enter confirmation budget before polling agent-state after an idle baseline
-FM_BACKEND_ORCA_COMPOSER_LINES=200  # orca-only: terminal-read lines scanned to locate the composer row for submit verification
-FM_BACKEND_ORCA_IDLE_RE='^Type a message\.\.\.$'  # orca-only: empty-composer placeholder regex after border/prompt stripping
 FM_SESSION_START_STATUS_TAIL=5   # state/*.status lines printed per task in the session-start digest
 FM_BOOTSTRAP_DETECT_ONLY=0   # internal/read-only session-start mode: skip bootstrap's mutating sweeps and print advisory TANGLE wording
 FM_GUARD_READ_ONLY=0    # internal/read-only guard mode: keep alarms but suppress drain, supervision repair, and checkout repair commands
@@ -553,7 +534,6 @@ FM_SEND_SLEEP=0.4       # seconds between fm-send submit checks
 FM_SEND_SETTLE=1        # seconds fm-send waits after a successful text submit; 0 disables
 FM_PENDING_REPLY_GRACE_SECS=120   # seconds after marked-request delivery before a completed turn without a correlated parent report is eligible for its one recovery repost
 # sub-supervisor (bin/fm-supervise-daemon.sh); presence-gated via /afk
-FM_SUPERVISOR_BACKEND=             # optional supervisor backend override; herdr is the only supported value
 FM_SUPERVISOR_TARGET=              # optional exact Herdr <session>:<pane-id>; otherwise uses HERDR_ENV/HERDR_PANE_ID
 FM_INJECT_SKIP=heartbeat           # |-prefixes force-self-handled bypassing classification; empty disables
 FM_ESCALATE_BATCH_SECS=90          # buffer window for batched escalation digests; 0 = flush immediately

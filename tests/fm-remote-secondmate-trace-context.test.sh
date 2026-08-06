@@ -74,7 +74,6 @@ SH
 chmod +x "$FAKEBIN/fake-ssh"
 
 printf 'codex\n' > "$PARENT/config/secondmate-harness"
-printf 'herdr\n' > "$PARENT/config/backend"
 printf 'codex\n' > "$PARENT/config/crew-harness"
 printf '## In flight\n\n## Queued\n\n## Done\n' > "$PARENT/data/backlog.md"
 

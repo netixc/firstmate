@@ -467,17 +467,17 @@ test_unsupported_backend_identity_stops_watch() {
     "$WATCH" > "$out" 2> "$err"; then
     fail "watcher accepted unsupported backend metadata"
   fi
-  grep -F "unsupported backend identity 'legacy' (supported: herdr orca)" "$err" >/dev/null \
-    || fail "watcher did not report the current supported backend choices: $(cat "$err")"
-  [ ! -s "$out" ] || fail "watcher surfaced an unrelated notification for unsupported backend metadata"
-  pass "unsupported watcher metadata stops with the current supported backend choices"
+  grep -F "does not identify the Herdr runtime (recorded: legacy)" "$err" >/dev/null \
+    || fail "watcher did not report the required Herdr identity: $(cat "$err")"
+  [ ! -s "$out" ] || fail "watcher surfaced an unrelated notification for unsupported runtime metadata"
+  pass "unsupported watcher metadata stops with the required Herdr identity"
 }
 
 test_remote_secondmate_metadata_stays_off_local_watch_paths() {
   local dir state fakebin out err pid window
   dir=$(make_case remote-secondmate); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; err="$dir/watch.err"; window="test:fm-missing"
-  printf 'window=remote:ios\nkind=secondmate\nremote_host=remote-mac\nremote_backend=herdr\nremote_target=fm-remote:w1:p1\n' > "$state/ios.meta"
+  printf 'window=remote:ios\nkind=secondmate\nremote_host=remote-mac\nremote_target=fm-remote:w1:p1\n' > "$state/ios.meta"
 
   PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state" FM_POLL=1 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" 2> "$err" &
@@ -495,8 +495,8 @@ test_remote_secondmate_metadata_stays_off_local_watch_paths() {
     "$WATCH" > "$out" 2> "$err"; then
     fail "watcher accepted missing local backend metadata"
   fi
-  grep -F "unsupported backend identity 'missing' (supported: herdr orca)" "$err" >/dev/null \
-    || fail "watcher did not reject missing local backend metadata: $(cat "$err")"
+  grep -F "does not identify the Herdr runtime (recorded: missing)" "$err" >/dev/null \
+    || fail "watcher did not reject missing local runtime metadata: $(cat "$err")"
   pass "remote secondmate metadata bypasses local watch paths without weakening local validation"
 }
 

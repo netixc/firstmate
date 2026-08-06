@@ -112,17 +112,6 @@ event_wait_or_sleep
 [ "$CAP_CALLS" = 1 ] || fail "capability probe must be memoized across waits, got $CAP_CALLS calls"
 pass "event_wait_or_sleep: one cached capability probe owns validation across bounded waits"
 
-# --- event_wait_or_sleep: explicit Orca never runs the Herdr event path -------
-
-reset_state
-fm_write_meta "$STATE_DIR/tk4.meta" "window=fm-tk4" "terminal=term-tk4" "backend=orca" "kind=ship"
-# shellcheck disable=SC2329 # Runtime override called by the isolated watcher.
-fm_backend_wait_transition() { printf 'CALLED\n' > "$TMP/wtcalled"; return 1; }
-event_wait_or_sleep
-[ ! -e "$TMP/wtcalled" ] || fail "an Orca-only home must never invoke the Herdr event wait path"
-grep -q 'SLEEP' "$SLEEP_LOG" || fail "an Orca-only home must sleep POLL"
-pass "event_wait_or_sleep: a home with no push-capable endpoint sleeps without touching the event path"
-
 # --- event_wait_or_sleep: runtime failures disable the event path (fail-closed)
 
 reset_state

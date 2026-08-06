@@ -14,10 +14,10 @@
 #      explicit per-spawn harness arg still wins.
 #   B) Inheritance. The primary pushes a declared, extensible set of LOCAL
 #      (gitignored) config items - config/crew-dispatch.json, config/crew-harness,
-#      config/backlog-backend, config/backend, config/herdr-presentation-spaces,
+#      config/backlog-backend, config/herdr-presentation-spaces,
 #      config/startup-memory-budget, and config/trace-context -
 #      down into each secondmate home's config/, so the secondmate's OWN crewmates,
-#      dispatch profiles, backlog backend, runtime-backend default, Herdr
+#      dispatch profiles, backlog backend, Herdr
 #      presentation choice, startup-memory budget, and trace context inherit the
 #      primary's settings. config/herdr-presentation-spaces is default-ON, so an
 #      absent primary file and an absent destination file both mean on and the
@@ -61,7 +61,7 @@ unset CLAUDECODE PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT
 BASE_PATH=${FM_TEST_BASE_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
 fm_git_identity fmtest fmtest@example.com
 TMP_ROOT=$(fm_test_tmproot fm-secondmate-harness)
-export FM_BACKEND=herdr
+export
 
 # ===========================================================================
 # A) fm-harness.sh secondmate resolution + fallback (deterministic detect_own)
@@ -268,7 +268,6 @@ test_propagate_lib() {
   printf '{"default":{"harness":"codex"}}\n' > "$src/crew-dispatch.json"
   printf 'codex\n' > "$src/crew-harness"
   printf 'manual\n' > "$src/backlog-backend"
-  printf 'herdr\n' > "$src/backend"
   : > "$src/herdr-presentation-spaces"
   : > "$src/trace-context"
   stdout="$d/clean-copy.out"
@@ -279,11 +278,8 @@ test_propagate_lib() {
   [ "$(cat "$dest/crew-dispatch.json")" = '{"default":{"harness":"codex"}}' ] || fail "crew-dispatch.json not propagated"
   [ "$(cat "$dest/crew-harness")" = codex ] || fail "crew-harness not propagated"
   [ "$(cat "$dest/backlog-backend")" = manual ] || fail "backlog-backend not propagated"
-  [ "$(cat "$dest/backend")" = herdr ] || fail "backend not propagated"
   [ -f "$dest/herdr-presentation-spaces" ] || fail "herdr-presentation-spaces not propagated"
-  printf 'herdr\n' > "$dest/backend"
   propagate_inheritable_config "$src" "$dest"
-  [ "$(cat "$dest/backend")" = herdr ] || fail "primary backend did not overwrite a divergent destination"
   [ -f "$dest/trace-context" ] || fail "trace-context not propagated by the default inheritable set"
 
   # 2. idempotent: an unchanged re-run does not churn the mtime
@@ -301,12 +297,10 @@ test_propagate_lib() {
   printf '{"default":{"harness":"claude"}}\n' > "$src/crew-dispatch.json"
   printf 'claude\n' > "$src/crew-harness"
   printf 'tasks-axi\n' > "$src/backlog-backend"
-  printf 'orca\n' > "$src/backend"
   propagate_inheritable_config "$src" "$dest"
   [ "$(cat "$dest/crew-dispatch.json")" = '{"default":{"harness":"claude"}}' ] || fail "changed dispatch profile did not converge"
   [ "$(cat "$dest/crew-harness")" = claude ] || fail "changed value did not converge"
   [ "$(cat "$dest/backlog-backend")" = tasks-axi ] || fail "changed backlog backend did not converge"
-  [ "$(cat "$dest/backend")" = orca ] || fail "changed backend did not converge"
 
   outside="$d/outside-target"
   rm -f "$dest/crew-harness" "$outside"
@@ -319,14 +313,12 @@ test_propagate_lib() {
   [ "$(cat "$outside")" = outside ] || fail "destination symlink target was overwritten"
 
   # 4. removing the source mirrors absence downstream (primary-authoritative)
-  printf 'herdr\n' > "$dest/backend"
   rm -f "$src/crew-dispatch.json" "$src/crew-harness" "$src/backlog-backend" \
-    "$src/backend" "$src/herdr-presentation-spaces" "$src/trace-context"
+    "$src/herdr-presentation-spaces" "$src/trace-context"
   propagate_inheritable_config "$src" "$dest"
   [ -e "$dest/crew-dispatch.json" ] && fail "dispatch profile absence not mirrored downstream"
   [ -e "$dest/crew-harness" ] && fail "absence not mirrored downstream"
   [ -e "$dest/backlog-backend" ] && fail "backlog-backend absence not mirrored downstream"
-  [ -e "$dest/backend" ] && fail "backend absence not mirrored downstream"
   [ -e "$dest/herdr-presentation-spaces" ] && fail "herdr-presentation-spaces absence not mirrored downstream"
   [ -e "$dest/trace-context" ] && fail "trace-context absence not mirrored downstream"
 
@@ -345,12 +337,11 @@ test_propagate_lib() {
   [ -d "$dest/crew-harness" ] || fail "failed absence mirror removed the wrong path"
   rm -rf "$dest/crew-harness"
 
-  # 5. secondmate-harness is never inherited; backend still is
+  # 5. secondmate-harness is never inherited.
   printf 'grok\n' > "$src/secondmate-harness"
   printf '{"default":{"harness":"codex"}}\n' > "$src/crew-dispatch.json"
   printf 'codex\n' > "$src/crew-harness"
   printf 'manual\n' > "$src/backlog-backend"
-  printf 'herdr\n' > "$src/backend"
   rm -rf "$d/home2"
   mkdir -p "$d/home2/config" "$d/home2/state"
   propagate_inheritable_config "$src" "$d/home2/config"
@@ -358,12 +349,10 @@ test_propagate_lib() {
   [ "$(cat "$d/home2/config/crew-dispatch.json")" = '{"default":{"harness":"codex"}}' ] || fail "crew-dispatch.json not propagated alongside"
   [ "$(cat "$d/home2/config/crew-harness")" = codex ] || fail "crew-harness not propagated alongside"
   [ "$(cat "$d/home2/config/backlog-backend")" = manual ] || fail "backlog-backend not propagated alongside"
-  [ "$(cat "$d/home2/config/backend")" = herdr ] || fail "backend not propagated alongside"
 
   # 6. nothing to propagate -> destination dir is never created (a true no-op)
   rm -rf "$d/src3" "$d/dest3"
   mkdir -p "$d/src3"
-  # Keep backend out of the empty-source case by clearing it from src3 only.
   propagate_inheritable_config "$d/src3" "$d/dest3/config"
   [ -e "$d/dest3/config" ] && fail "empty-source propagation created a destination dir"
 
@@ -470,7 +459,6 @@ test_spawn_split_and_inherit() {
   printf 'claude\n' > "$w/home/config/crew-harness"
   printf 'codex\n' > "$w/home/config/secondmate-harness"
   printf 'manual\n' > "$w/home/config/backlog-backend"
-  printf 'herdr\n' > "$w/home/config/backend"
   make_seeded_home "$sm" sm
 
   spawn_secondmate "$w" sm "$sm"
@@ -485,8 +473,6 @@ test_spawn_split_and_inherit() {
     || fail "split: home crew-dispatch.json not inherited"
   [ "$(cat "$sm/config/backlog-backend" 2>/dev/null)" = manual ] \
     || fail "split: home backlog-backend not inherited as manual"
-  [ "$(cat "$sm/config/backend" 2>/dev/null)" = herdr ] \
-    || fail "split: home backend not inherited as herdr"
   [ -e "$sm/config/secondmate-harness" ] \
     && fail "split: secondmate-harness leaked into the secondmate home"
   pass "B2 spawn: secondmate runs the secondmate harness; its home inherits declared config"
@@ -632,50 +618,6 @@ spawn_secondmate_capture() {
     FM_PROJECTS_OVERRIDE="$world/home/projects" FM_CONFIG_OVERRIDE="$world/home/config" \
     FM_SPAWN_NO_GUARD=1 FM_FAKE_LAUNCH_LOG="$launchlog" \
     "$ROOT/bin/fm-spawn.sh" "$id" "$home" "$@" --secondmate
-}
-
-test_spawn_backend_precedence_over_inherited_config() {
-  local w sm meta launchlog out status
-  w="$TMP_ROOT/spawn-backend-env-precedence"
-  sm="$w/sm"
-  launchlog="$w/launch.log"
-  mkdir -p "$w/home/config"
-  printf 'orca\n' > "$w/home/config/backend"
-  make_seeded_home "$sm" sm
-
-  out=$(FM_BACKEND=herdr spawn_secondmate_capture \
-    "$w" sm "$sm" "$launchlog" 2>&1); status=$?
-  expect_code 0 "$status" \
-    "FM_BACKEND=herdr should beat inherited config/backend=orca"$'\n'"$out"
-
-  meta="$w/home/state/sm.meta"
-  [ "$(cat "$sm/config/backend")" = orca ] \
-    || fail "backend precedence fixture did not inherit config/backend=orca"
-  assert_grep 'backend=herdr' "$meta" \
-    "FM_BACKEND=herdr did not beat inherited config/backend=orca"
-  pass "B5b spawn: FM_BACKEND wins over inherited config/backend"
-}
-
-test_spawn_explicit_backend_precedence_over_env_and_inherited_config() {
-  local w sm meta launchlog out status
-  w="$TMP_ROOT/spawn-backend-flag-precedence"
-  sm="$w/sm"
-  launchlog="$w/launch.log"
-  mkdir -p "$w/home/config"
-  printf 'herdr\n' > "$w/home/config/backend"
-  make_seeded_home "$sm" sm
-
-  out=$(FM_BACKEND=orca spawn_secondmate_capture \
-    "$w" sm "$sm" "$launchlog" --backend herdr 2>&1); status=$?
-  expect_code 0 "$status" \
-    "explicit --backend herdr should beat FM_BACKEND=orca and inherited config/backend=herdr"$'\n'"$out"
-
-  meta="$w/home/state/sm.meta"
-  [ "$(cat "$sm/config/backend")" = herdr ] \
-    || fail "explicit backend precedence fixture did not inherit config/backend=herdr"
-  assert_grep 'backend=herdr' "$meta" \
-    "explicit --backend herdr did not beat FM_BACKEND=orca and inherited config/backend=herdr"
-  pass "B5c spawn: explicit --backend wins over FM_BACKEND and inherited config/backend"
 }
 
 # A bare "<harness>" secondmate-harness file (today's format) must launch with
@@ -947,7 +889,7 @@ new_world() {
     printf 'projects/\nstate/\ndata/\n.no-mistakes/\n'
     [ "$dispatch_ignore" = no ] || printf 'config/crew-dispatch.json\n'
     printf 'config/crew-harness\nconfig/secondmate-harness\nconfig/backlog-backend\n'
-    printf 'config/backend\nconfig/herdr-presentation-spaces\nconfig/startup-memory-budget\n'
+    printf 'config/herdr-presentation-spaces\nconfig/startup-memory-budget\n'
   } > "$w/main/.gitignore"
   printf 'v1\n' > "$w/main/AGENTS.md"
   printf 'r1\n' > "$w/main/README.md"
@@ -1189,7 +1131,6 @@ test_bootstrap_sweep_propagates_and_reconverges() {
   printf '{"default":{"harness":"codex"}}\n' > "$w/home/config/crew-dispatch.json"
   printf 'codex\n' > "$w/home/config/crew-harness"
   printf 'manual\n' > "$w/home/config/backlog-backend"
-  printf 'herdr\n' > "$w/home/config/backend"
   : > "$w/home/config/trace-context"
   printf 'grok\n' > "$w/home/config/secondmate-harness"
   run_bootstrap "$w" >/dev/null
@@ -1199,8 +1140,6 @@ test_bootstrap_sweep_propagates_and_reconverges() {
     || fail "sweep: crew-dispatch.json not pushed into the live home"
   [ "$(cat "$w/sm/config/backlog-backend" 2>/dev/null)" = manual ] \
     || fail "sweep: backlog-backend not pushed into the live home"
-  [ "$(cat "$w/sm/config/backend" 2>/dev/null)" = herdr ] \
-    || fail "sweep: backend not pushed into the live home"
   [ ! -e "$w/sm/config/trace-context" ] \
     || fail "sweep: trace-context changed a legacy live home before relaunch"
   [ -e "$w/sm/config/secondmate-harness" ] \
@@ -1210,7 +1149,6 @@ test_bootstrap_sweep_propagates_and_reconverges() {
   printf '{"default":{"harness":"claude"}}\n' > "$w/home/config/crew-dispatch.json"
   printf 'claude\n' > "$w/home/config/crew-harness"
   printf 'tasks-axi\n' > "$w/home/config/backlog-backend"
-  printf 'orca\n' > "$w/home/config/backend"
   run_bootstrap "$w" >/dev/null
   [ "$(cat "$w/sm/config/crew-harness" 2>/dev/null)" = claude ] \
     || fail "sweep: home did not re-converge to the primary's new crew-harness"
@@ -1218,12 +1156,10 @@ test_bootstrap_sweep_propagates_and_reconverges() {
     || fail "sweep: home did not re-converge to the primary's new crew-dispatch.json"
   [ "$(cat "$w/sm/config/backlog-backend" 2>/dev/null)" = tasks-axi ] \
     || fail "sweep: home did not re-converge to the primary's new backlog-backend"
-  [ "$(cat "$w/sm/config/backend" 2>/dev/null)" = orca ] \
-    || fail "sweep: home did not re-converge to the primary's new backend"
 
   # Mirror absence: primary clears inherited config; the home's copies are removed.
   rm -f "$w/home/config/crew-dispatch.json" "$w/home/config/crew-harness" \
-    "$w/home/config/backlog-backend" "$w/home/config/backend"
+    "$w/home/config/backlog-backend"
   run_bootstrap "$w" >/dev/null
   [ -e "$w/sm/config/crew-dispatch.json" ] \
     && fail "sweep: home crew-dispatch.json not removed after the primary cleared it"
@@ -1231,8 +1167,6 @@ test_bootstrap_sweep_propagates_and_reconverges() {
     && fail "sweep: home crew-harness not removed after the primary cleared it"
   [ -e "$w/sm/config/backlog-backend" ] \
     && fail "sweep: home backlog-backend not removed after the primary cleared it"
-  [ -e "$w/sm/config/backend" ] \
-    && fail "sweep: home backend not removed after the primary cleared it"
   pass "B7 bootstrap sweep pushes, re-converges, and mirrors absence; never inherits secondmate-harness"
 }
 
@@ -1247,7 +1181,6 @@ test_bootstrap_sweep_propagates_when_tracked_current() {
   printf '{"default":{"harness":"codex"}}\n' > "$w/home/config/crew-dispatch.json"
   printf 'codex\n' > "$w/home/config/crew-harness"
   printf 'manual\n' > "$w/home/config/backlog-backend"
-  printf 'herdr\n' > "$w/home/config/backend"
   run_bootstrap "$w" >/dev/null
   [ "$(cat "$w/sm/config/crew-dispatch.json" 2>/dev/null)" = '{"default":{"harness":"codex"}}' ] \
     || fail "crew-dispatch.json did not propagate to a tracked-current home"
@@ -1255,8 +1188,6 @@ test_bootstrap_sweep_propagates_when_tracked_current() {
     || fail "config did not propagate to a tracked-current home"
   [ "$(cat "$w/sm/config/backlog-backend" 2>/dev/null)" = manual ] \
     || fail "backlog-backend did not propagate to a tracked-current home"
-  [ "$(cat "$w/sm/config/backend" 2>/dev/null)" = herdr ] \
-    || fail "backend did not propagate to a tracked-current home"
   pass "B8 bootstrap sweep propagates config even when the home's tracked files are already current"
 }
 
@@ -1308,7 +1239,6 @@ test_bootstrap_sweep_materializes_and_inherits_memory_default() {
 
   [ -e "$w/sm/config/crew-dispatch.json" ] && fail "default-only sweep created a home crew-dispatch.json"
   [ -e "$w/sm/config/crew-harness" ] && fail "default-only sweep created a home crew-harness"
-  [ -e "$w/sm/config/backend" ] && fail "default-only sweep created a home backend"
   [ "$(cat "$w/home/config/startup-memory-budget")" = 7500 ] \
     || fail "primary bootstrap did not materialize the startup-memory default"
   [ "$(cat "$w/sm/config/startup-memory-budget")" = 7500 ] \
@@ -1316,42 +1246,6 @@ test_bootstrap_sweep_materializes_and_inherits_memory_default() {
   [ "$(git -C "$w/sm" rev-parse HEAD)" = "$head" ] \
     || fail "default-only sweep did not still fast-forward the tracked files"
   pass "B10 bootstrap sweep materializes and inherits the startup-memory default while fast-forwarding"
-}
-
-# config/backend: present and absent primary state converges exactly.
-test_backend_inheritance_present_and_absent() {
-  local w head out err status instruction
-  w=$(new_world backend-inherit)
-  head=$(git -C "$w/main" rev-parse HEAD)
-  add_sm_worktree "$w" sm "$head"
-
-  printf 'herdr\n' > "$w/home/config/backend"
-  err="$w/backend-inherit.err"
-  out=$(run_config_push "$w" 2>"$err"); status=$?
-  expect_code 0 "$status" "backend present push should succeed"
-  assert_contains "$out" "backend: pushed" "backend present value should report pushed"
-  [ "$(cat "$w/sm/config/backend")" = herdr ] || fail "backend present value not pushed"
-  instruction=$(reread_instruction_path "$w/sm") || fail "backend present reread instruction missing"
-  assert_contains "$(cat "$instruction")" $'-----BEGIN config/backend-----\nherdr\n-----END config/backend-----' \
-    "backend present reread must include exact bytes"
-
-  printf 'herdr\n' > "$w/sm/config/backend"
-  printf 'orca\n' > "$w/home/config/backend"
-  out=$(run_config_push "$w" 2>"$err"); status=$?
-  expect_code 0 "$status" "backend changed push should succeed"
-  assert_contains "$out" "backend: pushed" "backend changed value should report pushed"
-  [ "$(cat "$w/sm/config/backend")" = orca ] \
-    || fail "primary backend did not overwrite the divergent destination"
-
-  rm -f "$w/home/config/backend"
-  out=$(run_config_push "$w" 2>"$err"); status=$?
-  expect_code 0 "$status" "backend absence push should succeed"
-  assert_contains "$out" "backend: pushed - mirrored primary absence" "backend should mirror primary absence"
-  [ -e "$w/sm/config/backend" ] && fail "backend not removed on primary absence"
-  instruction=$(reread_instruction_path "$w/sm") || fail "backend absence reread instruction missing"
-  assert_contains "$(cat "$instruction")" $'-----BEGIN config/backend-----\nABSENT\n-----END config/backend-----' \
-    "backend absence reread must use ABSENT token"
-  pass "B12b backend inheritance: present values and primary absence converge exactly"
 }
 
 # config/herdr-presentation-spaces is default-ON, so this item's convergence is
@@ -1459,7 +1353,6 @@ test_config_push_propagates_reports_without_ff_or_nudge() {
   printf '{"default":{"harness":"codex"}}\n' > "$w/home/config/crew-dispatch.json"
   printf 'codex\n' > "$w/home/config/crew-harness"
   printf 'manual\n' > "$w/home/config/backlog-backend"
-  printf 'herdr\n' > "$w/home/config/backend"
   record_live_watcher_fixture "$w/home"
   : > "$w/home/config/trace-context"
   err="$w/config-push-basic.err"
@@ -1477,8 +1370,6 @@ test_config_push_propagates_reports_without_ff_or_nudge() {
     "config push did not report crew-harness as pushed"
   assert_contains "$out" "backlog-backend: pushed" \
     "config push did not report backlog-backend as pushed"
-  assert_contains "$out" "backend: pushed" \
-    "config push did not report backend as pushed"
   assert_contains "$out" "trace-context: unchanged" \
     "live config push must report trace-context as session-scoped and unchanged"
   [ ! -e "$w/sm/config/trace-context" ] \
@@ -1489,10 +1380,7 @@ test_config_push_propagates_reports_without_ff_or_nudge() {
     "config push must not use the AGENTS.md instruction-surface nudge channel"
   [ "$(git -C "$w/sm" rev-parse HEAD)" = "$old_head" ] \
     || fail "config push fast-forwarded tracked files"
-  [ "$(cat "$w/sm/config/backend")" = herdr ] || fail "config push did not write backend"
   instruction=$(reread_instruction_path "$w/sm") || fail "config-push reread instruction missing"
-  assert_contains "$(cat "$instruction")" $'-----BEGIN config/backend-----\nherdr\n-----END config/backend-----' \
-    "config-push reread must include exact backend bytes"
   [ ! -s "$err" ] || fail "clean config push wrote unexpected stderr: $(cat "$err")"
   assert_contains "$(cat "$log")" "[fm-from-firstmate]" \
     "config reread must use the marked routed secondmate path"
@@ -1506,8 +1394,6 @@ test_config_push_propagates_reports_without_ff_or_nudge() {
     "idempotent config push did not report crew-harness as unchanged"
   assert_contains "$out2" "backlog-backend: unchanged" \
     "idempotent config push did not report backlog-backend as unchanged"
-  assert_contains "$out2" "backend: unchanged" \
-    "idempotent config push did not report backend as unchanged"
   assert_contains "$out2" "trace-context: unchanged" \
     "idempotent config push did not preserve session-scoped trace context"
   assert_not_contains "$out2" "config-reread: sent" \
@@ -1646,7 +1532,6 @@ test_config_reread_per_home_changed_sets_and_exact_bytes() {
   printf '%s' "$multiline_json" > "$w/home/config/crew-dispatch.json"
   printf 'codex\n' > "$w/home/config/crew-harness"
   printf 'manual\n' > "$w/home/config/backlog-backend"
-  printf 'herdr\n' > "$w/home/config/backend"
   {
     shared_captain_header_for_tests
     printf '%s\n' "shared secret preference body that must never appear in a config reread"
@@ -1666,7 +1551,6 @@ test_config_reread_per_home_changed_sets_and_exact_bytes() {
     || fail "beta did not receive multiline dispatch"
   [ "$(cat "$w/alpha/config/crew-harness")" = codex ] || fail "alpha harness not updated"
   [ "$(cat "$w/alpha/config/backlog-backend")" = manual ] || fail "alpha backlog-backend not updated"
-  [ "$(cat "$w/alpha/config/backend")" = herdr ] || fail "alpha backend not updated"
 
   instr_a=$(reread_instruction_path "$w/alpha") || fail "alpha instruction missing after config push"
   instr_b=$(reread_instruction_path "$w/beta") || fail "beta instruction missing after config push"
@@ -1682,15 +1566,13 @@ test_config_reread_per_home_changed_sets_and_exact_bytes() {
   assert_contains "$(cat "$instr_a")" "config/crew-dispatch.json" "alpha missing dispatch path"
   assert_contains "$(cat "$instr_a")" "config/crew-harness" "alpha missing harness path"
   assert_contains "$(cat "$instr_a")" "config/backlog-backend" "alpha missing backlog path"
-  assert_contains "$(cat "$instr_a")" "config/backend" "alpha missing backend path"
   # Path order follows FM_INHERITABLE_CONFIG.
   awk '
     /config\/crew-dispatch\.json/ { d=NR }
     /config\/crew-harness/ { h=NR }
     /config\/backlog-backend/ { b=NR }
-    /config\/backend/ && !/backlog-backend/ { k=NR }
     END {
-      if (!(d && h && b && k && d < h && h < b && b < k)) exit 1
+      if (!(d && h && b && d < h && h < b)) exit 1
     }
   ' "$instr_a" || fail "alpha instruction path order is not deterministic allowlist order"
 
@@ -1701,8 +1583,6 @@ test_config_reread_per_home_changed_sets_and_exact_bytes() {
     "alpha instruction must include exact harness scalar bytes"
   assert_contains "$(cat "$instr_a")" $'-----BEGIN config/backlog-backend-----\nmanual\n-----END config/backlog-backend-----' \
     "alpha instruction must include exact backlog-backend scalar bytes"
-  assert_contains "$(cat "$instr_a")" $'-----BEGIN config/backend-----\nherdr\n-----END config/backend-----' \
-    "alpha instruction must include exact backend scalar bytes"
 
   # No parsed/effective summary, no SHA, no captain-shared dump.
   assert_not_contains "$(cat "$instr_a")" "Default worker" "must not emit parsed worker summary"
@@ -1786,7 +1666,6 @@ test_config_reread_isolation_and_absent_and_send_failure() {
     printf '%s\n' $'crew-dispatch.json\tpushed\tmirrored primary absence'
     printf '%s\n' $'crew-harness\tunchanged\t'
     printf '%s\n' $'backlog-backend\tunchanged\t'
-    printf '%s\n' $'backend\tunchanged\t'
     printf '%s\n' $'data/captain-shared.md\tpushed\t'
   } > "$report"
   rm -f "$w/beta/config/crew-dispatch.json"
@@ -2484,8 +2363,6 @@ test_spawn_backward_compat_crew_fallback
 test_spawn_bare_backward_compat
 test_spawn_explicit_harness_wins
 test_spawn_unverified_secondmate_harness_refused
-test_spawn_backend_precedence_over_inherited_config
-test_spawn_explicit_backend_precedence_over_env_and_inherited_config
 test_spawn_bare_harness_no_model_effort_flag
 test_spawn_secondmate_harness_model_token
 test_spawn_secondmate_harness_model_and_effort_tokens
@@ -2499,7 +2376,6 @@ test_bootstrap_sweep_propagates_and_reconverges
 test_bootstrap_sweep_propagates_when_tracked_current
 test_bootstrap_sweep_defers_dispatch_on_stale_unignored_home
 test_bootstrap_sweep_materializes_and_inherits_memory_default
-test_backend_inheritance_present_and_absent
 test_presentation_inheritance_default_on_and_opt_out
 test_bootstrap_sweep_surfaces_config_propagation_failure
 test_bootstrap_rereads_after_partial_propagation

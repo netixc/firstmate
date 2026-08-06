@@ -629,7 +629,7 @@ test_busy_idle_observation_via_backend_abstraction() {
   corr=$(fm_pending_reply_create "$home" "$state" "hibit" "backend turn")
   fm_pending_reply_mark_delivered "$state" "$corr"
   # Simulates Pi/Claude secondmate busy_state from fm_backend_busy_state without
-  # reading conversation text (Herdr native idle/busy or Orca unknown fallback).
+  # reading conversation text (Herdr native idle/busy or unknown fallback).
   fm_pending_reply_observe_busy "$state" "$corr" unknown
   [ -z "$(fm_pending_reply_get "$(fm_pending_reply_path "$state" "$corr")" request_turn_completed_epoch)" ] \
     || fail "unknown busy_state must not prove turn completion"
@@ -641,7 +641,7 @@ test_busy_idle_observation_via_backend_abstraction() {
 }
 
 test_unknown_backend_state_uses_capture_fallback() {
-  local backend=orca
+  local backend=herdr
   (
       local home state corr rec sm_home
       home=$(setup_parent "fallback-$backend")
@@ -684,7 +684,7 @@ test_unknown_backend_state_uses_capture_fallback() {
       [ "$(phase_of "$state" "$corr")" = escalated ] \
         || fail "$backend capture busy-to-idle should complete recovery turn"
   ) || fail "$backend unknown-state capture fallback failed"
-  pass "Orca unknown state uses the bounded capture fallback"
+  pass "unknown Herdr state uses the bounded capture fallback"
 }
 
 test_kimi_capture_fallback_uses_recorded_harness() (
@@ -703,10 +703,10 @@ test_kimi_capture_fallback_uses_recorded_harness() (
   fm_backend_capture() { printf '%s' "$FM_PENDING_KIMI_CAPTURE"; }
   export FM_PENDING_KIMI_CAPTURE=' 🌑 · Tip: ask Kimi to schedule tasks, e.g. "remind me at 5pm"'
 
-  [ "$(fm_pending_reply_backend_observation orca term-hibit fm-hibit codex)" = fallback-idle ] \
+  [ "$(fm_pending_reply_backend_observation herdr session:hibit fm-hibit codex)" = fallback-idle ] \
     || fail "Kimi spinner leaked into another harness"
   export FM_PENDING_KIMI_CAPTURE='Ctrl+c:cancel'
-  [ "$(fm_pending_reply_backend_observation orca term-hibit fm-hibit kimi)" = fallback-idle ] \
+  [ "$(fm_pending_reply_backend_observation herdr session:hibit fm-hibit kimi)" = fallback-idle ] \
     || fail "Grok's exact busy token leaked into Kimi pending-reply observation"
   export FM_PENDING_KIMI_CAPTURE=' 🌑 · Tip: ask Kimi to schedule tasks, e.g. "remind me at 5pm"'
   fm_pending_reply_tick "$state"

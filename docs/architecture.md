@@ -78,12 +78,11 @@ Terminal verbs remain captain-relevant, while a nonterminal progress verb cannot
 The always-on watcher also uses that library's absorb classification on no-verb signals and first-sighting stale panes before status-log terminality is trusted, while the daemon maintains distinct wedge and declared-pause recheck cadences.
 In away mode, seen-status dedupe does not clear possible-wedge aging for nonterminal progress, so housekeeping still re-escalates an unchanged idle pane at the configured bound.
 The daemon escalates captain-relevant events, plus a bounded recheck for a declared pause that remains idle, as one batched, single-line digest using the canonical `away-supervisor` kind from `bin/fm-operational-input.sh` so firstmate can distinguish it structurally from real messages.
-Its supervisor injection path supports Herdr panes only, with `FM_SUPERVISOR_BACKEND` and `FM_SUPERVISOR_TARGET` resolved independently from an individual task's backend.
+Its supervisor injection path uses Herdr and resolves `FM_SUPERVISOR_TARGET` independently from individual task metadata.
 Pane existence, busy checks, composer checks, capture, and verified submit route through `bin/fm-backend.sh` and Herdr's native state and ANSI-aware composer classifier.
-Composer-content classification has one shared owner, `bin/fm-composer-lib.sh`, used by Herdr and Orca after each adapter performs its own capture and composer-row recognition.
+Composer-content classification has one shared owner, `bin/fm-composer-lib.sh`, used after Herdr performs ANSI-aware capture and composer-row recognition.
 The daemon injects only into an affirmatively `empty` composer, so both `pending` and `unknown` defer and a bare dead-shell prompt cannot receive an escalation; the current boundary is in [Composer and injection safety](herdr-backend.md#composer-and-injection-safety).
-Unsupported supervisor backends refuse at daemon startup.
-Stalled escalation delivery writes `state/.subsuper-inject-wedged` and attempts a configured backend-independent active alert after `FM_MAX_DEFER_SECS` instead of silently deferring forever.
+Stalled escalation delivery writes `state/.subsuper-inject-wedged` and attempts a configured pane-independent active alert after `FM_MAX_DEFER_SECS` instead of silently deferring forever.
 On an unmarked return, `bin/fm-afk-return.sh` owns ordered shutdown, durable catch-up evidence, and the fail-closed gate that keeps ordinary work behind every live firstmate-actionable blocker.
 `fm-send.sh` selects a pre-Enter popup-settle for slash commands and for codex `$...` skill invocations using metadata-routed target `harness=` values, then adds its own `FM_SEND_SETTLE` pause after successful text sends so immediate peeks catch the receiving turn starting; the sub-supervisor uses only the shared submit core and does not pay that post-submit pause.
 
@@ -106,30 +105,19 @@ Rendered delivery readers deliberately remain outside this contract because they
 Herdr owns submit acknowledgement and away-mode supervisor-pane composer checks, while `bin/fm-pending-reply-lib.sh` owns secondmate delivery observation.
 All are harness-scoped rather than a global pattern union, and none is a recorded worker state source.
 
-## Runtime backends
+## Task runtime
 
-Herdr is the sole automatic and default runtime backend.
-Orca remains supported only through explicit per-task or configured selection and is never detected or chosen as fallback.
-`bin/fm-backend.sh` centralizes selection, metadata helpers, cleanup identity validation, selector resolution, and operation dispatch.
-[`configuration.md`](configuration.md#runtime-backend-configbackend--fm_backend) owns selection precedence and metadata semantics.
-Unknown or stale backend values are rejected with the current supported choices.
-
-Herdr provides task sessions while Treehouse provides task worktrees.
-It supplies native busy state, recovery-grade agent state, and native transition push when the installed protocol supports it.
+Herdr is Firstmate's sole task runtime, while Treehouse provides task worktrees.
+`bin/fm-backend.sh` centralizes runtime metadata helpers, cleanup identity validation, selector resolution, and Herdr operation dispatch.
+Unknown or stale runtime identities are rejected rather than reinterpreted.
+Herdr supplies native busy state, recovery-grade agent state, and native transition push when the installed protocol supports it.
 The watcher permanently retains polling as a fallback when push capability is unavailable.
 [`herdr-backend.md`](herdr-backend.md) owns setup, workspace placement, presentation projection, supervision, and lifecycle safety.
 [`verification/runtime-backends.md`](verification/runtime-backends.md#herdr) owns active empirical evidence.
 
-Orca is explicit-only and owns both worktree and terminal lifecycle.
-It records `orca_worktree_id=` and `terminal=` and releases the worktree only after the usual cleanup checks pass.
-Orca does not support secondmate spawns and is never selected automatically.
-[`orca-backend.md`](orca-backend.md) owns behavior and limits, while [`verification/runtime-backends.md`](verification/runtime-backends.md#orca) owns active evidence.
-
-Codex App is not selectable as a runtime backend; [`codex-app-backend.md`](codex-app-backend.md) owns that boundary.
-
 ## Worktrees, not branches in your checkout
 
-Crewmates never intentionally touch your project clone; [Treehouse](https://github.com/kunchenguid/treehouse) pools clean worktrees for Herdr tasks, while Orca creates its own worktrees for explicit `backend=orca` tasks.
+Crewmates never intentionally touch your project clone; [Treehouse](https://github.com/kunchenguid/treehouse) pools clean worktrees for Herdr tasks.
 For ship and scout work, `fm-spawn.sh` refuses to launch unless the resolved task path is a real git worktree root that is distinct from the project primary checkout.
 
 The firstmate repo has one extra exposure because it can dispatch crewmates to work on itself.
@@ -170,7 +158,7 @@ That keeps spawn launch compatible across claude, codex, grok, pi, opencode, and
 
 `data/secondmates.md` records persistent secondmates with natural-language scopes, project clone lists, and home paths.
 A local route points directly at its home, while a remote route adds an SSH alias and remote Firstmate code root so the entire home and all of its child work stay on that host.
-Remote placement pins the remote second-mate agent to Herdr while leaving the remote home's worker backend selection independent, and every non-doctor primary-to-remote `fm-on` command runs through the remote account's Firstmate-owned job worker rather than its SSH process or a Herdr pane.
+Remote placement runs the second mate and its workers in Herdr on that host, and every non-doctor primary-to-remote `fm-on` command runs through the remote account's Firstmate-owned job worker rather than its SSH process or a Herdr pane.
 [`remote-secondmates.md`](remote-secondmates.md) owns current setup, transport, relay, failure, and retirement behavior.
 `fm-home-seed.sh` provisions a local isolated home, clones the listed PR-based projects into it, initializes newly cloned `no-mistakes` projects, copies the charter to `data/charter.md`, and `fm-spawn.sh --secondmate` launches it through the same session-provider and status-file path as any direct report.
 `fm-remote-home-seed.sh` sends a bounded charter and origin manifest through the generic transport so the remote host clones and provisions its own home and projects.
@@ -301,7 +289,7 @@ The mechanics are owned by the `/updatefirstmate` skill and firstmate's operatin
 
 ## Restart-proof
 
-Fleet state lives in Herdr by default or explicit Orca task endpoints, no-mistakes run records, status event logs, local Markdown under `data/`, and persistent secondmate homes.
+Fleet state lives in Herdr task endpoints, no-mistakes run records, status event logs, local Markdown under `data/`, and persistent secondmate homes.
 For herdr, respawning after a server-restored layout closes and replaces confirmed no-agent or dead task-tab husks instead of requiring manual tab cleanup.
 At session start, confirmed-dead secondmate agent endpoints are closed and relaunched through the same secondmate spawn path, while ambiguous liveness reads are left untouched to avoid duplicate supervisors.
 Use `/stow` before an intentional reset when the conversation may hold durable knowledge that has not yet been written to disk; after that, the next firstmate session can reconcile and carry on.

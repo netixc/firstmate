@@ -420,8 +420,7 @@ task_json_lines() {
     remote_root=$(meta_value "$meta" remote_root)
     remote_home_present=null
     if [ -n "$remote_host" ]; then
-      backend=$(meta_value "$meta" remote_backend)
-      [ -n "$backend" ] || backend=unknown
+      backend=herdr
       target=$(meta_value "$meta" remote_target)
     else
       backend=$(fm_backend_of_meta "$meta")

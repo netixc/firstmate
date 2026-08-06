@@ -103,20 +103,20 @@ unit_stop_rejects_reused_pid() {
   pass "away lifecycle: stale process identity cannot signal an unrelated process"
 }
 
-unit_failed_start_rolls_back_state() {
+unit_unresolved_target_rolls_back_state() {
   local home
   home="$TMP_ROOT/failed-start"
   mkdir -p "$home/state"
   printf 'pending\n' > "$home/state/.subsuper-escalations"
   printf 'wedged\n' > "$home/state/.subsuper-inject-wedged"
-  if FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" FM_SUPERVISOR_TARGET=unused \
-    FM_SUPERVISOR_BACKEND=unsupported "$LAUNCH" start >/dev/null 2>&1; then
-    fail "unsupported supervisor backend unexpectedly succeeded"
+  if FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" FM_SUPERVISOR_TARGET='' \
+    HERDR_ENV='' HERDR_PANE_ID='' "$LAUNCH" start >/dev/null 2>&1; then
+    fail "launch without an authoritative supervisor target unexpectedly succeeded"
   fi
   assert_absent "$home/state/.afk" "failed start left false away state"
   [ "$(cat "$home/state/.subsuper-escalations")" = pending ] || fail "failed start discarded escalations"
   [ "$(cat "$home/state/.subsuper-inject-wedged")" = wedged ] || fail "failed start discarded wedge marker"
-  pass "away launcher: unsupported backends roll back without losing delivery artifacts"
+  pass "away launcher: unresolved targets roll back without losing delivery artifacts"
 }
 
 unit_herdr_partial_create_recovery() {
@@ -165,6 +165,6 @@ unit_relative_paths_are_absolute_before_daemon_launch
 unit_refresh_preserves_current_buffer
 unit_stop_ordering
 unit_stop_rejects_reused_pid
-unit_failed_start_rolls_back_state
+unit_unresolved_target_rolls_back_state
 unit_herdr_partial_create_recovery
 unit_record_write_rejects_unsupported_backend

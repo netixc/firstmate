@@ -31,8 +31,7 @@
 #   pi-ext           Pi/pi-signed per-task extension (agent_start/agent_settled)
 #   opencode-plugin  OpenCode per-task plugin (session.status)
 #   claude-hook      Claude lifecycle hooks (UserPromptSubmit/Stop/StopFailure/SessionEnd)
-#   codex-hook, codex-appserver  reserved: Codex, gated by
-#                    fm_busy_codex_semantic_source
+#   codex-hook      reserved: Codex, gated by fm_busy_codex_semantic_source
 #   kimi-wire, kimi-hook  reserved: standalone Kimi, gated by fm_busy_kimi_verified
 # Firstmate-owned sources accepted for every converted adapter:
 #   fm-spawn         the launch-brief turn seeded at spawn
@@ -58,13 +57,11 @@
 # It is scoped to harness=grok and can never classify another adapter.
 # Rendered delivery guards remain separate from recorded worker state.
 #
-# Codex negotiation (fm_busy_codex_appserver_observable,
-# fm_busy_codex_hooks_verified): the approved contract prefers Codex's
-# app-server turn lifecycle with capability negotiation, and sanctions its
-# stable lifecycle hooks as the intermediate. Neither is usable on the
-# installed binary, so Codex classifies unknown codex-unverified rather than
-# falling back to idle, and fm-spawn installs no Codex busy wiring.
-# docs/verification/supervision.md owns the evidence for both probes.
+# Codex negotiation (fm_busy_codex_hooks_verified): Codex's stable lifecycle
+# hooks are not usable on the installed binary, so Codex classifies unknown
+# codex-unverified rather than falling back to idle, and fm-spawn installs no
+# Codex busy wiring.
+# docs/verification/supervision.md owns the hook evidence.
 #
 # Sourcing: set -u and set -e safe; no subshell-unfriendly globals.
 
@@ -94,19 +91,6 @@ fm_busy_kimi_verified() {
   [ -n "$FM_BUSY_KIMI_VERIFIED_VERSIONS" ]
 }
 
-# fm_busy_codex_appserver_observable: capability/version negotiation for the
-# Codex app-server turn lifecycle. Returns 0 only when a pane worker's turns
-# are observable through the app-server protocol on the installed binary.
-# codex-cli 0.145.0 verdict (live, 2026-07-28): NOT observable. The v2
-# protocol does define the needed turn lifecycle (turn/started plus a
-# turn/completed status of completed, interrupted, failed, or inProgress),
-# but an interactive TUI worker neither starts nor attaches to the
-# app-server daemon, and `codex app-server daemon start` refuses outside the
-# managed standalone install, so no client can observe a pane worker's turns.
-fm_busy_codex_appserver_observable() {
-  return 1
-}
-
 # fm_busy_codex_hooks_verified: the sanctioned intermediate - Codex's stable
 # hooks engine (UserPromptSubmit to open a turn, Stop and SessionEnd to close
 # it). Returns 0 only once those hooks are live-verified to fire for a
@@ -125,7 +109,7 @@ fm_busy_codex_hooks_verified() {
 # exists. fm-spawn arms and wires Codex only behind this gate, and the
 # classifier reports unknown codex-unverified until it opens.
 fm_busy_codex_semantic_source() {
-  fm_busy_codex_appserver_observable || fm_busy_codex_hooks_verified
+  fm_busy_codex_hooks_verified
 }
 
 fm_busy_record_path() {  # <state-dir> <id>
@@ -167,7 +151,7 @@ fm_busy_sources_for_harness() {  # <harness>
     claude*) adapter=claude-hook ;;
     codex*)
       fm_busy_codex_semantic_source || { printf ''; return 0; }
-      adapter='codex-hook codex-appserver'
+      adapter='codex-hook'
       ;;
     opencode*) adapter=opencode-plugin ;;
     pi|pi-signed) adapter=pi-ext ;;

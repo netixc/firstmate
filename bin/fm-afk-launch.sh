@@ -16,7 +16,7 @@
 # from its OWN inherited env (discover_supervisor_target). Running it in a
 # separate terminal would make it discover its OWN pane, so this captures the
 # captain pane FIRST (from the pane this script runs in) and passes it in as
-# FM_SUPERVISOR_TARGET/FM_SUPERVISOR_BACKEND explicitly.
+# FM_SUPERVISOR_TARGET explicitly.
 #
 # Usage:
 #   fm-afk-launch.sh start     Capture the captain pane, then (unless the daemon
@@ -35,12 +35,12 @@
 #   fm-afk-launch.sh reconcile Close a recorded-but-dead daemon terminal by exact
 #                              id and drop the record (recovery after a crash).
 #
-# Herdr is the sole supported supervisor backend.
+# Herdr carries supervisor injection.
 #
 # Test seam: FM_AFK_LAUNCH_ENTRY overrides the command run in the created
 # terminal (default bin/fm-afk-start.sh), so a topology test can run a harmless
-# placeholder instead of a real daemon. FM_SUPERVISOR_TARGET/FM_SUPERVISOR_BACKEND
-# override the captured captain pane/backend (an isolated lab pane in tests).
+# placeholder instead of a real daemon. FM_SUPERVISOR_TARGET overrides the
+# captured captain pane with an isolated lab pane in tests.
 set -u
 
 FM_AFK_LAUNCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -374,8 +374,8 @@ fm_afk_launch_restore_backup() {  # <backup> <had-afk>
 # (so the daemon can inject into the captain pane, which lives there). A
 # dedicated background workspace (--no-focus) holds exactly one tab/pane; it
 # never touches the captain's active tab. Prints the record line on success.
-fm_afk_launch_create_herdr() {  # <captain-target> <captain-backend>
-  local captain_target=$1 captain_backend=$2 session out wsid pane entry cmd label recovered create_result
+fm_afk_launch_create_herdr() {  # <captain-target>
+  local captain_target=$1 session out wsid pane entry cmd label recovered create_result
   session=${captain_target%%:*}
   if [ -z "$session" ] || [ "$session" = "$captain_target" ]; then
     fm_afk_launch_log "cannot derive herdr session from captain target '$captain_target'"
@@ -407,8 +407,8 @@ fm_afk_launch_create_herdr() {  # <captain-target> <captain-backend>
     IFS=$'\t' read -r wsid pane <<< "$recovered"
   fi
   entry=$(fm_afk_launch_entry_cmd)
-  cmd=$(printf 'exec env FM_HOME=%q FM_SUPERVISOR_TARGET=%q FM_SUPERVISOR_BACKEND=%q %q' \
-    "$FM_HOME" "$captain_target" "$captain_backend" "$entry")
+  cmd=$(printf 'exec env FM_HOME=%q FM_SUPERVISOR_TARGET=%q %q' \
+    "$FM_HOME" "$captain_target" "$entry")
   if ! fm_afk_launch_record_write herdr "$session:$pane" "$wsid"; then
     fm_afk_launch_log "failed to persist herdr daemon terminal record; closing $session:$pane"
     fm_afk_launch_close_terminal herdr "$session:$pane"
@@ -426,7 +426,7 @@ fm_afk_launch_create_herdr() {  # <captain-target> <captain-backend>
 }
 
 fm_afk_launch_start() {
-  local captain_target captain_backend backup artifact had_afk=0 result
+  local captain_target backup artifact had_afk=0 result
   if [ -e "$FM_AFK_LAUNCH_STATE/.afk-return-catchup" ]; then
     fm_afk_launch_log "return catch-up is still pending; run bin/fm-afk-return.sh check before re-entering away mode"
     return 1
@@ -434,8 +434,6 @@ fm_afk_launch_start() {
   # Capture the captain pane FIRST, before creating anything.
   captain_target=$(discover_supervisor_target) || {
     fm_afk_launch_log "could not resolve the captain supervisor pane (set FM_SUPERVISOR_TARGET)"; return 1; }
-  captain_backend=$(discover_supervisor_backend) || {
-    fm_afk_launch_log "could not resolve the captain supervisor backend (set FM_SUPERVISOR_BACKEND)"; return 1; }
 
   mkdir -p "$FM_AFK_LAUNCH_STATE"
 
@@ -477,13 +475,7 @@ fm_afk_launch_start() {
   fi
 
   if [ "$result" -eq 0 ]; then
-    case "$captain_backend" in
-      herdr) fm_afk_launch_create_herdr "$captain_target" "$captain_backend"; result=$? ;;
-      *)
-        fm_afk_launch_log "unsupported supervisor backend '$captain_backend' (supported: herdr)"
-        result=1
-        ;;
-    esac
+    fm_afk_launch_create_herdr "$captain_target"; result=$?
   fi
   if [ "$result" -ne 0 ]; then
     fm_afk_launch_restore_backup "$backup" "$had_afk" || result=1

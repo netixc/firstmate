@@ -7,7 +7,7 @@ set -u
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 # Live fixture records use the current Herdr metadata contract unless a case
-# supplies another backend explicitly.
+# already supplies its runtime identity explicitly.
 fm_write_meta_base() {
   local file=$1 kv
   shift
@@ -116,10 +116,10 @@ EOF
     "home=$home/secondmate-home" \
     "projects=alpha, beta, gamma, "
   printf 'working: watching delegated scope\n' > "$home/state/secondmate-task.status"
-  fm_write_meta "$home/state/orca-task.meta" \
-    "backend=orca" \
+  fm_write_meta "$home/state/missing-task.meta" \
+    "backend=herdr" \
     "window=workspace:surface" \
-    "worktree=$home/projects/missing-orca" \
+    "worktree=$home/projects/missing-worktree" \
     "project=alpha" \
     "harness=codex" \
     "kind=ship" \
@@ -153,7 +153,7 @@ test_fixture_snapshot_json() {
   out=$(PATH="$fakebin:$PATH" FM_HOME="$home" "$SNAPSHOT" --json)
   printf '%s' "$out" | jq -e . >/dev/null || fail "snapshot must be valid JSON"
   ids=$(printf '%s' "$out" | jq -r '.tasks | map(.id) | join(",")')
-  [ "$ids" = "orca-task,scout-task,secondmate-task,ship-task" ] \
+  [ "$ids" = "missing-task,scout-task,secondmate-task,ship-task" ] \
     || fail "task ordering must be stable by id, got $ids"
   printf '%s' "$out" | jq -e '
     .tasks[] | select(.id == "ship-task")
@@ -176,11 +176,11 @@ test_fixture_snapshot_json() {
       and (.actions.watch | contains("do not routinely fm-peek"))
   ' >/dev/null || fail "secondmate return-channel guidance missing"
   printf '%s' "$out" | jq -e '
-    .tasks[] | select(.id == "orca-task")
-    | .backend == "orca"
+    .tasks[] | select(.id == "missing-task")
+    | .backend == "herdr"
       and .paths.worktree.present == false
       and .current_state.state == "unknown"
-  ' >/dev/null || fail "Orca missing-file row missing"
+  ' >/dev/null || fail "Herdr missing-file row missing"
   printf '%s' "$out" | jq -e '
     [.backlog.records[] | select(.state == "queued")] | length == 2
   ' >/dev/null || fail "queued canonical and unstructured backlog records missing"

@@ -2,7 +2,7 @@
 # Host-local lifecycle control for the remote secondmate home selected by fm-on.
 #
 # Usage:
-#   fm-remote-secondmate-control.sh launch <id> <harness> <model|-> <effort|-> herdr [traceparent]
+#   fm-remote-secondmate-control.sh launch <id> <harness> <model|-> <effort|-> [traceparent]
 #   fm-remote-secondmate-control.sh state <id>
 #   fm-remote-secondmate-control.sh route <id>
 #   fm-remote-secondmate-control.sh send <id> <message>
@@ -13,12 +13,10 @@
 #   fm-remote-secondmate-control.sh update <id>
 #   fm-remote-secondmate-control.sh retire <id> [--force]
 #
-# Remote placement ends here, but the second-mate agent always runs on the
-# Herdr backend in the dedicated fm-remote session, so launch refuses any other
-# selection rather than reading this home's config/backend. The interactive
-# default session remains for the user's work.
+# Remote placement ends here, but the second-mate agent always runs in the
+# dedicated fm-remote Herdr session. The interactive default session remains
+# for the user's work.
 # fm-spawn/fm-send/fm-teardown keep owning the local endpoint mechanics.
-# The home's own workers keep their ordinary backend selection.
 # bin/fm-remote-doctor.sh owns that host's readiness for Herdr.
 # docs/remote-secondmates.md owns why.
 # A private parent-route state directory stores only the remote secondmate
@@ -65,24 +63,15 @@ validate_home() { # <id> [allow-absent]
 meta_path() { printf '%s/%s.meta\n' "$CONTROL_STATE" "$1"; }
 
 remote_endpoint_load() {
-  local id=$1 herdr_session recorded_backend
+  local id=$1 herdr_session
   REMOTE_ENDPOINT_ERROR=
   REMOTE_ENDPOINT_META=$(meta_path "$id")
-  recorded_backend=$(fm_backend_of_meta "$REMOTE_ENDPOINT_META")
-  if ! fm_backend_is_known "$recorded_backend"; then
-    REMOTE_ENDPOINT_ERROR="remote secondmate $id endpoint has unsupported backend '$recorded_backend' (supported: $FM_BACKEND_KNOWN)"
-    return 1
-  fi
   if ! fm_backend_validate_task_endpoint "$REMOTE_ENDPOINT_META" "$id" 2>/dev/null; then
     REMOTE_ENDPOINT_ERROR="remote secondmate $id endpoint metadata is invalid; refusing access until it is explicitly migrated"
     return 1
   fi
   REMOTE_ENDPOINT_BACKEND=$FM_BACKEND_VALIDATED_BACKEND
   REMOTE_ENDPOINT_TARGET=$FM_BACKEND_VALIDATED_TARGET
-  if [ "$REMOTE_ENDPOINT_BACKEND" != herdr ]; then
-    REMOTE_ENDPOINT_ERROR="remote secondmate $id endpoint is recorded on backend '$REMOTE_ENDPOINT_BACKEND', expected 'herdr'; refusing access until it is explicitly migrated"
-    return 1
-  fi
   herdr_session=$(fm_backend_meta_exact_value "$REMOTE_ENDPOINT_META" herdr_session 2>/dev/null || true)
   if [ "$herdr_session" != "$REMOTE_HERDR_SESSION" ]; then
     REMOTE_ENDPOINT_ERROR="remote secondmate $id endpoint is recorded in Herdr session '${herdr_session:-missing}', expected '$REMOTE_HERDR_SESSION'; refusing access until it is explicitly migrated"
@@ -119,7 +108,6 @@ print_route() { # <id>
   harness=$(fm_meta_get "$REMOTE_ENDPOINT_META" harness)
   traceparent=$(fm_meta_get "$REMOTE_ENDPOINT_META" traceparent)
   printf 'schema=fm-remote-secondmate-control.v1\n'
-  printf 'backend=%s\n' "$REMOTE_ENDPOINT_BACKEND"
   printf 'target=%s\n' "$REMOTE_ENDPOINT_TARGET"
   printf 'herdr_session=%s\n' "$REMOTE_HERDR_SESSION"
   printf 'harness=%s\n' "$harness"
@@ -138,17 +126,16 @@ cmd_route() {
 }
 
 cmd_launch() {
-  local id=$1 harness=$2 model=$3 effort=$4 selected_backend=$5 traceparent=${6:-}
+  local id=$1 harness=$2 model=$3 effort=$4 traceparent=${5:-}
   local current meta out herdr_session
 
   validate_id "$id"
   validate_home "$id"
   case "$harness" in claude|codex|opencode|pi|pi-signed|grok|kimi) ;; *) die "unverified remote secondmate harness: $harness" ;; esac
   case "$effort" in -|low|medium|high|xhigh|max) ;; *) die "invalid remote secondmate effort: $effort" ;; esac
-  # Herdr is required on this host, not merely preferred: its server belongs to
-  # the GUI login session, so the endpoint survives every SSH disconnection that
-  # a remote route depends on. bin/fm-remote-doctor.sh is the readiness owner.
-  case "$selected_backend" in herdr) ;; *) die "a remote secondmate runs only on the herdr backend, not '$selected_backend'" ;; esac
+  # Herdr's server belongs to the GUI login session, so the endpoint survives
+  # every SSH disconnection that a remote route depends on.
+  # bin/fm-remote-doctor.sh is the readiness owner.
   mkdir -p "$CONTROL_STATE" "$CONTROL_DATA"
   meta=$(meta_path "$id")
   if [ -f "$meta" ]; then
@@ -167,7 +154,7 @@ cmd_launch() {
       *) die "remote endpoint state is $current; refusing duplicate launch" ;;
     esac
   fi
-  ARGS=("$id" "$TARGET_HOME" --secondmate --harness "$harness" --backend "$selected_backend")
+  ARGS=("$id" "$TARGET_HOME" --secondmate --harness "$harness")
   [ "$model" = - ] || ARGS+=(--model "$model")
   [ "$effort" = - ] || ARGS+=(--effort "$effort")
   [ -z "$traceparent" ] || ARGS+=(--traceparent "$traceparent")
@@ -292,7 +279,7 @@ cmd_retire() {
 }
 
 case "${1:-}" in
-  launch) shift; [ "$#" -ge 5 ] && [ "$#" -le 6 ] || usage; cmd_launch "$@" ;;
+  launch) shift; [ "$#" -ge 4 ] && [ "$#" -le 5 ] || usage; cmd_launch "$@" ;;
   state) shift; [ "$#" -eq 1 ] || usage; validate_id "$1"; validate_home "$1"; state_value "$1" ;;
   route) shift; [ "$#" -eq 1 ] || usage; cmd_route "$1" ;;
   send) shift; [ "$#" -eq 2 ] || usage; cmd_send "$@" ;;

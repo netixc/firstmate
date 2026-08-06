@@ -46,7 +46,7 @@ pi -p -e .pi/extensions/fm-primary-turnend-guard.ts \
 Observed result: `PI_SMOKE_DONE`, with one session-start execution.
 The earlier `sendUserMessage` counterfactual raced the positional prompt; the current non-triggering `pi.sendMessage` custom message did not.
 The installed pi-signed 0.82.0 wrapper repeated the Pi primary extension and session-start path on 2026-07-27.
-[`runtime-backends.md`](runtime-backends.md#herdr) owns the runtime evidence and authoritative selection boundary.
+[`runtime-backends.md`](runtime-backends.md#herdr) owns the Herdr runtime evidence and authoritative identity and dispatch boundary.
 
 Current deterministic entry point:
 
@@ -72,17 +72,14 @@ Each pass polled `state/<id>.busy-state` while a real turn ran.
 | Kimi (standalone) | not installed | None usable | No binary on `PATH`, so the gate stays closed and it classifies `unknown kimi-unverified`. |
 | Grok | 0.2.112 | Isolated rendered-tail fallback | Retained unconverted; the approved audit could not credit a live structured-lifecycle run. |
 
-Codex was probed two ways, both refused:
+Codex hooks were probed with:
 
 ```sh
-codex app-server daemon start
 codex exec --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust 'Reply with exactly PROBE2.'
 ```
 
-The daemon refused with `managed standalone Codex install not found`, and an interactive TUI worker neither starts nor attaches to the app-server control socket, so no client can observe its turns.
 Firstmate-written project hooks under `<worktree>/.codex/hooks.json` fired for neither an interactive pane whose directory trust was granted nor `codex exec`, in both cases with `--dangerously-bypass-hook-trust`, while global `~/.codex/hooks.json` `SessionStart` hooks fired in the same runs.
 Codex also exposes no `StopFailure` hook, so an API-error turn end would need separate coverage even after hook discovery works.
-The app-server protocol schema does define the required lifecycle (`turn/started`, plus a `turn/completed` status of `completed`, `interrupted`, `failed`, or `inProgress`), so the gate is a reachability problem rather than a protocol gap.
 
 Deterministic entry points:
 

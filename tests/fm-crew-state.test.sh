@@ -30,7 +30,7 @@ set -u
 # shellcheck source=tests/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 # Every live fixture in this suite represents the current Herdr metadata
-# contract unless it explicitly supplies another backend.
+# contract unless it explicitly supplies its runtime identity.
 fm_write_meta_base() {
   local file=$1 kv
   shift

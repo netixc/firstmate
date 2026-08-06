@@ -383,13 +383,13 @@ make_project() {  # <dir>
 spawn_task() {  # <id> <home> <project>
   local id=$1 home=$2 project=$3
   FM_GATE_REFUSE_BYPASS=1 FM_SPAWN_NO_GUARD=1 FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
-    "$ROOT/bin/fm-spawn.sh" "$id" "$project" "sh -c 'sleep 120'" --mode no-mistakes --yolo off --backend herdr
+    "$ROOT/bin/fm-spawn.sh" "$id" "$project" "sh -c 'sleep 120'" --mode no-mistakes --yolo off
 }
 
 spawn_secondmate_task() {
   local id=$1 home=$2
   FM_GATE_REFUSE_BYPASS=1 FM_SPAWN_NO_GUARD=1 FM_HOME="$HOME_DIR" FM_ROOT_OVERRIDE="$ROOT" \
-    "$ROOT/bin/fm-spawn.sh" "$id" "$home" "sh -c 'sleep 120'" --secondmate --backend herdr
+    "$ROOT/bin/fm-spawn.sh" "$id" "$home" "sh -c 'sleep 120'" --secondmate
 }
 
 teardown_task() {  # <id> <home>
@@ -897,7 +897,7 @@ touch "$SECOND_HOME_A/state/.last-watcher-beat" "$SECOND_HOME_B/state/.last-watc
 # may write config/herdr-presentation-spaces.
 git -C "$SECOND_HOME_A" init -q
 git -C "$SECOND_HOME_B" init -q
-printf 'config/herdr-presentation-spaces\nconfig/crew-harness\nconfig/crew-dispatch.json\nconfig/backlog-backend\nconfig/backend\nconfig/startup-memory-budget\n' \
+printf 'config/herdr-presentation-spaces\nconfig/crew-harness\nconfig/crew-dispatch.json\nconfig/backlog-backend\nconfig/startup-memory-budget\n' \
   > "$SECOND_HOME_A/.gitignore"
 cp "$SECOND_HOME_A/.gitignore" "$SECOND_HOME_B/.gitignore"
 git -C "$SECOND_HOME_A" add .gitignore
