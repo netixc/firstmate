@@ -130,7 +130,7 @@ fm_watcher_healthy() {
 #   autoarm     Claude Stop-hook auto-arm: the watcher is armed at each turn end
 #               and exits on its wake, so it runs only BETWEEN turns. Mid-turn a
 #               fresh beacon with no live watcher process is the healthy state.
-#   persistent  every other harness (codex foreground checkpoint, opencode/pi/grok
+#   persistent  every other harness (codex foreground checkpoint, pi/grok
 #               background arm, unknown): the watcher runs as a tracked live
 #               process, so a live identity-matched pid is the real liveness signal.
 # FM_SUPERVISION_MODEL overrides detection (tests, and callers that already know

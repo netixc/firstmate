@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Detect the agent harness this process tree runs on.
-# Usage: fm-harness.sh                  print own harness: claude|codex|opencode|pi|pi-signed|grok|kimi|unknown
+# Usage: fm-harness.sh                  print own harness: claude|codex|grok|pi|unknown
 #        fm-harness.sh crew             print the effective CREWMATE harness
 #                                        (config/crew-harness; "default" resolves to own)
 #        fm-harness.sh secondmate       print the harness the PRIMARY uses to launch
@@ -27,19 +27,24 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 
+validate_configured_harness() {
+  local harness=$1 source=$2
+  case "$harness" in
+    claude|codex|grok|pi) return 0 ;;
+    *)
+      printf "error: unsupported harness '%s' in %s; expected claude, codex, grok, or pi\n" "$harness" "$source" >&2
+      return 1
+      ;;
+  esac
+}
+
 detect_own() {
   # Layer 1: environment markers for verified harnesses.
   # Keep marker detection before ancestry detection as an explicit precedence rule.
-  # Only claude, pi, and grok set verified markers of their own; codex, opencode,
-  # and kimi are markerless, so a foreign marker retained in a terminal
-  # multiplexer's stored environment can silently misidentify one of them before
-  # ancestry is consulted. This is a precedence hazard, not evidence that
-  # CLAUDECODE inheritance into a kimi child was observed; it was not observed.
+  # Claude, Pi, and Grok set verified markers of their own; Codex is markerless,
+  # so ancestry remains its detection path.
   [ "${CLAUDECODE:-}" = "1" ] && { echo claude; return; }
-  if [ "${PI_CODING_AGENT:-}" = "true" ]; then
-    if [ "${FM_PI_HARNESS:-}" = pi-signed ]; then echo pi-signed; else echo pi; fi
-    return
-  fi
+  [ "${PI_CODING_AGENT:-}" = "true" ] && { echo pi; return; }
   # grok sets GROK_AGENT=1 for its child/tool processes (verified, grok 0.2.73).
   # It does NOT set CLAUDECODE despite being Claude-Code-compatible, so this marker
   # is unambiguous when firstmate runs natively on grok.
@@ -51,10 +56,7 @@ detect_own() {
     case "$(basename -- "$comm")" in
       *claude*) echo claude; return ;;
       *codex*) echo codex; return ;;
-      *opencode*) echo opencode; return ;;
       *grok*) echo grok; return ;;
-      kimi) echo kimi; return ;;
-      pi-signed) echo pi; return ;;
       pi) echo pi; return ;;
       node*|python*)
         # Bare interpreter: match the harness name in its script path.
@@ -62,7 +64,6 @@ detect_own() {
         case "$args" in
           *claude*) echo claude; return ;;
           *codex*) echo codex; return ;;
-          *opencode*) echo opencode; return ;;
           *grok*) echo grok; return ;;
           *" pi "*|*/pi) echo pi; return ;;
         esac ;;
@@ -80,7 +81,12 @@ detect_own() {
 resolve_crew() {
   local crew=
   [ -f "$CONFIG/crew-harness" ] && crew=$(tr -d '[:space:]' < "$CONFIG/crew-harness" || true)
-  if [ -z "$crew" ] || [ "$crew" = "default" ]; then detect_own; else echo "$crew"; fi
+  if [ -z "$crew" ] || [ "$crew" = "default" ]; then
+    detect_own
+    return
+  fi
+  validate_configured_harness "$crew" config/crew-harness || return 1
+  printf '%s\n' "$crew"
 }
 
 # Print the first non-empty, non-comment line of config/secondmate-harness
@@ -125,7 +131,12 @@ secondmate_field() {
 resolve_secondmate() {
   local sm
   sm=$(secondmate_field 1)
-  if [ -z "$sm" ] || [ "$sm" = "default" ]; then resolve_crew; else echo "$sm"; fi
+  if [ -z "$sm" ] || [ "$sm" = "default" ]; then
+    resolve_crew
+    return
+  fi
+  validate_configured_harness "$sm" config/secondmate-harness || return 1
+  printf '%s\n' "$sm"
 }
 
 # Print the optional model token (2nd field) from config/secondmate-harness, or
@@ -135,6 +146,7 @@ resolve_secondmate_model() {
   local sm
   sm=$(secondmate_field 1)
   [ -n "$sm" ] && [ "$sm" != "default" ] || return 0
+  validate_configured_harness "$sm" config/secondmate-harness || return 1
   secondmate_field 2
 }
 
@@ -144,6 +156,7 @@ resolve_secondmate_effort() {
   local sm
   sm=$(secondmate_field 1)
   [ -n "$sm" ] && [ "$sm" != "default" ] || return 0
+  validate_configured_harness "$sm" config/secondmate-harness || return 1
   secondmate_field 3
 }
 

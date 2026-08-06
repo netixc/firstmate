@@ -23,7 +23,7 @@ When enabled, for each spawn Firstmate resolves one W3C `traceparent` carrier fo
 This feature parents no SDK span by itself.
 
 Because the injected carrier and the recorded carrier are the same string, an observer that reads the metadata reconstructs exactly the identity the child received.
-The injection sits at the unconditional pre-launch export site, so it covers ship, scout, and Secondmate spawns and is identical across every harness (`claude`, `codex`, `opencode`, `pi`, `grok`, `kimi`) - the same coverage `GOTMPDIR` already has, with no `launch_template()` change.
+The injection sits at the unconditional pre-launch export site, so it covers ship, scout, and secondmate spawns identically across Claude Code, Codex CLI, Grok, and Pi.
 Ship, scout, and secondmate spawns reach that site through Herdr.
 
 ### Remote Secondmate routes

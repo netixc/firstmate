@@ -1111,7 +1111,7 @@ TXT
   [ "$(printf '%s' "$out" | jq 'length')" -gt 1 ] || fail "fenced markdown reply must split"
   printf '%s' "$out" | jq -e \
     'all(.[]; (((gsub(" \\([0-9]+/[0-9]+\\)$"; "") | split("```") | length) - 1) % 2) == 0)' \
-    >/dev/null || fail "thread chunks must not leave an open code fence"
+    >/dev/null || fail "thread chunks must not leave an unterminated fence"
   printf '%s' "$out" | jq -e \
     'any(.[]; contains("```bash\nprintf") and contains("marker must not land in here\"") and contains("\n```"))' \
     >/dev/null || fail "the fenced code block must stay in one chunk"

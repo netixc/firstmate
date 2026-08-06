@@ -4,7 +4,7 @@
 #
 # These tests run the REAL fm-spawn against a fake Herdr pane and an isolated
 # git worktree, then drive the generated adapter artifact (the Pi extension,
-# the OpenCode plugin) in a plain Node host, so the artifact, the real
+# the Pi extension) in a plain Node host, so the artifact, the real
 # bin/fm-busy-event.sh writer, and the real classifier are exercised together
 # with no live harness session.
 set -u
@@ -36,7 +36,7 @@ case "${1:-} ${2:-}" in
 esac
 SH
   chmod +x "$fakebin/herdr"
-  fm_fake_exit0 "$fakebin" treehouse pi opencode claude codex
+  fm_fake_exit0 "$fakebin" treehouse pi claude codex
   printf '%s\n' "$fakebin"
 }
 
@@ -178,78 +178,6 @@ test_pi_extension_stale_incarnation_rejected() {
   pass "pi extension events from a superseded incarnation are rejected as stale"
 }
 
-# drive_oc_plugin <plugin-path> <events-json-lines...>: load the generated
-# OpenCode plugin in a plain Node host and feed it one event per argument, in
-# order, through the same hooks.event entry OpenCode calls.
-drive_oc_plugin() {
-  local plugin=$1
-  shift
-  PLUGIN_PATH="$plugin" node --input-type=module - "$@" 2>&1 <<'EOF'
-import { pathToFileURL } from "node:url";
-const mod = await import(pathToFileURL(process.env.PLUGIN_PATH).href);
-const hooks = await mod.FmBusyState({});
-for (const arg of process.argv.slice(2)) {
-  await hooks.event({ event: JSON.parse(arg) });
-}
-EOF
-}
-
-oc_status() {  # <sessionID> <type>
-  printf '{"type":"session.status","properties":{"sessionID":"%s","status":{"type":"%s"}}}' "$1" "$2"
-}
-
-oc_idle() {  # <sessionID>
-  printf '{"type":"session.idle","properties":{"sessionID":"%s"}}' "$1"
-}
-
-test_opencode_plugin_semantic_lifecycle() {
-  local rec id=busy-oc-1 out state plugin
-  rec=$(make_spawn_case oc-lifecycle opencode "$id")
-  read_case_record "$rec"
-  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$id" "$PROJ_DIR")
-  expect_code 0 $? "opencode spawn should succeed: $out"
-  state="$HOME_DIR/state"
-  plugin="$WT_DIR/.opencode/plugins/fm-busy-state.js"
-  assert_present "$plugin" "opencode spawn did not write the busy-state plugin"
-
-  out=$(classify opencode "$id" "$state")
-  [ "$out" = "busy fm-spawn" ] || fail "seed after spawn must be 'busy fm-spawn', got '$out'"
-
-  out=$(drive_oc_plugin "$plugin" "$(oc_status ses_main busy)") || fail "busy drive failed: $out"
-  out=$(classify opencode "$id" "$state")
-  [ "$out" = "busy opencode-plugin" ] || fail "session busy must classify 'busy opencode-plugin', got '$out'"
-
-  out=$(drive_oc_plugin "$plugin" \
-    "$(oc_status ses_main busy)" \
-    "$(oc_status ses_child busy)" \
-    "$(oc_status ses_child idle)") || fail "child-session drive failed: $out"
-  out=$(classify opencode "$id" "$state")
-  [ "$out" = "busy opencode-plugin" ] || fail "a child session's idle must not clear the worker, got '$out'"
-
-  out=$(drive_oc_plugin "$plugin" \
-    "$(oc_status ses_main retry)" \
-    "$(oc_status ses_main idle)") || fail "retry/idle drive failed: $out"
-  out=$(classify opencode "$id" "$state")
-  [ "$out" = "idle opencode-plugin" ] || fail "the latched session's idle must classify idle, got '$out'"
-
-  rm -f "$state/$id.turn-ended"
-  out=$(drive_oc_plugin "$plugin" \
-    "$(oc_status ses_main busy)" \
-    "$(oc_idle ses_main)") || fail "session.idle drive failed: $out"
-  [ -f "$state/$id.turn-ended" ] || fail "session.idle no longer touches the notification marker"
-  out=$(classify opencode "$id" "$state")
-  [ "$out" = "idle opencode-plugin" ] || fail "session.idle for the latched session must classify idle, got '$out'"
-
-  rm -f "$state/$id.turn-ended"
-  out=$(drive_oc_plugin "$plugin" \
-    "$(oc_status ses2 busy)" \
-    "$(oc_idle ses_other)") || fail "other-session idle drive failed: $out"
-  [ -f "$state/$id.turn-ended" ] || fail "the marker touch must stay a notification for every session.idle"
-  out=$(classify opencode "$id" "$state")
-  [ "$out" = "busy opencode-plugin" ] || fail "another session's idle must not clear the latched busy, got '$out'"
-  pass "opencode plugin classifies from session.status, scoped to the latched worker session"
-}
-
 run_claude_hook() {  # <settings.json> <hook-event>
   local cmd
   cmd=$(jq -r ".hooks[\"$2\"][0].hooks[0].command" "$1")
@@ -328,26 +256,10 @@ test_codex_unverified_until_a_semantic_source_exists() {
   pass "codex classifies unknown until a semantic source is verified, never idle or footer-matched"
 }
 
-test_kimi_and_grok_install_no_unverified_wiring() {
-  local state out
-  state="$TMP_ROOT/gates/state"
-  mkdir -p "$state"
-  [ -z "$(fm_busy_sources_for_harness kimi)" ] \
-    || fail "standalone kimi must trust no semantic source until it is verified"
-  [ -z "$(fm_busy_sources_for_harness grok)" ] \
-    || fail "grok must trust no semantic source while its structured path is unverified"
-  out=$(fm_busy_classify herdr default:w1:p1 kimi gate-k "$state" '🌒 · thinking')
-  [ "$out" = "unknown kimi-unverified" ] || fail "kimi must classify unknown, not from its spinner, got '$out'"
-  out=$(fm_busy_classify herdr default:w1:p1 grok gate-g "$state" 'Ctrl+c:cancel')
-  [ "$out" = "busy grok-regex" ] || fail "grok must classify through its isolated fallback, got '$out'"
-  pass "kimi and grok install no unverified semantic wiring and classify through their own gates"
-}
 
 test_pi_extension_semantic_lifecycle
 test_pi_extension_serializes_settle_before_next_start
 test_pi_extension_stale_incarnation_rejected
-test_kimi_and_grok_install_no_unverified_wiring
-test_opencode_plugin_semantic_lifecycle
 test_claude_hooks_semantic_lifecycle
 test_claude_hooks_stale_incarnation_harmless
 test_codex_unverified_until_a_semantic_source_exists

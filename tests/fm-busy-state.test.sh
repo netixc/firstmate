@@ -160,7 +160,7 @@ test_stale_gen_record_unknown() {
 test_missing_record_unknown_not_idle() {
   local state out h
   state=$(new_state_dir missing)
-  for h in claude opencode pi pi-signed; do
+  for h in claude pi; do
     out=$(fm_busy_classify herdr w1 "$h" t1 "$state")
     [ "$out" = "unknown missing" ] || fail "$h with no record must be 'unknown missing', got '$out'"
   done
@@ -222,7 +222,7 @@ test_converted_adapters_ignore_footer_text() {
    ■■■■⬝⬝⬝⬝  esc interrupt
 Working...
 Ctrl+c:cancel'
-  for h in claude opencode pi pi-signed; do
+  for h in claude pi; do
     out=$(fm_busy_classify herdr w1 "$h" t1 "$state" "$tail")
     [ "$out" = "unknown missing" ] || fail "$h must never classify from footer text, got '$out'"
   done
@@ -246,7 +246,6 @@ Ctrl+c:cancel')
   pass "the grok fallback is regex-scoped to grok and classifies only grok tasks"
 }
 
-# --- kimi verification gate -----------------------------------------------------
 
 test_codex_unverified_gate() {
   local state gen out
@@ -259,20 +258,6 @@ test_codex_unverified_gate() {
     || fail "codex must trust no semantic source until one is verified"
   pass "codex classifies unknown until a semantic source passes its verification gate"
 }
-
-test_kimi_unverified_gate() {
-  local state gen out
-  state=$(new_state_dir kimi-gate)
-  gen=$("$EV" arm "$state" t1)
-  "$EV" apply "$state" t1 busy --gen "$gen" --source kimi-hook --event user-prompt-submit
-  out=$(fm_busy_classify herdr w1 kimi t1 "$state")
-  [ "$out" = "unknown kimi-unverified" ] || fail "unverified kimi must classify unknown, got '$out'"
-  out=$(fm_busy_classify herdr w1 kimi t1 "$state" '🌒 · thinking')
-  [ "$out" = "unknown kimi-unverified" ] || fail "kimi must not classify from footer text, got '$out'"
-  pass "standalone kimi classifies unknown until the live verification gate opens"
-}
-
-# --- endpoint death and native fallbacks ----------------------------------------
 
 test_dead_endpoint_overrides() {
   local state gen out
@@ -371,7 +356,6 @@ test_source_mismatch_cross_adapter
 test_converted_adapters_ignore_footer_text
 test_grok_regex_isolated
 test_codex_unverified_gate
-test_kimi_unverified_gate
 test_dead_endpoint_overrides
 test_herdr_native_busy_only
 test_record_read_leaves_caller_shell_intact
