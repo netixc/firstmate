@@ -26,11 +26,8 @@
   "readmeSetupTargets": [
     "docs/configuration.md",
     "docs/wedge-alarm.md",
-    "docs/tmux-backend.md",
     "docs/herdr-backend.md",
-    "docs/zellij-backend.md",
     "docs/orca-backend.md",
-    "docs/cmux-backend.md",
     "docs/remote-secondmates.md"
   ],
   "requiredOwnerPointers": [
@@ -79,23 +76,11 @@
       "target": "docs/verification/supervision.md"
     },
     {
-      "source": "docs/tmux-backend.md",
-      "target": "docs/verification/runtime-backends.md"
-    },
-    {
       "source": "docs/herdr-backend.md",
       "target": "docs/verification/runtime-backends.md"
     },
     {
-      "source": "docs/zellij-backend.md",
-      "target": "docs/verification/runtime-backends.md"
-    },
-    {
       "source": "docs/orca-backend.md",
-      "target": "docs/verification/runtime-backends.md"
-    },
-    {
-      "source": "docs/cmux-backend.md",
       "target": "docs/verification/runtime-backends.md"
     },
     {
@@ -221,10 +206,6 @@
       "audience": "maintainer-architecture"
     },
     {
-      "path": "docs/cmux-backend.md",
-      "audience": "operator-current"
-    },
-    {
       "path": "docs/codex-app-backend.md",
       "audience": "operator-current"
     },
@@ -309,10 +290,6 @@
       "audience": "agent-runtime"
     },
     {
-      "path": "docs/tmux-backend.md",
-      "audience": "operator-current"
-    },
-    {
       "path": "docs/trace-context.md",
       "audience": "maintainer-architecture"
     },
@@ -354,10 +331,6 @@
     },
     {
       "path": "docs/wedge-alarm.md",
-      "audience": "operator-current"
-    },
-    {
-      "path": "docs/zellij-backend.md",
       "audience": "operator-current"
     },
     {

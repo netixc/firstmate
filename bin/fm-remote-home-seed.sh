@@ -134,8 +134,9 @@ while IFS= read -r line || [ -n "$line" ]; do
 done < "$BRIEF" > "$TMP/charter.remote"
 
 PROJECTS_CSV=
+PROJECT_COUNT=0
 : > "$TMP/project.records"
-for project in "${PROJECT_NAMES[@]}"; do
+for project in ${PROJECT_NAMES[@]+"${PROJECT_NAMES[@]}"}; do
   SRC="$PROJECTS/$project"
   [ -d "$SRC/.git" ] || die "project clone is unavailable: $SRC"
   MODE_LINE=$(FM_HOME="$FM_HOME" FM_DATA_OVERRIDE="$DATA" "$SCRIPT_DIR/fm-project-mode.sh" "$project")
@@ -157,6 +158,7 @@ EOF
   MODE_B64=$(printf '%s' "$MODE" | encode)
   printf 'project=%s|%s|%s|%s\n' "$NAME_B64" "$ORIGIN_B64" "$PROJECT_REG_B64" "$MODE_B64" >> "$TMP/project.records"
   PROJECTS_CSV="${PROJECTS_CSV}${PROJECTS_CSV:+, }$project"
+  PROJECT_COUNT=$((PROJECT_COUNT + 1))
 done
 
 {
@@ -170,7 +172,7 @@ done
   # back; the parent's real filesystem path is never sent, since it names
   # nothing on the remote filesystem.
   printf 'parent_host_b64=%s\n' "$(printf '%s' "$HOST" | encode)"
-  printf 'project_count=%s\n' "${#PROJECT_NAMES[@]}"
+  printf 'project_count=%s\n' "$PROJECT_COUNT"
   cat "$TMP/project.records"
 } > "$TMP/manifest"
 MANIFEST_BYTES=$(LC_ALL=C wc -c < "$TMP/manifest" | tr -d ' ')

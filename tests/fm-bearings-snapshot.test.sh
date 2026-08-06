@@ -10,6 +10,22 @@ set -u
 # shellcheck disable=SC1091
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
+# Live fixture records use the current Herdr metadata contract unless a case
+# supplies another backend explicitly.
+fm_write_meta_base() {
+  local file=$1 kv
+  shift
+  : > "$file"
+  for kv in "$@"; do printf '%s\n' "$kv" >> "$file"; done
+}
+fm_write_meta() {
+  local file=$1 kv has_backend=0
+  shift
+  for kv in "$@"; do case "$kv" in backend=*) has_backend=1 ;; esac; done
+  fm_write_meta_base "$file" "$@"
+  [ "$has_backend" = 1 ] || printf 'backend=herdr\n' >> "$file"
+}
+
 BEARINGS="$ROOT/bin/fm-bearings-snapshot.sh"
 TMP_ROOT=$(fm_test_tmproot fm-bearings)
 
@@ -26,18 +42,20 @@ make_fakebin() {  # <dir>
 [ "${FAKE_NM_SLEEP:-0}" = 1 ] && sleep 30
 exit 0
 SH
-  cat > "$fb/tmux" <<'SH'
+  cat > "$fb/herdr" <<'SH'
 #!/usr/bin/env bash
-case "${1:-}" in
-  display-message) case "$*" in *dead-*) exit 1 ;; *) printf '%%1\n' ;; esac ;;
-  capture-pane)
+case "${1:-} ${2:-}" in
+  'status --json') printf '{"client":{"version":"0.7.5","protocol":16},"server":{"running":true}}\n' ;;
+  'pane get') case "$*" in *dead-*) exit 1 ;; *) printf '{"result":{"pane":{"pane_id":"fixture","foreground_cwd":"/tmp"}}}\n' ;; esac ;;
+  'pane read')
     case "$*" in
       *fm-domain-alpha*) printf 'stale terminal summary: Phase 7 started\n> \n' ;;
       *) printf 'all quiet\n> \n' ;;
     esac
     ;;
+  'agent get') printf '{"result":{"agent":{"agent_status":"idle"}}}\n' ;;
+  *) exit 0 ;;
 esac
-exit 0
 SH
   cat > "$fb/gh" <<'SH'
 #!/usr/bin/env bash
@@ -65,7 +83,7 @@ SH
 echo "curl $*" >> "$NET_LOG"
 exit 1
 SH
-  chmod +x "$fb/no-mistakes" "$fb/tmux" "$fb/gh" "$fb/gh-axi" "$fb/curl"
+  chmod +x "$fb/no-mistakes" "$fb/herdr" "$fb/gh" "$fb/gh-axi" "$fb/curl"
   printf '%s\n' "$fb"
 }
 

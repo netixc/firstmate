@@ -46,10 +46,7 @@ run_return() {  # <case-dir> <mode>
 
 seed_live_blocker() {  # <case-dir> <backend> <key>
   local dir=$1 backend=$2 key=$3 target
-  case "$backend" in
-    tmux) target='synthetic:fm-repair-task' ;;
-    herdr) target='fm-lab-synthetic:w1:p2' ;;
-  esac
+  target='fm-lab-synthetic:w1:p2'
   cat > "$dir/home/state/repair-task.meta" <<EOF
 window=$target
 backend=$backend
@@ -121,9 +118,8 @@ test_return_gate_orders_catchup_before_bearings() {
 }
 
 test_explicit_reclassification_requires_durable_reason() {
-  local backend dir out rc
-  for backend in tmux herdr; do
-    dir="$TMP_ROOT/reclassify-$backend"
+  local backend=herdr dir out rc
+  dir="$TMP_ROOT/reclassify-$backend"
     install_runner "$dir"
     seed_live_blocker "$dir" "$backend" vendor-release
     date +%s > "$dir/home/state/.afk"
@@ -146,9 +142,8 @@ test_explicit_reclassification_requires_durable_reason() {
     printf 'resolved [key=vendor-release]: reclassified as an external wait because the synthetic vendor owns the next event\n' >> "$dir/home/state/repair-task.status"
     printf 'paused [key=vendor-release]: waiting for the synthetic vendor window\n' >> "$dir/home/state/repair-task.status"
     out=$(run_return "$dir" check) || fail "$backend durable reclassification did not clear the return gate: $out"
-    [ ! -e "$dir/home/state/.afk-return-catchup" ] || fail "$backend reclassification left a gate behind"
-  done
-  pass "tmux and Herdr blockers require the same explicit durable reclassification before ordinary work"
+  [ ! -e "$dir/home/state/.afk-return-catchup" ] || fail "$backend reclassification left a gate behind"
+  pass "Herdr blockers require the same explicit durable reclassification before ordinary work"
 }
 
 test_captain_decision_does_not_masquerade_as_firstmate_blocker() {
@@ -156,8 +151,8 @@ test_captain_decision_does_not_masquerade_as_firstmate_blocker() {
   dir="$TMP_ROOT/captain-decision"
   install_runner "$dir"
   cat > "$dir/home/state/decision-task.meta" <<'EOF'
-window=synthetic:fm-decision-task
-backend=tmux
+window=fm-lab-synthetic:w1:p3
+backend=herdr
 kind=ship
 EOF
   printf 'needs-decision [key=api-shape]: captain must choose the synthetic API shape\n' > "$dir/home/state/decision-task.status"

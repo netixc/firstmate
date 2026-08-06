@@ -59,20 +59,25 @@ SH
   printf '%s\n' "$root"
 }
 
-add_tmux_fake() {
+add_herdr_fake() {
   local fb=$1
-  cat > "$fb/tmux" <<'SH'
+  cat > "$fb/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
 LOG="${FM_ORCA_LOG:?}"
 {
-  printf 'tmux'
+  printf 'herdr'
   for a in "$@"; do printf '\x1f%s' "$a"; done
   printf '\n'
 } >> "$LOG"
-exit 0
+case "${1:-} ${2:-}" in
+  'session list') printf '{"sessions":[{"name":"default","running":true,"socket_path":"/tmp/fm-orca-test-herdr.sock"}]}\n' ;;
+  'status --json') printf '{"server":{"running":true}}\n' ;;
+  'pane get') printf '{"error":{"code":"pane_not_found"}}\n'; exit 1 ;;
+  *) exit 0 ;;
+esac
 SH
-  chmod +x "$fb/tmux"
+  chmod +x "$fb/herdr"
 }
 
 test_capture_reads_terminal_tail_json() {
@@ -200,7 +205,7 @@ test_composer_state_popup_placeholder_fill_is_pending() {
 # Dead-shell injection safety (task fm-composer-shellglyph-safety): a pane whose
 # agent has exited to a bare login shell has no bordered composer row, so the
 # classifier finds nothing and reports `unknown` - NOT a safe (empty) injection
-# target. Covers the same guarantee herdr/cmux/tmux tests pin for their backends.
+# target. Covers the same guarantee Herdr tests pin for their backends.
 test_composer_state_bare_shell_prompt_is_unknown() {
   local out
   orca_case composer-bare-shell
@@ -528,7 +533,7 @@ test_spawn_refuses_orca_secondmate_before_home_mutation() {
   status=$?
   set +e
   [ "$status" -ne 0 ] || fail "backend=orca --secondmate should be refused"
-  assert_contains "$out" "backend=orca does not support --secondmate spawns yet" \
+  assert_contains "$out" "backend=orca does not support --secondmate spawns" \
     "orca secondmate refusal should happen at backend selection"
   assert_absent "$subhome/config/crew-harness" \
     "orca secondmate refusal should not propagate inherited local material into the secondmate home"
@@ -686,7 +691,7 @@ test_spawn_releases_orca_resources_when_metadata_write_fails() {
     "$ROOT/bin/fm-spawn.sh" "$id" "$proj" claude --mode no-mistakes --yolo off --backend orca 2>&1 )
   status=$?
   [ "$status" -ne 0 ] || fail "Orca spawn should fail when metadata cannot be written"
-  assert_contains "$out" "Is a directory" "spawn should fail at metadata publication"
+  assert_contains "$out" "refusing to publish task metadata over a non-regular path" "spawn should fail safely at metadata publication"
   assert_contains "$(cat "$LOG")" $'orca\x1f''terminal'$'\x1f''close'$'\x1f''--terminal'$'\x1f''term-meta-fail'$'\x1f''--json' \
     "Orca spawn should close the recorded terminal when a later abort occurs"
   assert_contains "$(cat "$LOG")" $'orca\x1f''worktree'$'\x1f''rm'$'\x1f''--worktree'$'\x1f''id:wt-meta-fail'$'\x1f''--force'$'\x1f''--json' \
@@ -1156,7 +1161,9 @@ test_secondmate_force_teardown_removes_orca_child_via_orca() {
   printf 'domain\n' > "$subhome/.fm-secondmate-home"
   fm_git_worktree "$childproj" "$childwt" "fm/$child_id"
   fm_write_meta "$home/state/domain.meta" \
-    "window=firstmate:fm-domain" "worktree=$subhome" "project=$subhome" \
+    "backend=herdr" "window=default:wP:p1" "endpoint_task_id=domain" \
+    "herdr_session=default" "herdr_workspace_id=wP" "herdr_tab_id=wP:t1" "herdr_pane_id=wP:p1" \
+    "worktree=$subhome" "project=$subhome" \
     "harness=echo" "kind=secondmate" "mode=secondmate" "yolo=off" \
     "home=$subhome" "projects=alpha"
   printf '%s\n' "- domain - Orca child cleanup (home: $subhome; scope: orca cleanup; projects: alpha; added 2026-07-03)" \
@@ -1168,7 +1175,7 @@ test_secondmate_force_teardown_removes_orca_child_via_orca() {
     "backend=orca" "orca_worktree_id=wt-child-cleanup"
   orca_case secondmate-child-cleanup
   printf '{"ok":true,"result":{"worktree":{"id":"wt-child-cleanup","path":"%s"}}}\n' "$childwt" > "$RESP/1.out"
-  add_tmux_fake "$FB"
+  add_herdr_fake "$FB"
   neutral=$(neutral_fm_root "$CASE_DIR/neutral")
   set +e
   out=$( PATH="$FB:$PATH" FM_ORCA_LOG="$LOG" FM_ORCA_RESPONSES="$RESP" \
@@ -1199,7 +1206,9 @@ test_secondmate_force_teardown_refuses_orca_child_id_path_mismatch() {
   fm_git_worktree "$childproj" "$childwt" "fm/$child_id"
   git -C "$childproj" worktree add --quiet -b "fm/$child_id-other" "$other_wt"
   fm_write_meta "$home/state/domain.meta" \
-    "window=firstmate:fm-domain" "worktree=$subhome" "project=$subhome" \
+    "backend=herdr" "window=default:wP:p1" "endpoint_task_id=domain" \
+    "herdr_session=default" "herdr_workspace_id=wP" "herdr_tab_id=wP:t1" "herdr_pane_id=wP:p1" \
+    "worktree=$subhome" "project=$subhome" \
     "harness=echo" "kind=secondmate" "mode=secondmate" "yolo=off" \
     "home=$subhome" "projects=alpha"
   printf '%s\n' "- domain - Orca child cleanup (home: $subhome; scope: orca cleanup; projects: alpha; added 2026-07-03)" \
@@ -1211,7 +1220,7 @@ test_secondmate_force_teardown_refuses_orca_child_id_path_mismatch() {
     "backend=orca" "orca_worktree_id=wt-child-mismatch"
   orca_case secondmate-child-mismatch
   printf '{"ok":true,"result":{"worktree":{"id":"wt-child-mismatch","path":"%s"}}}\n' "$other_wt" > "$RESP/1.out"
-  add_tmux_fake "$FB"
+  add_herdr_fake "$FB"
   neutral=$(neutral_fm_root "$CASE_DIR/neutral")
   set +e
   out=$( PATH="$FB:$PATH" FM_ORCA_LOG="$LOG" FM_ORCA_RESPONSES="$RESP" \
@@ -1240,7 +1249,9 @@ test_secondmate_force_teardown_refuses_partial_orca_child() {
   printf 'domain\n' > "$subhome/.fm-secondmate-home"
   fm_git_worktree "$childproj" "$childwt" "fm/$child_id"
   fm_write_meta "$home/state/domain.meta" \
-    "window=firstmate:fm-domain" "worktree=$subhome" "project=$subhome" \
+    "backend=herdr" "window=default:wP:p1" "endpoint_task_id=domain" \
+    "herdr_session=default" "herdr_workspace_id=wP" "herdr_tab_id=wP:t1" "herdr_pane_id=wP:p1" \
+    "worktree=$subhome" "project=$subhome" \
     "harness=echo" "kind=secondmate" "mode=secondmate" "yolo=off" \
     "home=$subhome" "projects=alpha"
   printf '%s\n' "- domain - Orca partial child cleanup (home: $subhome; scope: orca cleanup; projects: alpha; added 2026-07-03)" \
@@ -1251,7 +1262,7 @@ test_secondmate_force_teardown_refuses_partial_orca_child() {
     "harness=claude" "kind=ship" "mode=no-mistakes" "yolo=off" \
     "backend=orca" "orca_worktree_id=wt-partial-child"
   orca_case secondmate-partial-child-cleanup
-  add_tmux_fake "$FB"
+  add_herdr_fake "$FB"
   neutral=$(neutral_fm_root "$CASE_DIR/neutral")
   set +e
   out=$( PATH="$FB:$PATH" FM_ORCA_LOG="$LOG" FM_ORCA_RESPONSES="$RESP" \
@@ -1260,7 +1271,7 @@ test_secondmate_force_teardown_refuses_partial_orca_child() {
   set -e
   [ "$rc" -ne 0 ] || fail "forced secondmate teardown accepted a child with no terminal identity"
   assert_contains "$out" "missing terminal" "partial child refusal did not explain the incomplete endpoint"
-  [ ! -s "$LOG" ] || fail "partial child refusal dispatched to Orca or tmux"
+  [ ! -s "$LOG" ] || fail "partial child refusal dispatched to Orca or Herdr"
   assert_present "$home/state/domain.meta" "partial child refusal removed parent metadata"
   assert_present "$subhome/state/$child_id.meta" "partial child refusal removed child metadata"
   pass "fm-teardown.sh --force: refuses partial Orca secondmate children before runtime dispatch"

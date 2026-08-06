@@ -3,20 +3,19 @@
 # Usage: fm-send.sh <target> <text...>
 #   <target> may be an exact task id, a legacy fm-<id> task label resolved
 #   through this home's state/<id>.meta, or an explicit well-formed backend
-#   target. fm-send refuses unresolved guesses rather than falling back to a
-#   tmux window search, because a "successful" send to the wrong endpoint is
-#   worse than a loud failure.
+#   target. fm-send refuses unresolved guesses because a "successful" send to
+#   the wrong endpoint is worse than a loud failure.
 # Special keys instead of text: fm-send.sh <target> --key Enter
-# Key support is backend-specific: tmux/herdr support Escape, Enter, and C-c;
-# Orca currently supports Enter and C-c only, and rejects Escape.
+# Herdr supports Escape, Enter, and C-c.
+# Orca currently supports Enter and C-c only and rejects Escape.
 #
 # Text submission is verified: the line is typed ONCE, then Enter is sent and
 # retried (Enter only, never retyped) until the target backend confirms a
 # submit or reports an inconclusive send. If a swallowed Enter is positively
 # confirmed, fm-send exits NON-ZERO so the caller knows the steer did not land
 # instead of silently leaving an unsubmitted instruction.
-# Submission dispatches through the target's recorded backend; the tmux adapter
-# shares its composer/submit core with the away-mode daemon via bin/fm-tmux-lib.sh.
+# Submission dispatches through the target's recorded backend and uses the
+# backend's own composer and submit confirmation.
 # Tune with FM_SEND_RETRIES (default 3) / FM_SEND_SLEEP (0.4).
 # Slash commands, and codex `$...` skill invocations resolved through harness
 # meta, get a longer pre-Enter settle so completion popups do not swallow Enter.
@@ -116,14 +115,8 @@ fm_send_meta_for_key_value() {  # <state-dir> <key> <value>
   return 1
 }
 
-fm_send_count_colons() {  # <string>
-  local s=$1 no_colons
-  no_colons=${s//:/}
-  printf '%s' $(( ${#s} - ${#no_colons} ))
-}
-
 fm_send_resolve_target() {  # <raw-target>
-  local raw=$1 meta pane_meta target backend assumed colons id session hint
+  local raw=$1 meta pane_meta target backend id session hint
 
   RESOLVED_TARGET=""
   TARGET_BACKEND=""
@@ -171,7 +164,7 @@ fm_send_resolve_target() {  # <raw-target>
       # than mistaking it for an unresolved task selector.
       ;;
     fm-*)
-      RESOLUTION_TRIED="meta=$STATE/$raw.meta; legacy-meta=$STATE/${raw#fm-}.meta; backend=none"
+      RESOLUTION_TRIED="selector-meta=$STATE/${raw#fm-}.meta; backend=none"
       echo "error: no metadata for $raw in $STATE (tried $RESOLUTION_TRIED); pass a well-formed explicit backend target only when targeting outside this firstmate home" >&2
       return 1
       ;;
@@ -203,24 +196,18 @@ fm_send_resolve_target() {  # <raw-target>
 
   case "$raw" in
     *:*)
-      colons=$(fm_send_count_colons "$raw")
-      if [ "$colons" -ge 2 ]; then
-        assumed=herdr
-      else
-        assumed=tmux
-      fi
-      if ! fm_backend_target_exists "$assumed" "$raw"; then
-        echo "error: explicit target '$raw' is not a live $assumed endpoint (tried meta=$STATE/$raw.meta; metadata window/terminal lookup; backend=$assumed). Use fm-<id> for a recorded task/lane, or pass a target whose backend endpoint can be verified." >&2
+      if ! fm_backend_target_exists herdr "$raw"; then
+        echo "error: explicit target '$raw' is not a live Herdr endpoint (tried meta=$STATE/$raw.meta; metadata window/terminal lookup; backend=herdr). Use fm-<id> for a recorded task or pass a verified <session>:<pane-id> target." >&2
         return 1
       fi
       RESOLVED_TARGET=$raw
-      TARGET_BACKEND=$assumed
-      RESOLUTION_TRIED="meta=$STATE/$raw.meta; metadata window/terminal lookup; backend=$assumed; endpoint=verified"
+      TARGET_BACKEND=herdr
+      RESOLUTION_TRIED="meta=$STATE/$raw.meta; metadata window/terminal lookup; backend=herdr; endpoint=verified"
       return 0
       ;;
   esac
 
-  echo "error: target '$raw' is not resolvable (tried meta=$STATE/$raw.meta; metadata window/terminal lookup; backend=none). Use fm-$raw for a recorded task/lane, or pass a well-formed explicit backend target such as session:window." >&2
+  echo "error: target '$raw' is not resolvable (tried meta=$STATE/$raw.meta; metadata window/terminal lookup; backend=none). Use fm-$raw for a recorded task/lane, or pass a well-formed explicit Herdr target such as <session>:<pane-id>." >&2
   return 1
 }
 
@@ -254,9 +241,8 @@ fi
 # The target's BACKEND comes from selector meta, from matching an explicit target
 # back to recorded meta, or from strict explicit-target shape validation.
 # Do not add a separate passive liveness preflight here. Active send paths own
-# backend readiness: herdr, for example, must route through its session-aware
-# target_ready path before sending, while zellij verifies pane labels in its
-# send implementation. A failed backend send is still surfaced below as a hard
+# backend readiness: Herdr routes through its session-aware target-ready path
+# before sending. A failed backend send is still surfaced below as a hard
 # error with the attempted resolution attached.
 
 if [ "${1:-}" = "--key" ]; then

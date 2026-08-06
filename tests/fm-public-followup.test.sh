@@ -26,6 +26,30 @@ TMP_ROOT=$(fm_test_tmproot fm-public-followup)
 command -v jq >/dev/null 2>&1 || { echo "skip: jq not found"; exit 0; }
 command -v tasks-axi >/dev/null 2>&1 || { echo "skip: tasks-axi not found"; exit 0; }
 
+# Endpoint-bound fixtures use complete current Herdr metadata, while parent
+# routing records without endpoints remain minimal.
+fm_write_meta() {  # <file> <key=value> ...
+  local file=$1 kv endpoint='' window='' backend='' session pane workspace
+  shift
+  : > "$file"
+  for kv in "$@"; do
+    printf '%s\n' "$kv" >> "$file"
+    case "$kv" in
+      endpoint_task_id=*) endpoint=${kv#endpoint_task_id=} ;;
+      window=*) window=${kv#window=} ;;
+      backend=*) backend=${kv#backend=} ;;
+    esac
+  done
+  [ -n "$endpoint" ] || return 0
+  [ -z "$backend" ] || [ "$backend" = herdr ] || return 0
+  [ -n "$backend" ] || printf 'backend=herdr\n' >> "$file"
+  session=${window%%:*}
+  pane=${window#*:}
+  case "$pane" in *:*) workspace=${pane%%:*} ;; *) workspace=w1 ;; esac
+  printf 'herdr_session=%s\nherdr_workspace_id=%s\nherdr_tab_id=%s:t1\nherdr_pane_id=%s\n' \
+    "$session" "$workspace" "$workspace" "$pane" >> "$file"
+}
+
 # A fakebin `curl` standing in for the relay. It logs every call so a test can
 # prove exactly how many public posts happened, and honours FAKE_FOLLOWUP_CODE so
 # a transport failure can be simulated.
@@ -71,6 +95,19 @@ SH
   printf '%s\n' "$fakebin"
 }
 
+install_dead_herdr() {  # <fakebin>
+  cat > "$1/herdr" <<'SH'
+#!/usr/bin/env bash
+case "${1:-} ${2:-}" in
+  'status --json') printf '{"client":{"version":"0.7.5","protocol":16},"server":{"running":true}}\n' ;;
+  'session list') printf '{"sessions":[{"name":"firstmate","running":true,"socket_path":"/tmp/fm-public-followup.sock"},{"name":"default","running":true,"socket_path":"/tmp/fm-public-followup-default.sock"}]}\n' ;;
+  'pane get') printf '{"error":{"code":"pane_not_found"}}\n'; exit 1 ;;
+  *) exit 0 ;;
+esac
+SH
+  chmod +x "$1/herdr"
+}
+
 # make_home <name> [relay-on|relay-off]: a firstmate home with its own backlog.
 # relay-off omits .env entirely, which is exactly what a home that never opted
 # into the myfirstmate relay looks like.
@@ -87,7 +124,8 @@ make_home() {  # <name> [relay-on|relay-off]
 EOF
   [ "$relay" = relay-off ] || printf 'FMX_PAIRING_TOKEN=test-token\n' > "$home/.env"
   make_fake_curl "$home" >/dev/null
-  fm_fake_exit0 "$home/fakebin" tmux treehouse no-mistakes gh gh-axi
+  fm_fake_exit0 "$home/fakebin" treehouse no-mistakes gh gh-axi
+  install_dead_herdr "$home/fakebin"
   printf '%s\n' "$home"
 }
 
@@ -718,7 +756,8 @@ test_secondmate_teardown_resolves_parent_from_durable_record_when_env_lost() {
   child=$(cd "$child" && pwd -P)
   parent_resolved=$(cd "$parent" && pwd -P)
   make_fake_curl "$child" >/dev/null
-  fm_fake_exit0 "$child/fakebin" tmux treehouse no-mistakes gh gh-axi
+  fm_fake_exit0 "$child/fakebin" treehouse no-mistakes gh gh-axi
+  install_dead_herdr "$child/fakebin"
 
   assert_local_secondmate_parent_record "$child" "$parent_resolved"
 
@@ -755,7 +794,8 @@ test_secondmate_teardown_durable_record_missing_parent_registration_still_refuse
   child=$(cd "$child" && pwd -P)
   parent_resolved=$(cd "$parent" && pwd -P)
   make_fake_curl "$child" >/dev/null
-  fm_fake_exit0 "$child/fakebin" tmux treehouse no-mistakes gh gh-axi
+  fm_fake_exit0 "$child/fakebin" treehouse no-mistakes gh gh-axi
+  install_dead_herdr "$child/fakebin"
   assert_local_secondmate_parent_record "$child" "$parent_resolved"
   fm_write_meta "$child/state/work-child.meta" \
     "window=firstmate:fm-work-child" "endpoint_task_id=work-child" \
@@ -786,7 +826,8 @@ test_secondmate_teardown_durable_record_with_unknown_field_succeeds() {
   child=$(cd "$child" && pwd -P)
   parent_resolved=$(cd "$parent" && pwd -P)
   make_fake_curl "$child" >/dev/null
-  fm_fake_exit0 "$child/fakebin" tmux treehouse no-mistakes gh gh-axi
+  fm_fake_exit0 "$child/fakebin" treehouse no-mistakes gh gh-axi
+  install_dead_herdr "$child/fakebin"
   assert_local_secondmate_parent_record "$child" "$parent_resolved"
   printf 'some_future_field=value\n' >> "$child/.fm-secondmate-parent"
   parent_alias="$TMP_ROOT/teardown-durable-clean-parent-alias"
@@ -821,7 +862,8 @@ test_secondmate_teardown_rejects_conflicting_live_and_durable_parent_bindings() 
   child=$(cd "$child" && pwd -P)
   parent_resolved=$(cd "$durable_parent" && pwd -P)
   make_fake_curl "$child" >/dev/null
-  fm_fake_exit0 "$child/fakebin" tmux treehouse no-mistakes gh gh-axi
+  fm_fake_exit0 "$child/fakebin" treehouse no-mistakes gh gh-axi
+  install_dead_herdr "$child/fakebin"
   assert_local_secondmate_parent_record "$child" "$parent_resolved"
   fm_write_meta "$durable_parent/state/mate.meta" "kind=secondmate" "home=$child"
   fm_git_init_commit "$child/projects/worktree"
@@ -853,7 +895,8 @@ test_secondmate_teardown_rejects_unsafe_durable_parent_records() {
       || fail "real secondmate seeding failed for $case_name"
     child=$(cd "$child" && pwd -P)
     make_fake_curl "$child" >/dev/null
-    fm_fake_exit0 "$child/fakebin" tmux treehouse no-mistakes gh gh-axi
+    fm_fake_exit0 "$child/fakebin" treehouse no-mistakes gh gh-axi
+  install_dead_herdr "$child/fakebin"
     fm_write_meta "$child/state/work-child.meta" \
       "window=firstmate:fm-work-child" "endpoint_task_id=work-child" \
       "worktree=$child" "project=$child" "kind=ship" "mode=local-only"
@@ -1058,6 +1101,7 @@ test_cleanup_refuses_while_a_public_reply_is_owed() {
   seed_commitment "$home" pf-guard req-guard discord main ship-task
   fm_write_meta "$home/state/ship-task.meta" \
     "window=firstmate:fm-ship-task" \
+    "endpoint_task_id=ship-task" \
     "worktree=$home/projects/gone" \
     "project=$home/projects/sample" \
     "harness=codex" \

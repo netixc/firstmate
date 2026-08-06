@@ -24,7 +24,7 @@ This feature parents no SDK span by itself.
 
 Because the injected carrier and the recorded carrier are the same string, an observer that reads the metadata reconstructs exactly the identity the child received.
 The injection sits at the unconditional pre-launch export site, so it covers ship, scout, and Secondmate spawns and is identical across every harness (`claude`, `codex`, `opencode`, `pi`, `grok`, `kimi`) - the same coverage `GOTMPDIR` already has, with no `launch_template()` change.
-Ship and scout spawns reach that site on every spawn backend (`tmux`, `herdr`, `zellij`, `orca`, `cmux`); a Secondmate reaches it on every backend that accepts a Secondmate spawn (`tmux`, `herdr`, `zellij`), because `bin/fm-spawn.sh` rejects a Secondmate on `orca` and `cmux`.
+Ship and scout spawns reach that site on Herdr and explicit Orca; a Secondmate reaches it on Herdr because `bin/fm-spawn.sh` rejects a Secondmate on Orca.
 
 ### Remote Secondmate routes
 

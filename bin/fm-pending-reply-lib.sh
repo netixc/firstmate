@@ -66,9 +66,9 @@ _FM_PENDING_REPLY_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/n
 . "$_FM_PENDING_REPLY_LIB_DIR/fm-marker-lib.sh"
 # shellcheck source=bin/fm-backend.sh
 . "$_FM_PENDING_REPLY_LIB_DIR/fm-backend.sh"
-# shellcheck source=bin/fm-tmux-lib.sh
-. "$_FM_PENDING_REPLY_LIB_DIR/fm-tmux-lib.sh"
-
+# Rendered fallback matching is owned by the backend-neutral busy-state library.
+# shellcheck source=bin/fm-busy-lib.sh
+. "$_FM_PENDING_REPLY_LIB_DIR/fm-busy-lib.sh"
 FM_PENDING_REPLY_SCHEMA='fm-pending-reply.v1'
 FM_PENDING_REPLY_CORR_RE='corr=[A-Fa-f0-9]{16}'
 FM_PENDING_REPLY_GRACE_DEFAULT=120
@@ -596,8 +596,8 @@ fm_pending_reply_fallback_idle_eligible() {  # <record-path>
 # pane is healthy and it runs no supervised turn sequence of its own. This
 # observation exists only to notice a busy-then-idle transition around one
 # delivered request, so it is a delivery-confirmation signal in the same
-# category as the submit acknowledgement in bin/fm-tmux-lib.sh - never task
-# state, and never a source consumers can confuse with semantic state.
+# category as submit acknowledgement - never task state and never a source
+# consumers can confuse with semantic state.
 #
 # It stays harness-scoped (fm_busy_lines_match with the recorded harness, no
 # global OR of every vendor signature), so one harness's output cannot make
@@ -1012,7 +1012,7 @@ fm_pending_reply_tick() {  # <state-dir>
       awaiting_report|recovery_sent) ;;
       *) continue ;;
     esac
-    backend=tmux
+    backend=herdr
     target=
     busy=unknown
     sm_home=

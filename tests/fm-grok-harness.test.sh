@@ -12,20 +12,29 @@ TMP_ROOT=$(fm_test_tmproot fm-grok-harness)
 make_spawn_fakebin() {
   local dir=$1 fakebin
   fakebin=$(fm_fakebin "$dir")
-  cat > "$fakebin/tmux" <<'SH'
+  cat > "$fakebin/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
-case "$*" in
-  *"#{pane_current_path}"*) printf '%s\n' "${FM_FAKE_PANE_PATH:-}"; exit 0 ;;
+case "${1:-} ${2:-}" in
+  'status --json') printf '{"client":{"version":"0.7.5","protocol":16},"server":{"running":true}}\n' ;;
+  'session list') printf '{"sessions":[{"name":"default","running":true,"socket_path":"/tmp/fm-grok-harness.sock"}]}\n' ;;
+  'workspace list') printf '{"result":{"workspaces":[{"workspace_id":"w1","label":"firstmate"}]}}\n' ;;
+  'tab list') printf '{"result":{"tabs":[]}}\n' ;;
+  'tab create') printf '{"result":{"tab":{"tab_id":"w1:t1"},"root_pane":{"pane_id":"w1:p1"}}}\n' ;;
+  'pane get')
+    if [ -f "${FM_FAKE_HERDR_CLOSED:-/dev/null}" ]; then
+      printf '{"error":{"code":"pane_not_found"}}\n'
+      exit 1
+    fi
+    printf '{"result":{"pane":{"pane_id":"w1:p1","tab_id":"w1:t1","workspace_id":"w1","foreground_cwd":"%s"}}}\n' "${FM_FAKE_PANE_PATH:-}"
+    ;;
+  'pane close') : > "${FM_FAKE_HERDR_CLOSED:?}" ;;
+  'pane run'|'pane send-text'|'pane send-keys'|'tab close') ;;
+  'agent get') printf '{"result":{"agent":{"agent_status":"working"}}}\n' ;;
+  *) exit 0 ;;
 esac
-case "${1:-}" in
-  display-message) printf 'firstmate\n'; exit 0 ;;
-  list-windows) exit 0 ;;
-  has-session|new-session|new-window|send-keys|kill-window) exit 0 ;;
-esac
-exit 0
 SH
-  chmod +x "$fakebin/tmux"
+  chmod +x "$fakebin/herdr"
   fm_fake_exit0 "$fakebin" treehouse gh-axi gh
   printf '%s\n' "$fakebin"
 }
@@ -40,6 +49,7 @@ make_spawn_case() {
   grok_home="$case_dir/grok"
   id="grok-$name-x1"
   mkdir -p "$home/data/$id" "$home/projects" "$home/state" "$home/config" "$grok_home"
+  printf 'off\n' > "$home/config/herdr-presentation-spaces"
   printf 'brief\n' > "$home/data/$id/brief.md"
   fm_git_worktree "$proj" "$wt" "fm/$id"
   touch "$home/state/.last-watcher-beat"
@@ -51,7 +61,8 @@ run_grok_spawn() {
   FM_ROOT_OVERRIDE='' FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
-    FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$wt" TMUX="fake,1,0" \
+    FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$wt" \
+    FM_FAKE_HERDR_CLOSED="$home/state/$id.herdr-closed" \
     GROK_HOME="$grok_home" PATH="$fakebin:$PATH" \
     "$SPAWN" "$id" "$proj" grok --mode no-mistakes --yolo off 2>&1
 }
@@ -96,7 +107,7 @@ EOF
 }
 
 test_grok_teardown_removes_pointer_and_token() {
-  local rec case_dir home proj wt fakebin grok_home id out status token
+  local rec case_dir home proj wt fakebin grok_home id out status token teardown_out
   rec=$(make_spawn_case teardown)
   IFS='|' read -r case_dir home proj wt fakebin grok_home id <<EOF
 $rec
@@ -106,10 +117,11 @@ EOF
   expect_code 0 "$status" "grok spawn should succeed before teardown"
   token=$(sed -n 's/^token=//p' "$wt/.fm-grok-turnend")
 
-  FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" \
+  teardown_out=$(FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" \
+    FM_FAKE_HERDR_CLOSED="$home/state/$id.herdr-closed" \
     GROK_HOME="$grok_home" PATH="$fakebin:$PATH" \
-    "$TEARDOWN" "$id" --force >/dev/null 2>&1 \
-    || fail "grok teardown failed"
+    "$TEARDOWN" "$id" --force 2>&1) \
+    || fail "grok teardown failed: $teardown_out"
 
   assert_absent "$wt/.fm-grok-turnend" "grok pointer survived teardown"
   assert_absent "$grok_home/hooks/fm-turn-end.d/$token" "grok auth token survived teardown"

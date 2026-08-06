@@ -40,33 +40,8 @@ export FM_SEND_SETTLE=0
 make_stubs() {  # <dir> -> fakebin
   local dir=$1 fb="$1/fakebin"
   mkdir -p "$fb"
-  cat > "$fb/tmux" <<'SH'
-#!/usr/bin/env bash
-set -u
-case "${1:-}" in
-  send-keys)
-    shift
-    literal=0
-    while [ $# -gt 0 ]; do
-      case "$1" in
-        -t) shift 2 ;;
-        -l) literal=1; shift ;;
-        *) break ;;
-      esac
-    done
-    if [ "$literal" = 1 ]; then
-      printf '%s' "${1:-}" >> "$FM_SEND_LOG"
-    fi
-    exit 0 ;;
-  display-message)
-    for a in "$@"; do case "$a" in *cursor_y*) printf '1\n'; exit 0 ;; esac; done
-    printf 'fakepane\n'; exit 0 ;;
-  capture-pane) printf '╭────╮\n│    │\n╰────╯\n'; exit 0 ;;
-  list-windows) exit 0 ;;
-esac
-exit 0
-SH
-  chmod +x "$fb/tmux"
+  fm_fake_herdr_terminal "$fb"
+  printf '╭────╮\n│ >  │\n╰────╯\n' > "$dir/capture"
   cat > "$fb/sleep" <<'SH'
 #!/usr/bin/env bash
 exit 0
@@ -85,7 +60,7 @@ run_send() {
   local fb=$1 home=$2 log=$3; shift 3
   : > "$log"
   env PATH="$fb:$PATH" \
-    FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SEND_LOG="$log" FM_SEND_SETTLE=0 \
+    FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_FAKE_HERDR_LOG="$log" FM_FAKE_HERDR_CAPTURE="$(dirname "$fb")/capture" FM_BACKEND_HERDR_SUBMIT_MIN_SLEEP=0 FM_SEND_SETTLE=0 \
     FM_PENDING_REPLY_GRACE_SECS=0 \
     "$SEND" "$@" 2>/dev/null
 }
@@ -577,12 +552,14 @@ test_unmarked_captain_input_creates_no_expectation() {
   home=$(setup_parent unmarked)
   # Crewmate target stays unmarked and creates no pending-reply record.
   fm_write_meta "$home/state/build.meta" \
-    "window=sess:fm-build" "worktree=$home/wt" "project=$home/p" \
+    "backend=herdr" "window=sess:fm-build" "worktree=$home/wt" "project=$home/p" \
     "harness=echo" "kind=ship" "mode=no-mistakes" "yolo=off"
   run_send "$fb" "$home" "$log" "build" "captain says hello"; rc=$?
   expect_code 0 "$rc" "unmarked crewmate send should succeed"
-  [ "$(cat "$log")" = "captain says hello" ] \
-    || fail "crewmate send should stay unmarked"$'\n'"$(cat "$log" | od -An -c)"
+  assert_contains "$(cat "$log")" "TEXT:captain says hello" \
+    "crewmate send should preserve the original payload"
+  assert_not_contains "$(cat "$log")" "$FM_FROMFIRST_MARK" \
+    "crewmate send should stay unmarked"
   pending_count=$(find "$home/state/pending-replies" -type f 2>/dev/null | wc -l | tr -d ' ')
   [ "$pending_count" = 0 ] || fail "unmarked input must create no pending-reply records (got $pending_count)"
   pass "direct unmarked captain input creates no expectation"
@@ -596,7 +573,8 @@ test_fm_send_marked_secondmate_creates_pending_and_embeds_corr() {
   fm_write_secondmate_meta "$home/state/hibit.meta" "$home/sm" "sess:fm-hibit"
   run_send "$fb" "$home" "$log" "hibit" "audit the build"; rc=$?
   expect_code 0 "$rc" "secondmate send should succeed"
-  got=$(cat "$log")
+  got=$(grep '^TEXT:' "$log" | tail -1)
+  got=${got#TEXT:}
   case "$got" in
     "$FM_FROMFIRST_MARK"corr=*) : ;;
     *) fail "secondmate send must embed marker+corr"$'\n'"$(printf '%s' "$got" | od -An -c)" ;;
@@ -651,7 +629,7 @@ test_busy_idle_observation_via_backend_abstraction() {
   corr=$(fm_pending_reply_create "$home" "$state" "hibit" "backend turn")
   fm_pending_reply_mark_delivered "$state" "$corr"
   # Simulates Pi/Claude secondmate busy_state from fm_backend_busy_state without
-  # reading conversation text (herdr native idle/busy or tmux unknown fallback).
+  # reading conversation text (Herdr native idle/busy or Orca unknown fallback).
   fm_pending_reply_observe_busy "$state" "$corr" unknown
   [ -z "$(fm_pending_reply_get "$(fm_pending_reply_path "$state" "$corr")" request_turn_completed_epoch)" ] \
     || fail "unknown busy_state must not prove turn completion"
@@ -663,9 +641,8 @@ test_busy_idle_observation_via_backend_abstraction() {
 }
 
 test_unknown_backend_state_uses_capture_fallback() {
-  local backend
-  for backend in tmux zellij; do
-    (
+  local backend=orca
+  (
       local home state corr rec sm_home
       home=$(setup_parent "fallback-$backend")
       state="$home/state"
@@ -678,7 +655,7 @@ test_unknown_backend_state_uses_capture_fallback() {
       corr=$(fm_pending_reply_create "$home" "$state" "hibit" "$backend fallback")
       fm_pending_reply_mark_delivered "$state" "$corr"
       fm_write_secondmate_meta "$state/hibit.meta" "$sm_home" "session:fm-hibit" alpha pi
-      [ "$backend" = tmux ] || printf 'backend=%s\n' "$backend" >> "$state/hibit.meta"
+      printf 'backend=%s\n' "$backend" >> "$state/hibit.meta"
       fm_backend_busy_state() { printf 'unknown'; }
       fm_backend_capture() { printf '%s' "$FM_PENDING_TEST_CAPTURE"; }
       # Invoked indirectly through FM_PENDING_REPLY_SEND_HOOK.
@@ -706,9 +683,8 @@ test_unknown_backend_state_uses_capture_fallback() {
       fm_pending_reply_tick "$state"
       [ "$(phase_of "$state" "$corr")" = escalated ] \
         || fail "$backend capture busy-to-idle should complete recovery turn"
-    ) || fail "$backend unknown-state capture fallback failed"
-  done
-  pass "tmux and zellij unknown states use bounded capture fallback"
+  ) || fail "$backend unknown-state capture fallback failed"
+  pass "Orca unknown state uses the bounded capture fallback"
 }
 
 test_kimi_capture_fallback_uses_recorded_harness() (
@@ -727,10 +703,10 @@ test_kimi_capture_fallback_uses_recorded_harness() (
   fm_backend_capture() { printf '%s' "$FM_PENDING_KIMI_CAPTURE"; }
   export FM_PENDING_KIMI_CAPTURE=' 🌑 · Tip: ask Kimi to schedule tasks, e.g. "remind me at 5pm"'
 
-  [ "$(fm_pending_reply_backend_observation tmux session:fm-hibit fm-hibit codex)" = fallback-idle ] \
+  [ "$(fm_pending_reply_backend_observation orca term-hibit fm-hibit codex)" = fallback-idle ] \
     || fail "Kimi spinner leaked into another harness"
   export FM_PENDING_KIMI_CAPTURE='Ctrl+c:cancel'
-  [ "$(fm_pending_reply_backend_observation tmux session:fm-hibit fm-hibit kimi)" = fallback-idle ] \
+  [ "$(fm_pending_reply_backend_observation orca term-hibit fm-hibit kimi)" = fallback-idle ] \
     || fail "Grok's exact busy token leaked into Kimi pending-reply observation"
   export FM_PENDING_KIMI_CAPTURE=' 🌑 · Tip: ask Kimi to schedule tasks, e.g. "remind me at 5pm"'
   fm_pending_reply_tick "$state"

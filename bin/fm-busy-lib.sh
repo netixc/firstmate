@@ -53,12 +53,10 @@
 #      Grok-only temporary regex fallback classifies a grok task from its
 #      rendered tail, then unknown missing
 #   5. malformed, stale, or untrusted records -> unknown, never a fallback
-# The Grok arm is the ONLY rendered-text classification that survives the
-# redesign, because Grok's structured lifecycle was not credited-live-verified
-# in the approved audit; it is scoped to harness=grok and can never classify
-# another adapter. The delivery guards in bin/fm-tmux-lib.sh match rendered
-# footers for submit acknowledgement and away-mode supervisor injection only;
-# neither is a recorded worker state source.
+# The Grok arm is the only rendered-text classification that survives the
+# redesign because Grok's structured lifecycle was not live-verified.
+# It is scoped to harness=grok and can never classify another adapter.
+# Rendered delivery guards remain separate from recorded worker state.
 #
 # Codex negotiation (fm_busy_codex_appserver_observable,
 # fm_busy_codex_hooks_verified): the approved contract prefers Codex's
@@ -246,13 +244,44 @@ fm_busy_record_read() {  # <state-dir> <id>
   printf '%s %s %s %s' "$r_state" "$r_source" "$r_event" "$r_seq"
 }
 
-# fm_busy_grok_tail_busy: the Grok-only temporary rendered-tail fallback.
+# Delivery-only rendered busy signatures for a supervisor pane.
+# These are not worker-current-state sources; pane injection uses them only to
+# avoid typing over an active primary harness.
+FM_DELIVERY_BUSY_REGEX_DEFAULT='esc (to )?interrupt|Working\.\.\.|Ctrl\+c:cancel'
+FM_CLAUDE_BUSY_REGEX_DEFAULT='esc to interrupt|…[[:space:]]+\([0-9]+[smh]'
+FM_CODEX_BUSY_REGEX_DEFAULT='esc to interrupt'
+FM_OPENCODE_BUSY_REGEX_DEFAULT='esc interrupt'
+FM_PI_BUSY_REGEX_DEFAULT='Working\.\.\.'
+FM_GROK_BUSY_REGEX_DEFAULT='Ctrl\+c:cancel'
+FM_KIMI_BUSY_REGEX_DEFAULT='^[[:space:]]*(🌑|🌒|🌓|🌔|🌕|🌖|🌗|🌘)[[:space:]]+·[[:space:]]+'
+
+fm_busy_lines_match() {  # [harness]
+  local harness=${1:-} lines regex
+  IFS= read -r -d '' lines || true
+  if [ -n "${FM_BUSY_REGEX:-}" ]; then
+    regex=$FM_BUSY_REGEX
+  else
+    case "$harness" in
+      claude) regex=$FM_CLAUDE_BUSY_REGEX_DEFAULT ;;
+      codex) regex=$FM_CODEX_BUSY_REGEX_DEFAULT ;;
+      opencode) regex=$FM_OPENCODE_BUSY_REGEX_DEFAULT ;;
+      pi|pi-signed) regex=$FM_PI_BUSY_REGEX_DEFAULT ;;
+      grok) regex=$FM_GROK_BUSY_REGEX_DEFAULT ;;
+      kimi) regex=$FM_KIMI_BUSY_REGEX_DEFAULT ;;
+      '') regex=$FM_DELIVERY_BUSY_REGEX_DEFAULT ;;
+      *) regex= ;;
+    esac
+  fi
+  [ -n "$regex" ] && printf '%s' "$lines" | grep -qiE "$regex"
+}
+
+# fm_busy_grok_tail_busy: the Grok-only temporary worker-state fallback.
 # Consumes the tail on stdin; 0 when Grok's verified busy signature matches.
 # FM_BUSY_REGEX still globally overrides the signature, mirroring the
 # historical operator escape hatch.
 fm_busy_grok_tail_busy() {
   grep -v '^[[:space:]]*$' | tail -12 \
-    | grep -qiE "${FM_BUSY_REGEX:-${FM_TMUX_GROK_BUSY_REGEX_DEFAULT:-Ctrl\\+c:cancel}}"
+    | grep -qiE "${FM_BUSY_REGEX:-$FM_GROK_BUSY_REGEX_DEFAULT}"
 }
 
 # fm_busy_classify: semantic classification for a task whose endpoint the

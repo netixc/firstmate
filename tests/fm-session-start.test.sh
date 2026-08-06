@@ -14,7 +14,7 @@
 #   - status-tail bounding, default and FM_SESSION_START_STATUS_TAIL override
 #   - orphan status logs whose task meta has already disappeared
 #   - per-task endpoint-liveness lines for a live and a dead recorded target,
-#     tmux and herdr both
+#     Herdr
 #   - composition: the script invokes the real fm-lock.sh/fm-bootstrap.sh/
 #     fm-wake-drain.sh (their real, distinctive output appears verbatim), it
 #     does not reimplement their logic
@@ -59,7 +59,17 @@ new_world() {
 # test deliberately breaks one. Mirrors fm-bootstrap.test.sh's fixture.
 make_fake_toolchain() {
   local fakebin=$1
-  fm_fake_exit0 "$fakebin" tmux node chrome-devtools-axi
+  fm_fake_exit0 "$fakebin" node chrome-devtools-axi
+  cat > "$fakebin/herdr" <<'SH'
+#!/usr/bin/env bash
+case "${1:-} ${2:-}" in
+  'status --json') printf '{"client":{"version":"0.7.5","protocol":16},"server":{"running":true}}\n' ;;
+  'session list') printf '{"sessions":[]}\n' ;;
+  *) exit 0 ;;
+esac
+SH
+  chmod +x "$fakebin/herdr"
+  ln -s "$(command -v jq)" "$fakebin/jq"
   fm_fake_version_tool "$fakebin" lavish-axi FM_FAKE_LAVISH_AXI_VERSION 0.1.45
   cat > "$fakebin/gh-axi" <<'SH'
 #!/usr/bin/env bash
@@ -207,120 +217,6 @@ SH
   chmod +x "$fakebin/ps"
 }
 
-# make_fake_tmux <fakebin> <live-target>: display-message succeeds only for
-# the given "session:window" target - the exact primitive
-# fm_backend_target_exists uses for a tmux endpoint liveness read.
-make_fake_tmux() {
-  local fakebin=$1 live=$2
-  cat > "$fakebin/tmux" <<SH
-#!/usr/bin/env bash
-set -u
-case "\${1:-}" in
-  display-message)
-    target=""
-    prev=""
-    for a in "\$@"; do
-      [ "\$prev" = "-t" ] && target="\$a"
-      prev="\$a"
-    done
-    [ "\$target" = "$live" ] && { printf '%%1\n'; exit 0; }
-    exit 1
-    ;;
-esac
-exit 1
-SH
-  chmod +x "$fakebin/tmux"
-}
-
-# make_fake_tmux_secondmate_recovery <fakebin>: a stateful tmux boundary
-# fixture for the real session-start -> bootstrap -> spawn path.
-# FM_FAKE_TMUX_MODE selects missing, ambiguous, unreadable, or shell; missing
-# reproduces real tmux's active-window fallback while inventory omits the mate.
-make_fake_tmux_secondmate_recovery() {
-  local fakebin=$1
-  cat > "$fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-set -u
-mode=${FM_FAKE_TMUX_MODE:?}
-log=${FM_FAKE_TMUX_LOG:?}
-spawned=${FM_FAKE_TMUX_SPAWNED:?}
-killed=${spawned}.killed
-mate_home=${FM_FAKE_SECOND_MATE_HOME:?}
-mate_id=${FM_FAKE_SECOND_MATE_ID:?}
-mate_window="fm-$mate_id"
-case "${1:-}" in
-  display-message)
-    target=
-    format=
-    prev=
-    for arg in "$@"; do
-      [ "$prev" = -t ] && target=$arg
-      prev=$arg
-      case "$arg" in '#{'*) format=$arg ;; esac
-    done
-    if [ "${target#%}" != "$target" ]; then
-      case "$format" in
-        *pane_current_path*) printf '%s\n' "$mate_home" ;;
-        *pane_current_command*) printf '%s\n' node ;;
-        *) printf '%s\n' "$target" ;;
-      esac
-      exit 0
-    fi
-    if [ -e "$spawned" ]; then
-      case "$format" in
-        *pane_current_command*) printf '%s\n' node ;;
-        *) printf '%%1\n' ;;
-      esac
-      exit 0
-    fi
-    case "$mode" in
-      ambiguous)
-        case "$format" in *pane_current_command*) printf '%s\n' node ;; *) printf '%%1\n' ;; esac
-        exit 0
-        ;;
-      shell)
-        case "$format" in *pane_current_command*) printf '%s\n' zsh ;; *) printf '%%1\n' ;; esac
-        exit 0
-        ;;
-      missing)
-        case "$format" in *pane_current_command*) printf '%s\n' node ;; *) printf '%%fallback\n' ;; esac
-        exit 0
-        ;;
-      unreadable) exit 1 ;;
-    esac
-    ;;
-  list-windows)
-    if [ "$mode" = unreadable ] && [ ! -e "$spawned" ] && [ ! -e "$killed" ]; then
-      exit 1
-    fi
-    if [ -e "$spawned" ]; then
-      printf '%s\n' "$mate_window"
-    elif [ ! -e "$killed" ] && { [ "$mode" = ambiguous ] || [ "$mode" = shell ]; }; then
-      printf '%s\n' "$mate_window"
-    else
-      printf '%s\n' main
-    fi
-    exit 0
-    ;;
-  has-session) exit 0 ;;
-  kill-window)
-    printf '%s\n' "$*" >> "$log"
-    : > "$killed"
-    exit 0
-    ;;
-  new-window)
-    printf '%s\n' "$*" >> "$log"
-    : > "$spawned"
-    printf '%%1\n'
-    exit 0
-    ;;
-  set-window-option|send-keys) exit 0 ;;
-esac
-exit 0
-SH
-  chmod +x "$fakebin/tmux"
-}
-
 make_fake_herdr_secondmate_recovery() {
   local fakebin=$1
   # The recovery kill now requires the shared named-session lock and an exact
@@ -442,45 +338,6 @@ run_session_start() {
 # prepare_session_start_secondmate <name>: a throwaway main home and Pi
 # secondmate home wired to the real spawn implementation through the fixture
 # root. Echoes root|home|fakebin|mate|log|spawned.
-prepare_session_start_secondmate() {
-  local name=$1 rec root home fakebin w mate log spawned id=$SESSION_START_SECOND_MATE_ID
-  rec=$(new_world "$name")
-  IFS='|' read -r root home fakebin <<EOF
-$rec
-EOF
-  w=${root%/root}
-  mate="$w/secondmate-$id"
-  log="$w/tmux.log"
-  spawned="$w/tmux.spawned"
-  mkdir -p "$mate/bin" "$mate/data" "$mate/state" "$mate/config" "$mate/projects"
-  printf '%s\n' "$id" > "$mate/.fm-secondmate-home"
-  printf '# Firstmate\n' > "$mate/AGENTS.md"
-  printf 'Second mate charter.\n' > "$mate/data/charter.md"
-  printf '%s\n' pi > "$home/config/secondmate-harness"
-  printf '%s\n' manual > "$home/config/backlog-backend"
-  touch "$home/state/.last-watcher-beat"
-  {
-    printf 'window=firstmate:fm-%s\n' "$id"
-    printf 'kind=secondmate\n'
-    printf 'harness=pi\n'
-    printf 'home=%s\n' "$mate"
-  } > "$home/state/$id.meta"
-  ln -s "$ROOT/bin" "$root/bin"
-  make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
-  make_fake_tmux_secondmate_recovery "$fakebin"
-  : > "$log"
-  printf '%s|%s|%s|%s|%s|%s\n' "$root" "$home" "$fakebin" "$mate" "$log" "$spawned"
-}
-
-run_session_start_secondmate() {
-  local root=$1 home=$2 fakebin=$3 mate=$4 log=$5 spawned=$6 mode=$7
-  TMUX='' FM_BACKEND=tmux FM_FAKE_TMUX_MODE="$mode" FM_FAKE_TMUX_LOG="$log" \
-    FM_FAKE_TMUX_SPAWNED="$spawned" FM_FAKE_SECOND_MATE_HOME="$mate" \
-    FM_FAKE_SECOND_MATE_ID="$SESSION_START_SECOND_MATE_ID" \
-    run_session_start "$home" "$root" "$fakebin:$BASE_PATH"
-}
-
 prepare_session_start_herdr_secondmate() {
   local name=$1 rec root home fakebin w mate log state id=$SESSION_START_HERDR_SECOND_MATE_ID
   rec=$(new_world "$name")
@@ -501,6 +358,9 @@ EOF
   touch "$home/state/.last-watcher-beat"
   {
     printf 'window=default:p-old\n'
+    printf 'endpoint_task_id=%s\n' "$id"
+    printf 'worktree=%s\n' "$mate"
+    printf 'project=%s\n' "$mate"
     printf 'kind=secondmate\n'
     printf 'harness=pi\n'
     printf 'home=%s\n' "$mate"
@@ -842,43 +702,21 @@ EOF
 }
 
 test_herdr_backend_diagnostics_follow_real_session_start() {
-  local mode rec root home fakebin mask out
-  for mode in configured autodetected; do
-    rec=$(new_world "herdr-$mode")
-    IFS='|' read -r root home fakebin <<EOF
+  local rec root home fakebin out
+  rec=$(new_world herdr-default)
+  IFS='|' read -r root home fakebin <<EOF
 $rec
 EOF
-    make_fake_toolchain "$fakebin"
-    make_fake_ps_claude "$fakebin"
-    rm -f "$fakebin/tmux"
-    fm_fake_exit0 "$fakebin" herdr jq
-    printf '%s\n' manual > "$home/config/backlog-backend"
-    mask="$home/mask-tmux.bash"
-    cat > "$mask" <<'SH'
-command() {
-  if [ "${1:-}" = -v ] && [ "${2:-}" = tmux ]; then
-    return 1
-  fi
-  builtin command "$@"
-}
-SH
-    if [ "$mode" = configured ]; then
-      printf '%s\n' herdr > "$home/config/backend"
-      out=$(TMUX='' HERDR_ENV='' BASH_ENV="$mask" run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
-      assert_not_contains "$out" "NOTICE: auto-detected herdr runtime" \
-        "an explicit Herdr home should not be reported as auto-detected"
-    else
-      out=$(TMUX='' HERDR_ENV=1 BASH_ENV="$mask" run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
-      assert_contains "$out" "NOTICE: auto-detected herdr runtime (HERDR_ENV=1)" \
-        "session start did not preserve the Herdr runtime auto-detection fallback"
-    fi
-    assert_contains "$out" "SESSION START - $home" "the real session-start path did not run in the throwaway home"
-    assert_not_contains "$out" "MISSING: tmux" "Herdr session start falsely required masked tmux"
-    assert_not_contains "$out" "MISSING: herdr" "Herdr session start missed its available session CLI"
-    assert_not_contains "$out" "MISSING: jq" "Herdr session start missed its available JSON dependency"
-    assert_not_contains "$out" "MISSING: treehouse" "Herdr session start missed its available worktree provider"
-  done
-  pass "session start: configured and auto-detected Herdr homes never require tmux"
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_claude "$fakebin"
+  printf '%s\n' manual > "$home/config/backlog-backend"
+  out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+  assert_contains "$out" "SESSION START - $home" "the real session-start path did not run"
+  assert_not_contains "$out" "BACKEND_INVALID" "the absent backend selection did not resolve to Herdr"
+  assert_not_contains "$out" "MISSING: herdr" "session start missed its available Herdr CLI"
+  assert_not_contains "$out" "MISSING: jq" "session start missed its available JSON dependency"
+  assert_not_contains "$out" "MISSING: treehouse" "session start missed its available worktree provider"
+  pass "session start: an absent backend selection uses the complete Herdr toolchain"
 }
 
 # --- status tail bounding -----------------------------------------------------
@@ -891,7 +729,7 @@ $rec
 EOF
   make_fake_toolchain "$fakebin"
   make_fake_ps_claude "$fakebin"
-  make_fake_tmux "$fakebin" "fm-sess:live"
+  make_fake_herdr "$fakebin" live
 
   printf 'window=fm-sess:live\nkind=ship\n' > "$home/state/task-a.meta"
   printf 'working: step 1\nworking: step 2\nworking: step 3\nworking: step 4\nworking: step 5\nworking: step 6\nworking: step 7\n' \
@@ -944,84 +782,6 @@ EOF
 
 # --- session-start secondmate recovery boundary -----------------------------
 
-test_session_start_relaunches_missing_pi_secondmate() {
-  local rec root home fakebin mate log spawned out first_calls second_calls
-  rec=$(prepare_session_start_secondmate secondmate-missing-pi)
-  IFS='|' read -r root home fakebin mate log spawned <<EOF
-$rec
-EOF
-
-  out=$(run_session_start_secondmate "$root" "$home" "$fakebin" "$mate" "$log" "$spawned" missing)
-
-  assert_not_contains "$out" "SECONDMATE_LIVENESS:" "successful missing-window recovery should stay non-actionable"
-  assert_contains "$(cat "$log")" "new-window" "session start did not relaunch the missing Pi secondmate"
-  assert_not_contains "$(cat "$log")" "kill-window" "session start tried to kill an already-absent window"
-  assert_contains "$out" "endpoint: alive (backend=tmux window=firstmate:fm-$SESSION_START_SECOND_MATE_ID)" \
-    "the later fleet read did not confirm the relaunched window"
-  assert_grep 'harness=pi' "$home/state/$SESSION_START_SECOND_MATE_ID.meta" \
-    "the real respawn path did not preserve the Pi harness: $(cat "$home/state/$SESSION_START_SECOND_MATE_ID.meta")"
-
-  first_calls=$(grep -c 'new-window' "$log" || true)
-  rm -f "$home/state/.lock"
-  run_session_start_secondmate "$root" "$home" "$fakebin" "$mate" "$log" "$spawned" missing >/dev/null
-  second_calls=$(grep -c 'new-window' "$log" || true)
-  [ "$first_calls" -eq 1 ] && [ "$second_calls" -eq 1 ] \
-    || fail "a second session-start pass duplicated the relaunched Pi secondmate: $(cat "$log")"
-  pass "session start: an absent recorded tmux window relaunches its Pi secondmate exactly once"
-}
-
-test_session_start_preserves_ambiguous_pi_process() {
-  local rec root home fakebin mate log spawned out
-  rec=$(prepare_session_start_secondmate secondmate-ambiguous-pi)
-  IFS='|' read -r root home fakebin mate log spawned <<EOF
-$rec
-EOF
-
-  out=$(run_session_start_secondmate "$root" "$home" "$fakebin" "$mate" "$log" "$spawned" ambiguous)
-
-  assert_contains "$out" "SECONDMATE_LIVENESS: secondmate $SESSION_START_SECOND_MATE_ID: skipped: existing endpoint has ambiguous agent process (backend=tmux)" \
-    "session start did not distinguish an existing Pi-shaped process from a missing window"
-  [ ! -s "$log" ] || fail "session start touched an ambiguous existing Pi process: $(cat "$log")"
-  assert_contains "$out" "endpoint: alive (backend=tmux window=firstmate:fm-$SESSION_START_SECOND_MATE_ID)" \
-    "the later fleet read should still see the ambiguous endpoint"
-  pass "session start: an existing ambiguous Pi process prevents duplicate recovery"
-}
-
-test_session_start_preserves_transiently_unreadable_tmux() {
-  local rec root home fakebin mate log spawned out
-  rec=$(prepare_session_start_secondmate secondmate-unreadable-pi)
-  IFS='|' read -r root home fakebin mate log spawned <<EOF
-$rec
-EOF
-
-  out=$(run_session_start_secondmate "$root" "$home" "$fakebin" "$mate" "$log" "$spawned" unreadable)
-
-  assert_contains "$out" "SECONDMATE_LIVENESS: secondmate $SESSION_START_SECOND_MATE_ID: skipped: endpoint probe unreadable (backend=tmux)" \
-    "session start did not distinguish transient unreadability from absence"
-  [ ! -s "$log" ] || fail "session start touched a transiently unreadable target: $(cat "$log")"
-  assert_contains "$out" "endpoint: dead (backend=tmux window=firstmate:fm-$SESSION_START_SECOND_MATE_ID)" \
-    "the later cheap presence read should preserve the visible offline symptom"
-  pass "session start: transient tmux unreadability never licenses a relaunch"
-}
-
-test_session_start_preserves_proven_bare_shell_recovery() {
-  local rec root home fakebin mate log spawned out
-  rec=$(prepare_session_start_secondmate secondmate-bare-shell)
-  IFS='|' read -r root home fakebin mate log spawned <<EOF
-$rec
-EOF
-
-  out=$(run_session_start_secondmate "$root" "$home" "$fakebin" "$mate" "$log" "$spawned" shell)
-
-  assert_not_contains "$out" "SECONDMATE_LIVENESS:" "successful bare-shell recovery should stay non-actionable"
-  assert_contains "$(cat "$log")" "kill-window -t =firstmate:=fm-$SESSION_START_SECOND_MATE_ID" \
-    "the proven bare-shell path did not remove its existing dead endpoint"
-  assert_contains "$(cat "$log")" "new-window" "the proven bare-shell path did not relaunch"
-  assert_contains "$out" "endpoint: alive (backend=tmux window=firstmate:fm-$SESSION_START_SECOND_MATE_ID)" \
-    "the later fleet read did not confirm the bare-shell relaunch"
-  pass "session start: the proven bare-shell recovery path remains intact"
-}
-
 test_session_start_relaunches_herdr_husk_secondmate() {
   local rec root home fakebin mate log state out
   rec=$(prepare_session_start_herdr_secondmate secondmate-herdr-husk)
@@ -1041,27 +801,7 @@ EOF
   pass "session start: a confirmed Herdr husk is closed and relaunched"
 }
 
-# --- endpoint liveness: tmux and herdr, live and dead ------------------------
-
-test_endpoint_liveness_tmux() {
-  local rec root home fakebin out
-  rec=$(new_world liveness-tmux)
-  IFS='|' read -r root home fakebin <<EOF
-$rec
-EOF
-  make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
-  make_fake_tmux "$fakebin" "fm-sess:live-window"
-
-  printf 'window=fm-sess:live-window\nkind=ship\n' > "$home/state/task-live.meta"
-  printf 'window=fm-sess:dead-window\nkind=ship\n' > "$home/state/task-dead.meta"
-
-  out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
-  assert_contains "$out" "endpoint: alive (backend=tmux window=fm-sess:live-window)" "live tmux endpoint not reported alive"
-  assert_contains "$out" "endpoint: dead (backend=tmux window=fm-sess:dead-window)" "dead tmux endpoint not reported dead"
-
-  pass "tmux endpoint liveness is reported per task: alive for a live window, dead for a gone one"
-}
+# --- endpoint liveness: Herdr, live and dead --------------------------------
 
 test_endpoint_liveness_herdr() {
   local rec root home fakebin out
@@ -1441,14 +1181,9 @@ test_trace_context_effective_state_is_frozen_after_lock
 test_session_lock_concurrent_single_winner
 test_output_ordering_diagnostics_lead
 test_herdr_backend_diagnostics_follow_real_session_start
-test_session_start_relaunches_missing_pi_secondmate
-test_session_start_preserves_ambiguous_pi_process
-test_session_start_preserves_transiently_unreadable_tmux
-test_session_start_preserves_proven_bare_shell_recovery
 test_session_start_relaunches_herdr_husk_secondmate
 test_status_tail_bounding
 test_orphan_status_logs_are_printed
-test_endpoint_liveness_tmux
 test_endpoint_liveness_herdr
 test_composition_invokes_real_scripts
 test_backlog_compact_tasks_axi_omits_bodies_and_keeps_metadata
