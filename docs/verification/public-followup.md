@@ -99,4 +99,4 @@ The only supervision surfaces touched are the session-start digest, which `bin/f
 
 Herdr task runtime: not applicable after inspection.
 No command here reads `state/<id>.meta`'s backend fields, resolves an endpoint, or captures a pane.
-The one lifecycle integration is `bin/fm-teardown.sh`'s refusal, which runs before any backend command and keys only on the task id, so it behaves identically on every backend.
+The one lifecycle integration is `bin/fm-teardown.sh`'s refusal, which runs before any Herdr command and keys only on the task id, so it is independent of endpoint state.

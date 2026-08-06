@@ -75,7 +75,7 @@ For normal Herdr operations, `HERDR_SESSION` selects the named session, but dest
 
 ## Away-mode supervisor target (FM_SUPERVISOR_TARGET)
 
-The `/afk` sub-supervisor injects escalation digests into Firstmate's own Herdr pane independently of an individual task's backend.
+The `/afk` sub-supervisor injects escalation digests into Firstmate's own Herdr pane independently of individual task endpoints.
 `FM_SUPERVISOR_TARGET=<session>:<pane-id>` overrides target discovery.
 Without that override, `HERDR_ENV=1` plus `HERDR_PANE_ID` identifies the pane and `HERDR_SESSION` defaults to `default`.
 When no authoritative target is available, away-mode launch refuses rather than guessing a pane.
@@ -83,7 +83,7 @@ When no authoritative target is available, away-mode launch refuses rather than 
 ## Away-mode wedge alarm channels (config/wedge-alarm)
 
 When away-mode injection wedges past `FM_MAX_DEFER_SECS`, the sub-supervisor raises a loud, rate-limited alarm.
-Beyond the durable `state/.subsuper-inject-wedged` marker, it attempts a configured backend-independent active alert that can reach the captain even when every pane is unreadable.
+Beyond the durable `state/.subsuper-inject-wedged` marker, it attempts a configured pane-independent active alert that can reach the captain even when every pane is unreadable.
 `config/wedge-alarm` (local, gitignored) lists channel directives, one per non-empty, non-comment line; every listed non-`off` channel fires, best-effort.
 `FM_WEDGE_ALARM_CHANNEL` overrides the file with a single directive.
 Directives are `off` (a position-independent kill switch that disables every active alert), `auto`/`default`, `osascript` (macOS Notification Center banner), `herdr` (herdr UI notification), and `command:<cmd>` (run `<cmd>` via `sh -c`, summary on `$1` and stdin).
