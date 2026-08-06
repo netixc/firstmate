@@ -68,8 +68,8 @@ These sentences are the single owner of the task-selector vocabulary.
 
 `FM_HOME` determines Herdr's home label: the primary home uses `firstmate`, and a secondmate home marked by `.fm-secondmate-home` uses `2ndmate-<secondmate-id>`.
 [`herdr-backend.md`](herdr-backend.md#watching-and-task-containers) owns launcher-bound workspace placement, collision handling, and recovery.
-The local `config/herdr-presentation-spaces` file opts a home out of Herdr's default-on disposable single-task projection.
-[`herdr-backend.md`](herdr-backend.md#presentation-spaces) owns accepted values, safety limits, and cleanup.
+The local `config/herdr-presentation-spaces` file opts a home out of, or explicitly in to, Herdr's disposable single-task projection; an unconfigured home projects only at or above the Herdr version floor.
+[`herdr-backend.md`](herdr-backend.md#presentation-spaces) owns accepted values, the floor, safety limits, and cleanup.
 For normal Herdr operations, `HERDR_SESSION` selects the named session, but destructive test cleanup must use the guarded lab helper described in that guide.
 `config/herdr-presentation-spaces` is inherited into secondmate homes under the primary-authoritative contract owned by `secondmate-provisioning`.
 

@@ -111,7 +111,7 @@ Herdr is Firstmate's sole task runtime, while Treehouse provides task worktrees.
 Unknown or stale runtime identities are rejected rather than reinterpreted.
 Herdr supplies native busy state, recovery-grade agent state, and native transition push when the installed protocol supports it.
 The watcher permanently retains polling as a fallback when push capability is unavailable.
-[`herdr-backend.md`](herdr-backend.md) owns setup, workspace placement, presentation projection, supervision, and lifecycle safety.
+[`herdr-backend.md`](herdr-backend.md) owns setup, workspace placement, the version-gated presentation projection, supervision, and lifecycle safety.
 [`verification/runtime-backends.md`](verification/runtime-backends.md#herdr) owns active empirical evidence.
 
 ## Worktrees, not branches in your checkout

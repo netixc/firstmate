@@ -19,10 +19,10 @@
 #      down into each secondmate home's config/, so the secondmate's OWN crewmates,
 #      dispatch profiles, backlog backend, Herdr
 #      presentation choice, startup-memory budget, and trace context inherit the
-#      primary's settings. config/herdr-presentation-spaces is default-ON, so an
-#      absent primary file and an absent destination file both mean on and the
-#      generic absence mirror already converges that item correctly.
-#      It is primary-authoritative
+#      primary's settings. For config/herdr-presentation-spaces, an absent
+#      primary file and an absent destination file both mean the same
+#      unconfigured default, so the generic absence mirror converges that item
+#      without deciding its release-dependent floor. It is primary-authoritative
 #      (re-pushed at secondmate spawn, on the bootstrap secondmate sweep, and by
 #      config push).
 #      config/secondmate-harness is deliberately NOT inherited (secondmates do
@@ -1260,14 +1260,20 @@ test_bootstrap_sweep_materializes_and_inherits_memory_default() {
   pass "B10 bootstrap sweep materializes and inherits the startup-memory default while fast-forwarding"
 }
 
-# config/herdr-presentation-spaces is default-ON, so this item's convergence is
-# asserted through the verdict the spawn gate actually reads in the destination
-# home, not through file presence alone: mirroring the primary's absence must
-# converge a secondmate to the same default rather than turning its projection off.
+# config/herdr-presentation-spaces has an unconfigured default, so this item's
+# convergence is asserted through the preference the spawn gate actually reads
+# in the destination home, not through file presence alone: mirroring the
+# primary's absence must converge a secondmate to the same unconfigured default
+# rather than turning its projection off. The version floor that decides what
+# that default resolves to is a property of the running release, not inheritance,
+# and is pinned in tests/fm-backend-herdr.test.sh.
 sm_presentation_verdict() {  # <config-dir> -> on|off
   bash -c '
     . "$0/bin/backends/herdr.sh"
-    if fm_backend_herdr_presentation_enabled "$1"; then printf "on\n"; else printf "off\n"; fi
+    case "$(fm_backend_herdr_presentation_preference "$1")" in
+      off) printf "off\n" ;;
+      *) printf "on\n" ;;
+    esac
   ' "$ROOT" "$1" 2>/dev/null
 }
 
@@ -1306,7 +1312,7 @@ test_presentation_inheritance_default_on_and_opt_out() {
   expect_code 0 "$status" "presentation legacy opt-in push should succeed"
   verdict=$(sm_presentation_verdict "$w/sm/config")
   [ "$verdict" = on ] || fail "a legacy primary opt-in file left the secondmate projection $verdict"
-  pass "B12c presentation inheritance: the primary default converges on, and only an explicit opt-out propagates off"
+  pass "B12c presentation inheritance: the unconfigured default converges, and explicit choices propagate"
 }
 
 test_bootstrap_sweep_surfaces_config_propagation_failure() {
