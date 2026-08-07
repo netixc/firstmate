@@ -16,10 +16,10 @@
 # ingests it, acknowledges the captured generation, then registers the next
 # cursor-anchored source. A continuity break is escalated and not re-armed.
 #
-# Ingest accepts only bounded, printable status lines with an allowed lifecycle
-# verb and corr=<16hex>. Exact lines are appended at most once to the parent's
-# state/<id>.status. A data/*.md pointer is fetched through the path-confined
-# remote file reader and rewritten to its local private copy before append.
+# Ingest accepts bounded printable `<verb> [<metadata>]...:` lines; allowed verbs
+# are working/needs-decision/blocked/paused/done/failed/resolved, and repeatable
+# metadata is key=<ASCII alnum plus ._-> or corr=<16hex>, with corr required.
+# Malformed groups fail; confined data/*.md pointers are rewritten; lines append once.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
