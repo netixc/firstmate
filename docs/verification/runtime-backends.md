@@ -9,8 +9,8 @@ Herdr is the sole task runtime.
 ## Herdr
 
 The compatibility floor is protocol 14.
-The presentation-projection suite's latest active verification uses Herdr 0.8.0 protocol 19 on macOS aarch64, every other section's latest uses Herdr 0.7.5 protocol 17 on macOS aarch64, and earlier 0.7.5 protocol-16, 0.7.4, protocol-14, and 0.7.3 evidence is retained where it defines current behavior or fallbacks.
-Protocol 17 keeps every protocol-16 feature gate satisfied; the event and workspace-move floors remain 16.
+The presentation projection default has a higher Herdr 0.8.0 protocol-19 floor, while the event and workspace-move floors remain protocol 16.
+Earlier protocol-14 through protocol-18 evidence is retained where it defines current behavior or fallbacks.
 
 Core read-only probes:
 
@@ -42,6 +42,29 @@ The CLI matrix was checked directly:
 
 All destructive verification used `bin/fm-herdr-lab.sh` with a non-default `fm-lab-` name and a byte-identical default-session tripwire.
 No ambient `herdr server stop` command is a supported test operation.
+
+### Presentation version floor
+
+The default presentation projection was live-verified on 2026-08-06 against pinned macOS aarch64 releases through a guarded named non-default lab.
+The probe downloaded each asset, checked its SHA-256, read the binary's own client version and protocol through the lab helper, and required the classifier to agree with the expected floor verdict.
+
+```sh
+FM_HERDR_VERSION_FLOOR_LIVE_E2E=1 \
+  tests/fm-herdr-version-floor-live-e2e.test.sh
+```
+
+Observed output:
+
+```text
+ok - installed Herdr 0.8.0 protocol 19 classifies above the presentation floor
+ok - Herdr v0.7.5: version 0.7.5 protocol 17 classifies below the presentation floor
+ok - Herdr preview-2026-07-29-44b3adb12552: version 0.7.5-preview.2026-07-29-44b3adb12552 protocol 18 classifies below the presentation floor
+ok - Herdr v0.8.0: version 0.8.0 protocol 19 classifies above the presentation floor
+evidence: asset=herdr-macos-aarch64 releases_checked=4 installed=0.8.0 protocol=19
+```
+
+The portable classifier and preference coverage is `tests/fm-backend-herdr.test.sh`.
+The release-aware end-user projection coverage is `tests/fm-backend-herdr-presentation-e2e.test.sh`.
 
 ### Prune and respawn
 
@@ -168,24 +191,25 @@ ok - real Herdr lab: missing, renamed, and duplicate tokens trigger zero destruc
 ok - real Herdr lab validation completed on Herdr 0.7.5 with the default-session tripwire intact
 ```
 
-The projection suite ran again on 2026-08-04 against Herdr 0.8.0 protocol 19 for the default-on flip, where an absent `config/herdr-presentation-spaces` enables the projection and only the value `off` opts out:
+The release-aware projection suite ran on 2026-08-06 against Herdr 0.8.0 protocol 19:
 
 ```sh
 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
   tests/fm-backend-herdr-presentation-e2e.test.sh
 ```
 
-Observed default and opt-out guarantees:
+Observed output included:
 
 ```text
 ok - real Herdr lab: an opted-out spawn retains the Stage 1 Herdr command sequence with zero ordering calls
-ok - real Herdr lab: a home that configured nothing is projected by default
-ok - real Herdr lab: the primary presentation setting inherits into real secondmate homes
+ok - real Herdr lab: a home that configured nothing is projected by default on herdr 0.8.0
+ok - real Herdr lab: every projected create, task-tab create, seeded prune, and move preserves active workspace and tab
+ok - real Herdr lab: exact task-pane close removes the projected workspace with no unrestored wrong-focus interval
 ok - real Herdr lab validation completed on Herdr 0.8.0 with the default-session tripwire intact
 ```
 
-The projected spawn in that run used the historical empty opt-in file, so a home that had already enabled the projection keeps it without any migration step.
-One concurrent cross-home recovery case refused under contention on a loaded machine and passed on an immediate rerun; recovery-path presentation lock contention is a deliberate hard refusal rather than a flat fallback, which default-on now makes reachable from any Herdr home.
+That suite branches on the floor classifier, so the same unconfigured-home case proves flat fallback with a release-naming warning on a below-floor release while explicit empty-file and `on` preferences continue to project.
+One concurrent cross-home recovery case refused under contention on a loaded machine and passed on an immediate rerun; recovery-path presentation lock contention is a deliberate hard refusal rather than a flat fallback.
 
 The restored-shell session-start cleanup ran on 2026-07-24 against Herdr 0.7.5 protocol 17:
 
@@ -214,7 +238,20 @@ ok - mitigation: no explicit close and no corrective focus were needed on the de
 evidence: herdr=0.7.5 protocol=17 steal_live=1 default-session-tripwire=armed
 ```
 
-Direct lab probes on the same day established the removal rules the emptying-close plan relies on, each verified with `workspace list` focus reads around one mutation in a guarded `fm-lab-` session:
+The regression was re-run on 2026-08-06 against Herdr 0.8.0 protocol 19:
+
+```sh
+HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
+  tests/fm-backend-herdr-focus-flash-e2e.test.sh
+```
+
+```text
+ok - old path note: this Herdr release preserves focus across the explicit close; continuing with outcome-only assertions
+ok - mitigation: every in-operation sample preserved exact focus while the doomed workspace was removed
+evidence: herdr=0.8.0 protocol=19 steal_live=0 default-session-tripwire=armed
+```
+
+Earlier direct lab probes established the removal rules the emptying-close plan relies on, each verified with `workspace list` focus reads around one mutation in a guarded `fm-lab-` session:
 
 - An explicit `pane close` that emptied a non-focused workspace moved focus off the focused workspace in both before-focus and after-focus geometries.
 - Ending a workspace's lone shell preserved the focused workspace exactly when the dying workspace sat behind it or the focused workspace was last, and moved focus to the focused workspace's right neighbor otherwise.

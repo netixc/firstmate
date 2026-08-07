@@ -181,6 +181,7 @@ fm-herdr-lab.test.sh|fm-lint.test.sh|\
       ;;
     fm-afk-pi-herdr-return-e2e.test.sh|\
     fm-codex-continuity-live-e2e.test.sh|\
+    fm-herdr-version-floor-live-e2e.test.sh|\
     fm-quota-array-dispatch-live-e2e.test.sh|fm-send-secondmate-marker-herdr-e2e.test.sh)
       printf '%s\n' live-harness-optin
       ;;
@@ -857,8 +858,19 @@ families_for_changed_path() {
       printf '%s\n' secondmate
       ;;
     bin/fm-session-start.sh|bin/fm-bootstrap.sh|bin/fm-fleet-sync.sh|\
-    bin/fm-sessionstart-nudge.sh|bin/fm-tangle*|bin/fm-update.sh|\
-    bin/fm-gate-refuse*|bin/fm-lock*|bin/fm-quota-axi-lib.sh)
+    bin/fm-sessionstart-nudge.sh|bin/fm-sessionstart-run.sh|bin/fm-tangle*|\
+    bin/fm-update.sh|bin/fm-gate-refuse*|bin/fm-lock*|\
+    bin/fm-quota-axi-lib.sh)
+      printf '%s\n' session-bootstrap
+      ;;
+    bin/fm-timeout-lib.sh)
+      # Session start, fleet and bearings snapshots, and the vendor auth probe
+      # all depend on this shared hard-bound owner.
+      printf '%s\n' session-bootstrap
+      printf '%s\n' snapshot-bearings
+      printf '%s\n' pure-contract-unit
+      ;;
+    .claude/settings.json|.codex/hooks.json|.pi/extensions/fm-primary-turnend-guard.ts)
       printf '%s\n' session-bootstrap
       ;;
     bin/fm-pr-*|bin/fm-merge-local.sh|bin/fm-teardown.sh|bin/fm-review-diff.sh|\
