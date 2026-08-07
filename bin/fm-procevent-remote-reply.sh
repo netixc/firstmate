@@ -16,10 +16,10 @@
 # ingests it, acknowledges the captured generation, then registers the next
 # cursor-anchored source. A continuity break is escalated and not re-armed.
 #
-# Ingest accepts only bounded, printable status lines with an allowed lifecycle
-# verb and corr=<16hex>. Exact lines are appended at most once to the parent's
-# state/<id>.status. A data/*.md pointer is fetched through the path-confined
-# remote file reader and rewritten to its local private copy before append.
+# Ingest accepts bounded printable `<verb> [<metadata>]...:` lines; allowed verbs
+# are working/needs-decision/blocked/paused/done/failed/resolved, and repeatable
+# metadata is key=<ASCII alnum plus ._-> or corr=<16hex>, with corr required.
+# Malformed groups fail; confined data/*.md pointers are rewritten; lines append once.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -230,13 +230,14 @@ fetch_document() { # <id> <remote-relative> <result-var>
 }
 
 line_valid() { # <line>
-  local line=$1 bytes
+  local line=$1 bytes prefix
   [ -n "$line" ] || return 1
   bytes=$(printf '%s' "$line" | LC_ALL=C wc -c | tr -d ' ')
   [ "$bytes" -le "$MAX_LINE_BYTES" ] || return 1
   [ -z "$(printf '%s' "$line" | LC_ALL=C tr -d '\11\40-\176')" ] || return 1
-  printf '%s' "$line" | grep -Eq '^(working|needs-decision|blocked|paused|done|failed|resolved)([[:space:]]+\[[^]]+\])?:' || return 1
-  printf '%s' "$line" | grep -Eq 'corr=[A-Fa-f0-9]{16}'
+  printf '%s' "$line" | grep -Eq '^(working|needs-decision|blocked|paused|done|failed|resolved)([[:space:]]+\[(key=[A-Za-z0-9._-]+|corr=[A-Fa-f0-9]{16})\])*:' || return 1
+  prefix=${line%%:*}
+  printf '%s' "$prefix" | grep -Eq '(^|[[:space:]])\[corr=[A-Fa-f0-9]{16}\]($|[[:space:]])'
 }
 
 cmd_ingest() {
@@ -309,7 +310,7 @@ cmd_ingest() {
   while IFS= read -r corr; do
     [ -n "$corr" ] || continue
     fm_pending_reply_try_resolve "$STATE" "$corr" "$status_file" >/dev/null 2>&1 || true
-  done < <(grep -Eo 'corr=[A-Fa-f0-9]{16}' "$payload" | cut -d= -f2- | tr 'A-F' 'a-f' | awk '!seen[$0]++')
+  done < <(grep -Eo '\[corr=[A-Fa-f0-9]{16}\]' "$payload" | cut -d= -f2- | tr -d ']' | tr 'A-F' 'a-f' | awk '!seen[$0]++')
   if [ -n "$seq" ]; then
     write_ingest_receipt "$id" "$seq" "$result" \
       || { fm_lock_release "$lock"; die "cannot commit remote reply ingestion receipt"; }

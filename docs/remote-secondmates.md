@@ -175,7 +175,7 @@ FM_HOME=<primary-home> bin/fm-send.sh fm-<id> '<request>'
 
 Marked requests keep the existing correlation contract.
 The remote charter appends replies to `state/parent-replies.status` in the remote home.
-A process-event source performs a non-destructive, cursor-anchored delta read, validates bounded correlated status lines, fetches only referenced `data/*.md` documents through the confined reader, and appends each accepted line at most once to the primary status channel.
+A process-event source performs a non-destructive, cursor-anchored delta read, validates status lines against the exact lifecycle and bracketed-metadata grammar owned by [`fm-procevent-remote-reply.sh`](../bin/fm-procevent-remote-reply.sh), fetches only referenced `data/*.md` documents through the confined reader, and appends each accepted line at most once to the primary status channel.
 The source log is never truncated or consumed.
 A shortened or changed prefix stops the relay and surfaces a continuity failure instead of silently resetting the cursor.
 
