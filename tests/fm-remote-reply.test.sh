@@ -232,6 +232,12 @@ printf 'done [key=unclosed [corr=%s: malformed\n' "$TWO_GROUP_CORR" \
   > "$TMP_ROOT/unclosed-group.payload"
 printf 'done [key=unclosed [corr=%s]: malformed\n' "$TWO_GROUP_CORR" \
   > "$TMP_ROOT/nested-group.payload"
+printf 'needs-decision [key=bad key] [corr=%s]: unsafe key\n' "$TWO_GROUP_CORR" \
+  > "$TMP_ROOT/unsafe-key.payload"
+printf 'done [corr=0123456789abcde]: short correlation\n' \
+  > "$TMP_ROOT/short-correlation.payload"
+printf 'done [corr=0123456789abcdef0]: long correlation\n' \
+  > "$TMP_ROOT/long-correlation.payload"
 printf 'unexpected done [corr=%s]: malformed prefix\n' "$TWO_GROUP_CORR" \
   > "$TMP_ROOT/arbitrary-prefix.payload"
 printf 'needs-decision [key=missing-correlation]: no correlation\n' \
@@ -247,13 +253,16 @@ printf 'unsupported [corr=%s]: unsupported lifecycle\n' "$TWO_GROUP_CORR" \
   > "$TMP_ROOT/unsupported-verb.payload"
 try_reject_payload unclosed-group "$TMP_ROOT/unclosed-group.payload"
 try_reject_payload nested-group "$TMP_ROOT/nested-group.payload"
+try_reject_payload unsafe-key "$TMP_ROOT/unsafe-key.payload"
+try_reject_payload short-correlation "$TMP_ROOT/short-correlation.payload"
+try_reject_payload long-correlation "$TMP_ROOT/long-correlation.payload"
 try_reject_payload arbitrary-prefix "$TMP_ROOT/arbitrary-prefix.payload"
 try_reject_payload missing-correlation "$TMP_ROOT/missing-correlation.payload"
 try_reject_payload control-byte "$TMP_ROOT/control-byte.payload"
 try_reject_payload oversized "$TMP_ROOT/oversized.payload"
 try_reject_payload unsafe-document "$TMP_ROOT/unsafe-document.payload"
 try_reject_payload unsupported-verb "$TMP_ROOT/unsupported-verb.payload"
-pass "remote reply rejects malformed groups, prefixes, missing correlations, control bytes, oversized lines, unsafe documents, and unsupported verbs"
+pass "remote reply rejects malformed metadata, prefixes, missing correlations, control bytes, oversized lines, unsafe documents, and unsupported verbs"
 
 # A digest-valid but uncorrelated line is still rejected at the public ingest
 # boundary. Recalculate its payload commitment so the behavioral assertion is
