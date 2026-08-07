@@ -292,6 +292,33 @@ EOF
   pass "captain holds are idempotent, distinct, teardown-safe, Bearings-visible, and durably routed before close"
 }
 
+test_stale_hold_transfer_preserves_reopened_key() {
+  local home id hold transfer open
+  home=$(make_home stale-hold-transfer)
+  id=sample-transfer-review
+  tasks_in "$home" add "$id" "Review transfer safety" --kind scout --repo sample --start >/dev/null \
+    || fail "could not create transfer-safety origin"
+  write_origin_meta "$home" "$id"
+  printf 'needs-decision [key=route]: choose the original route\n' > "$home/state/$id.status"
+  hold=$(run_decisions "$home" hold "$id" route \
+    --title "Choose the route" --reason "captain route choice pending" --repo sample) \
+    || fail "could not create transfer-safety hold"
+  run_decisions "$home" complete "$id" route >/dev/null \
+    || fail "could not complete transfer-safety inventory"
+  transfer=$(grep '^captain-held \[key=route\] \[open-gen=[0-9][0-9]*\]:' \
+    "$home/state/$id.status" | tail -1)
+  [ -n "$transfer" ] || fail "automatic hold transfer omitted its opening generation"
+
+  printf 'needs-decision [key=route]: choose the newer route\n%s\n' "$transfer" \
+    >> "$home/state/$id.status"
+  open=$(bash -c '. "$1"; status_open_decisions "$2"' _ \
+    "$ROOT/bin/fm-classify-lib.sh" "$home/state/$id.status")
+  assert_contains "$open" $'route\tneeds-decision\tchoose the newer route' \
+    "stale automatic hold transfer closed a newer same-key decision"
+  [ "$hold" = "$id-decision-route" ] || fail "transfer-safety hold identity changed"
+  pass "stale automatic hold transfers preserve newer same-key decisions"
+}
+
 test_scout_teardown_always_requires_inventory_verification() {
   local home id
   home=$(make_home unconditional-teardown)
@@ -580,6 +607,7 @@ test_uninventoried_report_decision_refuses_completion
 
 test_scout_teardown_always_requires_inventory_verification
 test_structured_holds_survive_teardown_and_route_resolution
+test_stale_hold_transfer_preserves_reopened_key
 test_origin_slug_validation_precedes_path_construction
 test_visual_review_uses_shared_completion_owner
 test_none_inventory_and_resolved_prose_do_not_create_holds

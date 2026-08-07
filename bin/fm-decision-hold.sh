@@ -307,7 +307,7 @@ EOF
   fi
 
   status_file="$STATE/$origin.status"
-  raw_open=$(status_open_decisions "$status_file")
+  raw_open=$(status_open_decisions_versioned "$status_file")
   open=$(origin_open_decisions "$origin")
   while IFS=$'\t' read -r key _verb _summary; do
     [ -n "$key" ] || continue
@@ -324,10 +324,11 @@ EOF
 
     # Transfer any still-open status decision to its durable backlog owner so the
     # live status fold does not duplicate the same Captain's Call item.
-    while IFS=$'\t' read -r key _verb _summary; do
+    while IFS=$'\t' read -r key _verb _summary generation; do
       [ -n "$key" ] || continue
       list_has_key "$keys" "$key" || continue
-      printf 'captain-held [key=%s]: tracked by %s\n' "$key" "$(hold_id "$origin" "$key")" >> "$status_file"
+      printf 'captain-held [key=%s] [open-gen=%s]: tracked by %s\n' \
+        "$key" "$generation" "$(hold_id "$origin" "$key")" >> "$status_file"
       key_seen=1
     done <<EOF
 $raw_open
