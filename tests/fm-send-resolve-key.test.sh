@@ -20,7 +20,8 @@
 #   6. A remote secondmate answer differs only at the transport layer: the
 #      message crosses the stubbed ssh transport while the close is the same
 #      local ledger append; a failed transport closes nothing.
-#   7. Flag misuse (--key, empty message, explicit backend target) refuses.
+#   7. A delayed closure cannot close a newer opening that reuses the key.
+#   8. Flag misuse (--key, empty message, explicit backend target) refuses.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -44,6 +45,10 @@ make_stubs() {  # <dir> -> echoes fakebin dir
   printf '╭────╮\n│ >  │\n╰────╯\n' > "$dir/capture"
   cat > "$fb/sleep" <<'SH'
 #!/usr/bin/env bash
+if [ -n "${FM_FAKE_SLEEP_HOOK_STATUS:-}" ] && [ ! -e "${FM_FAKE_SLEEP_HOOK_STATUS}.hooked" ]; then
+  printf 'resolved [key=race]: original opening closed elsewhere\nneeds-decision [key=race]: newer question\n' >> "$FM_FAKE_SLEEP_HOOK_STATUS"
+  : > "${FM_FAKE_SLEEP_HOOK_STATUS}.hooked"
+fi
 exit 0
 SH
   chmod +x "$fb/sleep"
@@ -97,7 +102,7 @@ test_answer_send_closes_open_decision() {
   run_send "$fb" "$home" "$log" t1 --resolve-key api-shape "go with REST"; rc=$?
   expect_code 0 "$rc" "an answer send with --resolve-key should succeed"
   assert_contains "$(cat "$log")" "go with REST" "the answer text should reach the worker"
-  grep -F 'resolved [key=api-shape]: answered: go with REST' "$home/state/t1.status" >/dev/null \
+  grep -E 'resolved \[key=api-shape\] \[open-gen=[0-9]+\]: answered: go with REST' "$home/state/t1.status" >/dev/null \
     || fail "fm-send did not append the closing resolved line:"$'\n'"$(cat "$home/state/t1.status")"
 
   out=$(drain_out "$home")
@@ -296,7 +301,7 @@ test_remote_secondmate_answer_closes_locally() {
   expect_code 0 "$rc" "a remote secondmate answer send should succeed"
   assert_grep 'fm-remote-entrypoint.sh' "$ssh_log" \
     "the answer message should cross the remote transport"
-  grep -F 'resolved [key=upgrade-window]: answered: the weekend, freeze Friday' "$home/state/rsm.status" >/dev/null \
+  grep -E 'resolved \[key=upgrade-window\] \[open-gen=[0-9]+\]: answered: the weekend, freeze Friday' "$home/state/rsm.status" >/dev/null \
     || fail "the remote answer did not close the local ledger: $(cat "$home/state/rsm.status")"
   out=$(drain_out "$home")
   if printf '%s' "$out" | grep -F 'OPEN DECISIONS' >/dev/null; then
@@ -325,6 +330,27 @@ test_remote_transport_failure_does_not_close() {
   printf '%s' "$out" | grep -F '[key=quota]' >/dev/null \
     || fail "the remote blocker vanished after a failed transport: $out"
   pass "fm-send --resolve-key: a failed remote transport never closes the decision"
+}
+
+test_reopened_key_survives_delayed_close() {
+  local dir fb log home rc out
+  dir="$TMP_ROOT/reopened-race"; mkdir -p "$dir"
+  fb=$(make_stubs "$dir"); log="$dir/send.log"
+  home=$(setup_home reopened-race)
+  fm_write_meta "$home/state/t8.meta" "backend=herdr" "window=sess:fm-t8" "kind=ship"
+  printf 'needs-decision [key=race]: original question\n' > "$home/state/t8.status"
+
+  : > "$log"
+  env PATH="$fb:$PATH" \
+    FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_FAKE_HERDR_LOG="$log" \
+    FM_FAKE_HERDR_CAPTURE="$dir/capture" FM_BACKEND_HERDR_SUBMIT_MIN_SLEEP=0 \
+    FM_FAKE_SLEEP_HOOK_STATUS="$home/state/t8.status" FM_SEND_SETTLE=0 \
+    "$SEND" t8 --resolve-key race "answer to the original question" >/dev/null 2>&1; rc=$?
+  expect_code 0 "$rc" "the original answer should still be delivered and recorded"
+  out=$(drain_out "$home")
+  printf '%s' "$out" | grep -F 't8 [key=race] needs-decision: newer question' >/dev/null \
+    || fail "the delayed answer closed the newer same-key decision: $out"
+  pass "fm-send --resolve-key: a delayed close targets only its original opening generation"
 }
 
 test_flag_misuse_refuses() {
@@ -386,4 +412,5 @@ test_multiple_keys_close_together
 test_local_secondmate_answer_marked_and_closed
 test_remote_secondmate_answer_closes_locally
 test_remote_transport_failure_does_not_close
+test_reopened_key_survives_delayed_close
 test_flag_misuse_refuses

@@ -165,7 +165,11 @@ status_is_paused_or_captain_held() {  # <status-line>
 #   resolved       [key=api-shape]: <how it was decided>
 # A line with no token uses the key "default", preserving the historical
 # one-open-decision-per-task behavior (a bare "resolved:" closes "default").
-# The three parsers are pure reads of a single line; the verb parser strips any
+# A generated answer-time resolution also carries "[open-gen=<number>]" after
+# its key. The fold applies that resolution only to the matching opening
+# generation, so a delayed answer cannot close a later reuse of the same key.
+# Legacy resolutions without open-gen retain their historical key-only meaning.
+# The parsers are pure reads of a single line; the verb parser strips any
 # key token before the colon so the leading word is recovered cleanly.
 status_line_verb() {  # <status-line> -> leading verb word
   local v=${1%%:*}
@@ -194,7 +198,20 @@ _fm_decision_key() {  # <status-line> -> key slug, or "default" when no token
     *) printf 'default' ;;
   esac
 }
-# Drop the record for <key> from a newline-terminated "<key>\t<verb>\t<note>" set.
+_fm_decision_open_generation() {  # <status-line> -> generation, or empty
+  local prefix=${1%%:*} generation
+  case "$prefix" in
+    *\[open-gen=*\]*)
+      generation=${prefix#*\[open-gen=}
+      generation=${generation%%\]*}
+      case "$generation" in
+        ''|*[!0-9]*) return 1 ;;
+        *) printf '%s' "$generation" ;;
+      esac
+      ;;
+  esac
+}
+# Drop the record for <key> from the internal open-decision set.
 # Portable (no associative arrays) so the fold runs on bash 3.2 as well as 4+.
 _fm_decision_drop() {  # <open-set> <key>
   local set=$1 key=$2 line out=''
@@ -209,15 +226,65 @@ $set
 EOF
   printf '%s' "$out"
 }
-# Fold ONE status line into an existing "<key>\t<verb>\t<note>\n"-per-line open
-# set, applying the same needs-decision/blocked-opens, resolved/captain-held-closes
-# rule status_open_decisions documents above. Pure text transform, no file I/O.
+_fm_decision_drop_generation() {  # <open-set> <key> <generation>
+  local set=$1 key=$2 generation=$3 line out='' record_generation
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    case "$line" in
+      "$key"$'\t'*)
+        record_generation=${line##*$'\t'}
+        [ "$record_generation" = "$generation" ] || out="${out}${line}"$'\n'
+        ;;
+      *) out="${out}${line}"$'\n' ;;
+    esac
+  done <<EOF
+$set
+EOF
+  printf '%s' "$out"
+}
+_fm_decision_next_generation() {  # <open-set>
+  local set=$1 line generation=0
+  while IFS= read -r line; do
+    case "$line" in '#generation='*) generation=${line#\#generation=} ;; esac
+  done <<EOF
+$set
+EOF
+  printf '%s' "$((generation + 1))"
+}
+_fm_decision_set_generation() {  # <open-set> <generation>
+  local set=$1 generation=$2 line
+  printf '#generation=%s\n' "$generation"
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    case "$line" in '#generation='*) continue ;; esac
+    printf '%s\n' "$line"
+  done <<EOF
+$set
+EOF
+}
+_fm_decision_public_set() {  # <internal-open-set> [include-generation]
+  local set=$1 include_generation=${2:-0} line
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    case "$line" in '#generation='*) continue ;; esac
+    if [ "$include_generation" = 1 ]; then
+      printf '%s\n' "$line"
+    else
+      printf '%s\n' "${line%$'\t'*}"
+    fi
+  done <<EOF
+$set
+EOF
+}
+# Fold ONE status line into an internal generation-bearing open set, applying
+# the same needs-decision/blocked-opens, resolved/captain-held-closes rule
+# status_open_decisions documents above. Pure text transform, no file I/O.
 # This is the ONE place the per-line open/resolved rule is written; both the
 # whole-file fold (status_open_decisions) and the incremental cursor-backed fold
 # (status_open_decisions_incremental) below call this instead of re-deriving the
 # rule, so the two consumption strategies can never drift apart on semantics.
 _fm_decision_fold_line() {  # <open-set> <status-line> <resolve-verb> <held-verb>
-  local open=$1 line=$2 resolve=$3 held=$4 verb key note stripped
+  local open=$1 line=$2 resolve=$3 held=$4 verb key note stripped generation
   stripped=${line//[[:space:]]/}
   [ -n "$stripped" ] || { printf '%s' "$open"; return 0; }
   verb=$(status_line_verb "$line")
@@ -225,12 +292,19 @@ _fm_decision_fold_line() {  # <open-set> <status-line> <resolve-verb> <held-verb
   case "$verb" in
     needs-decision|blocked)
       note=$(status_line_note "$line")
+      generation=$(_fm_decision_next_generation "$open")
       open=$(_fm_decision_drop "$open" "$key")
+      open=$(_fm_decision_set_generation "$open" "$generation")
       [ -n "$open" ] && open="${open}"$'\n'
-      open="${open}${key}"$'\t'"${verb}"$'\t'"${note}"$'\n'
+      open="${open}${key}"$'\t'"${verb}"$'\t'"${note}"$'\t'"${generation}"$'\n'
       ;;
     "$resolve"|"$held")
-      open=$(_fm_decision_drop "$open" "$key")
+      generation=$(_fm_decision_open_generation "$line") || { printf '%s' "$open"; return 0; }
+      if [ -n "$generation" ]; then
+        open=$(_fm_decision_drop_generation "$open" "$key" "$generation")
+      else
+        open=$(_fm_decision_drop "$open" "$key")
+      fi
       [ -n "$open" ] && open="${open}"$'\n'
       ;;
   esac
@@ -249,7 +323,7 @@ _fm_decision_fold_line() {  # <open-set> <status-line> <resolve-verb> <held-verb
 # before any read - a cheap builtin, unlike fm_wake_latest_event's O_NOFOLLOW
 # subprocess read, which exists for that function's much narrower payload-driven
 # path resolution rather than this directory-local glob.
-status_open_decisions() {  # <status-file>
+_status_open_decisions_internal() {  # <status-file>
   local f=$1 line resolve held open=''
   [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || return 0
   resolve=${FM_CLASSIFY_RESOLVE_VERB:-$FM_CLASSIFY_RESOLVE_VERB_DEFAULT}
@@ -258,6 +332,18 @@ status_open_decisions() {  # <status-file>
     open=$(_fm_decision_fold_line "$open" "$line" "$resolve" "$held")
   done < "$f"
   printf '%s' "$open"
+}
+
+status_open_decisions() {  # <status-file>
+  local open
+  open=$(_status_open_decisions_internal "$1")
+  _fm_decision_public_set "$open"
+}
+
+status_open_decisions_versioned() {  # <status-file>
+  local open
+  open=$(_status_open_decisions_internal "$1")
+  _fm_decision_public_set "$open" 1
 }
 
 # Fleet-wide wrapper around status_open_decisions: scans every task's status
@@ -352,7 +438,7 @@ _fm_open_decisions_file_ident() {  # <file> -> "dev:inode", empty on I/O failure
 }
 
 status_open_decisions_incremental() {  # <status-file>
-  local f=$1 cf offset ident open='' trusted_open='' cursor_data first rest ident_line
+  local f=$1 cf offset ident open='' trusted_open='' cursor_data first rest offset_line ident_line
   local size cur_ident resolve held chunk_file chunk_size line
   [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || return 0
   cf=$(_fm_open_decisions_cursor_path "$f")
@@ -362,14 +448,19 @@ status_open_decisions_incremental() {  # <status-file>
     if cursor_data=$(LC_ALL=C command cat "$cf" 2>/dev/null); then
       first=${cursor_data%%$'\n'*}
       case "$first" in
-        offset=*)
-          offset=${first#offset=}
+        version=2)
+          rest=${cursor_data#*$'\n'}
+          offset_line=${rest%%$'\n'*}
+          case "$offset_line" in
+            offset=*) offset=${offset_line#offset=} ;;
+            *) offset=0 ;;
+          esac
           case "$offset" in
             ''|*[!0-9]*) offset=0 ;;
             *)
-              case "$cursor_data" in
+              case "$rest" in
                 *$'\n'*)
-                  rest=${cursor_data#*$'\n'}
+                  rest=${rest#*$'\n'}
                   ident_line=${rest%%$'\n'*}
                   case "$ident_line" in
                     ident=*)
@@ -394,12 +485,12 @@ status_open_decisions_incremental() {  # <status-file>
   # A stat/size-read failure is a genuine I/O error, not "the file is empty" -
   # report the already-trusted persisted set unchanged rather than risking a
   # silent invalidation that would wipe it.
-  cur_ident=$(_fm_open_decisions_file_ident "$f") || { printf '%s' "$trusted_open"; return 0; }
-  [ -n "$cur_ident" ] || { printf '%s' "$trusted_open"; return 0; }
+  cur_ident=$(_fm_open_decisions_file_ident "$f") || { _fm_decision_public_set "$trusted_open"; return 0; }
+  [ -n "$cur_ident" ] || { _fm_decision_public_set "$trusted_open"; return 0; }
   size=$(LC_ALL=C wc -c < "$f" 2>/dev/null) \
-    || { printf '%s' "$trusted_open"; return 0; }
+    || { _fm_decision_public_set "$trusted_open"; return 0; }
   size=${size//[[:space:]]/}
-  case "$size" in ''|*[!0-9]*) printf '%s' "$trusted_open"; return 0 ;; esac
+  case "$size" in ''|*[!0-9]*) _fm_decision_public_set "$trusted_open"; return 0 ;; esac
 
   if [ -z "$ident" ] || [ "$ident" != "$cur_ident" ] || [ "$offset" -gt "$size" ]; then
     offset=0
@@ -409,12 +500,12 @@ status_open_decisions_incremental() {  # <status-file>
   if [ "$offset" -lt "$size" ]; then
     chunk_file="$cf.read.$$"
     tail -c "+$((offset + 1))" "$f" > "$chunk_file" 2>/dev/null \
-      || { rm -f "$chunk_file"; printf '%s' "$trusted_open"; return 0; }
+      || { rm -f "$chunk_file"; _fm_decision_public_set "$trusted_open"; return 0; }
     chunk_size=$(LC_ALL=C wc -c < "$chunk_file" 2>/dev/null) \
-      || { rm -f "$chunk_file"; printf '%s' "$trusted_open"; return 0; }
+      || { rm -f "$chunk_file"; _fm_decision_public_set "$trusted_open"; return 0; }
     chunk_size=${chunk_size//[[:space:]]/}
     case "$chunk_size" in
-      ''|*[!0-9]*) rm -f "$chunk_file"; printf '%s' "$trusted_open"; return 0 ;;
+      ''|*[!0-9]*) rm -f "$chunk_file"; _fm_decision_public_set "$trusted_open"; return 0 ;;
     esac
     # Test-only observability seam (off by default, no production behavior
     # change): when set, records exactly how many bytes THIS call folded, so a
@@ -429,6 +520,7 @@ status_open_decisions_incremental() {  # <status-file>
     done < "$chunk_file"
     rm -f "$chunk_file"
     {
+      printf 'version=2\n'
       printf 'offset=%s\n' "$size"
       printf 'ident=%s\n' "$cur_ident"
       # An `if` (not `[ -n "$open" ] && printf ...`) so the group's exit status
@@ -438,7 +530,7 @@ status_open_decisions_incremental() {  # <status-file>
       if [ -n "$open" ]; then printf '%s' "$open"; fi
     } > "$cf.tmp.$$" && mv -f "$cf.tmp.$$" "$cf"
   fi
-  printf '%s' "$open"
+  _fm_decision_public_set "$open"
 }
 
 # Incremental sibling of scan_open_decisions: same fleet-wide directory walk and

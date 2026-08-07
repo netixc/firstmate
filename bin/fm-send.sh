@@ -39,7 +39,8 @@
 # before the message) when this send answers an open keyed needs-decision: or
 # blocked: record in the target task's state/<id>.status. After the submit is
 # confirmed, fm-send itself appends the closing
-# "resolved [key=<key>]: answered: <capped excerpt>" line to that status file,
+# "resolved [key=<key>] [open-gen=<generation>]: answered: <capped excerpt>"
+# line to that status file,
 # so the captain-facing OPEN DECISIONS record closes at answer time and never
 # depends on the busy worker writing a matching resolved line. The close is a
 # LOCAL append for every target kind - crewmate, scout, local secondmate, and
@@ -47,7 +48,8 @@
 # folds lives in this home's own state dir (a remote mate's escalations reach
 # it through the parent-replies ingest); only the answer message crosses the
 # backend or remote transport. Each named key must currently be open in that
-# ledger per status_open_decisions (bin/fm-classify-lib.sh) or fm-send refuses
+# ledger per status_open_decisions_versioned (bin/fm-classify-lib.sh) or
+# fm-send refuses
 # before sending, so a mistyped key cannot deliver an answer while silently
 # orphaning the decision. A failed or unconfirmed send never closes a key; a
 # delivered answer whose closing append fails exits nonzero with the exact
@@ -297,10 +299,11 @@ fi
 # Validate the answerer-closes request before any durable mutation or send: the
 # target must have a task ledger in THIS home, the send must carry an answer
 # message, and every named key must be open right now in that ledger per the
-# ONE authoritative fold (status_open_decisions). Refusing here, before the
-# send, is what keeps a mistyped key loud instead of delivering an answer that
-# silently leaves its decision open.
+# ONE authoritative fold (status_open_decisions_versioned). Refusing here,
+# before the send, is what keeps a mistyped key loud instead of delivering an
+# answer that silently leaves its decision open.
 RESOLVE_STATUS_FILE=
+RESOLVE_KEY_GENERATIONS=
 if [ -n "$RESOLVE_KEYS" ]; then
   if [ -z "$TARGET_SELECTOR" ] || [ -z "$TARGET_META" ]; then
     echo "error: --resolve-key needs a task selector resolved through this home's metadata; an explicit backend target has no decision ledger here" >&2
@@ -316,15 +319,21 @@ if [ -n "$RESOLVE_KEYS" ]; then
   fi
   RESOLVE_TASK_ID=$(fm_send_id_from_meta "$TARGET_META")
   RESOLVE_STATUS_FILE="$STATE/$RESOLVE_TASK_ID.status"
-  resolve_open_set=$(status_open_decisions "$RESOLVE_STATUS_FILE")
+  resolve_open_set=$(status_open_decisions_versioned "$RESOLVE_STATUS_FILE")
   for k in $RESOLVE_KEYS; do
-    case "$resolve_open_set" in
-      "$k"$'\t'*|*$'\n'"$k"$'\t'*) ;;
-      *)
-        echo "error: --resolve-key '$k': no open decision or blocker with that key in $RESOLVE_STATUS_FILE (already closed, mistyped, or transferred). Re-check the OPEN DECISIONS listing, then resend without that key or with the right one; nothing was sent." >&2
-        exit 1
-        ;;
-    esac
+    generation=
+    while IFS= read -r open_line; do
+      case "$open_line" in
+        "$k"$'\t'*) generation=${open_line##*$'\t'}; break ;;
+      esac
+    done <<EOF
+$resolve_open_set
+EOF
+    if [ -z "$generation" ]; then
+      echo "error: --resolve-key '$k': no open decision or blocker with that key in $RESOLVE_STATUS_FILE (already closed, mistyped, or transferred). Re-check the OPEN DECISIONS listing, then resend without that key or with the right one; nothing was sent." >&2
+      exit 1
+    fi
+    RESOLVE_KEY_GENERATIONS="${RESOLVE_KEY_GENERATIONS}${RESOLVE_KEY_GENERATIONS:+$'\n'}${k}"$'\t'"${generation}"
   done
 fi
 
@@ -332,13 +341,22 @@ fi
 # fully confirmed. An append failure exits nonzero with the manual close
 # command; the decision then stays open and re-surfaces, never silently lost.
 fm_send_close_resolved_keys() {  # <answer-text>
-  local note=$1 k line
+  local note=$1 k line generation generation_line
   note=$(printf '%s' "$note" | tr '\n\r\t' '   ' | LC_ALL=C tr -d '\000-\037\177')
   for k in $RESOLVE_KEYS; do
-    line="resolved [key=$k]: answered: $note"
+    generation=
+    while IFS= read -r generation_line; do
+      case "$generation_line" in
+        "$k"$'\t'*) generation=${generation_line#*$'\t'}; break ;;
+      esac
+    done <<EOF
+$RESOLVE_KEY_GENERATIONS
+EOF
+    [ -n "$generation" ] || return 1
+    line="resolved [key=$k] [open-gen=$generation]: answered: $note"
     fm_cap_line_var "$line"
     if ! printf '%s\n' "$FM_LINE_CAP_LINE" >> "$RESOLVE_STATUS_FILE"; then
-      echo "error: the answer was delivered to $T, but decision key '$k' could not be closed in $RESOLVE_STATUS_FILE. Close it manually with: echo 'resolved [key=$k]: <how it was answered>' >> $RESOLVE_STATUS_FILE - do not resend the answer." >&2
+      echo "error: the answer was delivered to $T, but decision key '$k' could not be closed in $RESOLVE_STATUS_FILE. Close it manually with: echo 'resolved [key=$k] [open-gen=$generation]: <how it was answered>' >> $RESOLVE_STATUS_FILE - do not resend the answer." >&2
       return 1
     fi
   done
