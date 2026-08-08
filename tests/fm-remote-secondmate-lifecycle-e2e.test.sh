@@ -76,7 +76,9 @@ git -C "$PARENT/projects/alpha" push -q -u origin main
 cat > "$PARENT/data/projects.md" <<EOF
 - alpha [direct-PR] - alpha project (added 2026-08-02)
 EOF
+mkdir -p "$PARENT/config/secondmate-profiles"
 printf 'codex\n' > "$PARENT/config/secondmate-harness"
+printf 'pi openai-codex/gpt-5.6-luna medium\n' > "$PARENT/config/secondmate-profiles/ios"
 printf 'primary harness defaults\n' > "$PARENT/config/crew-harness"
 
 cat > "$FAKEBIN/fake-ssh" <<'SH'
@@ -165,7 +167,7 @@ case "${FM_FAKE_SSH_MODE:-normal}:$command_name:$command_rel" in
     [ "$_command_action" = launch ] || exit 93
     printf 'schema=fm-remote-secondmate-control.v1\n'
     printf 'target=firstmate:fm-ios\n'
-    printf 'harness=codex\n'
+    printf 'harness=pi\n'
     exit 0
     ;;
   launch-default-session-route:fm-remote-secondmate-control.sh:*)
@@ -173,7 +175,7 @@ case "${FM_FAKE_SSH_MODE:-normal}:$command_name:$command_rel" in
     printf 'schema=fm-remote-secondmate-control.v1\n'
     printf 'target=default:w1:p2\n'
     printf 'herdr_session=default\n'
-    printf 'harness=codex\n'
+    printf 'harness=pi\n'
     exit 0
     ;;
   provision-block-fail:fm-remote-home-provision.sh:*)
@@ -662,7 +664,15 @@ assert_contains "$out" 'remote=remote-mac' "remote spawn did not report the host
 assert_grep 'remote_host=remote-mac' "$PARENT/state/ios.meta" "parent metadata omitted the remote host"
 assert_grep 'remote_herdr_session=fm-remote' "$PARENT/state/ios.meta" "parent metadata omitted the pinned remote Herdr session"
 assert_grep 'remote_target=fm-remote:' "$PARENT/state/ios.meta" "parent metadata did not record an fm-remote endpoint"
+assert_grep 'harness=pi' "$PARENT/state/ios.meta" "remote spawn ignored the per-secondmate profile harness"
+assert_grep 'model=openai-codex/gpt-5.6-luna' "$PARENT/state/ios.meta" "remote spawn ignored the per-secondmate profile model"
+assert_grep 'effort=medium' "$PARENT/state/ios.meta" "remote spawn ignored the per-secondmate profile effort"
 assert_grep 'herdr_session=fm-remote' "$REMOTE_HOME/state/parent-route/ios.meta" "remote metadata did not record the pinned Herdr session"
+assert_grep 'harness=pi' "$REMOTE_HOME/state/parent-route/ios.meta" "remote host did not receive the profile harness"
+assert_grep 'model=openai-codex/gpt-5.6-luna' "$REMOTE_HOME/state/parent-route/ios.meta" "remote host did not receive the profile model"
+assert_grep 'effort=medium' "$REMOTE_HOME/state/parent-route/ios.meta" "remote host did not receive the profile effort"
+assert_absent "$REMOTE_HOME/config/secondmate-profiles" "remote inheritance copied the primary-only profile directory"
+assert_grep "--model 'openai-codex/gpt-5.6-luna' --thinking 'medium'" "$HERDR_LOG" "remote Pi launch omitted profile flags"
 assert_grep '--session fm-remote' "$HERDR_LOG" "remote launch did not target the fm-remote session"
 assert_no_grep '--session default' "$HERDR_LOG" "remote launch targeted the interactive default session"
 assert_grep 'window=remote:ios' "$PARENT/state/ios.meta" "parent metadata pretended the endpoint was local"
@@ -978,6 +988,24 @@ assert_contains "$UPDATE_OUT" 'synced:' "remote update did not report a host-loc
   || fail "remote persistent home did not fast-forward to its code-root commit"
 assert_present "$REMOTE_HOME/REMOTE_UPDATE_PROBE" "remote update did not materialize the code-root commit"
 pass "remote update imports and fast-forwards the persistent home on its configured host"
+
+# The update leaves primary-local profiles untouched. Remove the remote endpoint
+# after that update and let bootstrap take the real remote recovery path, proving
+# the profile is re-resolved by the parent instead of inherited from the host.
+old_remote_target=$(sed -n 's/^remote_target=//p' "$PARENT/state/ios.meta")
+old_remote_pane=${old_remote_target#*:}
+"$REMOTE_ROOT/bin/herdr" pane close "$old_remote_pane"
+profile_launches_before=$(grep -F -c -- "pi --model 'openai-codex/gpt-5.6-luna' --thinking 'medium'" "$HERDR_LOG" || true)
+BOOT_PROFILE_RELAUNCH=$(remote_env "$ROOT/bin/fm-bootstrap.sh")
+assert_not_contains "$BOOT_PROFILE_RELAUNCH" 'SECONDMATE_LIVENESS: secondmate ios:' \
+  "remote profile relaunch reported an avoidable liveness failure"
+profile_launches_after=$(grep -F -c -- "pi --model 'openai-codex/gpt-5.6-luna' --thinking 'medium'" "$HERDR_LOG" || true)
+[ "$profile_launches_after" -eq $((profile_launches_before + 1)) ] \
+  || fail "remote bootstrap relaunch did not reuse the profile command"
+assert_grep 'harness=pi' "$PARENT/state/ios.meta" "remote bootstrap relaunch lost the profile harness"
+assert_grep 'model=openai-codex/gpt-5.6-luna' "$PARENT/state/ios.meta" "remote bootstrap relaunch lost the profile model"
+assert_grep 'effort=medium' "$PARENT/state/ios.meta" "remote bootstrap relaunch lost the profile effort"
+pass "remote update and bootstrap recovery retain the parent-owned secondmate profile"
 
 rm -f "$TMP_ROOT/doctor.repaired"
 : > "$DOCTOR_LOG"

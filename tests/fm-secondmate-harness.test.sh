@@ -3,7 +3,7 @@
 # tokens config/secondmate-harness carries alongside the harness, and the
 # primary->secondmate inherited local-material propagation.
 #
-# Three capabilities are under test:
+# Four capabilities are under test:
 #   A) Harness split. config/secondmate-harness sets the harness the PRIMARY uses
 #      to launch SECONDMATE agents, independent of config/crew-harness (the
 #      crewmate harness). fm-harness.sh secondmate resolves the fallback chain
@@ -40,6 +40,9 @@
 #      spawn only when the harness also resolves from that file, so the pin is
 #      durable across every respawn while explicit per-spawn harness/model/effort
 #      flags still win.
+#   D) Per-secondmate profile. config/secondmate-profiles/<id> carries one strict
+#      profile for that id, takes precedence over the global file, and is never
+#      inherited into secondmate homes.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -158,6 +161,88 @@ extra whitespace between tokens is tolerated^grok   grok-4    xhigh^grok^grok-4^
 leading/trailing blank lines and a comment are skipped^# a comment\n\nclaude opus low\n^claude^opus^low
 ROWS
   pass "C1 fm-harness.sh secondmate-model/secondmate-effort resolve the optional tokens; bare harness stays empty (backward-compat)"
+}
+
+# ===========================================================================
+# D) Per-secondmate profile resolution and refusal behavior
+# ===========================================================================
+test_per_secondmate_profile_resolution() {
+  local cfg record harness model effort source
+  cfg="$TMP_ROOT/per-secondmate-profile/config"
+  mkdir -p "$cfg/secondmate-profiles"
+  printf 'claude legacy-model high\n' > "$cfg/secondmate-harness"
+  printf 'pi openai-codex/gpt-5.6-luna medium\n' > "$cfg/secondmate-profiles/homelab"
+
+  record=$(CLAUDECODE=1 FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh" secondmate-profile homelab)
+  harness=${record%%$'\t'*}
+  record=${record#*$'\t'}
+  model=${record%%$'\t'*}
+  record=${record#*$'\t'}
+  effort=${record%%$'\t'*}
+  source=${record#*$'\t'}
+  [ "$harness" = pi ] || fail "profile: harness resolved '$harness', expected pi"
+  [ "$model" = openai-codex/gpt-5.6-luna ] || fail "profile: model resolved '$model'"
+  [ "$effort" = medium ] || fail "profile: effort resolved '$effort', expected medium"
+  [ "$source" = config/secondmate-profiles/homelab ] || fail "profile: source resolved '$source'"
+  [ "$(CLAUDECODE=1 FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh" secondmate homelab)" = pi ] \
+    || fail "profile: per-id harness accessor ignored homelab profile"
+  [ "$(CLAUDECODE=1 FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh" secondmate-model homelab)" = openai-codex/gpt-5.6-luna ] \
+    || fail "profile: per-id model accessor ignored homelab profile"
+  [ "$(CLAUDECODE=1 FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh" secondmate-effort homelab)" = medium ] \
+    || fail "profile: per-id effort accessor ignored homelab profile"
+  [ "$(CLAUDECODE=1 FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh" secondmate unprofiled)" = claude ] \
+    || fail "profile: an unprofiled route did not keep the global fallback"
+  [ "$(CLAUDECODE=1 FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh" secondmate-model unprofiled)" = legacy-model ] \
+    || fail "profile: an unprofiled route lost the global model fallback"
+  printf 'codex\n' > "$cfg/secondmate-harness"
+  [ -z "$(CLAUDECODE=1 FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh" secondmate-model unprofiled)" ] \
+    || fail "profile: an unprofiled bare global harness invented a model"
+  [ -z "$(CLAUDECODE=1 FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh" secondmate-effort unprofiled)" ] \
+    || fail "profile: an unprofiled bare global harness invented an effort"
+  pass "D1 fm-harness.sh resolves a per-secondmate profile before the unchanged global fallback"
+}
+
+test_per_secondmate_profile_refuses_invalid_entries() {
+  local label line expected cfg out rc n
+  n=0
+  while IFS='^' read -r label line expected; do
+    [ -n "$label" ] || continue
+    n=$((n + 1))
+    cfg="$TMP_ROOT/invalid-per-secondmate-profile-$n/config"
+    mkdir -p "$cfg/secondmate-profiles"
+    printf 'claude global-model high\n' > "$cfg/secondmate-harness"
+    printf '%b\n' "$line" > "$cfg/secondmate-profiles/homelab"
+    rc=0
+    out=$(CLAUDECODE=1 FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh" secondmate-profile homelab 2>&1) || rc=$?
+    [ "$rc" -ne 0 ] || fail "$label: invalid profile fell back to the global setting"
+    assert_contains "$out" 'config/secondmate-profiles/homelab' "$label: refusal did not name the profile source"
+    assert_contains "$out" "$expected" "$label: refusal did not explain the invalid field"
+  done <<'ROWS'
+unsupported harness^bogus model high^unsupported harness 'bogus'
+placeholder model^pi default medium^model must be a concrete token
+invalid effort^pi openai-codex/gpt-5.6-luna ultra^effort must be low, medium, high, xhigh, or max
+extra field^pi openai-codex/gpt-5.6-luna medium extra^expected <harness> [<model>] [<effort>]
+empty profile^# comment\n\n^expected exactly one non-comment line
+ROWS
+
+  cfg="$TMP_ROOT/invalid-per-secondmate-profile-symlink/config"
+  mkdir -p "$cfg/secondmate-profiles"
+  printf 'pi openai-codex/gpt-5.6-luna medium\n' > "$cfg/source"
+  ln -s "$cfg/source" "$cfg/secondmate-profiles/homelab"
+  rc=0
+  out=$(CLAUDECODE=1 FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh" secondmate-profile homelab 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "symlink profile was accepted"
+  assert_contains "$out" 'regular non-symlink file' "symlink profile refusal did not identify the safety boundary"
+
+  cfg="$TMP_ROOT/invalid-per-secondmate-profile-directory-symlink/config"
+  mkdir -p "$cfg/profile-source"
+  printf 'pi openai-codex/gpt-5.6-luna medium\n' > "$cfg/profile-source/homelab"
+  ln -s "$cfg/profile-source" "$cfg/secondmate-profiles"
+  rc=0
+  out=$(CLAUDECODE=1 FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh" secondmate-profile homelab 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "symlink profile directory was accepted"
+  assert_contains "$out" 'expected a non-symlink directory' "symlink directory refusal did not identify the safety boundary"
+  pass "D2 malformed, unsafe, and unsupported per-secondmate profiles refuse without fallback"
 }
 
 # ===========================================================================
@@ -346,8 +431,10 @@ test_propagate_lib() {
   [ -d "$dest/crew-harness" ] || fail "failed absence mirror removed the wrong path"
   rm -rf "$dest/crew-harness"
 
-  # 5. secondmate-harness is never inherited.
+  # 5. Primary-only secondmate launch configuration is never inherited.
   printf 'grok\n' > "$src/secondmate-harness"
+  mkdir -p "$src/secondmate-profiles"
+  printf 'pi openai-codex/gpt-5.6-luna medium\n' > "$src/secondmate-profiles/homelab"
   printf '{"default":{"harness":"codex"}}\n' > "$src/crew-dispatch.json"
   printf 'codex\n' > "$src/crew-harness"
   printf 'manual\n' > "$src/backlog-backend"
@@ -355,6 +442,7 @@ test_propagate_lib() {
   mkdir -p "$d/home2/config" "$d/home2/state"
   propagate_inheritable_config "$src" "$d/home2/config"
   [ -e "$d/home2/config/secondmate-harness" ] && fail "secondmate-harness was inherited (must not be)"
+  [ -e "$d/home2/config/secondmate-profiles" ] && fail "secondmate-profiles were inherited (must not be)"
   [ "$(cat "$d/home2/config/crew-dispatch.json")" = '{"default":{"harness":"codex"}}' ] || fail "crew-dispatch.json not propagated alongside"
   [ "$(cat "$d/home2/config/crew-harness")" = codex ] || fail "crew-harness not propagated alongside"
   [ "$(cat "$d/home2/config/backlog-backend")" = manual ] || fail "backlog-backend not propagated alongside"
@@ -791,6 +879,92 @@ test_spawn_explicit_harness_uses_explicit_profile_axes() {
   assert_not_contains "$launch" "model_reasoning_effort=\"high\"" \
     "explicit-harness-explicit-axes: launch leaked the file's effort token"
   pass "C8 spawn: an explicit --harness still honors explicit model/effort flags"
+}
+
+# A profile owns all three resolved axes for exactly one secondmate. Exercise the
+# real launch interface for every supported adapter, rather than checking the
+# parser alone, so each template receives the requested model and effort shape.
+test_spawn_per_secondmate_profiles_across_harnesses() {
+  local harness model effort expected w sm id meta launchlog launch out status
+  while IFS='^' read -r harness model effort expected; do
+    [ -n "$harness" ] || continue
+    w="$TMP_ROOT/spawn-profile-$harness"
+    id="profile-$harness"
+    sm="$w/$id"
+    launchlog="$w/launch.log"
+    mkdir -p "$w/home/config/secondmate-profiles"
+    printf 'claude global-model low\n' > "$w/home/config/secondmate-harness"
+    printf '%s %s %s\n' "$harness" "$model" "$effort" > "$w/home/config/secondmate-profiles/$id"
+    make_seeded_home "$sm" "$id"
+
+    out=$(spawn_secondmate_capture "$w" "$id" "$sm" "$launchlog" 2>&1); status=$?
+    expect_code 0 "$status" "profile $harness secondmate spawn should succeed: $out"
+    meta="$w/home/state/$id.meta"
+    [ "$(meta_field "$meta" harness)" = "$harness" ] \
+      || fail "profile $harness: meta harness ignored the profile"
+    [ "$(meta_field "$meta" model)" = "$model" ] \
+      || fail "profile $harness: meta model ignored the profile"
+    [ "$(meta_field "$meta" effort)" = "$effort" ] \
+      || fail "profile $harness: meta effort ignored the profile"
+    launch=$(cat "$launchlog")
+    assert_contains "$launch" "$expected" "profile $harness: launch did not carry the adapter's profile flags"
+    [ -e "$sm/config/secondmate-profiles" ] \
+      && fail "profile $harness: primary-only profile directory was inherited into the secondmate home"
+  done <<'ROWS'
+claude^claude-opus^high^claude --dangerously-skip-permissions --model 'claude-opus' --effort 'high'
+codex^gpt-5.6^xhigh^codex --model 'gpt-5.6' -c 'model_reasoning_effort="xhigh"'
+grok^grok-4^high^grok --always-approve --model 'grok-4' --reasoning-effort 'high'
+pi^openai-codex/gpt-5.6-luna^medium^pi --model 'openai-codex/gpt-5.6-luna' --thinking 'medium'
+ROWS
+  pass "D3 per-secondmate profiles reach Claude, Codex, Grok, and Pi launch templates without inheritance"
+}
+
+test_spawn_per_secondmate_profile_keeps_explicit_axes_highest() {
+  local w clean_sm explicit_sm launchlog meta launch
+  w="$TMP_ROOT/spawn-profile-explicit"
+  clean_sm="$w/clean-sm"
+  explicit_sm="$w/explicit-sm"
+  launchlog="$w/launch.log"
+  mkdir -p "$w/home/config/secondmate-profiles"
+  printf 'pi openai-codex/gpt-5.6-luna medium\n' > "$w/home/config/secondmate-profiles/clean"
+  printf 'pi openai-codex/gpt-5.6-luna medium\n' > "$w/home/config/secondmate-profiles/explicit"
+  make_seeded_home "$clean_sm" clean
+  make_seeded_home "$explicit_sm" explicit
+
+  spawn_secondmate_capture "$w" clean "$clean_sm" "$launchlog" --harness codex >/dev/null 2>&1
+  meta="$w/home/state/clean.meta"
+  [ "$(meta_field "$meta" harness)" = codex ] || fail "profile explicit harness: meta did not use codex"
+  [ "$(meta_field "$meta" model)" = default ] || fail "profile explicit harness: inherited profile model unexpectedly"
+  [ "$(meta_field "$meta" effort)" = default ] || fail "profile explicit harness: inherited profile effort unexpectedly"
+
+  spawn_secondmate_capture "$w" explicit "$explicit_sm" "$launchlog" \
+    --harness codex --model gpt-5.6 --effort xhigh >/dev/null 2>&1
+  meta="$w/home/state/explicit.meta"
+  [ "$(meta_field "$meta" harness)" = codex ] || fail "profile explicit axes: meta did not use codex"
+  [ "$(meta_field "$meta" model)" = gpt-5.6 ] || fail "profile explicit axes: model did not win"
+  [ "$(meta_field "$meta" effort)" = xhigh ] || fail "profile explicit axes: effort did not win"
+  launch=$(cat "$launchlog")
+  assert_contains "$launch" "--model 'gpt-5.6'" "profile explicit axes: launch did not use explicit model"
+  assert_contains "$launch" 'model_reasoning_effort="xhigh"' "profile explicit axes: launch did not use explicit effort"
+  assert_not_contains "$launch" openai-codex/gpt-5.6-luna "profile explicit axes: launch leaked profile model"
+  pass "D4 explicit per-spawn harness, model, and effort remain higher precedence than a profile"
+}
+
+test_spawn_per_secondmate_profile_refuses_without_global_fallback() {
+  local w sm launchlog out status
+  w="$TMP_ROOT/spawn-invalid-profile"
+  sm="$w/sm"
+  launchlog="$w/launch.log"
+  mkdir -p "$w/home/config/secondmate-profiles"
+  printf 'claude global-model high\n' > "$w/home/config/secondmate-harness"
+  printf 'bogus unsupported-model high\n' > "$w/home/config/secondmate-profiles/sm"
+  make_seeded_home "$sm" sm
+
+  out=$(spawn_secondmate_capture "$w" sm "$sm" "$launchlog" 2>&1); status=$?
+  [ "$status" -ne 0 ] || fail "invalid profile spawn fell back to the global harness"
+  assert_contains "$out" 'config/secondmate-profiles/sm' "invalid profile spawn did not name the profile source"
+  [ -e "$w/home/state/sm.meta" ] && fail "invalid profile spawn published metadata"
+  pass "D5 an explicitly invalid per-secondmate profile aborts spawn instead of using the global fallback"
 }
 
 test_spawned_secondmate_uses_its_harness_supervision_model() {
@@ -2374,6 +2548,8 @@ SH
 test_harness_resolution
 test_unsupported_configured_harnesses
 test_secondmate_model_effort_tokens
+test_per_secondmate_profile_resolution
+test_per_secondmate_profile_refuses_invalid_entries
 test_pi_detection_and_session_lock_identity
 test_dash_leading_process_names_are_basename_operands
 test_propagate_lib
@@ -2389,6 +2565,9 @@ test_spawn_explicit_model_overrides_secondmate_harness_token
 test_spawn_explicit_effort_overrides_secondmate_harness_token
 test_spawn_explicit_harness_does_not_inherit_secondmate_harness_tokens
 test_spawn_explicit_harness_uses_explicit_profile_axes
+test_spawn_per_secondmate_profiles_across_harnesses
+test_spawn_per_secondmate_profile_keeps_explicit_axes_highest
+test_spawn_per_secondmate_profile_refuses_without_global_fallback
 test_spawned_secondmate_uses_its_harness_supervision_model
 test_spawn_fallback_chain_and_crew_scout_unaffected
 test_bootstrap_sweep_propagates_and_reconverges

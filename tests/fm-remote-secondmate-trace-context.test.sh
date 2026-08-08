@@ -227,6 +227,11 @@ if FM_HOME="$PROTOCOL_HOME" "$REMOTE_ROOT/bin/fm-remote-inherit.sh" \
   fail "the remote inherit receiver accepted an item outside the declared set"
 fi
 assert_absent "$PROTOCOL_HOME/config/secondmate-harness" "a non-inheritable item was published remotely"
+if FM_HOME="$PROTOCOL_HOME" "$REMOTE_ROOT/bin/fm-remote-inherit.sh" \
+  put config/secondmate-profiles/homelab "$FLAG_BYTES" "$FLAG_HASH" 1 < "$TMP_ROOT/flag-payload" >/dev/null 2>&1; then
+  fail "the remote inherit receiver accepted a per-secondmate profile outside the declared set"
+fi
+assert_absent "$PROTOCOL_HOME/config/secondmate-profiles" "a primary-only profile directory was published remotely"
 pass "allowlist: the remote receiver accepts exactly the declared inherited-material set, including the enablement flag"
 
 # --- the delivery flag is the only caller-supplied path to a pane export -----

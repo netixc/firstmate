@@ -43,6 +43,33 @@ The CLI matrix was checked directly:
 All destructive verification used `bin/fm-herdr-lab.sh` with a non-default `fm-lab-` name and a byte-identical default-session tripwire.
 No ambient `herdr server stop` command is a supported test operation.
 
+### Secondmate launch-profile routing
+
+On 2026-08-08, the per-secondmate profile resolver was reviewed against every supported launch template and both existing Herdr route shapes.
+The resolver changes only the parent-side harness, model, and effort values that reach `fm-spawn.sh`; it does not change any adapter template or Herdr container, endpoint, session, or presentation operation.
+
+```sh
+tests/fm-secondmate-harness.test.sh
+tests/fm-session-start.test.sh
+tests/fm-remote-secondmate-lifecycle-e2e.test.sh
+```
+
+Observed relevant output:
+
+```text
+ok - D3 per-secondmate profiles reach Claude, Codex, Grok, and Pi launch templates without inheritance
+ok - D4 explicit per-spawn harness, model, and effort remain higher precedence than a profile
+ok - D5 an explicitly invalid per-secondmate profile aborts spawn instead of using the global fallback
+ok - session start: a confirmed Herdr husk relaunches with its durable profile
+ok - remote update and bootstrap recovery retain the parent-owned secondmate profile
+ALL TESTS PASSED
+```
+
+The review probes were `claude --version`, `codex --version`, `grok --version`, `pi --version`, `herdr --version`, and `herdr status --json | jq -c '{client:{version:.client.version,protocol:.client.protocol},server:{running:.server.running,protocol:.server.protocol}}'`.
+They reported Claude Code 2.1.220, codex-cli 0.146.0, Grok 0.2.118, Pi 0.84.1, `herdr 0.8.0`, and `{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}`.
+The existing model and effort flags remain the adapter-owned templates in `bin/fm-spawn.sh`.
+The stateful remote suite confirmed that the existing `fm-remote` session boundary receives the resolved profile as explicit launch arguments rather than inherited profile files.
+
 ### Presentation version floor
 
 The default presentation projection was live-verified on 2026-08-06 against pinned macOS aarch64 releases through a guarded named non-default lab.
