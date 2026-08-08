@@ -7,6 +7,33 @@ set -eu
 
 SESSION_START="$ROOT/bin/fm-session-start.sh"
 TMP_ROOT=$(fm_test_tmproot fm-session-start-pi)
+FAKEBIN="$TMP_ROOT/fakebin"
+mkdir -p "$FAKEBIN"
+PI_HOLDER_PID=$$
+
+cat > "$FAKEBIN/ps" <<SH
+#!/usr/bin/env bash
+set -u
+pid=
+previous=
+for argument in "\$@"; do
+  [ "\$previous" = -p ] && pid=\$argument
+  previous=\$argument
+done
+case "\$*" in
+  *"comm="*)
+    if [ "\$pid" = "$PI_HOLDER_PID" ]; then printf '%s\n' /usr/local/bin/pi
+    else printf '%s\n' /bin/bash; fi
+    ;;
+  *"args="*)
+    if [ "\$pid" = "$PI_HOLDER_PID" ]; then printf '%s\n' pi
+    else printf '%s\n' bash; fi
+    ;;
+  *"ppid="*) printf '%s\n' "$PI_HOLDER_PID" ;;
+  *) exit 1 ;;
+esac
+SH
+chmod +x "$FAKEBIN/ps"
 
 make_home() {
   local home=$1
@@ -15,7 +42,8 @@ make_home() {
 
 run_session_start() {
   local home=$1
-  FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" FM_BOOTSTRAP_DETECT_ONLY=1 "$SESSION_START" 2>&1
+  FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" FM_BOOTSTRAP_DETECT_ONLY=1 \
+    PI_CODING_AGENT=true PATH="$FAKEBIN:$PATH" "$SESSION_START" 2>&1
 }
 
 test_pi_session_start_block() {
