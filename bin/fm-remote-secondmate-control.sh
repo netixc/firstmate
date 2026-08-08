@@ -115,6 +115,7 @@ print_route() { # <id>
   printf 'schema=fm-remote-secondmate-control.v1\n'
   printf 'target=%s\n' "$REMOTE_ENDPOINT_TARGET"
   printf 'herdr_session=%s\n' "$REMOTE_HERDR_SESSION"
+  printf 'harness=pi\n'
   printf 'runtime=pi\n'
   [ -z "$traceparent" ] || printf 'traceparent=%s\n' "$traceparent"
 }

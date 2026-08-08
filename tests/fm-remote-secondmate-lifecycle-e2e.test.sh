@@ -763,6 +763,9 @@ assert_no_grep '--session default' "$HERDR_LOG" "remote launch targeted the inte
 assert_grep 'window=remote:ios' "$PARENT/state/ios.meta" "parent metadata pretended the endpoint was local"
 assert_present "$PARENT/state/procevent/remote-reply-ios.source" "remote spawn did not arm its reply source"
 publish_healthy_watcher_identity "$PARENT/state" "$PARENT" "$ROOT/bin/fm-watch.sh"
+REMOTE_ROUTE=$(remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh route ios)
+assert_contains "$REMOTE_ROUTE" 'harness=pi' "remote route omitted the base-parent Pi identity field"
+assert_contains "$REMOTE_ROUTE" 'runtime=pi' "remote route omitted the Pi-only runtime identity field"
 [ "$(remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh state ios)" = alive ] \
   || fail "remote endpoint was not projected alive from its own host"
 # Herdr reports a native agent state, so the delivery observation resolves
