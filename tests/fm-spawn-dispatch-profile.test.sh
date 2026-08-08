@@ -97,6 +97,20 @@ JSON
   pass "active dispatch requires an explicit Pi model and launches it"
 }
 
+test_explicit_model_still_validates_configuration() {
+  local record home project worktree fakebin log id
+  record=$(make_case invalid-explicit invalid-explicit)
+  IFS='|' read -r home project worktree fakebin log id <<EOF
+$record
+EOF
+  printf 'retired-runtime\n' > "$home/config/crew-harness"
+  expect_fail 'obsolete runtime selection' run_spawn "$home" "$worktree" "$fakebin" "$log" "$id" "$project" --model xai/grok-4.1 --mode no-mistakes --yolo off
+  rm -f "$home/config/crew-harness"
+  printf '{not-json}\n' > "$home/config/crew-dispatch.json"
+  expect_fail 'malformed JSON' run_spawn "$home" "$worktree" "$fakebin" "$log" "$id" "$project" --model xai/grok-4.1 --mode no-mistakes --yolo off
+  pass "explicit Pi model cannot bypass runtime migration or dispatch validation"
+}
+
 test_runtime_override_rejected() {
   local record home project worktree fakebin log id
   record=$(make_case runtime-override override-pi)
@@ -109,4 +123,5 @@ EOF
 
 test_pi_profile_launch
 test_dispatch_requires_explicit_pi_model
+test_explicit_model_still_validates_configuration
 test_runtime_override_rejected

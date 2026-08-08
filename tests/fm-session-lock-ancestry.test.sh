@@ -12,12 +12,44 @@ TMP_ROOT=$(fm_test_tmproot fm-session-lock-pi)
 test_pi_matcher_is_narrow() {
   fm_pi_process_matches /usr/local/bin/pi 'pi --model openai-codex/gpt-5.6-luna' \
     || fail "exact Pi command was not recognized"
-  fm_pi_process_matches /usr/local/bin/node '/opt/pi-coding-agent/dist/pi.js' \
+  fm_pi_process_matches /usr/local/bin/node '/opt/pi-coding-agent/dist/cli.js' \
     || fail "Pi node entrypoint was not recognized"
   if fm_pi_process_matches /usr/local/bin/bash 'bash /tmp/worker'; then
     fail "ordinary shell was recognized as Pi"
   fi
+  if fm_pi_process_matches /usr/local/bin/bash 'bash -c pi --model test/model'; then
+    fail "shell command arguments were recognized as Pi"
+  fi
   pass "session lock recognizes only Pi process identities"
+}
+
+test_lock_owner_must_be_verified_pi() {
+  local dir="$TMP_ROOT/verified-owner" fakebin
+  fakebin=$(fm_fakebin "$dir")
+  mkdir -p "$dir/state"
+  cat > "$fakebin/ps" <<'SH'
+#!/usr/bin/env bash
+field= pid=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -o) field=$2; shift 2 ;;
+    -p) pid=$2; shift 2 ;;
+    *) shift ;;
+  esac
+done
+case "$pid:$field" in
+  *:comm=) printf '%s\n' bash ;;
+  *:args=) printf '%s\n' 'bash -c pi --model test/model' ;;
+  *:ppid=) printf '%s\n' 1 ;;
+esac
+SH
+  chmod +x "$fakebin/ps"
+  printf '%s\n' "$$" > "$dir/state/.lock"
+  if PATH="$fakebin:$PATH" bash -c '. "$1"; fm_session_lock_owned_by_self "$2"' _ \
+    "$ROOT/bin/fm-session-lock-lib.sh" "$dir/state"; then
+    fail "an unverified shell process claimed the Pi session lock"
+  fi
+  pass "session lock ownership requires verified Pi ancestry"
 }
 
 test_pi_ancestry_and_liveness() {
@@ -52,3 +84,4 @@ SH
 
 test_pi_matcher_is_narrow
 test_pi_ancestry_and_liveness
+test_lock_owner_must_be_verified_pi

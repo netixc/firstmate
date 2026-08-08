@@ -353,7 +353,7 @@ spawn_remote_secondmate() {
   if [ "$(fm_trace_context_session_effective "$STATE/.trace-context-effective")" = on ]; then
     remote_traceparent=$(FM_TRACE_CONTEXT=on fm_trace_context_resolve "$CONFIG" "$meta" || true)
   fi
-  launch_args=("$id" "$model" "$effort")
+  launch_args=("$id" pi "$model" "$effort")
   [ -z "$remote_traceparent" ] || launch_args+=("$remote_traceparent")
   if out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh launch \
     "${launch_args[@]}" < /dev/null 2>&1); then
@@ -584,6 +584,8 @@ launch_template() {
 
 HARNESS=pi
 if [ "$KIND" != secondmate ]; then
+  "$FM_ROOT/bin/fm-harness.sh" validate-config || exit 1
+  "$FM_ROOT/bin/fm-harness.sh" validate-dispatch || exit 1
   if [ -f "$CONFIG/crew-dispatch.json" ] && [ "$MODEL_SET" -eq 0 ]; then
     echo "error: config/crew-dispatch.json is active - pass the selected Pi --model so dispatch selection cannot be skipped." >&2
     exit 1

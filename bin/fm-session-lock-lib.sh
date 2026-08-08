@@ -5,11 +5,21 @@
 # This file is sourced by lock and session-start helpers and has no source-time side effects.
 
 fm_pi_process_matches() { # <comm> <args>
-  local comm=$1 args=$2 base
+  local comm=$1 args=$2 base argv0 entry
   base=$(basename -- "$comm")
   [ "$base" = pi ] && return 0
-  case "$comm $args" in
-    *'/pi-coding-agent/'*|*'/pi.js '*|*'/pi '*|*' pi '*) return 0 ;;
+  argv0=${args%% *}
+  [ "$(basename -- "$argv0")" = pi ] && return 0
+  case "$base" in
+    node|nodejs)
+      entry=$argv0
+      case "$entry" in node|nodejs) entry=${args#"$argv0"}; entry=${entry# } ;;
+      esac
+      entry=${entry%% *}
+      case "$entry" in
+        */pi-coding-agent/dist/cli.js|*/pi-coding-agent/dist/bun/cli.js) return 0 ;;
+      esac
+      ;;
   esac
   return 1
 }
@@ -49,10 +59,12 @@ fm_session_lock_owned_by_self() {
   lock_pid=$(cat "$state/.lock" 2>/dev/null || true)
   case "$lock_pid" in ''|*[!0-9]*) return 1 ;; esac
   for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
-    [ "$pid" = "$lock_pid" ] && return 0
     comm=$(ps -o comm= -p "$pid" 2>/dev/null) || break
     args=$(ps -o args= -p "$pid" 2>/dev/null || true)
-    fm_pi_process_matches "$comm" "$args" || :
+    if fm_pi_process_matches "$comm" "$args"; then
+      [ "$pid" = "$lock_pid" ]
+      return
+    fi
     pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
     case "$pid" in ''|*[!0-9]*) break ;; esac
     [ "$pid" -gt 1 ] || break

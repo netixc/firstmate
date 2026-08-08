@@ -2,7 +2,7 @@
 # Host-local lifecycle control for the remote secondmate home selected by fm-on.
 #
 # Usage:
-#   fm-remote-secondmate-control.sh launch <id> <model|-> <effort|-> [traceparent]
+#   fm-remote-secondmate-control.sh launch <id> [pi] <model|-> <effort|-> [traceparent]
 #   fm-remote-secondmate-control.sh state <id>
 #   fm-remote-secondmate-control.sh route <id>
 #   fm-remote-secondmate-control.sh send <id> <message>
@@ -127,8 +127,14 @@ cmd_route() {
 }
 
 cmd_launch() {
-  local id=$1 model=$2 effort=$3 traceparent=${4:-}
+  local id=$1 model effort traceparent
   local current meta out herdr_session
+
+  shift
+  if [ "${1:-}" = pi ]; then shift; fi
+  model=$1
+  effort=$2
+  traceparent=${3:-}
 
   validate_id "$id"
   validate_home "$id"
@@ -279,7 +285,7 @@ cmd_retire() {
 }
 
 case "${1:-}" in
-  launch) shift; [ "$#" -ge 3 ] && [ "$#" -le 4 ] || usage; cmd_launch "$@" ;;
+  launch) shift; [ "$#" -ge 3 ] && [ "$#" -le 5 ] || usage; cmd_launch "$@" ;;
   state) shift; [ "$#" -eq 1 ] || usage; validate_id "$1"; validate_home "$1"; state_value "$1" ;;
   route) shift; [ "$#" -eq 1 ] || usage; cmd_route "$1" ;;
   send) shift; [ "$#" -eq 2 ] || usage; cmd_send "$@" ;;

@@ -9,6 +9,7 @@
 #        fm-harness.sh secondmate-effort [<id>] print the resolved optional thinking token
 #        fm-harness.sh secondmate-profile <id> print model, thinking, and source as TSV
 #        fm-harness.sh validate-config         validate Pi-only local runtime configuration
+#        fm-harness.sh validate-dispatch       validate Pi-only dispatch configuration
 #
 # Firstmate supports Pi alone.
 # config/crew-profile is the optional ordinary-worker profile.
@@ -259,6 +260,54 @@ validate_config() {
   fi
 }
 
+validate_dispatch() {
+  local file="$CONFIG/crew-dispatch.json" err
+  [ -e "$file" ] || [ -L "$file" ] || return 0
+  [ -f "$file" ] && [ ! -L "$file" ] || {
+    printf 'error: config/crew-dispatch.json must be a regular non-symlink file\n' >&2
+    return 1
+  }
+  command -v jq >/dev/null 2>&1 || {
+    printf 'error: jq is required to validate config/crew-dispatch.json\n' >&2
+    return 1
+  }
+  jq -e . "$file" >/dev/null 2>&1 || {
+    printf 'error: malformed JSON in config/crew-dispatch.json\n' >&2
+    return 1
+  }
+  err=$(jq -r '
+    def profiles($value):
+      if ($value | type) == "array" then $value
+      elif ($value | type) == "object" then [$value]
+      else []
+      end;
+    def configured_profiles:
+      ([(.rules // [])[]? | profiles(.use?)[]?]
+        + (if has("default") then [profiles(.default)[]?] else [] end));
+    def profile_error($items):
+      if ($items | any(type != "object")) then "each profile must be an object"
+      elif ($items | any(has("harness"))) then "obsolete runtime field: harness; Pi is fixed and profiles contain only model and effort"
+      elif ($items | any((.model? | type) != "string" or (.model | length) == 0)) then "each profile needs a non-empty model"
+      elif ($items | any(has("effort") and (((.effort | type) != "string") or (["low","medium","high","xhigh","max"] | index(.effort) | not)))) then "effort must be low, medium, high, xhigh, or max when present"
+      else empty
+      end;
+    if type != "object" then "top-level value must be an object"
+    elif has("rules") and (.rules | type) != "array" then "rules must be an array"
+    elif [(.rules // [])[]? | select(type != "object")] | length > 0 then "each rule must be an object"
+    elif [(.rules // [])[]? | select((.when? | type) != "string" or (.when | length) == 0)] | length > 0 then "each rule needs non-empty when"
+    elif [(.rules // [])[]? | select((.use? | type) != "object" and (.use? | type) != "array")] | length > 0 then "each rule needs use"
+    elif [(.rules // [])[]? | select((.use? | type) == "array" and (.use | length) == 0)] | length > 0 then "each rule needs at least one use profile"
+    elif has("default") and ((.default | type) != "object" and (.default | type) != "array") then "default must be a profile object or non-empty profile array"
+    elif has("default") and ((.default | type) == "array" and (.default | length) == 0) then "default needs at least one profile"
+    else profile_error(configured_profiles)
+    end
+  ' "$file" 2>/dev/null || true)
+  [ -z "$err" ] || {
+    printf 'error: %s\n' "$err" >&2
+    return 1
+  }
+}
+
 case "${1:-}" in
   primary) require_primary_pi ;;
   crew) resolve_crew_profile >/dev/null && printf 'pi\n' ;;
@@ -293,6 +342,7 @@ case "${1:-}" in
     resolve_secondmate_profile "$2"
     ;;
   validate-config) validate_config ;;
+  validate-dispatch) validate_dispatch ;;
   '') detect_primary ;;
   *)
     printf 'error: unknown fm-harness command: %s\n' "$1" >&2

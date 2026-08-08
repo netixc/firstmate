@@ -72,7 +72,18 @@ test_invalid_pi_profile_rejected() {
   pass "invalid Pi profile values are refused"
 }
 
+test_dispatch_validation() {
+  local config="$TMP_ROOT/dispatch/config"
+  mkdir -p "$config"
+  printf '%s\n' '{"rules":[{"when":"test","use":{"model":"xai/grok-4.1","effort":"high"}}]}' > "$config/crew-dispatch.json"
+  run_harness "$config" validate-dispatch || fail "valid Pi dispatch was rejected"
+  printf '%s\n' '{"rules":[{"when":"test","use":{"harness":"codex","model":"xai/grok-4.1"}}]}' > "$config/crew-dispatch.json"
+  expect_fail 'obsolete runtime field: harness' run_harness "$config" validate-dispatch
+  pass "Pi dispatch validation is shared by launch and bootstrap"
+}
+
 test_builtin_pi_profile
 test_pi_profiles_and_precedence
 test_obsolete_selection_blocks_launch
 test_invalid_pi_profile_rejected
+test_dispatch_validation

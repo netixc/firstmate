@@ -521,6 +521,10 @@ secondmate_liveness_sweep() {
     [ -n "$window" ] || continue
     harness=$(fm_meta_get "$meta" harness)
     remote_host=$(fm_meta_get "$meta" remote_host)
+    if [ "$harness" != pi ]; then
+      echo "SECONDMATE_LIVENESS: secondmate $id: skipped: recorded runtime '${harness:-missing}' is not Pi and cannot be recovered"
+      continue
+    fi
     if [ -n "$remote_host" ]; then
       remote_rc=0
       fm_remote_readiness_ensure "$SCRIPT_DIR" "$id" || remote_rc=$?
@@ -573,12 +577,6 @@ secondmate_liveness_sweep() {
     target=$(fm_backend_target_of_meta "$meta")
     [ -n "$target" ] || target="$window"
     agent_state=$(fm_backend_agent_state "$backend" "$target" 2>/dev/null) || agent_state=unreadable
-    case "$harness" in
-      pi) ;;
-      *)
-        case "$agent_state" in dead|missing) agent_state=unverified-runtime ;; esac
-        ;;
-    esac
     case "$agent_state" in
       alive)
         if [ "${FM_BOOTSTRAP_VERBOSE_FACTS:-0}" = 1 ]; then
@@ -870,44 +868,13 @@ EOF
 crew_dispatch_validate() {
   local file err
   file="$CONFIG/crew-dispatch.json"
-  [ -f "$file" ] || return 0
+  [ -e "$file" ] || [ -L "$file" ] || return 0
   if ! command -v jq >/dev/null 2>&1; then
     echo "MISSING: jq (install: $(install_cmd jq))"
     return 0
   fi
-  if ! jq -e . "$file" >/dev/null 2>&1; then
-    echo "CREW_DISPATCH: invalid config/crew-dispatch.json - malformed JSON"
-    return 0
-  fi
-  err=$(jq -r '
-    def profiles($value):
-      if ($value | type) == "array" then $value
-      elif ($value | type) == "object" then [$value]
-      else []
-      end;
-    def configured_profiles:
-      ([(.rules // [])[]? | profiles(.use?)[]?]
-        + (if has("default") then [profiles(.default)[]?] else [] end));
-    def profile_error($items):
-      if ($items | any(type != "object")) then "each profile must be an object"
-      elif ($items | any(has("harness"))) then "obsolete runtime field: harness; Pi is fixed and profiles contain only model and effort"
-      elif ($items | any((.model? | type) != "string" or (.model | length) == 0)) then "each profile needs a non-empty model"
-      elif ($items | any(has("effort") and (((.effort | type) != "string") or (["low","medium","high","xhigh","max"] | index(.effort) | not)))) then "effort must be low, medium, high, xhigh, or max when present"
-      else empty
-      end;
-    if type != "object" then "top-level value must be an object"
-    elif has("rules") and (.rules | type) != "array" then "rules must be an array"
-    elif [(.rules // [])[]? | select(type != "object")] | length > 0 then "each rule must be an object"
-    elif [(.rules // [])[]? | select((.when? | type) != "string" or (.when | length) == 0)] | length > 0 then "each rule needs non-empty when"
-    elif [(.rules // [])[]? | select((.use? | type) != "object" and (.use? | type) != "array")] | length > 0 then "each rule needs use"
-    elif [(.rules // [])[]? | select((.use? | type) == "array" and (.use | length) == 0)] | length > 0 then "each rule needs at least one use profile"
-    elif has("default") and ((.default | type) != "object" and (.default | type) != "array") then "default must be a profile object or non-empty profile array"
-    elif has("default") and ((.default | type) == "array" and (.default | length) == 0) then "default needs at least one profile"
-    else
-      profile_error(configured_profiles)
-    end
-  ' "$file" 2>/dev/null || true)
-  if [ -n "$err" ]; then
+  if ! err=$("$SCRIPT_DIR/fm-harness.sh" validate-dispatch 2>&1); then
+    err=${err#error: }
     echo "CREW_DISPATCH: invalid config/crew-dispatch.json - $err"
     return 0
   fi

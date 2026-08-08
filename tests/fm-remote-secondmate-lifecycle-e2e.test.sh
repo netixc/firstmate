@@ -1059,6 +1059,17 @@ mv -f "$TMP_ROOT/remote-ios-before-liveness-legacy.meta" "$remote_route_meta"
 rm -f "$STALE_RUNTIME_STATE"
 pass "startup reports alive stale runtime identities without changing their routes"
 
+cp "$PARENT/state/ios.meta" "$TMP_ROOT/parent-ios-before-retired-runtime.meta"
+sed 's/^harness=pi$/harness=codex/' "$TMP_ROOT/parent-ios-before-retired-runtime.meta" > "$PARENT/state/ios.meta"
+cp "$PARENT/state/ios.meta" "$TMP_ROOT/parent-ios-retired-runtime.meta"
+BOOT_RETIRED=$(remote_env "$ROOT/bin/fm-bootstrap.sh")
+assert_contains "$BOOT_RETIRED" "SECONDMATE_LIVENESS: secondmate ios: skipped: recorded runtime 'codex' is not Pi and cannot be recovered" \
+  "liveness accepted a recorded non-Pi remote secondmate"
+cmp -s "$TMP_ROOT/parent-ios-retired-runtime.meta" "$PARENT/state/ios.meta" \
+  || fail "liveness rewrote the preserved non-Pi parent route"
+mv -f "$TMP_ROOT/parent-ios-before-retired-runtime.meta" "$PARENT/state/ios.meta"
+pass "startup preserves and reports recorded non-Pi remote secondmates"
+
 # Host loss maps to unknown/unavailable and never creates a local replacement.
 launches_before=$(grep -c '^tab create' "$HERDR_LOG" || true)
 rm -rf -- "$PARENT/state/.watch.lock"
