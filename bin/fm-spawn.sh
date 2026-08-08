@@ -410,7 +410,7 @@ spawn_remote_secondmate() {
     legacy-harness) launch_args=("$id" pi "$model" "$effort") ;;
     compat-marker) launch_args=("$id" pi "$model" "$effort") ;;
     pi-model-effort) launch_args=("$id" "$model" "$effort") ;;
-    versioned-launch) remote_launch_command=launch-v2; launch_args=("$id" "$model" "$effort") ;;
+    versioned-launch) remote_launch_command='launch-v2'; launch_args=("$id" "$model" "$effort") ;;
   esac
   [ -z "$remote_traceparent" ] || launch_args+=("$remote_traceparent")
   if out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh "$remote_launch_command" \
