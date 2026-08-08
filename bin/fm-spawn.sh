@@ -212,20 +212,19 @@ spawn_profile_output_parse() {
 }
 
 remote_secondmate_launch_protocol() {
-  local id=$1 out rc schema launch route
+  local id=$1 out rc schema launch route launch_v2
   if out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh capabilities < /dev/null 2>&1); then
     schema=$(printf '%s\n' "$out" | sed -n 's/^schema=//p' | tail -1)
     launch=$(printf '%s\n' "$out" | sed -n 's/^launch=//p' | tail -1)
     route=$(printf '%s\n' "$out" | sed -n 's/^route=//p' | tail -1)
-    if [ "$schema" = fm-remote-secondmate-control.v3 ] \
-      && [ "$launch" = launch-v2 ] \
-      && [ "$route" = runtime ]; then
-      printf 'versioned-launch\n'
-      return 0
-    fi
+    launch_v2=$(printf '%s\n' "$out" | sed -n 's/^launch_v2=//p' | tail -1)
     if [ "$schema" = fm-remote-secondmate-control.v2 ] \
       && [ "$launch" = pi-model-effort ] \
       && [ "$route" = runtime ]; then
+      if [ "$launch_v2" = launch-v2 ]; then
+        printf 'versioned-launch\n'
+        return 0
+      fi
       printf 'compat-marker\n'
       return 0
     fi

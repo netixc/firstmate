@@ -224,9 +224,10 @@ case "${FM_FAKE_SSH_MODE:-normal}:$command_name:$command_rel" in
   model-pi-v3:fm-remote-secondmate-control.sh:*)
     case "$_command_action" in
       capabilities)
-        printf 'schema=fm-remote-secondmate-control.v3\n'
-        printf 'launch=launch-v2\n'
+        printf 'schema=fm-remote-secondmate-control.v2\n'
+        printf 'launch=pi-model-effort\n'
         printf 'route=runtime\n'
+        printf 'launch_v2=launch-v2\n'
         exit 0
         ;;
       launch-v2)
@@ -720,6 +721,14 @@ cat >> "$PARENT/data/secondmates.md" <<EOF
 EOF
 remote_env "$ROOT/bin/fm-home-seed.sh" validate >/dev/null || fail "mixed local and remote registry validation failed"
 pass "mixed local and remote routes validate without migration"
+
+REMOTE_CAPABILITIES=$(remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh capabilities)
+REMOTE_CAPABILITIES_V2=$(printf '%s\n' "$REMOTE_CAPABILITIES" | sed -n '1,3p')
+[ "$REMOTE_CAPABILITIES_V2" = 'schema=fm-remote-secondmate-control.v2
+launch=pi-model-effort
+route=runtime' ] || fail "remote capabilities changed the v2 compatibility fields"
+assert_contains "$REMOTE_CAPABILITIES" 'launch_v2=launch-v2' "remote capabilities omitted the additive versioned launch verb"
+pass "remote capabilities preserve v2 fields and advertise launch-v2 additively"
 
 # Launch in the remote home's dedicated Herdr session.
 # Parent metadata records host placement and arms the reply source.

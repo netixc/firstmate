@@ -131,9 +131,10 @@ cmd_route() {
 }
 
 cmd_capabilities() {
-  printf 'schema=fm-remote-secondmate-control.v3\n'
-  printf 'launch=launch-v2\n'
+  printf 'schema=fm-remote-secondmate-control.v2\n'
+  printf 'launch=pi-model-effort\n'
   printf 'route=runtime\n'
+  printf 'launch_v2=launch-v2\n'
 }
 
 cmd_launch_values() {
