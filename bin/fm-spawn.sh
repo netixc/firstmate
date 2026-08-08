@@ -211,10 +211,44 @@ spawn_profile_output_parse() {
   fi
 }
 
+remote_secondmate_launch_protocol() {
+  local id=$1 out rc schema launch route
+  if out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh capabilities < /dev/null 2>&1); then
+    schema=$(printf '%s\n' "$out" | sed -n 's/^schema=//p' | tail -1)
+    launch=$(printf '%s\n' "$out" | sed -n 's/^launch=//p' | tail -1)
+    route=$(printf '%s\n' "$out" | sed -n 's/^route=//p' | tail -1)
+    [ "$schema" = fm-remote-secondmate-control.v2 ] \
+      && [ "$launch" = pi-model-effort ] \
+      && [ "$route" = runtime ] || {
+        echo "error: remote secondmate controller returned unsupported capabilities" >&2
+        return 1
+      }
+    printf 'pi-model-effort\n'
+    return 0
+  else
+    rc=$?
+  fi
+  [ "$rc" -ne 255 ] || return 255
+  if out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh help < /dev/null 2>&1); then
+    rc=0
+  else
+    rc=$?
+  fi
+  [ "$rc" -ne 255 ] || return 255
+  case "$out" in
+    *'launch <id> <harness> <model|-> <effort|->'*) printf 'legacy-harness\n' ;;
+    *'launch <id> <model|-> <effort|->'*) printf 'pi-model-effort\n' ;;
+    *)
+      echo "error: remote secondmate controller launch protocol is unsupported" >&2
+      return 1
+      ;;
+  esac
+}
+
 spawn_remote_secondmate() {
-  local id=$1 remote host root home model effort out rc meta tmp
+  local id=$1 remote host root home model effort out rc meta tmp remote_launch_protocol
   local profile_record
-  local remote_target remote_runtime remote_herdr_session registry_lock remote_lock remote_generation
+  local remote_target remote_runtime remote_harness remote_herdr_session registry_lock remote_lock remote_generation
   local remote_traceparent remote_recorded_traceparent
   local -a launch_args
   id=${POS[0]:-}
@@ -313,6 +347,19 @@ spawn_remote_secondmate() {
     [ "$rc" -ne 255 ] || return 255
     return 1
   fi
+  if remote_launch_protocol=$(remote_secondmate_launch_protocol "$id"); then
+    :
+  else
+    rc=$?
+    fm_lock_release "$registry_lock" || true
+    fm_lock_release "$SPAWN_TASK_LOCK" || true
+    if [ "$rc" -eq 255 ]; then
+      echo "error: remote secondmate $id controller protocol could not be confirmed; preserved route $host:$home" >&2
+    else
+      echo "error: remote secondmate $id controller protocol is unsupported; launch refused" >&2
+    fi
+    return "$rc"
+  fi
   remote_lock=$(fm_remote_inherit_transaction_lock_path "$STATE" "$id")
   if ! fm_lock_acquire_wait "$remote_lock"; then
     fm_lock_release "$registry_lock" || true
@@ -353,7 +400,10 @@ spawn_remote_secondmate() {
   if [ "$(fm_trace_context_session_effective "$STATE/.trace-context-effective")" = on ]; then
     remote_traceparent=$(FM_TRACE_CONTEXT=on fm_trace_context_resolve "$CONFIG" "$meta" || true)
   fi
-  launch_args=("$id" pi "$model" "$effort")
+  case "$remote_launch_protocol" in
+    legacy-harness) launch_args=("$id" pi "$model" "$effort") ;;
+    pi-model-effort) launch_args=("$id" "$model" "$effort") ;;
+  esac
   [ -z "$remote_traceparent" ] || launch_args+=("$remote_traceparent")
   if out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh launch \
     "${launch_args[@]}" < /dev/null 2>&1); then
@@ -373,8 +423,22 @@ spawn_remote_secondmate() {
   fi
   remote_target=$(printf '%s\n' "$out" | sed -n 's/^target=//p' | tail -1)
   remote_runtime=$(printf '%s\n' "$out" | sed -n 's/^runtime=//p' | tail -1)
+  remote_harness=$(printf '%s\n' "$out" | sed -n 's/^harness=//p' | tail -1)
   remote_herdr_session=$(printf '%s\n' "$out" | sed -n 's/^herdr_session=//p' | tail -1)
-  [ -n "$remote_target" ] && [ "$remote_runtime" = pi ] || {
+  if [ "$remote_runtime" = pi ]; then
+    :
+  elif [ -z "$remote_runtime" ] \
+    && [ "$remote_launch_protocol" = legacy-harness ] \
+    && [ "$remote_harness" = pi ]; then
+    :
+  else
+    fm_lock_release "$remote_lock" || true
+    fm_lock_release "$registry_lock" || true
+    fm_lock_release "$SPAWN_TASK_LOCK" || true
+    echo "error: remote launch returned malformed route metadata; preserving the remote route for reconciliation" >&2
+    return 1
+  fi
+  [ -n "$remote_target" ] || {
     fm_lock_release "$remote_lock" || true
     fm_lock_release "$registry_lock" || true
     fm_lock_release "$SPAWN_TASK_LOCK" || true

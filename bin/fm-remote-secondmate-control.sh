@@ -3,6 +3,7 @@
 #
 # Usage:
 #   fm-remote-secondmate-control.sh launch <id> [pi] <model|-> <effort|-> [traceparent]
+#   fm-remote-secondmate-control.sh capabilities
 #   fm-remote-secondmate-control.sh state <id>
 #   fm-remote-secondmate-control.sh route <id>
 #   fm-remote-secondmate-control.sh send <id> <message>
@@ -124,6 +125,12 @@ cmd_route() {
     die "remote secondmate has no endpoint metadata"
   fi
   print_route "$id"
+}
+
+cmd_capabilities() {
+  printf 'schema=fm-remote-secondmate-control.v2\n'
+  printf 'launch=pi-model-effort\n'
+  printf 'route=runtime\n'
 }
 
 cmd_launch() {
@@ -286,6 +293,7 @@ cmd_retire() {
 
 case "${1:-}" in
   launch) shift; [ "$#" -ge 3 ] && [ "$#" -le 5 ] || usage; cmd_launch "$@" ;;
+  capabilities) shift; [ "$#" -eq 0 ] || usage; cmd_capabilities ;;
   state) shift; [ "$#" -eq 1 ] || usage; validate_id "$1"; validate_home "$1"; state_value "$1" ;;
   route) shift; [ "$#" -eq 1 ] || usage; cmd_route "$1" ;;
   send) shift; [ "$#" -eq 2 ] || usage; cmd_send "$@" ;;

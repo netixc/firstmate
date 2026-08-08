@@ -100,6 +100,12 @@ command_fields=$(perl -MMIME::Base64=decode_base64 -e '
   my @args=split(/\0/, $data);
   print join("\t", map { defined $_ ? $_ : "" } @args[0..2]);
 ' "$argv_b64")
+command_argv=$(perl -MMIME::Base64=decode_base64 -e '
+  my $data=decode_base64($ARGV[0]);
+  my @args=split(/\0/, $data);
+  pop @args if @args && $args[-1] eq "";
+  print join("\t", @args);
+' "$argv_b64")
 IFS=$'\t' read -r command_name _command_action command_rel <<EOF
 $command_fields
 EOF
@@ -163,14 +169,48 @@ if [ "${FM_FAKE_SSH_MODE:-normal}" = doctor-fixable ] \
   exit 0
 fi
 case "${FM_FAKE_SSH_MODE:-normal}:$command_name:$command_rel" in
-  launch-missing-session-route:fm-remote-secondmate-control.sh:*)
+  mixed-base:fm-remote-secondmate-control.sh:*)
+    case "$_command_action" in
+      capabilities) printf 'error: unknown command: capabilities\n' >&2; exit 1 ;;
+      help)
+        printf 'fm-remote-secondmate-control.sh launch <id> <harness> <model|-> <effort|-> [traceparent]\n' >&2
+        exit 2
+        ;;
+      launch)
+        [ "$command_argv" = $'fm-remote-secondmate-control.sh\tlaunch\tios\tpi\topenai-codex/gpt-5.6-luna\tmedium' ] || exit 94
+        printf 'schema=fm-remote-secondmate-control.v1\n'
+        printf 'target=fm-remote:legacy-base\n'
+        printf 'herdr_session=fm-remote\n'
+        printf 'harness=pi\n'
+        exit 0
+        ;;
+    esac
+    ;;
+  mixed-pi-v1:fm-remote-secondmate-control.sh:*)
+    case "$_command_action" in
+      capabilities) printf 'error: unknown command: capabilities\n' >&2; exit 1 ;;
+      help)
+        printf 'fm-remote-secondmate-control.sh launch <id> <model|-> <effort|-> [traceparent]\n' >&2
+        exit 2
+        ;;
+      launch)
+        [ "$command_argv" = $'fm-remote-secondmate-control.sh\tlaunch\tios\topenai-codex/gpt-5.6-luna\tmedium' ] || exit 95
+        printf 'schema=fm-remote-secondmate-control.v1\n'
+        printf 'target=fm-remote:pi-v1\n'
+        printf 'herdr_session=fm-remote\n'
+        printf 'runtime=pi\n'
+        exit 0
+        ;;
+    esac
+    ;;
+  launch-missing-session-route:fm-remote-secondmate-control.sh:ios)
     [ "$_command_action" = launch ] || exit 93
     printf 'schema=fm-remote-secondmate-control.v1\n'
     printf 'target=firstmate:fm-ios\n'
     printf 'runtime=pi\n'
     exit 0
     ;;
-  launch-default-session-route:fm-remote-secondmate-control.sh:*)
+  launch-default-session-route:fm-remote-secondmate-control.sh:ios)
     [ "$_command_action" = launch ] || exit 93
     printf 'schema=fm-remote-secondmate-control.v1\n'
     printf 'target=default:w1:p2\n'
@@ -183,7 +223,7 @@ case "${FM_FAKE_SSH_MODE:-normal}:$command_name:$command_rel" in
     while [ ! -f "$FM_FAKE_SEED_RELEASE" ]; do sleep 0.02; done
     exit 1
     ;;
-  launch-block:fm-remote-secondmate-control.sh:*)
+  launch-block:fm-remote-secondmate-control.sh:ios)
     [ "$_command_action" = launch ] || exit 93
     touch "$FM_FAKE_LAUNCH_ENTERED"
     while [ ! -f "$FM_FAKE_LAUNCH_RELEASE" ]; do sleep 0.02; done
@@ -721,6 +761,17 @@ cmp -s "$TMP_ROOT/herdr-before-default-session.log" "$HERDR_LOG" \
   || fail "mismatched fm-remote target caused a Herdr operation"
 mv -f "$TMP_ROOT/remote-ios-before-default-session.meta" "$remote_route_meta"
 pass "legacy and mismatched remote endpoints stop before Herdr access"
+
+cp "$PARENT/state/ios.meta" "$TMP_ROOT/parent-ios-before-mixed-version.meta"
+MIXED_BASE=$(FM_FAKE_SSH_MODE=mixed-base remote_env "$ROOT/bin/fm-spawn.sh" ios --secondmate)
+assert_contains "$MIXED_BASE" 'spawned ios runtime=pi' "base controller negotiation did not complete the Pi launch"
+assert_grep 'remote_target=fm-remote:legacy-base' "$PARENT/state/ios.meta" "base controller route was not reconciled"
+cp "$TMP_ROOT/parent-ios-before-mixed-version.meta" "$PARENT/state/ios.meta"
+MIXED_PI_V1=$(FM_FAKE_SSH_MODE=mixed-pi-v1 remote_env "$ROOT/bin/fm-spawn.sh" ios --secondmate)
+assert_contains "$MIXED_PI_V1" 'spawned ios runtime=pi' "Pi-v1 controller negotiation did not complete the Pi launch"
+assert_grep 'remote_target=fm-remote:pi-v1' "$PARENT/state/ios.meta" "Pi-v1 controller route was not reconciled"
+mv -f "$TMP_ROOT/parent-ios-before-mixed-version.meta" "$PARENT/state/ios.meta"
+pass "remote spawn negotiates base and Pi-v1 controller protocols"
 
 cp "$PARENT/state/ios.meta" "$TMP_ROOT/parent-ios-before-missing-session.meta"
 cp "$PARENT/data/secondmates.md" "$TMP_ROOT/registry-before-missing-session.md"
