@@ -4,21 +4,15 @@
 #        fm-harness.sh crew                    print the effective CREWMATE harness
 #                                               (config/crew-harness; "default" resolves to own)
 #        fm-harness.sh secondmate [<id>]       print the harness the PRIMARY uses to launch
-#                                               one SECONDMATE agent. With no id, resolve
-#                                               config/secondmate-harness -> config/crew-harness
-#                                               -> own. With an id, a matching per-secondmate
-#                                               profile takes precedence.
+#                                               one SECONDMATE agent. With no id, use the
+#                                               legacy global resolution; with an id, use
+#                                               the id-aware profile resolver.
 #        fm-harness.sh secondmate-model [<id>] print the optional resolved MODEL token.
 #        fm-harness.sh secondmate-effort [<id>] print the optional resolved EFFORT token.
 #        fm-harness.sh secondmate-profile <id> print one tab-separated resolved profile:
 #                                               harness, model, effort, source.
-# config/secondmate-harness format: a single line "<harness> [<model>] [<effort>]",
-# whitespace-separated. A bare "<harness>" behaves exactly as before: harness only,
-# no model/effort. Only the first non-empty, non-comment line is parsed.
-# config/secondmate-profiles/<id> format: exactly one non-empty, non-comment
-# "<harness> [<model>] [<effort>]" line. The id is [A-Za-z0-9._-]+, the harness
-# must be claude|codex|grok|pi, and effort must be low|medium|high|xhigh|max.
-# An existing malformed profile is an error, never a fallback to the global value.
+# docs/configuration.md "Harness support" owns both profile schemas and precedence.
+# An existing malformed per-secondmate profile is an error, never a fallback.
 # Model/effort come only from the selected secondmate profile or global file -
 # config/crew-harness stays a bare adapter name and is never parsed for a model.
 # Detection layers: verified environment markers first, then process ancestry.
@@ -125,10 +119,8 @@ secondmate_field() {
   esac
 }
 
-# Resolve the global harness the PRIMARY uses to launch SECONDMATE agents: a
-# fallback chain config/secondmate-harness -> config/crew-harness -> own. An
-# absent or "default" secondmate-harness token defers to the crew resolution, so
-# an unset secondmate-harness behaves exactly as before this knob existed.
+# Resolve the legacy global secondmate harness while preserving its historical
+# absent/default compatibility behavior.
 resolve_secondmate() {
   local sm
   sm=$(secondmate_field 1)

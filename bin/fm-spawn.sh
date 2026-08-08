@@ -64,11 +64,10 @@
 #   With no harness arg, a crewmate/scout spawn resolves the CREW harness only when
 #   config/crew-dispatch.json is absent. When that file exists, crewmate/scout
 #   spawns require an explicit harness so firstmate cannot silently skip dispatch
-#   profile consultation. A --secondmate spawn is exempt and resolves its named
-#   SECONDMATE profile (config/secondmate-profiles/<id> ->
-#   config/secondmate-harness -> config/crew-harness -> own), so the complete
-#   secondmate profile is DURABLE across every respawn (recovery, /updatefirstmate,
-#   restart). A bare adapter name (claude|codex|grok|pi)
+#   profile consultation. A --secondmate spawn is exempt and uses the id-aware
+#   resolver owned by fm-harness.sh, so the complete secondmate profile is DURABLE
+#   across every respawn (recovery, /updatefirstmate, restart). A bare adapter
+#   name (claude|codex|grok|pi)
 #   overrides it for this spawn (either kind). A non-flag string containing
 #   whitespace is treated as a RAW launch command - the escape hatch for verifying
 #   new adapters.
@@ -773,11 +772,10 @@ case "$ARG3" in
     done
     ;;
   '')
-    # No explicit harness: resolve from config. A secondmate uses its matching
-    # config/secondmate-profiles/<id> entry first, otherwise the unchanged global
-    # config/secondmate-harness -> config/crew-harness -> own fallback. Resolving
-    # once here on every spawn keeps the complete profile durable across recovery,
-    # bootstrap liveness relaunch, update, and restart paths.
+    # No explicit harness: resolve once through the applicable config owner.
+    # Repeating that resolution on every spawn keeps the complete secondmate
+    # profile durable across recovery, bootstrap liveness relaunch, update, and
+    # restart paths.
     if [ "$KIND" = secondmate ]; then
       SECONDMATE_PROFILE=$("$FM_ROOT/bin/fm-harness.sh" secondmate-profile "$ID") || exit 1
       secondmate_profile_output_parse "$SECONDMATE_PROFILE" || exit 1

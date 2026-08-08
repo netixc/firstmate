@@ -17,8 +17,7 @@ The captain may override that file at session start or later; a per-task instruc
 `default` means mirror firstmate's own harness.
 
 Secondmates have their own launch-profile resolution, so one secondmate can run on a different adapter, model, or effort from crewmates and sibling secondmates.
-`config/secondmate-profiles/<id>` wins for that id, then the primary's global `config/secondmate-harness`, then `config/crew-harness`, then firstmate's own harness.
-[`docs/configuration.md`](../../../docs/configuration.md#harness-support) owns that strict profile schema and precedence.
+[`docs/configuration.md`](../../../docs/configuration.md#harness-support) owns the strict profile schema and precedence.
 The [`secondmate-provisioning` skill](../secondmate-provisioning/SKILL.md) owns the complete inherited-local-material allowlist and propagation contract.
 This skill owns only the harness-relevant consequence: a secondmate's own crewmates use the primary's inherited dispatch profiles and static harness value, while the primary's secondmate profile surfaces are never inherited because secondmates do not spawn secondmates.
 Inheritance copies the literal `config/crew-harness` file, so for a secondmate's own crewmates to run on the primary's crewmate harness the captain must set `config/crew-harness` to a concrete adapter name, such as `codex`.
@@ -33,8 +32,8 @@ The supervision knowledge lives here: busy state, exit command, interrupt, dialo
 Each adapter's `Busy state` row names only which semantic source that harness uses; `bin/fm-busy-lib.sh` owns the contract itself, including verdicts, source attribution, and the verification gates that keep an unverified harness at unknown.
 
 Never dispatch a crewmate or secondmate on an unverified adapter.
-If `config/crew-harness`, `config/secondmate-harness`, or an applicable `config/secondmate-profiles/<id>` entry names an unverified adapter, tell the captain under `AGENTS.md` section 9 that the requested worker runtime is not verified yet, use firstmate's own verified runtime for current work, and ask only whether to verify the requested runtime before future use.
-Do not pause current work for that future-verification choice, and never launch an unverified adapter.
+If `config/crew-harness`, `config/secondmate-harness`, or an applicable `config/secondmate-profiles/<id>` entry names an unverified adapter, stop that launch and report the invalid source under `AGENTS.md` section 9 rather than substituting another adapter.
+Never launch an unverified adapter.
 If the captain asks for a new harness, propose verifying it first: spawn a trivial supervised task using `fm-spawn`'s raw-launch-command escape hatch, confirm every fact empirically, then record the mechanics in `fm-spawn`, its semantic busy source and trust gate in `bin/fm-busy-lib.sh`, any needed `FM_COMPOSER_IDLE_RE` empty-composer override plus any novel bare agent prompt glyph in `bin/fm-composer-lib.sh`'s shared composer classifier, and the verified knowledge here.
 The shared composer classifier is the one fleet-wide owner of the empty/dead-shell/pending decision, so a new harness's idle composer is not misread as a dead shell.
 
@@ -42,7 +41,7 @@ The shared composer classifier is the one fleet-wide owner of the empty/dead-she
 
 `bin/fm-harness.sh` prints firstmate's own harness, using verified env markers first and then process ancestry.
 `bin/fm-harness.sh crew` resolves the effective crewmate harness from `config/crew-harness` (absent or `default` -> own).
-`bin/fm-harness.sh secondmate-profile <id>` resolves the per-secondmate profile before the global fallback, while `secondmate` with no id preserves the legacy global resolution.
+`bin/fm-harness.sh secondmate-profile <id>` exposes the id-aware resolver, while `secondmate` with no id preserves the legacy global resolution.
 `bin/fm-spawn.sh` uses `crew` mode for a crewmate/scout launch and the id-aware secondmate resolver for a `--secondmate` launch, re-resolving on every spawn so the selected profile is durable across respawns; an explicit per-spawn harness arg overrides it.
 On `unknown`, ask the captain instead of guessing.
 A captain override always beats detection.

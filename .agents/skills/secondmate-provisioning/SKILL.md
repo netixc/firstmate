@@ -86,9 +86,7 @@ Release happens only on explicit retirement or seed rollback, never on routine r
 `bin/fm-home-seed.sh` copies the charter into the secondmate home as `data/charter.md`.
 It also writes the gitignored `.fm-secondmate-parent` durable binding before the required `.fm-secondmate-home` identity marker; the parser header in [`bin/fm-secondmate-parent-lib.sh`](../../../bin/fm-secondmate-parent-lib.sh) owns the record contract, and both files must remain in place.
 `bin/fm-spawn.sh --secondmate` resolves the named route's complete primary-local profile before launch, recovery, bootstrap liveness relaunch, or a post-update restart.
-[`docs/configuration.md`](../../../docs/configuration.md#harness-support) owns the global fallback, per-secondmate profile schema, resolver, validation, precedence, and non-inheritance contract.
-An explicit per-spawn harness still starts clean on model and effort, while explicit model or effort flags override only that selected axis.
-A remote route accepts only a verified harness adapter and refuses a raw launch command at the host boundary.
+[`docs/configuration.md`](../../../docs/configuration.md#harness-support) owns the global fallback, per-secondmate profile schema, resolver, validation, launch precedence, and remote-route limits.
 
 This section is the single owner of the secondmate sync and inherited-local-material propagation contract; `AGENTS.md` sections 3 and 4 point here.
 Before a local launch, `fm-spawn.sh --secondmate` locally fast-forwards the home to the primary firstmate checkout's current default-branch commit when it is safe; dirty, diverged, or in-flight homes launch unchanged with a warning.
