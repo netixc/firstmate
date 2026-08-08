@@ -203,15 +203,51 @@ case "${FM_FAKE_SSH_MODE:-normal}:$command_name:$command_rel" in
         ;;
     esac
     ;;
+  mixed-pi-v2:fm-remote-secondmate-control.sh:*)
+    case "$_command_action" in
+      capabilities)
+        printf 'schema=fm-remote-secondmate-control.v2\n'
+        printf 'launch=pi-model-effort\n'
+        printf 'route=runtime\n'
+        exit 0
+        ;;
+      launch)
+        [ "$command_argv" = $'fm-remote-secondmate-control.sh\tlaunch\tios\tpi\topenai-codex/gpt-5.6-luna\tmedium' ] || exit 96
+        printf 'schema=fm-remote-secondmate-control.v1\n'
+        printf 'target=fm-remote:pi-v2\n'
+        printf 'herdr_session=fm-remote\n'
+        printf 'runtime=pi\n'
+        exit 0
+        ;;
+    esac
+    ;;
+  model-pi-v3:fm-remote-secondmate-control.sh:*)
+    case "$_command_action" in
+      capabilities)
+        printf 'schema=fm-remote-secondmate-control.v3\n'
+        printf 'launch=launch-v2\n'
+        printf 'route=runtime\n'
+        exit 0
+        ;;
+      launch-v2)
+        [ "$command_argv" = $'fm-remote-secondmate-control.sh\tlaunch-v2\tios\tpi\tmedium' ] || exit 97
+        printf 'schema=fm-remote-secondmate-control.v1\n'
+        printf 'target=fm-remote:model-pi-v3\n'
+        printf 'herdr_session=fm-remote\n'
+        printf 'runtime=pi\n'
+        exit 0
+        ;;
+    esac
+    ;;
   launch-missing-session-route:fm-remote-secondmate-control.sh:ios)
-    [ "$_command_action" = launch ] || exit 93
+    case "$_command_action" in launch|launch-v2) ;; *) exit 93 ;; esac
     printf 'schema=fm-remote-secondmate-control.v1\n'
     printf 'target=firstmate:fm-ios\n'
     printf 'runtime=pi\n'
     exit 0
     ;;
   launch-default-session-route:fm-remote-secondmate-control.sh:ios)
-    [ "$_command_action" = launch ] || exit 93
+    case "$_command_action" in launch|launch-v2) ;; *) exit 93 ;; esac
     printf 'schema=fm-remote-secondmate-control.v1\n'
     printf 'target=default:w1:p2\n'
     printf 'herdr_session=default\n'
@@ -224,7 +260,7 @@ case "${FM_FAKE_SSH_MODE:-normal}:$command_name:$command_rel" in
     exit 1
     ;;
   launch-block:fm-remote-secondmate-control.sh:ios)
-    [ "$_command_action" = launch ] || exit 93
+    case "$_command_action" in launch|launch-v2) ;; *) exit 93 ;; esac
     touch "$FM_FAKE_LAUNCH_ENTERED"
     while [ ! -f "$FM_FAKE_LAUNCH_RELEASE" ]; do sleep 0.02; done
     ;;
@@ -770,8 +806,16 @@ cp "$TMP_ROOT/parent-ios-before-mixed-version.meta" "$PARENT/state/ios.meta"
 MIXED_PI_V1=$(FM_FAKE_SSH_MODE=mixed-pi-v1 remote_env "$ROOT/bin/fm-spawn.sh" ios --secondmate)
 assert_contains "$MIXED_PI_V1" 'spawned ios runtime=pi' "Pi-v1 controller negotiation did not complete the Pi launch"
 assert_grep 'remote_target=fm-remote:pi-v1' "$PARENT/state/ios.meta" "Pi-v1 controller route was not reconciled"
+cp "$TMP_ROOT/parent-ios-before-mixed-version.meta" "$PARENT/state/ios.meta"
+MIXED_PI_V2=$(FM_FAKE_SSH_MODE=mixed-pi-v2 remote_env "$ROOT/bin/fm-spawn.sh" ios --secondmate)
+assert_contains "$MIXED_PI_V2" 'spawned ios runtime=pi' "Pi-v2 controller negotiation did not complete the compatibility launch"
+assert_grep 'remote_target=fm-remote:pi-v2' "$PARENT/state/ios.meta" "Pi-v2 controller route was not reconciled"
+cp "$TMP_ROOT/parent-ios-before-mixed-version.meta" "$PARENT/state/ios.meta"
+MODEL_PI_V3=$(FM_FAKE_SSH_MODE=model-pi-v3 remote_env "$ROOT/bin/fm-spawn.sh" ios --model pi --effort medium --secondmate)
+assert_contains "$MODEL_PI_V3" 'spawned ios runtime=pi' "v3 controller rejected the concrete pi model token"
+assert_grep 'remote_target=fm-remote:model-pi-v3' "$PARENT/state/ios.meta" "v3 model-token route was not reconciled"
 mv -f "$TMP_ROOT/parent-ios-before-mixed-version.meta" "$PARENT/state/ios.meta"
-pass "remote spawn negotiates base and Pi-v1 controller protocols"
+pass "remote spawn negotiates predecessor protocols without colliding with model pi"
 
 cp "$PARENT/state/ios.meta" "$TMP_ROOT/parent-ios-before-missing-session.meta"
 cp "$PARENT/data/secondmates.md" "$TMP_ROOT/registry-before-missing-session.md"

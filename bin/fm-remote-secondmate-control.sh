@@ -3,6 +3,7 @@
 #
 # Usage:
 #   fm-remote-secondmate-control.sh launch <id> [pi] <model|-> <effort|-> [traceparent]
+#   fm-remote-secondmate-control.sh launch-v2 <id> <model|-> <effort|-> [traceparent]
 #   fm-remote-secondmate-control.sh capabilities
 #   fm-remote-secondmate-control.sh state <id>
 #   fm-remote-secondmate-control.sh route <id>
@@ -45,6 +46,8 @@ REMOTE_HERDR_SESSION=fm-remote
 . "$SCRIPT_DIR/fm-backend.sh"
 # shellcheck source=bin/fm-pending-reply-lib.sh
 . "$SCRIPT_DIR/fm-pending-reply-lib.sh"
+# shellcheck source=bin/fm-trace-context-lib.sh
+. "$SCRIPT_DIR/fm-trace-context-lib.sh"
 
 die() { printf 'error: %s\n' "$1" >&2; exit 1; }
 usage() { sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
@@ -128,20 +131,14 @@ cmd_route() {
 }
 
 cmd_capabilities() {
-  printf 'schema=fm-remote-secondmate-control.v2\n'
-  printf 'launch=pi-model-effort\n'
+  printf 'schema=fm-remote-secondmate-control.v3\n'
+  printf 'launch=launch-v2\n'
   printf 'route=runtime\n'
 }
 
-cmd_launch() {
-  local id=$1 model effort traceparent
+cmd_launch_values() {
+  local id=$1 model=$2 effort=$3 traceparent=${4:-}
   local current meta out herdr_session
-
-  shift
-  if [ "${1:-}" = pi ]; then shift; fi
-  model=$1
-  effort=$2
-  traceparent=${3:-}
 
   validate_id "$id"
   validate_home "$id"
@@ -183,6 +180,41 @@ cmd_launch() {
   [ "$herdr_session" = "$REMOTE_HERDR_SESSION" ] \
     || die "remote launch recorded Herdr session '${herdr_session:-missing}', expected '$REMOTE_HERDR_SESSION'"
   print_route "$id"
+}
+
+cmd_launch() {
+  local id=$1 model effort traceparent
+  shift
+  case "$#" in
+    2)
+      model=$1
+      effort=$2
+      traceparent=
+      ;;
+    3)
+      if [ "$1" = pi ] && ! fm_trace_context_valid "$3"; then
+        model=$2
+        effort=$3
+        traceparent=
+      else
+        model=$1
+        effort=$2
+        traceparent=$3
+      fi
+      ;;
+    4)
+      [ "$1" = pi ] || die "invalid legacy remote launch marker"
+      model=$2
+      effort=$3
+      traceparent=$4
+      ;;
+    *) usage ;;
+  esac
+  cmd_launch_values "$id" "$model" "$effort" "$traceparent"
+}
+
+cmd_launch_v2() {
+  cmd_launch_values "$@"
 }
 
 cmd_send() {
@@ -293,6 +325,7 @@ cmd_retire() {
 
 case "${1:-}" in
   launch) shift; [ "$#" -ge 3 ] && [ "$#" -le 5 ] || usage; cmd_launch "$@" ;;
+  launch-v2) shift; [ "$#" -ge 3 ] && [ "$#" -le 4 ] || usage; cmd_launch_v2 "$@" ;;
   capabilities) shift; [ "$#" -eq 0 ] || usage; cmd_capabilities ;;
   state) shift; [ "$#" -eq 1 ] || usage; validate_id "$1"; validate_home "$1"; state_value "$1" ;;
   route) shift; [ "$#" -eq 1 ] || usage; cmd_route "$1" ;;

@@ -217,14 +217,20 @@ remote_secondmate_launch_protocol() {
     schema=$(printf '%s\n' "$out" | sed -n 's/^schema=//p' | tail -1)
     launch=$(printf '%s\n' "$out" | sed -n 's/^launch=//p' | tail -1)
     route=$(printf '%s\n' "$out" | sed -n 's/^route=//p' | tail -1)
-    [ "$schema" = fm-remote-secondmate-control.v2 ] \
+    if [ "$schema" = fm-remote-secondmate-control.v3 ] \
+      && [ "$launch" = launch-v2 ] \
+      && [ "$route" = runtime ]; then
+      printf 'versioned-launch\n'
+      return 0
+    fi
+    if [ "$schema" = fm-remote-secondmate-control.v2 ] \
       && [ "$launch" = pi-model-effort ] \
-      && [ "$route" = runtime ] || {
-        echo "error: remote secondmate controller returned unsupported capabilities" >&2
-        return 1
-      }
-    printf 'pi-model-effort\n'
-    return 0
+      && [ "$route" = runtime ]; then
+      printf 'compat-marker\n'
+      return 0
+    fi
+    echo "error: remote secondmate controller returned unsupported capabilities" >&2
+    return 1
   else
     rc=$?
   fi
@@ -246,7 +252,7 @@ remote_secondmate_launch_protocol() {
 }
 
 spawn_remote_secondmate() {
-  local id=$1 remote host root home model effort out rc meta tmp remote_launch_protocol
+  local id=$1 remote host root home model effort out rc meta tmp remote_launch_protocol remote_launch_command
   local profile_record
   local remote_target remote_runtime remote_harness remote_herdr_session registry_lock remote_lock remote_generation
   local remote_traceparent remote_recorded_traceparent
@@ -400,12 +406,15 @@ spawn_remote_secondmate() {
   if [ "$(fm_trace_context_session_effective "$STATE/.trace-context-effective")" = on ]; then
     remote_traceparent=$(FM_TRACE_CONTEXT=on fm_trace_context_resolve "$CONFIG" "$meta" || true)
   fi
+  remote_launch_command=launch
   case "$remote_launch_protocol" in
     legacy-harness) launch_args=("$id" pi "$model" "$effort") ;;
+    compat-marker) launch_args=("$id" pi "$model" "$effort") ;;
     pi-model-effort) launch_args=("$id" "$model" "$effort") ;;
+    versioned-launch) remote_launch_command=launch-v2; launch_args=("$id" "$model" "$effort") ;;
   esac
   [ -z "$remote_traceparent" ] || launch_args+=("$remote_traceparent")
-  if out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh launch \
+  if out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh "$remote_launch_command" \
     "${launch_args[@]}" < /dev/null 2>&1); then
     rc=0
   else
