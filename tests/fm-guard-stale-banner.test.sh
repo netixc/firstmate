@@ -63,7 +63,7 @@ run_guard_case_read_only() {
     "$ROOT/bin/fm-guard.sh" 2>&1
 }
 
-# The Claude Stop auto-arm model: the watcher runs only between turns, so a fresh
+# The pi Stop auto-arm model: the watcher runs only between turns, so a fresh
 # beacon with no live watcher process is the healthy mid-turn state.
 run_guard_case_autoarm() {
   local dir=$1
@@ -299,16 +299,18 @@ test_read_only_never_mutates_stale_banner_state_files() {
   pass "fm-guard stale banner: read-only never mutates stale-banner state files"
 }
 
-test_autoarm_fresh_beacon_without_watcher_is_healthy() {
+test_autoarm_fresh_beacon_without_watcher_alarms() {
   local dir out
   dir=$(make_guard_case autoarm-fresh)
-  # A fresh beacon and NO live watcher: the healthy mid-turn state under the
-  # Claude Stop auto-arm model, where the watcher only runs between turns.
+  # Pi requires one live supervision cycle whenever work is under way. A fresh
+  # leftover beacon cannot prove that a watcher is currently attached.
   touch "$(case_home "$dir")/state/.last-watcher-beat"
   out=$(run_guard_case_autoarm "$dir")
-  [ -z "$out" ] \
-    || fail "auto-arm model with a fresh beacon and no live watcher must stay silent, got: $out"
-  pass "fm-guard stale banner: auto-arm fresh beacon without a live watcher is healthy"
+  [ "$(count_text "$out" "WATCHER DOWN - SUPERVISION IS OFF")" -eq 1 ] \
+    || fail "a fresh beacon without a live watcher must still alarm, got: $out"
+  assert_contains "$out" "no live watcher process holds this home lock" \
+    "fresh-beacon alarm must name the missing watcher process"
+  pass "fm-guard stale banner: a fresh beacon without a live watcher remains unhealthy"
 }
 
 test_autoarm_stale_beacon_alarms_with_correct_reason() {
@@ -375,7 +377,7 @@ test_persistent_no_watcher_episode_survives_beacon_touch() {
 
 test_first_stale_call_prints_full_banner
 test_repeated_same_episode_prints_reminder_only
-test_autoarm_fresh_beacon_without_watcher_is_healthy
+test_autoarm_fresh_beacon_without_watcher_alarms
 test_autoarm_stale_beacon_alarms_with_correct_reason
 test_autoarm_stale_episode_is_stable
 test_persistent_no_watcher_banner_names_missing_process

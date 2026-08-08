@@ -247,7 +247,11 @@ if [ -z "${FM_SESSION_START_STAGE_FILE:-}" ]; then
   exit 0
 fi
 
-PRIMARY_HARNESS=$("$SCRIPT_DIR/fm-harness.sh" 2>/dev/null || printf unknown)
+PRIMARY_RUNTIME_ERROR=
+if ! PRIMARY_HARNESS=$("$SCRIPT_DIR/fm-harness.sh" primary 2>&1); then
+  PRIMARY_RUNTIME_ERROR=$PRIMARY_HARNESS
+  PRIMARY_HARNESS=pi
+fi
 
 # shellcheck source=bin/fm-backend.sh
 . "$SCRIPT_DIR/fm-backend.sh"
@@ -519,6 +523,9 @@ else
     "$SCRIPT_DIR/fm-bootstrap.sh" 2>&1
   )
 fi
+if [ -n "$PRIMARY_RUNTIME_ERROR" ]; then
+  printf 'PI_RUNTIME: %s\n' "$PRIMARY_RUNTIME_ERROR"
+fi
 if [ -n "$BOOT_OUT" ]; then
   printf '%s\n' "$BOOT_OUT"
 else
@@ -559,23 +566,19 @@ AFK_PRESENT=0
 X_MODE_PRESENT=0
 [ -f "$CONFIG/x-mode.env" ] && X_MODE_PRESENT=1
 
-if [ "$PRIMARY_HARNESS" = pi ]; then
-  PI_EXT="$FM_ROOT/.pi/extensions/fm-primary-pi-watch.ts"
-  PI_TURNEND_EXT="$FM_ROOT/.pi/extensions/fm-primary-turnend-guard.ts"
-  PI_WATCH_MARKER="$STATE/.pi-watch-extension-loaded"
-  PI_TURNEND_MARKER="$STATE/.pi-turnend-extension-loaded"
-  PI_LOCK="$STATE/.lock"
-  PI_RESTART_COMMAND=$PRIMARY_HARNESS
-  [ "$PRIMARY_HARNESS" != pi ] || PI_RESTART_COMMAND='plain pi'
-  PI_WATCH_VERSION=$(hash_file "$PI_EXT" || printf '')
-  PI_TURNEND_VERSION=$(hash_file "$PI_TURNEND_EXT" || printf '')
-  if ! pi_extension_loaded "$PI_WATCH_MARKER" "$PI_WATCH_VERSION" "$PI_LOCK" \
-    || ! pi_extension_loaded "$PI_TURNEND_MARKER" "$PI_TURNEND_VERSION" "$PI_LOCK"; then
-    printf 'PI_WATCH_EXTENSION: not loaded - approve Pi project trust once per clone, then restart %s so %s and %s auto-load for turn-end guard and background wake coverage; use -e %s -e %s only if project hooks are not trusted\n' "$PI_RESTART_COMMAND" "$PI_TURNEND_EXT" "$PI_EXT" "$PI_TURNEND_EXT" "$PI_EXT"
-  fi
+PI_EXT="$FM_ROOT/.pi/extensions/fm-primary-pi-watch.ts"
+PI_TURNEND_EXT="$FM_ROOT/.pi/extensions/fm-primary-turnend-guard.ts"
+PI_WATCH_MARKER="$STATE/.pi-watch-extension-loaded"
+PI_TURNEND_MARKER="$STATE/.pi-turnend-extension-loaded"
+PI_LOCK="$STATE/.lock"
+PI_RESTART_COMMAND='Pi'
+PI_WATCH_VERSION=$(hash_file "$PI_EXT" || printf '')
+PI_TURNEND_VERSION=$(hash_file "$PI_TURNEND_EXT" || printf '')
+if ! pi_extension_loaded "$PI_WATCH_MARKER" "$PI_WATCH_VERSION" "$PI_LOCK" \
+  || ! pi_extension_loaded "$PI_TURNEND_MARKER" "$PI_TURNEND_VERSION" "$PI_LOCK"; then
+  printf 'PI_WATCH_EXTENSION: not loaded - approve Pi project trust once per clone, then restart %s so %s and %s auto-load for turn-end guard and background wake coverage; use -e %s -e %s only if project extensions are not trusted\n' "$PI_RESTART_COMMAND" "$PI_TURNEND_EXT" "$PI_EXT" "$PI_TURNEND_EXT" "$PI_EXT"
 fi
 "$SCRIPT_DIR/fm-supervision-instructions.sh" \
-  --harness "$PRIMARY_HARNESS" \
   --read-only "$READ_ONLY" \
   --afk "$AFK_PRESENT" \
   --x-mode "$X_MODE_PRESENT"
@@ -715,14 +718,14 @@ supervision.
 EOF
 elif [ -f "$CONFIG/x-mode.env" ]; then
   cat <<EOF
-Follow the supervision operating instructions block above for harness '$PRIMARY_HARNESS'.
+Follow the Pi supervision operating instructions block above.
 X mode is active, so the emitted block's cadence instruction applies.
 This script never starts supervision itself.
 
 EOF
 else
 cat <<EOF
-Follow the supervision operating instructions block above for harness '$PRIMARY_HARNESS'.
+Follow the Pi supervision operating instructions block above.
 This script never starts supervision itself.
 
 EOF

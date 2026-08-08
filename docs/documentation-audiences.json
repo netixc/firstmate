@@ -157,10 +157,6 @@
       "audience": "agent-runtime"
     },
     {
-      "path": "CLAUDE.md",
-      "audience": "agent-runtime"
-    },
-    {
       "path": "CONTRIBUTING.md",
       "audience": "maintainer-architecture"
     },
@@ -237,27 +233,7 @@
       "audience": "operator-current"
     },
     {
-      "path": "docs/subagent-guard.md",
-      "audience": "maintainer-architecture"
-    },
-    {
-      "path": "docs/supervision-protocols/claude.md",
-      "audience": "agent-runtime"
-    },
-    {
-      "path": "docs/supervision-protocols/codex.md",
-      "audience": "agent-runtime"
-    },
-    {
-      "path": "docs/supervision-protocols/grok.md",
-      "audience": "agent-runtime"
-    },
-    {
       "path": "docs/supervision-protocols/pi.md",
-      "audience": "agent-runtime"
-    },
-    {
-      "path": "docs/supervision-protocols/unknown.md",
       "audience": "agent-runtime"
     },
     {

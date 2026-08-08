@@ -75,7 +75,7 @@ EOF
     "window=firstmate:fm-$id" \
     "worktree=$home/projects/missing-scratch" \
     "project=$home/projects/sample" \
-    "harness=codex" \
+    "harness=pi" \
     "kind=scout" \
     "mode=scout"
   printf 'done: report and visual review complete\n' > "$home/state/$id.status"
@@ -125,7 +125,7 @@ write_origin_meta() {  # <home> <id> [kind]
     "endpoint_task_id=$id" \
     "worktree=$home/projects/missing-$id" \
     "project=$home/projects/sample" \
-    "harness=codex" \
+    "harness=pi" \
     "kind=$kind" \
     "mode=$kind" \
     "herdr_session=firstmate" \

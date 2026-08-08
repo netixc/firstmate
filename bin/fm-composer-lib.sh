@@ -1,49 +1,11 @@
 #!/usr/bin/env bash
-# bin/fm-composer-lib.sh - the one fleet-wide owner of composer-content
-# classification for Herdr task panes.
+# Classify composer content for Pi panes managed through Herdr.
 #
-# WHY THIS EXISTS (task fm-composer-shellglyph-safety): the four adapters each
-# carried their own copy of the "is this composer row empty / pending / not an
-# agent composer" decision, and the copies drifted. The dangerous drift: a BARE
-# shell prompt glyph (`>`, `$`, `%`, `#`) - what a pane shows once its agent has
-# exited to a plain login shell - was treated as an empty, ready-to-inject
-# AGENT composer. The away-mode escalation injector (bin/fm-supervise-daemon.sh)
-# reads composer-emptiness to decide whether a pane is a safe injection target,
-# so a dead-shell pane misread as "empty" meant an escalation could be typed
-# into (and, worst case, executed by) that shell. Consolidating the one decision
-# here means the safety rule cannot silently drift across adapters again.
-#
-# THE SAFETY RULE this owner enforces: a bare shell prompt glyph is a genuine
-# empty agent composer ONLY when it appears INSIDE a real agent-composer
-# container - a bordered composer box, where the harness draws its own prompt
-# glyph (e.g. claude's older `| > ... |`). On a bare, unstructured row it is a
-# dead-shell prompt and is NEVER "empty"; it classifies as `unknown` (not a safe
-# injection target). The AGENT prompt glyphs `❯` (claude) and `›` (codex) are a
-# genuine empty agent composer either way, bordered or bare.
-#
-# GHOST/PLACEHOLDER TEXT is the other half of this owner (task
-# afk-herdr-false-pending): a harness fills an otherwise-empty composer with
-# de-emphasized ghost text - claude's rotating prompt suggestion, codex's idle
-# suggestion, grok's placeholder - which a plain capture cannot tell apart from
-# text a human typed, so the away-mode injector reads the idle pane as "pending
-# input" and defers every escalation (the overnight wedge that motivated this
-# consolidation). fm_composer_strip_ghost is the ONE ANSI-aware extractor of
-# "real typed content": it drops every de-emphasized run - dim/faint (SGR 2, how
-# claude and codex render ghost text) AND a dark/muted TRUECOLOR foreground (how
-# grok renders placeholder/hint text) - and keeps only normal-intensity,
-# normally-coloured text. Consolidating it here means ANSI-aware readers cannot
-# drift into per-harness one-off strips again; the previous Herdr-only faint
-# byte-pattern check missed claude's own dim ghost (its prompt glyph is not
-# bold-wrapped) and no adapter covered grok's truecolor placeholder at all.
-#
-# Herdr owns capture and structural row-finding through its ANSI tail scan.
-# Once it has a candidate composer row it hands the RAW styled row to
-# fm_composer_strip_ghost for the real-typed-content extraction, strips the box
-# borders, trims, and hands the result plus a <bordered> flag to
-# fm_composer_classify_content for the shared
-# empty|pending|unknown verdict.
-# Re-sourcing is a cheap idempotent redefinition, so this file needs no include
-# guard.
+# A bare shell prompt is never a safe injection target.
+# It can only be empty inside a structurally identified composer box.
+# De-emphasized placeholder text is removed before pending-input classification.
+# Herdr owns row discovery and calls this file for the final empty, pending, or
+# unknown verdict.
 
 # fm_composer_strip_ansi: drop every CSI escape sequence, leaving plain text.
 # Used for STRUCTURAL row/shape detection, where ghost text must be KEPT so the
@@ -61,12 +23,12 @@ fm_composer_strip_ansi() {
 # content" from a captured, styled composer row. Reads the styled line on stdin
 # from `herdr pane read --format ansi` and prints the
 # plain, non-ghost text on stdout, dropping:
-#   - dim/faint runs (SGR 2): how claude and codex render ghost/suggestion text.
+#   - dim/faint runs (SGR 2).
 #     A reset (SGR 0) or normal-intensity (SGR 22) ends a dim run.
 #   - dark/muted TRUECOLOR foreground runs (SGR 38;2;r;g;b or the colon form
 #     38:2::r:g:b) whose perceived luminance (0.299R + 0.587G + 0.114B) is below
-#     FM_COMPOSER_GHOST_LUMA_MAX (default 128): how grok renders its placeholder
-#     and hint text. A reset (SGR 0), a default-foreground (SGR 39), any base
+#     FM_COMPOSER_GHOST_LUMA_MAX (default 128).
+#     A reset (SGR 0), a default-foreground (SGR 39), any base
 #     foreground colour (30-37 / 90-97), or a lighter 38;2 foreground ends the
 #     dark-foreground run. This assumes a DARK terminal theme, the firstmate
 #     fleet reality, where real typed input is bright and only de-emphasised UI
@@ -161,8 +123,7 @@ fm_composer_strip_ghost() {
 #              prompt row); 0 for a bare, unstructured row.
 #   <content>  the candidate composer content, already border-stripped and
 #              whitespace-trimmed by the caller.
-#   [idle_re]  optional per-harness idle-placeholder regex (e.g. grok's
-#              "Type a message...") that reads as empty; matched both before and
+#   [idle_re]  optional idle-placeholder regex that reads as empty; matched both before and
 #              after a leading prompt glyph is stripped, so a pattern written
 #              with or without the glyph both land.
 fm_composer_idle_matches() {
@@ -179,14 +140,14 @@ fm_composer_classify_content() {  # <bordered> <content> [idle_re] [idle_case] [
   plain_content=${5:-$content}
   if [ "$bordered" != 1 ] && [ -z "$content" ] && [ -n "$plain_content" ]; then
     case "$plain_content" in
-      '❯'|'›') printf 'empty'; return 0 ;;
+      '❯') printf 'empty'; return 0 ;;
       *) printf 'unknown'; return 0 ;;
     esac
   fi
   # A bare prompt glyph on its own row.
   case "$content" in
-    '❯'|'›')
-      # Agent prompt glyph: a genuine empty agent composer, bordered or bare.
+    '❯')
+      # Pi's agent prompt glyph is a genuine empty composer, bordered or bare.
       printf 'empty'; return 0 ;;
     '>'|'$'|'%'|'#')
       # Shell prompt glyph: empty ONLY inside a composer box (the harness's own
@@ -202,8 +163,8 @@ fm_composer_classify_content() {  # <bordered> <content> [idle_re] [idle_case] [
   fi
   # Strip a leading prompt glyph, then re-judge the remainder.
   case "$content" in
-    '❯ '*|'› '*|'> '*|'$ '*|'% '*|'# '*) content=${content#??} ;;
-    '❯'*|'›'*|'>'*|'$'*|'%'*|'#'*) content=${content#?} ;;
+    '❯ '*|'> '*|'$ '*|'% '*|'# '*) content=${content#??} ;;
+    '❯'*|'>'*|'$'*|'%'*|'#'*) content=${content#?} ;;
   esac
   content="${content#"${content%%[![:space:]]*}"}"
   content="${content%"${content##*[![:space:]]}"}"

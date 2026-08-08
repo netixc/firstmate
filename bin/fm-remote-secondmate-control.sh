@@ -2,7 +2,7 @@
 # Host-local lifecycle control for the remote secondmate home selected by fm-on.
 #
 # Usage:
-#   fm-remote-secondmate-control.sh launch <id> <harness> <model|-> <effort|-> [traceparent]
+#   fm-remote-secondmate-control.sh launch <id> <model|-> <effort|-> [traceparent]
 #   fm-remote-secondmate-control.sh state <id>
 #   fm-remote-secondmate-control.sh route <id>
 #   fm-remote-secondmate-control.sh send <id> <message>
@@ -103,14 +103,15 @@ state_value() { # <id>; prints recovery-grade state
 }
 
 print_route() { # <id>
-  local id=$1 harness traceparent
+  local id=$1 traceparent
   remote_endpoint_require "$id"
-  harness=$(fm_meta_get "$REMOTE_ENDPOINT_META" harness)
+  [ "$(fm_meta_get "$REMOTE_ENDPOINT_META" harness)" = pi ] \
+    || die "remote secondmate endpoint is not a Pi runtime"
   traceparent=$(fm_meta_get "$REMOTE_ENDPOINT_META" traceparent)
   printf 'schema=fm-remote-secondmate-control.v1\n'
   printf 'target=%s\n' "$REMOTE_ENDPOINT_TARGET"
   printf 'herdr_session=%s\n' "$REMOTE_HERDR_SESSION"
-  printf 'harness=%s\n' "$harness"
+  printf 'runtime=pi\n'
   [ -z "$traceparent" ] || printf 'traceparent=%s\n' "$traceparent"
 }
 
@@ -126,13 +127,12 @@ cmd_route() {
 }
 
 cmd_launch() {
-  local id=$1 harness=$2 model=$3 effort=$4 traceparent=${5:-}
+  local id=$1 model=$2 effort=$3 traceparent=${4:-}
   local current meta out herdr_session
 
   validate_id "$id"
   validate_home "$id"
-  case "$harness" in claude|codex|grok|pi) ;; *) die "unverified remote secondmate harness: $harness" ;; esac
-  case "$effort" in -|low|medium|high|xhigh|max) ;; *) die "invalid remote secondmate effort: $effort" ;; esac
+  case "$effort" in -|low|medium|high|xhigh|max) ;; *) die "invalid remote secondmate thinking: $effort" ;; esac
   # Herdr's server belongs to the GUI login session, so the endpoint survives
   # every SSH disconnection that a remote route depends on.
   # bin/fm-remote-doctor.sh is the readiness owner.
@@ -154,7 +154,7 @@ cmd_launch() {
       *) die "remote endpoint state is $current; refusing duplicate launch" ;;
     esac
   fi
-  ARGS=("$id" "$TARGET_HOME" --secondmate --harness "$harness")
+  ARGS=("$id" "$TARGET_HOME" --secondmate)
   [ "$model" = - ] || ARGS+=(--model "$model")
   [ "$effort" = - ] || ARGS+=(--effort "$effort")
   [ -z "$traceparent" ] || ARGS+=(--traceparent "$traceparent")
@@ -279,7 +279,7 @@ cmd_retire() {
 }
 
 case "${1:-}" in
-  launch) shift; [ "$#" -ge 4 ] && [ "$#" -le 5 ] || usage; cmd_launch "$@" ;;
+  launch) shift; [ "$#" -ge 3 ] && [ "$#" -le 4 ] || usage; cmd_launch "$@" ;;
   state) shift; [ "$#" -eq 1 ] || usage; validate_id "$1"; validate_home "$1"; state_value "$1" ;;
   route) shift; [ "$#" -eq 1 ] || usage; cmd_route "$1" ;;
   send) shift; [ "$#" -eq 2 ] || usage; cmd_send "$@" ;;

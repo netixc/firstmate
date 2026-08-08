@@ -317,12 +317,11 @@ fm_write_meta() {
   done
 }
 
-# fm_write_secondmate_meta <file> <home> [window] [projects] [harness]: write the
-# standard kind=secondmate meta block used across the secondmate suites. Window
-# defaults to firstmate:w1:p-<id>, projects defaults to alpha, and harness defaults
-# to echo to match the common case.
+# fm_write_secondmate_meta <file> <home> [window] [projects]: write the
+# standard Pi secondmate metadata block used across the secondmate suites.
+# Window defaults to firstmate:w1:p-<id> and projects defaults to alpha.
 fm_write_secondmate_meta() {
-  local file=$1 home=$2 id window projects=${4:-alpha} harness=${5:-echo}
+  local file=$1 home=$2 id window projects=${4:-alpha}
   local session pane
   id=$(basename "$file" .meta)
   window=${3:-firstmate:w1:p-$id}
@@ -333,7 +332,7 @@ fm_write_secondmate_meta() {
     "endpoint_task_id=$id" \
     "worktree=$home" \
     "project=$home" \
-    "harness=$harness" \
+    "harness=pi" \
     "kind=secondmate" \
     "mode=secondmate" \
     "yolo=off" \

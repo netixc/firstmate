@@ -157,6 +157,7 @@ write_task_meta() {
     "endpoint_task_id=$id" \
     "worktree=$dir/wt" \
     "project=$dir/project" \
+    "harness=pi" \
     "kind=ship" \
     "mode=no-mistakes"
 }
@@ -2372,7 +2373,7 @@ test_bootstrap_isolates_incomplete_poll_migration() {
     || fail "could not prepare healthy poll for migration isolation"
   fm_pr_poll_publish_prepared || fail "could not publish healthy poll for migration isolation"
   fm_write_secondmate_meta "$state/secondmate-a.meta" "$dir/secondmate-home" \
-    'firstmate:fm-secondmate-a' alpha codex
+    'firstmate:fm-secondmate-a' alpha pi
   printf 'FMX_PAIRING_TOKEN=test-token\n' > "$dir/home/.env"
   mkdir -p "$dir/home/projects"
   fm_fake_exit0 "$fakebin" curl jq

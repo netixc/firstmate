@@ -1,100 +1,17 @@
-# Primary turn-end supervision guard
+# Pi turn-end guard
 
-This is the authoritative current contract for the "no turn ends blind" primary backstop referenced from AGENTS.md section 8.
-The predicate lives in `bin/fm-turnend-guard.sh`.
-Primary scope lives in `bin/fm-primary-scope-lib.sh`, shared with the native session-start adapters in [`sessionstart-nudge.md`](sessionstart-nudge.md).
-Harness hook files adapt each enabled primary harness integration's turn-end mechanism to that shared predicate.
+Pi's tracked `fm-primary-turnend-guard.ts` extension is the primary-session "no turn ends blind" backstop.
+After Pi settles a logical run, the extension invokes `bin/fm-turnend-guard.sh`.
+The predicate exits successfully when no supervision is needed or the current home already has a healthy watcher.
+It exits 2 only when work, a process-event source, or Relay needs supervision and Pi's watcher is missing or unhealthy.
 
-Related PreToolUse guards deny unsafe commands before execution rather than detecting a blind turn end afterward.
-Their separate owners are [`arm-pretool-check.md`](arm-pretool-check.md), [`cd-guard.md`](cd-guard.md), and [`subagent-guard.md`](subagent-guard.md).
-Do not infer this guard's scope, loop safety, or compatibility tradeoffs for those guards.
+On exit 2, the extension sends one bounded follow-up through Pi's supported follow-up delivery.
+The follow-up tells Firstmate to drain the durable queue and repair supervision only if the extension reported a missing, failed, or unhealthy cycle.
+The extension, not a shell background job, owns watcher continuity.
+Child worker worktrees are out of scope.
 
-## Current invariant
+Pi's primary extension also provides the turn-end behavior for persistent secondmate homes.
+The guard never grants merge, discard, security, or approval authority.
+It is a supervision backstop rather than permission to omit the live watcher cycle.
 
-`bin/fm-guard.sh` is a pull-based warning that runs only when another supervision command invokes it.
-The turn-end guard closes the remaining gap at the primary's own turn boundary.
-When work, a process-event source, or Relay polling needs supervision at that boundary and no identity-matched watcher has a fresh beacon, the harness integration must either block the turn end or force one bounded follow-up that uses the recovery instruction from the emitted session-start protocol.
-The mid-turn pull warning uses the model-aware supervision verdict described below, while the turn-end guard keeps the PID-strict watcher predicate.
-The guard remains a backstop; [`watcher-continuity.md`](watcher-continuity.md) owns normal continuity.
-
-## Guard predicates
-
-The guard first calls the shared primary scope.
-A secondmate home runs its own primary Firstmate session, so a genuine `.fm-secondmate-home` marker includes it whether the home is a linked worktree or plain clone.
-The marker must be a regular non-symlink file whose whitespace-stripped first line is a non-empty identifier containing only letters, digits, dots, underscores, and dashes.
-An unmarked checkout or invalid marker falls through to the git-dir check.
-That check keeps crewmate and scout linked worktrees inert because their git dir differs from their git common dir.
-It also requires `AGENTS.md`, `bin/`, and the effective state directory.
-
-For an in-scope primary, the guard counts in-flight work from `state/*.meta`.
-Registered `state/procevent/*.source` records also require supervision even though they have no task metadata.
-The default cross-harness mode exits silently with no supervision need.
-Every mode treats `state/x-watch.check.sh` as supervision need, so Relay polling remains guarded without an in-flight task.
-Otherwise it calls `fm_watcher_healthy <state-dir> <watch-path> [grace-seconds] [home]` from `bin/fm-wake-lib.sh`, the same PID-strict identity-matched lock and fresh-beacon check used by `bin/fm-watch-arm.sh`: a stale beacon blocks even when a watcher pid is live, and a fresh leftover beacon blocks when the lock is missing, dead, or identity-mismatched.
-The turn-end guard needs that strict check because it fires at the turn boundary, where the auto-arm is bringing a fresh watcher up for the upcoming idle period, and it cooperates with that arm rather than trusting a beacon left by the cycle that just ended.
-`bin/fm-guard.sh`, the pull warning, instead uses the model-aware `fm_watcher_supervision_verdict` from the same library, because it fires mid-turn when the auto-arm model runs no watcher at all.
-Under the Claude Stop auto-arm model a beacon fresh within grace is healthy even with no live watcher process, and only a beacon stale beyond grace (or absent) alarms.
-Under every persistent-watcher harness a live identity-matched watcher with a fresh beacon is still required, so the pull guard keeps the same strict semantics there.
-Its banner names the true failing condition, either a missing live watcher process or a genuinely stale beacon with its real age, and keys the once-per-episode dedup on that condition rather than the beacon mtime.
-
-`FM_STATE_OVERRIDE` wins over `FM_HOME/state`, and `FM_HOME` wins over repository-root `state/`.
-`FM_GUARD_GRACE` controls beacon freshness and defaults to 300 seconds.
-If `jq` is missing or hook stdin is empty, the guard exits 0 because it cannot safely read loop-guard fields.
-
-## Harness integrations
-
-- Claude registers two `Stop` hooks in `.claude/settings.json`, both anchored through `CLAUDE_PROJECT_DIR`: `bin/fm-turnend-guard.sh --claude`, and `bin/fm-claude-stop-autoarm.sh` with `asyncRewake: true` and `timeout: 28800`.
-- Codex registers a `Stop` hook in `.codex/hooks.json`, anchors the executable to the hook process working directory, verifies a Firstmate-shaped hook-bearing root, and passes the original payload to the shared guard.
-- Pi listens for `agent_settled` in `.pi/extensions/fm-primary-turnend-guard.ts`, runs once per logical agent run, and calls `pi.sendUserMessage(..., { deliverAs: "followUp" })` once when the guard returns 2.
-- Grok registers a `Stop` hook in `.grok/hooks/fm-primary-turnend-guard.json` and delegates capability selection to `bin/fm-turnend-guard-grok.sh`.
-  The tracked Claude Stop entries are inert when `GROK_AGENT` is present, so Grok's Claude-compatible settings loading cannot create a second continuation path.
-
-Claude and Codex can block a Stop directly with exit status 2 and stderr.
-Both payloads carry `stop_hook_active`.
-In the default Codex mode, a true value lets the second stop finish after one forced continuation.
-
-Claude runs the guard with `--claude`, which ignores `stop_hook_active` and cooperates with the Stop-owned auto-arm.
-Claude Code sets `stop_hook_active=true` on every stop after any stop-hook continuation, including `asyncRewake` rewakes, which re-opened the 2026-07-21 blind window under the default one-shot behavior.
-The Claude mode waits up to `FM_CLAUDE_AUTOARM_SYNC_WAIT_MS` (default 800 milliseconds) and allows the stop when the watcher is healthy, `state/.claude-autoarm.lock` has a live `autoarm` role owner whose eventual failure must exit 2, or `state/.claude-autoarm-epoch` contains a fresh actionable rewake owned by this event epoch.
-Fresh `failed` and `failed-suppressed` outcomes enter or advance the failure progression instead of acting as unconditional recovery proof.
-The auto-arm itself rechecks the healthy watcher predicate and retries a bounded number of times before reporting a genuine failure.
-The first fresh exhausted-failure epoch preserves its handoff without consuming a blocked-stop count, while later fresh failed epochs advance the same monotonic progression instead of resetting it.
-When none of those proofs appears, it re-blocks up to `FM_CLAUDE_TURNEND_BLOCK_BUDGET` times (default 3, below Claude's 8-block override).
-In Claude mode, positive watcher recovery clears the block budget, failure notice, and attended alarm together under the existing budget lock before either hook reports ordinary recovery.
-The one loud attended fail-open is available only when the auto-arm has recorded an exhausted failure, its one notice is already consumed, the block budget is exhausted, and a final check finds neither a healthy watcher nor an automatic continuation.
-Each epoch identity is accounted at most once under the budget lock.
-Whenever both coordination locks are needed, positive auto-arm recovery and the terminal check acquire the auto-arm owner lock before the budget lock.
-After that alarm, the Stop auto-arm suppresses further exit-2 continuations until positive watcher recovery, so the final fail-open remains reachable.
-The alarm cannot repeat during that failure episode, and a later unhealthy stop blocks again.
-A positively verified healthy watcher clears the failure notice, alarm, and block budget for a future independent episode.
-A Claude failure notice describes the automatic mechanism as broken and does not direct a routine manual background arm.
-
-Pi exposes a passive callback that fails open at the hook boundary to protect the user session but schedules one bounded follow-up when the predicate blocks.
-The generated prompts use the canonical `turn-end-guard` kind after the U+2063 `FIRSTMATE_OP: ` prefix, so Ahoy does not treat them as captain messages.
-Each passive adapter owns a loop latch.
-Pi keeps the latch across internal tool turns and clears it only when the generated follow-up settles or delivery fails.
-
-Grok makes exactly one typed capability decision from each running Stop payload.
-A boolean `stopHookActive` selects native blocking, including both false on the initial stop and true on the bounded continuation.
-The camel-case field has precedence when both spellings appear; when it is absent, a boolean `stop_hook_active` selects the same native path for compatibility.
-The native path returns the shared guard's status and stderr to the same Grok process and never starts `grok --resume`.
-When both capability spellings are absent, the adapter preserves one pre-native `grok --resume` fallback guarded by `GROK_TURNEND_GUARD_ACTIVE` and intentionally omits `--permission-mode`.
-Malformed JSON, a selected field with a non-boolean type, missing `jq`, missing hook prerequisites, or an already-active legacy guard allows the stop without starting either continuation path.
-Grok's project hook requires the checkout to be trusted with `/hooks-trust` or launch-time `--trust`; genuine pre-native builds can run the same tracked hook from an isolated global hook directory.
-
-If a passive adapter cannot invoke its SDK, or the Grok legacy fallback cannot find `grok` or a session id, the next pull-based `fm-guard.sh` call reports the problem.
-That warning uses `bin/fm-supervision-instructions.sh --repair-line`, so it always points to the active harness protocol rather than embedding another repair command.
-
-## Compatibility limits
-
-- Child crewmate and scout worktrees are outside scope.
-- A valid secondmate home is in scope; an idle secondmate endpoint with no Relay poll remains healthy because it has no supervision need.
-- The direct-blocking and bounded passive-follow-up split is limited to the primary integrations listed above.
-- Unreadable hook input remains fail-open.
-- No harness adapter uses a shell ampersand to manufacture supervision.
-
-## Regression coverage
-
-`tests/fm-turnend-guard.test.sh` covers the predicate, main and secondmate primary scope, child-worktree exclusion, `FM_HOME` and `FM_STATE_OVERRIDE` precedence, the live-lock and fresh-beacon guard predicate, the cooperative `--claude` claim wait, monotonic failed-epoch progression, bounded attended fail-open, post-alarm continuation suppression, positive recovery reset, Pi logical-run latching, missing-`jq` behavior, all four primary registrations, Grok native and legacy selection, typed field precedence, malformed input, and exactly-one-path safety.
-`tests/fm-guard-stale-banner.test.sh` covers the pull-guard predicate, including the persistent-model fresh-leftover-beacon negative control, the auto-arm model's healthy fresh-beacon-without-a-watcher case and its stale-beacon alarm, the true-reason banner wording, and the reason-keyed episode dedup surviving a beacon mtime change.
-[`verification/supervision.md`](verification/supervision.md#turn-end-guard) records the active cross-harness empirical evidence, including the 2026-07-24 Claude `asyncRewake` revalidation.
+See [supervision verification](verification/supervision.md) for current executable and live Pi evidence.

@@ -73,8 +73,8 @@ exec "$FM_FAKE_REMOTE_ENTRYPOINT" "$@"
 SH
 chmod +x "$FAKEBIN/fake-ssh"
 
-printf 'codex\n' > "$PARENT/config/secondmate-harness"
-printf 'codex\n' > "$PARENT/config/crew-harness"
+printf 'openai-codex/gpt-5.6-luna medium\n' > "$PARENT/config/secondmate-profile"
+printf 'openai-codex/gpt-5.6-luna medium\n' > "$PARENT/config/crew-profile"
 printf '## In flight\n\n## Queued\n\n## Done\n' > "$PARENT/data/backlog.md"
 
 remote_env() {
@@ -223,10 +223,10 @@ FM_HOME="$PROTOCOL_HOME" "$REMOTE_ROOT/bin/fm-remote-inherit.sh" \
   || fail "the remote inherit receiver refused a declared inheritable item"
 assert_present "$PROTOCOL_HOME/config/trace-context" "the accepted inherited enablement flag was not published"
 if FM_HOME="$PROTOCOL_HOME" "$REMOTE_ROOT/bin/fm-remote-inherit.sh" \
-  put config/secondmate-harness "$FLAG_BYTES" "$FLAG_HASH" 1 < "$TMP_ROOT/flag-payload" >/dev/null 2>&1; then
+  put config/secondmate-profile "$FLAG_BYTES" "$FLAG_HASH" 1 < "$TMP_ROOT/flag-payload" >/dev/null 2>&1; then
   fail "the remote inherit receiver accepted an item outside the declared set"
 fi
-assert_absent "$PROTOCOL_HOME/config/secondmate-harness" "a non-inheritable item was published remotely"
+assert_absent "$PROTOCOL_HOME/config/secondmate-profile" "a non-inheritable item was published remotely"
 if FM_HOME="$PROTOCOL_HOME" "$REMOTE_ROOT/bin/fm-remote-inherit.sh" \
   put config/secondmate-profiles/homelab "$FLAG_BYTES" "$FLAG_HASH" 1 < "$TMP_ROOT/flag-payload" >/dev/null 2>&1; then
   fail "the remote inherit receiver accepted a per-secondmate profile outside the declared set"

@@ -8,7 +8,7 @@ This document owns the version-scoped feasibility evidence, Pi transcript taxono
 A qualifying implementation must auto-load from the trusted project, persist the toggle choice for the effective Firstmate home across Pi session starts and resumes, keep working activity visible, emit no Calm status row, redraw already-rendered controllable rows, remove supported hidden rows without gaps, restore ordinary rendering, and leave delivery, tool execution, model context, session storage, export and share operation, diagnostics, and expansion state unchanged.
 The governing presentation policy allows genuine original user prompts, genuine user-facing assistant text, and working activity.
 Working activity may be presented through Pi's stock row or through a supported Calm-owned widget, but Calm must leave the stock row untouched whenever Calm is off.
-Changing persisted context to remove hidden content, filtering provider context, patching installed harness code, or claiming coverage outside a supported renderer does not satisfy that boundary.
+Changing persisted context to remove hidden content, filtering provider context, patching installed Pi code, or claiming coverage outside a supported renderer does not satisfy that boundary.
 
 ## Compatibility evidence
 
@@ -227,33 +227,14 @@ The installed extension API has no supported global transcript filter, user-mess
 Pi 0.81.1 through 0.82.0 export `AssistantMessageComponent` and `InteractiveMode`, so Calm uses separate idempotent, API-probed adapters for assistant thinking layout and the complete operational-user transcript row while leaving all message data and non-Calm rendering unchanged; see the [compatibility contract](calm.md#pi-compatibility) for how a future Pi lacking one of those exports is handled.
 General component replacement, ANSI cursor erasure, provider-context mutation, and installed-file patching remain rejected as unsupported or preservation-breaking workarounds.
 
-## Cross-harness verification record
+## Pi verification record
 
-The four-harness inspection was performed on 2026-07-22, with every integration surface rechecked and Pi reverified at 0.81.1 on 2026-07-23 for the latest Calm presentation change.
-
-```text
-$ claude --version
-2.1.218 (Claude Code)
-$ codex --version
-codex-cli 0.144.6
-$ pi --version
-0.81.1
-$ grok --version
-grok 0.2.106 (bde89716f679)
-```
-
-| Harness | Conclusion | Evidence |
-| --- | --- | --- |
-| Claude Code 2.1.218 | Not feasible through the inspected supported project surface. | Project hooks can observe lifecycle and tool events, while the plugin CLI packages supported components; neither inspected surface exposes a transcript-row renderer or transcript-wide redraw API. |
-| Codex CLI 0.144.6 | Not feasible through the inspected supported project surface. | The tracked hooks expose session, pre-tool, and stop handling, while the plugin and feature inventories expose no TUI tool-row renderer or transcript redraw control. |
-| Pi (verified 0.81.1 through 0.82.0) | Partially feasible with two API-probed exported-class adapters. | Public APIs control working visibility, collapsed labels, known tool slots, custom entries, and expansion redraws; exported assistant and interactive-mode classes provide the collapsed-thinking and operational-user layout boundaries, gated on the exact method's presence rather than a version number, while generic user, tool, and status filtering remains unavailable. |
-| Grok CLI 0.2.106 | Not feasible through the inspected supported project surface. | Project hooks expose lifecycle and tool interception, while the plugin CLI exposes no row-renderer contract; `--minimal` changes the whole screen mode rather than selected transcript rows. |
-
-These conclusions are deliberately limited to the named versions and supported surfaces.
-They do not claim that a harness can never add the missing renderer API.
-For the duplicate-turn fix and the latest presentation change, the launch templates for Claude Code, Codex CLI, Grok, and Pi and the watcher, turn-end, session-start, away-supervisor, and from-firstmate producers were re-inspected.
-The canonical encoder and every non-Pi delivery path remain unchanged, and Herdr continues to transport the same input selected by the harness adapter.
-Only Pi's Calm presentation implementation changed; every producer and non-Pi transport remains unchanged.
+Pi transcript and Calm behavior was reverified against the installed Pi 0.81.1 through 0.82.0 surfaces described above.
+Only Pi is supported by Firstmate, so Calm claims no behavior for another worker runtime.
+The verification is deliberately limited to the named versions and supported extension surfaces.
+It does not claim that a future Pi release cannot change or remove a renderer boundary.
+The canonical operational-input encoder and all Firstmate producers retain their ordinary user-message semantics.
+Herdr continues to transport that Pi input unchanged.
 
 ## Regression coverage
 

@@ -81,8 +81,8 @@
 #                                   (default 300)
 #          FM_HOUSEKEEPING_TICK     seconds between housekeeping passes while
 #                                   the watcher is mid-cycle (default 15)
-#          FM_BUSY_REGEX            optional rendered busy-signature override
-#                                   for delivery guards and Grok's fallback
+#          FM_BUSY_REGEX            optional rendered Pi busy-signature override
+#                                   for delivery guards
 #          FM_COMPOSER_IDLE_RE      empty-composer regex applied after dim-ghost
 #                                   and structural border stripping (default:
 #                                   bare prompt glyphs plus busy footers)
@@ -172,9 +172,9 @@ WEDGE_ALARM_NOTIFIER_PID=
 # The captain-relevant verb set and the status classifiers (last_status_line,
 # status_is_captain_relevant, window_to_task, scan_captain_relevant_statuses) now
 # live in bin/fm-classify-lib.sh, shared with the always-on watcher.
-# Composer-empty detection, submit acknowledgement, and the harness-scoped
-# supervisor-pane busy guard dispatch through the Herdr adapter.
-# FM_BUSY_REGEX also overrides Grok's isolated task-state fallback.
+# Composer-empty detection, submit acknowledgement, and Pi's supervisor-pane
+# busy guard dispatch through the Herdr adapter.
+# FM_BUSY_REGEX overrides Pi's rendered busy-signature fallback.
 INJECT_FAIL_SLEEP_DEFAULT=30
 INJECT_CONFIRM_RETRIES_DEFAULT=3
 INJECT_CONFIRM_SLEEP_DEFAULT=0.5
@@ -525,26 +525,17 @@ mark_escalated_seen() {  # <kind> <arg> <state>
 # pane_input_pending returns 0 unless the composer is positively proven empty.
 # This includes real unsubmitted text, ambiguous structure, unreadable state,
 # and future verdicts. The detector drops dim/faint ghost text and strips the
-# harness's composer box borders, so an aligned ghost-only or idle bordered
-# claude composer ("│ > … │") is correctly proven empty.
+# Pi's composer box borders, so an aligned ghost-only or idle bordered Pi
+# composer is correctly proven empty.
 # pane_is_busy / pane_input_pending: BACKEND-AWARE (dispatch goes through
 # bin/fm-backend.sh's generic per-backend primitives rather than a hand-rolled
 # case statement here). <backend> defaults to Herdr when omitted.
 #
 # This rendered reader applies only to the supervisor pane during away-mode
-# injection. It never classifies a recorded worker task. The detected primary
-# harness selects exactly one signature, so output from another harness cannot
-# make the primary read busy.
-#
-# Resolved lazily and memoized: harness detection walks process ancestry, which
-# is too heavy to pay on every source of this library (the unit tests and the
-# launcher source it purely for its pure functions).
+# injection. It never classifies a recorded worker task. Firstmate uses Pi
+# alone, so rendered output from another tool never changes the interpretation.
 fm_daemon_primary_harness() {
-  if [ -z "${FM_DAEMON_PRIMARY_HARNESS:-}" ]; then
-    FM_DAEMON_PRIMARY_HARNESS=$("$FM_DAEMON_DIR/fm-harness.sh" 2>/dev/null || printf 'unknown')
-    [ -n "$FM_DAEMON_PRIMARY_HARNESS" ] || FM_DAEMON_PRIMARY_HARNESS=unknown
-  fi
-  printf '%s' "$FM_DAEMON_PRIMARY_HARNESS"
+  printf 'pi'
 }
 
 pane_is_busy() {  # <target> [backend]

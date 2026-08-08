@@ -76,7 +76,6 @@ unit_stop_ordering() {
   printf '%s' "$pid" > "$lock/pid"
   FM_STATE_OVERRIDE="$home/state" bash -c ' . "$1"; fm_pid_identity "$2"' _ \
     "$ROOT/bin/fm-wake-lib.sh" "$pid" > "$lock/pid-identity"
-  printf 'none\t-\tnative\n' > "$home/state/.afk-daemon-terminal"
   FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$LAUNCH" stop >/dev/null 2>&1
   [ "$(cat "$marker" 2>/dev/null || true)" = present ] || fail "away flag cleared before the daemon flushed"
   assert_absent "$home/state/.afk" "away flag remained after stop"

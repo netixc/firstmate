@@ -133,15 +133,13 @@ now_ms() {
 family_for_basename() {
   case "$1" in
     fm-arm-pretool-check.test.sh|fm-ask-user-authority.test.sh|\
-    fm-brief.test.sh|fm-vendor-auth-probe.test.sh|\
-    fm-calm-pi-extension.test.sh|fm-cd-pretool-check.test.sh|\
+    fm-brief.test.sh|fm-calm-pi-extension.test.sh|fm-cd-pretool-check.test.sh|\
     fm-composer-ghost.test.sh|fm-composer-lib.test.sh|\
     fm-crew-state.test.sh|fm-decision-hold-lifecycle.test.sh|\
-    fm-documentation-audiences.test.sh|fm-ensure-agents-md.test.sh|fm-grok-harness.test.sh|\
-fm-herdr-lab.test.sh|fm-lint.test.sh|\
+    fm-documentation-audiences.test.sh|fm-ensure-agents-md.test.sh|\
+    fm-harness-pi.test.sh|fm-herdr-lab.test.sh|fm-lint.test.sh|\
     fm-operational-input.test.sh|fm-pi-primary-types.test.sh|\
     fm-send-popup-settle.test.sh|fm-send-settle.test.sh|\
-    fm-subagent-pretool-check.test.sh|\
     fm-supervision-instructions.test.sh|fm-task-delivery.test.sh|\
     fm-trace-context-lib.test.sh|\
     fm-transition-lib.test.sh|\
@@ -151,7 +149,7 @@ fm-herdr-lab.test.sh|fm-lint.test.sh|\
     fm-daemon.test.sh|fm-guard-stale-banner.test.sh|fm-pi-watch-extension.test.sh|\
     fm-session-lock-ancestry.test.sh|\
     fm-supervision-events.test.sh|fm-turnend-guard.test.sh|fm-wake-daemon-lifecycle-e2e.test.sh|\
-    fm-wake-queue.test.sh|fm-watch-arm.test.sh|fm-watch-checkpoint.test.sh|fm-watch-triage.test.sh|\
+    fm-wake-queue.test.sh|fm-watch-arm.test.sh|fm-watch-triage.test.sh|\
     fm-watcher-lock.test.sh)
       printf '%s\n' watcher-wake-lock
       ;;
@@ -167,7 +165,7 @@ fm-herdr-lab.test.sh|fm-lint.test.sh|\
     fm-remote-doctor.test.sh|fm-remote-job.test.sh|\
     fm-remote-reply.test.sh|fm-remote-secondmate-lifecycle-e2e.test.sh|\
     fm-remote-secondmate-trace-context.test.sh|\
-    fm-secondmate-harness.test.sh|fm-secondmate-lifecycle-e2e.test.sh|\
+    fm-secondmate-profile.test.sh|fm-secondmate-lifecycle-e2e.test.sh|\
     fm-secondmate-liveness.test.sh|fm-secondmate-safety.test.sh|fm-secondmate-sync.test.sh|\
     fm-startup-memory-budget.test.sh|\
     fm-send-secondmate-marker.test.sh|fm-shared-captain-inheritance.test.sh)
@@ -180,7 +178,6 @@ fm-herdr-lab.test.sh|fm-lint.test.sh|\
       printf '%s\n' session-bootstrap
       ;;
     fm-afk-pi-herdr-return-e2e.test.sh|\
-    fm-codex-continuity-live-e2e.test.sh|\
     fm-herdr-version-floor-live-e2e.test.sh|\
     fm-quota-array-dispatch-live-e2e.test.sh|fm-send-secondmate-marker-herdr-e2e.test.sh)
       printf '%s\n' live-harness-optin
@@ -260,7 +257,7 @@ tests/fm-composer-lib.test.sh
 tests/fm-crew-state.test.sh
 tests/fm-decision-hold-lifecycle.test.sh
 tests/fm-ensure-agents-md.test.sh
-tests/fm-grok-harness.test.sh
+tests/fm-harness-pi.test.sh
 tests/fm-herdr-lab.test.sh
 tests/fm-lint.test.sh
 tests/fm-pi-primary-types.test.sh
@@ -283,34 +280,34 @@ EOF
 list_portable_parallel_1() {
   cat <<'EOF'
 tests/fm-x-mode.test.sh
-tests/fm-cd-pretool-check.test.sh
-tests/fm-decision-hold-lifecycle.test.sh
-tests/fm-test-run.test.sh
-tests/fm-composer-ghost.test.sh
-tests/fm-grok-harness.test.sh
-tests/fm-lint.test.sh
-tests/fm-pi-primary-types.test.sh
+tests/fm-backend-herdr.test.sh
+tests/fm-pr-merge.test.sh
 tests/fm-review-diff.test.sh
-tests/fm-brief.test.sh
-tests/fm-transition-lib.test.sh
+tests/fm-send-settle.test.sh
+tests/fm-send-popup-settle.test.sh
+tests/fm-harness-pi.test.sh
+tests/fm-supervision-instructions.test.sh
+tests/fm-composer-ghost.test.sh
+tests/fm-composer-lib.test.sh
 EOF
 }
 
 # Portable parallel shard 2: the complementary LPT half of the proven set.
 list_portable_parallel_2() {
   cat <<'EOF'
-tests/fm-backend-herdr.test.sh
-tests/fm-arm-pretool-check.test.sh
+tests/fm-decision-hold-lifecycle.test.sh
+tests/fm-test-run.test.sh
 tests/fm-crew-state.test.sh
 tests/fm-herdr-lab.test.sh
-tests/fm-pr-merge.test.sh
-tests/fm-send-popup-settle.test.sh
-tests/fm-send-settle.test.sh
+tests/fm-lint.test.sh
 tests/fm-send-strict.test.sh
+tests/fm-brief.test.sh
 tests/fm-spawn-batch.test.sh
-tests/fm-supervision-instructions.test.sh
+tests/fm-cd-pretool-check.test.sh
+tests/fm-arm-pretool-check.test.sh
 tests/fm-ensure-agents-md.test.sh
-tests/fm-composer-lib.test.sh
+tests/fm-transition-lib.test.sh
+tests/fm-pi-primary-types.test.sh
 EOF
 }
 
@@ -361,9 +358,6 @@ tests/fm-bootstrap.test.sh 21912
 tests/fm-busy-adapter-wiring.test.sh 13962
 tests/fm-busy-state.test.sh 607
 tests/fm-calm-pi-extension.test.sh 203
-tests/fm-claude-stop-autoarm-live-e2e.test.sh 19
-tests/fm-claude-stop-autoarm.test.sh 60521
-tests/fm-codex-continuity-live-e2e.test.sh 19
 tests/fm-daemon.test.sh 15140
 tests/fm-documentation-audiences.test.sh 572
 tests/fm-fleet-snapshot-view.test.sh 5902
@@ -380,7 +374,7 @@ tests/fm-pr-check-security.test.sh 199573
 tests/fm-procevent.test.sh 42789
 tests/fm-public-followup.test.sh 23365
 tests/fm-quota-array-dispatch-live-e2e.test.sh 19
-tests/fm-secondmate-harness.test.sh 87895
+tests/fm-secondmate-profile.test.sh 87895
 tests/fm-secondmate-lifecycle-e2e.test.sh 4929
 tests/fm-secondmate-liveness.test.sh 12553
 tests/fm-secondmate-safety.test.sh 24432
@@ -393,7 +387,6 @@ tests/fm-shared-captain-inheritance.test.sh 3506
 tests/fm-spawn-dispatch-profile.test.sh 41351
 tests/fm-spawn-worktree-settle.test.sh 4598
 tests/fm-startup-memory-budget.test.sh 4260
-tests/fm-subagent-pretool-check.test.sh 901
 tests/fm-supervision-events.test.sh 413
 tests/fm-tangle-guard.test.sh 7230
 tests/fm-teardown-endpoint-safety.test.sh 1073
@@ -401,10 +394,8 @@ tests/fm-teardown.test.sh 23237
 tests/fm-test-isolation-proof.test.sh 326
 tests/fm-turnend-guard.test.sh 5986
 tests/fm-update.test.sh 1894
-tests/fm-vendor-auth-probe.test.sh 42796
 tests/fm-wake-daemon-lifecycle-e2e.test.sh 4284
 tests/fm-wake-queue.test.sh 22787
-tests/fm-watch-checkpoint.test.sh 3943
 tests/fm-watch-triage.test.sh 113051
 tests/fm-watcher-lock.test.sh 98342
 EOF
@@ -864,14 +855,15 @@ families_for_changed_path() {
       printf '%s\n' session-bootstrap
       ;;
     bin/fm-timeout-lib.sh)
-      # Session start, fleet and bearings snapshots, and the vendor auth probe
-      # all depend on this shared hard-bound owner.
+      # Session start plus fleet and bearings snapshots depend on this shared
+      # hard-bound owner.
       printf '%s\n' session-bootstrap
       printf '%s\n' snapshot-bearings
       printf '%s\n' pure-contract-unit
       ;;
-    .claude/settings.json|.codex/hooks.json|.pi/extensions/fm-primary-turnend-guard.ts)
+    .pi/extensions/fm-primary-turnend-guard.ts|.pi/extensions/fm-primary-pi-watch.ts)
       printf '%s\n' session-bootstrap
+      printf '%s\n' watcher-wake-lock
       ;;
     bin/fm-pr-*|bin/fm-merge-local.sh|bin/fm-teardown.sh|bin/fm-review-diff.sh|\
     bin/fm-x-*|bin/fm-check*)
@@ -902,7 +894,6 @@ families_for_changed_path() {
     bin/fm-brief.sh|bin/fm-ensure-agents-md.sh|bin/fm-crew-state.sh|\
     bin/fm-decision-hold.sh|bin/fm-supervision*|bin/fm-transition-lib.sh|\
     bin/fm-marker-lib.sh|bin/fm-operational-input.sh|bin/fm-tasks-axi-lib.sh|\
-    bin/fm-vendor-auth-probe.sh|\
     bin/fm-primary-scope-lib.sh|bin/fm-project-mode.sh|bin/fm-promote.sh|\
     bin/fm-ff-lib.sh|bin/fm-gotmp*|bin/*pretool*)
       printf '%s\n' pure-contract-unit
@@ -922,7 +913,7 @@ families_for_changed_path() {
     docs/fm-test-isolation-proof.json)
       printf '%s\n' pure-contract-unit
       ;;
-    .github/*|.tasks.toml|AGENTS.md|CLAUDE.md|CONTRIBUTING.md|\
+    .github/*|.tasks.toml|AGENTS.md|CONTRIBUTING.md|\
     docs/configuration.md|docs/supervision-protocols/*)
       printf '%s\n' pure-contract-unit
       ;;

@@ -26,7 +26,7 @@ endpoint_task_id=$id
 window=default:w1:p1
 worktree=/tmp/$id-worktree
 project=/tmp/$id-project
-harness=claude
+harness=pi
 herdr_session=default
 herdr_workspace_id=w1
 herdr_tab_id=w1:t1
@@ -102,7 +102,7 @@ test_stale_backend_metadata_is_rejected() {
     "$SEND" stale hello 2>&1)
   status=$?
   [ "$status" -ne 0 ] || fail "stale backend metadata should be rejected"
-  assert_contains "$out" "Firstmate requires Herdr" "stale runtime rejection did not name Herdr"
+  assert_contains "$out" "Firstmate requires Herdr" "stale workspace backend rejection did not name Herdr"
   assert_no_grep 'TEXT:hello' "$log" "stale backend metadata still dispatched text"
   pass "fm-send: stale backend values are rejected without reinterpretation"
 }

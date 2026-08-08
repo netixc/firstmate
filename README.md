@@ -23,11 +23,11 @@ firstmate flips the model.
 You talk to a single agent - the first mate - and it runs the crew for you: spawning autonomous agents in a visible session backend, giving each a clean git worktree, supervising them to completion, and handing you finished PRs, approved local merges, or standalone investigation reports.
 For larger fleets, you can opt in to persistent secondmates: second mates that are still ordinary direct reports, but run from their own isolated firstmate homes on this machine or another SSH-reachable host.
 
-firstmate is not a model, not a harness, not a skill, not an MCP server, and not a CLI.
-firstmate is an agent distro for running a crew of agents.
-An agent distro is a portable directory of instructions, skills, tooling, policies, and state conventions that turns a general-purpose agent into a specialized one.
-There is no app to install: the cloned repo is the distro - `AGENTS.md`, bundled firstmate skills, and helper scripts that any terminal coding agent can follow.
-Launching a supported harness inside it instantiates your first mate - and makes you the captain.
+firstmate is not a model, not a skill, not an MCP server, and not a CLI.
+firstmate is a Pi agent distro for running a crew of agents.
+An agent distro is a portable directory of instructions, skills, tooling, policies, and state conventions that turns Pi into a specialized first mate.
+There is no app to install beyond Pi and the repo: the clone contains `AGENTS.md`, bundled firstmate skills, and helper scripts.
+Launching Pi inside it instantiates your first mate - and makes you the captain.
 
 ## Features
 
@@ -37,7 +37,7 @@ Launching a supported harness inside it instantiates your first mate - and makes
 - **Two task shapes** - ship tasks deliver authorized changes; scout tasks leave standalone investigation reports when the intake contract warrants separate research.
 - **Explicit project modes** - each project ships via `no-mistakes`, `direct-PR`, or `local-only`, with an optional `+yolo` autonomy flag.
 - **Optional secondmates** - opt in to persistent second mates that run from isolated firstmate homes with their own `FM_HOME`, state, projects, and session lock, either locally or as a whole home on an SSH-reachable host, with guarded updates and recovery that never turns an unavailable remote route into a local replacement.
-- **Event-driven, zero-token supervision** - a bash watcher sleeps on the fleet and wakes the first mate only when something needs you; verified primary harnesses also get a turn-end backstop that blocks or follows up on a blind stop when work is under way and supervision is not live.
+- **Event-driven, zero-token supervision** - a bash watcher sleeps on the fleet and wakes the first mate only when something needs you; Pi's tracked extensions also provide a turn-end backstop when work is under way and supervision is not live.
 - **Optional Relay** - opt in with one local `.env` pairing token so firstmate can answer your public mentions on X and Discord alike, act on normal reversible mention requests through the same lifecycle as chat requests, acknowledge spawned work, and post up to three public-safe completion follow-ups within seven days for genuine milestones and the final outcome without changing non-Relay behavior; a final reply promised in a thread becomes durable state that is reconciled from disk, so a restart or a compacted conversation cannot lose it; dry-run preview records would-be replies and dismissals locally before go-live.
 - **Strict project boundary** - the first mate is read-only over your projects except for the narrow guarded and captain-approved operations authorized by [hard rule 1](AGENTS.md#1-identity-and-prime-directives), including fleet sync's guarded safe branch pruning; crewmates make every other project change behind the configured merge authority.
 - **Restart-proof** - all state lives on disk and in Herdr; kill the session anytime and the next one reconciles, including confirmed-dead secondmate agents, and carries on.
@@ -48,21 +48,12 @@ Full detail on every feature lives in [docs/architecture.md](docs/architecture.m
 
 ### Requirements
 
-- A verified primary agent harness: Claude Code, Codex CLI, Grok, or Pi.
+- Pi, Firstmate's sole primary and worker runtime.
 - Git and the GitHub CLI, authenticated through `gh auth login`.
 - Herdr and its required dependencies.
 
 The first mate detects and offers to install supported missing tools after you approve.
 Herdr-specific setup is linked in [Documentation](#documentation).
-
-### Recommended harnesses
-
-**Claude Code, Grok, and Pi are equal co-primary recommendations** for running the primary firstmate session.
-Claude Code uses a tracked Stop hook for tokenless watcher re-arm and rewake, Grok uses background-notify wake cycles, and Pi uses its tracked primary watcher extension.
-All three have verified turn-end guard paths when launched with their documented setup.
-Pick whichever one matches your subscription and workflow.
-
-Codex is also verified and supported as a primary harness; it uses bounded foreground checkpoints, so it carries more harness-specific supervision tradeoffs than the three co-primaries.
 
 ### Install and launch
 
@@ -72,28 +63,13 @@ git clone https://github.com/netixc/firstmate
 cd firstmate
 ```
 
-Then launch one of the co-primary harnesses; AGENTS.md takes over from there:
-
-**Claude Code**
-
-```sh
-claude
-```
-
-**Grok**
-
-```sh
-grok --trust
-```
-
-**Pi**
+Then launch Pi; AGENTS.md takes over from there:
 
 ```sh
 pi
 ```
 
-For Grok, `--trust` is needed once per clone so project hooks and the turn-end guard load; `/hooks-trust` inside Grok works too.
-For Pi, approve the project trust prompt once per clone on first launch so the tracked `.pi/extensions/*.ts` files auto-load.
+Approve the project trust prompt once per clone on first launch so the tracked `.pi/extensions/*.ts` files auto-load.
 Pi's `/calm` toggle hides supported transcript chrome, including canonically classified Firstmate operational user rows, and uses a Calm-only animated working boat during active runs while preserving all model context and session data.
 The hidden operational inputs remain ordinary user-role messages with unchanged delivery, ordering, authority, persistence, and exports.
 The preference persists for the effective Firstmate home, and toggling it off restores ordinary rendering.
@@ -114,9 +90,9 @@ The preference persists for the effective Firstmate home, and toggling it off re
 > alright merge it
 ```
 
-### Task runtime
+### Task workspace
 
-Herdr is Firstmate's sole task runtime.
+Herdr is Firstmate's sole terminal workspace layer.
 Setup guides are linked in [Documentation](#documentation) below.
 
 ## How It Works
@@ -146,14 +122,13 @@ Setup guides are linked in [Documentation](#documentation) below.
 
 You chat with the first mate.
 It routes each request to a crewmate in its own session endpoint and git worktree, supervises the fleet with a zero-token event-driven watcher, and brings you finished PRs, approved local merges, or investigation reports.
-Optional secondmates extend this to persistent local or whole-home remote second mates, dispatch profiles let you steer which harness handles which task, and opt-in Relay lets the same fleet answer public mentions.
+Optional secondmates extend this to persistent local or whole-home remote second mates, dispatch profiles let you steer Pi model and thinking selection for each task, and opt-in Relay lets the same fleet answer public mentions.
 
 Full architecture - the supervision engine, worktree isolation, secondmates, dispatch profiles, project modes, optional Relay, fleet sync, and self-update - is in [docs/architecture.md](docs/architecture.md).
 
 ## Built-in skills
 
-Firstmate ships these user-invocable built-in skills.
-Claude and grok use the slash form shown here; codex uses the same names with `$`, such as `$afk`.
+Firstmate ships these user-invocable built-in skills for Pi.
 
 | Skill              | What it does                                                                                                                                  |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -185,16 +160,16 @@ Firstmate's skills live in two separate places with different audiences:
 ## Documentation
 
 - [docs/architecture.md](docs/architecture.md) - maintainer architecture for the crew, supervision, worktrees, secondmates, and project modes.
-- [docs/configuration.md](docs/configuration.md) - environment variables, `FM_HOME`, optional Relay and its X and Discord setup steps, the files you set, and harness support.
+- [docs/configuration.md](docs/configuration.md) - environment variables, `FM_HOME`, optional Relay and its X and Discord setup steps, the files you set, and Pi model/thinking profiles.
 - [docs/remote-secondmates.md](docs/remote-secondmates.md) - current setup, routing, transfer, recovery, and safety behavior for whole-home remote second mates.
 - [docs/calm.md](docs/calm.md) - current Pi `/calm` behavior and supported presentation limits.
 - [docs/wedge-alarm.md](docs/wedge-alarm.md) - configure the active alert for an away-mode escalation delivery that gets stuck.
-- [docs/herdr-backend.md](docs/herdr-backend.md) - current setup, safety boundaries, and limits for the Herdr task runtime.
-- [docs/verification/runtime-backends.md](docs/verification/runtime-backends.md) - active maintainer verification for Herdr runtime guarantees.
+- [docs/herdr-backend.md](docs/herdr-backend.md) - current setup, safety boundaries, and limits for the Herdr terminal workspace layer.
+- [docs/verification/runtime-backends.md](docs/verification/runtime-backends.md) - active maintainer verification for Pi and Herdr guarantees.
 - [docs/gitlab-merge-watch.md](docs/gitlab-merge-watch.md) - maintainer verification for GitLab merge watching on arbitrary instances.
 - [docs/turnend-guard.md](docs/turnend-guard.md) - the primary session's current "no turn ends blind" backstop, scope, loop safety, and compatibility limits.
 - [docs/verification/supervision.md](docs/verification/supervision.md) - active maintainer verification for session-start, guard, continuity, and wedge integrations.
-- [docs/supervision-protocols/](docs/supervision-protocols/) - rendered primary-harness watcher protocols for Claude, Codex, Pi, Grok, and unknown harness fallback.
+- [docs/supervision-protocols/pi.md](docs/supervision-protocols/pi.md) - Pi's rendered primary watcher protocol.
 - [docs/scripts.md](docs/scripts.md) - the `bin/` toolbelt reference.
 - [docs/documentation-audiences.md](docs/documentation-audiences.md) - documentation audiences and the machine-checked placement boundary.
 - [`AGENTS.md`](AGENTS.md) - the distro's always-loaded operating contract and routing index for conditional procedures.

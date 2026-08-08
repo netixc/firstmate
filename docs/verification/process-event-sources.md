@@ -137,10 +137,10 @@ Without this launcher, reconcile would silently fail to start a runner on macOS 
 
 ## Scope
 
-The runner is domain-neutral and creates no endpoint, task metadata, or backlog item, so the supported primary harnesses and Herdr task runtime are unaffected except through the `check` wake they already consume.
+The runner is domain-neutral and creates no endpoint, task metadata, or backlog item, so the Pi primary and Herdr workspace layer are unaffected except through the `check` wake they already consume.
 Lavish is the first adapter; adding another requires only a new `bin/fm-procevent-<adapter>.sh`, whose `terminal` command is optional and defaults to keeping the source armed.
 
 Proactive delivery is inside that same boundary.
 The watcher reports a queued process-event result through the one shared actionable-exit path (`wake` in `bin/fm-push-transition-lib.sh`) that every existing signal, stale, and check wake already uses, so it reads no pane, queries no backend, and names no harness.
-Both axes are therefore unaffected by construction rather than by assumption: every supported primary harness re-arms from that same exit, and Herdr supplies endpoint state only to the pane paths this change does not touch.
+Both axes are therefore unaffected by construction rather than by assumption: Pi re-arms from that same exit, and Herdr supplies endpoint state only to the pane paths this change does not touch.
 While `state/.afk` exists the watcher stays one-shot as before, because this delivery ends the cycle exactly like the existing check path and leaves classification to the daemon.

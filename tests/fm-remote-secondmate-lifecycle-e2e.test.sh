@@ -77,9 +77,9 @@ cat > "$PARENT/data/projects.md" <<EOF
 - alpha [direct-PR] - alpha project (added 2026-08-02)
 EOF
 mkdir -p "$PARENT/config/secondmate-profiles"
-printf 'codex\n' > "$PARENT/config/secondmate-harness"
-printf 'pi openai-codex/gpt-5.6-luna medium\n' > "$PARENT/config/secondmate-profiles/ios"
-printf 'primary harness defaults\n' > "$PARENT/config/crew-harness"
+printf 'xai/grok-4.1 high\n' > "$PARENT/config/secondmate-profile"
+printf 'openai-codex/gpt-5.6-luna medium\n' > "$PARENT/config/secondmate-profiles/ios"
+printf 'openai-codex/gpt-5.6-luna low\n' > "$PARENT/config/crew-profile"
 
 cat > "$FAKEBIN/fake-ssh" <<'SH'
 #!/usr/bin/env bash
@@ -104,7 +104,7 @@ IFS=$'\t' read -r command_name _command_action command_rel <<EOF
 $command_fields
 EOF
 case "${FM_FAKE_SSH_MODE:-normal}:$command_name:$command_rel" in
-  inherit-partial:fm-remote-inherit.sh:config/crew-harness) exit 255 ;;
+  inherit-partial:fm-remote-inherit.sh:config/crew-profile) exit 255 ;;
   inherit-block:fm-remote-inherit.sh:data/captain-shared.md)
     cat > "$FM_FAKE_INHERIT_PAYLOAD"
     touch "$FM_FAKE_INHERIT_ENTERED"
@@ -167,7 +167,7 @@ case "${FM_FAKE_SSH_MODE:-normal}:$command_name:$command_rel" in
     [ "$_command_action" = launch ] || exit 93
     printf 'schema=fm-remote-secondmate-control.v1\n'
     printf 'target=firstmate:fm-ios\n'
-    printf 'harness=pi\n'
+    printf 'runtime=pi\n'
     exit 0
     ;;
   launch-default-session-route:fm-remote-secondmate-control.sh:*)
@@ -175,7 +175,7 @@ case "${FM_FAKE_SSH_MODE:-normal}:$command_name:$command_rel" in
     printf 'schema=fm-remote-secondmate-control.v1\n'
     printf 'target=default:w1:p2\n'
     printf 'herdr_session=default\n'
-    printf 'harness=pi\n'
+    printf 'runtime=pi\n'
     exit 0
     ;;
   provision-block-fail:fm-remote-home-provision.sh:*)
@@ -615,22 +615,22 @@ printf 'complete inherited payload\n' > "$TMP_ROOT/inherit-complete"
 inherit_bytes=$(LC_ALL=C wc -c < "$TMP_ROOT/inherit-complete" | tr -d ' ')
 inherit_hash=$(sha256_file "$TMP_ROOT/inherit-complete")
 if printf 'complete' | FM_HOME="$PROTOCOL_HOME" "$REMOTE_ROOT/bin/fm-remote-inherit.sh" \
-  put config/crew-harness "$inherit_bytes" "$inherit_hash" 1 >/dev/null 2>&1; then
+  put config/crew-profile "$inherit_bytes" "$inherit_hash" 1 >/dev/null 2>&1; then
   fail "remote inheritance published a truncated payload"
 fi
-assert_absent "$PROTOCOL_HOME/config/crew-harness" "truncated inheritance published a destination"
+assert_absent "$PROTOCOL_HOME/config/crew-profile" "truncated inheritance published a destination"
 FM_HOME="$PROTOCOL_HOME" "$REMOTE_ROOT/bin/fm-remote-inherit.sh" \
-  put config/crew-harness "$inherit_bytes" "$inherit_hash" 2 \
+  put config/crew-profile "$inherit_bytes" "$inherit_hash" 2 \
   < "$TMP_ROOT/inherit-complete" >/dev/null
 printf 'stale inherited payload\n' > "$TMP_ROOT/inherit-stale"
 inherit_stale_bytes=$(LC_ALL=C wc -c < "$TMP_ROOT/inherit-stale" | tr -d ' ')
 inherit_stale_hash=$(sha256_file "$TMP_ROOT/inherit-stale")
 if FM_HOME="$PROTOCOL_HOME" "$REMOTE_ROOT/bin/fm-remote-inherit.sh" \
-  put config/crew-harness "$inherit_stale_bytes" "$inherit_stale_hash" 1 \
+  put config/crew-profile "$inherit_stale_bytes" "$inherit_stale_hash" 1 \
   < "$TMP_ROOT/inherit-stale" >/dev/null 2>&1; then
   fail "remote inheritance accepted a superseded payload generation"
 fi
-cmp -s "$TMP_ROOT/inherit-complete" "$PROTOCOL_HOME/config/crew-harness" \
+cmp -s "$TMP_ROOT/inherit-complete" "$PROTOCOL_HOME/config/crew-profile" \
   || fail "superseded inheritance replaced the current payload"
 pass "remote inheritance rejects incomplete and superseded payload generations"
 
@@ -647,7 +647,7 @@ pass "mixed local and remote routes validate without migration"
 
 # Launch in the remote home's dedicated Herdr session.
 # Parent metadata records host placement and arms the reply source.
-printf 'pi\n' > "$PARENT/config/crew-harness"
+printf 'openai-codex/gpt-5.6-luna low\n' > "$PARENT/config/crew-profile"
 launches_before_inherit=0
 [ ! -f "$HERDR_LOG" ] || launches_before_inherit=$(grep -c '^tab create' "$HERDR_LOG" || true)
 if FM_FAKE_SSH_MODE=inherit-partial remote_env "$ROOT/bin/fm-spawn.sh" ios --secondmate \
@@ -703,7 +703,7 @@ if remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh route ios
   || remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh capture ios >/dev/null 2>&1 \
   || remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh observe ios >/dev/null 2>&1 \
   || remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh retire ios --force >/dev/null 2>&1 \
-  || remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh launch ios codex - - >/dev/null 2>&1; then
+  || remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh launch ios pi - - >/dev/null 2>&1; then
   fail "legacy default-session metadata remained operational"
 fi
 cmp -s "$TMP_ROOT/herdr-before-default-session.log" "$HERDR_LOG" \
@@ -754,14 +754,14 @@ cat > "$remote_route_meta" <<EOF
 window=firstmate:fm-ios
 worktree=$REMOTE_HOME
 project=$REMOTE_ROOT
-harness=codex
+harness=pi
 kind=secondmate
 backend=stale-runtime
 EOF
 cp "$remote_route_meta" "$TMP_ROOT/remote-ios-legacy-before-refusal.meta"
 printf 'fm-ios|%s\n' "$REMOTE_HOME" > "$STALE_RUNTIME_STATE"
 set +e
-remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh launch ios codex - - \
+remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh launch ios pi - - \
   > "$TMP_ROOT/stale-alive-refusal.out" 2>&1
 stale_alive_rc=$?
 set -e
@@ -846,7 +846,7 @@ pass "marked send and routed reply complete through the existing parent correlat
 rm -f "$PARENT/state/.wake-queue"
 
 printf '{"revision":2}\n' > "$PARENT/config/crew-dispatch.json"
-printf 'grok\n' > "$PARENT/config/crew-harness"
+printf 'xai/grok-4.1 xhigh\n' > "$PARENT/config/crew-profile"
 set +e
 FM_FAKE_SSH_MODE=inherit-partial remote_env "$ROOT/bin/fm-config-push.sh" \
   > "$TMP_ROOT/config-partial.out" 2>&1
@@ -854,14 +854,14 @@ config_partial_rc=$?
 set -e
 [ "$config_partial_rc" -ne 0 ] || fail "partial remote inheritance claimed complete convergence"
 assert_grep '"revision":2' "$REMOTE_HOME/config/crew-dispatch.json" "partial inheritance did not apply its first file"
-[ "$(cat "$REMOTE_HOME/config/crew-harness")" != grok ] \
+[ "$(cat "$REMOTE_HOME/config/crew-profile")" != 'xai/grok-4.1 xhigh' ] \
   || fail "partial inheritance unexpectedly applied the failed file"
 NUDGE_MARKER="$PARENT/state/.secondmate-nudge-pending/ios.pending"
 assert_grep 'remote=1' "$NUDGE_MARKER" "partial inheritance left no durable remote reread marker"
 publish_healthy_watcher_identity "$PARENT/state" "$PARENT" "$REMOTE_ROOT/bin/fm-watch.sh"
 remote_env "$ROOT/bin/fm-bootstrap.sh" > "$TMP_ROOT/config-partial-retry.out" \
   || fail "bootstrap did not converge partial remote inheritance"
-[ "$(cat "$REMOTE_HOME/config/crew-harness")" = grok ] \
+[ "$(cat "$REMOTE_HOME/config/crew-profile")" = 'xai/grok-4.1 xhigh' ] \
   || fail "bootstrap did not apply the remaining inherited file"
 assert_absent "$NUDGE_MARKER" "bootstrap cleared no remote reread marker after convergence"
 PARTIAL_CONFIG_CORR=$(grep -Eo 'corr=[a-f0-9]{16}' "$HERDR_LOG" | tail -1 | cut -d= -f2-)
@@ -913,7 +913,7 @@ wait "$config_second" || fail "bootstrap inheritance transaction failed after wa
   || fail "later bootstrap convergence was overwritten by stale inherited bytes"
 pass "config push and bootstrap serialize remote inheritance convergence"
 
-printf 'codex\n' > "$PARENT/config/crew-harness"
+printf 'openai-codex/gpt-5.6-luna low\n' > "$PARENT/config/crew-profile"
 touch "$TMP_ROOT/herdr-send-fail"
 if remote_env "$ROOT/bin/fm-config-push.sh" > "$TMP_ROOT/config-push-fail.out" 2>&1; then
   fail "remote config push claimed success after its reread send failed"
@@ -1033,7 +1033,7 @@ cat > "$remote_route_meta" <<EOF
 window=firstmate:fm-ios
 worktree=$REMOTE_HOME
 project=$REMOTE_ROOT
-harness=codex
+harness=pi
 kind=secondmate
 backend=stale-runtime
 EOF

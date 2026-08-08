@@ -22,7 +22,7 @@ if [ -z "${FM_TEST_DAEMON_SOURCED:-}" ]; then
 fi
 
 TMP_ROOT=$(fm_test_tmproot fm-daemon-tests)
-FM_DAEMON_PRIMARY_HARNESS=claude
+FM_DAEMON_PRIMARY_HARNESS=pi
 export FM_DAEMON_PRIMARY_HARNESS
 
 test_afk_start_refuses_when_flag_cannot_be_written() {
@@ -507,11 +507,11 @@ test_housekeeping_herdr_idle_busy_record_clears_stale() {
   local dir state key gen
   dir=$(make_supercase stale-herdr-idle-busy-record)
   state="$dir/state"
-  fm_write_meta "$state/herdr-footer.meta" "window=default:w1:p4" "backend=herdr" "harness=claude"
+  fm_write_meta "$state/herdr-footer.meta" "window=default:w1:p4" "backend=herdr" "harness=pi"
   printf 'working\n' > "$state/herdr-footer.status"
   gen=$("$ROOT/bin/fm-busy-event.sh" arm "$state" herdr-footer)
   "$ROOT/bin/fm-busy-event.sh" apply "$state" herdr-footer busy --gen "$gen" \
-    --source claude-hook --event user-prompt-submit
+    --source pi-ext --event user-prompt-submit
   key=$(printf '%s' "herdr-footer" | tr ':/.' '___')
   echo $(( $(date +%s) - 500 )) > "$state/.subsuper-stale-$key"
   (
@@ -538,7 +538,7 @@ test_housekeeping_herdr_resumed_stale_cleared() {
   local dir state key
   dir=$(make_supercase stale-herdr-resumed)
   state="$dir/state"
-  fm_write_meta "$state/herdr-busy.meta" "window=default:w1:p3" "backend=herdr"
+  fm_write_meta "$state/herdr-busy.meta" "window=default:w1:p3" "backend=herdr" "harness=pi"
   printf 'working\n' > "$state/herdr-busy.status"
   key=$(printf '%s' "herdr-busy" | tr ':/.' '___')
   echo $(( $(date +%s) - 500 )) > "$state/.subsuper-stale-$key"
@@ -861,14 +861,12 @@ test_pane_input_pending_requires_proven_empty_prompt() {
       pane_input_pending "default:w1:p1" \
       || fail "bare shell prompt '$prompt' should defer as unknown"
   done
-  for prompt in '❯' '›'; do
-    printf 'output\noutput\n%s \n' "$prompt" > "$capture"
-    if PATH="$fakebin:$PATH" FM_FAKE_HERDR_CAPTURE="$capture" \
-      pane_input_pending "default:w1:p1"; then
-      fail "proven empty agent prompt '$prompt' should not defer"
-    fi
-  done
-  pass "pane_input_pending: only proven empty agent prompts pass"
+  printf 'output\noutput\n❯ \n' > "$capture"
+  if PATH="$fakebin:$PATH" FM_FAKE_HERDR_CAPTURE="$capture" \
+    pane_input_pending "default:w1:p1"; then
+    fail "the Pi empty prompt '❯' should not defer"
+  fi
+  pass "pane_input_pending: only the proven Pi empty prompt passes"
 }
 
 # A bare, unbordered shell prompt is a dead shell and therefore never a safe
@@ -900,12 +898,12 @@ test_herdr_composer_state_bordered_and_agent_rows_are_empty() {
   printf '%s\n' "❯ " > "$capture"
   out=$(PATH="$fakebin:$PATH" FM_FAKE_HERDR_CAPTURE="$capture" \
     fm_backend_herdr_composer_state "default:w1:p1")
-  [ "$out" = empty ] || fail "a bare claude '❯' composer should read empty, got '$out'"
+  [ "$out" = empty ] || fail "a bare pi '❯' composer should read empty, got '$out'"
   printf '%s\n' "› " > "$capture"
   out=$(PATH="$fakebin:$PATH" FM_FAKE_HERDR_CAPTURE="$capture" \
     fm_backend_herdr_composer_state "default:w1:p1")
-  [ "$out" = empty ] || fail "a bare codex '›' composer should read empty, got '$out'"
-  pass "Herdr composer state accepts bordered boxes and bare agent glyphs as empty"
+  [ "$out" != empty ] || fail "a retired-runtime prompt must not read as an empty Pi composer"
+  pass "Herdr composer state accepts bordered boxes and Pi's bare prompt as empty"
 }
 
 test_herdr_composer_state_requires_matching_box_borders() {
@@ -1030,8 +1028,8 @@ test_afk_genuine_done_still_terminal_stale() {
 }
 
 test_pane_input_pending_bordered_idle_not_pending() {
-  # THE regression: an idle claude composer is a bordered box ("│ > … │"). The
-  # old idle regex only matched a BARE prompt, so every idle claude pane read as
+  # THE regression: an idle pi composer is a bordered box ("│ > … │"). The
+  # old idle regex only matched a BARE prompt, so every idle pi pane read as
   # pending and the away-mode daemon deferred 100% of escalations for 9.5h.
   local dir state fakebin capture line
   dir=$(make_supercase pending-bordered-idle)
@@ -1066,7 +1064,7 @@ test_pane_input_pending_bordered_with_text_is_pending() {
 
 test_submit_ack_confirms_on_bordered_empty_composer() {
   # RC2: the submit acknowledgement must recognize a bordered-EMPTY composer as
-  # "submitted." The old ACK reused the broken check, so on claude it could never
+  # "submitted." The old ACK reused the broken check, so on pi it could never
   # confirm and always reported a false "Enter swallowed."
   local dir fakebin sent verdict
   dir=$(make_bordered_case ack-bordered)
@@ -1206,7 +1204,7 @@ test_max_defer_afk_inactive_does_not_flush_or_alarm() {
 # --- backend-independent active wedge alert ---------------------------------
 # These cover the 2026-07-10 overnight-incident fix: the max-defer wedge alarm's
 # ACTIVE alert channel must reach the captain even when the wedged pane and its
-# backend status-line are unreadable (a claude-on-herdr primary that night).
+# backend status-line are unreadable (a Pi-on-Herdr primary that night).
 #
 # NO test here EVER posts a real notification. Every notifier routes through
 # the FM_WEDGE_ALARM_EXEC seam, which tests/wake-helpers.sh forces to a recorder
@@ -1616,33 +1614,30 @@ test_pane_is_busy_herdr_native_busy_state() {
   (
     fm_backend_busy_state() { [ "$1" = herdr ] && [ "$2" = "default:w1:p2" ] || fail "unexpected busy_state args: $1 $2"; printf 'busy'; }
     fm_backend_capture() { fail "capture should not be consulted when busy_state is conclusive"; }
-    FM_STATE_OVERRIDE="$dir/state" FM_DAEMON_PRIMARY_HARNESS=claude pane_is_busy "default:w1:p2" herdr \
+    FM_STATE_OVERRIDE="$dir/state" FM_DAEMON_PRIMARY_HARNESS=pi pane_is_busy "default:w1:p2" herdr \
       || fail "pane_is_busy should report busy from herdr's native busy_state"
   ) || fail "herdr native-busy pane_is_busy subshell failed"
   pass "pane_is_busy: herdr native busy_state='busy' short-circuits without a capture fallback"
 }
 
-test_primary_busy_guard_is_harness_scoped() {
+test_primary_busy_guard_uses_pi_signature() {
   (
     fm_backend_busy_state() { printf 'unknown'; }
     fm_backend_capture() { printf 'Working...\n'; }
-    if FM_DAEMON_PRIMARY_HARNESS=claude pane_is_busy "default:w1:p2" herdr; then
-      fail "Pi's rendered signature must not classify a Claude primary busy"
-    fi
     FM_DAEMON_PRIMARY_HARNESS=pi pane_is_busy "default:w1:p2" herdr \
-      || fail "Pi's rendered signature should classify a Pi primary busy"
-  ) || fail "harness-scoped primary busy guard subshell failed"
-  pass "primary busy guard isolates rendered signatures by detected harness"
+      || fail "Pi's rendered signature should classify the Pi primary busy"
+  ) || fail "Pi primary busy guard subshell failed"
+  pass "primary busy guard recognizes Pi's rendered signature"
 }
 
 test_pane_is_busy_defaults_to_herdr_when_backend_omitted() {
   local dir fakebin capture
   dir=$(make_supercase busy-default-backend)
   fakebin="$dir/fakebin"; capture="$dir/pane.txt"
-  printf 'Ctrl+c:cancel\n' > "$capture"
-  PATH="$fakebin:$PATH" FM_FAKE_HERDR_CAPTURE="$capture" FM_STATE_OVERRIDE="$dir/state" FM_DAEMON_PRIMARY_HARNESS=grok pane_is_busy "default:w1:p1" \
-    || fail "pane_is_busy with no backend arg should still default to herdr"
-  pass "pane_is_busy: omitted backend defaults to herdr for Grok's isolated fallback"
+  printf 'Working...\n' > "$capture"
+  PATH="$fakebin:$PATH" FM_FAKE_HERDR_CAPTURE="$capture" FM_STATE_OVERRIDE="$dir/state" FM_DAEMON_PRIMARY_HARNESS=pi pane_is_busy "default:w1:p1" \
+    || fail "pane_is_busy with no backend arg should still default to Herdr's Pi rendering"
+  pass "pane_is_busy: omitted backend defaults to herdr for pi's isolated fallback"
 }
 
 test_pane_input_pending_herdr_dispatch() {
@@ -1861,7 +1856,7 @@ test_fm_send_exits_nonzero_on_initial_send_failure
 test_fm_send_exits_nonzero_on_pending_submit
 test_discover_supervisor_target_herdr
 test_pane_is_busy_herdr_native_busy_state
-test_primary_busy_guard_is_harness_scoped
+test_primary_busy_guard_uses_pi_signature
 test_pane_is_busy_defaults_to_herdr_when_backend_omitted
 test_pane_input_pending_herdr_dispatch
 test_inject_msg_herdr_busy_guard_defers

@@ -167,7 +167,7 @@ run_spawn() {
       "FM_PROJECTS_OVERRIDE=$home/projects" "FM_CONFIG_OVERRIDE=$home/config" \
       "FM_SPAWN_NO_GUARD=1" "FM_FAKE_PANE_PATH=$pane" \
       "PATH=$fakebin:$PATH" "$@" \
-      "$SPAWN" "$id" "$proj" codex --mode no-mistakes --yolo off ) 2>&1
+      "$SPAWN" "$id" "$proj" --mode no-mistakes --yolo off ) 2>&1
 }
 
 test_spawn_refuses_and_admits() {
@@ -229,7 +229,7 @@ test_send_refuses_and_admits() {
   fakebin=$(make_send_fakebin "$TMP/send-fake")
   log="$TMP/send-herdr.log"
   fm_write_meta "$home/state/lane-ok.meta" \
-    "backend=herdr" "window=sess:fm-lane-ok" "kind=ship" "harness=codex"
+    "backend=herdr" "window=sess:fm-lane-ok" "kind=ship" "harness=pi"
 
   # env-marker refuse.
   : > "$log"

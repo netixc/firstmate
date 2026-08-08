@@ -91,12 +91,11 @@ total_ns=69694000 per_call_us=69
 
 Roughly 0.07 ms per session start, from a single `[ -f "$FM_HOME/.env" ]` test that returns false before anything else runs.
 
-## Compatibility axes reviewed
+## Pi compatibility reviewed
 
-The Claude Code, Codex CLI, Grok, and Pi primary-session paths are not applicable after inspection.
-Nothing here reads or renders harness-specific state.
-The only supervision surfaces touched are the session-start digest, which `bin/fm-supervision-instructions.sh` already renders per harness without knowing this section exists, and the wake payload produced by the existing relay poll, which every harness protocol consumes identically.
+Nothing here reads or renders Pi-specific terminal state.
+The only supervision surfaces touched are Pi's session-start digest and the wake payload produced by the existing relay poll.
 
-Herdr task runtime: not applicable after inspection.
+Herdr workspace layer: not applicable after inspection.
 No command here reads `state/<id>.meta`'s backend fields, resolves an endpoint, or captures a pane.
 The one lifecycle integration is `bin/fm-teardown.sh`'s refusal, which runs before any Herdr command and keys only on the task id, so it is independent of endpoint state.

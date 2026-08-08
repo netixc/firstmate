@@ -1,10 +1,10 @@
-# Herdr runtime backend
+# Herdr workspace backend
 
-Herdr is Firstmate's sole agent-native task runtime with native per-pane agent state and push events.
+Herdr is Firstmate's sole terminal workspace layer with native per-pane agent state and push events.
 Firstmate requires Herdr protocol 14 or newer; broad backend verification covers versions 0.7.1, 0.7.3, 0.7.4, 0.7.5, and 0.8.0, while protocol-16 features remain gated by availability.
 Default-on presentation spaces have a higher floor of Herdr 0.8.0 for the reason given under [Presentation spaces](#presentation-spaces).
 Herdr provides the terminal session while Treehouse continues to provide task worktrees.
-[`configuration.md`](configuration.md#task-runtime) owns shared runtime metadata and selector semantics.
+[`configuration.md`](configuration.md#pi-runtime-support) owns shared Pi identity metadata and profile-selection semantics.
 
 ## Setup
 
@@ -71,7 +71,7 @@ A home opts out by writing `off` into local gitignored `config/herdr-presentatio
 An absent file leaves the choice to the version floor below, while an empty file and the value `on` are both a deliberate opt-in.
 Values are compared with whitespace stripped and case ignored, and an unrecognized value warns and follows the unconfigured default rather than failing a spawn over a purely visual setting.
 The empty file is the historical presence-based opt-in form, so every home that had already enabled the projection stays enabled with no migration step and no previously enabled home can be turned off by the floor.
-A home that never created the file gains the projection at its next Herdr spawn on a supported release, and that reaches every task because Herdr is the sole runtime.
+A home that never created the file gains the projection at its next Herdr spawn on a supported release, and that reaches every task because Herdr is the sole workspace layer.
 
 Projecting each task into its own workspace makes every task cleanup a workspace-emptying removal, which is the only removal shape Herdr's pre-0.8.0 focus defect touches.
 The focus-safe removal plan can avoid it only while the closing pane's shell can be proved lone, childless, and idle.
@@ -225,7 +225,7 @@ A human-blocked permission dialog has no busy banner and still surfaces.
 ## Composer and injection safety
 
 Herdr has no direct cursor-row primitive.
-The adapter locates the bottom-most recognized bordered row, Claude `❯` row, Codex `›` row, or a Pi separator region admitted only when native identity is exactly Pi and state is idle, done, or blocked.
+The adapter locates Pi's bottom-most native-identity-corroborated separator region only when native state is idle, done, or blocked.
 A working Pi, pending middle row, missing identity, incomplete separator pair, or over-tall candidate remains pending or unknown.
 
 ANSI capture preserves de-emphasized placeholder style.
@@ -276,8 +276,7 @@ It rejects every other supervisor value rather than applying the wrong transport
 For Herdr, target existence, native state, capture, composer state, and verified submit all route through the shared backend dispatcher and the explicit named-session CLI owner.
 The pane-independent max-defer alert is configured in [`wedge-alarm.md`](wedge-alarm.md).
 
-Harnesses with native tracked background execution can run the daemon in their terminal.
-Pi has no such mechanism.
+Pi has no native tracked-background execution mechanism.
 `bin/fm-afk-launch.sh` therefore creates a dedicated unfocused Herdr workspace, runs the daemon there with an explicit supervisor target and backend, records the exact daemon pane, and closes only that pane on stop.
 It never splits the captain's active tab and never uses shell `&`.
 Recovery reconciles only the recorded exact id.
