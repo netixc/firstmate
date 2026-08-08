@@ -185,20 +185,22 @@ Enabled primary-session turn-end guard integrations are tracked as repo-level ho
 Primary-session watcher wake protocols are rendered at session start by [`bin/fm-supervision-instructions.sh`](../bin/fm-supervision-instructions.sh) from [`docs/supervision-protocols/`](supervision-protocols/).
 Claude's Stop `asyncRewake` hook owns tokenless re-arm cycles, Grok uses background-notify cycles, Codex uses bounded foreground checkpoints, and Pi uses its two tracked primary extensions.
 `config/crew-harness` is a local, gitignored file containing one adapter name for crewmate and scout launches.
-Both static harness configuration files reject any adapter outside the four supported values above.
 When it is absent or contains `default`, crewmates mirror the firstmate's own harness.
-`config/secondmate-harness` is a separate local, gitignored file containing the adapter the primary uses to launch secondmate agents, optionally followed by model and effort tokens on the same line.
-The first non-empty, non-comment line is parsed as `<harness> [<model>] [<effort>]`.
-A bare `<harness>` preserves the previous behavior: harness only, with no model or effort launch flag.
-When the harness token is absent or `default`, secondmate launch falls back through `config/crew-harness` and then the primary's own harness, and no model or effort is read from that file.
-`fm-harness.sh secondmate-model` and `fm-harness.sh secondmate-effort` expose only the optional tokens from `config/secondmate-harness`; `config/crew-harness` remains a bare adapter-name file.
-An explicit harness argument to `fm-spawn.sh` still overrides either config file for that spawn only.
-An explicit `--model` or `--effort` overrides the matching token from `config/secondmate-harness`; for a local route, an explicit harness or raw launch command starts with clean model and effort defaults unless those flags are also passed.
+`config/secondmate-harness` remains the primary-local global fallback for secondmate launches.
+Its first non-empty, non-comment line is `<harness> [<model>] [<effort>]`, where a bare harness preserves the previous harness-only behavior and an absent or `default` harness falls back through `config/crew-harness` and then the primary's own harness.
+`config/secondmate-profiles/<id>` is the primary-local override for one secondmate id and takes precedence over that global fallback.
+A profile id is `[A-Za-z0-9._-]+`, the profile directory must not be a symlink, and each profile must be a regular non-symlink file containing exactly one non-empty, non-comment `<harness> [<model>] [<effort>]` line.
+The harness must be `claude`, `codex`, `grok`, or `pi`, the optional model must be a concrete token other than `default` or `-`, and the optional effort must be `low`, `medium`, `high`, `xhigh`, or `max`.
+A malformed or unsupported explicit profile stops that secondmate launch rather than falling back around it.
+For example, `mkdir -p config/secondmate-profiles && printf 'pi openai-codex/gpt-5.6-luna medium\n' > config/secondmate-profiles/homelab` pins only `homelab`.
+`bin/fm-harness.sh secondmate-profile <id>` is the parser and reports the resolved harness, model, effort, and source; its `secondmate`, `secondmate-model`, and `secondmate-effort` forms accept the same optional id.
+`fm-spawn.sh` re-resolves the profile for every local or remote launch and relaunch, including recovery and bootstrap liveness relaunch after an update or restart.
+An explicit per-spawn harness remains highest precedence, starts with clean model and effort defaults, and explicit `--model` or `--effort` independently override the selected config axis.
 Remote secondmate routes accept verified harness adapters only and reject raw launch commands.
 When `config/crew-dispatch.json` exists, crewmate and scout spawns require an explicit resolved harness instead of automatically falling back to `config/crew-harness`.
 The inherited-local-material contract is owned by [`secondmate-provisioning`](../.agents/skills/secondmate-provisioning/SKILL.md); its harness-relevant consequence is that a secondmate's own crewmates use the primary's dispatch profiles and static harness value.
 Those inherited values are defaults and rules only; `fm-spawn` still permits a consciously chosen explicit runtime outside the config.
-`config/secondmate-harness` is not inherited because secondmates do not launch secondmates.
+`config/secondmate-harness` and `config/secondmate-profiles/` are not inherited because secondmates do not launch secondmates.
 For grok, `fm-spawn.sh` installs one firstmate-owned global turn-end hook under `$GROK_HOME/hooks/`, or `~/.grok/hooks/` when `GROK_HOME` is unset, and drops a per-task `.fm-grok-turnend` pointer in the worktree, with teardown removing the task token and pointer.
 For Pi secondmate launches, `fm-spawn.sh` starts Pi with `-e` pointed at the secondmate home's own tracked `.pi/extensions/fm-primary-pi-watch.ts` and `.pi/extensions/fm-primary-turnend-guard.ts`, both already present from the secondmate home's git worktree.
 
@@ -208,8 +210,8 @@ For Pi secondmate launches, `fm-spawn.sh` starts Pi with `-e` pointed at the sec
 The shell scripts do not match those rules; firstmate chooses the best matching rule with judgment, resolves its profile object or array under the operating contract in `AGENTS.md` section 4 and `quota-array-dispatch`, and passes only concrete `--harness`, `--model`, and `--effort` flags to `fm-spawn.sh`.
 When the file exists, `fm-spawn.sh` enforces that contract by refusing crewmate and scout spawns that lack an explicit harness (`--harness`, a positional adapter, or a raw launch command).
 Batch spawns satisfy the same requirement with a shared `--harness`.
-Secondmate spawns are exempt and still resolve through `config/secondmate-harness` and its optional model and effort tokens.
-This section is the single owner of the canonical schema and its per-field semantics.
+Secondmate spawns are exempt and use the static secondmate profile resolution documented in [Harness support](#harness-support).
+This section is the single owner of the crew-dispatch JSON schema and its per-field semantics.
 `AGENTS.md` section 4 owns the always-loaded dispatch intake boundary, and `quota-array-dispatch` owns the completion-aware profile-array selection procedure.
 
 ```json

@@ -64,22 +64,19 @@
 #   With no harness arg, a crewmate/scout spawn resolves the CREW harness only when
 #   config/crew-dispatch.json is absent. When that file exists, crewmate/scout
 #   spawns require an explicit harness so firstmate cannot silently skip dispatch
-#   profile consultation. A --secondmate spawn is exempt and resolves the SECONDMATE
-#   harness (config/secondmate-harness -> config/crew-harness -> own), so the
-#   secondmate-vs-crewmate split is DURABLE across every respawn (recovery,
-#   /updatefirstmate, restart). A bare adapter name (claude|codex|grok|pi)
+#   profile consultation. A --secondmate spawn is exempt and resolves its named
+#   SECONDMATE profile (config/secondmate-profiles/<id> ->
+#   config/secondmate-harness -> config/crew-harness -> own), so the complete
+#   secondmate profile is DURABLE across every respawn (recovery, /updatefirstmate,
+#   restart). A bare adapter name (claude|codex|grok|pi)
 #   overrides it for this spawn (either kind). A non-flag string containing
 #   whitespace is treated as a RAW launch command - the escape hatch for verifying
 #   new adapters.
-#   config/secondmate-harness may also carry an optional model and effort as extra
-#   whitespace-separated tokens ("<harness> [<model>] [<effort>]"). For a
-#   --secondmate spawn, those tokens apply only when this spawn also resolves its
-#   harness from config/secondmate-harness. An explicit per-spawn --harness,
-#   positional harness arg, or raw launch command starts with clean model/effort
-#   defaults unless the caller also passes explicit --model/--effort flags. When
-#   the file governs the spawn, its model/effort tokens are re-resolved on every
-#   respawn exactly like the harness axis, and explicit --model/--effort flags
-#   still win over the file's tokens.
+#   The selected secondmate profile may carry optional model and effort tokens.
+#   An explicit per-spawn --harness, positional harness arg, or raw launch command
+#   starts with clean model/effort defaults unless the caller also passes explicit
+#   --model/--effort flags. When config governs the spawn, every profile axis is
+#   re-resolved on every respawn and explicit --model/--effort flags still win.
 #   A --secondmate spawn also propagates the primary's declared inherited local
 #   material, so the secondmate's OWN crewmates inherit primary config and the
 #   secondmate receives the primary's read-only shared captain-preference file
@@ -308,8 +305,35 @@ else
   }
 fi
 
+# Parse the tab-separated profile line emitted by fm-harness.sh without using
+# read's whitespace-field collapsing behavior, which would lose intentionally
+# empty model or effort fields from a legacy global profile.
+secondmate_profile_output_parse() {
+  local record=$1 remainder
+  SPAWN_PROFILE_HARNESS=
+  SPAWN_PROFILE_MODEL=
+  SPAWN_PROFILE_EFFORT=
+  SPAWN_PROFILE_SOURCE=
+  case "$record" in
+    *$'\t'*$'\t'*$'\t'*) ;;
+    *) echo "error: secondmate profile resolver returned malformed data" >&2; return 1 ;;
+  esac
+  SPAWN_PROFILE_HARNESS=${record%%$'\t'*}
+  remainder=${record#*$'\t'}
+  SPAWN_PROFILE_MODEL=${remainder%%$'\t'*}
+  remainder=${remainder#*$'\t'}
+  SPAWN_PROFILE_EFFORT=${remainder%%$'\t'*}
+  SPAWN_PROFILE_SOURCE=${remainder#*$'\t'}
+  if [ -z "$SPAWN_PROFILE_HARNESS" ] || [ -z "$SPAWN_PROFILE_SOURCE" ] \
+     || [[ "$SPAWN_PROFILE_SOURCE" == *$'\t'* ]]; then
+    echo "error: secondmate profile resolver returned malformed data" >&2
+    return 1
+  fi
+}
+
 spawn_remote_secondmate() {
   local id=$1 remote host root home harness positional model effort out rc meta tmp
+  local profile_record
   local remote_target remote_harness remote_herdr_session registry_lock remote_lock remote_generation
   local remote_traceparent remote_recorded_traceparent
   local -a launch_args
@@ -348,7 +372,17 @@ spawn_remote_secondmate() {
   elif [ -n "$positional" ]; then
     harness=$positional
   else
-    harness=$("$FM_ROOT/bin/fm-harness.sh" secondmate)
+    if ! profile_record=$("$FM_ROOT/bin/fm-harness.sh" secondmate-profile "$id"); then
+      fm_lock_release "$registry_lock" || true
+      fm_lock_release "$SPAWN_TASK_LOCK" || true
+      return 1
+    fi
+    if ! secondmate_profile_output_parse "$profile_record"; then
+      fm_lock_release "$registry_lock" || true
+      fm_lock_release "$SPAWN_TASK_LOCK" || true
+      return 1
+    fi
+    harness=$SPAWN_PROFILE_HARNESS
   fi
   case "$harness" in
     claude|codex|grok|pi) ;;
@@ -363,11 +397,11 @@ spawn_remote_secondmate() {
   effort=${EFFORT:--}
   if [ -z "$HARNESS_ARG" ] && [ -z "$positional" ]; then
     if [ "$MODEL_SET" -eq 0 ]; then
-      model=$("$SCRIPT_DIR/fm-harness.sh" secondmate-model)
+      model=$SPAWN_PROFILE_MODEL
       [ -n "$model" ] || model=-
     fi
     if [ "$EFFORT_SET" -eq 0 ]; then
-      effort=$("$SCRIPT_DIR/fm-harness.sh" secondmate-effort)
+      effort=$SPAWN_PROFILE_EFFORT
       [ -n "$effort" ] || effort=-
     fi
   fi
@@ -739,17 +773,20 @@ case "$ARG3" in
     done
     ;;
   '')
-    # No explicit harness: resolve from config. A secondmate AGENT launches on the
-    # secondmate harness (config/secondmate-harness -> config/crew-harness -> own);
-    # every other kind uses the crew harness only when no dispatch profile file is
-    # active. Resolving here on every spawn is what makes the split DURABLE - a
-    # respawn (recovery, /updatefirstmate, restart) re-resolves, so
-    # config/secondmate-harness keeps governing secondmate launches across restarts.
-    # The launch_template lookup below is the unverified-adapter guard for both
-    # kinds: a harness with no template aborts the spawn.
+    # No explicit harness: resolve from config. A secondmate uses its matching
+    # config/secondmate-profiles/<id> entry first, otherwise the unchanged global
+    # config/secondmate-harness -> config/crew-harness -> own fallback. Resolving
+    # once here on every spawn keeps the complete profile durable across recovery,
+    # bootstrap liveness relaunch, update, and restart paths.
     if [ "$KIND" = secondmate ]; then
-      HARNESS=$("$FM_ROOT/bin/fm-harness.sh" secondmate)
-      harness_src='config/secondmate-harness (falling back to config/crew-harness)'
+      SECONDMATE_PROFILE=$("$FM_ROOT/bin/fm-harness.sh" secondmate-profile "$ID") || exit 1
+      secondmate_profile_output_parse "$SECONDMATE_PROFILE" || exit 1
+      SM_HARNESS=$SPAWN_PROFILE_HARNESS
+      SM_MODEL=$SPAWN_PROFILE_MODEL
+      SM_EFFORT=$SPAWN_PROFILE_EFFORT
+      SM_PROFILE_SOURCE=$SPAWN_PROFILE_SOURCE
+      HARNESS=$SM_HARNESS
+      harness_src=$SM_PROFILE_SOURCE
     else
       if [ -f "$CONFIG/crew-dispatch.json" ]; then
         echo "error: config/crew-dispatch.json is active - pass an explicit harness resolved from the dispatch rules (the consultation backstop, so the rules are never silently skipped)." >&2
@@ -766,25 +803,20 @@ case "$ARG3" in
     ;;
 esac
 
-# config/secondmate-harness may carry optional model/effort tokens alongside the
-# harness ("<harness> [<model>] [<effort>]"). They apply only when this is a
-# --secondmate spawn and no explicit per-spawn harness/raw launch was supplied, so
-# the harness itself came from the secondmate config fallback chain. Resolving
-# here on every spawn makes the pin durable across respawns. Precedence: explicit
-# --model/--effort flags still win over the file's tokens.
+# The selected secondmate profile carries optional model/effort tokens alongside
+# its harness. They apply only when no explicit per-spawn harness or raw launch
+# was supplied, and explicit --model/--effort flags still win axis by axis. The
+# per-secondmate parser rejects an invalid effort; preserve the global file's
+# established warning-and-ignore behavior when its legacy token is invalid.
 if [ "$KIND" = secondmate ] && [ -z "$ARG3" ]; then
   if [ "$MODEL_SET" -eq 0 ]; then
-    SM_MODEL=$("$SCRIPT_DIR/fm-harness.sh" secondmate-model)
     [ -z "$SM_MODEL" ] || MODEL=$SM_MODEL
   fi
-  if [ "$EFFORT_SET" -eq 0 ]; then
-    SM_EFFORT=$("$SCRIPT_DIR/fm-harness.sh" secondmate-effort)
-    if [ -n "$SM_EFFORT" ]; then
-      case "$SM_EFFORT" in
-        low|medium|high|xhigh|max) EFFORT=$SM_EFFORT ;;
-        *) echo "warning: config/secondmate-harness effort token '$SM_EFFORT' is not one of low, medium, high, xhigh, max; ignoring" >&2 ;;
-      esac
-    fi
+  if [ "$EFFORT_SET" -eq 0 ] && [ -n "$SM_EFFORT" ]; then
+    case "$SM_EFFORT" in
+      low|medium|high|xhigh|max) EFFORT=$SM_EFFORT ;;
+      *) echo "warning: $SM_PROFILE_SOURCE effort token '$SM_EFFORT' is not one of low, medium, high, xhigh, max; ignoring" >&2 ;;
+    esac
   fi
 fi
 

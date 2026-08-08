@@ -399,7 +399,9 @@ EOF
   printf '%s\n' "$id" > "$mate/.fm-secondmate-home"
   printf '# Firstmate\n' > "$mate/AGENTS.md"
   printf 'Second mate charter.\n' > "$mate/data/charter.md"
-  printf '%s\n' pi > "$home/config/secondmate-harness"
+  mkdir -p "$home/config/secondmate-profiles"
+  printf '%s\n' 'claude global-model high' > "$home/config/secondmate-harness"
+  printf '%s\n' 'pi openai-codex/gpt-5.6-luna medium' > "$home/config/secondmate-profiles/$id"
   printf '%s\n' manual > "$home/config/backlog-backend"
   touch "$home/state/.last-watcher-beat"
   {
@@ -932,7 +934,15 @@ EOF
     "the later fleet read did not confirm the relaunched Herdr endpoint"
   assert_grep 'herdr_pane_id=p-new' "$home/state/$SESSION_START_HERDR_SECOND_MATE_ID.meta" \
     "the real respawn path did not record the replacement Herdr pane"
-  pass "session start: a confirmed Herdr husk is closed and relaunched"
+  assert_grep 'harness=pi' "$home/state/$SESSION_START_HERDR_SECOND_MATE_ID.meta" \
+    "bootstrap relaunch ignored the secondmate profile harness"
+  assert_grep 'model=openai-codex/gpt-5.6-luna' "$home/state/$SESSION_START_HERDR_SECOND_MATE_ID.meta" \
+    "bootstrap relaunch ignored the secondmate profile model"
+  assert_grep 'effort=medium' "$home/state/$SESSION_START_HERDR_SECOND_MATE_ID.meta" \
+    "bootstrap relaunch ignored the secondmate profile effort"
+  assert_contains "$(cat "$log")" "pi --model 'openai-codex/gpt-5.6-luna' --thinking 'medium'" \
+    "bootstrap relaunch did not thread the profile into the Pi command"
+  pass "session start: a confirmed Herdr husk relaunches with its durable profile"
 }
 
 # --- endpoint liveness: Herdr, live and dead --------------------------------
