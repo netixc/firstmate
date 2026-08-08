@@ -51,7 +51,7 @@ new_world() {
   git init -q -b main "$w/main"
   # Mirror the real repo: the gitignored operational dirs never dirty a worktree,
   # so a secondmate home's data/state/projects can never block its fast-forward.
-  printf 'projects/\nstate/\ndata/\n.no-mistakes/\nconfig/crew-harness\n' > "$w/main/.gitignore"
+  printf 'projects/\nstate/\ndata/\n.no-mistakes/\nconfig/crew-profile\n' > "$w/main/.gitignore"
   printf 'v1\n' > "$w/main/AGENTS.md"
   printf 'r1\n' > "$w/main/README.md"
   mkdir -p "$w/main/bin" "$w/main/.agents/skills"
@@ -74,7 +74,7 @@ add_sm_worktree() {
     printf 'window=firstmate:fm-%s\n' "$id"
     printf 'endpoint_task_id=%s\n' "$id"
     printf 'kind=secondmate\n'
-    printf 'harness=codex\n'
+    printf 'harness=pi\n'
     printf 'home=%s/%s\n' "$w" "$id"
     printf 'worktree=%s/%s\n' "$w" "$id"
     printf 'project=%s/%s\n' "$w" "$id"
@@ -640,7 +640,7 @@ test_nudge_retry_uses_fresh_herdr_endpoint_after_respawn() {
     printf 'window=%s\n' "$stale"
     printf 'backend=herdr\n'
     printf 'kind=secondmate\n'
-    printf 'harness=claude\n'
+    printf 'harness=pi\n'
     printf 'home=%s/sm-instr\n' "$w"
   } > "$meta"
 
@@ -746,11 +746,46 @@ SH
     FM_STATE_OVERRIDE="$w/home/state" FM_DATA_OVERRIDE="$w/home/data" \
     FM_PROJECTS_OVERRIDE="$w/home/projects" FM_CONFIG_OVERRIDE="$w/home/config" \
     FM_SPAWN_NO_GUARD=1 \
-    "$ROOT/bin/fm-spawn.sh" sm "$w/sm" codex --secondmate >/dev/null 2>&1 || true
+    "$ROOT/bin/fm-spawn.sh" sm "$w/sm" --secondmate >/dev/null 2>&1 || true
 
   [ "$(head_of "$w/sm")" = "$c2" ] \
     || fail "spawn did not fast-forward the secondmate worktree to the primary's HEAD"
   pass "T10 spawn fast-forwards a secondmate worktree to the primary's local HEAD before launch"
+}
+
+# --- T10a: profile refusal happens only after the guarded local sync ---------
+# A malformed Pi profile must stop the launch, but cannot strand an otherwise
+# clean local secondmate behind the primary. This is the pre-launch ordering
+# regression: sync is safety work, while profile validation is a later launch
+# prerequisite.
+test_spawn_sync_precedes_pi_profile_refusal() {
+  local w c1 c2 err rc=0
+  w=$(new_world spawn-sync-before-profile-refusal)
+  c1=$(head_of "$w/main")
+  git -C "$w/main" worktree add -q --detach "$w/sm" "$c1"
+  printf 'sm\n' > "$w/sm/.fm-secondmate-home"
+  mkdir -p "$w/sm/data" "$w/home/config"
+  printf 'charter\n' > "$w/sm/data/charter.md"
+  cp "$ROOT/bin/fm-harness.sh" "$w/main/bin/fm-harness.sh"
+  chmod +x "$w/main/bin/fm-harness.sh"
+  # The second token is intentionally invalid for Pi's --thinking contract.
+  printf 'openai-codex/gpt-5.6-luna retired-thinking\n' > "$w/home/config/secondmate-profile"
+  bump_primary "$w" instr
+  c2=$(head_of "$w/main")
+
+  PATH="$BASE_PATH" HERDR='' \
+    FM_ROOT_OVERRIDE="$w/main" FM_HOME="$w/home" \
+    FM_STATE_OVERRIDE="$w/home/state" FM_DATA_OVERRIDE="$w/home/data" \
+    FM_PROJECTS_OVERRIDE="$w/home/projects" FM_CONFIG_OVERRIDE="$w/home/config" \
+    FM_SPAWN_NO_GUARD=1 \
+    "$ROOT/bin/fm-spawn.sh" sm "$w/sm" --secondmate >/dev/null 2>"$w/profile.err" || rc=$?
+
+  [ "$rc" -ne 0 ] || fail "a malformed Pi secondmate profile unexpectedly launched"
+  assert_contains "$(cat "$w/profile.err")" "thinking must be low, medium, high, xhigh, or max" \
+    "the launch should stop at the malformed Pi profile"
+  [ "$(head_of "$w/sm")" = "$c2" ] \
+    || fail "profile refusal skipped the required pre-launch fast-forward"
+  pass "T10a local secondmate sync completes before a malformed Pi profile refuses launch"
 }
 
 # --- T11: spawn warns when pre-launch sync is skipped ------------------------
@@ -780,7 +815,7 @@ SH
     FM_STATE_OVERRIDE="$w/home/state" FM_DATA_OVERRIDE="$w/home/data" \
     FM_PROJECTS_OVERRIDE="$w/home/projects" FM_CONFIG_OVERRIDE="$w/home/config" \
     FM_SPAWN_NO_GUARD=1 \
-    "$ROOT/bin/fm-spawn.sh" sm "$w/sm" codex --secondmate >/dev/null 2>"$err" || true
+    "$ROOT/bin/fm-spawn.sh" sm "$w/sm" --secondmate >/dev/null 2>"$err" || true
 
   assert_contains "$(cat "$err")" \
     "warning: secondmate sm sync skipped before launch: dirty working tree" \
@@ -878,6 +913,7 @@ test_bootstrap_nudge_retry_refuses_changed_home
 test_nudge_retry_uses_fresh_herdr_endpoint_after_respawn
 test_bootstrap_sweep_surfaces_skipped_home
 test_spawn_fast_forwards_before_launch
+test_spawn_sync_precedes_pi_profile_refusal
 test_spawn_warns_when_sync_skipped_before_launch
 test_seed_marker_clean_when_gitignored
 test_seed_marker_converges_existing_home

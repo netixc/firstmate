@@ -56,22 +56,19 @@ The snapshot strips control sequences, retains only capture metadata and literal
 The default path remains local-only; live GitHub enrichment exists only behind the bearings `--include-prs` opt-in.
 Optional Relay integrates with the watcher only after explicit opt-in; [configuration.md](configuration.md#relay-env) owns its generated-artifact and dispatch mechanics.
 
-At session start, `bin/fm-session-start.sh` emits exactly one primary-harness supervision block rendered by `bin/fm-supervision-instructions.sh` from `docs/supervision-protocols/`.
-That block owns the live wait shape for the running primary harness: Claude's Stop `asyncRewake` hook owns tokenless re-arm cycles, Grok uses background-notify cycles, Codex uses bounded foreground checkpoints, and Pi uses its two tracked primary extensions.
-`bin/fm-watch-arm.sh` remains the verified arm wrapper for protocols that call it; it forks the watcher as a tracked child, verifies it is genuinely alive with a fresh liveness beacon, and prints an honest `started`, `attached`, or nonzero `FAILED` status.
+At session start, `bin/fm-session-start.sh` emits Pi's one supervision block through `bin/fm-supervision-instructions.sh` and `docs/supervision-protocols/pi.md`.
+Pi's tracked primary extensions own turn-end protection and the watcher child lifecycle.
+`bin/fm-watch-arm.sh` remains their verified arm wrapper.
+It forks the watcher as a tracked child, verifies a genuinely live process with a fresh liveness beacon, and prints an honest `started`, `attached`, or nonzero `FAILED` status.
 [`watcher-continuity.md`](watcher-continuity.md#arm-layer-cycle-contract) owns the arm layer's successor, terminal-delivery, and typed clean-close failure contract.
-The arm layer records one bounded lifecycle row per observed cycle in `state/.watch-cycle-exits.log`; `state/.watch-triage.log` remains exclusively the absorbed-wake debug log.
+The arm layer records one bounded lifecycle row per observed cycle in `state/.watch-cycle-exits.log`.
+`state/.watch-triage.log` remains exclusively the absorbed-wake debug log.
 Pi verifies session-lock ownership and launches one singleton successor from its child-close handler before delivering an actionable wake prompt, with bounded exponential retry for failed restoration.
-Claude's `bin/fm-claude-stop-autoarm.sh` hook fires on every Stop and, when the home is eligible and still needs supervision, claims one home-scoped cycle, foregrounds the arm wrapper, and translates actionable closes into exit-2 rewakes.
-It suppresses failed-looking closes when the same identity-matched watcher is healthy, retries genuine failures within a bound, and coordinates exhausted failure episodes with the Claude turn-end guard as documented in [`turnend-guard.md`](turnend-guard.md).
-[`watcher-continuity.md`](watcher-continuity.md) owns Claude's residual active-turn coverage and watcher-status command-gating boundary.
-The existing turn-end guard remains the final backstop for all four harness protocols, with the `--claude` mode cooperating with the auto-arm claim.
-Its `--restart` mode signals only the watcher recorded in the current home's `state/.watch.lock`, so restarting one home cannot kill sibling secondmate watchers.
-A pull-based guard (`bin/fm-guard.sh`) warns through supervision tool output if the primary checkout is tangled, if work, process-event sources, or Relay polling has an unhealthy model-aware supervision verdict, or if queued wakes are waiting to be drained.
+Pi's turn-end guard is the final backstop when work, a process-event source, or Relay polling needs supervision and no identity-matched watcher lock with a fresh beacon is live.
+The guard covers the main primary and genuinely marked secondmate homes, exempts child crewmate and scout worktrees, and is documented in [turnend-guard.md](turnend-guard.md).
+A pull-based guard (`bin/fm-guard.sh`) warns through supervision tool output if the primary checkout is tangled, if work, process-event sources, or Relay polling lacks Pi supervision, or if queued wakes are waiting to be drained.
 The drain script calls that guard after emptying the queue, which avoids repeating the queued-wakes warning for records it just consumed while still warning on unhealthy supervision.
 It leads with a prominent bordered tangle banner, while `bin/fm-guard.sh` owns the watcher-down banner and reminder policy so repeated guarded commands stay noisy without reprinting the full banner in the same episode.
-On every verified primary harness, tracked hook integration gives the primary session a push-based backstop: when work, a process-event source, or Relay polling needs supervision and no identity-matched watcher lock with a fresh beacon is live, direct Stop hooks block and passive turn-end hooks force one bounded follow-up.
-The guard covers the main primary and genuinely marked secondmate homes, exempts child crewmate/scout worktrees, is loop-safe per harness, and is documented in [turnend-guard.md](turnend-guard.md).
 
 A presence-gated sub-supervisor (`bin/fm-supervise-daemon.sh`) extends this for walk-away supervision: the `/afk` skill starts it through the tracked foreground helper `bin/fm-afk-start.sh`, after which the watcher reverts to daemon-managed one-shot mode and the daemon self-handles routine wakes in bash.
 The watcher and daemon share `bin/fm-classify-lib.sh` for captain-relevant status verbs, declared-external-wait vocabulary, and status-scan primitives.
@@ -85,29 +82,25 @@ Composer-content classification has one shared owner, `bin/fm-composer-lib.sh`, 
 The daemon injects only into an affirmatively `empty` composer, so both `pending` and `unknown` defer and a bare dead-shell prompt cannot receive an escalation; the current boundary is in [Composer and injection safety](herdr-backend.md#composer-and-injection-safety).
 Stalled escalation delivery writes `state/.subsuper-inject-wedged` and attempts a configured pane-independent active alert after `FM_MAX_DEFER_SECS` instead of silently deferring forever.
 On an unmarked return, `bin/fm-afk-return.sh` owns ordered shutdown, durable catch-up evidence, and the fail-closed gate that keeps ordinary work behind every live firstmate-actionable blocker.
-`fm-send.sh` selects a pre-Enter popup-settle for slash commands and for codex `$...` skill invocations using metadata-routed target `harness=` values, then adds its own `FM_SEND_SETTLE` pause after successful text sends so immediate peeks catch the receiving turn starting; the sub-supervisor uses only the shared submit core and does not pay that post-submit pause.
+`fm-send.sh` uses Pi's shared submit core and adds its own `FM_SEND_SETTLE` pause after successful text sends so immediate peeks catch the receiving turn starting; the sub-supervisor uses only the shared submit core and does not pay that post-submit pause.
 
-## Busy state is semantic, per adapter
+## Busy state is semantic for Pi
 
-`bin/fm-busy-lib.sh` is the single owner of what "this worker is busy" means, and `bin/fm-busy-event.sh` is the only writer of the per-task records it reads.
-Every classification returns a verdict of busy, idle, unknown, or dead together with the source that produced it, so a consumer or a diagnostic can never confuse semantic state with a fallback.
-
-Each converted adapter reports its own turn lifecycle through a machine-readable contract the vendor already exposes: Pi uses the Firstmate-owned extension's `agent_start` and `agent_settled` confirmed by `ctx.isIdle()`, and Claude uses owned `UserPromptSubmit`, `Stop`, `StopFailure`, and `SessionEnd` hooks.
-Codex classifies unknown behind an explicit probe until a semantic source is live-verified, and Grok keeps one clearly isolated rendered-tail fallback that can only classify a Grok task.
-
-Missing, malformed, stale, untrusted, or unverified semantic state is unknown, never idle, and unknown is never promoted to busy either.
-Ordinary task-state consumers act only on an exact busy verdict, so an unreadable worker surfaces for a closer look instead of being absorbed as still-working or written off as finished.
-Endpoint death is the only process-level override and yields dead; child processes, CPU, process sleep state, and marker modification times are not state signals.
-`state/<id>.turn-ended` files remain wake notifications, not current state.
-
-Each record is bound to an incarnation token minted when the task's wiring is armed, so an event from a superseded incarnation is rejected rather than applied, and a record left behind by one classifies unknown.
+`bin/fm-busy-lib.sh` is the single owner of what "this Pi worker is busy" means, and `bin/fm-busy-event.sh` is the only writer of the per-task records it reads.
+Every classification returns busy, idle, unknown, or dead together with its source so a consumer or diagnostic cannot confuse semantic state with a fallback.
+Pi uses the Firstmate-owned extension's `agent_start` and `agent_settled` events confirmed by `ctx.isIdle()`.
+Missing, malformed, stale, untrusted, or unverified semantic state is unknown rather than idle.
+Ordinary task-state consumers act only on an exact busy verdict, so an unreadable worker surfaces for a closer look instead of being absorbed as still working or written off as finished.
+Endpoint death is the only process-level override and yields dead.
+Child processes, CPU, process sleep state, and marker modification times are not state signals.
+`state/<id>.turn-ended` files remain wake notifications rather than current state.
+Each record is bound to an incarnation token minted when task wiring is armed, so an event from a superseded incarnation is rejected rather than applied.
 Rendered delivery readers deliberately remain outside this contract because they answer delivery questions rather than recorded worker state.
 Herdr owns submit acknowledgement and away-mode supervisor-pane composer checks, while `bin/fm-pending-reply-lib.sh` owns secondmate delivery observation.
-All are harness-scoped rather than a global pattern union, and none is a recorded worker state source.
 
-## Task runtime
+## Task workspace
 
-Herdr is Firstmate's sole task runtime, while Treehouse provides task worktrees.
+Herdr is Firstmate's sole terminal workspace layer, while Treehouse provides task worktrees.
 `bin/fm-backend.sh` centralizes runtime metadata helpers, cleanup identity validation, selector resolution, and Herdr operation dispatch.
 Unknown or stale runtime identities are rejected rather than reinterpreted.
 Herdr supplies native busy state, recovery-grade agent state, and native transition push when the installed protocol supports it.
@@ -145,14 +138,13 @@ The intake and authority contract in `AGENTS.md` owns when separate scout resear
 
 ## Dispatch profiles
 
-Crewmate and scout dispatch can stay on the static crewmate harness resolved by `config/crew-harness`, or it can use local dispatch profiles in `config/crew-dispatch.json`.
-The dispatch file is intentionally judgment-based: firstmate reads the natural-language rules at intake, chooses the best matching rule, resolves profile arrays itself from current quota output under the `AGENTS.md` section 4 intake boundary and the `quota-array-dispatch` selection procedure, and passes only concrete `--harness`, `--model`, and `--effort` axes to `fm-spawn.sh`.
-The shell scripts validate the JSON shape and verified harness/effort combinations, but they do not parse task intent, match natural-language rules, or own array selection.
+Crewmate and scout dispatch uses the ordinary-worker Pi profile or local dispatch profiles in `config/crew-dispatch.json`.
+The dispatch file is intentionally judgment-based: firstmate reads natural-language rules at intake, chooses the best matching rule, resolves profile arrays from current quota output under the `AGENTS.md` section 4 intake boundary and the `quota-array-dispatch` selection procedure, and passes only concrete `--model` and `--effort` axes to `fm-spawn.sh`.
+The shell scripts validate the JSON shape and Pi thinking values, but they do not parse task intent, match natural-language rules, or own array selection.
 The session-start bootstrap step keeps valid dispatch configuration silent unless verbose facts are enabled and surfaces a concise invalid-config line when validation fails.
-When the file exists, `fm-spawn.sh` refuses crewmate and scout launches without an explicit harness, so `config/crew-harness` is only automatic when no dispatch profile file is active.
-Secondmate launches are exempt because they resolve their own static secondmate profile instead.
-Unsupported effort values are still recorded in task meta when passed to `fm-spawn.sh`, but the launch template omits any effort flag that the selected harness does not accept.
-That keeps spawn launch compatible across Claude Code, Codex CLI, Grok, and Pi while preserving the requested profile for later audit.
+When the file exists, `fm-spawn.sh` refuses crewmate and scout launches without an explicit selected Pi model, so `config/crew-profile` is only automatic when no dispatch profile file is active.
+Secondmate launches are exempt because they resolve their own secondmate Pi profile instead.
+An invalid runtime field, model, or effort blocks configuration rather than becoming a compatibility path.
 
 ## Optional secondmates
 
@@ -184,9 +176,10 @@ Idle secondmate panes are healthy; teardown is explicit and refuses while the se
 Secondmate homes converge conservatively to the primary's version and declared inherited local material at launch and during locked session start.
 The [`secondmate-provisioning` skill](../.agents/skills/secondmate-provisioning/SKILL.md) owns the full guarded sync, propagation, nudge, and mid-session local-material push contract.
 
-Secondmate agents can run on a different verified harness, model, and effort than crewmates or sibling secondmates through the primary-local profile resolver.
-The profile's schema and precedence are owned by [`configuration.md`](configuration.md#harness-support), while `fm-spawn.sh` re-resolves it for local and remote launches and relaunches.
-`config/crew-harness` remains the inherited crewmate harness, and `config/crew-dispatch.json` remains the inherited natural-language dispatch surface for a secondmate's own crewmates.
+Pi is the sole worker runtime for crewmates and secondmates.
+A primary-local profile resolver selects only the Pi model and thinking level for an ordinary worker or secondmate.
+The profile schema and precedence are owned by [`configuration.md`](configuration.md#pi-runtime-support), while `fm-spawn.sh` re-resolves it for local and remote launches and relaunches.
+`config/crew-profile` remains the inherited ordinary-worker default, and `config/crew-dispatch.json` remains the inherited natural-language Pi-model dispatch surface for a secondmate's own crewmates.
 The [`secondmate-provisioning` skill](../.agents/skills/secondmate-provisioning/SKILL.md) owns the complete inherited-local-material allowlist and propagation contract.
 
 The `data/secondmates.md` line contract is owned by the [`secondmate-provisioning` skill](../.agents/skills/secondmate-provisioning/SKILL.md#routing-table), and the secondmate environment variables are documented in [configuration.md](configuration.md).
@@ -248,10 +241,10 @@ The [Relay configuration reference](configuration.md#promised-public-replies-sta
 
 ## Project memory belongs to projects
 
-Durable project-intrinsic agent knowledge lives in each project's committed `AGENTS.md`, with `CLAUDE.md` as a symlink.
-Ship briefs prompt crewmates to create or update those files through the normal delivery path; `data/projects.md` stays a thin private registry.
-Each project `AGENTS.md` carries a short `## Maintaining this file` self-governance section; `bin/fm-ensure-agents-md.sh` owns the canonical wording and injects it idempotently when creating the skeleton, promoting an existing `CLAUDE.md`, or reconciling an existing `AGENTS.md` that still lacks it.
-It refuses a case-variant real memory file such as a lowercase `agents.md`, whose `CLAUDE.md` symlink would carry an uppercase literal target that dangles on a case-sensitive filesystem, and surfaces the mismatch for manual reconciliation.
+Durable project-intrinsic agent knowledge lives in each project's committed `AGENTS.md`.
+Ship briefs prompt crewmates to create or update that file through the normal delivery path; `data/projects.md` stays a thin private registry.
+Each project `AGENTS.md` carries a short `## Maintaining this file` self-governance section; `bin/fm-ensure-agents-md.sh` owns the canonical wording and injects it idempotently when creating the skeleton or reconciling an existing `AGENTS.md` that still lacks it.
+It refuses a case-variant real memory file such as a lowercase `agents.md` and surfaces the mismatch for manual reconciliation.
 The full ownership rule - what is project-intrinsic versus fleet-private, and how firstmate keeps the two apart without writing into project clones - is owned by [`AGENTS.md`](../AGENTS.md) (project and knowledge management).
 
 ## Operational memory routing

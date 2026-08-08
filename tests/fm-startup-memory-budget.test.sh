@@ -217,7 +217,7 @@ new_propagation_world() {
     printf 'worktree=%s\n' "$sm"
     printf 'project=%s\n' "$sm"
     printf 'kind=secondmate\n'
-    printf 'harness=codex\n'
+    printf 'harness=pi\n'
     printf 'home=%s\n' "$sm"
     printf 'herdr_session=firstmate\n'
     printf 'herdr_workspace_id=w1\n'

@@ -221,15 +221,15 @@ assert_no_grep 'command:' "$ROOT/bin/fm-trace-context-lib.sh" "trace-context lib
 fm_trace_context_resolve "$CFG_OFF" "$NOMETA" >/dev/null || fail "resolve must return 0 when off"
 pass "the resolver has no sleep/timeout/command hang source and always returns success"
 
-# --- harness/backend/kind independence (code only, comments stripped) ---------
+# --- runtime/backend/kind independence (code only, comments stripped) ---------
 
 LIB_CODE=$(sed 's/#.*$//' "$ROOT/bin/fm-trace-context-lib.sh")
-for tok in harness backend herdr claude codex grok kind ship scout secondmate ; do
+for tok in harness backend herdr kind ship scout secondmate ; do
   case "$LIB_CODE" in
-    *"$tok"*) fail "trace-context lib code must be harness/backend/kind agnostic, but references '$tok'" ;;
+    *"$tok"*) fail "trace-context lib code must be runtime/backend/kind agnostic, but references '$tok'" ;;
   esac
 done
-pass "the carrier is minted identically for every harness, backend, and spawn kind (no such branching in the lib code)"
+pass "the carrier is minted identically for every runtime, backend, and spawn kind (no such branching in the lib code)"
 
 # --- no prompt / task-prose reads (code only, comments stripped) --------------
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/fm-backend.test.sh - Herdr runtime metadata and dispatch contract.
+# tests/fm-backend.test.sh - Herdr workspace metadata and dispatch contract.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -9,33 +9,33 @@ set -u
 
 TMP_ROOT=$(fm_test_tmproot fm-backend-tests)
 
-test_runtime_validation_accepts_only_herdr() {
+test_workspace_backend_validation_accepts_only_herdr() {
   local out status
-  fm_backend_validate herdr || fail "Herdr should be the supported runtime"
+  fm_backend_validate herdr || fail "Herdr should be the supported workspace backend"
   out=$(fm_backend_validate stale-runtime 2>&1)
   status=$?
-  [ "$status" -ne 0 ] || fail "an unsupported runtime must be rejected"
-  assert_contains "$out" "Firstmate requires Herdr" "the rejection should name the sole runtime"
-  pass "runtime validation accepts only Herdr"
+  [ "$status" -ne 0 ] || fail "an unsupported workspace backend must be rejected"
+  assert_contains "$out" "Firstmate requires Herdr" "the rejection should name the sole workspace layer"
+  pass "workspace backend validation accepts only Herdr"
 }
 
-test_runtime_required_tools_match_ownership() {
+test_workspace_backend_required_tools_match_ownership() {
   local out
   out=$(fm_backend_required_tools herdr)
   [ "$out" = "herdr jq treehouse" ] || fail "Herdr requirements mismatch: '$out'"
   if fm_backend_required_tools stale-runtime >/dev/null 2>&1; then
-    fail "unsupported runtimes must have no dependency declaration"
+    fail "unsupported workspace backends must have no dependency declaration"
   fi
   pass "Herdr declares the endpoint and worktree dependencies"
 }
 
-test_runtime_meta_requires_explicit_identity() {
+test_workspace_backend_meta_requires_explicit_identity() {
   local meta out
   meta="$TMP_ROOT/meta-missing-runtime"
   printf 'window=default:w1:p2\n' > "$meta"
   out=$(fm_backend_of_meta "$meta")
   [ -z "$out" ] || fail "metadata without backend= must remain stale, got '$out'"
-  pass "metadata routing does not reinterpret a missing runtime identity"
+  pass "metadata routing does not reinterpret a missing workspace backend identity"
 }
 
 test_selector_resolution_prefers_durable_metadata() {
@@ -55,7 +55,7 @@ EOF_META
   pass "durable task selectors and explicit Herdr endpoints resolve exactly"
 }
 
-test_selector_runtime_rejects_stale_metadata() {
+test_selector_backend_rejects_stale_metadata() {
   local state out status
   state="$TMP_ROOT/selector-runtime"
   mkdir -p "$state"
@@ -71,11 +71,11 @@ window=default:w1:p2
 EOF_META
   out=$(fm_backend_of_selector stale default:w1:p2 "$state" 2>&1)
   status=$?
-  [ "$status" -ne 0 ] || fail "a stale recorded runtime must be rejected"
+  [ "$status" -ne 0 ] || fail "a stale recorded workspace backend must be rejected"
   [ -z "$out" ] || fail "stale selector rejection should stay silent, got '$out'"
   out=$(fm_backend_of_selector unknown direct:w1:p3 "$state")
   [ "$out" = herdr ] || fail "an unrecorded explicit endpoint should use Herdr, got '$out'"
-  pass "selector runtime resolution accepts Herdr and rejects stale metadata"
+  pass "selector backend resolution accepts Herdr and rejects stale metadata"
 }
 
 test_task_endpoint_validation_accepts_herdr() {
@@ -93,12 +93,12 @@ herdr_tab_id=w1:t2
 herdr_pane_id=w1:p2
 EOF_META
   fm_backend_validate_task_endpoint "$meta" sample || fail "a consistent Herdr endpoint should validate"
-  [ "$FM_BACKEND_VALIDATED_BACKEND" = herdr ] || fail "validated runtime should be Herdr"
+  [ "$FM_BACKEND_VALIDATED_BACKEND" = herdr ] || fail "validated workspace backend should be Herdr"
   [ "$FM_BACKEND_VALIDATED_TARGET" = lab:w1:p2 ] || fail "validated Herdr target mismatch"
   pass "endpoint validation accepts a consistently bound Herdr endpoint"
 }
 
-test_task_endpoint_validation_rejects_stale_runtime() {
+test_task_endpoint_validation_rejects_stale_backend() {
   local meta out status
   meta="$TMP_ROOT/stale-endpoint.meta"
   cat > "$meta" <<'EOF_META'
@@ -111,8 +111,8 @@ EOF_META
   out=$(fm_backend_validate_task_endpoint "$meta" sample 2>&1)
   status=$?
   [ "$status" -ne 0 ] || fail "stale endpoint metadata must be rejected"
-  assert_contains "$out" "does not identify the Herdr runtime" "stale metadata rejection should name Herdr"
-  pass "endpoint validation rejects stale runtime metadata without reinterpretation"
+  assert_contains "$out" "does not identify the Herdr workspace backend" "stale metadata rejection should name Herdr"
+  pass "endpoint validation rejects stale workspace backend metadata without reinterpretation"
 }
 
 test_task_endpoint_validation_rejects_missing_binding() {
@@ -138,18 +138,18 @@ EOF_META
 test_herdr_dispatch_retains_native_supervision() {
   fm_backend_has_push herdr || fail "Herdr should retain native transition support"
   if fm_backend_has_push stale-runtime; then
-    fail "an unknown runtime must not claim Herdr's transition stream"
+    fail "an unknown workspace backend must not claim Herdr's transition stream"
   fi
   pass "Herdr retains native supervision semantics"
 }
 
-test_runtime_validation_accepts_only_herdr
-test_runtime_required_tools_match_ownership
-test_runtime_meta_requires_explicit_identity
+test_workspace_backend_validation_accepts_only_herdr
+test_workspace_backend_required_tools_match_ownership
+test_workspace_backend_meta_requires_explicit_identity
 test_selector_resolution_prefers_durable_metadata
-test_selector_runtime_rejects_stale_metadata
+test_selector_backend_rejects_stale_metadata
 test_task_endpoint_validation_accepts_herdr
-test_task_endpoint_validation_rejects_stale_runtime
+test_task_endpoint_validation_rejects_stale_backend
 test_task_endpoint_validation_rejects_missing_binding
 test_herdr_dispatch_retains_native_supervision
 

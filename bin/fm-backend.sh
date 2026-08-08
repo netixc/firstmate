@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# fm-backend.sh - Herdr runtime metadata, selector resolution, and operation helpers.
+# fm-backend.sh - Herdr workspace metadata, selector resolution, and operation helpers.
 #
-# Herdr is Firstmate's sole task runtime.
-# Runtime metadata names Herdr explicitly so cleanup refuses stale or malformed
+# Herdr is Firstmate's sole terminal workspace layer.
+# Backend metadata names Herdr explicitly so cleanup refuses stale or malformed
 # endpoint records rather than reinterpreting them.
 
 FM_BACKEND_SCRIPT=${BASH_SOURCE[0]:-$0}
@@ -29,7 +29,7 @@ fm_backend_is_known() {  # <name>
 
 fm_backend_validate() {  # <name>
   [ "$1" = herdr ] && return 0
-  echo "error: unsupported runtime '$1' (Firstmate requires Herdr)" >&2
+  echo "error: unsupported task workspace backend '$1' (Firstmate requires Herdr)" >&2
   return 1
 }
 
@@ -51,7 +51,7 @@ fm_meta_get() {  # <meta-file> <key>
   grep "^$key=" "$meta" 2>/dev/null | tail -1 | cut -d= -f2- || true
 }
 
-# Runtime metadata remains explicit so endpoint cleanup cannot adopt a stale
+# Backend metadata remains explicit so endpoint cleanup cannot adopt a stale
 # record created by an unknown implementation.
 fm_backend_of_meta() {  # <meta-file>
   fm_meta_get "$1" backend
@@ -77,7 +77,7 @@ fm_backend_endpoint_atom_valid() {  # <value>
 }
 
 # Validate cleanup identity entirely from durable task metadata before any
-# runtime command or cleanup mutation.
+# workspace command or cleanup mutation.
 fm_backend_validate_task_endpoint() {  # <meta-file> <task-id>
   local meta=$1 id=$2 backend_count backend window worktree project
   local binding_count binding recorded_session workspace tab pane
@@ -113,12 +113,12 @@ fm_backend_validate_task_endpoint() {  # <meta-file> <task-id>
   esac
   backend_count=$(grep -c '^backend=' "$meta" 2>/dev/null || true)
   [ "$backend_count" -eq 1 ] || {
-    echo "REFUSED: task $id has a missing or ambiguous runtime identity; preserving task state." >&2
+    echo "REFUSED: task $id has a missing or ambiguous workspace backend identity; preserving task state." >&2
     return 1
   }
   backend=$(fm_backend_meta_exact_value "$meta" backend) || backend=
   [ "$backend" = herdr ] || {
-    echo "REFUSED: task $id does not identify the Herdr runtime; preserving task state." >&2
+    echo "REFUSED: task $id does not identify the Herdr workspace backend; preserving task state." >&2
     return 1
   }
   binding_count=$(grep -c '^endpoint_task_id=' "$meta" 2>/dev/null || true)
@@ -216,7 +216,7 @@ fm_backend_source() {  # <runtime>
   fm_backend_validate "$1" || return 1
   if [ -z "${_FM_BACKEND_HERDR_SOURCED:-}" ]; then
     [ -r "$FM_BACKEND_LIB_DIR/backends/herdr.sh" ] || {
-      echo "error: Herdr runtime adapter is unavailable" >&2
+      echo "error: Herdr workspace adapter is unavailable" >&2
       return 1
     }
     # shellcheck source=/dev/null

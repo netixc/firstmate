@@ -1,110 +1,26 @@
 #!/usr/bin/env bash
-# fm-busy-lib.sh - the ONE owner of firstmate's semantic busy-state contract.
+# Own Firstmate's Pi semantic busy-state contract.
 #
-# Design source: the captain-approved semantic busy-state redesign
-# (2026-07-28): each harness adapter reports turn lifecycle through a
-# machine-readable semantic source it owns, classification always exposes
-# which source produced it, and missing, malformed, stale, unsupported, or
-# unverified semantic data is UNKNOWN - never idle. Endpoint death is the only
-# process-level override and yields dead, never busy. Child processes, CPU,
-# process sleep state, marker mtimes, and the old global UI-regex OR are not
-# state signals here; state/<id>.turn-ended files remain wake NOTIFICATIONS
-# owned by the watcher, not current-state truth.
-#
-# Record file: state/<id>.busy-state - exactly one line, atomically replaced
-# by bin/fm-busy-event.sh (the only writer):
-#
-#   v1 gen=<token> seq=<uint> state=<busy|idle|unknown> source=<token> event=<token> ts=<epoch>
-#
-# Gen sidecar: state/<id>.busy-gen - one token minted when the task's busy
-# wiring is armed (fm-spawn, or a documented recovery re-arm). Every event
-# must present the current gen; an event or record carrying any other gen is
-# a stale incarnation and is rejected (written events) or classified unknown
-# (read records). seq is a strictly increasing integer per gen, advanced
-# under the writer's lock, so an out-of-order apply can never regress a
-# newer record.
-#
-# Semantic sources written by adapters (fm_busy_sources_for_harness owns the
-# per-harness trust table; a record whose source is not trusted for the
-# task's recorded harness classifies unknown, so one adapter's writer can
-# never classify another adapter):
-#   pi-ext           Pi per-task extension (agent_start/agent_settled)
-#   claude-hook      Claude lifecycle hooks (UserPromptSubmit/Stop/StopFailure/SessionEnd)
-#   codex-hook      reserved: Codex, gated by fm_busy_codex_semantic_source
-# Firstmate-owned sources accepted for every converted adapter:
-#   fm-spawn         the launch-brief turn seeded at spawn
-#   fm-interrupt     a firstmate-controlled interruption of the worker
-#   fm-recovery      a documented recovery reset after relaunch
-# Classifier-only sources (never written into a record):
-#   endpoint-gone, herdr-native, grok-regex, missing, malformed,
-#   gen-mismatch, source-mismatch, codex-unverified,
-#   capture-failed, no-target
-#
-# Classification (fm_busy_classify): busy | idle | unknown | dead, always
-# with the producing source as the second token. Precedence:
-#   1. dead endpoint (fm_busy_classify_live only) -> dead endpoint-gone
-#   2. a valid, gen-matching, source-trusted record -> its state and source
-#   3. no record at all: herdr's native busy verdict is trusted as busy
-#      (generation state is sufficient for busy, not for idle), then the
-#      Grok-only temporary regex fallback classifies a grok task from its
-#      rendered tail, then unknown missing
-#   4. malformed, stale, or untrusted records -> unknown, never a fallback
-# The Grok arm is the only rendered-text classification that survives the
-# redesign because Grok's structured lifecycle was not live-verified.
-# It is scoped to harness=grok and can never classify another adapter.
-# Rendered delivery guards remain separate from recorded worker state.
-#
-# Codex negotiation (fm_busy_codex_hooks_verified): Codex's stable lifecycle
-# hooks are not usable on the installed binary, so Codex classifies unknown
-# codex-unverified rather than falling back to idle, and fm-spawn installs no
-# Codex busy wiring.
-# docs/verification/supervision.md owns the hook evidence.
-#
-# Sourcing: set -u and set -e safe; no subshell-unfriendly globals.
+# Pi task extensions write a generation-bound record through fm-busy-event.sh.
+# Missing, malformed, stale, unsupported, or untrusted state is unknown, never idle.
+# A gone endpoint is the only process-level override and is reported as dead.
 
 FM_BUSY_LIB_VERSION=v1
 
-# fm_busy_codex_hooks_verified: the sanctioned intermediate - Codex's stable
-# hooks engine (UserPromptSubmit to open a turn, Stop and SessionEnd to close
-# it). Returns 0 only once those hooks are live-verified to fire for a
-# firstmate-launched worker. codex-cli 0.145.0 verdict (live, 2026-07-28):
-# NOT verified. Firstmate-written project hooks under <worktree>/.codex/
-# never fired in an interactive pane whose directory trust was granted, nor
-# under `codex exec`, in either case with --dangerously-bypass-hook-trust,
-# while global hooks fired in the same runs. Codex additionally exposes no
-# StopFailure hook, so an API-error turn end would need separate coverage
-# even after the discovery problem is solved.
-fm_busy_codex_hooks_verified() {
-  return 1
-}
-
-# fm_busy_codex_semantic_source: 0 when ANY verified Codex semantic source
-# exists. fm-spawn arms and wires Codex only behind this gate, and the
-# classifier reports unknown codex-unverified until it opens.
-fm_busy_codex_semantic_source() {
-  fm_busy_codex_hooks_verified
-}
-
-fm_busy_record_path() {  # <state-dir> <id>
+fm_busy_record_path() { # <state-dir> <id>
   printf '%s/%s.busy-state' "$1" "$2"
 }
 
-fm_busy_gen_path() {  # <state-dir> <id>
+fm_busy_gen_path() { # <state-dir> <id>
   printf '%s/%s.busy-gen' "$1" "$2"
 }
 
-# fm_busy_token_valid: conservative token charset shared by gen, source, and
-# event fields. Anything else is malformed.
-fm_busy_token_valid() {  # <value>
-  case "${1:-}" in
-    ''|*[!A-Za-z0-9._-]*) return 1 ;;
-  esac
+fm_busy_token_valid() { # <value>
+  case "${1:-}" in ''|*[!A-Za-z0-9._-]*) return 1 ;; esac
   return 0
 }
 
-# fm_busy_current_gen: the task's armed gen token, or failure when the busy
-# contract has never been armed for this task.
-fm_busy_current_gen() {  # <state-dir> <id>
+fm_busy_current_gen() { # <state-dir> <id>
   local gen_file gen
   gen_file=$(fm_busy_gen_path "$1" "$2")
   [ -f "$gen_file" ] || return 1
@@ -113,62 +29,39 @@ fm_busy_current_gen() {  # <state-dir> <id>
   printf '%s' "$gen"
 }
 
-# fm_busy_sources_for_harness: the semantic sources trusted to classify a
-# task recorded with <harness>. One line, space-separated, possibly empty.
-# The firstmate-owned sources are appended for every converted adapter.
-# Grok deliberately trusts nothing: it has no semantic writer yet, and its
-# temporary rendered-tail fallback lives in the classifier, not in records.
-fm_busy_sources_for_harness() {  # <harness>
-  local adapter=
+fm_busy_sources_for_harness() { # <runtime>
   case "${1:-}" in
-    claude*) adapter=claude-hook ;;
-    codex*)
-      fm_busy_codex_semantic_source || { printf ''; return 0; }
-      adapter='codex-hook'
-      ;;
-    pi) adapter=pi-ext ;;
-    *) printf ''; return 0 ;;
+    pi) printf '%s' 'pi-ext fm-spawn fm-interrupt fm-recovery' ;;
+    *) printf '%s' '' ;;
   esac
-  printf '%s fm-spawn fm-interrupt fm-recovery' "$adapter"
 }
 
-fm_busy_source_trusted() {  # <harness> <source>
+fm_busy_source_trusted() { # <runtime> <source>
   local trusted
   trusted=$(fm_busy_sources_for_harness "$1")
-  case " $trusted " in
-    *" $2 "*) return 0 ;;
-  esac
+  case " $trusted " in *" $2 "*) return 0 ;; esac
   return 1
 }
 
-# fm_busy_record_read: parse and validate state/<id>.busy-state against the
-# armed gen. Prints "<state> <source> <event> <seq>" for a valid record.
-# Non-zero returns name the reason on stdout instead:
-#   missing      no record file (or no armed gen and no record)
-#   malformed    unparseable line, bad tokens, or a missing armed gen for an
-#                existing record
-#   gen-mismatch a record from a stale incarnation
-fm_busy_record_read() {  # <state-dir> <id>
-  local state=$1 id=$2 rec gen line extra ver f
+# Print "<state> <source> <event> <seq>" for a valid current record.
+# On failure print missing, malformed, or gen-mismatch and return nonzero.
+fm_busy_record_read() { # <state-dir> <id>
+  local state=$1 id=$2 rec gen line ver f
   local r_gen='' r_seq='' r_state='' r_source='' r_event='' r_ts=''
+  local -a fields
   rec=$(fm_busy_record_path "$state" "$id")
   if [ ! -f "$rec" ]; then
     printf 'missing'
     return 1
   fi
   if ! gen=$(fm_busy_current_gen "$state" "$id"); then
-    # A record without an armed gen has no incarnation to bind to.
     printf 'malformed'
     return 1
   fi
-  # shellcheck disable=SC2034 # extra exists only to prove the record is one line
-  { IFS= read -r line && ! IFS= read -r extra; } < "$rec" 2>/dev/null || {
+  { IFS= read -r line && ! IFS= read -r _; } < "$rec" 2>/dev/null || {
     printf 'malformed'
     return 1
   }
-  # `read -a` rather than `set --`: it never glob-expands a field and never
-  # touches the caller's positional parameters or shell options.
-  local -a fields
   IFS=' ' read -r -a fields <<< "$line"
   ver=${fields[0]:-}
   [ "$ver" = "$FM_BUSY_LIB_VERSION" ] || { printf 'malformed'; return 1; }
@@ -183,12 +76,15 @@ fm_busy_record_read() {  # <state-dir> <id>
       *) printf 'malformed'; return 1 ;;
     esac
   done
-  fm_busy_token_valid "$r_gen" || { printf 'malformed'; return 1; }
-  fm_busy_token_valid "$r_source" || { printf 'malformed'; return 1; }
-  fm_busy_token_valid "$r_event" || { printf 'malformed'; return 1; }
+  if ! fm_busy_token_valid "$r_gen" \
+    || ! fm_busy_token_valid "$r_source" \
+    || ! fm_busy_token_valid "$r_event"; then
+    printf 'malformed'
+    return 1
+  fi
   case "$r_seq" in ''|*[!0-9]*) printf 'malformed'; return 1 ;; esac
   case "$r_ts" in ''|*[!0-9]*) printf 'malformed'; return 1 ;; esac
-  case "$r_state" in busy|idle|unknown) : ;; *) printf 'malformed'; return 1 ;; esac
+  case "$r_state" in busy|idle|unknown) ;; *) printf 'malformed'; return 1 ;; esac
   if [ "$r_gen" != "$gen" ]; then
     printf 'gen-mismatch'
     return 1
@@ -196,65 +92,31 @@ fm_busy_record_read() {  # <state-dir> <id>
   printf '%s %s %s %s' "$r_state" "$r_source" "$r_event" "$r_seq"
 }
 
-# Delivery-only rendered busy signatures for a supervisor pane.
-# These are not worker-current-state sources; pane injection uses them only to
-# avoid typing over an active primary harness.
-FM_DELIVERY_BUSY_REGEX_DEFAULT='esc (to )?interrupt|Working\.\.\.|Ctrl\+c:cancel'
-FM_CLAUDE_BUSY_REGEX_DEFAULT='esc to interrupt|…[[:space:]]+\([0-9]+[smh]'
-FM_CODEX_BUSY_REGEX_DEFAULT='esc to interrupt'
+# Delivery-only rendered busy signature for the primary pane.
+# Task state uses Pi lifecycle records rather than rendered text.
 FM_PI_BUSY_REGEX_DEFAULT='Working\.\.\.'
-FM_GROK_BUSY_REGEX_DEFAULT='Ctrl\+c:cancel'
-
-fm_busy_lines_match() {  # [harness]
-  local harness=${1:-} lines regex
+fm_busy_lines_match() { # [runtime]
+  local runtime=${1:-pi} lines regex
   IFS= read -r -d '' lines || true
-  if [ -n "${FM_BUSY_REGEX:-}" ]; then
-    regex=$FM_BUSY_REGEX
-  else
-    case "$harness" in
-      claude) regex=$FM_CLAUDE_BUSY_REGEX_DEFAULT ;;
-      codex) regex=$FM_CODEX_BUSY_REGEX_DEFAULT ;;
-      pi) regex=$FM_PI_BUSY_REGEX_DEFAULT ;;
-      grok) regex=$FM_GROK_BUSY_REGEX_DEFAULT ;;
-      '') regex=$FM_DELIVERY_BUSY_REGEX_DEFAULT ;;
-      *) regex= ;;
-    esac
-  fi
-  [ -n "$regex" ] && printf '%s' "$lines" | grep -qiE "$regex"
+  case "$runtime" in pi) ;; *) return 1 ;; esac
+  regex=${FM_BUSY_REGEX:-$FM_PI_BUSY_REGEX_DEFAULT}
+  printf '%s' "$lines" | grep -qiE "$regex"
 }
 
-# fm_busy_grok_tail_busy: the Grok-only temporary worker-state fallback.
-# Consumes the tail on stdin; 0 when Grok's verified busy signature matches.
-# FM_BUSY_REGEX still globally overrides the signature, mirroring the
-# historical operator escape hatch.
-fm_busy_grok_tail_busy() {
-  grep -v '^[[:space:]]*$' | tail -12 \
-    | grep -qiE "${FM_BUSY_REGEX:-$FM_GROK_BUSY_REGEX_DEFAULT}"
-}
-
-# fm_busy_classify: semantic classification for a task whose endpoint the
-# caller has already established as present. Prints "<verdict> <source>":
-# busy|idle|unknown plus the producing source (see header). Never probes
-# process state. <tail40> is optional pre-captured plain output used only by
-# the Grok arm; when absent the Grok arm captures through fm_backend_capture
-# if available, else reports unknown capture-failed.
-fm_busy_classify() {  # <backend> <target> <harness> <id> <state-dir> [tail40]
-  local backend=$1 target=$2 harness=$3 id=$4 state=$5 tail40=${6-}
+# Print "busy|idle|unknown <source>" for an established endpoint.
+fm_busy_classify() { # <backend> <target> <runtime> <id> <state-dir> [unused-tail]
+  local backend=$1 target=$2 runtime=$3 id=$4 state=$5
   local out rc r_state r_source native
-  case "$harness" in
-    codex*)
-      if ! fm_busy_codex_semantic_source; then
-        printf 'unknown codex-unverified'
-        return 0
-      fi
-      ;;
-  esac
+  [ "$runtime" = pi ] || {
+    printf 'unknown unsupported-runtime'
+    return 0
+  }
   out=$(fm_busy_record_read "$state" "$id") && rc=0 || rc=$?
-  if [ "$rc" = 0 ]; then
+  if [ "$rc" -eq 0 ]; then
     r_state=${out%% *}
     out=${out#* }
     r_source=${out%% *}
-    if fm_busy_source_trusted "$harness" "$r_source"; then
+    if fm_busy_source_trusted "$runtime" "$r_source"; then
       printf '%s %s' "$r_state" "$r_source"
     else
       printf 'unknown source-mismatch'
@@ -267,10 +129,6 @@ fm_busy_classify() {  # <backend> <target> <harness> <id> <state-dir> [tail40]
       return 0
       ;;
   esac
-  # No record at all. A native herdr busy verdict is semantic enough to trust
-  # for BUSY (streaming means a turn is running); native idle is narrower
-  # than turn state (a long foreground tool call reads idle) and stays
-  # unknown here.
   if [ "$backend" = herdr ] && command -v fm_backend_busy_state >/dev/null 2>&1; then
     native=$(fm_backend_busy_state "$backend" "$target" 2>/dev/null || true)
     if [ "$native" = busy ]; then
@@ -278,35 +136,11 @@ fm_busy_classify() {  # <backend> <target> <harness> <id> <state-dir> [tail40]
       return 0
     fi
   fi
-  case "$harness" in
-    grok*)
-      if [ -z "$tail40" ]; then
-        if command -v fm_backend_capture >/dev/null 2>&1; then
-          tail40=$(fm_backend_capture "$backend" "$target" 40 2>/dev/null) || {
-            printf 'unknown capture-failed'
-            return 0
-          }
-        else
-          printf 'unknown capture-failed'
-          return 0
-        fi
-      fi
-      if printf '%s' "$tail40" | fm_busy_grok_tail_busy; then
-        printf 'busy grok-regex'
-      else
-        printf 'idle grok-regex'
-      fi
-      return 0
-      ;;
-  esac
   printf 'unknown missing'
 }
 
-# fm_busy_classify_live: fm_busy_classify behind the one process-level
-# override - a gone endpoint is dead, never busy. Requires fm-backend.sh to
-# be sourced for fm_backend_target_exists.
-fm_busy_classify_live() {  # <backend> <target> <harness> <id> <state-dir> [expected-label]
-  local backend=$1 target=$2 harness=$3 id=$4 state=$5 label=${6-}
+fm_busy_classify_live() { # <backend> <target> <runtime> <id> <state-dir> [expected-label]
+  local backend=$1 target=$2 runtime=$3 id=$4 state=$5 label=${6-}
   if [ -z "$target" ]; then
     printf 'unknown no-target'
     return 0
@@ -315,32 +149,23 @@ fm_busy_classify_live() {  # <backend> <target> <harness> <id> <state-dir> [expe
     printf 'dead endpoint-gone'
     return 0
   fi
-  fm_busy_classify "$backend" "$target" "$harness" "$id" "$state"
+  fm_busy_classify "$backend" "$target" "$runtime" "$id" "$state"
 }
 
-# fm_busy_classify_meta: classify a task from its recorded metadata, so every
-# consumer resolves backend, target, and harness the same way instead of
-# re-deriving them. Requires fm-backend.sh to be sourced. <tail40> is
-# optional pre-captured plain output reused by the Grok arm.
-fm_busy_classify_meta() {  # <meta-file> <id> <state-dir> [tail40]
-  local meta=$1 id=$2 state=$3 tail40=${4-} backend target harness
+fm_busy_classify_meta() { # <meta-file> <id> <state-dir> [unused-tail]
+  local meta=$1 id=$2 state=$3 backend target runtime
   [ -f "$meta" ] || { printf 'unknown missing'; return 0; }
   backend=$(fm_backend_of_meta "$meta")
   target=$(fm_backend_target_of_meta "$meta")
-  harness=$(fm_meta_get "$meta" harness)
+  runtime=$(fm_meta_get "$meta" harness)
   if [ -z "$target" ]; then
     printf 'unknown no-target'
     return 0
   fi
-  fm_busy_classify "$backend" "$target" "$harness" "$id" "$state" "$tail40"
+  fm_busy_classify "$backend" "$target" "$runtime" "$id" "$state"
 }
 
-# fm_busy_is_busy: boolean view for callers that only gate on provable
-# activity. 0 iff the classification verdict is exactly busy; idle, unknown,
-# and dead all return 1, so an unknown can never be silently promoted to
-# either boolean pole - callers that must distinguish idle from unknown read
-# the full classification instead.
-fm_busy_is_busy() {  # <backend> <target> <harness> <id> <state-dir> [tail40]
+fm_busy_is_busy() {
   local verdict
   verdict=$(fm_busy_classify "$@")
   [ "${verdict%% *}" = busy ]

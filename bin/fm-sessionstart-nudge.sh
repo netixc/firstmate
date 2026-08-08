@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Print the one-line session-start instruction only for a genuine firstmate
-# primary whose current harness session has not already acquired the home lock.
-# Every silence and error path exits 0 because Claude SessionStart exit 2 blocks
-# session initialization.
+# Pi primary whose current session has not already acquired the home lock.
+# Every silence and error path exits 0 so a recoverable startup condition never blocks Pi.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

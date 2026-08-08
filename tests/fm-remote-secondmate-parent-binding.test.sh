@@ -141,7 +141,7 @@ git -C "$PARENT/projects/alpha" remote add origin "file://$TMP_ROOT/alpha.git"
 git -C "$PARENT/projects/alpha" push -q -u origin main
 git --git-dir="$TMP_ROOT/alpha.git" symbolic-ref HEAD refs/heads/main
 printf -- '- alpha [direct-PR] - alpha project (added 2026-08-04)\n' > "$PARENT/data/projects.md"
-printf 'codex\n' > "$PARENT/config/secondmate-harness"
+printf 'openai-codex/gpt-5.6-luna medium\n' > "$PARENT/config/secondmate-profile"
 
 # The primary home is the X-mode / relay home: the captain's real activation.
 printf 'FMX_PAIRING_TOKEN=repro-token\n' > "$PARENT/.env"
@@ -223,7 +223,7 @@ mkdir -p "$REMOTE_HOME/state"
 write_child_meta() {
   fm_write_meta "$REMOTE_HOME/state/work-child.meta" \
     "backend=herdr" "window=firstmate:fm-work-child" "endpoint_task_id=work-child" \
-    "worktree=$CHILD_WT" "project=$CHILD_WT" "harness=codex" "kind=ship" \
+    "worktree=$CHILD_WT" "project=$CHILD_WT" "harness=pi" "kind=ship" \
     "mode=local-only" "yolo=off" \
     "herdr_session=firstmate" "herdr_workspace_id=w1" \
     "herdr_tab_id=w1:t1" "herdr_pane_id=fm-work-child"

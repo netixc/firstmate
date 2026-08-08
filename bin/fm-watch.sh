@@ -53,7 +53,7 @@
 #                          running a check or removing poll artifacts
 #   heartbeat              fleet-scan backstop found an unsurfaced captain-relevant
 #                          status, unless afk is active
-# For normal supervision, resume the session-start primary-harness protocol
+# For normal supervision, resume the session-start Pi protocol
 # after each printed reason. Direct duplicate invocations of this script still
 # no-op through the watcher singleton lock.
 set -u
@@ -116,9 +116,8 @@ CHECK_TIMEOUT=${FM_CHECK_TIMEOUT:-30}     # seconds allowed per *.check.sh
 SIGNAL_GRACE=${FM_SIGNAL_GRACE:-30}   # seconds to linger after a signal so trailing
                                       # signals (a status write, then the same turn's
                                       # turn-end hook) coalesce into one wake
-# Busy state is decided by the semantic contract in bin/fm-busy-lib.sh, which
-# is the single owner of per-harness sources, source attribution, and the one
-# remaining rendered-text fallback (Grok only).
+# Busy state is decided by the Pi semantic contract in bin/fm-busy-lib.sh,
+# which owns lifecycle sources, source attribution, and the rendered fallback.
 # Always-on wake triage: most wakes during a long crew validation are benign (a
 # working: note or turn-end while a pipeline runs, a no-change heartbeat). Rather
 # than wake firstmate's LLM for each, this watcher classifies every wake in bash
@@ -181,13 +180,11 @@ hash_pane() {
   if command -v md5 >/dev/null 2>&1; then md5 -q; else md5sum | cut -d' ' -f1; fi
 }
 
-# window_is_busy: 0 (busy) iff the task's harness is PROVABLY working, through
-# the semantic busy-state contract (bin/fm-busy-lib.sh). Only an exact busy
-# verdict returns 0: idle, unknown, and dead all return 1, so a converted
-# adapter whose semantic state is missing, malformed, stale, or unverified is
-# treated as not-provably-working and surfaces rather than being absorbed.
-# <tail40> is the same bounded capture already read for hashing and is
-# consumed only by the Grok-scoped fallback inside the contract.
+# window_is_busy: 0 (busy) iff the Pi task is provably working through the
+# semantic busy-state contract (bin/fm-busy-lib.sh). Only an exact busy verdict
+# returns 0: idle, unknown, and dead all return 1, so missing, malformed, stale,
+# or unverified state surfaces rather than being absorbed. <tail40> is the same
+# bounded capture already read for hashing and is consumed by the Pi fallback.
 window_is_busy() {  # <window> <tail40>
   local w=$1 tail40=$2 task meta verdict
   task=$(window_to_task "$w" "$STATE")
@@ -213,8 +210,8 @@ window_kind() {
   echo unknown
 }
 
-# window_backend: require the Herdr runtime identity on the metadata whose
-# endpoint matches <w>. Missing or stale records are never reinterpreted.
+# window_backend: require the Herdr workspace backend identity on the metadata
+# whose endpoint matches <w>. Missing or stale records are never reinterpreted.
 window_backend() {
   local w=$1 meta backend
   meta=$(fm_backend_meta_for_window "$w" "$STATE" 2>/dev/null || true)
@@ -224,9 +221,9 @@ window_backend() {
       printf '%s\n' "$backend"
       return 0
     fi
-    echo "error: endpoint '$w' does not identify the Herdr runtime (recorded: ${backend:-missing})" >&2
+    echo "error: endpoint '$w' does not identify the Herdr workspace backend (recorded: ${backend:-missing})" >&2
   else
-    echo "error: endpoint '$w' has no current Herdr runtime metadata" >&2
+    echo "error: endpoint '$w' has no current Herdr workspace metadata" >&2
   fi
   return 1
 }
@@ -306,8 +303,8 @@ wedge_timer_check() {  # <window> <since-file> <triage-label> <escalation-count-
 }
 
 # busy_turn_over_age: 0 iff <task>'s latest completed-turn marker is at least
-# BUSY_TURN_MAX_SECS old. Ages the per-task turn-ended marker, the harness-neutral
-# signal every verified harness's turn-end hook touches; before any turn has
+# BUSY_TURN_MAX_SECS old. Ages the per-task turn-ended marker, the runtime-neutral
+# signal Pi's task extension touches; before any turn has
 # completed, ages the task's spawn record instead so a fresh task still gets a
 # bound. The caller checks that the pane is busy and routes a crossed bound
 # through the existing wedge_timer_check, never anything that touches the

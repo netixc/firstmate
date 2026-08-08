@@ -16,8 +16,7 @@
 # Submission uses the target's recorded Herdr identity, composer, and submit
 # confirmation.
 # Tune with FM_SEND_RETRIES (default 3) / FM_SEND_SLEEP (0.4).
-# Slash commands, and codex `$...` skill invocations resolved through harness
-# meta, get a longer pre-Enter settle so completion popups do not swallow Enter.
+# Slash commands get a longer pre-Enter settle so completion popups do not swallow Enter.
 #
 # From-firstmate marker: when the resolved target is a task selector whose meta
 # records kind=secondmate, the text uses the live-charter-compatible
@@ -113,7 +112,7 @@ fm_send_id_from_meta() {  # <meta-file>
 fm_send_record_interrupt() {  # <key>
   local key=$1 id gen
   [ "$key" = Escape ] || return 0
-  case "$TARGET_HARNESS" in claude*) : ;; *) return 0 ;; esac
+  [ "$TARGET_HARNESS" = pi ] || return 0
   [ -n "$TARGET_META" ] || return 0
   id=$(fm_send_id_from_meta "$TARGET_META")
   [ -f "$STATE/$id.busy-gen" ] || return 0
@@ -125,7 +124,7 @@ fm_send_record_interrupt() {  # <key>
     "$FM_ROOT/bin/fm-busy-event.sh" apply "$STATE" "$id" idle \
       --current-gen --source fm-interrupt --event interrupt
   fi || {
-    echo "error: key '$key' reached $T, but the Claude interrupt state could not be recorded for $id" >&2
+    echo "error: key '$key' reached $T, but the Pi interrupt state could not be recorded for $id" >&2
     return 1
   }
 }
@@ -240,6 +239,10 @@ fm_send_resolve_target() {  # <raw-target>
 
 RAW_TARGET=$1
 fm_send_resolve_target "$RAW_TARGET" || exit 1
+if [ -n "$TARGET_META" ] && [ "$TARGET_HARNESS" != pi ]; then
+  echo "error: recorded task runtime '${TARGET_HARNESS:-missing}' is not Pi; do not steer a retired runtime endpoint" >&2
+  exit 1
+fi
 T=$RESOLVED_TARGET
 shift
 
@@ -362,11 +365,9 @@ EOF
   done
 }
 
-# Resolve the target's harness from its meta (recorded by fm-spawn), used only to
-# scope the codex `$<skill>` popup-settle below. A task selector carries
-# meta; an explicit backend-target escape hatch has none, so its harness is
-# unknown and treated as non-codex (the safe default that keeps the fast path).
-# The target's BACKEND comes from selector meta, from matching an explicit target
+# The target runtime comes from selector metadata and must be Pi for a managed task.
+# An explicit endpoint escape hatch has no task metadata.
+# The target backend comes from selector metadata, from matching an explicit target
 # back to recorded meta, or from strict explicit-target shape validation.
 # Do not add a separate passive liveness preflight here. Active send paths own
 # backend readiness: Herdr routes through its session-aware target-ready path
@@ -420,19 +421,10 @@ else
       exit 1
     fi
   fi
-  # Slash commands open a completion popup in some TUIs (verified on codex);
-  # submitting too fast selects nothing, so give the popup time to settle before
-  # the (retried) Enter. Codex opens the same kind of popup for a `$<skill>`
-  # invocation, so a `$...` message to a codex target gets the same settle. That
-  # `$` case is scoped to codex on purpose: unlike `/`, a leading `$` commonly
-  # starts ordinary text ("$5/month", "$HOME"), so a universal `$` rule would
-  # needlessly slow plain text to claude/pi. The target backend's
-  # verified submit retry still backs the settle up either way.
+  # Slash commands can open a completion popup before their first Enter.
+  # Pi's verified submit retry backs this settle up when the pane remains pending.
   case "$*" in
     /*) settle=1.2 ;;
-    \$*)
-      if [ "$TARGET_HARNESS" = codex ]; then settle=1.2; else settle=0.3; fi
-      ;;
     *) settle=0.3 ;;
   esac
   retries=${FM_SEND_RETRIES:-3}

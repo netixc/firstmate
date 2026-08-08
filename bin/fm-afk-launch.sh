@@ -4,13 +4,10 @@
 # tear it down by that exact id, and reconcile a leaked one after a crash.
 #
 # Why this exists (docs/herdr-backend.md "Away-mode daemon terminal launch"):
-# bin/fm-afk-start.sh execs the supervise daemon in the FOREGROUND of whatever
-# terminal it is already in. Harnesses with a native in-pane tracked-background
-# tool (claude, grok) run it there directly and it is fine. A harness with NO
-# native background mechanism (pi) has to manufacture a terminal, and doing that
-# by SPLITTING the captain's active pane visibly shrinks it - the regression this
-# script fixes. Instead this creates a non-visible tracked Herdr workspace with
-# --no-focus that never touches the captain's active tab and never uses shell `&`.
+# bin/fm-afk-start.sh execs the supervise daemon in the foreground of the
+# terminal it is already in. Pi creates a non-visible tracked Herdr workspace
+# with --no-focus rather than splitting the captain's active pane or using shell
+# `&`.
 #
 # Correct supervisor targeting: the daemon finds the captain pane to inject into
 # from its OWN inherited env (discover_supervisor_target). Running it in a
@@ -25,9 +22,6 @@
 #                              record it. Idempotent: an already-running daemon
 #                              just refreshes state/.afk; a recorded-but-dead
 #                              terminal is reconciled (closed by id) first.
-#   fm-afk-launch.sh start-native
-#                              Prepare lifecycle state for a harness-native
-#                              background job and record that no terminal exists.
 #   fm-afk-launch.sh stop      Correct-ordered exit: SIGTERM the daemon so its
 #                              cleanup flushes WHILE state/.afk is still present,
 #                              wait for it, close the recorded terminal by exact
@@ -156,7 +150,7 @@ fm_afk_launch_entry_cmd() {
 fm_afk_launch_record_write() {  # <backend> <target> <extra>
   local pending
   case "$1" in
-    herdr|none) ;;
+    herdr) ;;
     *)
       fm_afk_launch_log "unsupported daemon terminal backend '$1' (supported: herdr)"
       return 2
@@ -191,7 +185,6 @@ fm_afk_launch_record_read() {
   fi
   case "$FM_AFK_REC_BACKEND" in
     herdr) [ -n "$extra" ] ;;
-    none) [ "$FM_AFK_REC_TARGET" = - ] && [ "$extra" = native ] ;;
     *) return 2 ;;
   esac || { fm_afk_launch_log "daemon terminal record is malformed; refusing to act on it"; return 2; }
 }
@@ -215,9 +208,6 @@ fm_afk_launch_close_terminal() {  # <backend> <target>
       [ -n "$session" ] && [ -n "$pane" ] && [ "$pane" != "$target" ] || return 1
       fm_backend_herdr_cli "$session" pane close "$pane" >/dev/null 2>&1
       ;;
-    none)
-      return 0
-      ;;
     *)
       fm_afk_launch_log "cannot close unknown recorded backend '$backend'"
       return 1
@@ -237,9 +227,6 @@ fm_afk_launch_terminal_absent() {  # <backend> <target>
       [ "$result" -ne 0 ] || return 1
       code=$(printf '%s' "$out" | jq -r '.error.code // empty' 2>/dev/null) || return 1
       [ "$code" = pane_not_found ]
-      ;;
-    none)
-      return 0
       ;;
     *) return 1 ;;
   esac
@@ -485,49 +472,6 @@ fm_afk_launch_start() {
   return "$result"
 }
 
-fm_afk_launch_start_native() {
-  local backup artifact had_afk=0 result=0
-  mkdir -p "$FM_AFK_LAUNCH_STATE" || return 1
-  if [ -e "$FM_AFK_LAUNCH_STATE/.afk-return-catchup" ]; then
-    fm_afk_launch_log "return catch-up is still pending; run bin/fm-afk-return.sh check before re-entering away mode"
-    return 1
-  fi
-  if daemon_lock_held_by_live_daemon; then
-    fm_afk_launch_record_validate_if_present || return 1
-    fm_afk_launch_flag_write || return 1
-    fm_afk_launch_log "daemon already running; refreshed away-mode flag"
-    return 0
-  fi
-  backup=$(mktemp -d "$FM_AFK_LAUNCH_STATE/.afk-launch-backup.XXXXXX") || return 1
-  if [ -f "$FM_AFK_LAUNCH_STATE/.afk" ]; then
-    had_afk=1
-    cp "$FM_AFK_LAUNCH_STATE/.afk" "$backup/.afk" || { rm -rf "$backup"; return 1; }
-  fi
-  for artifact in .subsuper-escalations .subsuper-escalations.since .subsuper-inject-wedged; do
-    if [ -e "$FM_AFK_LAUNCH_STATE/$artifact" ]; then
-      cp -p "$FM_AFK_LAUNCH_STATE/$artifact" "$backup/$artifact" || { rm -rf "$backup"; return 1; }
-    fi
-  done
-  fm_afk_launch_reconcile || result=1
-  if [ "$result" -eq 0 ]; then
-    if ! fm_afk_clear_stale_artifacts "$FM_AFK_LAUNCH_STATE"; then
-      fm_afk_launch_log "failed to clear stale away-mode artifacts"
-      result=1
-    elif ! fm_afk_launch_flag_write; then
-      result=1
-    fi
-  fi
-  if [ "$result" -eq 0 ]; then
-    fm_afk_launch_record_write none - native || result=1
-  fi
-  if [ "$result" -ne 0 ]; then
-    fm_afk_launch_restore_backup "$backup" "$had_afk" || result=1
-  else
-    rm -rf "$backup" || result=1
-  fi
-  return "$result"
-}
-
 fm_afk_launch_stop() {
   local pid pid_identity current_identity result=0 read_result
   fm_afk_launch_record_read
@@ -595,7 +539,6 @@ fm_afk_launch_main() {
   fm_afk_launch_lock_acquire || return 1
   case "${1:-start}" in
     start) fm_afk_launch_start ;;
-    start-native) fm_afk_launch_start_native ;;
     stop) fm_afk_launch_stop ;;
     reconcile) fm_afk_launch_reconcile ;;
     -h|--help|help) fm_afk_launch_usage ;;

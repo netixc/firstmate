@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Enter away mode and run the sub-supervisor daemon in a harness-tracked
-# foreground process when one is not already alive.
+# Enter away mode and run the sub-supervisor daemon in Pi's tracked terminal
+# when one is not already alive.
 #
 # Usage: fm-afk-start.sh
 #   Sets state/.afk unless FM_AFK_STATE_PREPARED=1, checks
@@ -17,19 +17,10 @@
 # enables nounset and errexit; callers that need different shell options must
 # restore them explicitly.
 #
-# This is the COMMON daemon entry for every backend. HOW it becomes a tracked
-# background process differs by harness/backend and is owned elsewhere:
-#   - Harnesses with a native in-pane tracked-background tool (e.g. claude, grok)
-#     run this directly via that tool, so the daemon inherits the captain pane's
-#     env and auto-discovers it.
-#   - Harnesses with NO native background mechanism (e.g. pi) run this THROUGH
-#     bin/fm-afk-launch.sh, which creates a non-visible tracked terminal per
-#     backend (an unfocused Herdr workspace) and passes the
-#     captain pane in as FM_SUPERVISOR_TARGET so injection targets it, not the
-#     daemon's own new pane.
-# Do not wrap this in `nohup ... &`: Codex/herdr can reap fire-and-forget shell
-# children after the tool call returns, while a tracked background terminal stays
-# attached and has a real lifecycle.
+# This is Pi's daemon entry. bin/fm-afk-launch.sh creates a non-visible tracked
+# Herdr terminal and passes the captain pane in FM_SUPERVISOR_TARGET so injection
+# targets the captain rather than the daemon's own pane. Do not wrap this in
+# `nohup ... &`: the tracked terminal owns its lifecycle.
 set -eu
 
 FM_AFK_START_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

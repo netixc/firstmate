@@ -4,19 +4,16 @@
 # The watcher (bin/fm-watch.sh) blocks until it has an actionable wake to
 # surface, then prints one reason line and exits. While state/.afk exists the
 # daemon owns triage and the watcher exits on every wake for the daemon to
-# classify. Reliability depends on arming through a mechanism that SURVIVES the
-# call and NOTIFIES on exit, so firstmate must run this script as the harness's
-# own tracked background task (e.g. run_in_background), or - for a Claude
-# primary - inside the Stop asyncRewake hook's foreground process tree
-# (bin/fm-claude-stop-autoarm.sh), where the harness owns the process group and
-# the hook's exit-2 rewake is the notification. Run it as its own standalone
-# background task, never bundled onto the tail of another command.
+# classify. Reliability depends on Pi's extension owning a child process that
+# survives the tool call and reports its exit. Firstmate starts that extension
+# cycle with fm_watch_arm_pi; this script is its child and is never invoked as
+# a shell background job or bundled onto another command.
 # NEVER fire it and forget with a shell `&` inside another call: that backgrounded
 # child is reaped when the call returns, leaving NO watcher running and a false
 # "already running" off the dying process. That exact mistake silently took
 # supervision down for ~30 minutes.
-# On a harness with a PreToolUse-equivalent hook, bin/fm-arm-pretool-check.sh
-# applies the command-position policy before the command runs; see
+# Pi's tool-call extension applies bin/fm-arm-pretool-check.sh's command-position
+# policy before a command runs; see
 # docs/arm-pretool-check.md for the blessed tree and deny reason codes. It is a
 # pre-execution seatbelt, not a substitute for the verification here.
 #

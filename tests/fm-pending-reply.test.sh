@@ -18,7 +18,7 @@
 #   9. Direct unmarked captain input creates no expectation
 #  10. fm-send secondmate path embeds corr and creates durable pending records
 #  11. Backend busy/idle observation works through the shared busy abstraction
-#      used by Pi/Claude secondmate backends (no conversation scrape)
+#      used by Pi secondmate backends (no conversation scrape)
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -553,7 +553,7 @@ test_unmarked_captain_input_creates_no_expectation() {
   # Crewmate target stays unmarked and creates no pending-reply record.
   fm_write_meta "$home/state/build.meta" \
     "backend=herdr" "window=sess:fm-build" "worktree=$home/wt" "project=$home/p" \
-    "harness=echo" "kind=ship" "mode=no-mistakes" "yolo=off"
+    "harness=pi" "kind=ship" "mode=no-mistakes" "yolo=off"
   run_send "$fb" "$home" "$log" "build" "captain says hello"; rc=$?
   expect_code 0 "$rc" "unmarked crewmate send should succeed"
   assert_contains "$(cat "$log")" "TEXT:captain says hello" \
@@ -628,7 +628,7 @@ test_busy_idle_observation_via_backend_abstraction() {
   export FM_PENDING_REPLY_NOW=9200
   corr=$(fm_pending_reply_create "$home" "$state" "hibit" "backend turn")
   fm_pending_reply_mark_delivered "$state" "$corr"
-  # Simulates Pi/Claude secondmate busy_state from fm_backend_busy_state without
+  # Simulates Pi secondmate busy_state from fm_backend_busy_state without
   # reading conversation text (Herdr native idle/busy or unknown fallback).
   fm_pending_reply_observe_busy "$state" "$corr" unknown
   [ -z "$(fm_pending_reply_get "$(fm_pending_reply_path "$state" "$corr")" request_turn_completed_epoch)" ] \
@@ -637,7 +637,7 @@ test_busy_idle_observation_via_backend_abstraction() {
   fm_pending_reply_observe_busy "$state" "$corr" idle
   [ -n "$(fm_pending_reply_get "$(fm_pending_reply_path "$state" "$corr")" request_turn_completed_epoch)" ] \
     || fail "busy->idle must prove turn completion"
-  pass "backend busy/idle observation covers Pi/Claude paths without conversation scrape"
+  pass "backend busy/idle observation covers Pi paths without conversation scrape"
 }
 
 test_unknown_backend_state_uses_capture_fallback() {
@@ -654,7 +654,7 @@ test_unknown_backend_state_uses_capture_fallback() {
       export FM_PENDING_REPLY_NOW=10000
       corr=$(fm_pending_reply_create "$home" "$state" "hibit" "$backend fallback")
       fm_pending_reply_mark_delivered "$state" "$corr"
-      fm_write_secondmate_meta "$state/hibit.meta" "$sm_home" "session:fm-hibit" alpha pi
+      fm_write_secondmate_meta "$state/hibit.meta" "$sm_home" "session:fm-hibit" alpha
       printf 'backend=%s\n' "$backend" >> "$state/hibit.meta"
       fm_backend_busy_state() { printf 'unknown'; }
       fm_backend_capture() { printf '%s' "$FM_PENDING_TEST_CAPTURE"; }

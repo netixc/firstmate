@@ -9,10 +9,10 @@ set -u
 
 TMP_ROOT=$(fm_test_tmproot fm-teardown-endpoint-safety)
 
-write_common() {  # <meta> <id> <runtime>
-  local meta=$1 id=$2 runtime=$3
+write_common() {  # <meta> <id> <backend>
+  local meta=$1 id=$2 backend=$3
   cat > "$meta" <<EOF_META
-backend=$runtime
+backend=$backend
 endpoint_task_id=$id
 worktree=/tmp/$id-worktree
 project=/tmp/$id-project
@@ -35,8 +35,8 @@ EOF_META
   pass "endpoint validation accepts an exactly bound Herdr endpoint"
 }
 
-test_missing_runtime_identity_is_rejected() {
-  local id=missing-runtime meta="$TMP_ROOT/missing-runtime.meta" out status
+test_missing_workspace_backend_identity_is_rejected() {
+  local id=missing-backend meta="$TMP_ROOT/missing-backend.meta" out status
   cat > "$meta" <<EOF_META
 endpoint_task_id=$id
 window=default:w3:p4
@@ -50,19 +50,19 @@ EOF_META
   out=$(fm_backend_validate_task_endpoint "$meta" "$id" 2>&1)
   status=$?
   [ "$status" -ne 0 ] || fail "metadata without backend= was accepted"
-  assert_contains "$out" "missing or ambiguous runtime identity" "missing runtime refusal was unclear"
-  pass "endpoint validation rejects a missing runtime identity as stale"
+  assert_contains "$out" "missing or ambiguous workspace backend identity" "missing workspace backend refusal was unclear"
+  pass "endpoint validation rejects a missing workspace backend identity as stale"
 }
 
-test_unsupported_endpoint_is_rejected_before_runtime_dispatch() {
+test_unsupported_endpoint_is_rejected_before_workspace_dispatch() {
   local id=unsupported meta="$TMP_ROOT/unsupported.meta" out status
   write_common "$meta" "$id" stale-runtime
   printf 'window=old:endpoint\n' >> "$meta"
   out=$(fm_backend_validate_task_endpoint "$meta" "$id" 2>&1)
   status=$?
   [ "$status" -ne 0 ] || fail "unsupported endpoint metadata was accepted"
-  assert_contains "$out" "does not identify the Herdr runtime" "unsupported endpoint error did not name Herdr"
-  pass "endpoint validation rejects unsupported runtime values without reinterpretation"
+  assert_contains "$out" "does not identify the Herdr workspace backend" "unsupported endpoint error did not name Herdr"
+  pass "endpoint validation rejects unsupported workspace backend values without reinterpretation"
 }
 
 test_herdr_binding_mismatch_is_rejected() {
@@ -106,7 +106,7 @@ EOF_META
 }
 
 test_valid_herdr_endpoint
-test_missing_runtime_identity_is_rejected
-test_unsupported_endpoint_is_rejected_before_runtime_dispatch
+test_missing_workspace_backend_identity_is_rejected
+test_unsupported_endpoint_is_rejected_before_workspace_dispatch
 test_herdr_binding_mismatch_is_rejected
 test_herdr_field_inconsistency_is_rejected
