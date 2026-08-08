@@ -599,9 +599,9 @@ fm_pending_reply_fallback_idle_eligible() {  # <record-path>
 # category as submit acknowledgement - never task state and never a source
 # consumers can confuse with semantic state.
 #
-# It stays harness-scoped (fm_busy_lines_match with the recorded harness, no
-# global OR of every vendor signature), so one harness's output cannot make
-# another read busy, and a weak rendered idle degrades to `fallback-idle`,
+# It requires the recorded Pi identity when calling fm_busy_lines_match, so a
+# retired runtime record cannot be interpreted through Pi's rendered state.
+# A weak rendered idle degrades to `fallback-idle`,
 # which the caller accepts as idle only after its grace window.
 fm_pending_reply_backend_observation() {  # <backend> <target> [expected-label] [harness]
   local backend=$1 target=$2 expected_label=${3-} harness=${4-} native tail40

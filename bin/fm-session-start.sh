@@ -36,8 +36,7 @@
 #                       locked.
 #   3. wake-drain     - mutates the durable wake queue, so it also only runs
 #                       when locked.
-#   4. supervision-instructions - the one emitted operating block for the
-#                       detected primary harness.
+#   4. supervision-instructions - the one emitted Pi operating block.
 #   5. read-once contract - the do-not-re-read contract covering every source
 #                       represented by the two digests below.
 #   6. fleet digest   - a compact data/backlog.md identity/metadata listing,
@@ -48,14 +47,14 @@
 #                       data/captain-shared.md, data/learnings.md: read-only,
 #                       always safe, always runs.
 #   8. closing reminder - prints the context-specific watcher next step; this
-#                       script points back to the emitted harness supervision
+#                       script points back to the emitted Pi supervision
 #                       block and deliberately never arms the watcher itself.
 #
 # Those eight names are also the runtime-bound stage list below, so a truncated
 # startup can name exactly which of them never ran.
 #
 # ORDERING, and why FLEET STATE now runs before CONTEXT: this digest is
-# delivered through a harness that truncates an oversized payload from the TAIL,
+# delivered through Pi, which can truncate an oversized payload from the TAIL,
 # and it has really been truncated in practice - a 70KB digest arrived as lines
 # 1-435 of 578, cutting off eight lines before the live-task inventory. What a
 # truncated tail drops must therefore be the CHEAPEST thing to lose. Curated
@@ -87,7 +86,7 @@
 # The tradeoff this ordering accepts: a refused (read-only) session must not
 # go dark. So on refusal, bootstrap still runs (in FM_BOOTSTRAP_DETECT_ONLY=1
 # mode) for its read-only detect lines - missing tools, gh auth, the
-# worktree-tangle check, the harness override, crew-dispatch validation,
+# worktree-tangle check, Pi runtime migration, crew-dispatch validation,
 # tasks-axi and quota-axi tool checks, and tasks-axi availability - none of
 # which mutate shared state and all of which are safe to compute without
 # verified lock ownership.

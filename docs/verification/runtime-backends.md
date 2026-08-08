@@ -12,7 +12,8 @@ The maintained checks below cover the supported interface rather than a retired 
 - `tests/fm-harness-pi.test.sh` proves Pi-only detection, profiles, migration rejection, and invalid configuration behavior.
 - `tests/fm-spawn-dispatch-profile.test.sh` proves Pi-only ordinary-worker launch and model/thinking dispatch.
 - `tests/fm-secondmate-profile.test.sh` proves Pi secondmate profile precedence and recovery refusal for non-Pi records.
-- `tests/fm-remote-secondmate-lifecycle-e2e.test.sh` proves remote secondmates launch through Pi with a Herdr endpoint.
+- `tests/fm-secondmate-sync.test.sh` proves guarded local pre-launch sync completes before later Pi profile validation can refuse launch.
+- `tests/fm-remote-secondmate-lifecycle-e2e.test.sh` proves remote secondmates negotiate mixed tracked controller versions, launch through Pi with a Herdr endpoint, and return Pi-only route identity.
 - `tests/fm-backend-herdr.test.sh` and the Herdr smoke suites prove endpoint identity, task isolation, and safe pane lifecycle behavior.
 
 ## Workspace removal focus safety

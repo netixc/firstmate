@@ -3,8 +3,8 @@
 #
 # When enabled, firstmate resolves one W3C `traceparent` carrier for a task,
 # injects it into the agent's pane shell as the TRACEPARENT environment variable
-# before launch (bin/fm-spawn.sh, alongside GOTMPDIR, so it reaches every spawn
-# backend and every harness for ship, scout, and secondmate spawns), and records
+# before launch (bin/fm-spawn.sh, alongside GOTMPDIR, so it reaches every Pi
+# ship, scout, and secondmate spawn), and records
 # the identical value as `traceparent=` in state/<id>.meta. Because the injected
 # carrier and the recorded carrier are the same string, an observer that reads
 # the metadata sees exactly the identity the child received - no collector,

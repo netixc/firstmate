@@ -598,7 +598,7 @@ if [ "${#POS[@]}" -gt 0 ] && [ "${POS[0]}" != "$idpart" ] && case "$idpart" in *
   [ -z "$MODEL" ] || shared_args+=(--model "$MODEL")
   [ -z "$EFFORT" ] || shared_args+=(--effort "$EFFORT")
   # One delivery contract applies to every pair in a batch, exactly like the shared
-  # harness. Each pair still re-validates it against its own brief, so a batch
+  # Pi profile. Each pair still re-validates it against its own brief, so a batch
   # spanning several modes is two invocations rather than a silent mixed dispatch.
   [ "$MODE_SET" -eq 0 ] || shared_args+=(--mode "$MODE")
   [ "$YOLO_SET" -eq 0 ] || shared_args+=(--yolo "$YOLO")
@@ -924,7 +924,7 @@ fi
 
 # PROJ_ABS can still carry a symlinked path component (e.g. macOS's /tmp ->
 # /private/tmp) when it came from the ship/scout branch's logical `pwd` above.
-# A runtime backend's current-path read can report the OS-level,
+# A workspace backend's current-path read can report the OS-level,
 # physically-resolved cwd, so comparing it against a
 # still-symlinked PROJ_ABS can misfire both ways: false-negative (the poll
 # below never notices the pane left the project) or false-positive (the
@@ -942,7 +942,7 @@ real_path_or_raw() {  # <path>
   fi
 }
 
-# Runtime container creation converges on the opaque $T target consumed by the
+# Task-workspace creation converges on the opaque $T target consumed by the
 # shared send, capture, supervision, and cleanup paths.
 validate_spawn_worktree() {  # <source> <inspect-target>
   local source=$1 inspect_target=$2 wt_real proj_real wt_top wt_top_real

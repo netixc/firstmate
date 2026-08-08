@@ -53,7 +53,7 @@
 #                          running a check or removing poll artifacts
 #   heartbeat              fleet-scan backstop found an unsurfaced captain-relevant
 #                          status, unless afk is active
-# For normal supervision, resume the session-start primary-harness protocol
+# For normal supervision, resume the session-start Pi protocol
 # after each printed reason. Direct duplicate invocations of this script still
 # no-op through the watcher singleton lock.
 set -u
@@ -303,8 +303,8 @@ wedge_timer_check() {  # <window> <since-file> <triage-label> <escalation-count-
 }
 
 # busy_turn_over_age: 0 iff <task>'s latest completed-turn marker is at least
-# BUSY_TURN_MAX_SECS old. Ages the per-task turn-ended marker, the harness-neutral
-# signal every verified harness's turn-end hook touches; before any turn has
+# BUSY_TURN_MAX_SECS old. Ages the per-task turn-ended marker, the runtime-neutral
+# signal Pi's task extension touches; before any turn has
 # completed, ages the task's spawn record instead so a fresh task still gets a
 # bound. The caller checks that the pane is busy and routes a crossed bound
 # through the existing wedge_timer_check, never anything that touches the
