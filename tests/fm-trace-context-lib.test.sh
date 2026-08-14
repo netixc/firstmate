@@ -221,18 +221,29 @@ assert_no_grep 'command:' "$ROOT/bin/fm-trace-context-lib.sh" "trace-context lib
 fm_trace_context_resolve "$CFG_OFF" "$NOMETA" >/dev/null || fail "resolve must return 0 when off"
 pass "the resolver has no sleep/timeout/command hang source and always returns success"
 
-# --- harness/backend/kind independence (code only, comments stripped) ---------
+# --- supported backend resolver matrix ---------------------------------------
 
-LIB_CODE=$(sed 's/#.*$//' "$ROOT/bin/fm-trace-context-lib.sh")
-for tok in harness backend tmux herdr zellij orca cmux claude codex opencode grok kind ship scout secondmate ; do
-  case "$LIB_CODE" in
-    *"$tok"*) fail "trace-context lib code must be harness/backend/kind agnostic, but references '$tok'" ;;
+# shellcheck source=/dev/null
+. "$ROOT/bin/fm-backend.sh"
+for backend in tmux herdr; do
+  case "$backend" in
+    tmux)
+      resolved_backend=$(FM_BACKEND='' FM_BACKEND_CONFIG_DIR="$CFG_OFF" TMUX='test,1,0' HERDR_ENV='' fm_backend_name)
+      carrier=$(FM_TRACE_CONTEXT=on TMUX='test,1,0' HERDR_ENV='' fm_trace_context_resolve "$CFG_OFF" "$WORK/$backend.meta")
+      ;;
+    herdr)
+      resolved_backend=$(FM_BACKEND='' FM_BACKEND_CONFIG_DIR="$CFG_OFF" TMUX='' HERDR_ENV=1 fm_backend_name 2>/dev/null)
+      carrier=$(FM_TRACE_CONTEXT=on TMUX='' HERDR_ENV=1 fm_trace_context_resolve "$CFG_OFF" "$WORK/$backend.meta")
+      ;;
   esac
+  [ "$resolved_backend" = "$backend" ] || fail "$backend runtime context resolved as '$resolved_backend'"
+  fm_trace_context_valid "$carrier" || fail "$backend runtime context must resolve a valid traceparent: '$carrier'"
 done
-pass "the carrier is minted identically for every harness, backend, and spawn kind (no such branching in the lib code)"
+pass "tmux and Herdr runtime contexts both resolve valid carriers through public interfaces"
 
 # --- no prompt / task-prose reads (code only, comments stripped) --------------
 
+LIB_CODE=$(sed 's/#.*$//' "$ROOT/bin/fm-trace-context-lib.sh")
 for tok in brief prompt report status ; do
   case "$LIB_CODE" in
     *"$tok"*) fail "trace-context lib code must never read task prose, but references '$tok'" ;;

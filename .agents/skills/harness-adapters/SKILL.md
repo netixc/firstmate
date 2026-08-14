@@ -197,7 +197,7 @@ Claude renders a predicted-next-prompt suggestion as dim/faint text inside an ot
 A plain `tmux capture-pane` cannot tell that ghost text apart from typed text.
 Firstmate launches every claude crewmate and secondmate with `CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false`, scoped to firstmate-launched agents through `bin/fm-spawn.sh`, so it never touches the captain's global config.
 The CLI's `--prompt-suggestions` flag is print/SDK-mode only and does not suppress the interactive composer ghost text, verified empirically on v2.1.186.
-As defense in depth for any pane that flag cannot reach, including the captain's own firstmate composer that away-mode reads, the shared `fm_composer_strip_ghost` extractor in `bin/fm-composer-lib.sh` removes dim/faint SGR 2 ghost runs before pending-input classification on every styled reader (tmux, herdr, and Zellij).
+As defense in depth for any pane that flag cannot reach, including the captain's own firstmate composer that away-mode reads, the shared `fm_composer_strip_ghost` extractor in `bin/fm-composer-lib.sh` removes dim/faint SGR 2 ghost runs before pending-input classification on every styled reader (tmux and Herdr).
 Its broader dark-TRUECOLOR placeholder handling and dark-theme tradeoff are documented in `docs/herdr-backend.md` "Composer and injection safety", with active captures in `docs/verification/runtime-backends.md`.
 That styled capture is internal to the boolean detector only.
 `fm-peek` and every other human or LLM-facing capture path stays plain `tmux capture-pane` with no escape codes.
@@ -340,7 +340,7 @@ Pin `[hints] project_picker_disabled = true` in `~/.grok/config.toml` if a non-p
 
 **TRUECOLOR placeholder styling: covered (task afk-herdr-false-pending, 2026-07-10).**
 A freshly-dismissed, never-typed-into grok composer shows a placeholder ("Type a message...") styled with a dark 24-bit TRUECOLOR foreground, not the SGR-2 dim/faint attribute the ghost stripper originally detected.
-The shared ANSI-aware owner `fm_composer_strip_ghost` (`bin/fm-composer-lib.sh`) now drops a dark/muted truecolor foreground (perceived luminance below `FM_COMPOSER_GHOST_LUMA_MAX`, default 128) as well as dim/faint, so the placeholder is stripped and the row reads empty on every styled backend (tmux, herdr, and Zellij route through the same owner).
+The shared ANSI-aware owner `fm_composer_strip_ghost` (`bin/fm-composer-lib.sh`) now drops a dark/muted truecolor foreground (perceived luminance below `FM_COMPOSER_GHOST_LUMA_MAX`, default 128) as well as dim/faint, so the placeholder is stripped and the row reads empty on both styled backends (tmux and Herdr route through the same owner).
 Verified live against grok 0.2.93: real input is the bright `38;2;224;222;244` (luminance ~225, kept), while grok's borders and placeholder/hint text are dark truecolor (`38;2;50;47;70` .. `38;2;110;106;134`, luminance ~51..110, dropped).
 This assumes a dark terminal theme, the fleet reality; the SGR-2 signal stays theme-independent.
 Regression coverage: `tests/fm-composer-ghost.test.sh` (`test_strip_ghost_drops_dark_truecolor_ghost`, `test_dark_truecolor_ghost_only_composer_is_not_pending`) and `tests/fm-backend-herdr.test.sh` (`test_composer_state_grok_dark_truecolor_placeholder_is_empty`, `test_composer_state_grok_bright_truecolor_real_text_is_pending`).
@@ -406,7 +406,7 @@ Because the versioned install path is what identifies the alias, an auto-update 
 
 **Cursor parks its terminal cursor outside its composer.**
 `#{cursor_y}` pointed below the footer both when idle and with real text typed, and `#{cursor_flag}` was 0, so tmux's cursor row is not a composer locator for a Cursor pane and the cursor-ANCHORED read answers `unknown` in every state.
-`bin/fm-tmux-lib.sh` therefore reclassifies a pane it can prove is Cursor the way every cursorless backend already classifies it, letting the bottom-most shape win, so the composite `fm_tmux_composer_state` now reports a real `empty` or `pending` for a Cursor pane on tmux (verified 2026-08-13).
+`bin/fm-tmux-lib.sh` therefore reclassifies a pane it can prove is Cursor the way the cursorless Herdr backend already classifies it, letting the bottom-most shape win, so the composite `fm_tmux_composer_state` now reports a real `empty` or `pending` for a Cursor pane on tmux (verified 2026-08-13).
 That gate is Cursor's own structural process identity from `bin/fm-cursor-lib.sh`, never the verdict alone, so the strict blank-cursor-row posture stays in force for every other harness and a dead shell still never reads `empty`.
 This is what makes away-mode escalation delivery work against a Cursor primary: `bin/fm-supervise-daemon.sh` needs an affirmatively-empty composer before it types, and it needed no Cursor-specific branch once the reader was correct.
 Submission is additionally acknowledged from the idle-to-busy transition, which is why cursor's `ctrl+c to stop` token is part of the delivery busy union in `bin/fm-composer-lib.sh`.
@@ -415,9 +415,6 @@ Match that TOKEN and never the spinner verb: the same version rendered `Working`
 **Delivery confirmation is verified on tmux and Herdr only.**
 Herdr reports a Cursor pane `blocked` in EVERY state - idle, mid-turn, and after - so its native idle-baseline submit path is unreachable for Cursor and the composer branch runs instead; that branch reads a mid-turn row carrying the placeholder beside `ctrl+c to stop`, which is `pending`.
 `bin/backends/herdr.sh` therefore confirms a Cursor submit from a rendered-footer idle-to-busy transition, taking the baseline before the first Enter so an already-busy pane never confirms.
-Zellij, cmux, and Orca share a submit core that never consults that footer, so a Cursor steer there LANDS but `bin/fm-send.sh` reports delivery unconfirmed and exits non-zero.
-Treat that as a known limitation of those three backends rather than a lost message: the steer is in the pane and the worker's own recorded state still comes from its transcript fold.
-Teaching the shared core the same transition is deliberately separate work, because it changes the submit path for every harness on those three backends and needs its own live validation on each.
 
 The composer's reverse-video placeholder remnant is taught to the ONE fleet-wide screen classifier in `bin/fm-composer-lib.sh`, not to any adapter.
 Herdr additionally draws the composer's rules with half-block glyphs, which the same shared classifier owns as structural edges; without them a bare composer's wrap region swallows the footer below it and an idle pane reads `pending`.
