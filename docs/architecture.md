@@ -244,7 +244,7 @@ Teardown is fail-closed for ship worktrees: dirty worktrees refuse, and committe
 
 Relay is the optional Discord-only public-mention subsystem hosted by [myfirstmate.io](https://myfirstmate.io).
 The dashboard owns Discord identity linking, bot installation, and pairing-token issuance, while the Firstmate home remains a polling client and never opens a Discord Gateway connection or runs a local transport daemon.
-A non-empty `FMX_PAIRING_TOKEN` in the home's gitignored `.env` activates the existing authenticated check path; without it, Relay is inert.
+A non-empty `FMX_PAIRING_TOKEN` in the home's gitignored `.env` activates the existing authenticated check path; without it, hosted polling and replies remain inactive.
 
 Locked bootstrap creates the validated `state/relay-watch.check.sh` identity shim and `config/relay.env` cadence file.
 The same bootstrap path performs one bounded migration of legacy local connector artifacts into `relay-*` state, Relay task metadata, and `FM_RELAY_*` optional settings, leaving the pairing-token key stable.

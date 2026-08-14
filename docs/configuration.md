@@ -319,8 +319,8 @@ To enable Relay:
 3. Copy the dashboard pairing token into this Firstmate home's gitignored `.env` as `FMX_PAIRING_TOKEN=<token>`.
 4. Start a new Firstmate session, then mention the installed bot in Discord.
 
-A home without a non-empty `FMX_PAIRING_TOKEN` is inert.
-It does not create Relay state, poll myfirstmate.io, scan the backlog for public commitments, or change the default watcher cadence.
+A clean home without a non-empty `FMX_PAIRING_TOKEN` is inert.
+An upgraded home may perform the bounded local-name migration documented below once, but without the token it does not arm Relay, poll myfirstmate.io, scan the backlog for public commitments, or change the default watcher cadence.
 The token identifies the hosted Relay tenant and records consent for public replies and normal reversible lifecycle actions from eligible owner mentions.
 Destructive, irreversible, and security-sensitive requests still require confirmation through a trusted channel.
 Relay keeps owner-only routing: every direct mention delivered to a home is from that home's owner, while surrounding Discord conversation context can contain untrusted third-party messages.
