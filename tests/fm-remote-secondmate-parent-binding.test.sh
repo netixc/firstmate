@@ -144,7 +144,7 @@ printf -- '- alpha [direct-PR] - alpha project (added 2026-08-04)\n' > "$PARENT/
 printf 'codex\n' > "$PARENT/config/secondmate-harness"
 printf 'tmux\n' > "$PARENT/config/backend"
 
-# The primary home is the X-mode / relay home: the captain's real activation.
+# The primary home is the Relay / relay home: the captain's real activation.
 printf 'FMX_PAIRING_TOKEN=repro-token\n' > "$PARENT/.env"
 
 # --- deterministic SSH boundary, identical shape to the lifecycle e2e suite --
@@ -245,7 +245,7 @@ run_child_teardown() { # <extra env assignments...>
 }
 
 # Case B-equivalent: the delivered (wrong) binding points at the remote code
-# root, and that root itself carries an X-mode .env - a plausible real-world
+# root, and that root itself carries a Relay .env - a plausible real-world
 # state (a captain who also runs Firstmate directly on the build Mac). Before
 # the fix this refused; the durable record now makes it out of scope.
 printf 'FMX_PAIRING_TOKEN=remote-host-token\n' > "$REMOTE_ROOT/.env"

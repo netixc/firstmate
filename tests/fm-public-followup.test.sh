@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # End-to-end and regression tests for the deterministic public-followup consumer.
 #
-# The failure this suite pins: firstmate promises a public final reply in an X or
-# Discord thread, routes the work out, and then the session compacts or restarts.
+# The failure this suite pins: firstmate promises a public final reply in a Discord
+# thread, routes the work out, and then the session compacts or restarts.
 # Nothing in memory survives. The promise is only kept if a terminal work result
 # reconciles the typed obligation from DISK and the final reply lands in the
 # ORIGINAL thread exactly once.
@@ -18,7 +18,7 @@ set -u
 
 PF="$ROOT/bin/fm-public-followup.sh"
 EMIT="$ROOT/bin/fm-public-followup-emit.sh"
-POLL="$ROOT/bin/fm-x-poll.sh"
+POLL="$ROOT/bin/fm-relay-poll.sh"
 TEARDOWN="$ROOT/bin/fm-teardown.sh"
 SESSION_START="$ROOT/bin/fm-session-start.sh"
 TMP_ROOT=$(fm_test_tmproot fm-public-followup)
@@ -135,14 +135,14 @@ seed_commitment() {
 
   # The mention payload and the durable per-request context, exactly as the relay
   # poll records them at intake.
-  mkdir -p "$home/state/x-inbox"
+  mkdir -p "$home/state/relay-inbox"
   jq -n --arg r "$request" --arg p "$platform" \
     '{request_id:$r, platform:$p, text:"please fix worker placement"}' \
-    > "$home/state/x-inbox/$request.json"
-  chmod 700 "$home/state/x-inbox"
-  chmod 600 "$home/state/x-inbox/$request.json"
+    > "$home/state/relay-inbox/$request.json"
+  chmod 700 "$home/state/relay-inbox"
+  chmod 600 "$home/state/relay-inbox/$request.json"
   FM_HOME="$home" bash -c \
-    ". '$ROOT/bin/fm-x-lib.sh'; fmx_context_registry_set '$home/state' '$request' '$platform' 1900" \
+    ". '$ROOT/bin/fm-relay-lib.sh'; fm_relay_context_registry_set '$home/state' '$request' '$platform' 1900" \
     || fail "could not retain the private request context"
 
   run_pf "$home" register "$obligation" --relation rel-code \
@@ -244,7 +244,7 @@ test_restart_e2e_delivers_exactly_once() {
   printf '%s\n' fmdev > "$child/.fm-secondmate-home"
   fm_write_meta "$home/state/fmdev.meta" "kind=secondmate" "home=$child"
   fm_write_meta "$child/state/work-code-q1.meta" \
-    "x_request=req-restart" "x_request_ts=1700000000" "x_followups=1"
+    "relay_request=req-restart" "relay_request_ts=1700000000" "relay_followups=1"
 
   # The reported failure, reproduced: with the work bound but no reconciled
   # terminal result, the commitment is stranded at pending-work and nothing can
@@ -265,7 +265,7 @@ test_restart_e2e_delivers_exactly_once() {
   # Simulate compaction/restart: nothing but disk survives, and the drained inbox
   # is gone. The durable private request context is what keeps the thread binding
   # resolvable.
-  rm -f "$home/state/x-inbox/req-restart.json"
+  rm -f "$home/state/relay-inbox/req-restart.json"
 
   out=$(FAKE_CURL_LOG="$log" run_pf "$home" consume) \
     || fail "cold reconciliation failed"
@@ -295,8 +295,8 @@ test_restart_e2e_delivers_exactly_once() {
   [ "$receipt" = posted ] || fail "a validated posted receipt must be recorded, got '$receipt'"
   [ "$(task_state "$home" pf-restart)" = 'done' ] \
     || fail "the commitment must be Done only after the receipt"
-  assert_no_grep '^x_request=' "$child/state/work-code-q1.meta" \
-    "typed delivery must clear the secondmate's legacy X link"
+  assert_no_grep '^relay_request=' "$child/state/work-code-q1.meta" \
+    "typed delivery must clear the secondmate's Relay task link"
   pass "restart end-to-end: typed result reconciles from disk and delivers one reply to the original thread"
 }
 
@@ -432,7 +432,7 @@ test_dry_run_does_not_close_commitment() {
   emit_terminal "$home" "$home" pf-dry main work-dry >/dev/null || fail "emit failed"
   run_pf "$home" consume >/dev/null || fail "consume failed"
 
-  FMX_DRY_RUN=1 FAKE_CURL_LOG="$log" expect_failure \
+  FM_RELAY_DRY_RUN=1 FAKE_CURL_LOG="$log" expect_failure \
     "a dry-run must not close a public commitment" run_pf "$home" deliver pf-dry
   assert_contains "$EXPECT_OUT" "recorded as retryable" \
     "a dry-run must leave a retryable typed state"
@@ -449,9 +449,9 @@ test_late_receipt_closes_the_exact_attempt_without_reposting() {
   local home log out posts attempt
   home=$(make_home late-receipt)
   log="$home/curl.log"; : > "$log"
-  seed_commitment "$home" pf-late req-late x main work-late
+  seed_commitment "$home" pf-late req-late discord main work-late
   fm_write_meta "$home/state/work-late.meta" \
-    "x_request=req-late" "x_request_ts=1700000000" "x_followups=1"
+    "relay_request=req-late" "relay_request_ts=1700000000" "relay_followups=1"
   emit_terminal "$home" "$home" pf-late main work-late >/dev/null || fail "emit failed"
   FAKE_CURL_LOG="$log" run_pf "$home" consume >/dev/null || fail "consume failed"
 
@@ -475,8 +475,8 @@ test_late_receipt_closes_the_exact_attempt_without_reposting() {
   posts=$(followup_posts "$log")
   [ "$posts" -eq 0 ] || fail "recording a late receipt must post nothing, got $posts posts"
   [ "$(task_state "$home" pf-late)" = 'done' ] || fail "a validated late receipt must close the commitment"
-  assert_no_grep '^x_request=' "$home/state/work-late.meta" \
-    "a late receipt must clear the legacy X link"
+  assert_no_grep '^relay_request=' "$home/state/work-late.meta" \
+    "a late receipt must clear the Relay task link"
 
   FAKE_CURL_LOG="$log" expect_failure "a receipt for a different attempt must be refused" \
     run_pf "$home" record-posted pf-late --attempt 9 --chunks 1
@@ -487,17 +487,17 @@ test_typed_terminal_clear_only_removes_legacy_link() {
   local home meta out
   home=$(make_home typed-clear)
   meta="$home/state/work-clear.meta"
-  printf '%s\n' 'status=working' 'x_request=req-clear' 'x_request_ts=1700000000' \
-    'x_followups=2' 'x_platform=discord' 'x_reply_max_chars=1900' > "$meta"
+  printf '%s\n' 'status=working' 'relay_request=req-clear' 'relay_request_ts=1700000000' \
+    'relay_followups=2' 'relay_platform=discord' 'relay_reply_max_chars=1900' > "$meta"
 
   out=$(PATH="$home/fakebin:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" \
-    FM_STATE_OVERRIDE="$home/state" "$ROOT/bin/fm-x-followup.sh" --clear work-clear) \
+    FM_STATE_OVERRIDE="$home/state" "$ROOT/bin/fm-relay-followup.sh" --clear work-clear) \
     || fail "the typed terminal clear transition must succeed"
   [ "$out" = work-clear ] || fail "the clear-only transition must identify the task"
   assert_grep 'status=working' "$meta" "clear-only transition must preserve unrelated task metadata"
-  assert_no_grep '^x_request=' "$meta" "clear-only transition must remove the request link"
-  assert_no_grep '^x_followups=' "$meta" "clear-only transition must remove the follow-up counter"
-  assert_no_grep '^x_platform=' "$meta" "clear-only transition must remove platform metadata"
+  assert_no_grep '^relay_request=' "$meta" "clear-only transition must remove the request link"
+  assert_no_grep '^relay_followups=' "$meta" "clear-only transition must remove the follow-up counter"
+  assert_no_grep '^relay_platform=' "$meta" "clear-only transition must remove platform metadata"
   pass "typed terminal cleanup clears the legacy link without posting"
 }
 
@@ -537,7 +537,7 @@ test_outward_delivery_stays_with_the_owning_home() {
   printf '%s\n' child > "$child/.fm-secondmate-home"
   fm_write_meta "$owner/state/child.meta" "kind=secondmate" "home=$child"
   fm_write_meta "$child/state/work-child.meta" \
-    "x_request=req-own" "x_request_ts=1700000000" "x_followups=1"
+    "relay_request=req-own" "relay_request_ts=1700000000" "relay_followups=1"
 
   FAKE_CURL_LOG="$log" emit_terminal "$owner" "$owner" pf-own secondmate:child work-child >/dev/null \
     || fail "the child could not report its typed result"
@@ -556,8 +556,8 @@ test_outward_delivery_stays_with_the_owning_home() {
   [ "$(followup_posts "$log")" -eq 0 ] || fail "the refused delivery must post nothing"
   FAKE_CURL_LOG="$log" run_pf "$owner" deliver pf-own >/dev/null \
     || fail "the owning home must deliver the typed public reply"
-  assert_no_grep '^x_request=' "$child/state/work-child.meta" \
-    "typed delivery must clear the child task's legacy X link"
+  assert_no_grep '^relay_request=' "$child/state/work-child.meta" \
+    "typed delivery must clear the child task's Relay task link"
   pass "a child home reports typed results but can never become the outward-post owner"
 }
 
@@ -565,9 +565,9 @@ test_delivery_requires_registration_before_posting() {
   local home log out
   home=$(make_home missing-registration)
   log="$home/curl.log"; : > "$log"
-  seed_commitment "$home" pf-missing req-missing x main work-missing
+  seed_commitment "$home" pf-missing req-missing discord main work-missing
   fm_write_meta "$home/state/work-missing.meta" \
-    "x_request=req-missing" "x_request_ts=1700000000" "x_followups=1"
+    "relay_request=req-missing" "relay_request_ts=1700000000" "relay_followups=1"
   emit_terminal "$home" "$home" pf-missing main work-missing >/dev/null || fail "emit failed"
   run_pf "$home" consume >/dev/null || fail "consume failed"
   rm -f "$home/state/public-followup/registry/pf-missing"
@@ -579,7 +579,7 @@ test_delivery_requires_registration_before_posting() {
   [ "$(followup_posts "$log")" -eq 0 ] || fail "missing registration must prevent any public post"
   [ "$(task_state "$home" pf-missing)" != 'done' ] \
     || fail "missing registration must not close the obligation"
-  assert_grep 'x_request=req-missing' "$home/state/work-missing.meta" \
+  assert_grep 'relay_request=req-missing' "$home/state/work-missing.meta" \
     "missing registration must leave the legacy link for reconciliation"
   pass "typed delivery refuses to post when its cleanup registration is missing"
 }
@@ -589,7 +589,7 @@ test_secondmate_teardown_requires_parent_binding() {
   parent=$(make_home teardown-parent)
   child=$(make_home teardown-child)
   printf '%s\n' mate > "$child/.fm-secondmate-home"
-  seed_commitment "$parent" pf-teardown req-teardown x secondmate:mate work-child
+  seed_commitment "$parent" pf-teardown req-teardown discord secondmate:mate work-child
   fm_write_meta "$parent/state/mate.meta" "kind=secondmate" "home=$child"
   fm_write_meta "$child/state/work-child.meta" \
     "window=firstmate:fm-work-child" "endpoint_task_id=work-child" \
@@ -613,7 +613,7 @@ test_secondmate_teardown_requires_parent_binding() {
     || fail "home-seed validation rejected a punctuation-bearing operational registry record"
   registry_before=$(cat "$parent/data/secondmates.md")
   marker_before=$(cat "$child/.fm-secondmate-home")
-  seed_commitment "$parent" pf-teardown-valid req-teardown-valid x secondmate:mate work-child
+  seed_commitment "$parent" pf-teardown-valid req-teardown-valid discord secondmate:mate work-child
   fm_write_meta "$parent/state/mate.meta" "kind=secondmate" "home=$child"
   fm_write_meta "$child/state/work-child.meta" \
     "window=firstmate:fm-work-child" "endpoint_task_id=work-child" \
@@ -722,7 +722,7 @@ test_secondmate_teardown_resolves_parent_from_durable_record_when_env_lost() {
 
   assert_local_secondmate_parent_record "$child" "$parent_resolved"
 
-  seed_commitment "$parent" pf-durable req-durable x secondmate:mate work-child
+  seed_commitment "$parent" pf-durable req-durable discord secondmate:mate work-child
   fm_write_meta "$parent/state/mate.meta" "kind=secondmate" "home=$child"
   fm_write_meta "$child/state/work-child.meta" \
     "window=firstmate:fm-work-child" "endpoint_task_id=work-child" \
@@ -1021,7 +1021,7 @@ test_secondmate_parent_binding_matches_literal_id() {
   printf '%s\n' 'mate.id' > "$child/.fm-secondmate-home"
   printf -- '- mateXid - synthetic (home: %s; scope: synthetic; projects: ; added 2026-07-30)\n' \
     "$child" > "$parent/data/secondmates.md"
-  seed_commitment "$parent" pf-teardown-literal req-teardown-literal x secondmate:mate.id work-literal
+  seed_commitment "$parent" pf-teardown-literal req-teardown-literal discord secondmate:mate.id work-literal
   fm_write_meta "$parent/state/mate.id.meta" "kind=secondmate" "home=$child"
   fm_write_meta "$child/state/work-literal.meta" \
     "window=firstmate:fm-work-literal" "endpoint_task_id=work-literal" \
@@ -1043,7 +1043,7 @@ test_traversal_registration_is_refused_before_delivery() {
   local home log out
   home=$(make_home traversal-registration)
   log="$home/curl.log"; : > "$log"
-  seed_commitment "$home" pf-traversal req-traversal x main work-traversal
+  seed_commitment "$home" pf-traversal req-traversal discord main work-traversal
   emit_terminal "$home" "$home" pf-traversal main work-traversal >/dev/null \
     || fail "emit failed for traversal registration"
   sed -i.bak 's/^work_home=.*/work_home=secondmate:..\/..\/x/' \
@@ -1092,8 +1092,8 @@ test_private_context_survives_inbox_cleanup() {
   # Drain the inbox exactly as answering the original mention does, and make any
   # relay fallback fail, so only the retained private context can resolve the
   # thread's platform and size budget.
-  rm -f "$home/state/x-inbox/req-ctx.json"
-  assert_present "$home/state/x-context/req-ctx.json" \
+  rm -f "$home/state/relay-inbox/req-ctx.json"
+  assert_present "$home/state/relay-context/req-ctx.json" \
     "the private request context must outlive the inbox payload"
 
   FAKE_CURL_LOG="$log" FAKE_REQCTX_CODE=500 run_pf "$home" deliver pf-ctx >/dev/null \
@@ -1222,7 +1222,7 @@ test_exhausted_binding_is_not_retried() {
   local home log out posts
   home=$(make_home exhausted)
   log="$home/curl.log"; : > "$log"
-  seed_commitment "$home" pf-gone req-gone x main work-gone
+  seed_commitment "$home" pf-gone req-gone discord main work-gone
   emit_terminal "$home" "$home" pf-gone main work-gone >/dev/null || fail "emit failed"
   run_pf "$home" consume >/dev/null || fail "consume failed"
 

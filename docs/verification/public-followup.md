@@ -43,15 +43,29 @@ ok - typed public-followup records carry only public-safe summaries and delivera
 The first case is the end-to-end proof.
 It reproduces the stranded state first (work bound, no reconciled terminal result, delivery refused with "still waiting on its bound work" and zero posts), then has a secondmate-shaped child report a typed `pr-merged` result, deletes the drained inbox payload, reconciles from disk, and asserts exactly one `connector/followup` call carrying the original `request_id`, a validated `posted` receipt, and a Done obligation.
 
-The existing Relay suite is unchanged by this work:
+## Discord-only hosted Relay boundary
+
+Recorded 2026-08-14 on Darwin 25.6.0 (arm64) with GNU bash 3.2.57, tasks-axi 0.2.4, jq 1.7.1-apple, and ShellCheck 0.11.0.
+The Relay test uses fake `curl` responses for the unchanged myfirstmate.io connector endpoints and makes no public post.
 
 ```sh
-bash tests/fm-x-mode.test.sh | grep -c '^ok -'
+bash tests/fm-relay.test.sh | tee /tmp/fm-relay.out
+grep -c '^ok -' /tmp/fm-relay.out
 ```
 
 ```
-103
+ok - Relay accepts only explicit Discord payloads and has no numeric platform fallback
+ok - fm-relay-reply --image posts an image object on answer
+ok - fm-relay-poll records the durable per-request reply context from the relay payload
+ok - a delayed Discord follow-up stays one message after inbox cleanup via the durable registry
+ok - fm-relay-dismiss posts a request-bound dismiss and echoes only the request_id
+ok - fm-relay-followup posts a follow-up, increments the counter, and keeps the link under the cap
+ok - bootstrap migrates existing Discord Relay state and optional settings exactly once
+102
 ```
+
+This verifies the current Discord-only source boundary, request-id-bound answer and dismissal shapes, images, per-request Discord budgets, delayed follow-ups, and the one-time local-state migration.
+The same suite keeps the no-token hard no-op and generated activation cleanup cases executable through the public scripts.
 
 ## Relay-disabled zero overhead
 

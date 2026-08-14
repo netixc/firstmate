@@ -163,9 +163,9 @@ test_guard_warnings() {
   err="$dir/guard.err"
   mkdir -p "$dir/config"
   printf 'project=x\n' > "$state/task.meta"
-  : > "$dir/config/x-mode.env"
+  : > "$dir/config/relay.env"
   CLAUDECODE=1 PI_CODING_AGENT='' GROK_AGENT='' FM_ROOT_OVERRIDE="$dir" FM_STATE_OVERRIDE="$state" FM_GUARD_GRACE=1 "$ROOT/bin/fm-guard.sh" 2> "$err" >/dev/null || fail "guard failed"
-  grep -F "source '$dir/config/x-mode.env' first" "$err" >/dev/null || fail "guard repair line did not source the X-mode cadence config"
+  grep -F "source '$dir/config/relay.env' first" "$err" >/dev/null || fail "guard repair line did not source the Relay cadence config"
 
   # (2) live watcher plus fresh beacon, empty queue -> silence.
   dir=$(make_case guard-fresh)

@@ -96,11 +96,11 @@ Approved setup nodes are:
 
 - `cd <one path word>`.
 - `export NAME=<one shell word>` with no command substitution, process substitution, or redirection.
-- `source <x-mode path>` or `. <x-mode path>`.
-- `[ -f <x-mode path> ] && source <x-mode path>` and the equivalent dot form.
+- `source <Relay cadence path>` or `. <Relay cadence path>`.
+- `[ -f <Relay cadence path> ] && source <Relay cadence path>` and the equivalent dot form.
 
-The allowed x-mode paths are `config/x-mode.env`, `./config/x-mode.env`, and an absolute path that normalizes to `<active-firstmate-home>/config/x-mode.env`.
-An absolute x-mode path outside the active home is not an approved setup node.
+The allowed Relay cadence paths are `config/relay.env`, `./config/relay.env`, and an absolute path that normalizes to `<active-firstmate-home>/config/relay.env`.
+An absolute Relay cadence path outside the active home is not an approved setup node.
 
 Approved nodes may be separated by `;`, a real newline, or `&&`.
 `&&` is accepted after setup so a failed `cd`, `export`, or source prevents the protected call from running under the wrong setup.
@@ -194,7 +194,7 @@ Every harness was instructed to issue these exact shell command strings as separ
 ```sh
 printf 'UNRELATED_EXECUTED\n'
 pgrep -fl '/bin/fm-watch.sh' || true
-source '<scratch-project>/config/x-mode.env'; bin/fm-watch-checkpoint.sh --seconds 180
+source '<scratch-project>/config/relay.env'; bin/fm-watch-checkpoint.sh --seconds 180
 tmux send-keys -t isolated-pi-lab "printf '%s\n' 'bin/fm-watch-arm.sh &'"; tmux send-keys -t isolated-pi-lab Enter
 bin/fm-watch-arm.sh &
 ```

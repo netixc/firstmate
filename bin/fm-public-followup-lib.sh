@@ -2,9 +2,8 @@
 # fm-public-followup-lib.sh - shared gating and private-transport helpers for the
 # deterministic public-followup consumer.
 #
-# Firstmate promises a public final reply when a myfirstmate relay mention (X or
-# Discord) asks for work. `tasks-axi public-followup` is the sole owner of that
-# typed obligation and its state machine; state/x-context/ is the sole owner of
+# Firstmate promises a public final reply when a myfirstmate relay mention (Discord) asks for work. `tasks-axi public-followup` is the sole owner of that
+# typed obligation and its state machine; state/relay-context/ is the sole owner of
 # the private full request context. This library owns only the small Firstmate
 # side: the activation gate, the private per-home transport directories, and the
 # deterministic terminal-event identity.
@@ -49,13 +48,13 @@
 # event id and the same destination path. Idempotency therefore holds across
 # retries, restarts, and duplicate child reports without any coordination.
 #
-# Depends on bin/fm-x-lib.sh for .env reading and the private-artifact
+# Depends on bin/fm-relay-lib.sh for .env reading and the private-artifact
 # publication primitives (atomic, single-link, mode-validated, non-executable);
 # those remain that file's contract and are not restated here.
 
 _FM_PF_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null)" || _FM_PF_LIB_DIR="."
-# shellcheck source=bin/fm-x-lib.sh
-. "$_FM_PF_LIB_DIR/fm-x-lib.sh"
+# shellcheck source=bin/fm-relay-lib.sh
+. "$_FM_PF_LIB_DIR/fm-relay-lib.sh"
 
 FM_PF_DIRNAME='public-followup'
 # Consumed by the sourcing scripts, not by this library.
@@ -69,10 +68,10 @@ FM_PF_EVENT_BYTES_MAX=${FM_PF_EVENT_BYTES_MAX:-8192}
 # --- gate 1: the authoritative relay activation contract --------------------
 
 # fm_pf_relay_active <home>: 0 when this home has opted into the myfirstmate
-# relay, 1 otherwise. Identical contract to bootstrap's X-mode activation - a
+# relay, 1 otherwise. Identical contract to bootstrap's Relay activation - a
 # non-empty FMX_PAIRING_TOKEN in <home>/.env - so no second activation flag
 # exists to drift. FMX_PAIRING_TOKEN in the environment wins, matching
-# fmx_load_config, so a direct client call and this gate agree.
+# fm_relay_load_config, so a direct client call and this gate agree.
 fm_pf_relay_active() {
   local home=$1 token
   if [ -n "${FMX_PAIRING_TOKEN+x}" ]; then
@@ -80,7 +79,7 @@ fm_pf_relay_active() {
     return $?
   fi
   [ -f "$home/.env" ] || return 1
-  token=$(fmx_env_get FMX_PAIRING_TOKEN "$home/.env")
+  token=$(fm_relay_env_get FMX_PAIRING_TOKEN "$home/.env")
   [ -n "$token" ]
 }
 
