@@ -2323,6 +2323,40 @@ test_bootstrap_migrates_before_other_mutations() {
   pass "bootstrap runs the non-executing migration at the locked session boundary"
 }
 
+test_bootstrap_migrates_relay_metadata_before_pr_authentication() {
+  local dir state meta quarantined
+  dir=$(make_case bootstrap-relay-metadata-boundary)
+  state="$dir/home/state"
+  meta="$state/task-a.meta"
+  fm_write_meta "$meta" \
+    'window=fm-task-a' \
+    'pr=https://github.com/o/r/pull/11'
+  seed_canonical_poll "$dir" task-a https://github.com/o/r/pull/11
+  rm -f "$state/.pr-check-migration-scan-v1" "$state/.pr-check-migration-v1"
+  printf '%s\n' \
+    'x_request=req-legacy' \
+    'x_request_ts=1700000000' \
+    'x_followups=1' \
+    'x_platform=discord' \
+    'x_reply_max_chars=1900' >> "$meta"
+
+  FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" PATH="$dir/fakebin:$BASE_PATH" \
+    "$ROOT/bin/fm-bootstrap.sh" > "$dir/bootstrap.out" 2> "$dir/bootstrap.err" \
+    || fail "bootstrap Relay metadata boundary failed"
+
+  fm_pr_poll_artifacts_valid "$state" task-a "$POLL" \
+    || fail "legacy Relay metadata caused bootstrap to quarantine a valid PR poll"
+  assert_grep 'relay_request=req-legacy' "$meta" \
+    "bootstrap did not preserve the linked Relay request"
+  assert_grep 'relay_platform=discord' "$meta" \
+    "bootstrap did not preserve the linked Discord platform"
+  assert_no_grep '^x_' "$meta" "bootstrap left legacy task metadata after migration"
+  quarantined=$(find "$state/.pr-check-quarantine" -name 'task-a.check.*' -type f 2>/dev/null || true)
+  [ -z "$quarantined" ] \
+    || fail "bootstrap quarantined a PR poll before migrating legacy Relay metadata"
+  pass "bootstrap migrates legacy Relay task metadata before PR authentication"
+}
+
 test_bootstrap_isolates_incomplete_poll_migration() {
   local dir state fakebin fleet_marker relay_poll_marker rc
   dir=$(make_case bootstrap-migration-isolation)
@@ -3388,6 +3422,7 @@ test_nonexecuting_migration
 test_historical_relay_shim_transition_matrix
 test_direct_registration_refreshes_v1_relay_shim
 test_bootstrap_migrates_before_other_mutations
+test_bootstrap_migrates_relay_metadata_before_pr_authentication
 test_bootstrap_isolates_incomplete_poll_migration
 test_custom_snapshot_cleanup_on_signal
 test_returned_custom_check_descendants_are_drained

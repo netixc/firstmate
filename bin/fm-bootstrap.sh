@@ -899,13 +899,7 @@ relay_remove_artifact() {
 # the emitted harness-aware supervision repair instruction.
 relay_setup() {
   local env_file token shim cadence shim_body cadence_body tool missing shim_home
-  if ! fm_relay_migrate_local_v1 "$FM_HOME" "$STATE" "$CONFIG"; then
-    echo "RELAY: local state migration failed; Relay remains inactive until the legacy artifacts can be migrated safely"
-    return 0
-  fi
-  if [ "${FM_RELAY_MIGRATED:-0}" = 1 ]; then
-    echo "RELAY: migrated legacy local connector state and settings to Relay names"
-  fi
+  [ "${FM_RELAY_LOCAL_MIGRATION_OK:-0}" = 1 ] || return 0
   env_file="$FM_HOME/.env"
   shim="$STATE/relay-watch.check.sh"
   cadence="$CONFIG/relay.env"
@@ -1119,12 +1113,22 @@ if [ "${1:-}" = "install" ]; then
   exit 0
 fi
 
-# This is the first mutating sweep at a locked session boundary. It pauses an
+# This is the first mutating sweep at a locked session boundary. It migrates
+# legacy Relay task metadata before PR-check authentication, then pauses an
 # identity-matched watcher, holds its lock, and neutralizes legacy PR checks
 # before any tool detection or later bootstrap mutation can leave old artifacts
 # runnable. Detect-only sessions never touch state, and the deferred network pass
 # never repeats it: the local pass that ran first already closed that window.
+FM_RELAY_LOCAL_MIGRATION_OK=0
 if [ "${FM_BOOTSTRAP_DETECT_ONLY:-0}" != 1 ] && local_phase; then
+  if fm_relay_migrate_local_v1 "$FM_HOME" "$STATE" "$CONFIG"; then
+    FM_RELAY_LOCAL_MIGRATION_OK=1
+    if [ "${FM_RELAY_MIGRATED:-0}" = 1 ]; then
+      echo "RELAY: migrated legacy local connector state and settings to Relay names"
+    fi
+  else
+    echo "RELAY: local state migration failed; Relay remains inactive until the legacy artifacts can be migrated safely"
+  fi
   "$SCRIPT_DIR/fm-pr-check-migrate.sh" || true
   startup_memory_budget_setup
 fi
