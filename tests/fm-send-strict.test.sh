@@ -128,7 +128,7 @@ test_unresolvable_target_does_not_tmux_fallback() {
     "$SEND" lost-target "hello" >/dev/null 2>"$err"; rc=$?
   [ "$rc" -ne 0 ] || fail "unresolvable target should fail"
   assert_contains "$(cat "$err")" "not resolvable" "unresolvable diagnostic should be loud"
-  assert_contains "$(cat "$err")" "metadata window/terminal lookup" "unresolvable diagnostic should name the attempted lookup"
+  assert_contains "$(cat "$err")" "recorded-window lookup" "unresolvable diagnostic should name the attempted lookup"
   assert_contains "$(cat "$err")" "backend=none" "unresolvable diagnostic should name that no backend was assumed"
   [ ! -s "$log" ] || fail "unresolvable target fell through to tmux send"$'\n'"$(cat "$log")"
   pass "fm-send strict: unresolvable selectors do not fall back to tmux"

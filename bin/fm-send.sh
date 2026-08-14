@@ -250,7 +250,7 @@ fm_send_resolve_target() {  # <raw-target>
   if [ -n "$meta" ]; then
     target=$(fm_backend_target_of_meta "$meta")
     if [ -z "$target" ]; then
-      echo "error: no backend target recorded in $meta (tried explicit target '$raw' via recorded window/terminal; backend=from-meta)" >&2
+      echo "error: no backend target recorded in $meta (tried explicit target '$raw' via recorded window; backend=from-meta)" >&2
       return 1
     fi
     RESOLVED_TARGET=$target
@@ -270,17 +270,17 @@ fm_send_resolve_target() {  # <raw-target>
         assumed=tmux
       fi
       if ! fm_backend_target_exists "$assumed" "$raw"; then
-        echo "error: explicit target '$raw' is not a live $assumed endpoint (tried meta=$STATE/$raw.meta; metadata window/terminal lookup; backend=$assumed). Use fm-<id> for a recorded task/lane, or pass a target whose backend endpoint can be verified." >&2
+        echo "error: explicit target '$raw' is not a live $assumed endpoint (tried meta=$STATE/$raw.meta; recorded-window lookup; backend=$assumed). Use fm-<id> for a recorded task/lane, or pass a target whose backend endpoint can be verified." >&2
         return 1
       fi
       RESOLVED_TARGET=$raw
       TARGET_BACKEND=$assumed
-      RESOLUTION_TRIED="meta=$STATE/$raw.meta; metadata window/terminal lookup; backend=$assumed; endpoint=verified"
+      RESOLUTION_TRIED="meta=$STATE/$raw.meta; recorded-window lookup; backend=$assumed; endpoint=verified"
       return 0
       ;;
   esac
 
-  echo "error: target '$raw' is not resolvable (tried meta=$STATE/$raw.meta; metadata window/terminal lookup; backend=none). Use fm-$raw for a recorded task/lane, or pass a well-formed explicit backend target such as session:window." >&2
+  echo "error: target '$raw' is not resolvable (tried meta=$STATE/$raw.meta; recorded-window lookup; backend=none). Use fm-$raw for a recorded task/lane, or pass a well-formed explicit backend target such as session:window." >&2
   return 1
 }
 

@@ -6,12 +6,8 @@
 # bin/backends/herdr.sh) and by fm-spawn.sh's kimi
 # launch-readiness check.
 #
-# WHY THIS EXISTS (tasks fm-composer-shellglyph-safety and
-# fm-composer-thin-adapter-refactor-r1): the adapters each carried their own
-# copy of composer shape knowledge, and every copy drifted. The audited result
-# (data/fm-composer-consolidation-audit-s1) was a 5-adapter x 6-harness matrix
-# in which no adapter was right about more than five harnesses, no two adapters
-# were wrong in the same places, and one harness was unreadable everywhere.
+# WHY THIS EXISTS: composer shape knowledge is centralized so the supported
+# adapters cannot drift into conflicting harness classifications.
 # The consolidation rule that prevents a recurrence: an adapter CAPTURES a
 # screen and DESCRIBES its capabilities; it never classifies. A new harness
 # shape is taught to fm_composer_classify_screen below, once, and every backend
