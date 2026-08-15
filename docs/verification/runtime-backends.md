@@ -35,7 +35,7 @@ Pi and pi-signed 0.82.0 were reverified on 2026-07-27 through real isolated `fm-
 The earlier record that every harness is observed under its own `#{pane_current_command}` no longer holds and has been replaced by the per-harness evidence below.
 In this macOS run that reading reflected a rewritable process title rather than stable executable identity, so it is now one of two independent name sources rather than the sole basis of a verdict.
 
-The six verified worker adapters were relaunched on 2026-08-03 with tmux 3.6a on macOS 26.5.2 arm64, each on a private socket in an isolated lab.
+The four verified worker adapters were relaunched on 2026-08-03 with tmux 3.6a on macOS 26.5.2 arm64, each on a private socket in an isolated lab.
 
 ```sh
 tmux -L "$socket" new-window -d -t "$session:" -n "$harness" -c "$wt" -- "$bin"
@@ -155,7 +155,7 @@ ok - codex (codex-cli 0.146.0): real idle composer classifies empty
 ok - opencode (1.14.46): real idle composer classifies empty
 ok - pi (0.84.0): real idle composer classifies empty
 ok - strict posture live: a blank shell row classifies unknown and injection defers
-ok - live composer-matrix guard verified 5 live surface(s)
+ok - live composer-matrix guard verified 4 live surface(s)
 ```
 
 All three installed harnesses' real idle composers reached a proven `empty`, including Pi through the tmux foreground-process identity probe and OpenCode through the left-bar shape; Codex and OpenCode first parked on vendor update-available modals that the strict classifier correctly refused until the guard's single non-submitting Escape dismissed them.
