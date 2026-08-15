@@ -178,6 +178,17 @@ run_native_ahoy_regressions() {
   git init -q "$AHOY_PROJECT"
   cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$AHOY_PROJECT/.pi/extensions/"
   cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$AHOY_PROJECT/.pi/extensions/lib/"
+  cat > "$AHOY_PROJECT/.pi/extensions/captain-boundary-probe.ts" <<'EOF'
+import { writeFileSync } from "node:fs";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+export default function (pi: ExtensionAPI) {
+  pi.on("before_agent_start", (event) => {
+    if (event.prompt !== "A genuine captain message before Ahoy.") return;
+    writeFileSync(`${process.env.FM_HOME}/state/prior-captain-boundary`, "seen\n");
+  });
+}
+EOF
   cp \
     "$ROOT/bin/fm-sessionstart-nudge.sh" \
     "$ROOT/bin/fm-primary-scope-lib.sh" \
@@ -233,12 +244,13 @@ run_native_ahoy_regressions() {
     cd "$AHOY_PROJECT" &&
       FM_HOME="$later_home" pi --print --approve --no-session --no-context-files --no-extensions \
         -e .pi/extensions/fm-primary-turnend-guard.ts \
+        -e .pi/extensions/captain-boundary-probe.ts \
         --no-skills --skill .agents/skills \
         --model openai-codex/gpt-5.6-sol --thinking low \
-        "Respond exactly PRIOR_BOUNDARY_ACK." "/ahoy"
+        "A genuine captain message before Ahoy." "/ahoy"
   )
-  printf '%s\n' "$later_out" | grep -Fq "PRIOR_BOUNDARY_ACK" \
-    || fail "Pi native later-message setup did not preserve the genuine captain boundary: $later_out"
+  [ "$(sed -n '1p' "$later_home/state/prior-captain-boundary")" = seen ] \
+    || fail "Pi native later-message setup did not preserve the genuine captain boundary"
   printf '%s\n' "$later_out" | grep -Fq "AHOY_BEARINGS_BRANCH" \
     && fail "Pi native later-message Ahoy gathered Bearings: $later_out"
   [ "$(sed -n '1p' "$later_home/state/session-start-count")" = 1 ] \
