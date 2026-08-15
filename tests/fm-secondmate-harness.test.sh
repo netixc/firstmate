@@ -538,12 +538,12 @@ test_spawn_explicit_harness_wins() {
 # The unverified-adapter guard holds on the resolved secondmate path: an unknown
 # config/secondmate-harness aborts the spawn (no meta written) and names the source.
 test_spawn_unverified_secondmate_harness_refused() {
-  local w sm fakebin err rc removed
+  local w sm fakebin err rc unsupported
   w="$TMP_ROOT/spawn-unverified"
   sm="$w/sm"
   mkdir -p "$w/home/config" "$w/home/state"
-  removed=$(printf 'cur%s' 'sor')
-  printf '%s\n' "$removed" > "$w/home/config/secondmate-harness"
+  unsupported=legacy-agent
+  printf '%s\n' "$unsupported" > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
   fakebin=$(make_noop_tmux "$w/tmux")
   err="$w/spawn.err"
@@ -556,7 +556,7 @@ test_spawn_unverified_secondmate_harness_refused() {
     "$ROOT/bin/fm-spawn.sh" sm "$sm" --secondmate >/dev/null 2>"$err" || rc=$?
 
   [ "$rc" -ne 0 ] || fail "unverified: spawn should have failed"
-  assert_contains "$(cat "$err")" "no launch template for harness '$removed'" \
+  assert_contains "$(cat "$err")" "no launch template for harness '$unsupported'" \
     "unverified: error names the rejected harness"
   assert_contains "$(cat "$err")" "config/secondmate-harness" \
     "unverified: error names the secondmate-harness source"
