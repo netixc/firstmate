@@ -17,14 +17,12 @@
 #   bin/fm-cd-pretool-check.sh --command '<cmd>'
 #
 # Stdin mode extracts .toolInput.command for Grok or .tool_input.command for
-# Codex and Cursor. CLI mode is used by OpenCode and Pi after their adapters
-# extract the exact command string. --cursor selects Cursor's own deny rendering.
+# Codex. CLI mode is used by OpenCode and Pi after their adapters extract the
+# exact command string.
 #
 # Exit/output contract (identical shape to bin/fm-arm-pretool-check.sh):
 #   ALLOW - exit 0 and no output.
 #   DENY - exit 2, a hook deny object on stderr, and a Grok decision object on stdout.
-#   DENY, --cursor - exit 0 and Cursor's own decision object on stdout. Cursor
-#          reads the returned object rather than the exit status.
 #   INERT - not the real primary checkout (a crewmate/scout task worktree or a
 #           non-firstmate repo): exit 0 with no output, exactly like ALLOW.
 #   FAIL OPEN - malformed or empty stdin, missing jq for stdin transport,
@@ -33,25 +31,21 @@
 # Codex blocks on exit 2 and displays stderr.
 # Grok consumes the stdout decision object.
 # OpenCode and Pi consume exit 2 plus stderr.
-# Cursor consumes the stdout decision object.
 set -u
 
 CMD=""
 CMD_SET=0
-CURSOR_MODE=0
 
 usage() {
   cat <<'EOF'
-Usage: fm-cd-pretool-check.sh [--command <cmd>] [--cursor]
+Usage: fm-cd-pretool-check.sh [--command <cmd>]
 
 With no --command, reads a PreToolUse-style JSON payload on stdin (Grok
-toolInput.command, or Codex/Cursor tool_input.command).
+toolInput.command, or Codex tool_input.command).
 Fires only in the real primary firstmate checkout; it is a silent no-op in a
 crewmate/scout task worktree or any non-firstmate repo.
 Exits 0 to allow and 2 to deny a persistent top-level cwd change.
 The deny reason is written to stderr, with a Grok decision object on stdout.
-With --cursor, a deny is Cursor's own decision object on stdout and exit 0,
-because Cursor reads the returned object rather than the exit status.
 Malformed transport and an unavailable classifier runtime fail open.
 EOF
 }
@@ -67,10 +61,6 @@ while [ "$#" -gt 0 ]; do
     --command=*)
       CMD=${1#--command=}
       CMD_SET=1
-      shift
-      ;;
-    --cursor)
-      CURSOR_MODE=1
       shift
       ;;
     -h|--help)
@@ -163,10 +153,6 @@ json_escape() {
 
 DETAIL="[$CODE] $REASON"
 ESCAPED=$(json_escape "$DETAIL")
-if [ "$CURSOR_MODE" -eq 1 ]; then
-  printf '{"permission":"deny","user_message":"%s"}\n' "$ESCAPED"
-  exit 0
-fi
 printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"%s"}\n' "$ESCAPED" >&2
 printf '{"decision":"deny","reason":"%s"}\n' "$ESCAPED"
 exit 2

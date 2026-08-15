@@ -35,7 +35,7 @@ mkdir -p "$TMP_ROOT"
 TMP_ROOT=$(cd "$TMP_ROOT" && pwd)
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
-VERIFIED_HARNESSES="codex opencode pi pi-signed grok kimi cursor"
+VERIFIED_HARNESSES="codex opencode pi pi-signed grok kimi"
 
 # The expectation table, written out independently of the implementation so a
 # silent change to either side shows up here.
@@ -47,7 +47,6 @@ verified_adapter_contract() {  # <harness> -> exit command, interrupt key, repea
     pi-signed) printf '/quit\tEscape\t1\n' ;;
     grok) printf '/exit\tC-c\t1\n' ;;
     kimi) printf '/exit\tEscape\t1\n' ;;
-    cursor) printf '/exit\tEscape\t1\n' ;;
     *) return 1 ;;
   esac
 }
@@ -202,11 +201,7 @@ test_exit_types_each_harness_verified_command() {
   for harness in $VERIFIED_HARNESSES; do
     dir=$(new_case "exit-$harness")
     add_task "$dir" t1 "$harness"
-    if [ "$harness" = cursor ]; then
-      alive_as "$dir" cursor-agent
-    else
-      alive_as "$dir" "$harness"
-    fi
+    alive_as "$dir" "$harness"
     out=$(run_control "$dir" t1 exit); rc=$?
     expect_code 0 "$rc" "exit on $harness should succeed"$'\n'"$out"
     IFS=$'\t' read -r expected key repeat <<< "$(verified_adapter_contract "$harness")"
@@ -222,11 +217,7 @@ test_interrupt_sends_each_harness_verified_key() {
   for harness in $VERIFIED_HARNESSES; do
     dir=$(new_case "int-$harness")
     add_task "$dir" t1 "$harness"
-    if [ "$harness" = cursor ]; then
-      alive_as "$dir" cursor-agent
-    else
-      alive_as "$dir" "$harness"
-    fi
+    alive_as "$dir" "$harness"
     out=$(run_control "$dir" t1 interrupt); rc=$?
     expect_code 0 "$rc" "interrupt on $harness should succeed"$'\n'"$out"
     IFS=$'\t' read -r expected key repeat <<< "$(verified_adapter_contract "$harness")"
@@ -245,8 +236,7 @@ test_interrupt_sends_each_harness_verified_key() {
 test_harness_family_resolution() {
   local pair recorded want got
   for pair in codex:codex codex-cli:codex \
-      opencode:opencode grok:grok grok-2:grok kimi:kimi cursor:cursor \
-      cursor-agent:cursor pi:pi \
+      opencode:opencode grok:grok grok-2:grok kimi:kimi pi:pi \
       pi-signed:pi-signed; do
     recorded=${pair%%:*}
     want=${pair#*:}
@@ -308,10 +298,11 @@ test_opencode_interrupts_twice_and_others_once() {
 }
 
 test_unverified_harness_is_refused() {
-  local dir out rc
+  local dir out rc removed
   dir=$(new_case unverified)
-  add_task "$dir" t1 someagent
-  alive_as "$dir" someagent
+  removed=$(printf 'cur%s' 'sor')
+  add_task "$dir" t1 "$removed"
+  alive_as "$dir" "$removed"
   out=$(run_control "$dir" t1 exit); rc=$?
   expect_code 1 "$rc" "an unverified harness should refuse"
   assert_contains "$out" "no verified control mechanics" "refusal should name the missing verification"

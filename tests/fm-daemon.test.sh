@@ -862,13 +862,12 @@ test_pane_input_pending_requires_proven_empty_prompt() {
       pane_input_pending "fakepane" \
       || fail "bare shell prompt '$prompt' should defer as unknown"
   done
-  for prompt in '›' '→'; do
-    printf 'output\noutput\n%s \n' "$prompt" > "$capture"
-    if PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=2 \
-      pane_input_pending "fakepane"; then
-      fail "proven empty agent prompt '$prompt' should not defer"
-    fi
-  done
+  prompt='›'
+  printf 'output\noutput\n%s \n' "$prompt" > "$capture"
+  if PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=2 \
+    pane_input_pending "fakepane"; then
+    fail "proven empty agent prompt '$prompt' should not defer"
+  fi
   pass "pane_input_pending: only proven empty agent prompts pass"
 }
 
@@ -892,8 +891,8 @@ test_tmux_composer_state_bare_shell_is_unknown() {
 }
 
 # The other side of the fix: a bordered composer box (the harness draws its own
-# prompt glyph inside it) and surviving bare agent prompt glyphs (Codex › and
-# Cursor →) are genuine empty agent composers and must still read `empty`.
+# prompt glyph inside it) and Codex's surviving bare agent prompt glyph are
+# genuine empty agent composers and must still read `empty`.
 test_tmux_composer_state_bordered_and_agent_rows_are_empty() {
   local dir fakebin capture out
   dir=$(make_supercase composer-empty-agent)
@@ -906,11 +905,7 @@ test_tmux_composer_state_bordered_and_agent_rows_are_empty() {
   out=$(PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=0 \
     fm_tmux_composer_state "fakepane")
   [ "$out" = empty ] || fail "a bare codex '›' composer should read empty, got '$out'"
-  printf '%s\n' "→ " > "$capture"
-  out=$(PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=0 \
-    fm_tmux_composer_state "fakepane")
-  [ "$out" = empty ] || fail "a bare cursor '→' composer should read empty, got '$out'"
-  pass "fm_tmux_composer_state: a bordered composer box and surviving bare agent glyphs still read empty"
+  pass "fm_tmux_composer_state: a bordered composer box and Codex's bare agent glyph still read empty"
 }
 
 test_tmux_composer_state_requires_matching_box_borders() {

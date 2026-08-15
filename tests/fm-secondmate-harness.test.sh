@@ -57,7 +57,7 @@ set -u
 # ambient PI_CODING_AGENT=true, the pi-signed ancestry case resolves "pi". Drop the
 # ambient markers so what this suite asserts does not depend on which harness it
 # was launched from; every case states the marker it means to test.
-unset PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT CURSOR_AGENT CURSOR_INVOKED_AS
+unset PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT
 
 BASE_PATH=${FM_TEST_BASE_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
 fm_git_identity fmtest fmtest@example.com
@@ -98,27 +98,6 @@ crew=default resolves to own, secondmate follows^default^-^pi^pi
 secondmate=default with crew absent -> own^-^default^pi^pi
 ROWS
   pass "A1 fm-harness.sh secondmate resolves the fallback chain; crew mode unchanged"
-}
-
-test_cursor_marker_detection() {
-  local dir fakebin got
-  dir="$TMP_ROOT/cursor-marker"
-  fakebin=$(fm_fakebin "$dir")
-  cat > "$fakebin/ps" <<'SH'
-#!/usr/bin/env bash
-case "$*" in
-  *'ppid='*) printf '%s\n' 1 ;;
-  *) printf '%s\n' bash ;;
-esac
-SH
-  chmod +x "$fakebin/ps"
-  got=$(env -u PI_CODING_AGENT -u GROK_AGENT \
-    PATH="$fakebin:$BASE_PATH" CURSOR_INVOKED_AS=cursor-agent "$ROOT/bin/fm-harness.sh")
-  [ "$got" = cursor ] || fail "Cursor's exact launcher marker resolved '$got', expected cursor"
-  got=$(env -u PI_CODING_AGENT -u GROK_AGENT \
-    PATH="$fakebin:$BASE_PATH" CURSOR_INVOKED_AS=cursor "$ROOT/bin/fm-harness.sh")
-  [ "$got" != cursor ] || fail "an inexact Cursor marker value was accepted as Cursor Agent CLI"
-  pass "fm-harness detects only Cursor Agent CLI's exact invocation marker"
 }
 
 # ===========================================================================
@@ -559,11 +538,12 @@ test_spawn_explicit_harness_wins() {
 # The unverified-adapter guard holds on the resolved secondmate path: an unknown
 # config/secondmate-harness aborts the spawn (no meta written) and names the source.
 test_spawn_unverified_secondmate_harness_refused() {
-  local w sm fakebin err rc
+  local w sm fakebin err rc removed
   w="$TMP_ROOT/spawn-unverified"
   sm="$w/sm"
   mkdir -p "$w/home/config" "$w/home/state"
-  printf 'bogus\n' > "$w/home/config/secondmate-harness"
+  removed=$(printf 'cur%s' 'sor')
+  printf '%s\n' "$removed" > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
   fakebin=$(make_noop_tmux "$w/tmux")
   err="$w/spawn.err"
@@ -576,47 +556,12 @@ test_spawn_unverified_secondmate_harness_refused() {
     "$ROOT/bin/fm-spawn.sh" sm "$sm" --secondmate >/dev/null 2>"$err" || rc=$?
 
   [ "$rc" -ne 0 ] || fail "unverified: spawn should have failed"
-  assert_contains "$(cat "$err")" "no launch template for harness 'bogus'" \
+  assert_contains "$(cat "$err")" "no launch template for harness '$removed'" \
     "unverified: error names the rejected harness"
   assert_contains "$(cat "$err")" "config/secondmate-harness" \
     "unverified: error names the secondmate-harness source"
   [ -e "$w/home/state/sm.meta" ] && fail "unverified: a meta was written despite the abort"
   pass "B6 spawn: an unverified resolved secondmate harness is refused (guard intact)"
-}
-
-test_spawn_cursor_secondmate_launches_with_its_primary_contract() {
-  local w sm fakebin launchlog launch meta rc
-  w="$TMP_ROOT/spawn-cursor-secondmate"
-  sm="$w/sm"
-  launchlog="$w/launch.log"
-  mkdir -p "$w/home/config" "$w/home/state" "$w/home/data" "$w/home/projects"
-  printf 'cursor\n' > "$w/home/config/secondmate-harness"
-  make_seeded_home "$sm" sm
-  fakebin=$(make_launch_capturing_tmux "$w/tmux")
-  : > "$launchlog"
-  rc=0
-  PATH="$fakebin:$BASE_PATH" TMUX='' PI_CODING_AGENT=true \
-    FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$w/home" \
-    FM_STATE_OVERRIDE="$w/home/state" FM_DATA_OVERRIDE="$w/home/data" \
-    FM_PROJECTS_OVERRIDE="$w/home/projects" FM_CONFIG_OVERRIDE="$w/home/config" \
-    FM_SPAWN_NO_GUARD=1 FM_FAKE_LAUNCH_LOG="$launchlog" FM_FAKE_PANE_PATH="$sm" \
-    "$ROOT/bin/fm-spawn.sh" sm "$sm" --secondmate >/dev/null 2>&1 || rc=$?
-
-  [ "$rc" -eq 0 ] || {
-    echo "skip: cursor executable not resolvable in this environment, so the launch could not be built"
-    return
-  }
-  meta="$w/home/state/sm.meta"
-  [ "$(meta_field "$meta" harness)" = cursor ] || fail "a cursor secondmate must record its own harness"
-  [ "$(meta_field "$meta" kind)" = secondmate ] || fail "a cursor secondmate must record kind=secondmate"
-  launch=$(cat "$launchlog")
-  assert_contains "$launch" "--trust" \
-    "a cursor secondmate must launch with --trust, or none of its project hooks load and its home has no supervision at all"
-  assert_contains "$launch" "--workspace" \
-    "a cursor secondmate must be pinned to its own home as the workspace"
-  assert_contains "$launch" "FM_SUPERVISION_MODEL=autoarm" \
-    "cursor's stop-hook park runs the watcher only between turns, so its home must inherit the autoarm model"
-  pass "Cursor is accepted for secondmates and launches with the contract its park needs"
 }
 
 # ===========================================================================
@@ -2514,7 +2459,6 @@ SH
 }
 
 test_harness_resolution
-test_cursor_marker_detection
 test_secondmate_model_effort_tokens
 test_pi_signed_detection_and_session_lock_identity
 test_dash_leading_process_names_are_basename_operands
@@ -2524,7 +2468,6 @@ test_spawn_backward_compat_crew_fallback
 test_spawn_bare_backward_compat
 test_spawn_explicit_harness_wins
 test_spawn_unverified_secondmate_harness_refused
-test_spawn_cursor_secondmate_launches_with_its_primary_contract
 test_spawn_backend_precedence_over_inherited_config
 test_spawn_explicit_backend_precedence_over_env_and_inherited_config
 test_spawn_bare_harness_no_model_effort_flag

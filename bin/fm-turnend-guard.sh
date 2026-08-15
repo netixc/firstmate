@@ -8,9 +8,8 @@
 # Pi adapters use the same predicate and force one bounded follow-up because
 # their turn-end events are passive. Grok delegates native blocking when its
 # running Stop payload advertises that capability, with one bounded resume
-# fallback for older payloads. Cursor calls this guard with --cursor and renders
-# exit 2 as one bounded follow-up because exit 2 is a silent no-op in its stop
-# step. See docs/turnend-guard.md for per-harness mechanics and evidence.
+# fallback for older payloads. See docs/turnend-guard.md for per-harness
+# mechanics and evidence.
 #
 # Codex and Grok use the payload's typed stop-active field as a one-block loop
 # guard. Passive adapters provide their own one-follow-up guard before calling
@@ -25,12 +24,7 @@ STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 GRACE=${FM_GUARD_GRACE:-300}
 WATCH="$SCRIPT_DIR/fm-watch.sh"
-for arg in "$@"; do
-  case "$arg" in
-    --cursor) : ;;
-    *) echo "usage: $(basename "$0") [--cursor]" >&2; exit 2 ;;
-  esac
-done
+[ "$#" -eq 0 ] || { echo "usage: $(basename "$0")" >&2; exit 2; }
 
 # shellcheck source=bin/fm-supervision-lib.sh
 . "$SCRIPT_DIR/fm-supervision-lib.sh"
