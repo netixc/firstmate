@@ -38,7 +38,7 @@ Three properties follow and are load-bearing for dispatch:
 - A named-model window can be tighter than the account bound, so it must not be read across models. A model-specific scope applies only to that named model; every other model remains bounded by the provider's applicable account scopes.
 
 `quotaSemantics.status` is `unknown` with no `effectiveAvailability` entries at all for providers whose vendor exposes no window (observed for `copilot`).
-`state.authStatus` is present only for some providers (observed for `grok` alone), so its absence is missing evidence, not a credential fault.
+`state.authStatus` is optional, so its absence is missing evidence, not a credential fault.
 
 ## Completion-runway shape the judgment depends on
 
