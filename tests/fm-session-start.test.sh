@@ -11,7 +11,7 @@
 #   - output section ordering: the safety preamble leads unchanged, live fleet
 #     state precedes the curated memory a truncated tail may take, and the
 #     read-once contract precedes both
-#   - context-aware next-step guidance for read-only, AFK, X mode, and normal
+#   - context-aware next-step guidance for read-only, AFK, Relay, and normal
 #     watcher ownership
 #   - status-tail bounding, default and FM_SESSION_START_STATUS_TAIL override
 #   - the per-line status-tail cap and its truncation marker
@@ -317,14 +317,14 @@ SH
 
 # make_fake_tmux_secondmate_recovery <fakebin>: a stateful tmux boundary
 # fixture for the real session-start -> bootstrap -> spawn path.
-# FM_FAKE_TMUX_MODE selects missing, ambiguous, unreadable, or shell; missing
+# FM_FAKE_TMURELAY selects missing, ambiguous, unreadable, or shell; missing
 # reproduces real tmux's active-window fallback while inventory omits the mate.
 make_fake_tmux_secondmate_recovery() {
   local fakebin=$1
   cat > "$fakebin/tmux" <<'SH'
 #!/usr/bin/env bash
 set -u
-mode=${FM_FAKE_TMUX_MODE:?}
+mode=${FM_FAKE_TMURELAY:?}
 log=${FM_FAKE_TMUX_LOG:?}
 spawned=${FM_FAKE_TMUX_SPAWNED:?}
 killed=${spawned}.killed
@@ -577,7 +577,7 @@ EOF
 
 run_session_start_secondmate() {
   local root=$1 home=$2 fakebin=$3 mate=$4 log=$5 spawned=$6 mode=$7
-  TMUX='' FM_BACKEND=tmux FM_FAKE_TMUX_MODE="$mode" FM_FAKE_TMUX_LOG="$log" \
+  TMUX='' FM_BACKEND=tmux FM_FAKE_TMURELAY="$mode" FM_FAKE_TMUX_LOG="$log" \
     FM_FAKE_TMUX_SPAWNED="$spawned" FM_FAKE_SECOND_MATE_HOME="$mate" \
     FM_FAKE_SECOND_MATE_ID="$SESSION_START_SECOND_MATE_ID" \
     FM_FAKE_HARNESS_PID=$$ \
@@ -2201,7 +2201,7 @@ EOF
   pass "an empty fleet reports (none) for in-flight tasks and an absent AFK flag"
 }
 
-test_next_step_sources_x_mode_cadence() {
+test_next_step_sources_relay_cadence() {
   local rec root home fakebin out
   rec=$(new_world next-step-x)
   IFS='|' read -r root home fakebin <<EOF
@@ -2214,12 +2214,12 @@ EOF
 
   out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
 
-  assert_contains "$out" "FMX: X mode on" "bootstrap did not activate X mode"
+  assert_contains "$out" "RELAY: Relay on" "bootstrap did not activate Relay"
   assert_contains "$out" "SUPERVISION OPERATING INSTRUCTIONS - primary harness: claude" "supervision block missing"
-  assert_contains "$out" "- X mode: active" "supervision block did not mention X cadence"
+  assert_contains "$out" "- Relay: active" "supervision block did not mention X cadence"
   assert_contains "$out" "Follow the supervision operating instructions block above" "next step did not point back to the emitted supervision block"
 
-  pass "session start emits X-mode cadence guidance in the harness supervision block"
+  pass "session start emits Relay cadence guidance in the harness supervision block"
 }
 
 test_next_step_afk_delegates_to_daemon() {
@@ -2426,7 +2426,7 @@ test_backlog_queued_bound_discloses_its_remainder
 test_backlog_compact_manual_backend_skips_indented_bodies
 test_backlog_compact_tasks_axi_unavailable_uses_manual_fallback
 test_fleet_digest_empty_fleet
-test_next_step_sources_x_mode_cadence
+test_next_step_sources_relay_cadence
 test_next_step_afk_delegates_to_daemon
 test_supervision_block_exactly_one_and_pi_diagnostic
 test_pi_signed_primary_uses_pi_extensions_without_identity_normalization

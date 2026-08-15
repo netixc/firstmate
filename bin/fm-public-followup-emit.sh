@@ -253,7 +253,7 @@ EVENT_BYTES=$(printf '%s\n' "$EVENT_JSON" | LC_ALL=C wc -c | tr -d ' ') \
   || die "typed terminal event exceeds $FM_PF_EVENT_BYTES_MAX bytes" 2
 
 printf '%s\n' "$EVENT_JSON" \
-  | fmx_private_artifact_publish_stdin_once "$(fm_pf_events_dir "$STATE")" "$EVENT_ID.json" 600
+  | fm_relay_private_artifact_publish_stdin_once "$(fm_pf_events_dir "$STATE")" "$EVENT_ID.json" 600
 case $? in
   0|1) printf '%s\n' "$EVENT_ID" ;;
   *) die "could not publish the terminal event into $HOME_DIR" 1 ;;

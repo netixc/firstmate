@@ -203,7 +203,7 @@ family_for_basename() {
       printf '%s\n' backend-dispatch
       ;;
     fm-pr-check-security.test.sh|fm-pr-merge.test.sh|fm-review-diff.test.sh|\
-    fm-teardown.test.sh|fm-x-mode.test.sh)
+    fm-teardown.test.sh|fm-relay.test.sh)
       printf '%s\n' pr-forge
       ;;
     fm-afk-inject-e2e.test.sh|fm-afk-return.test.sh)
@@ -284,7 +284,7 @@ tests/fm-supervision-instructions.test.sh
 tests/fm-test-run.test.sh
 tests/fm-tmux-submit-busy.test.sh
 tests/fm-transition-lib.test.sh
-tests/fm-x-mode.test.sh
+tests/fm-relay.test.sh
 EOF
 }
 
@@ -293,7 +293,7 @@ EOF
 # Execution order is longest first so wall-clock stays near the balanced sum.
 list_portable_parallel_1() {
   cat <<'EOF'
-tests/fm-x-mode.test.sh
+tests/fm-relay.test.sh
 tests/fm-cd-pretool-check.test.sh
 tests/fm-decision-hold-lifecycle.test.sh
 tests/fm-test-run.test.sh
@@ -900,7 +900,7 @@ families_for_changed_path() {
       printf '%s\n' secondmate
       ;;
     bin/fm-pr-*|bin/fm-merge-local.sh|bin/fm-teardown.sh|bin/fm-review-diff.sh|\
-    bin/fm-x-*|bin/fm-check*)
+    bin/fm-relay-*|bin/fm-check*)
       printf '%s\n' pr-forge
       ;;
     bin/fm-nm-run-lib.sh)

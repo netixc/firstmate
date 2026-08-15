@@ -130,7 +130,7 @@
       "audience": "agent-runtime"
     },
     {
-      "path": ".agents/skills/fmx-respond/SKILL.md",
+      "path": ".agents/skills/relay-respond/SKILL.md",
       "audience": "agent-runtime"
     },
     {

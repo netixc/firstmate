@@ -168,15 +168,15 @@ test_fresh_beacon_without_live_watcher_stays_alarm() {
   pass "fm-guard stale banner: a fresh beacon without a live watcher remains unhealthy"
 }
 
-test_x_mode_without_live_watcher_stays_alarm() {
+test_relay_without_live_watcher_stays_alarm() {
   local dir home out
-  dir=$(make_guard_case x-mode-no-live)
+  dir=$(make_guard_case relay-no-live)
   home=$(case_home "$dir")
   rm -f "$home/state/task.meta"
-  : > "$home/state/x-watch.check.sh"
+  : > "$home/state/relay-watch.check.sh"
   out=$(run_guard_case "$dir")
-  assert_contains "$out" "X-mode relay polling needs supervision" "X-mode-only need must remain guarded"
-  pass "fm-guard stale banner: X-mode polling without a live watcher remains unhealthy"
+  assert_contains "$out" "Relay polling needs supervision" "Relay-only need must remain guarded"
+  pass "fm-guard stale banner: Relay polling without a live watcher remains unhealthy"
 }
 
 test_healthy_recovery_rearms_next_stale_episode() {
@@ -698,7 +698,7 @@ test_autoarm_stale_episode_is_stable
 test_persistent_no_watcher_banner_names_missing_process
 test_persistent_no_watcher_episode_survives_beacon_touch
 test_fresh_beacon_without_live_watcher_stays_alarm
-test_x_mode_without_live_watcher_stays_alarm
+test_relay_without_live_watcher_stays_alarm
 test_healthy_recovery_rearms_next_stale_episode
 test_concurrent_same_episode_prints_one_full_banner
 test_home_isolation

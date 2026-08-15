@@ -855,9 +855,9 @@ function analyzeProgram(command, context, depth = 0) {
 }
 
 function xModePathAllowed(value, home) {
-  if (value === "config/x-mode.env" || value === "./config/x-mode.env") return true;
+  if (value === "config/relay.env" || value === "./config/relay.env") return true;
   if (!path.isAbsolute(value)) return false;
-  return path.normalize(value) === path.join(path.normalize(home), "config/x-mode.env");
+  return path.normalize(value) === path.join(path.normalize(home), "config/relay.env");
 }
 
 function ordinaryWordsOnly(tokens) {

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # fm-public-followup.sh - the deterministic consumer and delivery owner for
-# public commitments made through the myfirstmate relay (X and Discord).
+# public commitments made through the Discord-only myfirstmate Relay.
 #
 # THE PROBLEM THIS SOLVES: firstmate promises a public final reply, routes the
 # work out, and then the conversation compacts or the session restarts. Nothing
@@ -9,8 +9,8 @@
 #
 # OWNERSHIP BOUNDARIES (do not re-implement any of these here):
 #   tasks-axi public-followup   the typed obligation and its state machine.
-#   state/x-context/            the private full request context (fm-x-lib.sh).
-#   bin/fm-x-reply.sh           posting to the relay, thread splitting, dry run.
+#   state/relay-context/            the private full request context (fm-relay-lib.sh).
+#   bin/fm-relay-reply.sh           posting to the relay, thread splitting, dry run.
 #   bin/fm-public-followup-lib.sh  the activation gate and private transport.
 # This script composes them; it never restates their contracts or schemas.
 #
@@ -31,7 +31,7 @@
 #
 #   fm-public-followup.sh register <obligation-id> --relation <relation-id>
 #         --work-home <main|secondmate:<id>> --work-id <task-id> --generation <n>
-#         [--platform <x|discord>] [--request <request-id>]
+#         [--platform discord] [--request <request-id>]
 #       Record the binding the relay path just created with `tasks-axi
 #       public-followup add` + `bind-work`. This is the event-driven
 #       registration: it creates this home's private public-followup directories
@@ -65,7 +65,7 @@
 #       event's bounded public-safe outcome is reused exactly, which keeps the
 #       common path deterministic. The sequence is begin-delivery with the
 #       payload hash, post, then record the posted receipt or a typed error.
-#       A validated receipt also clears any bound legacy X link before the
+#       A validated receipt also clears any bound Relay task link before the
 #       registration is removed.
 #       An already-posted obligation is an idempotent success without another
 #       post; an obligation left in delivery-posting by a crash is REFUSED
@@ -230,19 +230,20 @@ cmd_register() {
     || die "obligation '$id' has no bound relation '$relation' for $work_home/$work_id; run tasks-axi public-followup bind-work first" 1
 
   [ -n "$platform" ] || platform=$(pf_field "$payload" '.public_followup.request.platform')
+  [ "$platform" = discord ] || die "obligation '$id' must identify Discord as its platform" 1
   [ -n "$request" ] || request=$(pf_field "$payload" '.public_followup.request.request_id')
   [ -z "$request" ] || fm_pf_slug_valid "$request" || die "unsafe request id: $request"
 
   local mkdir_target
   for mkdir_target in "$(fm_pf_registry_dir "$STATE")" "$(fm_pf_events_dir "$STATE")" \
                       "$(fm_pf_consumed_dir "$STATE")" "$(fm_pf_rejected_dir "$STATE")"; do
-    fmx_private_artifact_dir_prepare "$mkdir_target" >/dev/null \
+    fm_relay_private_artifact_dir_prepare "$mkdir_target" >/dev/null \
       || die "could not prepare $mkdir_target" 1
   done
 
   printf 'obligation_id=%s\nrelation_id=%s\nwork_home=%s\nwork_id=%s\ngeneration=%s\nplatform=%s\nrequest_id=%s\n' \
     "$id" "$relation" "$work_home" "$work_id" "$generation" "$platform" "$request" \
-    | fmx_private_artifact_publish_stdin "$(fm_pf_registry_dir "$STATE")" "$id" 600 \
+    | fm_relay_private_artifact_publish_stdin "$(fm_pf_registry_dir "$STATE")" "$id" 600 \
     || die "could not write the registration record" 1
 
   printf 'registered %s %s/%s generation=%s platform=%s\n' \
@@ -291,10 +292,10 @@ EOF
 reject_event() {
   local file=$1 event_id=$2 reason=$3 rejected event_payload
   rejected=$(fm_pf_rejected_dir "$STATE")
-  fmx_private_artifact_dir_prepare "$rejected" >/dev/null \
+  fm_relay_private_artifact_dir_prepare "$rejected" >/dev/null \
     || { printf 'rejected %s: %s (quarantine failed; event retained)\n' "$event_id" "$reason"; return 1; }
   if ! printf '%s\n' "$reason" \
-      | fmx_private_artifact_publish_stdin "$rejected" "$event_id.reason" 600 2>/dev/null; then
+      | fm_relay_private_artifact_publish_stdin "$rejected" "$event_id.reason" 600 2>/dev/null; then
     printf 'rejected %s: %s (quarantine failed; event retained)\n' "$event_id" "$reason"
     return 1
   fi
@@ -303,7 +304,7 @@ reject_event() {
     return 1
   fi
   if ! printf '%s' "$event_payload" \
-      | fmx_private_artifact_publish_stdin "$rejected" "$event_id.json" 600 2>/dev/null; then
+      | fm_relay_private_artifact_publish_stdin "$rejected" "$event_id.json" 600 2>/dev/null; then
     printf 'rejected %s: %s (quarantine failed; event retained)\n' "$event_id" "$reason"
     return 1
   fi
@@ -323,7 +324,7 @@ cmd_consume() {
   local obligation delivery request platform
   events_dir=$(fm_pf_events_dir "$STATE")
   consumed_dir=$(fm_pf_consumed_dir "$STATE")
-  fmx_private_artifact_dir_prepare "$consumed_dir" >/dev/null \
+  fm_relay_private_artifact_dir_prepare "$consumed_dir" >/dev/null \
     || die "could not prepare the consumed-event ledger" 1
   stderr_file=$(mktemp "${TMPDIR:-/tmp}/fm-pf-consume.XXXXXX") \
     || die "could not stage the reconciliation log" 1
@@ -399,7 +400,7 @@ cmd_consume() {
     fi
 
     if ! printf 'accepted %s\n' "$(now_rfc3339)" \
-        | fmx_private_artifact_publish_stdin "$consumed_dir" "$event_id" 600 2>/dev/null; then
+        | fm_relay_private_artifact_publish_stdin "$consumed_dir" "$event_id" 600 2>/dev/null; then
       printf 'accepted %s: consumed ledger could not be recorded; event retained for reconciliation\n' "$event_id"
       consume_rc=1
       continue
@@ -464,7 +465,7 @@ cmd_pending() {
       # The obligation is gone from the backlog (pruned after Done): the
       # registration is stale bookkeeping, not evidence, so drop it.
       if ! clear_public_followup_link "$id"; then
-        printf 'cannot clear the legacy X link for closed public commitment %s; registration retained for reconciliation\n' "$id"
+        printf 'cannot clear the Relay task link for closed public commitment %s; registration retained for reconciliation\n' "$id"
         printed=1
         continue
       fi
@@ -475,7 +476,7 @@ cmd_pending() {
     task_state=$(pf_field "$payload" '.state')
     if [ "$task_state" = 'done' ] || [ "$delivery" = 'posted' ] || [ "$delivery" = 'waived' ]; then
       if ! clear_public_followup_link "$id"; then
-        printf 'cannot clear the legacy X link for closed public commitment %s; registration retained for reconciliation\n' "$id"
+        printf 'cannot clear the Relay task link for closed public commitment %s; registration retained for reconciliation\n' "$id"
         printed=1
         continue
       fi
@@ -521,7 +522,7 @@ public_followup_secondmate_home() {
   local id=$1 meta home marker
   fm_pf_home_id_valid "secondmate:$id" || return 1
   meta="$STATE/$id.meta"
-  home=$(fmx_meta_get "$meta" home)
+  home=$(fm_relay_meta_get "$meta" home)
   if [ -z "$home" ] && [ -f "$DATA/secondmates.md" ] && [ ! -L "$DATA/secondmates.md" ]; then
     home=$(secondmate_registry_field "$DATA/secondmates.md" "$id" home || true)
   fi
@@ -552,7 +553,7 @@ clear_public_followup_link() {
     *) return 1 ;;
   esac
   FM_HOME="$home" FM_STATE_OVERRIDE="$state" FM_ROOT_OVERRIDE="$FM_ROOT" \
-    "$FM_ROOT/bin/fm-x-followup.sh" --clear "$work_id" >/dev/null
+    "$FM_ROOT/bin/fm-relay-followup.sh" --clear "$work_id" >/dev/null
 }
 
 public_followup_legacy_link_status() {
@@ -582,7 +583,7 @@ public_followup_legacy_link_status() {
     meta="$home/state/$work_id.meta"
     [ -e "$meta" ] || continue
     [ -f "$meta" ] && [ ! -L "$meta" ] || return 2
-    [ -n "$(fmx_meta_get "$meta" x_request)" ] && return 0
+    [ -n "$(fm_relay_meta_get "$meta" relay_request)" ] && return 0
   done <<EOF
 $relations
 EOF
@@ -643,6 +644,7 @@ cmd_deliver() {
   delivery=$(pf_field "$payload" '.public_followup.delivery.state')
   request=$(pf_field "$payload" '.public_followup.request.request_id')
   platform=$(pf_field "$payload" '.public_followup.request.platform')
+  [ "$platform" = discord ] || die "obligation '$id' must identify Discord as its platform" 1
   attempt=$(pf_field "$payload" '.public_followup.delivery.attempt_count')
   case "$attempt" in ''|*[!0-9]*) attempt=0 ;; esac
 
@@ -650,15 +652,15 @@ cmd_deliver() {
     posted|waived)
       if public_followup_registration_valid "$id"; then
         if ! clear_public_followup_link "$id"; then
-          die "obligation '$id' is already $delivery, but its legacy X link could not be cleared; the registration was retained for reconciliation" 1
+          die "obligation '$id' is already $delivery, but its Relay task link could not be cleared; the registration was retained for reconciliation" 1
         fi
       else
         link_status=1
         public_followup_legacy_link_status "$payload" || link_status=$?
         case "$link_status" in
-          0) die "obligation '$id' is already $delivery, but its legacy X link cannot be cleared without a valid registration; reconcile it before any later terminal follow-up" 1 ;;
+          0) die "obligation '$id' is already $delivery, but its Relay task link cannot be cleared without a valid registration; reconcile it before any later terminal follow-up" 1 ;;
           1) ;;
-          *) die "obligation '$id' is already $delivery, but its registration is missing or invalid and the legacy X link cannot be verified; reconcile it before any later terminal follow-up" 1 ;;
+          *) die "obligation '$id' is already $delivery, but its registration is missing or invalid and the Relay task link cannot be verified; reconcile it before any later terminal follow-up" 1 ;;
         esac
       fi
       rm -f -- "$(fm_pf_registry_dir "$STATE")/$id" 2>/dev/null || true
@@ -667,7 +669,7 @@ cmd_deliver() {
       ;;
     ready|retry-due|context-blocked|unknown|partial)
       public_followup_registration_valid "$id" \
-        || die "public-followup registration for '$id' is missing or invalid; reconcile it before delivery so any legacy X link can be cleared" 1
+        || die "public-followup registration for '$id' is missing or invalid; reconcile it before delivery so any Relay task link can be cleared" 1
       ;;
     delivery-posting)
       die "obligation '$id' is mid-delivery on attempt $attempt: a previous post was started and its outcome was never recorded. Confirm whether that post landed, then close it with 'record-posted $id --attempt $attempt --chunks <exact-count>' or reopen it for retry. Posting again here could duplicate the public reply." 1
@@ -718,8 +720,8 @@ cmd_deliver() {
   esac
 
   rc=0
-  FMX_REPLY_PLATFORM="$platform" FM_HOME="$FM_HOME" \
-    "$FM_ROOT/bin/fm-x-reply.sh" "$request" --followup --receipt-file "$receipt" \
+  FM_RELAY_REQUEST_PLATFORM="$platform" FM_HOME="$FM_HOME" \
+    "$FM_ROOT/bin/fm-relay-reply.sh" "$request" --followup --receipt-file "$receipt" \
     --text-file "$tmp_text" >/dev/null || rc=$?
 
   if [ "$rc" -eq 0 ]; then
@@ -741,7 +743,7 @@ EOF
     fi
     if record_posted "$id" "$attempt" "$request" "$platform" "$chunks"; then
       if ! clear_public_followup_link "$id"; then
-        die "the public reply for '$id' POSTED and its receipt was recorded, but its legacy X link could not be cleared; the registration was retained for reconciliation" 1
+        die "the public reply for '$id' POSTED and its receipt was recorded, but its Relay task link could not be cleared; the registration was retained for reconciliation" 1
       fi
       rm -f -- "$(fm_pf_registry_dir "$STATE")/$id" 2>/dev/null || true
       printf 'delivered %s request=%s platform=%s chunks=%s\n' "$id" "$request" "$platform" "$chunks"
@@ -786,7 +788,7 @@ cmd_record_posted() {
   [ "$chunks" -ge 1 ] 2>/dev/null || die "--chunks <n> is required and must be a positive integer"
   fm_pf_relay_active "$FM_HOME" || die "the relay is not active for this home" 1
   public_followup_registration_valid "$id" \
-    || die "public-followup registration for '$id' is missing or invalid; reconcile it before recording a receipt so any legacy X link can be cleared" 1
+    || die "public-followup registration for '$id' is missing or invalid; reconcile it before recording a receipt so any Relay task link can be cleared" 1
   require_tools
 
   local payload request platform
@@ -798,7 +800,7 @@ cmd_record_posted() {
   record_posted "$id" "$attempt" "$request" "$platform" "$chunks" \
     || die "tasks-axi refused the receipt for '$id' attempt $attempt; the recorded attempt must match exactly" 1
   if ! clear_public_followup_link "$id"; then
-    die "the receipt for '$id' was recorded, but its legacy X link could not be cleared; the registration was retained for reconciliation" 1
+    die "the receipt for '$id' was recorded, but its Relay task link could not be cleared; the registration was retained for reconciliation" 1
   fi
   rm -f -- "$(fm_pf_registry_dir "$STATE")/$id" 2>/dev/null || true
   printf 'recorded %s attempt=%s request=%s\n' "$id" "$attempt" "$request"
@@ -877,7 +879,7 @@ cmd_retire() {
     esac
   fi
   if ! clear_public_followup_link "$id"; then
-    die "could not clear the legacy X link for '$id'; its registration was retained for reconciliation" 1
+    die "could not clear the Relay task link for '$id'; its registration was retained for reconciliation" 1
   fi
   rm -f -- "$(fm_pf_registry_dir "$STATE")/$id" 2>/dev/null || true
   printf 'retired %s\n' "$id"

@@ -1268,7 +1268,7 @@ test_opencode_primary_watch_plugin_sources_effective_config() {
   mkdir -p "$repo/bin" "$home/state" "$home/config"
   git init -q "$repo"
   : > "$repo/AGENTS.md"
-  printf 'export FM_POLL=7\n' > "$home/config/x-mode.env"
+  printf 'export FM_POLL=7\n' > "$home/config/relay.env"
   cat > "$repo/bin/fm-watch-arm.sh" <<'SH'
 #!/usr/bin/env bash
 printf 'poll=%s\n' "${FM_POLL:-missing}" >> "${FM_ARM_LOG:?}"

@@ -10,7 +10,7 @@ The proof ran 24 candidates with four workers and no failures.
 
 | duration_ms | script |
 |---:|---|
-| 52939 | `tests/fm-x-mode.test.sh` |
+| 52939 | `tests/fm-relay.test.sh` |
 | 48294 | `tests/fm-backend-herdr.test.sh` |
 | 46788 | `tests/fm-arm-pretool-check.test.sh` |
 | 34207 | `tests/fm-cd-pretool-check.test.sh` |
