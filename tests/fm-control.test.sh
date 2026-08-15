@@ -35,23 +35,20 @@ mkdir -p "$TMP_ROOT"
 TMP_ROOT=$(cd "$TMP_ROOT" && pwd)
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
-VERIFIED_HARNESSES="claude codex opencode pi pi-signed grok kimi cursor muse"
+VERIFIED_HARNESSES="claude codex opencode pi pi-signed grok kimi cursor"
 
 # The expectation table, written out independently of the implementation so a
-# silent change to either side shows up here. The fourth field is the composer
-# clear that must FOLLOW the interrupt key, empty for every adapter that leaves
-# its composer empty on cancel.
-verified_adapter_contract() {  # <harness> -> exit command, interrupt key, repeat, clear key
+# silent change to either side shows up here.
+verified_adapter_contract() {  # <harness> -> exit command, interrupt key, repeat
   case "$1" in
-    claude) printf '/exit\tEscape\t1\t\n' ;;
-    codex) printf '/quit\tEscape\t1\t\n' ;;
-    opencode) printf '/exit\tEscape\t2\t\n' ;;
-    pi) printf '/quit\tEscape\t1\t\n' ;;
-    pi-signed) printf '/quit\tEscape\t1\t\n' ;;
-    grok) printf '/exit\tC-c\t1\t\n' ;;
-    kimi) printf '/exit\tEscape\t1\t\n' ;;
-    cursor) printf '/exit\tEscape\t1\t\n' ;;
-    muse) printf '/exit\tEscape\t1\tC-u\n' ;;
+    claude) printf '/exit\tEscape\t1\n' ;;
+    codex) printf '/quit\tEscape\t1\n' ;;
+    opencode) printf '/exit\tEscape\t2\n' ;;
+    pi) printf '/quit\tEscape\t1\n' ;;
+    pi-signed) printf '/quit\tEscape\t1\n' ;;
+    grok) printf '/exit\tC-c\t1\n' ;;
+    kimi) printf '/exit\tEscape\t1\n' ;;
+    cursor) printf '/exit\tEscape\t1\n' ;;
     *) return 1 ;;
   esac
 }
@@ -106,13 +103,6 @@ case "${1:-}" in
          && { [ "$payload" = Escape ] || [ "$payload" = C-c ]; }; then
         printf 'zsh' > "$D/command"
       fi
-      if [ "$payload" = Escape ] && [ -n "${FM_FAKE_MUSE_LOG:-}" ]; then
-        if [ -n "${FM_FAKE_MUSE_DISAPPEAR_BEFORE_ACK:-}" ]; then
-          : > "$D/muse-ack-pending"
-        else
-          printf '%s\n' '{"schema_version":1,"payload_type":"runtime.session","payload":{"kind":"run","run_id":"run-1","event":{"kind":"terminal","terminal":"cancelled","reason":null}}}' >> "$FM_FAKE_MUSE_LOG"
-        fi
-      fi
     fi
     exit 0 ;;
   display-message)
@@ -136,12 +126,6 @@ SH
   chmod +x "$fb/tmux"
   cat > "$fb/sleep" <<'SH'
 #!/usr/bin/env bash
-if [ -n "${FM_FAKE_MUSE_DISAPPEAR_BEFORE_ACK:-}" ] \
-   && [ -e "$FM_FAKE_DIR/muse-ack-pending" ]; then
-  rm -f "$FM_FAKE_DIR/muse-ack-pending"
-  printf 'zsh' > "$FM_FAKE_DIR/command"
-  printf '%s\n' '{"schema_version":1,"payload_type":"runtime.session","payload":{"kind":"run","run_id":"run-1","event":{"kind":"terminal","terminal":"cancelled","reason":null}}}' >> "$FM_FAKE_MUSE_LOG"
-fi
 exit 0
 SH
   chmod +x "$fb/sleep"
@@ -192,10 +176,8 @@ add_task() {
 run_control() {
   local dir=$1; shift
   env PATH="$dir/fakebin:$PATH" FM_HOME="$dir/home" FM_FAKE_DIR="$dir/fake" \
-    FM_CONTROL_POLL=0.01 FM_CONTROL_SETTLE_WAIT=0.05 \
-    FM_CONTROL_EXIT_WAIT=0.05 FM_CONTROL_LAUNCH_WAIT=0.05 \
-    FM_FAKE_MUSE_LOG="${FM_FAKE_MUSE_LOG:-}" \
-    FM_FAKE_MUSE_DISAPPEAR_BEFORE_ACK="${FM_FAKE_MUSE_DISAPPEAR_BEFORE_ACK:-}" \
+    FM_CONTROL_POLL=0.01 FM_CONTROL_EXIT_WAIT=0.05 \
+    FM_CONTROL_LAUNCH_WAIT=0.05 \
     FM_FAKE_INTERRUPT_STOPS_AGENT="${FM_FAKE_INTERRUPT_STOPS_AGENT:-}" \
     "$CONTROL" "$@" 2>&1
 }
@@ -217,7 +199,7 @@ keys_sent() {  # <case-dir>
 # --- 1. adapter contract across every verified harness -----------------------
 
 test_exit_types_each_harness_verified_command() {
-  local dir out rc harness expected key repeat clear
+  local dir out rc harness expected key repeat
   for harness in $VERIFIED_HARNESSES; do
     dir=$(new_case "exit-$harness")
     add_task "$dir" t1 "$harness"
@@ -228,7 +210,7 @@ test_exit_types_each_harness_verified_command() {
     fi
     out=$(run_control "$dir" t1 exit); rc=$?
     expect_code 0 "$rc" "exit on $harness should succeed"$'\n'"$out"
-    IFS=$'\t' read -r expected key repeat clear <<< "$(verified_adapter_contract "$harness")"
+    IFS=$'\t' read -r expected key repeat <<< "$(verified_adapter_contract "$harness")"
     [ "$(literals "$dir")" = "$expected" ] \
       || fail "exit on $harness should type exactly '$expected', got: $(literals "$dir")"
     assert_contains "$out" "stopped t1 harness=$harness" "exit should report the stop for $harness"
@@ -237,7 +219,7 @@ test_exit_types_each_harness_verified_command() {
 }
 
 test_interrupt_sends_each_harness_verified_key() {
-  local dir out rc harness expected key repeat clear got want
+  local dir out rc harness expected key repeat got want
   for harness in $VERIFIED_HARNESSES; do
     dir=$(new_case "int-$harness")
     add_task "$dir" t1 "$harness"
@@ -248,12 +230,11 @@ test_interrupt_sends_each_harness_verified_key() {
     fi
     out=$(run_control "$dir" t1 interrupt); rc=$?
     expect_code 0 "$rc" "interrupt on $harness should succeed"$'\n'"$out"
-    IFS=$'\t' read -r expected key repeat clear <<< "$(verified_adapter_contract "$harness")"
+    IFS=$'\t' read -r expected key repeat <<< "$(verified_adapter_contract "$harness")"
     want=$(for _ in $(seq 1 "$repeat"); do printf '%s\n' "$key"; done)
-    [ -z "$clear" ] || want="$want"$'\n'"$clear"
     got=$(keys_sent "$dir")
     [ "$got" = "$want" ] \
-      || fail "interrupt on $harness should send $repeat x $key${clear:+ then $clear}, got: $got"
+      || fail "interrupt on $harness should send $repeat x $key, got: $got"
     [ -z "$(literals "$dir")" ] \
       || fail "interrupt on $harness must type no text, got: $(literals "$dir")"
   done
@@ -266,7 +247,7 @@ test_harness_family_resolution() {
   local pair recorded want got
   for pair in claude:claude claude-latest:claude codex:codex codex-cli:codex \
       opencode:opencode grok:grok grok-2:grok kimi:kimi cursor:cursor \
-      cursor-agent:cursor muse:muse muse-bin-0.1.0:muse pi:pi \
+      cursor-agent:cursor pi:pi \
       pi-signed:pi-signed; do
     recorded=${pair%%:*}
     want=${pair#*:}
@@ -344,36 +325,12 @@ test_unverified_harness_is_refused() {
 test_backend_key_capability_matrix() {
   local backend key
   for backend in tmux herdr; do
-    for key in Escape Enter C-c C-u; do
+    for key in Escape Enter C-c; do
       fm_control_backend_supports_key "$backend" "$key" || fail "$backend should deliver $key"
     done
   done
   fm_control_backend_supports_key unsupported Enter && fail "unsupported backend must not claim key support"
   pass "fm-control-lib: both supported backends expose the complete key surface"
-}
-
-# A verified adapter is not automatically verified for every task kind, and the
-# check has to sit on the pre-stop side of a relaunch: muse has no primary
-# supervision protocol, so bin/fm-spawn.sh refuses it for a secondmate, and
-# discovering that only after the running agent was stopped would strand the
-# secondmate with no agent at all.
-test_harness_kind_capability() {
-  local harness
-  for harness in $VERIFIED_HARNESSES; do
-    fm_control_harness_supports_kind "$harness" ship \
-      || fail "$harness should be able to run a ship task"
-    fm_control_harness_supports_kind "$harness" scout \
-      || fail "$harness should be able to run a scout task"
-  done
-  fm_control_harness_supports_kind muse secondmate \
-    && fail "muse has no primary supervision protocol and must not claim a secondmate"
-  for harness in claude codex opencode pi pi-signed grok kimi; do
-    fm_control_harness_supports_kind "$harness" secondmate \
-      || fail "$harness should be able to run a secondmate"
-  done
-  fm_control_harness_supports_kind someagent ship \
-    && fail "an unverified harness must not claim any kind"
-  pass "fm-control-lib: adapter capability is per task kind, not per adapter alone"
 }
 
 test_state_verified_backends_are_exactly_tmux_and_herdr() {
@@ -654,47 +611,18 @@ test_interrupt_without_acknowledgement_preserves_busy_state() {
   pass "fm-control interrupt: unconfirmed delivery preserves observed busy state"
 }
 
-test_muse_interrupt_confirms_adapter_acknowledgement() {
-  local dir root log out rc
-  dir=$(new_case confirmed)
-  add_task "$dir" t1 muse
-  alive_as "$dir" muse
-  root="$dir/muse-sessions"
-  log="$root/2026/08/08/session-1/session.jsonl"
-  mkdir -p "$(dirname "$log")"
-  printf '%s\n' \
-    "{\"schema_version\":1,\"payload_type\":\"runtime.session.metadata\",\"payload\":{\"kind\":\"metadata\",\"record\":{\"workspace_root\":\"$dir/wt-t1\"}}}" \
-    '{"schema_version":1,"payload_type":"runtime.session","payload":{"kind":"run","run_id":"run-1","event":{"kind":"started","prompt":"work"}}}' > "$log"
-  printf 'sessions_root=%s\nworkspace_root=%s\nbinding_id=test\n' \
-    "$root" "$dir/wt-t1" > "$dir/home/state/t1.muse-session"
-  out=$(FM_FAKE_MUSE_LOG="$log" run_control "$dir" t1 interrupt); rc=$?
-  expect_code 0 "$rc" "muse interrupt should observe its adapter acknowledgement"$'\n'"$out"
-  assert_contains "$out" "verified=agent-alive cancel=confirmed" \
-    "the result should report muse's cancelled terminal acknowledgement"
-  pass "fm-control interrupt: muse confirms cancellation from its session log"
-}
-
-test_interrupt_revalidates_agent_after_acknowledgement_wait() {
-  local dir root log out rc
-  dir=$(new_case ack-race)
-  add_task "$dir" t1 muse
-  alive_as "$dir" muse
-  root="$dir/muse-sessions"
-  log="$root/2026/08/08/session-1/session.jsonl"
-  mkdir -p "$(dirname "$log")"
-  printf '%s\n' \
-    "{\"schema_version\":1,\"payload_type\":\"runtime.session.metadata\",\"payload\":{\"kind\":\"metadata\",\"record\":{\"workspace_root\":\"$dir/wt-t1\"}}}" \
-    '{"schema_version":1,"payload_type":"runtime.session","payload":{"kind":"run","run_id":"run-1","event":{"kind":"started","prompt":"work"}}}' > "$log"
-  printf 'sessions_root=%s\nworkspace_root=%s\nbinding_id=test\n' \
-    "$root" "$dir/wt-t1" > "$dir/home/state/t1.muse-session"
-  out=$(FM_FAKE_MUSE_LOG="$log" FM_FAKE_MUSE_DISAPPEAR_BEFORE_ACK=1 \
-    run_control "$dir" t1 interrupt); rc=$?
-  expect_code 1 "$rc" "interrupt should fail when the agent stops during acknowledgement polling"
+test_interrupt_that_stops_agent_fails_liveness_postcondition() {
+  local dir out rc
+  dir=$(new_case interrupt-stopped-agent)
+  add_task "$dir" t1 claude
+  alive_as "$dir" claude
+  out=$(FM_FAKE_INTERRUPT_STOPS_AGENT=1 run_control "$dir" t1 interrupt); rc=$?
+  expect_code 1 "$rc" "interrupt should fail when the key stops the agent"
   assert_contains "$out" "agent is 'dead' after its interrupt key" \
-    "the final postcondition should observe the agent after acknowledgement polling"
+    "the postcondition should observe the agent after interrupt delivery"
   assert_not_contains "$out" "interrupt-delivered" \
-    "a stale pre-wait liveness proof must not be published"
-  pass "fm-control interrupt: postconditions are revalidated after acknowledgement polling"
+    "a stale pre-delivery liveness proof must not be published"
+  pass "fm-control interrupt: an agent stopped by the key fails the liveness postcondition"
 }
 
 test_exit_accepts_agent_stopped_by_busy_interrupt() {
@@ -817,7 +745,6 @@ test_unverified_harness_is_refused
 test_harness_family_resolution
 test_prefixed_recorded_harness_reaches_each_control_verb
 test_backend_key_capability_matrix
-test_harness_kind_capability
 test_state_verified_backends_are_exactly_tmux_and_herdr
 test_window_label_is_refused_with_the_exact_id
 test_explicit_endpoint_is_refused
@@ -835,8 +762,7 @@ test_ambiguous_endpoint_refuses
 test_busy_agent_is_interrupted_before_the_exit_command
 test_idle_agent_is_not_interrupted
 test_interrupt_without_acknowledgement_preserves_busy_state
-test_muse_interrupt_confirms_adapter_acknowledgement
-test_interrupt_revalidates_agent_after_acknowledgement_wait
+test_interrupt_that_stops_agent_fails_liveness_postcondition
 test_exit_accepts_agent_stopped_by_busy_interrupt
 test_agent_that_does_not_stop_fails_closed
 test_grok_interrupt_without_acknowledgement_reports_unconfirmed

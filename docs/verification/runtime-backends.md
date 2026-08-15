@@ -59,23 +59,6 @@ Claude Code is the harness whose title no longer attributes it at all; every oth
 Codex reported `codex-aarch64-a` at 0.145.0 and `codex` at 0.146.0, and Kimi Code reported `kimi-code` as its foreground `comm` at 0.29.1 and `kimi` at 0.31.1, so these identities move between ordinary patch releases in both directions.
 That is the evidence for treating any single process name as a surface under vendor control rather than a stable contract.
 
-The crewmate-only Muse Code 0.1.0-R708.1 adapter was verified separately on 2026-08-05 against tmux on macOS arm64.
-Its installed `muse-bin-0.1.0-R708.1` foreground identity classified `alive`, while `musescore`, `amuse`, `muse-binary`, and `muse-bind` remained ambiguous in the portable regression.
-[`muse.md`](muse.md#process-identity) owns the artifact identity and launcher evidence for that verification.
-
-Bounded observed output:
-
-```text
-foreground comms:
-  zsh
-  .../instbin/muse-bin-0.1.0-R708.1
-classify each:
-  zsh                            -> shell
-  muse-bin-0.1.0-R708.1          -> agent
-fm_backend_agent_state tmux museliv:zsh
-alive
-```
-
 `#{pane_current_command}` and foreground `ps -o comm=` read different name fields, but which one preserves executable identity is platform-dependent.
 On macOS the pane command reflected the rewritable title while the full install path could survive in `ps -o comm=`; in the Linux portable regression those roles reversed for the version-named native executable, with the identifying path retained in argv[0].
 The classifier therefore accepts a harness basename first, then an exact harness path component in the full executable path, then the same component in argv[0], without depending on which field carries it on a given platform.
@@ -166,13 +149,13 @@ ok - fm-teardown: dedicated-socket invalid cleanup preserves target/control and 
 The dedicated tmux cell removed ambient tmux variables, required a socket-bound wrapper, kept one target and one independent control window, and proved the wrapper was not called for invalid metadata or a direct empty target.
 Valid cleanup removed only the exact task-bound target and left the control window live.
 The metadata-only validation covers tmux and Herdr before backend dispatch.
-Claude, Codex, OpenCode, Pi, pi-signed, Grok, Kimi, Cursor, and Muse share that backend cleanup boundary; their harness-specific hook files, tokens, transcript bindings, and session-log sidecars are cleaned only after it, so no harness needs a separate endpoint parser.
+Claude, Codex, OpenCode, Pi, pi-signed, Grok, Kimi, and Cursor share that backend cleanup boundary; their harness-specific hook files, tokens, and transcript bindings are cleaned only after it, so no harness needs a separate endpoint parser.
 
 ## Composer classification matrix
 
 The shared composer classifier (`bin/fm-composer-lib.sh`, `fm_composer_classify_screen`) owns every composer shape fleet-wide; each backend contributes only a capture and a capability descriptor.
 The live half of that guarantee was verified on 2026-08-10 from an already-trusted checkout at the branch's final validated head, against every installed harness then covered by the empty-composer matrix on tmux 3.6a, macOS arm64, on an isolated private socket, with no prompt submitted to any harness.
-An earlier untrusted-worktree run left Claude, Grok, and Muse unverified because the guard treats first-launch trust dialogs as an unreadable-composer state and never confirms them; this trusted-checkout rerun supersedes those missing results.
+An earlier untrusted-worktree run left Claude and Grok unverified because the guard treats first-launch trust dialogs as an unreadable-composer state and never confirms them; this trusted-checkout rerun supersedes those missing results.
 
 ```sh
 FM_COMPOSER_MATRIX_LIVE=1 tests/fm-composer-matrix-live-e2e.test.sh
@@ -187,12 +170,11 @@ ok - opencode (1.14.46): real idle composer classifies empty
 ok - pi (0.84.0): real idle composer classifies empty
 ok - grok (grok 1.0.0 (3cd0d0cbcebe)): real idle composer classifies empty
 # harness absent, not verified here: kimi
-ok - muse (Muse Code 0.1.0 (0.1.0-R708.1)): real idle composer classifies empty
 ok - strict posture live: a blank shell row classifies unknown and injection defers
-ok - live composer-matrix guard verified 7 live surface(s)
+ok - live composer-matrix guard verified 6 live surface(s)
 ```
 
-All six installed harnesses' real idle composers reached a proven `empty` (Claude auto-updated to 2.1.227 between the audit and this rerun, so the shipped classifier is proven against the newer release as well), including Pi through the tmux foreground-process identity probe, Grok through the titled-bottom-border tolerance, and OpenCode through the left-bar shape; Codex and OpenCode first parked on vendor update-available modals that the strict classifier correctly refused until the guard's single non-submitting Escape dismissed them.
+All five installed harnesses' real idle composers reached a proven `empty` (Claude auto-updated to 2.1.227 between the audit and this rerun, so the shipped classifier is proven against the newer release as well), including Pi through the tmux foreground-process identity probe, Grok through the titled-bottom-border tolerance, and OpenCode through the left-bar shape; Codex and OpenCode first parked on vendor update-available modals that the strict classifier correctly refused until the guard's single non-submitting Escape dismissed them.
 The strict blank-row posture held live: a blank shell row deferred injection.
 Kimi was not installed on the verification machine; its bordered shape is pinned by the portable capture regressions in `tests/fm-composer-lib.test.sh`, which also carry both adapters' capability profiles for every harness under both a UTF-8 locale and `LC_ALL=C`.
 This guard is the refresh command after an upgrade to any matrix-covered harness; rerun it and update the versions above rather than trusting this table across releases.

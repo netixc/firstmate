@@ -83,7 +83,6 @@
 #
 # Environment knobs (all bounded waits, seconds):
 #   FM_CONTROL_POLL              poll interval for postcondition waits (0.5)
-#   FM_CONTROL_SETTLE_WAIT       adapter acknowledgement wait after interrupt (5)
 #   FM_CONTROL_EXIT_WAIT         alive->dead wait after the exit command (30)
 #   FM_CONTROL_LAUNCH_WAIT       dead->alive wait after a relaunch (90)
 #   FM_CONTROL_EXIT_RETRIES      Enter retries for the exit command (3)
@@ -134,7 +133,6 @@ DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 . "$SCRIPT_DIR/fm-wake-lib.sh"
 
 POLL=${FM_CONTROL_POLL:-0.5}
-SETTLE_WAIT=${FM_CONTROL_SETTLE_WAIT:-5}
 EXIT_WAIT=${FM_CONTROL_EXIT_WAIT:-30}
 LAUNCH_WAIT=${FM_CONTROL_LAUNCH_WAIT:-90}
 EXIT_RETRIES=${FM_CONTROL_EXIT_RETRIES:-3}
@@ -334,69 +332,26 @@ require_state_verified_backend() {  # <verb>
 }
 
 # send_interrupt_keys: deliver the harness's interrupt key the verified number
-# of times, then the composer-clear key when the adapter needs one. Refuses
-# before sending anything when the backend cannot deliver either key, because
-# an interrupt that cancels the turn but leaves the restored prompt in the
-# composer would make the next submitted line concatenate onto it.
+# of times.
 send_interrupt_keys() {
-  local key repeat clear i=0
+  local key repeat i=0
   key=$(fm_control_interrupt_key "$HARNESS")
   repeat=$(fm_control_interrupt_repeat "$HARNESS")
-  clear=$(fm_control_interrupt_clear_key "$HARNESS")
   fm_control_backend_supports_key "$BACKEND" "$key" \
     || die "harness $HARNESS interrupts with $key, which the $BACKEND backend cannot deliver; refusing to send a different key"
-  [ -z "$clear" ] || fm_control_backend_supports_key "$BACKEND" "$clear" \
-    || die "harness $HARNESS needs $clear to clear its composer after an interrupt, which the $BACKEND backend cannot deliver; refusing to leave the cancelled prompt where the next submitted line would concatenate onto it"
   while [ "$i" -lt "$repeat" ]; do
     fm_backend_send_key "$BACKEND" "$T" "$key" "$LABEL" \
       || die "interrupt key $key was not delivered to task $ID on $BACKEND"
     i=$((i + 1))
     [ "$i" -ge "$repeat" ] || sleep 0.2
   done
-  [ -z "$clear" ] || fm_backend_send_key "$BACKEND" "$T" "$clear" "$LABEL" \
-    || die "interrupt key $key reached task $ID, but $clear did not, so its composer still holds the cancelled prompt; clear it before the next lifecycle action"
 }
 
-prepare_interrupt_ack() {
-  INTERRUPT_ACK_SOURCE=$(fm_control_interrupt_ack_source "$HARNESS")
-  INTERRUPT_ACK_LOG=
-  INTERRUPT_ACK_RUN=
-  case "$INTERRUPT_ACK_SOURCE" in
-    muse-session-terminal)
-      INTERRUPT_ACK_LOG=$(fm_busy_muse_session_log "$STATE" "$ID" 2>/dev/null || true)
-      [ -n "$INTERRUPT_ACK_LOG" ] || return 0
-      INTERRUPT_ACK_RUN=$(fm_busy_muse_active_run_id "$INTERRUPT_ACK_LOG" 2>/dev/null || true)
-      ;;
-  esac
-}
-
-interrupt_cancel_claim() {
-  local elapsed=0 terminal=
-  case "$INTERRUPT_ACK_SOURCE:$INTERRUPT_ACK_RUN" in
-    muse-session-terminal:?*) ;;
-    *) printf 'unconfirmed'; return 0 ;;
-  esac
-  while :; do
-    terminal=$(fm_busy_muse_run_terminal "$INTERRUPT_ACK_LOG" "$INTERRUPT_ACK_RUN" 2>/dev/null || true)
-    case "$terminal" in
-      cancelled) printf 'confirmed'; return 0 ;;
-      ?*) printf 'unconfirmed'; return 0 ;;
-    esac
-    awk -v e="$elapsed" -v t="$SETTLE_WAIT" 'BEGIN{exit !(e < t)}' || break
-    sleep "$POLL"
-    elapsed=$(awk -v e="$elapsed" -v p="$POLL" 'BEGIN{printf "%.3f", e + p}')
-  done
-  printf 'unconfirmed'
-}
-
-# deliver_interrupt: deliver and observe the strongest adapter-owned
-# cancellation claim available after delivery.
+# deliver_interrupt: deliver the verified key sequence.
+# Surviving adapters expose no prompt cancellation acknowledgement.
 deliver_interrupt() {
-  local cancel
-  prepare_interrupt_ack
   send_interrupt_keys
-  cancel=$(interrupt_cancel_claim)
-  printf '%s' "$cancel"
+  printf 'unconfirmed'
 }
 
 verify_interrupt_running() {
@@ -639,12 +594,6 @@ resolve_relaunch_profile() {
   else
     TARGET_HARNESS=$PRIOR_HARNESS
   fi
-  # The launch owner refuses an adapter that cannot run this task's kind, but it
-  # is only reached after the old agent has been stopped. Asking the same
-  # capability table here keeps that refusal on the pre-stop side of the
-  # transaction, where nothing has changed yet.
-  fm_control_harness_supports_kind "$TARGET_HARNESS" "$KIND" \
-    || die "'$TARGET_HARNESS' is not verified to run a $KIND task, so relaunching $ID onto it would stop the running agent for a launch that must be refused; choose an adapter verified for this kind"
   # A model or effort chosen for the previous harness does not transfer to a
   # different one, so an explicit harness change resets both axes unless the
   # caller names them too.
