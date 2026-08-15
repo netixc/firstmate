@@ -10,7 +10,7 @@
 # without model discretion. Verified live on 2026.08.11-e8db854.
 #
 # Usage: fm-sessionstart-cursor.sh --source <source>
-# Cursor's payload has no Claude-style `source` field, so the registration
+# Cursor's payload has no generic `source` field, so the registration
 # supplies it.
 #
 # Every path exits 0 and prints either nothing or one JSON object. Cursor blocks

@@ -100,7 +100,7 @@ SH
 window=fakeses:fm-$id
 worktree=$TMP_ROOT/nonexistent-worktree-$id
 project=$TMP_ROOT/nonexistent-project-$id
-harness=claude
+harness=pi
 kind=ship
 mode=no-mistakes
 yolo=off
@@ -174,7 +174,7 @@ SH
 window=fakeses:fm-$id
 worktree=$TMP_ROOT/nonexistent-wt-$id
 project=$TMP_ROOT/nonexistent-proj-$id
-harness=claude
+harness=pi
 kind=ship
 mode=no-mistakes
 yolo=off

@@ -45,13 +45,13 @@
 # captures in data/fm-composer-consolidation-audit-s1/report.md and
 # docs/verification/runtime-backends.md):
 #   bordered   - a complete boxed composer: a top border, side-bordered content
-#                rows of the same family, and a bottom border (grok, kimi,
-#                older claude). The bottom border may carry a TITLE (grok
+#                rows of the same family, and a bottom border (grok, kimi).
+#                The bottom border may carry a TITLE (grok
 #                writes its model name there); a titled bottom border that
 #                still starts and ends with the family's rule glyph is
 #                tolerated, not ambiguity.
-#   bare       - an agent prompt glyph row with no border at all (claude `❯`,
-#                codex `›`, cursor `→`). The agent glyph is itself the container
+#   bare       - an agent prompt glyph row with no border at all (codex `›`,
+#                cursor `→`). The agent glyph is itself the container
 #                proof; a bare SHELL glyph (`>` `$` `%` `#`) never is.
 #   left-bar   - opencode: rows prefixed by a heavy left bar `┃` with no
 #                closing border, holding the idle hint, blank rows, and a
@@ -63,18 +63,18 @@
 #                region between two transcript rules is otherwise exactly the
 #                strict rule's unidentifiable blank row.
 #
-# THE SAFETY RULE for glyphs: a bare shell prompt glyph (`>` `$` `%` `#`) -
+# THE SAFETY RULE for glyphs: a bare shell-like prompt glyph (`>` `❯` `$` `%` `#`) -
 # what a pane shows once its agent has exited to a plain login shell - is a
 # genuine empty agent composer ONLY inside a bordered container. On a bare row
 # it is a dead-shell prompt and classifies `unknown` (never a safe injection
-# target). The AGENT glyphs `❯` (claude), `›` (codex), and `→` (U+2192,
-# cursor) are a genuine empty agent composer either way.
+# target). The AGENT glyphs `›` (codex) and `→` (U+2192, cursor) are a
+# genuine empty agent composer either way.
 # Both glyph sets are declared
 # exactly once below; every decision reaches them through the declarations.
 #
 # GHOST/PLACEHOLDER TEXT (task afk-herdr-false-pending): a harness fills an
-# otherwise-empty composer with de-emphasized ghost text - claude's rotating
-# prompt suggestion, codex's idle suggestion, grok's placeholder, or cursor's
+# otherwise-empty composer with de-emphasized ghost text - codex's idle
+# suggestion, grok's placeholder, or cursor's
 # idle placeholder - which a
 # plain capture cannot tell apart from text a human typed.
 # fm_composer_strip_ghost is the ONE ANSI-aware extractor of "real typed
@@ -85,8 +85,7 @@
 # UNICODE WHITESPACE (issue #1988; open PRs #1995/#2047 target the same
 # defect and #1995's naming is adopted here so the implementations converge):
 # a harness may separate its prompt glyph from composer content with a
-# non-ASCII space. Real claude 2.x draws its EMPTY composer as exactly `❯`
-# followed by U+00A0 NO-BREAK SPACE. POSIX `[[:space:]]` includes U+00A0 only
+# non-ASCII space. POSIX `[[:space:]]` includes U+00A0 only
 # under some locales, so every trim used to be locale-dependent: the same live
 # pane read `empty` under a UTF-8 shell and `pending` under LC_ALL=C (a
 # daemon, launchd, or ssh context), deferring every away-mode escalation.
@@ -170,7 +169,7 @@ fm_composer_normalize_trim_var() {  # <varname>
 # (from `tmux capture-pane -e`, `herdr pane read --format ansi`, or
 # a styled capture) and prints the
 # plain, non-ghost text on stdout, dropping:
-#   - dim/faint runs (SGR 2): how claude and codex render ghost/suggestion text.
+#   - dim/faint runs (SGR 2): how codex renders suggestion text.
 #     A reset (SGR 0) or normal-intensity (SGR 22) ends a dim run.
 #   - dark/muted TRUECOLOR foreground runs (SGR 38;2;r;g;b or the colon form
 #     38:2::r:g:b) whose perceived luminance (0.299R + 0.587G + 0.114B) is below
@@ -279,12 +278,8 @@ fm_composer_strip_ghost() {
 # bin/fm-busy-lib.sh, which forbids classifying a harness from rendered text.
 # Matching a footer to confirm a keystroke landed is a different question from
 # asking what a worker is doing, and the two must not be conflated.
-# Delivery-only rendered busy footers per harness. claude/codex: "esc to
-# interrupt"; opencode: "esc interrupt"; pi: "Working..."; grok: "Ctrl+c:cancel".
-# Claude's current spinner has a rotating glyph and word, but every active-turn
-# line has an ellipsis followed by a parenthesized elapsed duration. Keep this
-# signature separate from the shared default because that shape is not generic
-# enough to classify arbitrary harness output safely.
+# Delivery-only rendered busy footers per harness. codex: "esc to interrupt";
+# opencode: "esc interrupt"; pi: "Working..."; grok: "Ctrl+c:cancel".
 # Kimi's anchored moon-phase spinner is separate because bare moon glyphs in
 # ordinary output must not classify another harness as busy. Leading whitespace is
 # OPTIONAL; whitespace on both sides of the separator is REQUIRED because every
@@ -302,7 +297,6 @@ fm_composer_strip_ghost() {
 # submit could never be acknowledged, because cursor parks its terminal cursor
 # outside its composer and the composer verdict is therefore always `unknown`.
 FM_DELIVERY_BUSY_REGEX_DEFAULT='esc (to )?interrupt|Working\.\.\.|Ctrl\+c:cancel|ctrl\+c to stop'
-FM_DELIVERY_CLAUDE_BUSY_REGEX_DEFAULT='esc to interrupt|…[[:space:]]+\([0-9]+[smh]'
 FM_DELIVERY_CODEX_BUSY_REGEX_DEFAULT='esc to interrupt'
 FM_DELIVERY_OPENCODE_BUSY_REGEX_DEFAULT='esc interrupt'
 FM_DELIVERY_PI_BUSY_REGEX_DEFAULT='Working\.\.\.'
@@ -324,7 +318,6 @@ fm_busy_lines_match() {  # [harness]
     regex=$FM_BUSY_REGEX
   else
     case "$harness" in
-      claude) regex=$FM_DELIVERY_CLAUDE_BUSY_REGEX_DEFAULT ;;
       codex) regex=$FM_DELIVERY_CODEX_BUSY_REGEX_DEFAULT ;;
       opencode) regex=$FM_DELIVERY_OPENCODE_BUSY_REGEX_DEFAULT ;;
       pi|pi-signed) regex=$FM_DELIVERY_PI_BUSY_REGEX_DEFAULT ;;
@@ -348,8 +341,8 @@ fm_busy_lines_match() {  # [harness]
 # a dead-shell prompt and must never read `empty`. Newline-separated and
 # consumed by `read` rather than word splitting, so `$`, `%`, and `#` stay
 # literal and no entry is ever exposed to pathname expansion.
-FM_COMPOSER_AGENT_PROMPT_GLYPHS=$(printf '%s\n' '❯' '›' '→')
-FM_COMPOSER_SHELL_PROMPT_GLYPHS=$(printf '%s\n' '>' '$' '%' '#')
+FM_COMPOSER_AGENT_PROMPT_GLYPHS=$(printf '%s\n' '›' '→')
+FM_COMPOSER_SHELL_PROMPT_GLYPHS=$(printf '%s\n' '>' '❯' '$' '%' '#')
 
 # The ONE fleet-wide idle-placeholder set: composer text a harness renders in
 # an EMPTY composer that a plain capture cannot tell from typed text. Grok's
@@ -901,7 +894,7 @@ _fm_composer_classify_rows() {  # <screen> <styled> <ambiguous> <first-row> <las
 
 # _fm_composer_classify_bare_row: the bare agent-glyph row verdict, including
 # the styled=0 degradation: without styling, trailing text after the glyph may
-# be the harness's own idle suggestion (claude's rotating dim hint, codex's
+# be the harness's own idle suggestion (codex's dim hint,
 # `Use /skills ...`), so it must read `unknown` rather than a false `pending`.
 _fm_composer_classify_bare_row() {  # <screen> <styled> <row>
   local screen=$1 styled=$2 row=$3 raw content plain state
@@ -1150,13 +1143,13 @@ EOF
     fm_composer_normalize_trim_var content
     # A styled agent-glyph placeholder disappears above when ghost stripping
     # proves it is furniture. If the same placeholder-looking bytes survive
-    # styling, they are real user input and must remain in the extracted content
-    # OpenCode's left-bar hint and legacy shell-glyph boxed placeholders have no
-    # such styling proof, so their structurally fixed positions remain the two
+    # styling, they are real user input and must remain in the extracted content.
+    # OpenCode's left-bar hint and an unstyled boxed placeholder have no such
+    # styling proof, so their structurally fixed positions remain the two
     # idle-regex exceptions here.
     if [ -z "$content" ] \
        || { { [ "$FM_COMPOSER_SELECTED_KIND" = leftbar ] \
-              || { [ "$FM_COMPOSER_SELECTED_KIND" = box ] && [ "$prompt_is_shell" = 1 ]; }; } \
+              || { [ "$FM_COMPOSER_SELECTED_KIND" = box ] && [ "$prompt_is_shell" = 1 ] && [ "$styled" != 1 ]; }; } \
             && [ "$placeholder_position" = 1 ] \
             && fm_composer_idle_matches "$content" "${FM_COMPOSER_IDLE_RE:-$FM_COMPOSER_IDLE_RE_DEFAULT}" insensitive; } \
        || { [ "$FM_COMPOSER_SELECTED_KIND" = leftbar ] \

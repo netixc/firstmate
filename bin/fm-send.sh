@@ -111,33 +111,6 @@ fm_send_id_from_meta() {  # <meta-file>
   printf '%s' "${base%.meta}"
 }
 
-fm_send_normalize_key() {  # <key>
-  case "$1" in
-    Escape|escape|Esc|esc) printf '%s' Escape ;;
-    *) printf '%s' "$1" ;;
-  esac
-}
-
-fm_send_record_interrupt() {  # <key>
-  local key=$1 id gen
-  [ "$key" = Escape ] || return 0
-  case "$TARGET_HARNESS" in claude*) : ;; *) return 0 ;; esac
-  [ -n "$TARGET_META" ] || return 0
-  id=$(fm_send_id_from_meta "$TARGET_META")
-  [ -f "$STATE/$id.busy-gen" ] || return 0
-  gen=$(fm_meta_get "$TARGET_META" busy_gen)
-  if [ -n "$gen" ]; then
-    "$FM_ROOT/bin/fm-busy-event.sh" apply "$STATE" "$id" idle \
-      --gen "$gen" --source fm-interrupt --event interrupt
-  else
-    "$FM_ROOT/bin/fm-busy-event.sh" apply "$STATE" "$id" idle \
-      --current-gen --source fm-interrupt --event interrupt
-  fi || {
-    echo "error: key '$key' reached $T, but the Claude interrupt state could not be recorded for $id" >&2
-    return 1
-  }
-}
-
 fm_send_meta_for_key_value() {  # <state-dir> <key> <value>
   local state=$1 key=$2 value=$3 meta got
   for meta in "$state"/*.meta; do
@@ -392,7 +365,6 @@ if [ "${1:-}" = "--key" ]; then
       ;;
   esac
   key=$2
-  semantic_key=$(fm_send_normalize_key "$key")
   if [ "$TARGET_BACKEND" = remote ]; then
     if ! "$SCRIPT_DIR/fm-on.sh" "$TARGET_REMOTE_ID" fm-remote-secondmate-control.sh key "$TARGET_REMOTE_ID" "$key" < /dev/null; then
       echo "error: key '$key' not sent to remote secondmate $TARGET_REMOTE_ID; completion may be unknown" >&2
@@ -402,7 +374,6 @@ if [ "${1:-}" = "--key" ]; then
     echo "error: key '$key' not sent to $T ($TARGET_BACKEND send failed; tried $RESOLUTION_TRIED)" >&2
     exit 1
   fi
-  fm_send_record_interrupt "$semantic_key" || exit 1
 else
   MESSAGE=$*
   # The pre-marker answer text, kept for the closing resolved note so the
@@ -439,7 +410,7 @@ else
   # invocation, so a `$...` message to a codex target gets the same settle. That
   # `$` case is scoped to codex on purpose: unlike `/`, a leading `$` commonly
   # starts ordinary text ("$5/month", "$HOME"), so a universal `$` rule would
-  # needlessly slow plain text to claude/opencode/pi. The target backend's
+  # needlessly slow plain text to opencode/pi. The target backend's
   # verified submit retry still backs the settle up either way.
   case "$*" in
     /*) settle=1.2 ;;

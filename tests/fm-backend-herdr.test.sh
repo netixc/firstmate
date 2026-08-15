@@ -2984,15 +2984,15 @@ test_busy_state_unknown_on_no_agent() {
 
 # --- composer_state: structural border-row classification --------------------
 
-test_composer_state_bare_prompt_is_empty() {
+test_composer_state_bordered_prompt_is_empty() {
   local dir log resp fb out
   dir="$TMP_ROOT/composer-bare"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
   printf '  ╭────────────────────────╮\n  │ ❯                      │\n  ╰──────── Composer ──────╯\n\n  Shift+Tab:mode\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
-  [ "$out" = empty ] || fail "a bare prompt glyph should read as empty, got '$out'"
-  pass "fm_backend_herdr_composer_state: a bare '❯' composer row reads empty"
+  [ "$out" = empty ] || fail "a bordered prompt glyph should read as empty, got '$out'"
+  pass "fm_backend_herdr_composer_state: a bordered Grok-style composer row reads empty"
 }
 
 test_composer_state_styled_placeholder_draft_is_pending() {
@@ -3052,12 +3052,12 @@ test_composer_state_unknown_on_capture_failure() {
 test_composer_state_unknown_when_no_composer_row_found() {
   local dir log resp fb out glyph idx=1
   dir="$TMP_ROOT/composer-no-row"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  for glyph in '>' '$' '%' '#'; do
+  for glyph in '>' '❯' '$' '%' '#'; do
     printf '%s \n' "$glyph" > "$resp/$idx.out"
     idx=$((idx + 1))
   done
   fb=$(make_herdr_fakebin "$dir")
-  for glyph in '>' '$' '%' '#'; do
+  for glyph in '>' '❯' '$' '%' '#'; do
     out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
       bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
     [ "$out" = unknown ] || fail "a bare shell prompt '$glyph' should read as unknown, got '$out'"
@@ -3136,53 +3136,21 @@ test_composer_state_pi_separator_requires_safe_native_identity() {
 
 # --- composer_state: unbordered (bare) composer rows -------------------------
 # Regression coverage for the away-mode redelivery-loop incident
-# (docs/herdr-backend.md "Incident (2026-07-07)"): real claude and codex
+# (docs/herdr-backend.md "Incident (2026-07-07)"): real codex
 # composer rows carry NO border glyph at all - the fixtures below are captured
 # verbatim (character-for-character) from a real herdr session running real
-# `claude`/`codex` (see the dated evidence entry). Before the fix these all
-# read "unknown" (claude/codex fixtures) or produced a false "empty" from a
+# `codex` (see the dated evidence entry). Before the fix these all
+# read "unknown" (codex fixtures) or produced a false "empty" from a
 # stale decorative box (the banner-priority fixture) - none of them correctly
 # tracked the live composer, which is exactly what caused
 # bin/fm-supervise-daemon.sh's fm_backend_herdr_send_text_submit to never
 # confirm a landed injection, so escalate_flush never cleared
 # state/.subsuper-escalations and the same digest was redelivered every cycle.
 
-test_composer_state_claude_unbordered_prompt_is_empty() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/composer-claude-bare-empty"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '  20\n  21\n\n\xe2\x9c\xbb Worked for 2s\n\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n\xe2\x9d\xaf\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n  Opus 4.8 (1M context)   \xe2\x96\x8d               3%%\n  \xe2\x86\x90 for agents\n' > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
-  [ "$out" = empty ] || fail "a genuinely idle, unbordered real-claude '❯' prompt row (no border glyph anywhere in view) should read empty, got '$out' (regression: this used to read 'unknown' forever, which is exactly what broke escalate_flush's buffer-clear)"
-  pass "fm_backend_herdr_composer_state: a real-claude unbordered '❯' prompt row (no border box in view) reads empty"
-}
-
-test_composer_state_claude_unbordered_prompt_is_pending() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/composer-claude-bare-pending"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '  20\n  21\n\n\xe2\x9c\xbb Worked for 2s\n\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n\xe2\x9d\xaf hello there this is a test message\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n' > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
-  [ "$out" = pending ] || fail "real unsubmitted text in an unbordered real-claude prompt row should read pending, got '$out'"
-  pass "fm_backend_herdr_composer_state: a real-claude unbordered '❯ <text>' prompt row reads pending"
-}
-
-# The exact incident shape: a bordered decorative box (claude's own startup
-# welcome banner) is STILL in the capture window, sitting ABOVE the live,
-# unbordered "❯" prompt. Before the fix, the bordered branch was the ONLY one
-# ever consulted, so the LAST bordered row (the banner's own blank interior
-# spacer row, immediately above its closing ╰──╯) won by construction and was
-# misread as the live composer - which happened to strip to empty here, but
-# for the same reason never tracks the REAL composer once real text is typed
-# below the banner (see the daemon-level E2E evidence in
-# docs/herdr-backend.md). The live, bottom-most row must win regardless of
-# shape.
 test_composer_state_bare_prompt_below_stale_bordered_banner_wins() {
   local dir log resp fb out
   dir="$TMP_ROOT/composer-banner-priority"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '\xe2\x95\xad\xe2\x94\x80 Claude Code \xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x95\xae\n\xe2\x94\x82           Welcome back Kun!           \xe2\x94\x82\n\xe2\x94\x82                                       \xe2\x94\x82\n\xe2\x95\xb0\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x95\xaf\n\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n\xe2\x9d\xaf still typing captain\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n' > "$resp/1.out"
+  printf '\xe2\x95\xad\xe2\x94\x80 Codex \xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x95\xae\n\xe2\x94\x82           Welcome back Kun!           \xe2\x94\x82\n\xe2\x94\x82                                       \xe2\x94\x82\n\xe2\x95\xb0\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x95\xaf\n\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n\xe2\x80\xba still typing captain\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
@@ -3190,49 +3158,9 @@ test_composer_state_bare_prompt_below_stale_bordered_banner_wins() {
   pass "fm_backend_herdr_composer_state: a live unbordered prompt row below a stale bordered decorative box still wins (not misread as the box's own row)"
 }
 
-# THE OVERNIGHT WEDGE regression (task afk-herdr-false-pending). Captured
-# read-only from the live primary claude-on-herdr pane default:w1:p3 on
-# 2026-07-10: an idle composer whose only content is claude's rotating
-# prompt-suggestion GHOST, rendered SGR-2 dim after the bare "❯" prompt
-# ("❯ \033[0m\033[2m<suggestion>\033[0m"). herdr's `pane read --format ansi`
-# preserves the dim attribute. The pre-fix herdr classifier stripped ALL ANSI
-# and read the suggestion as real pending text (its only faint check matched
-# codex's bold-wrapped "\033[1m❯ \033[0m\033[2m", which this shape is NOT), so
-# every away-mode injection deferred with "pending input (non-empty composer)"
-# all night (6524 lifetime defers; wedge 30623s undelivered). The shared
-# ANSI-aware owner now drops the dim ghost and the row reads empty (safe to
-# inject).
-test_composer_state_claude_dim_prompt_suggestion_ghost_is_empty() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/composer-claude-dim-ghost"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '\xe2\x9c\xbb Brewed for 2m 40s\n\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n\xe2\x9d\xaf \x1b[0m\x1b[2mwhat did the wheelhouse healing verification find?\x1b[0m\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n  Fable 5                 80%%\n' > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p3' "$ROOT" )
-  [ "$out" = empty ] || fail "the overnight shape - claude's SGR-2 dim prompt-suggestion ghost after a bare '❯' - must read empty, got '$out' (regression: this false-pending wedged away-mode injection all night)"
-  pass "fm_backend_herdr_composer_state: claude's dim prompt-suggestion ghost (the overnight wedge shape) reads empty"
-}
-
-# Same prompt row, but the text after "❯" is REAL (normal intensity, no dim) -
-# it must still read pending, so the ghost fix never weakens real-input
-# protection.
-test_composer_state_claude_dim_ghost_row_with_real_text_is_pending() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/composer-claude-dim-ghost-real"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n\xe2\x9d\xaf land pr 416 now\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n  Fable 5                 80%%\n' > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p3' "$ROOT" )
-  [ "$out" = pending ] || fail "real normal-intensity text after '❯' must still read pending, got '$out'"
-  pass "fm_backend_herdr_composer_state: real typed text on the same claude prompt row still reads pending"
-}
-
-# grok's TRUECOLOR placeholder gap (harness-adapters "Known gap"), now covered by
-# the same owner. grok renders its composer inside a bordered box whose border
-# and placeholder/hint text use a dark, muted truecolor foreground (verified live
-# against grok 0.2.93: border 38;2;86;82;110, muted 38;2;50;47;70, hint
-# 38;2;110;106;134; real input is the BRIGHT 38;2;224;222;244), while the "❯"
-# prompt glyph stays bright. The dark placeholder drops and the row reads empty.
+# Grok's boxed composer renders its idle placeholder in dark truecolor.
+# The shared ANSI-aware owner drops that ghost text while preserving bright
+# typed content, so an empty composer remains safe to inject into.
 test_composer_state_grok_dark_truecolor_placeholder_is_empty() {
   local dir log resp fb out
   dir="$TMP_ROOT/composer-grok-truecolor-ghost"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
@@ -3497,7 +3425,7 @@ test_send_text_submit_preexisting_working_does_not_false_confirm_swallowed_enter
   # 6: pane read - the pre-existing turn's footer has become busy
   printf '{"result":{"agent":{"agent_status":"working"}}}\n' > "$resp/2.out"
   printf '  ready\n' > "$resp/3.out"
-  printf '  \xe2\x9d\xaf hello captain\n' > "$resp/5.out"
+  printf '  \xe2\x80\xba hello captain\n' > "$resp/5.out"
   printf '  thinking... esc to interrupt\n' > "$resp/6.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
@@ -3658,7 +3586,7 @@ test_composer_state_codex_dynamic_idle_tip_reads_empty_when_faint() {
 test_composer_state_guard_still_refuses_real_pending_text_after_submit_confirmation_change() {
   local dir log resp fb out
   dir="$TMP_ROOT/composer-guard-still-refuses"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '  \xe2\x9d\xaf hello there this is a test message\n' > "$resp/1.out"
+  printf '  \xe2\x80\xba hello there this is a test message\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     bash -c '. "$0/bin/fm-backend.sh"; fm_backend_composer_state herdr default:w1:p2' "$ROOT" )
@@ -4082,7 +4010,7 @@ set_fake_agent() {  # <agent-dir> <window-or-pane> <status>
 
 test_normalize_event_leaves_from_empty() {
   local rec
-  rec=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_normalize_event wG:pQ wG blocked claude' "$ROOT")
+  rec=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_normalize_event wG:pQ wG blocked pi' "$ROOT")
   [ "$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_pane_id "$1"' "$ROOT" "$rec")" = "wG:pQ" ] \
     || fail "normalize_event pane_id wrong: $rec"
   [ "$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_from_status "$1"' "$ROOT" "$rec")" = "" ] \
@@ -4103,7 +4031,7 @@ test_escalation_marker_keys_like_watcher() {
 test_apply_transition_blocked_requires_commit_to_dedupe() {
   local dir state rec out rc marker
   dir="$TMP_ROOT/apply-blocked"; state="$dir/state"; mkdir -p "$state"
-  rec=$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_record wG:pQ wG "" blocked claude' "$ROOT")
+  rec=$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_record wG:pQ wG "" blocked pi' "$ROOT")
   marker="$state/.herdr-escalated-default_wG_pQ"
   out=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_apply_transition "$1" "$2" "$3"' "$ROOT" "$state" default "$rec"); rc=$?
   [ "$rc" = 0 ] || fail "a fresh blocked edge must return 0 (actionable), got $rc"
@@ -4122,8 +4050,8 @@ test_apply_transition_working_clears_marker() {
   local dir state blocked working marker rc
   dir="$TMP_ROOT/apply-working"; state="$dir/state"; mkdir -p "$state"
   marker="$state/.herdr-escalated-default_wG_pQ"
-  blocked=$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_record wG:pQ wG "" blocked claude' "$ROOT")
-  working=$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_record wG:pQ wG "" working claude' "$ROOT")
+  blocked=$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_record wG:pQ wG "" blocked pi' "$ROOT")
+  working=$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_record wG:pQ wG "" working pi' "$ROOT")
   bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_commit_transition "$1" "$2" "$3"' "$ROOT" "$state" default "$blocked"
   [ -e "$marker" ] || fail "setup: committed blocked edge should have set the marker"
   bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_apply_transition "$1" "$2" "$3"' "$ROOT" "$state" default "$working"; rc=$?
@@ -4151,7 +4079,7 @@ test_apply_transition_defer_and_fallback_are_noops() {
   marker="$state/.herdr-escalated-default_wG_pQ"
   for s in idle "done" unknown ""; do
     local rec
-    rec=$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_record wG:pQ wG "" "$1" claude' "$ROOT" "$s")
+    rec=$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_record wG:pQ wG "" "$1" pi' "$ROOT" "$s")
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_apply_transition "$1" "$2" "$3"' "$ROOT" "$state" default "$rec"; rc=$?
     [ "$rc" = 1 ] || fail "defer/fallback status '$s' must return 1 (no fast action), got $rc"
     [ ! -e "$marker" ] || fail "defer/fallback status '$s' must not touch the escalation marker"
@@ -4229,7 +4157,7 @@ test_wait_transition_stream_blocked_returns_record() {
   fb=$(make_herdr_eventfake "$dir")
   set_fake_agent "$agent" "wG:pQ" idle   # reconcile sees idle -> proceeds to stream
   reader=$(make_fake_reader "$dir"); lines="$dir/lines"
-  printf 'wG:pQ\t\tblocked\tclaude\n' > "$lines"
+  printf 'wG:pQ\t\tblocked\tpi\n' > "$lines"
   marker="$state/.herdr-escalated-sess_wG_pQ"
   out=$(PATH="$fb:$PATH" FM_BACKEND_HERDR_EVENTS_FORCE=1 FM_FAKE_SESSION_NAME=sess FM_FAKE_SOCKET="$dir/x.sock" FM_FAKE_AGENT_DIR="$agent" \
     FM_BACKEND_HERDR_EVENT_READER="$reader" FM_FAKE_READER_LINES="$lines" \
@@ -4251,7 +4179,7 @@ test_wait_transition_stream_absorb_clears_then_timeout() {
   # Stream a working edge (absorb) then an idle edge (defer). Neither is a fresh
   # actionable edge, so the wait ends as a clean timeout (rc 1) and the marker
   # is cleared by the working edge.
-  printf 'wG:pQ\t\tworking\tclaude\nwG:pQ\t\tidle\tclaude\n' > "$lines"
+  printf 'wG:pQ\t\tworking\tpi\nwG:pQ\t\tidle\tpi\n' > "$lines"
   rc=$(PATH="$fb:$PATH" FM_BACKEND_HERDR_EVENTS_FORCE=1 FM_FAKE_SESSION_NAME=sess FM_FAKE_SOCKET="$dir/x.sock" FM_FAKE_AGENT_DIR="$agent" \
     FM_BACKEND_HERDR_EVENT_READER="$reader" FM_FAKE_READER_LINES="$lines" \
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_wait_transition sess 2 "$1" sess:wG:pQ; echo $?' "$ROOT" "$state" | tail -1)
@@ -4422,7 +4350,7 @@ test_current_path_reads_cwd
 test_busy_state_working_maps_to_busy
 test_busy_state_done_and_blocked_map_to_idle
 test_busy_state_unknown_on_no_agent
-test_composer_state_bare_prompt_is_empty
+test_composer_state_bordered_prompt_is_empty
 test_composer_state_styled_placeholder_draft_is_pending
 test_composer_state_real_text_is_pending
 test_composer_state_popup_placeholder_fill_is_pending
@@ -4432,11 +4360,7 @@ test_composer_state_pi_separator_idle_is_empty
 test_composer_state_pi_separator_real_text_is_pending
 test_composer_state_pi_incomplete_separator_below_stale_generic_is_unknown
 test_composer_state_pi_separator_requires_safe_native_identity
-test_composer_state_claude_unbordered_prompt_is_empty
-test_composer_state_claude_unbordered_prompt_is_pending
 test_composer_state_bare_prompt_below_stale_bordered_banner_wins
-test_composer_state_claude_dim_prompt_suggestion_ghost_is_empty
-test_composer_state_claude_dim_ghost_row_with_real_text_is_pending
 test_composer_state_grok_dark_truecolor_placeholder_is_empty
 test_composer_state_grok_bright_truecolor_real_text_is_pending
 test_composer_state_codex_bare_prompt_glyph_is_empty

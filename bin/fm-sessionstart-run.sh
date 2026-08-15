@@ -12,7 +12,7 @@
 #
 # Usage: fm-sessionstart-run.sh [--source <source>]
 #   --source  The harness's own session-open source. When omitted, the source is
-#             read from a Claude/Codex-shaped JSON hook payload on stdin
+#             read from a Codex-shaped JSON hook payload on stdin
 #             (the `source` field). An unreadable or unrecognized source is
 #             treated as `startup`, because taking the helm redundantly is
 #             cheap and idempotent while not taking it is the whole bug.
@@ -28,8 +28,8 @@
 #                           silent) and a plain instruction is enough when a new
 #                           process resumed an old session (the nudge fires).
 #
-# Every path exits 0, exactly like the nudge wrapper: a Claude SessionStart
-# exit 2 blocks session initialization, so a failed session start must reach the
+# Every path exits 0, exactly like the nudge wrapper: a failed session start
+# must reach the
 # agent as digest text it can act on, never as a refusal to open the session.
 # A lock another live session holds and a truncated digest are reported inside
 # the digest, while broken GitHub auth arrives through the deferred network
@@ -48,8 +48,6 @@ COMPLETION_FILE="$STATE/.session-start-complete"
 . "$SCRIPT_DIR/fm-primary-scope-lib.sh"
 # shellcheck source=bin/fm-session-lock-lib.sh
 . "$SCRIPT_DIR/fm-session-lock-lib.sh"
-# shellcheck source=bin/fm-hook-host-lib.sh
-. "$SCRIPT_DIR/fm-hook-host-lib.sh"
 
 SOURCE=
 while [ $# -gt 0 ]; do
@@ -83,7 +81,7 @@ session_start_completed() {
 }
 
 if [ -z "$SOURCE" ] && [ ! -t 0 ]; then
-  # Claude and Codex both deliver a JSON SessionStart payload on stdin whose
+  # Codex delivers a JSON SessionStart payload on stdin whose
   # `source` field carries startup|resume|clear|compact. Parsed without jq so a
   # host missing it still gets correct routing rather than silent full runs.
   # A terminal stdin is skipped outright: a hook always pipes its payload, and
@@ -92,14 +90,6 @@ if [ -z "$SOURCE" ] && [ ! -t 0 ]; then
   # without depending on greedy-regex luck, and it cannot mistake a string VALUE
   # of "source" for the key, because only a key is followed by a bare colon.
   PAYLOAD=$(cat 2>/dev/null || true)
-  # Cursor loads the tracked Claude settings as well as its own registration,
-  # so a Cursor-delivered payload here is the duplicate: bin/fm-sessionstart-
-  # cursor.sh already owns that session open and calls this wrapper with an
-  # explicit --source and no payload. Running twice would take the helm twice
-  # and repeat every startup sweep.
-  if fm_hook_payload_is_foreign_host "$PAYLOAD"; then
-    exit 0
-  fi
   SOURCE=$(printf '%s' "$PAYLOAD" | awk '
     BEGIN { RS = "\"" }
     seen == 2 { print; exit }

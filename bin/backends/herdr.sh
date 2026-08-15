@@ -2685,7 +2685,7 @@ fm_backend_herdr_rendered_busy_state() {  # <target> [harness] -> busy|idle|unkn
 # (Enter only, never retyped) until herdr's NATIVE agent-state (agent get)
 # confirms a real turn started. Verified hazard (herdr-verification-p2.md
 # "slash/$ autocomplete popup"): a `/`- or `$`-prefixed send opens a
-# completion popup within ~0.1s, exactly like tmux's claude/codex popups, so
+# completion popup within ~0.1s, exactly like tmux's codex popup, so
 # the caller's <settle> before the first Enter matters here the same way it
 # does for tmux.
 #
@@ -2700,7 +2700,7 @@ fm_backend_herdr_rendered_busy_state() {  # <target> [harness] -> busy|idle|unkn
 #
 # Incident (2026-07-07, followed up on 2026-07-08): a redelivery loop in the
 # away-mode daemon. Root cause: composer-content submit confirmation was too
-# sensitive to harness rendering details. Real claude/codex use bare prompt
+# sensitive to harness rendering details. Real codex uses a bare prompt
 # rows, and real codex adds dynamic idle suggestions after `›`; the later
 # ANSI-aware composer classifier now handles the pre-injection guard for that
 # Codex shape, but idle-baseline submit confirmation deliberately stays on
@@ -2727,7 +2727,7 @@ fm_backend_herdr_rendered_busy_state() {  # <target> [harness] -> busy|idle|unkn
 #     loop gives up and sends a needless extra Enter.
 #   - Instant round-trip (a turn starts AND returns to idle between two
 #     polls): unavoidable in the absolute, but bounded by how tightly polls
-#     are packed into the budget; real claude/codex measured first-working
+#     are packed into the budget; real codex measured first-working
 #     at 90-490ms, comfortably inside a several-hundred-ms, multiply-sampled
 #     window, so this has not been observed in practice. On the (unobserved)
 #     residual chance it happens, the verdict is "pending" and the caller
@@ -2971,7 +2971,7 @@ fm_backend_herdr_busy_state() {  # <target>
 # that lands partway through is not missed just because it had not landed by
 # the FIRST sample.
 # Empirical evidence (docs/herdr-backend.md "Native agent-state submit
-# confirmation"): real claude and codex observed first-working at 90-490ms
+# confirmation"): real codex observed first-working at 90-490ms
 # after Enter, so a several-hundred-ms budget sampled repeatedly reliably
 # catches it. The remaining, inherent gap - a turn so fast it starts AND
 # returns to idle between two samples - is bounded by how tightly <polls> is

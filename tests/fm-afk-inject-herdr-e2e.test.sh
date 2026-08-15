@@ -133,7 +133,7 @@ EOF
 
 # --- deterministic bare-composer loop, drawn in the scratch pane -------------
 # Mirrors tests/fm-afk-inject-e2e.test.sh's supervisor-loop.sh, but draws the
-# shared classifier's positively identified bare-agent shape (`❯ <buf>`). This
+# shared classifier's positively identified Codex shape (`› <buf>`). This
 # remains readable under the strict blank-row posture without pretending that
 # one side-bordered row is a complete composer box. ALSO registers itself as a
 # real herdr agent via `herdr pane report-agent` and reports idle/working
@@ -190,7 +190,7 @@ redraw() {
   else
     shown="$_buf"
   fi
-  printf '\r\033[K❯ %s' "$shown"
+  printf '\r\033[K› %s' "$shown"
 }
 submit_line() {
   local _line=$_buf _c _hex

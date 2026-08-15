@@ -79,6 +79,7 @@ exit 0
 SH
   chmod +x "$fakebin/tmux"
   fm_fake_exit0 "$fakebin" treehouse
+  fm_fake_exit0 "$fakebin" pi
   printf '%s\n' "$fakebin"
 }
 
@@ -91,7 +92,7 @@ make_spawn_case() {
   launchlog="$case_dir/launch.log"
   fakebin=$(make_spawn_fakebin "$case_dir/fake")
   mkdir -p "$home/data" "$home/projects" "$home/state" "$home/config"
-  printf 'claude\n' > "$home/config/crew-harness"
+  printf 'pi\n' > "$home/config/crew-harness"
   printf '%s\n' "$$" > "$home/state/.lock"
   printf '%s off\n' "$$" > "$home/state/.trace-context-effective"
   fm_git_worktree "$proj" "$wt" "wt-$name"
@@ -177,7 +178,7 @@ run_two_level() {
   prim="$base/primary"
   sm="$base/sm"
   mkdir -p "$prim/config" "$prim/data" "$prim/state" "$prim/projects"
-  printf 'claude\n' > "$prim/config/crew-harness"
+  printf 'pi\n' > "$prim/config/crew-harness"
   [ "$pfile" = present ] && : > "$prim/config/trace-context"
   touch "$prim/state/.last-watcher-beat"
   start_trace_session "$prim" "$penv"
@@ -199,7 +200,7 @@ run_two_level() {
     FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$prim" \
     FM_STATE_OVERRIDE="$prim/state" FM_DATA_OVERRIDE="$prim/data" \
     FM_PROJECTS_OVERRIDE="$prim/projects" FM_CONFIG_OVERRIDE="$prim/config" \
-    FM_SPAWN_NO_GUARD=1 CLAUDECODE=1 TMUX="fake,1,0" \
+    FM_SPAWN_NO_GUARD=1 PI_CODING_AGENT=true TMUX="fake,1,0" \
     FM_FAKE_LAUNCH_LOG="$smlog" PATH="$smfake:$PATH" \
     "$SPAWN" "$sm_id" "$sm" --secondmate >/dev/null 2>&1 || true
 
@@ -255,7 +256,7 @@ test_enabled_records_and_injects_identical_carrier_before_launch() {
 
   gl=$(grep -n '^export GOTMPDIR=' "$LAUNCH_LOG" | tail -1 | cut -d: -f1)
   tl=$(grep -n '^export TRACEPARENT=' "$LAUNCH_LOG" | tail -1 | cut -d: -f1)
-  ll=$(grep -n 'claude' "$LAUNCH_LOG" | tail -1 | cut -d: -f1)
+  ll=$(grep -n 'pi' "$LAUNCH_LOG" | tail -1 | cut -d: -f1)
   [ -n "$gl" ] && [ -n "$tl" ] && [ -n "$ll" ] || fail "launch log missing GOTMPDIR/TRACEPARENT/launch lines"
   [ "$tl" -gt "$gl" ] || fail "TRACEPARENT export must ride the GOTMPDIR pre-launch site (gotmp=$gl tp=$tl)"
   [ "$tl" -lt "$ll" ] || fail "TRACEPARENT export must be sent before the launch literal (tp=$tl launch=$ll)"
@@ -299,7 +300,7 @@ test_failed_delivery_omits_metadata_and_still_launches() {
     || fail "failed traceparent delivery must not leave a traceparent= claim in meta"
   ! grep -q '^export TRACEPARENT=' "$LAUNCH_LOG" \
     || fail "the failed TRACEPARENT export must not be recorded as delivered"
-  grep -q 'claude' "$LAUNCH_LOG" || fail "the source task must still launch"
+  grep -q 'pi' "$LAUNCH_LOG" || fail "the source task must still launch"
   pass "failed TRACEPARENT delivery omits metadata while the source task still launches"
 }
 
@@ -316,7 +317,7 @@ test_unsafe_delivery_refuses_to_append_launch() {
   [ "$status" -ne 0 ] || fail "uncleared traceparent input must stop spawn"
   assert_contains "$out" "refusing to append the launch command" \
     "unsafe traceparent delivery should report why spawn stopped"
-  ! grep -q 'claude' "$LAUNCH_LOG" \
+  ! grep -q 'pi' "$LAUNCH_LOG" \
     || fail "unsafe traceparent delivery must not append the launch command"
   pass "uncleared TRACEPARENT input stops before the launch command is appended"
 }
@@ -337,7 +338,7 @@ test_failed_metadata_append_unsets_carrier_and_still_launches() {
 
   ! grep -q '^traceparent=' "$meta" \
     || fail "failed metadata append must not leave a traceparent= claim in meta"
-  grep -q '^unset TRACEPARENT; .*claude' "$LAUNCH_LOG" \
+  grep -q '^unset TRACEPARENT; .*pi' "$LAUNCH_LOG" \
     || fail "failed metadata append must unset TRACEPARENT in the launch command"
   pass "failed traceparent metadata append removes the carrier from the launched task"
 }
@@ -365,7 +366,7 @@ test_duplicate_secondmate_spawn_does_not_converge_trace_context() {
     FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$prim" \
     FM_STATE_OVERRIDE="$prim/state" FM_DATA_OVERRIDE="$prim/data" \
     FM_PROJECTS_OVERRIDE="$prim/projects" FM_CONFIG_OVERRIDE="$prim/config" \
-    FM_SPAWN_NO_GUARD=1 CLAUDECODE=1 TMUX="fake,1,0" \
+    FM_SPAWN_NO_GUARD=1 PI_CODING_AGENT=true TMUX="fake,1,0" \
     FM_FAKE_DUPLICATE_WINDOW="fm-$id" FM_FAKE_LAUNCH_LOG="$log" \
     PATH="$fake:$PATH" "$SPAWN" "$id" "$sm" --secondmate 2>&1)
   status=$?
@@ -480,7 +481,7 @@ test_two_routed_tasks_through_one_secondmate_root_distinct_traces() {
   base="$TMP_ROOT/routed-boundary"
   sm="$base/sm-home"
   mkdir -p "$sm/data" "$sm/projects" "$sm/state" "$sm/config"
-  printf 'claude\n' > "$sm/config/crew-harness"
+  printf 'pi\n' > "$sm/config/crew-harness"
   : > "$sm/config/trace-context"
   printf '%s\n' "$$" > "$sm/state/.lock"
   touch "$sm/state/.last-watcher-beat"

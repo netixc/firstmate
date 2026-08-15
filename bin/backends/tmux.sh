@@ -162,7 +162,7 @@ fm_backend_tmux_classify_process_name() {  # <path> [argv0] -> agent|shell|other
   base=${path##*/}
   base=${base#-}
   case "$base" in
-    *claude*|*codex*|*opencode*|*grok*|*kimi*|pi|pi-signed|pi-launcher|Pi) printf 'agent' ;;
+    *codex*|*opencode*|*grok*|*kimi*|pi|pi-signed|pi-launcher|Pi) printf 'agent' ;;
     zsh|bash|sh|dash|ash|ksh|mksh|tcsh|csh|fish) printf 'shell' ;;
     *)
       if fm_harness_path_name "$path" >/dev/null || fm_harness_path_name "$argv0" >/dev/null; then
@@ -193,9 +193,9 @@ fm_backend_tmux_classify_process_name() {  # <path> [argv0] -> agent|shell|other
 # This is the foreground-process-group half of the liveness probe, and it exists
 # because `#{pane_current_command}` and `ps -o comm=` expose different name
 # fields whose roles vary by platform. On macOS the tmux field can carry a
-# harness-rewritten title (Claude Code 2.1.220 reports `2.1.220`) while `comm`
-# retains executable identity; the portable Linux regression observes the
-# reverse for its version-named executable. Reading both `comm` and argv[0]
+# harness-rewritten title while `comm` retains executable identity; the portable
+# Linux regression observes the reverse for a version-named executable. Reading
+# both `comm` and argv[0]
 # preserves an identifying install path without making either platform's field
 # assignment load-bearing.
 #

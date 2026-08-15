@@ -6,7 +6,7 @@
 # saw an idle pane as holding pending input. Two rendering styles are covered by
 # the one shared ANSI-aware owner (fm_composer_strip_ghost, bin/fm-composer-lib.sh,
 # reached here through the fm_tmux_strip_ghost thin adapter):
-#   - DIM/FAINT (SGR 2): claude's rotating prompt suggestion, codex's idle tip.
+#   - DIM/FAINT (SGR 2): the adapter's rotating prompt suggestion, codex's idle tip.
 #   - a dark/muted TRUECOLOR foreground: grok's placeholder/hint text.
 # These tests pin:
 #   1. fm_tmux_strip_ghost drops dim/faint AND dark-truecolor runs, keeping
@@ -86,8 +86,8 @@ SH
 test_strip_ghost_drops_dim_keeps_normal() {
   local out
   # Dim run between ESC[2m and ESC[0m is dropped; the prompt glyph survives.
-  out=$(printf '\xe2\x9d\xaf \033[2mWhat is the largest country by area?\033[0m\n' | fm_tmux_strip_ghost)
-  [ "$out" = "$(printf '\xe2\x9d\xaf ')" ] || fail "dim run not dropped: '$out'"
+  out=$(printf '\xe2\x80\xba \033[2mWhat is the largest country by area?\033[0m\n' | fm_tmux_strip_ghost)
+  [ "$out" = "$(printf '\xe2\x80\xba ')" ] || fail "dim run not dropped: '$out'"
   # Normal-intensity text is kept verbatim (no styling at all).
   out=$(printf '\xe2\x9d\xaf real human text\n' | fm_tmux_strip_ghost)
   [ "$out" = "$(printf '\xe2\x9d\xaf real human text')" ] || fail "normal text changed: '$out'"
@@ -161,8 +161,8 @@ test_dim_ghost_only_composer_is_not_pending() {
   dir="$TMP_ROOT/ghost-only"; mkdir -p "$dir"
   fb=$(make_fake_tmux "$dir")
   capture="$dir/styled.txt"
-  # The exact rendering claude emits: a normal prompt glyph + a DIM predicted prompt.
-  printf '\xe2\x9d\xaf \033[2mWhat is the largest country by area?\033[0m\n' > "$capture"
+  # The exact rendering adapter emits: a normal prompt glyph + a DIM predicted prompt.
+  printf '\xe2\x80\xba \033[2mWhat is the largest country by area?\033[0m\n' > "$capture"
   if PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=0 \
      fm_pane_input_pending "fakepane"; then
     fail "dim ghost-only composer falsely read as pending"
@@ -175,7 +175,7 @@ test_dim_ghost_inside_bordered_composer_is_not_pending() {
   dir="$TMP_ROOT/ghost-bordered"; mkdir -p "$dir"
   fb=$(make_fake_tmux "$dir")
   capture="$dir/styled.txt"
-  # Bordered composer (claude box) holding only dim ghost text.
+  # Bordered composer (adapter box) holding only dim ghost text.
   printf '╭─────────────────────────────────────╮\n│ \033[2mtry the other approach instead\033[0m      │\n╰─────────────────────────────────────╯\n' > "$capture"
   if PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=1 \
      fm_pane_input_pending "fakepane"; then
@@ -190,7 +190,7 @@ test_normal_text_still_pending() {
   fb=$(make_fake_tmux "$dir")
   capture="$dir/styled.txt"
   # Real human text, normal intensity - must still read as pending.
-  printf '\xe2\x9d\xaf fix findings 1 and 3, skip 2\n' > "$capture"
+  printf '\xe2\x80\xba fix findings 1 and 3, skip 2\n' > "$capture"
   PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=0 \
     fm_pane_input_pending "fakepane" \
     || fail "real typed text was not detected as pending"
@@ -202,39 +202,23 @@ test_colored_text_with_2_payload_still_pending() {
   dir="$TMP_ROOT/colored-text"; mkdir -p "$dir"
   fb=$(make_fake_tmux "$dir")
   capture="$dir/styled.txt"
-  printf '\xe2\x9d\xaf \033[38;5;2mgreen typed\033[0m\n' > "$capture"
+  printf '\xe2\x80\xba \033[38;5;2mgreen typed\033[0m\n' > "$capture"
   PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=0 \
     fm_pane_input_pending "fakepane" \
     || fail "8-bit colored typed text was not detected as pending"
-  printf '\xe2\x9d\xaf \033[38;2;224;222;244mtruecolor typed\033[0m\n' > "$capture"
+  printf '\xe2\x80\xba \033[38;2;224;222;244mtruecolor typed\033[0m\n' > "$capture"
   PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=0 \
     fm_pane_input_pending "fakepane" \
     || fail "bright truecolor typed text was not detected as pending"
-  printf '\xe2\x9d\xaf \033[58;5;2munderline-color typed\033[0m\n' > "$capture"
+  printf '\xe2\x80\xba \033[58;5;2munderline-color typed\033[0m\n' > "$capture"
   PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=0 \
     fm_pane_input_pending "fakepane" \
     || fail "underline-colored typed text was not detected as pending"
-  printf '\xe2\x9d\xaf \033[58::5::2mcolon underline typed\033[0m\n' > "$capture"
+  printf '\xe2\x80\xba \033[58::5::2mcolon underline typed\033[0m\n' > "$capture"
   PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=0 \
     fm_pane_input_pending "fakepane" \
     || fail "colon underline typed text was not detected as pending"
   pass "fm_pane_input_pending: bright colored text with 2 payloads is still pending"
-}
-
-test_dark_truecolor_ghost_only_composer_is_not_pending() {
-  local dir fb capture
-  dir="$TMP_ROOT/grok-ghost"; mkdir -p "$dir"
-  fb=$(make_fake_tmux "$dir")
-  capture="$dir/styled.txt"
-  # A grok-style pristine composer: bright prompt glyph + a dark/muted truecolor
-  # placeholder. It must read NOT pending (the grok TRUECOLOR gap, now covered by
-  # the same ANSI-aware owner as claude's dim ghost).
-  printf '\xe2\x9d\xaf \033[38;2;50;47;70mType a message...\033[0m\n' > "$capture"
-  if PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=0 \
-     fm_pane_input_pending "fakepane"; then
-    fail "dark truecolor ghost-only composer falsely read as pending"
-  fi
-  pass "fm_pane_input_pending: a dark truecolor ghost-only composer (grok placeholder) is NOT pending"
 }
 
 test_dark_truecolor_bare_shell_prompt_is_unknown() {
@@ -257,9 +241,9 @@ test_real_text_with_trailing_ghost_is_pending() {
   dir="$TMP_ROOT/mixed"; mkdir -p "$dir"
   fb=$(make_fake_tmux "$dir")
   capture="$dir/styled.txt"
-  # A human typed "deploy" and claude appended a dim ghost completion. The real
+  # A human typed "deploy" and adapter appended a dim ghost completion. The real
   # text must win - the composer is pending.
-  printf '\xe2\x9d\xaf deploy\033[2m the staging environment now\033[0m\n' > "$capture"
+  printf '\xe2\x80\xba deploy\033[2m the staging environment now\033[0m\n' > "$capture"
   PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=0 \
     fm_pane_input_pending "fakepane" \
     || fail "real text with a trailing ghost completion was not detected as pending"
@@ -507,9 +491,8 @@ test_all_tmux_harness_composers_share_classification() {
   dir="$TMP_ROOT/all-harness-composers"; mkdir -p "$dir"
   fb=$(make_fake_tmux "$dir")
   capture="$dir/styled.txt"
-  for harness in claude codex opencode pi pi-signed grok; do
+  for harness in codex opencode pi pi-signed grok; do
     case "$harness" in
-      claude) printf '╭────────────╮\n│ ❯ \033[2mtry\033[0m      │\n╰────────────╯\n' > "$capture" ;;
       codex) printf '╭────────────╮\n│ › \033[2mtip\033[0m      │\n╰────────────╯\n' > "$capture" ;;
       opencode) printf '╭────────────╮\n│ >          │\n╰────────────╯\n' > "$capture" ;;
       pi|pi-signed) printf '╭────────────╮\n│            │\n╰────────────╯\n' > "$capture" ;;
@@ -520,7 +503,7 @@ test_all_tmux_harness_composers_share_classification() {
     [ "$out" = empty ] \
       || fail "$harness aligned idle composer should be empty, got '$out'"
     case "$harness" in
-      claude|grok) printf '╭────────────╮\n│ ❯ fix      │\n╰────────────╯\n' > "$capture" ;;
+      grok) printf '╭────────────╮\n│ ❯ fix      │\n╰────────────╯\n' > "$capture" ;;
       codex) printf '╭────────────╮\n│ › fix      │\n╰────────────╯\n' > "$capture" ;;
       opencode|pi|pi-signed) printf '╭────────────╮\n│ > fix      │\n╰────────────╯\n' > "$capture" ;;
     esac
@@ -529,7 +512,7 @@ test_all_tmux_harness_composers_share_classification() {
     [ "$out" = pending ] \
       || fail "$harness composer with text should be pending, got '$out'"
   done
-  pass "fm_tmux_composer_state: all tmux harnesses share empty and pending classification"
+  pass "fm_tmux_composer_state: all surviving tmux harnesses share empty and pending classification"
 }
 
 test_unrecognized_state_defers_input_guard() {
@@ -572,9 +555,9 @@ test_absent_tmux_identity_keeps_enclosed_bare_verdict() {
   printf '────────────────────────\n❯%s\n────────────────────────\n' "$nbsp" > "$capture"
   out=$(PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=1 \
     fm_tmux_composer_state "fakepane")
-  [ "$out" = empty ] \
-    || fail "an enclosed Claude glyph must keep its bare empty verdict when the Pi-only probe is absent, got '$out'"
-  pass "fm_tmux_composer_state: absent Pi identity preserves Claude's enclosed bare verdict"
+  [ "$out" = unknown ] \
+    || fail "an unbordered Grok-style glyph must remain unproven when the Pi-only probe is absent, got '$out'"
+  pass "fm_tmux_composer_state: absent Pi identity leaves an unbordered Grok-style glyph unproven"
 }
 
 test_legitimate_empty_routes_remain_empty() {
@@ -661,7 +644,6 @@ test_dim_ghost_only_composer_is_not_pending
 test_dim_ghost_inside_bordered_composer_is_not_pending
 test_normal_text_still_pending
 test_colored_text_with_2_payload_still_pending
-test_dark_truecolor_ghost_only_composer_is_not_pending
 test_dark_truecolor_bare_shell_prompt_is_unknown
 test_real_text_with_trailing_ghost_is_pending
 test_two_row_composer_reads_text_above_empty_cursor_row

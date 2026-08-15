@@ -170,10 +170,6 @@
       "audience": "agent-runtime"
     },
     {
-      "path": "CLAUDE.md",
-      "audience": "agent-runtime"
-    },
-    {
       "path": "CONTRIBUTING.md",
       "audience": "maintainer-architecture"
     },
@@ -260,14 +256,6 @@
     {
       "path": "docs/sessionstart-nudge.md",
       "audience": "operator-current"
-    },
-    {
-      "path": "docs/subagent-guard.md",
-      "audience": "maintainer-architecture"
-    },
-    {
-      "path": "docs/supervision-protocols/claude.md",
-      "audience": "agent-runtime"
     },
     {
       "path": "docs/supervision-protocols/codex.md",

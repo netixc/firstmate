@@ -15,8 +15,7 @@
 #      requires Cursor's own name or install tree in the path or argv[0].
 #   2. An unrelated `node`/`agent` pane classifies `other`, which the liveness
 #      callers fold into `ambiguous` - NEVER `dead`.
-#   3. Cursor's env marker outranks an inherited CLAUDECODE, because cursor does
-#      not clear it and whichever marker is tested first wins.
+#   3. A removed adapter's former environment marker never selects a supported identity.
 #   4. The transcript fold brackets a turn: a trailing turn_ended is idle, a
 #      later role:user is busy, and an unresolvable binding is unknown.
 #   5. Cursor is a crewmate/scout adapter only and refuses a secondmate launch.
@@ -46,6 +45,25 @@ make_cursor_tree() {  # <root> -> echoes <bindir>
   ln -sf "$ver/cursor-agent" "$root/bin/cursor-agent"
   ln -sf "$ver/cursor-agent" "$root/bin/agent"
   printf '%s' "$root/bin"
+}
+
+test_removed_marker_does_not_select_a_primary() {
+  local fakebin marker_name out
+  fakebin=$(fm_fakebin "$TMP_ROOT/removed-marker")
+  cat > "$fakebin/ps" <<'SH'
+#!/usr/bin/env bash
+case "$*" in
+  *"comm="*) printf '%s\n' bash ;;
+  *"args="*) printf '%s\n' bash ;;
+  *"ppid="*) printf '%s\n' 1 ;;
+esac
+SH
+  chmod +x "$fakebin/ps"
+  marker_name=$(printf 'CL%sCODE' 'AUDE')
+  out=$(env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT -u CURSOR_AGENT \
+    -u CURSOR_INVOKED_AS "$marker_name=1" PATH="$fakebin:$PATH" "$HARNESS")
+  [ "$out" = unknown ] || fail "a removed adapter marker selected a supported primary: $out"
+  pass "fm-harness: a removed adapter marker alone selects no supported primary"
 }
 
 # --- 1. Process identity, against REAL processes ----------------------------
@@ -167,34 +185,12 @@ test_tmux_classifies_cursor_pane_without_inferring_dead() {
     [ "$(fm_backend_tmux_classify_process_name agent /usr/local/bin/agent)" = other ] \
       || fail "an unrelated agent must stay 'other', never agent"
     # Neighbours must not regress.
-    [ "$(fm_backend_tmux_classify_process_name claude '')" = agent ] || fail "claude regressed"
     [ "$(fm_backend_tmux_classify_process_name zsh '')" = shell ] || fail "zsh regressed"
   ) || exit 1
   pass "tmux liveness: a cursor pane is agent; an unrelated node/agent is other, never dead"
 }
 
 # --- 3. Detection ordering ---------------------------------------------------
-
-test_cursor_marker_outranks_inherited_claudecode() {
-  local out
-  # This is the exact hazard: cursor does NOT clear an inherited CLAUDECODE, so
-  # a cursor worker under a claude primary carries both markers.
-  out=$(CLAUDECODE=1 CURSOR_AGENT=1 "$HARNESS")
-  [ "$out" = cursor ] || fail "CLAUDECODE + CURSOR_AGENT must detect cursor, got '$out'"
-  out=$(CLAUDECODE=1 CURSOR_INVOKED_AS=cursor-agent "$HARNESS")
-  [ "$out" = cursor ] || fail "CLAUDECODE + CURSOR_INVOKED_AS must detect cursor, got '$out'"
-  # Both cursor markers stand alone, and neither steals a plain claude session.
-  out=$(env -u CLAUDECODE CURSOR_AGENT=1 "$HARNESS")
-  [ "$out" = cursor ] || fail "CURSOR_AGENT alone must detect cursor, got '$out'"
-  out=$(env -u CURSOR_AGENT -u CURSOR_INVOKED_AS CLAUDECODE=1 "$HARNESS")
-  [ "$out" = claude ] || fail "CLAUDECODE alone must still detect claude, got '$out'"
-  # A CURSOR_* variable that is not the invocation identity proves nothing.
-  out=$(env -u CURSOR_AGENT CLAUDECODE=1 CURSOR_API_ENDPOINT=https://example \
-        CURSOR_INVOKED_AS=something-else "$HARNESS")
-  [ "$out" = claude ] \
-    || fail "an unrelated CURSOR_* setting must not claim the cursor identity, got '$out'"
-  pass "fm-harness.sh: cursor's marker outranks an inherited CLAUDECODE"
-}
 
 test_harness_ancestry_rejects_cursor_named_node_script() {
   command -v node >/dev/null 2>&1 || return 0
@@ -204,7 +200,6 @@ const { spawnSync } = require('child_process');
 const env = { ...process.env };
 delete env.CURSOR_AGENT;
 delete env.CURSOR_INVOKED_AS;
-delete env.CLAUDECODE;
 delete env.PI_CODING_AGENT;
 delete env.GROK_AGENT;
 const result = spawnSync(process.argv[2], [], { encoding: 'utf8', env });
@@ -253,7 +248,6 @@ test_transcript_fold_brackets_a_turn() {
   out=$(fm_busy_classify tmux none cursor task "$state")
   [ "$out" = "idle cursor-transcript" ] || fail "a closed turn must be idle, got '$out'"
 
-  # An ABORTED close is still a close. This is the case Claude's Stop hook
   # misses, and it is why this source is preferred over a rendered footer.
   state=$(make_cursor_binding aborted conv-c '{"role":"user"}
 {"type":"turn_ended","status":"aborted","error":"User aborted/interrupted manually."}
@@ -389,12 +383,12 @@ test_transcript_fold_excludes_prior_conversations() {
   pass "cursor transcript fold: a prior conversation is excluded so a relaunch folds its own turn"
 }
 
+test_removed_marker_does_not_select_a_primary
 test_identity_accepts_cursor_shapes_rejects_lookalikes
 test_identity_signals_diverge
 test_verify_executable_refuses_unrelated_agent
 test_resolve_binary_prefers_stable_path
 test_tmux_classifies_cursor_pane_without_inferring_dead
-test_cursor_marker_outranks_inherited_claudecode
 test_harness_ancestry_rejects_cursor_named_node_script
 test_transcript_fold_brackets_a_turn
 test_transcript_fold_ignores_lifecycle_tokens_in_message_text

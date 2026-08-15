@@ -130,17 +130,15 @@ fm_watcher_healthy() {
 
 # fm_watcher_healthy above is the PID-STRICT primitive: true only when a live,
 # identity-matched watcher PROCESS holds this home's lock with a fresh beacon. The
-# arm layer (bin/fm-watch-arm.sh, bin/fm-claude-stop-autoarm.sh) needs exactly
-# that - it decides whether to start, attach to, or replace a real watcher
-# process, so a leftover beacon must never satisfy it. bin/fm-turnend-guard.sh
-# also keeps this strict check because it fires at the turn boundary where the
-# auto-arm brings a fresh watcher up. The pull warning (bin/fm-guard.sh) fires
-# mid-turn, where the auto-arm model runs no watcher at all, so it wants a
+# arm layer (bin/fm-watch-arm.sh) needs exactly that - it decides whether to
+# start, attach to, or replace a real watcher process, so a leftover beacon must
+# never satisfy it. bin/fm-turnend-guard.sh also keeps this strict check because
+# it fires at the turn boundary. The pull warning (bin/fm-guard.sh) wants a
 # different, model-aware question:
 
 # fm_supervision_model
 # Print the supervision model of this home's PRIMARY harness:
-#   autoarm     Claude's Stop-hook auto-arm and Cursor's stop-hook park: the
+#   autoarm     Cursor's stop-hook park: the
 #               watcher is armed at each turn end and exits on its wake, so it
 #               runs only BETWEEN turns. Mid-turn a fresh beacon with no live
 #               watcher process is the healthy state.
@@ -162,7 +160,7 @@ fm_supervision_model() {
   esac
   harness=$("$FM_WAKE_LIB_DIR/fm-harness.sh" 2>/dev/null || printf unknown)
   case "$harness" in
-    claude|cursor) printf 'autoarm\n' ;;
+    cursor) printf 'autoarm\n' ;;
     pi|pi-signed) printf 'extension\n' ;;
     *) printf 'persistent\n' ;;
   esac
@@ -291,27 +289,8 @@ fm_lock_clean_known_files() {
     "$lockdir/pid" \
     "$lockdir/fm-home" \
     "$lockdir/pid-identity" \
-    "$lockdir/role" \
     "$lockdir/watcher-path" \
     2>/dev/null || true
-}
-
-fm_lock_set_role() {
-  local lockdir=$1 role=$2 current pid back
-  case "$role" in
-    autoarm|terminal-check) : ;;
-    *) return 1 ;;
-  esac
-  current=${BASHPID:-$$}
-  pid=$(cat "$lockdir/pid" 2>/dev/null || true)
-  [ "$pid" = "$current" ] || return 1
-  printf '%s\n' "$role" > "$lockdir/role" 2>/dev/null || return 1
-  back=$(cat "$lockdir/role" 2>/dev/null || true)
-  [ "$back" = "$role" ]
-}
-
-fm_lock_role() {
-  cat "$1/role" 2>/dev/null
 }
 
 fm_lock_abs_path() {
@@ -884,43 +863,6 @@ fm_task_set_lock_path() {  # <state-dir>
   [ -n "$state" ] || return 1
   case "$state" in *[$'\n\r\t']*) return 1 ;; esac
   printf '%s/.task-set.lock\n' "$state"
-}
-
-fm_failure_episode_reset() {
-  local state=$1 mode=${2:-acquire} lock current pid acquired=0 path
-  lock="$state/.turnend-claude-blocks.lock"
-  case "$mode" in
-    acquire)
-      fm_lock_try_acquire "$lock" || return 1
-      acquired=1
-      ;;
-    held)
-      current=${BASHPID:-$$}
-      pid=$(cat "$lock/pid" 2>/dev/null || true)
-      [ "$pid" = "$current" ] || return 1
-      ;;
-    *) return 1 ;;
-  esac
-  for path in \
-    "$state/.turnend-claude-blocks" \
-    "$state/.claude-autoarm-failure-notified" \
-    "$state/.claude-autoarm-failure-alarmed"
-  do
-    if [ -d "$path" ] && [ ! -L "$path" ]; then
-      [ "$acquired" -eq 0 ] || fm_lock_release "$lock"
-      return 1
-    fi
-  done
-  if ! rm -f \
-    "$state/.turnend-claude-blocks" \
-    "$state/.claude-autoarm-failure-notified" \
-    "$state/.claude-autoarm-failure-alarmed" \
-    2>/dev/null; then
-    [ "$acquired" -eq 0 ] || fm_lock_release "$lock"
-    return 1
-  fi
-  [ "$acquired" -eq 0 ] || fm_lock_release "$lock"
-  return 0
 }
 
 fm_wake_clean_field() {

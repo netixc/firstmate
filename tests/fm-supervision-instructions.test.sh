@@ -14,7 +14,6 @@ test_selected_harness_block_only() {
   assert_contains "$out" "SUPERVISION OPERATING INSTRUCTIONS - primary harness: codex" "codex heading missing"
   assert_contains "$out" "Mode: Codex foreground checkpoint." "codex snippet missing"
   assert_contains "$out" "bin/fm-watch-checkpoint.sh" "codex checkpoint helper missing"
-  assert_not_contains "$out" "Mode: Claude Stop-hook-owned supervision." "renderer printed the claude snippet too"
   assert_not_contains "$out" "Mode: Pi extension background wake." "renderer printed the pi snippet too"
   pass "renderer prints exactly the selected harness block"
 }
@@ -49,14 +48,6 @@ test_repair_lines() {
   out=$(FM_HOME="$home" FM_CODEX_WATCH_CHECKPOINT=7 "$RENDER" --harness codex --repair-line)
   assert_contains "$out" "bin/fm-watch-checkpoint.sh --seconds 7" "codex repair line did not use checkpoint helper and env override"
 
-  out=$(FM_HOME="$home" "$RENDER" --harness claude --queue-pending 1 --repair-line)
-  assert_contains "$out" "After draining queued wakes" "queue-pending prefix missing"
-  assert_contains "$out" "watcher supervision needs Stop-owned automatic recovery" "claude pre-verification repair line is not neutral"
-  assert_not_contains "$out" "is broken" "claude pre-verification repair line claimed a verified mechanism failure"
-  assert_not_contains "$out" "FAILED" "claude pre-verification repair line emitted a verified failure notice"
-  assert_not_contains "$out" "manual background" "claude pre-verification repair line directed a manual background arm"
-  assert_not_contains "$out" "bin/fm-watch-arm.sh" "claude pre-verification repair line directed an arm command"
-
   : > "$home/config/relay.env"
   out=$(FM_HOME="$home" FM_CODEX_WATCH_CHECKPOINT=7 "$RENDER" --harness codex --relay 1 --repair-line)
   assert_contains "$out" "source '$home/config/relay.env' first" "relay repair line did not source the effective cadence config"
@@ -87,17 +78,6 @@ test_cross_harness_ordinary_continuation_and_repair_matrix() {
   assert_not_contains "$ordinary" "bin/fm-watch-arm.sh" "opencode ordinary-wake line incorrectly calls the recovery probe"
   out=$("$RENDER" --harness opencode --repair-line)
   assert_contains "$out" "manual recovery probe" "opencode recovery line lost its manual probe"
-
-  out=$("$RENDER" --harness claude)
-  ordinary=$(printf '%s\n' "$out" | grep -F -- '- Ordinary wake:')
-  assert_contains "$ordinary" "Stop-owned auto-arm" "claude ordinary-wake line does not leave continuity to the Stop hook"
-  assert_contains "$ordinary" "bin/fm-claude-stop-autoarm.sh" "claude ordinary-wake line lost the auto-arm script name"
-  assert_contains "$ordinary" "do not arm another cycle" "claude ordinary-wake line does not forbid a model re-arm"
-  assert_not_contains "$ordinary" "bin/fm-watch-arm.sh" "claude ordinary-wake line incorrectly calls the manual arm"
-  out=$("$RENDER" --harness claude --repair-line)
-  assert_contains "$out" "watcher supervision needs Stop-owned automatic recovery" "claude recovery line lost its neutral automatic-recovery guidance"
-  assert_not_contains "$out" "is broken" "claude recovery line claimed failure before verification"
-  assert_not_contains "$out" "bin/fm-watch-arm.sh" "claude recovery line must not create a repeatable manual arm loop"
 
   out=$("$RENDER" --harness grok)
   ordinary=$(printf '%s\n' "$out" | grep -F -- '- Ordinary wake:')
@@ -147,7 +127,7 @@ test_grok_is_background_notify() {
   assert_not_contains "$out" "foreground checkpoint" "grok snippet must not be Codex-style foreground checkpoint"
   out=$("$RENDER" --harness grok --repair-line)
   assert_contains "$out" "Grok tracked background task" "grok repair line is not background-notify shaped"
-  pass "grok supervision is Claude-shaped background notify with passive Stop-hook backstop"
+  pass "grok supervision uses background notify with passive Stop-hook backstop"
 }
 
 test_grok_command_sources_effective_config() {

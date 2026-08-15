@@ -11,7 +11,7 @@
 #
 #   /...            -> 1.2  (universal; `/` only starts a command, never plain text)
 #   $... to codex   -> 1.2  (scoped: codex opens a `$<skill>` popup)
-#   $... to claude  -> 0.3  (NOT codex: `$` commonly starts plain text "$5", "$HOME")
+#   $... to pi  -> 0.3  (NOT codex: `$` commonly starts plain text "$5", "$HOME")
 #   $... explicit   -> 0.3  (session:window target has no meta -> harness unknown
 #                            -> non-codex safe default)
 #   plain text      -> 0.3  (fast path)
@@ -116,20 +116,20 @@ first_settle 1.2 'codex $skill -> long settle' codex '$no-mistakes'
 # task id, not only by the legacy `fm-<id>` window label.
 first_settle 1.2 'codex $skill exact task id -> long settle' codex '$no-mistakes' exact
 
-# Same `$` message to claude keeps the fast path: `$` is ordinary text there.
-first_settle 0.3 'claude $-message -> fast path' claude '$no-mistakes'
+# Same `$` message to pi keeps the fast path: `$` is ordinary text there.
+first_settle 0.3 'pi $-message -> fast path' pi '$no-mistakes'
 
-# `$`-prefixed plain text to claude (a price) must NOT popup-settle - the regression
+# `$`-prefixed plain text to pi (a price) must NOT popup-settle - the regression
 # the codex scoping exists to prevent.
-first_settle 0.3 'claude "$5/month" -> fast path' claude '$5/month is cheap'
+first_settle 0.3 'pi "$5/month" -> fast path' pi '$5/month is cheap'
 
 # An explicit session:window target has no meta, so the harness is unknown and
 # treated as non-codex: the safe default keeps the fast path even for a `$` message.
 first_settle 0.3 'explicit target $message -> fast path (unknown harness)' --explicit '$no-mistakes'
 
 # The `/` slash case stays universal and unchanged: long settle regardless of
-# harness (here a non-codex claude target).
-first_settle 1.2 'claude /command -> long settle (slash unchanged)' claude '/no-mistakes'
+# harness (here a non-codex pi target).
+first_settle 1.2 'pi /command -> long settle (slash unchanged)' pi '/no-mistakes'
 
 # A `/` to codex is likewise still the long settle (slash path untouched).
 first_settle 1.2 'codex /command -> long settle (slash unchanged)' codex '/help'
