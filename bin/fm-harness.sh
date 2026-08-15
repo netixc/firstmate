@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Detect the agent harness this process tree runs on.
-# Usage: fm-harness.sh                  print own harness: codex|opencode|pi|pi-signed|kimi|unknown
+# Usage: fm-harness.sh                  print own harness: codex|opencode|pi|pi-signed|unknown
 #        fm-harness.sh crew             print the effective CREWMATE harness
 #                                        (config/crew-harness; "default" resolves to own)
 #        fm-harness.sh secondmate       print the harness the PRIMARY uses to launch
@@ -30,8 +30,8 @@ CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 detect_own() {
   # Layer 1: environment markers for verified harnesses.
   # Keep marker detection before ancestry detection as an explicit precedence rule.
-  # Pi sets a verified marker of its own; codex, OpenCode, and Kimi are
-  # markerless, so a foreign marker retained in a terminal multiplexer's stored
+  # Pi sets a verified marker of its own; codex and OpenCode are markerless,
+  # so a foreign marker retained in a terminal multiplexer's stored
   # environment can silently misidentify one of them before ancestry is consulted.
   if [ "${PI_CODING_AGENT:-}" = "true" ]; then
     if [ "${FM_PI_HARNESS:-}" = pi-signed ]; then echo pi-signed; else echo pi; fi
@@ -44,7 +44,6 @@ detect_own() {
     case "$(basename -- "$comm")" in
       *codex*) echo codex; return ;;
       *opencode*) echo opencode; return ;;
-      kimi) echo kimi; return ;;
       pi-signed) echo pi; return ;;
       pi) echo pi; return ;;
       node*|python*)

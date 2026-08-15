@@ -6,8 +6,8 @@
 # bin/fm-lock.sh uses it to acquire and inspect state/.lock.
 # This file is sourced by scripts and has no side effects on source.
 
-FM_HARNESS_RE='codex|opencode|kimi|^pi$|^pi-signed$'
-FM_HARNESS_NAMES=(codex opencode kimi pi-signed pi)
+FM_HARNESS_RE='codex|opencode|^pi$|^pi-signed$'
+FM_HARNESS_NAMES=(codex opencode pi-signed pi)
 
 fm_harness_path_name() {  # <path>
   local path=$1 name

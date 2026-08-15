@@ -130,7 +130,7 @@ test_real_text_is_pending() {
 #
 # Fixtures cover retained idle composer shapes: Codex with an SGR-2 dim hint,
 # Pi with a blank row between solid `─` rules, OpenCode left-bar `┃` rows, and
-# Kimi's bordered composer.
+# a generic bordered shell-glyph composer.
 #
 # Capability profiles mirror the real adapters' descriptors: tmux
 # (styled+cursor+identity), styled cursorless, and plain capture. Every
@@ -232,17 +232,16 @@ test_matrix_opencode_leftbar_signals() {
 }
 
 
-test_matrix_kimi_bordered_shell_glyph_box() {
-  # Kimi's bordered `│ > │` composer - the shape fm-spawn.sh's retired
-  # spawn-local regex used to own. Now the shared owner proves it everywhere,
-  # which is what kimi launch-readiness and delivery route through.
+test_matrix_bordered_shell_glyph_box() {
+  # A bordered `│ > │` composer remains generic safety coverage: a shell-like
+  # glyph proves an empty composer only when the complete box contains it.
   local screen
   screen=$'╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯'
-  assert_screen "kimi idle on tmux" empty "$CAPS_TMUX" "$screen" 1
-  assert_screen "kimi idle on plain capture" empty "$CAPS_PLAIN" "$screen"
-  assert_screen "kimi idle on herdr" empty "$CAPS_STYLED" "$screen"
-  assert_screen "kimi idle on styled capture" empty "$CAPS_STYLED_NOID" "$screen"
-  pass "matrix: kimi's bordered shell-glyph box reads empty through the shared owner (spawn's fourth copy retired)"
+  assert_screen "bordered shell glyph on tmux" empty "$CAPS_TMUX" "$screen" 1
+  assert_screen "bordered shell glyph on plain capture" empty "$CAPS_PLAIN" "$screen"
+  assert_screen "bordered shell glyph on herdr" empty "$CAPS_STYLED" "$screen"
+  assert_screen "bordered shell glyph on styled capture" empty "$CAPS_STYLED_NOID" "$screen"
+  pass "matrix: a bordered shell-glyph box reads empty through the shared owner"
 }
 
 test_strict_blank_row_divergence() {
@@ -340,7 +339,7 @@ test_cursorless_bare_wrap_region_classifies() {
 }
 
 test_cursorless_container_rejects_contiguous_lower_activity() {
-  local box leftbar kimi opencode
+  local box leftbar boxed opencode
   box=$'╭────────────────────────╮\n│ ❯                      │\n╰────────────────────────╯\nWorking on request...'
   assert_screen "stale box above activity on herdr" unknown "$CAPS_STYLED" "$box"
   assert_screen "stale box above activity on styled capture" unknown "$CAPS_STYLED_NOID" "$box"
@@ -351,9 +350,9 @@ test_cursorless_container_rejects_contiguous_lower_activity() {
   assert_screen "stale left-bar above activity on styled capture" unknown "$CAPS_STYLED_NOID" "$leftbar"
   assert_screen "stale left-bar above activity on plain capture" unknown "$CAPS_PLAIN" "$leftbar"
 
-  kimi=$'╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯\n\nKimi status'
+  boxed=$'╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯\n\nstatus line'
   opencode=$'┃\n┃  Ask anything...\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high\n╹▀▀▀▀▀▀▀▀\n\nOpenCode status'
-  assert_screen "blank-separated kimi footer" empty "$CAPS_PLAIN" "$kimi"
+  assert_screen "blank-separated bordered footer" empty "$CAPS_PLAIN" "$boxed"
   assert_screen "left-bar floor and blank-separated footer" empty "$CAPS_STYLED_NOID" "$opencode"
   pass "fm_composer_classify_screen: cursorless containers reject only contiguous unclaimed activity"
 }
@@ -451,7 +450,7 @@ test_real_text_is_pending
 test_matrix_codex_dim_hint_row
 test_matrix_pi_separated_needs_identity
 test_matrix_opencode_leftbar_signals
-test_matrix_kimi_bordered_shell_glyph_box
+test_matrix_bordered_shell_glyph_box
 test_strict_blank_row_divergence
 test_bare_wrap_region_classifies
 test_contiguous_transcript_reanchors_on_live_prompt

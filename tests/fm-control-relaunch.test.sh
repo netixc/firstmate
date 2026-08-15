@@ -558,23 +558,6 @@ test_wiring_removal_failure_refuses_before_replacement_arm() {
   pass "fm-control relaunch: wiring cleanup failure refuses replacement arming"
 }
 
-test_turnend_auth_paths_are_owned_by_the_control_adapter() {
-  local dir state kimi_path token_path
-  dir=$(fm_test_tmproot fm-control-auth)
-  state="$dir/state"
-  mkdir -p "$state"
-  printf 'fm.222222222222\n' > "$state/x.kimi-turnend-token"
-  token_path=$(fm_control_harness_turnend_token_path kimi "$state" x)
-  [ "$token_path" = "$state/x.kimi-turnend-token" ] \
-    || fail "the Kimi token path should be computed without reading it"
-  kimi_path=$(HOME="$dir/kh" fm_control_harness_turnend_auth_path kimi fm.222222222222)
-  [ "$kimi_path" = "$dir/kh/.kimi-code/fm-turn-end.d/fm.222222222222" ] \
-    || fail "Kimi's registry path should resolve under the home store, got '$kimi_path'"
-  kimi_path=$(HOME="$dir/kh" fm_control_harness_turnend_auth_path kimi 'not a token/../..')
-  [ -z "$kimi_path" ] || fail "a malformed token must resolve to no path, got '$kimi_path'"
-  pass "fm-control-lib: one owner resolves Kimi's turn-end registry entry and refuses a malformed token"
-}
-
 test_secondmate_relaunch_picks_up_the_configured_harness_pin() {
   local dir home out rc
   dir=$(new_case smpin sm3)
@@ -1218,7 +1201,6 @@ test_same_harness_relaunch_keeps_the_profile_axes
 test_explicit_model_wins_over_the_recorded_one
 test_relaunch_onto_an_unverified_harness_is_refused
 test_wiring_removal_failure_refuses_before_replacement_arm
-test_turnend_auth_paths_are_owned_by_the_control_adapter
 test_secondmate_relaunch_picks_up_the_configured_harness_pin
 test_secondmate_relaunch_ignores_invalid_configured_effort_before_stop
 test_explicit_secondmate_harness_ignores_configured_profile_axes

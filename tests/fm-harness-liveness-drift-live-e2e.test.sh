@@ -60,20 +60,11 @@ fm_backend_source tmux || fail "fm_backend_source tmux failed"
 "$REAL_TMUX" -L "$SOCKET" new-session -d -s "$SESSION" -n control -c "$LAB/wt" \
   || fail "could not start the private tmux server"
 
-# Kimi is not required to be on PATH; mirror bin/fm-spawn.sh's own resolution
-# order so this guard covers the same binary firstmate would actually launch.
 resolve_harness_binary() {  # <harness>
-  local harness=$1 candidate
-  candidate=$(command -v "$harness" 2>/dev/null || true)
-  if [ -n "$candidate" ] && [ -x "$candidate" ]; then
-    printf '%s\n' "$candidate"
-    return 0
-  fi
-  if [ "$harness" = kimi ] && [ -n "${HOME:-}" ] && [ -x "$HOME/.kimi-code/bin/kimi" ]; then
-    printf '%s\n' "$HOME/.kimi-code/bin/kimi"
-    return 0
-  fi
-  return 1
+  local candidate
+  candidate=$(command -v "$1" 2>/dev/null || true)
+  [ -n "$candidate" ] && [ -x "$candidate" ] || return 1
+  printf '%s\n' "$candidate"
 }
 
 CHECKED=0
@@ -81,7 +72,7 @@ SKIPPED=
 
 # The verified adapters, in the order .agents/skills/harness-adapters/SKILL.md
 # records them. An adapter that gains a verified launch path belongs here too.
-for harness in codex opencode pi pi-signed kimi; do
+for harness in codex opencode pi pi-signed; do
   if ! bin_path=$(resolve_harness_binary "$harness"); then
     SKIPPED="$SKIPPED $harness"
     note "skip: $harness is not installed on this machine, so its classification is unverified here"

@@ -35,7 +35,7 @@ mkdir -p "$TMP_ROOT"
 TMP_ROOT=$(cd "$TMP_ROOT" && pwd)
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
-VERIFIED_HARNESSES="codex opencode pi pi-signed kimi"
+VERIFIED_HARNESSES="codex opencode pi pi-signed"
 
 # The expectation table, written out independently of the implementation so a
 # silent change to either side shows up here.
@@ -45,7 +45,6 @@ verified_adapter_contract() {  # <harness> -> exit command, interrupt key, repea
     opencode) printf '/exit\tEscape\t2\n' ;;
     pi) printf '/quit\tEscape\t1\n' ;;
     pi-signed) printf '/quit\tEscape\t1\n' ;;
-    kimi) printf '/exit\tEscape\t1\n' ;;
     *) return 1 ;;
   esac
 }
@@ -235,8 +234,7 @@ test_interrupt_sends_each_harness_verified_key() {
 test_harness_family_resolution() {
   local pair recorded want got
   for pair in codex:codex codex-cli:codex \
-      opencode:opencode kimi:kimi kimi-code:kimi pi:pi \
-      pi-signed:pi-signed; do
+      opencode:opencode pi:pi pi-signed:pi-signed; do
     recorded=${pair%%:*}
     want=${pair#*:}
     got=$(fm_control_harness_family "$recorded") \
@@ -297,16 +295,16 @@ test_opencode_interrupts_twice_and_others_once() {
 }
 
 test_unverified_harness_is_refused() {
-  local dir out rc removed
+  local dir out rc unsupported
   dir=$(new_case unverified)
-  removed=grok
-  add_task "$dir" t1 "$removed"
-  alive_as "$dir" "$removed"
+  unsupported=legacy-agent
+  add_task "$dir" t1 "$unsupported"
+  alive_as "$dir" "$unsupported"
   out=$(run_control "$dir" t1 exit); rc=$?
   expect_code 1 "$rc" "an unverified harness should refuse"
   assert_contains "$out" "no verified control mechanics" "refusal should name the missing verification"
   [ -z "$(literals "$dir")" ] || fail "an unverified harness must receive no bytes"
-  pass "fm-control: standalone Grok has no verified control mechanics and is refused"
+  pass "fm-control: an unsupported harness has no verified control mechanics and is refused"
 }
 
 # --- 2. backend capability matrix -------------------------------------------
