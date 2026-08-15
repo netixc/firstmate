@@ -2567,7 +2567,7 @@ SH
 }
 
 test_returned_custom_check_descendants_are_drained() {
-  local backend dir state fakebin ready direct_done child_pid_file sentinel watcher_pid child_pid i rc alive force_fallback
+  local backend dir state fakebin ready direct_done child_pid_file sentinel watcher_pid child_pid i rc alive force_fallback process_state
   for backend in installed-timeout fallback-timeout; do
     dir=$(make_case "returned-custom-descendant-$backend")
     state="$dir/home/state"
@@ -2623,10 +2623,13 @@ SH
     kill -TERM "$watcher_pid" 2>/dev/null || fail "could not stop $backend watcher"
     i=0
     while kill -0 "$watcher_pid" 2>/dev/null && [ "$i" -lt 150 ]; do
+      process_state=$(ps -o stat= -p "$watcher_pid" 2>/dev/null | tr -d '[:space:]' || true)
+      case "$process_state" in Z*) break ;; esac
       sleep 0.02
       i=$((i + 1))
     done
-    if kill -0 "$watcher_pid" 2>/dev/null; then
+    process_state=$(ps -o stat= -p "$watcher_pid" 2>/dev/null | tr -d '[:space:]' || true)
+    if kill -0 "$watcher_pid" 2>/dev/null && [ "${process_state#Z}" = "$process_state" ]; then
       kill -KILL "$watcher_pid" 2>/dev/null || true
       wait "$watcher_pid" 2>/dev/null || true
       kill -KILL "$child_pid" 2>/dev/null || true
@@ -2636,7 +2639,10 @@ SH
     wait "$watcher_pid" || rc=$?
     [ "$rc" -ne 0 ] || fail "$backend signaled watcher exited successfully"
     alive=0
-    kill -0 "$child_pid" 2>/dev/null && alive=1
+    process_state=$(ps -o stat= -p "$child_pid" 2>/dev/null | tr -d '[:space:]' || true)
+    if kill -0 "$child_pid" 2>/dev/null && [ "${process_state#Z}" = "$process_state" ]; then
+      alive=1
+    fi
     [ "$alive" -eq 0 ] || kill -KILL "$child_pid" 2>/dev/null || true
     wait "$child_pid" 2>/dev/null || true
     [ "$alive" -eq 0 ] || fail "$backend watcher left a returned check descendant alive"
