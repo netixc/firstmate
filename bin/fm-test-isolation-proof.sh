@@ -454,15 +454,6 @@ if [ "$GIT_BEFORE" != "$GIT_AFTER" ]; then
   FAILED=$((FAILED + 1))
 fi
 
-# Cross-process artifact check: no candidate may leave debris outside the
-# proof-owned TMPDIR tree. Workers only receive TMPDIR under PROOF_ROOT, so any
-# residual path under PROOF_ROOT is expected and cleaned by trap. Refuse if a
-# worker wrote a fixed global path we know about from audit (none remain after
-# the arm-pretool stderr path uses TMPDIR).
-if find "$PROOF_ROOT" -type f -name 'fm-arm-pretool-check-claude-stderr.*' 2>/dev/null | grep -q .; then
-  : # allowed only under proof roots; nothing to do
-fi
-
 RUN_FINISHED_ISO=$(now_iso)
 RUN_FINISHED_MS=$(now_ms)
 RUN_DURATION=$((RUN_FINISHED_MS - RUN_STARTED_MS))

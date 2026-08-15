@@ -315,7 +315,7 @@ case "$*" in
   *display-message*'#{pane_current_command}'*) printf '%s\n' codex; exit 0 ;;
   *display-message*'#{pane_id}'*) printf '%s\n' '%1'; exit 0 ;;
   *display-message*'#{cursor_y}'*) printf '%s\n' 0; exit 0 ;;
-  *capture-pane*) printf '❯\n'; exit 0 ;;
+  *capture-pane*) printf '›\n'; exit 0 ;;
   *'send-keys'*' -l '*)
     [ "${FM_FAKE_TMUX_FAIL_LITERAL:-0}" = 1 ] && exit 1
     exit 0
@@ -629,7 +629,7 @@ test_nudge_retry_uses_fresh_herdr_endpoint_after_respawn() {
     printf 'window=%s\n' "$stale"
     printf 'backend=herdr\n'
     printf 'kind=secondmate\n'
-    printf 'harness=claude\n'
+    printf 'harness=pi\n'
     printf 'home=%s/sm-instr\n' "$w"
   } > "$meta"
 

@@ -190,14 +190,14 @@ make_run_primary() {
 run_hook() {  # <root> [args...]
   local root=$1
   shift
-  env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
+  env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
     FM_GATE_REFUSE_BYPASS=0 FM_ROOT_OVERRIDE="$root" FM_HOME="$root" PATH="$RUN_PATH" "$RUN" "$@"
 }
 
 run_hook_pi() {  # <root> [args...]
   local root=$1
   shift
-  env -u CLAUDECODE -u GROK_AGENT PI_CODING_AGENT=true FM_PI_HARNESS=pi \
+  env -u GROK_AGENT PI_CODING_AGENT=true FM_PI_HARNESS=pi \
     FM_GATE_REFUSE_BYPASS=0 FM_ROOT_OVERRIDE="$root" FM_HOME="$root" PATH="$RUN_PATH" "$RUN" "$@"
 }
 
@@ -419,7 +419,6 @@ test_pi_large_sessionstart_digest_is_delivered_loudly() {
   cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$fixture/.pi/extensions/lib/"
   cp "$ROOT/bin/fm-sessionstart-run.sh" "$ROOT/bin/fm-sessionstart-nudge.sh" \
     "$ROOT/bin/fm-primary-scope-lib.sh" "$ROOT/bin/fm-gate-refuse-lib.sh" \
-    "$ROOT/bin/fm-hook-host-lib.sh" \
     "$ROOT/bin/fm-operational-input.sh" "$fixture/bin/"
   cat > "$fixture/bin/fm-session-start.sh" <<'SH'
 #!/usr/bin/env bash

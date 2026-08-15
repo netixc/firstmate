@@ -205,12 +205,12 @@ SH
   chmod +x "$fakebin/tasks-axi"
 }
 
-# make_fake_ps_claude <fakebin>: harness_pid()/holder_alive() (fm-lock.sh) walk
+# make_fake_ps_default <fakebin>: harness_pid()/holder_alive() (fm-lock.sh) walk
 # `ps` output looking for a harness command name; this fake reports EVERY
-# queried pid as a live `claude` harness unless a stable harness pid is set.
-make_fake_ps_claude() {
+# queried pid as a live `pi` harness unless a stable harness pid is set.
+make_fake_ps_default() {
   local fakebin=$1
-  make_fake_ps_harness "$fakebin" claude
+  make_fake_ps_harness "$fakebin" pi
 }
 
 make_fake_ps_harness() {
@@ -218,7 +218,7 @@ make_fake_ps_harness() {
   cat > "$fakebin/ps" <<'SH'
 #!/usr/bin/env bash
 set -u
-harness=${FM_FAKE_HARNESS:-claude}
+harness=${FM_FAKE_HARNESS:-pi}
 pid=
 previous=
 for argument in "$@"; do
@@ -504,19 +504,19 @@ SH
 # run_session_start <home> <root> <path>
 # Drop every harness env marker from bin/fm-harness.sh detect_own so the
 # surrounding interactive shell cannot leak past the suite's fake ps harness.
-# Markers today: CLAUDECODE (claude), PI_CODING_AGENT plus FM_PI_HARNESS
+# Markers today: PI_CODING_AGENT plus FM_PI_HARNESS
 # (Pi family), GROK_AGENT (grok).
 # codex and opencode have no env markers (ancestry only). Without this, a local
-# claude/pi/grok session fails cases that pin a different fake harness while CI
+# pi/grok session fails cases that pin a different fake harness while CI
 # (no ambient markers) still passes.
 run_session_start() {
   local home=$1 root=$2 path=$3 pi_harness=${4:-}
   if [ -n "$pi_harness" ]; then
-    env -u CLAUDECODE -u GROK_AGENT PI_CODING_AGENT=true FM_PI_HARNESS="$pi_harness" \
+    env -u GROK_AGENT PI_CODING_AGENT=true FM_PI_HARNESS="$pi_harness" \
       FM_HOME="$home" FM_ROOT_OVERRIDE="$root" PATH="$path" \
       "$SESSION_START"
   else
-    env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
+    env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
       FM_HOME="$home" FM_ROOT_OVERRIDE="$root" PATH="$path" \
       "$SESSION_START"
   fi
@@ -525,7 +525,7 @@ run_session_start() {
 run_pi_session_start() {  # <home> <root> <path> [fm-session-start args...]
   local home=$1 root=$2 path=$3
   shift 3
-  env -u CLAUDECODE -u GROK_AGENT PI_CODING_AGENT=true FM_PI_HARNESS=pi \
+  env -u GROK_AGENT PI_CODING_AGENT=true FM_PI_HARNESS=pi \
     FM_FAKE_HARNESS_PID="$SESSION_START_TEST_HARNESS_PID" \
     FM_HOME="$home" FM_ROOT_OVERRIDE="$root" PATH="$path" \
     "$SESSION_START" "$@"
@@ -534,7 +534,7 @@ run_pi_session_start() {  # <home> <root> <path> [fm-session-start args...]
 run_named_harness_session_start() {  # <harness> <home> <root> <path> [fm-session-start args...]
   local harness=$1 home=$2 root=$3 path=$4
   shift 4
-  env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
+  env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
     FM_FAKE_HARNESS="$harness" FM_FAKE_HARNESS_PID="$SESSION_START_TEST_HARNESS_PID" \
     FM_HOME="$home" FM_ROOT_OVERRIDE="$root" PATH="$path" \
     "$SESSION_START" "$@"
@@ -568,7 +568,7 @@ EOF
   } > "$home/state/$id.meta"
   ln -s "$ROOT/bin" "$root/bin"
   make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
   fm_fake_exit0 "$fakebin" pi
   make_fake_tmux_secondmate_recovery "$fakebin"
   : > "$log"
@@ -615,7 +615,7 @@ EOF
   } > "$home/state/$id.meta"
   ln -s "$ROOT/bin" "$root/bin"
   make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
   fm_fake_exit0 "$fakebin" pi
   make_fake_herdr_secondmate_recovery "$fakebin"
   : > "$log"
@@ -706,7 +706,7 @@ test_context_digest_absent_empty_present() {
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
 
   printf '%s\n' '- demo [no-mistakes] - a demo project (added 2026-07-01)' > "$home/data/projects.md"
   : > "$home/data/captain.md"
@@ -745,7 +745,7 @@ test_lock_refusal_read_only_path() {
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
 
   # A live secondmate meta with a window pointed at nothing real - if the
   # bootstrap sweep's secondmate_sync ran (a MUTATING step), it would try to
@@ -806,7 +806,7 @@ test_lock_write_failure_read_only_path() {
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
   append_wake "$home/state" signal task-a "done: must remain queued" || fail "seed wake failed"
   chmod 0500 "$home/state"
 
@@ -832,7 +832,7 @@ test_trace_context_effective_state_is_frozen_after_lock() {
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
   : > "$home/config/trace-context"
 
   FM_TRACE_CONTEXT=off run_session_start "$home" "$root" "$fakebin:$BASE_PATH" >/dev/null
@@ -881,14 +881,14 @@ done
 case "$*" in
   *"comm="*)
     if [ -f "$FM_FAKE_LOCK_STATE/harness-$pid" ]; then
-      printf '%s\n' /usr/local/bin/claude
+      printf '%s\n' /usr/local/bin/pi
     else
       printf '%s\n' /bin/bash
     fi
     ;;
   *"args="*)
     if [ -f "$FM_FAKE_LOCK_STATE/harness-$pid" ]; then
-      printf '%s\n' claude
+      printf '%s\n' pi
     else
       printf '%s\n' bash
     fi
@@ -945,7 +945,7 @@ test_output_ordering_diagnostics_lead() {
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
   # Force a MISSING diagnostic line so the bootstrap section is non-trivial.
   rm -f "$fakebin/node"
 
@@ -1002,7 +1002,7 @@ test_read_once_contract_is_stated_once_before_its_subject() {
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
 
   out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
 
@@ -1028,7 +1028,7 @@ test_herdr_backend_diagnostics_follow_real_session_start() {
 $rec
 EOF
     make_fake_toolchain "$fakebin"
-    make_fake_ps_claude "$fakebin"
+    make_fake_ps_default "$fakebin"
     rm -f "$fakebin/tmux"
     fm_fake_exit0 "$fakebin" herdr jq
     printf '%s\n' manual > "$home/config/backlog-backend"
@@ -1069,7 +1069,7 @@ test_status_tail_bounding() {
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
   make_fake_tmux "$fakebin" "fm-sess:live"
 
   printf 'window=fm-sess:live\nkind=ship\n' > "$home/state/task-a.meta"
@@ -1101,7 +1101,7 @@ test_status_tail_line_cap() {
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
   make_fake_tmux "$fakebin" "fm-sess:live"
 
   lede='needs-decision: [key=cap] pick the rendering strategy'
@@ -1139,7 +1139,7 @@ test_orphan_status_logs_are_printed() {
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
 
   printf 'kind=ship\n' > "$home/state/task-a.meta"
   printf 'matched: surfaced once\n' > "$home/state/task-a.status"
@@ -1308,7 +1308,7 @@ test_endpoint_liveness_tmux() {
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
   make_fake_tmux "$fakebin" "fm-sess:live-window"
 
   printf 'window=fm-sess:live-window\nkind=ship\n' > "$home/state/task-live.meta"
@@ -1328,7 +1328,7 @@ test_endpoint_liveness_herdr() {
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
   make_fake_herdr "$fakebin" "p-live"
 
   printf 'window=sess:p-live\nkind=ship\nbackend=herdr\n' > "$home/state/task-live.meta"
@@ -1350,7 +1350,7 @@ test_composition_invokes_real_scripts() {
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
   rm -f "$fakebin/node"
 
   printf 'needs-decision: pick a library\n' > "$home/state/task-z.status"
@@ -1457,13 +1457,13 @@ test_read_only_session_declares_skipped_network_checks() {
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
   printf '999999\n' > "$home/state/.lock"
   cat > "$fakebin/ps" <<'SH'
 #!/usr/bin/env bash
 set -u
 case "$*" in
-  *"-p 999999"*) printf 'claude\n'; exit 0 ;;
+  *"-p 999999"*) printf 'pi\n'; exit 0 ;;
   *"comm="*|*"args="*) printf 'bash\n'; exit 0 ;;
 esac
 exit 0
@@ -1489,7 +1489,7 @@ test_tasks_axi_compatibility_is_probed_once() {
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
   make_fake_tasks_axi_compact "$fakebin"
   log="$home/tasks-axi.log"
   printf '# Backlog\n\n## In flight\n\n## Queued\n' > "$home/data/backlog.md"
@@ -1545,7 +1545,7 @@ $rec
 EOF
   make_fake_toolchain "$fakebin"
   make_fake_tasks_axi_compact "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
   write_long_body_backlog "$home/data/backlog.md"
   mkdir -p "$home/projects/firstmate"
   printf 'window=fm-sess:compact\nworktree=%s\nproject=firstmate\nkind=ship\n' "$home/projects/firstmate" \
@@ -1605,7 +1605,7 @@ $rec
 EOF
   make_fake_toolchain "$fakebin"
   make_fake_tasks_axi_compact "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
   write_long_body_backlog "$home/data/backlog.md"
 
   out=$(FM_FAKE_TASKS_AXI_READY=7 FM_SESSION_START_QUEUED_LIMIT=3 \
@@ -1637,7 +1637,7 @@ test_backlog_compact_manual_backend_skips_indented_bodies() {
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
   printf '%s\n' manual > "$home/config/backlog-backend"
   write_long_body_backlog "$home/data/backlog.md"
 
@@ -1678,7 +1678,7 @@ test_backlog_compact_tasks_axi_unavailable_uses_manual_fallback() {
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
   write_long_body_backlog "$home/data/backlog.md"
 
   out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
@@ -1752,7 +1752,7 @@ test_runtime_bound_truncates_loudly_and_exits_zero() {
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
   make_hanging_tool "$fakebin" git
 
   mechanism=$(FM_TIMEOUT_MECHANISM_OVERRIDE=bash bash -c '. "$1"; fm_timeout_mechanism' \
@@ -1834,7 +1834,7 @@ test_runtime_bound_leaves_a_healthy_digest_untouched() {
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
 
   out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
 
@@ -1871,11 +1871,11 @@ for argument in "$@"; do
 done
 case "$*" in
   *"comm="*)
-    if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then printf '%s\n' /usr/local/bin/claude
+    if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then printf '%s\n' /usr/local/bin/pi
     else printf '%s\n' /bin/bash; fi
     ;;
   *"args="*)
-    if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then printf '%s\n' claude
+    if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then printf '%s\n' pi
     else printf '%s\n' bash; fi
     ;;
   *"ppid="*) /bin/ps -o ppid= -p "$pid" ;;
@@ -1900,7 +1900,7 @@ SH
   chmod +x "$nest"
 
   # shellcheck disable=SC2016 # $$ must expand in the launched shell, not here.
-  out=$(env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
+  out=$(env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
     FM_HOME="$home" FM_ROOT_OVERRIDE="$root" PATH="$fakebin:$BASE_PATH" \
     bash -c 'export FM_FAKE_HARNESS_PID=$$; exec "$1" 8 "$2"' _ "$nest" "$SESSION_START")
 
@@ -1921,7 +1921,7 @@ test_reemit_skips_startup_sweeps_but_keeps_the_wake_drain() {
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
   mkdir -p "$home/other-secondmate/state"
   fm_write_secondmate_meta "$home/state/sm-r.meta" "$home/other-secondmate" "firstmate:fm-sm-r" alpha
   append_wake "$home/state" signal task-r "done: queued after startup" || fail "seed wake failed"
@@ -1936,7 +1936,7 @@ EOF
 
   append_wake "$home/state" signal task-r "done: queued after the re-emit too" || fail "seed second wake failed"
   reemit=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$root" FM_FAKE_HARNESS_PID=$$ PATH="$fakebin:$BASE_PATH" \
-    env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
+    env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
     "$SESSION_START" --reemit)
 
   assert_contains "$reemit" "SESSION START (CONTEXT RE-EMIT) - $home" "--reemit did not label itself"
@@ -2151,11 +2151,11 @@ test_reemit_keeps_repair_ownership_with_the_lock_holder() {
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
   git -C "$root" checkout -q -B fm/reemit-tangle
 
   reemit=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$root" PATH="$fakebin:$BASE_PATH" \
-    env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
+    env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
     "$SESSION_START" --reemit)
 
   # A re-emit skips the sweeps because it ALREADY ran them, not because it lacks
@@ -2170,7 +2170,7 @@ EOF
   holder_pid=$!
   printf '%s\n' "$holder_pid" > "$home/state/.lock"
   readonly_out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$root" PATH="$fakebin:$BASE_PATH" \
-    env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
+    env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
     "$SESSION_START" --reemit)
   kill "$holder_pid" 2>/dev/null || true
   wait "$holder_pid" 2>/dev/null || true
@@ -2192,7 +2192,7 @@ test_fleet_digest_empty_fleet() {
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
 
   out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
   assert_contains "$out" "(none)" "empty fleet did not report (none) for in-flight tasks"
@@ -2208,14 +2208,14 @@ test_next_step_sources_relay_cadence() {
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
   fm_fake_exit0 "$fakebin" curl jq
   printf 'FMX_PAIRING_TOKEN=tok-next-step\n' > "$home/.env"
 
   out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
 
   assert_contains "$out" "RELAY: Relay on" "bootstrap did not activate Relay"
-  assert_contains "$out" "SUPERVISION OPERATING INSTRUCTIONS - primary harness: claude" "supervision block missing"
+  assert_contains "$out" "SUPERVISION OPERATING INSTRUCTIONS - primary harness: pi" "supervision block missing"
   assert_contains "$out" "- Relay: active" "supervision block did not mention X cadence"
   assert_contains "$out" "Follow the supervision operating instructions block above" "next step did not point back to the emitted supervision block"
 
@@ -2229,7 +2229,7 @@ test_next_step_afk_delegates_to_daemon() {
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_claude "$fakebin"
+  make_fake_ps_default "$fakebin"
   : > "$home/state/.afk"
 
   out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")

@@ -35,7 +35,7 @@
 #     inside, deliberately BELOW the registered loop_limit, so firstmate's bound
 #     bites first and can emit one final loud notice instead of going silently
 #     dark at Cursor's ceiling.
-# `loop_count` is Cursor's richer analogue of Claude/Codex `stop_hook_active`:
+# `loop_count` is Cursor's richer analogue of Codex `stop_hook_active`:
 # verified live on 2026.08.11-e8db854 as 0 on the first stop after a real user
 # message, +1 per follow-up-driven stop, and reset to 0 by the next real user
 # message. A genuine wake is productive work, so it does not consume the
@@ -361,7 +361,7 @@ fi
 # this turn would genuinely end blind, rather than deciding that here a second
 # time: bin/fm-turnend-guard.sh owns the block decision and its banner for every
 # harness, and --cursor tells it this is Cursor's own registration rather than
-# the Claude-settings duplicate.
+# any duplicate registration.
 GUARD_ERR=$(mktemp "${TMPDIR:-/tmp}/fm-turnend-cursor.XXXXXX") || exit 0
 printf '%s' "$PAYLOAD" | "$SCRIPT_DIR/fm-turnend-guard.sh" --cursor 2>"$GUARD_ERR"
 GUARD_RC=$?

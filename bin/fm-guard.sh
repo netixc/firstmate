@@ -10,7 +10,7 @@
 # healthy, prints a loud, clearly delimited banner so the agent cannot skim past
 # it in the tool output of whatever it was doing - the one channel every harness
 # has. Supervision health is MODEL-AWARE (fm_watcher_supervision_verdict in
-# bin/fm-wake-lib.sh): under the Claude Stop auto-arm model the watcher runs only
+# bin/fm-wake-lib.sh): under Cursor's stop-hook park the watcher runs only
 # between turns, so mid-turn a fresh beacon with no live watcher is healthy and
 # only a stale beacon (beyond FM_GUARD_GRACE) is a genuine lapse; under the Pi
 # extension model the extension tears the watcher down and respawns it on every

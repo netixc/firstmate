@@ -63,7 +63,7 @@ run_guard_case_read_only() {
     "$ROOT/bin/fm-guard.sh" 2>&1
 }
 
-# The Claude Stop auto-arm model: the watcher runs only between turns, so a fresh
+# The Cursor stop-hook park model: the watcher runs only between turns, so a fresh
 # beacon with no live watcher process is the healthy mid-turn state.
 run_guard_case_autoarm() {
   local dir=$1
@@ -349,7 +349,7 @@ test_autoarm_fresh_beacon_without_watcher_is_healthy() {
   local dir out
   dir=$(make_guard_case autoarm-fresh)
   # A fresh beacon and NO live watcher: the healthy mid-turn state under the
-  # Claude Stop auto-arm model, where the watcher only runs between turns.
+  # Cursor stop-hook park model, where the watcher only runs between turns.
   touch "$(case_home "$dir")/state/.last-watcher-beat"
   out=$(run_guard_case_autoarm "$dir")
   [ -z "$out" ] \
@@ -666,7 +666,7 @@ test_pi_harness_routes_itself_to_the_extension_model() {
     pid=$!
     record_pi_extension_session "$dir" "$pid" || fail "could not record the Pi extension session"
     touch "$home/state/.last-watcher-beat"
-    out=$(env -u CLAUDECODE -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u GROK_AGENT -u FM_SUPERVISION_MODEL \
+    out=$(env -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u GROK_AGENT -u FM_SUPERVISION_MODEL \
       "${pi_env[@]}" \
       FM_ROOT_OVERRIDE="$(case_root "$dir")" \
       FM_HOME="$home" \

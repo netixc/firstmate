@@ -26,7 +26,7 @@ batched digest rather than per-wake injections.
 2. **Ensure the sub-supervisor daemon is running as a tracked background process.**
    Its hosting differs by harness.
    Pick the right path:
-   - **Harness WITH a native in-pane tracked-background tool** (e.g. claude's
+   - **Harness WITH a native in-pane tracked-background tool** (e.g. grok's
      background bash, grok's background tool): first run
      `bin/fm-afk-launch.sh start-native`, then run
      `FM_AFK_STATE_PREPARED=1 bin/fm-afk-start.sh` through that native tool.
@@ -84,7 +84,7 @@ The daemon constructs every current injection as the `away-supervisor` kind owne
 The bare `FM_INJECT_MARK` form remains accepted for legacy daemon escalations during rollout.
 U+2063 has no normal keyboard keystroke and survives terminal transport as UTF-8 text.
 This is how firstmate tells a daemon escalation apart from a real message in the same pane.
-The operational prefix travels with the message text; it does not rely on harness-level typed-vs-injected detection, which is not portable across claude, codex, opencode, pi, pi-signed, grok, and kimi.
+The operational prefix travels with the message text; it does not rely on harness-level typed-vs-injected detection, which is not portable across codex, opencode, pi, pi-signed, grok, and kimi.
 
 ## Busy-guard and composer guard
 
@@ -186,7 +186,7 @@ the operational prefix lets firstmate distinguish it from a real captain message
   Every other result preserves the buffer for retry, so the daemon never merges its digest into the captain's half-typed line or types it into a shell.
 - The active backend passes its capture plus declarative styled, cursor, identity, and row capabilities to the shared screen classifier; all structural recognition and verdict logic remains in `bin/fm-composer-lib.sh`.
   Styled captures let that owner remove dim/faint and dark-TRUECOLOR ghost or placeholder text while shape detection uses the ANSI-stripped screen, so a dark border is not lost with ghost content.
-  A ghost-only or idle bordered composer such as claude's `│ > ... │` therefore reads empty without allowing an unbordered shell prompt to do the same.
+  A ghost-only or idle bordered composer therefore reads empty without allowing an unbordered shell prompt to do the same.
   `FM_COMPOSER_IDLE_RE` overrides the shared idle-placeholder regex, but a match alone never bypasses the classifier's shape-specific position and ANSI de-emphasis safety gates.
   `FM_BUSY_REGEX` overrides the rendered delivery guards plus Grok's isolated task-state fallback.
   A blank or otherwise unidentified input row carries no positive container proof and defers injection, so a modal dialog or a mid-redraw pane is never an injection target.

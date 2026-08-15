@@ -9,7 +9,7 @@
 #      (unsafe-for-injection), never `empty`. This is the safety fix.
 #   2. The SAME shell glyph INSIDE a bordered composer box is the harness's own
 #      prompt and still reads `empty` (existing behavior preserved).
-#   3. The AGENT prompt glyphs `❯` (claude), `›` (codex), and `→` (cursor)
+#   3. The AGENT prompt glyphs `›` (codex) and `→` (cursor)
 #      are a genuine empty agent composer either way, bordered or bare.
 #   4. Real unsubmitted text reads `pending`; a known idle placeholder reads
 #      `empty`.
@@ -28,7 +28,7 @@ classify() { fm_composer_classify_content "$@"; }
 
 test_bare_shell_glyphs_are_unknown() {
   local g out
-  for g in '>' '$' '%' '#'; do
+  for g in '>' '❯' '$' '%' '#'; do
     out=$(classify 0 "$g")
     [ "$out" = unknown ] \
       || fail "bare shell glyph '$g' must read unknown (dead shell, unsafe), got '$out'"
@@ -43,7 +43,7 @@ test_stripped_unbordered_content_uses_plain_content() {
     [ "$out" = unknown ] \
       || fail "stripped unbordered content '$plain' must retain its unknown safety verdict, got '$out'"
   done
-  for plain in '❯' '›' '→'; do
+  for plain in '›' '→'; do
     out=$(classify 0 '' '' sensitive "$plain")
     [ "$out" = empty ] \
       || fail "a stripped agent glyph '$plain' must remain empty, got '$out'"
@@ -63,25 +63,23 @@ test_bare_shell_prompt_with_command_is_not_empty() {
 
 test_bordered_shell_glyph_is_empty() {
   local g out
-  for g in '>' '$' '%' '#'; do
+  for g in '>' '❯' '$' '%' '#'; do
     out=$(classify 1 "$g")
     [ "$out" = empty ] \
       || fail "a shell glyph '$g' inside a bordered composer box must read empty, got '$out'"
   done
-  pass "fm_composer_classify_content: a bare prompt glyph inside a bordered composer box reads empty (claude's own idle composer)"
+  pass "fm_composer_classify_content: a bare agent prompt glyph reads empty inside a bordered composer"
 }
 
 # --- Agent glyphs are empty either way --------------------------------------
 
 test_agent_glyphs_are_empty_bordered_and_bare() {
   local out
-  out=$(classify 0 '❯'); [ "$out" = empty ] || fail "bare claude '❯' should read empty, got '$out'"
   out=$(classify 0 '›'); [ "$out" = empty ] || fail "bare codex '›' should read empty, got '$out'"
-  out=$(classify 1 '❯'); [ "$out" = empty ] || fail "bordered claude '❯' should read empty, got '$out'"
   out=$(classify 1 '›'); [ "$out" = empty ] || fail "bordered codex '›' should read empty, got '$out'"
   out=$(classify 0 '→'); [ "$out" = empty ] || fail "bare cursor '→' should read empty, got '$out'"
   out=$(classify 1 '→'); [ "$out" = empty ] || fail "bordered cursor '→' should read empty, got '$out'"
-  pass "fm_composer_classify_content: agent prompt glyphs (❯ claude, › codex, → cursor) read empty bordered or bare"
+  pass "fm_composer_classify_content: agent prompt glyphs (› codex, → cursor) read empty bordered or bare"
 }
 
 # --- Empty content and idle placeholder -------------------------------------
@@ -99,9 +97,9 @@ test_idle_placeholder_is_empty() {
   [ "$out" = pending ] || fail "placeholder-like text surviving a styled box capture should read pending, got '$out'"
   out=$(classify 1 '❯ Type a message...' "$idle" sensitive '❯ Type a message...' 1 0)
   [ "$out" = empty ] || fail "a glyph-bearing plain box placeholder should read empty, got '$out'"
-  out=$(classify 0 '❯ Type a message...' "$idle" sensitive '❯ Type a message...' 0 1)
+  out=$(classify 0 '› Type a message...' "$idle" sensitive '› Type a message...' 0 1)
   [ "$out" = pending ] || fail "placeholder text on a styled bare input row must be pending, got '$out'"
-  out=$(classify 0 '❯ Type a message...' "$idle" sensitive '❯ Type a message...' 0 0)
+  out=$(classify 0 '› Type a message...' "$idle" sensitive '› Type a message...' 0 0)
   [ "$out" = unknown ] || fail "placeholder text on a plain bare input row must be unknown, got '$out'"
   out=$(classify 1 'Type a message...')
   [ "$out" = pending ] || fail "without an idle regex the placeholder text is pending, got '$out'"
@@ -121,7 +119,7 @@ test_idle_placeholder_case_mode_is_explicit() {
 
 test_real_text_is_pending() {
   local out
-  out=$(classify 0 '❯ fix findings 1 and 3'); [ "$out" = pending ] || fail "bare '❯ <text>' should be pending, got '$out'"
+  out=$(classify 0 '› fix findings 1 and 3'); [ "$out" = pending ] || fail "bare '› <text>' should be pending, got '$out'"
   out=$(classify 1 '> deploy staging now'); [ "$out" = pending ] || fail "bordered '> <text>' should be pending, got '$out'"
   # A slash-command popup argument-hint placeholder is still unsubmitted text.
   out=$(classify 1 '/compact compaction instructions'); [ "$out" = pending ] || fail "a popup placeholder fill should be pending, got '$out'"
@@ -134,10 +132,8 @@ test_real_text_is_pending() {
 # fm-composer-thin-adapter-refactor-r1).
 #
 # Fixtures are the audit's byte-level captures of five real idle harnesses:
-# claude 2.1.226 (bare `❯` + U+00A0 NO-BREAK SPACE), codex 0.146.0 (bold `›`
 # + SGR-2 dim hint), Pi (blank row between solid `─` rules), OpenCode 1.14.46
 # (left-bar `┃` rows), and Grok
-# 1.0.0 (bordered box with a TITLED bottom border), plus claude captured
 # inside styled capture through `dump-screen --ansi` (`ESC[m` `❯` U+00A0).
 #
 # Capability profiles mirror the real adapters' descriptors: tmux
@@ -162,24 +158,6 @@ assert_screen() {
   [ "$out" = "$want" ] || fail "$label: expected $want, got '$out'"
   out=$(LC_ALL=C fm_composer_classify_screen "$@")
   [ "$out" = "$want" ] || fail "$label under LC_ALL=C: expected $want, got '$out'"
-}
-
-test_matrix_claude_bare_nbsp_row() {
-  # Real idle claude: `❯` + U+00A0, borderless, between horizontal rules.
-  # The audit's headline defect: this row read `pending` under LC_ALL=C
-  # (issue #1988), deferring every away-mode escalation in daemon contexts.
-  local screen typed
-  screen=$'transcript line\n────────────────────────\n❯'"$NBSP"$'\n────────────────────────\n  bypass permissions'
-  assert_screen "claude idle on tmux" empty "$CAPS_TMUX" "$screen" 2 probe-absent
-  assert_screen "claude idle on herdr" empty "$CAPS_STYLED" "$screen" '' probe-absent
-  assert_screen "claude idle on styled capture" empty "$CAPS_STYLED_NOID" "$screen"
-  assert_screen "claude idle on plain capture" empty "$CAPS_PLAIN" "$screen"
-  typed=$'────────────────────────\n❯ fix the login bug\n────────────────────────'
-  assert_screen "claude typed on tmux" pending "$CAPS_TMUX" "$typed" 1 probe-absent
-  # Plain capture cannot tell typed text from claude's rotating suggestion:
-  # the styled=0 degradation defers instead of fabricating pending.
-  assert_screen "claude typed on plain backends" unknown "$CAPS_PLAIN" "$typed"
-  pass "matrix: claude's ❯+NBSP row reads empty on every profile in both locales (#1988)"
 }
 
 test_matrix_codex_dim_hint_row() {
@@ -291,9 +269,9 @@ test_matrix_pi_separated_needs_identity() {
   typed=$'────────────────────────\n❯\n────────────────────────'
   assert_screen "pi lone-glyph draft with identity" pending "$CAPS_STYLED" "$typed" '' "$pi_idle"
   assert_screen "pi lone-glyph draft on tmux" pending "$CAPS_TMUX" "$typed" 1 "$pi_idle"
-  assert_screen "lone glyph without identity capability" empty "$CAPS_STYLED_NOID" "$typed"
-  assert_screen "lone glyph on plain backend" empty "$CAPS_PLAIN" "$typed"
-  assert_screen "lone glyph with non-pi identity" empty "$CAPS_STYLED" "$typed" '' "$none"
+  assert_screen "lone glyph without identity capability" unknown "$CAPS_STYLED_NOID" "$typed"
+  assert_screen "lone glyph on plain backend" unknown "$CAPS_PLAIN" "$typed"
+  assert_screen "lone glyph with non-pi identity" unknown "$CAPS_STYLED" "$typed" '' "$none"
   pass "matrix: pi's separated composer needs identity + structure; the blank row alone never proves it"
 }
 
@@ -359,19 +337,6 @@ test_matrix_kimi_bordered_shell_glyph_box() {
   pass "matrix: kimi's bordered shell-glyph box reads empty through the shared owner (spawn's fourth copy retired)"
 }
 
-test_matrix_claude_styled_ansi_dump() {
-  # Real Claude shape captured through a styled ANSI reader.
-  # (capability established by the audit): `ESC[m` `❯` U+00A0.
-  local screen plain
-  screen=$'styled pane transcript\n'"${ESC}[m❯${NBSP}"
-  plain=$'styled pane transcript\n❯'"$NBSP"
-  assert_screen "claude styled-capture on tmux" empty "$CAPS_TMUX" "$screen" 1
-  assert_screen "claude styled-capture on herdr" empty "$CAPS_STYLED" "$screen"
-  assert_screen "claude styled-capture on styled capture" empty "$CAPS_STYLED_NOID" "$screen"
-  assert_screen "claude styled-capture on plain backends" empty "$CAPS_PLAIN" "$plain"
-  pass "matrix: the real claude styled-capture --ansi dump reads empty in both locales"
-}
-
 test_strict_blank_row_divergence() {
   # THE STRICT POSTURE PIN (captain decision blank-row-injection-posture,
   # 2026-08-09): a blank or otherwise unidentified input row with no positive
@@ -404,24 +369,24 @@ test_bare_wrap_region_classifies() {
   # non-structural rows), so a swallowed Enter still reads pending and earns
   # its retry; a wrapped GHOST suggestion still proves empty.
   local wrapped ghost_wrapped out
-  wrapped=$'❯ a very long steer message that\nwraps onto the following line'
+  wrapped=$'› a very long steer message that\nwraps onto the following line'
   assert_screen "wrapped typed input" pending "$CAPS_TMUX" "$wrapped" 1
-  wrapped=$'❯ wrapped typed input\ncontinues without a terminal-inserted glyph'
+  wrapped=$'› wrapped typed input\ncontinues without a terminal-inserted glyph'
   assert_screen "ordinary wrapped input" pending "$CAPS_TMUX" "$wrapped" 1
-  ghost_wrapped=$'❯ '"${ESC}[2ma long rotating suggestion that${ESC}[0m"$'\n'"${ESC}[2mwraps onto the next line${ESC}[0m"
+  ghost_wrapped=$'› '"${ESC}[2ma long rotating suggestion that${ESC}[0m"$'\n'"${ESC}[2mwraps onto the next line${ESC}[0m"
   out=$(fm_composer_classify_screen "$CAPS_TMUX" "$ghost_wrapped" 1)
   [ "$out" = empty ] || fail "a wrapped ghost suggestion should still prove empty, got '$out'"
   # A structural row between the glyph and the cursor breaks the wrap claim.
-  out=$(fm_composer_classify_screen "$CAPS_TMUX" $'❯ text\n────────────────\nbelow the rule' 2)
+  out=$(fm_composer_classify_screen "$CAPS_TMUX" $'› text\n────────────────\nbelow the rule' 2)
   [ "$out" = unknown ] || fail "a rule between glyph and cursor must break the wrap region, got '$out'"
-  out=$(fm_composer_classify_screen "$CAPS_TMUX" $'❯ text\n$ live shell' 1)
+  out=$(fm_composer_classify_screen "$CAPS_TMUX" $'› text\n$ live shell' 1)
   [ "$out" = unknown ] || fail "a shell prompt below a glyph row must not become wrapped input, got '$out'"
   pass "fm_composer_classify_screen: the bare composer's wrap region stays identified; structure breaks it"
 }
 
 test_contiguous_transcript_reanchors_on_live_prompt() {
   local screen
-  screen=$'❯ hi\nHello!\n❯'
+  screen=$'› hi\nHello!\n›'
   assert_screen "contiguous transcript live prompt on cursorless styled backend" empty "$CAPS_STYLED_NOID" "$screen"
   assert_screen "contiguous transcript live prompt on cursorless plain backend" empty "$CAPS_PLAIN" "$screen"
   assert_screen "contiguous transcript live prompt with cursor" empty "$CAPS_TMUX" "$screen" 2
@@ -430,7 +395,7 @@ test_contiguous_transcript_reanchors_on_live_prompt() {
 
 test_lower_dead_shell_invalidates_cursorless_candidate() {
   local stale live out
-  stale=$'old transcript\n❯\nprocess exited\n$'
+  stale=$'old transcript\n›\nprocess exited\n$'
   assert_screen "stale composer above dead shell on herdr" unknown "$CAPS_STYLED" "$stale"
   assert_screen "stale composer above dead shell on styled capture" unknown "$CAPS_STYLED_NOID" "$stale"
   assert_screen "stale composer above dead shell on plain capture" unknown "$CAPS_PLAIN" "$stale"
@@ -438,7 +403,7 @@ test_lower_dead_shell_invalidates_cursorless_candidate() {
   [ "$out" = empty ] \
     || fail "cursor mode must keep the cursor-anchored composer verdict, got '$out'"
 
-  live=$'transcript shell snippet\n$ echo old output\nmore transcript\n❯'
+  live=$'transcript shell snippet\n$ echo old output\nmore transcript\n›'
   assert_screen "shell transcript above live composer on herdr" empty "$CAPS_STYLED" "$live"
   assert_screen "shell transcript above live composer on styled capture" empty "$CAPS_STYLED_NOID" "$live"
   assert_screen "shell transcript above live composer on plain capture" empty "$CAPS_PLAIN" "$live"
@@ -446,8 +411,8 @@ test_lower_dead_shell_invalidates_cursorless_candidate() {
 }
 
 test_cursorless_bare_wrap_region_classifies() {
-  local activity status bounded ghost out
-  activity=$'❯\nWorking on request...'
+  local activity status ghost out
+  activity=$'›\nWorking on request...'
   assert_screen "cursorless activity below bare row on herdr" pending "$CAPS_STYLED" "$activity"
   assert_screen "cursorless activity below bare row on styled capture" pending "$CAPS_STYLED_NOID" "$activity"
   assert_screen "cursorless activity below bare row on plain capture" unknown "$CAPS_PLAIN" "$activity"
@@ -457,12 +422,8 @@ test_cursorless_bare_wrap_region_classifies() {
   assert_screen "blank-separated codex status on styled capture" empty "$CAPS_STYLED_NOID" "$status"
   assert_screen "blank-separated codex status on plain capture" empty "$CAPS_PLAIN" "$status"
 
-  bounded=$'────────────────────────\n❯\n────────────────────────\nClaude 4.1'
-  assert_screen "rule-bounded claude footer on herdr" empty "$CAPS_STYLED" "$bounded" '' probe-absent
-  assert_screen "rule-bounded claude footer on styled capture" empty "$CAPS_STYLED_NOID" "$bounded"
-  assert_screen "rule-bounded claude footer on plain capture" empty "$CAPS_PLAIN" "$bounded"
 
-  ghost=$'❯ '"${ESC}[2ma long rotating suggestion that${ESC}[0m"$'\n'"${ESC}[2mwraps onto the next line${ESC}[0m"
+  ghost=$'› '"${ESC}[2ma long rotating suggestion that${ESC}[0m"$'\n'"${ESC}[2mwraps onto the next line${ESC}[0m"
   out=$(fm_composer_classify_screen "$CAPS_STYLED" "$ghost")
   [ "$out" = empty ] || fail "cursorless ghost wrap on herdr should be empty, got '$out'"
   out=$(fm_composer_classify_screen "$CAPS_STYLED_NOID" "$ghost")
@@ -497,10 +458,9 @@ test_bottom_most_candidate_wins() {
   # below it - the confidently-wrong plain capture case from the audit.
   local screen out
   screen=$'╭────────────────────────╮\n│ permissions: YOLO mode │\n╰────────────────────────╯\n❯'"$NBSP"
-  assert_screen "banner above live claude row" empty "$CAPS_PLAIN" "$screen"
   out=$(fm_composer_classify_screen "$CAPS_PLAIN" $'╭────────────────────────╮\n│ permissions: YOLO mode │\n╰────────────────────────╯\n› Use /skills to list available skills')
   [ "$out" != pending ] || fail "a stale banner must never classify as pending composer text"
-  screen=$'❯ old draft\n\n❯'
+  screen=$'› old draft\n\n›'
   assert_screen "blank-separated newer bare composer" empty "$CAPS_STYLED_NOID" "$screen"
   pass "fm_composer_classify_screen: the bottom-most candidate wins; stale banners cannot"
 }
@@ -554,15 +514,15 @@ test_selected_content_is_composer_scoped_and_wrap_normalized() {
   out=$(fm_composer_extract_selected_content "$CAPS_STYLED_NOID" "$screen")
   [ "$out" = 'Type a message...' ] \
     || fail "surviving placeholder-like input should remain extracted user content, got '$out'"
-  screen=$'❯ a legitimately long steer that\nwraps across the next bare row\n\ntranscript below the break'
+  screen=$'› a legitimately long steer that\nwraps across the next bare row\n\ntranscript below the break'
   out=$(fm_composer_extract_selected_content "$CAPS_STYLED_NOID" "$screen")
   [ "$out" = 'a legitimately long steer that wraps across the next bare row' ] \
     || fail "bare extraction should include only its contiguous wrap region, got '$out'"
-  screen=$'❯ wrapped user content\ncontinuation preserves a mid-row ❯ glyph'
+  screen=$'› wrapped user content\ncontinuation preserves a mid-row › glyph'
   out=$(fm_composer_extract_selected_content "$CAPS_STYLED_NOID" "$screen")
-  [ "$out" = 'wrapped user content continuation preserves a mid-row ❯ glyph' ] \
+  [ "$out" = 'wrapped user content continuation preserves a mid-row › glyph' ] \
     || fail "bare extraction should preserve mid-row agent glyph bytes, got '$out'"
-  screen=$'❯ stale composer\n$ live shell'
+  screen=$'› stale composer\n$ live shell'
   if out=$(fm_composer_extract_selected_content "$CAPS_STYLED_NOID" "$screen"); then
     fail "a lower live shell must invalidate composer extraction, got '$out'"
   fi
@@ -582,7 +542,6 @@ test_empty_content_is_empty
 test_idle_placeholder_is_empty
 test_idle_placeholder_case_mode_is_explicit
 test_real_text_is_pending
-test_matrix_claude_bare_nbsp_row
 test_matrix_codex_dim_hint_row
 test_matrix_cursor_reverse_video_placeholder_remnant
 test_matrix_herdr_halfblock_rule_bounds_bare_wrap
@@ -590,7 +549,6 @@ test_matrix_pi_separated_needs_identity
 test_matrix_opencode_leftbar_signals
 test_matrix_grok_titled_bottom_border
 test_matrix_kimi_bordered_shell_glyph_box
-test_matrix_claude_styled_ansi_dump
 test_strict_blank_row_divergence
 test_bare_wrap_region_classifies
 test_contiguous_transcript_reanchors_on_live_prompt

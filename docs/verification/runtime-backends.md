@@ -47,7 +47,6 @@ Observed identities, and the resulting verdict:
 
 | Harness | Version | `#{pane_current_command}` | Foreground `comm` | Verdict |
 | --- | --- | --- | --- | --- |
-| claude | 2.1.220 | `2.1.220` | `claude` | alive |
 | codex | codex-cli 0.146.0 | `codex` | `codex` | alive |
 | opencode | 1.18.11 | `opencode` | `opencode` | alive |
 | pi | 0.82.0 | `pi-launcher` | `pi-signed`, `pi` | alive |
@@ -55,7 +54,6 @@ Observed identities, and the resulting verdict:
 | grok | 0.2.118 | `grok-0.2.118-ma` | `grok` | alive |
 | kimi | 0.31.1 | `kimi` | `kimi` | alive |
 
-Claude Code is the harness whose title no longer attributes it at all; every other adapter is currently attributed by both sources.
 Codex reported `codex-aarch64-a` at 0.145.0 and `codex` at 0.146.0, and Kimi Code reported `kimi-code` as its foreground `comm` at 0.29.1 and `kimi` at 0.31.1, so these identities move between ordinary patch releases in both directions.
 That is the evidence for treating any single process name as a surface under vendor control rather than a stable contract.
 
@@ -73,8 +71,6 @@ FM_HARNESS_LIVENESS_DRIFT=1 bin/fm-test-run.sh tests/fm-harness-liveness-drift-l
 Bounded output from the run that produced the table:
 
 ```text
-ok - harness liveness: claude 2.1.220 (Claude Code) classifies alive
-# claude 2.1.220 (Claude Code): title='2.1.220' foreground=[claude ]
 # checked 7 installed harness(es)
 ```
 
@@ -149,13 +145,13 @@ ok - fm-teardown: dedicated-socket invalid cleanup preserves target/control and 
 The dedicated tmux cell removed ambient tmux variables, required a socket-bound wrapper, kept one target and one independent control window, and proved the wrapper was not called for invalid metadata or a direct empty target.
 Valid cleanup removed only the exact task-bound target and left the control window live.
 The metadata-only validation covers tmux and Herdr before backend dispatch.
-Claude, Codex, OpenCode, Pi, pi-signed, Grok, Kimi, and Cursor share that backend cleanup boundary; their harness-specific hook files, tokens, and transcript bindings are cleaned only after it, so no harness needs a separate endpoint parser.
+Codex, OpenCode, Pi, pi-signed, Grok, Kimi, and Cursor share that backend cleanup boundary; their harness-specific hook files, tokens, and transcript bindings are cleaned only after it, so no harness needs a separate endpoint parser.
 
 ## Composer classification matrix
 
 The shared composer classifier (`bin/fm-composer-lib.sh`, `fm_composer_classify_screen`) owns every composer shape fleet-wide; each backend contributes only a capture and a capability descriptor.
 The live half of that guarantee was verified on 2026-08-10 from an already-trusted checkout at the branch's final validated head, against every installed harness then covered by the empty-composer matrix on tmux 3.6a, macOS arm64, on an isolated private socket, with no prompt submitted to any harness.
-An earlier untrusted-worktree run left Claude and Grok unverified because the guard treats first-launch trust dialogs as an unreadable-composer state and never confirms them; this trusted-checkout rerun supersedes those missing results.
+An earlier untrusted-worktree run left Grok unverified because the guard treats first-launch trust dialogs as an unreadable-composer state and never confirms them; this trusted-checkout rerun supersedes that missing result.
 
 ```sh
 FM_COMPOSER_MATRIX_LIVE=1 tests/fm-composer-matrix-live-e2e.test.sh
@@ -164,7 +160,6 @@ FM_COMPOSER_MATRIX_LIVE=1 tests/fm-composer-matrix-live-e2e.test.sh
 Observed output:
 
 ```text
-ok - claude (2.1.227 (Claude Code)): real idle composer classifies empty
 ok - codex (codex-cli 0.146.0): real idle composer classifies empty
 ok - opencode (1.14.46): real idle composer classifies empty
 ok - pi (0.84.0): real idle composer classifies empty
@@ -174,7 +169,7 @@ ok - strict posture live: a blank shell row classifies unknown and injection def
 ok - live composer-matrix guard verified 6 live surface(s)
 ```
 
-All five installed harnesses' real idle composers reached a proven `empty` (Claude auto-updated to 2.1.227 between the audit and this rerun, so the shipped classifier is proven against the newer release as well), including Pi through the tmux foreground-process identity probe, Grok through the titled-bottom-border tolerance, and OpenCode through the left-bar shape; Codex and OpenCode first parked on vendor update-available modals that the strict classifier correctly refused until the guard's single non-submitting Escape dismissed them.
+All four installed harnesses' real idle composers reached a proven `empty`, including Pi through the tmux foreground-process identity probe, Grok through the titled-bottom-border tolerance, and OpenCode through the left-bar shape; Codex and OpenCode first parked on vendor update-available modals that the strict classifier correctly refused until the guard's single non-submitting Escape dismissed them.
 The strict blank-row posture held live: a blank shell row deferred injection.
 Kimi was not installed on the verification machine; its bordered shape is pinned by the portable capture regressions in `tests/fm-composer-lib.test.sh`, which also carry both adapters' capability profiles for every harness under both a UTF-8 locale and `LC_ALL=C`.
 This guard is the refresh command after an upgrade to any matrix-covered harness; rerun it and update the versions above rather than trusting this table across releases.
@@ -497,7 +492,7 @@ ok - forced teardown retains a nested secondmate home and its grandchild's Herdr
 
 Real captures verified these active distinctions:
 
-- Claude and Codex use bare `❯` and `›` agent composers.
+- Codex uses a bare `›` agent composer.
 - Pi uses content between complete separator rows and requires exact native Pi identity.
 - Dim or faint suggestion text is ghost content, while normally styled text is pending input.
 - Grok dark truecolor placeholders are ghost content, while bright truecolor typed input remains pending.
@@ -619,8 +614,6 @@ Read from the live agent process and from a tool subprocess it spawned:
 | `CURSOR_CONVERSATION_ID=<uuid>` | child/tool processes |
 | `AGENT_TRANSCRIPTS=<projects-root>/<slug>/agent-transcripts` | child/tool processes |
 
-Cursor does not clear an inherited `CLAUDECODE`, so ordering decides the verdict.
-With both markers set, `bin/fm-harness.sh` reports `cursor`; with `CLAUDECODE` alone it still reports `claude`.
 
 ### Composer
 
@@ -731,7 +724,7 @@ The rest of the lifecycle was driven end to end on that worker:
 5. `bin/fm-teardown.sh` refused until the scout's report and decision gate were satisfied, then removed the session record and returned the worktree.
 
 Other harnesses on Herdr are unaffected by the edge-detector change.
-All seven live panes of the running default session - one Pi, four Claude, two plain shells - classified identically under the pre-fix and current classifiers.
+All live panes sampled from the running default session classified identically under the pre-fix and current classifiers.
 
 **Delivery confirmation is verified on both supported backends.**
 

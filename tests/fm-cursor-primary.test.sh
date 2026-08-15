@@ -3,12 +3,8 @@
 # (docs/turnend-guard.md, docs/sessionstart-nudge.md,
 # docs/supervision-protocols/cursor.md).
 #
-# Four layers, all hermetic over temp dirs with real processes and NO cursor
-# installed, so CI enforces them everywhere:
-#   HOST GUARD  - bin/fm-hook-host-lib.sh, and each tracked Claude-shaped hook
-#                 entrypoint standing down on a Cursor-delivered payload, which
-#                 is what keeps a Cursor primary from running every covered
-#                 event twice.
+# The suite is hermetic over temp dirs with real processes and no Cursor
+# installation, so CI enforces the park and session contracts everywhere.
 #   PARK        - bin/fm-turnend-guard-cursor.sh, the stop-hook park: its
 #                 follow-up sources, its double loop bound, its bounded repair
 #                 nag, and its post-claim supersession contract.
@@ -63,15 +59,13 @@ C
   || fail "could not build the fake Cursor process"
 FAKE_CURSOR="$FAKEBIN/cursor-agent"
 
-CURSOR_PAYLOAD='{"session_id":"sess-cursor","generation_id":"gen-1","loop_count":0,"status":"completed","hook_event_name":"stop","cursor_version":"2026.08.11-e8db854"}'
-CLAUDE_STOP_PAYLOAD='{"session_id":"sess-claude","stop_hook_active":false}'
 
 install_scripts() {
   local dir=$1 f
   mkdir -p "$dir/bin" "$dir/docs"
   for f in fm-turnend-guard-cursor.sh fm-turnend-guard.sh fm-sessionstart-cursor.sh \
            fm-sessionstart-run.sh fm-sessionstart-nudge.sh fm-arm-pretool-check.sh \
-           fm-cd-pretool-check.sh fm-claude-stop-autoarm.sh fm-hook-host-lib.sh \
+           fm-cd-pretool-check.sh \
            fm-primary-scope-lib.sh fm-supervision-lib.sh fm-wake-lib.sh \
            fm-session-lock-lib.sh fm-cursor-lib.sh fm-operational-input.sh \
            fm-supervision-instructions.sh fm-harness.sh fm-lock.sh \
@@ -178,76 +172,17 @@ kind_of_followup() {  # <json> -> the operational kind
 
 # --- HOST GUARD --------------------------------------------------------------
 
-test_turnend_guard_stands_down_on_cursor_payload() {
-  local dir out status
-  dir=$(make_primary_dir "$TMP_ROOT/host-turnend")
-  : > "$dir/state/task1.meta"
-  out=$(printf '%s' "$CURSOR_PAYLOAD" | bash "$dir/bin/fm-turnend-guard.sh" 2>&1); status=$?
-  expect_code 0 "$status" "a Cursor-delivered Stop payload must not block through the Claude-settings duplicate"
-  [ -z "$out" ] || fail "duplicate entry produced output: $out"
-  out=$(printf '%s' "$CURSOR_PAYLOAD" | bash "$dir/bin/fm-turnend-guard.sh" --cursor 2>&1); status=$?
-  expect_code 2 "$status" "--cursor must let Cursor's own adapter reach the shared block decision"
-  case "$out" in *'TURN WOULD END BLIND'*) ;; *) fail "expected the shared banner, got: $out" ;; esac
-  pass "fm-turnend-guard: Cursor payload is inert without --cursor and blocks with it"
-}
-
-test_turnend_guard_still_blocks_for_claude_payload() {
-  local dir status
-  dir=$(make_primary_dir "$TMP_ROOT/host-claude")
-  : > "$dir/state/task1.meta"
-  printf '%s' "$CLAUDE_STOP_PAYLOAD" | bash "$dir/bin/fm-turnend-guard.sh" >/dev/null 2>&1
-  status=$?
-  expect_code 2 "$status" "the host guard must not disturb a genuine Claude Stop payload"
-  pass "fm-turnend-guard: a non-Cursor payload keeps blocking"
-}
-
-test_autoarm_stands_down_on_cursor_payload() {
-  local dir status
-  dir=$(make_primary_dir "$TMP_ROOT/host-autoarm")
-  : > "$dir/state/task1.meta"
-  write_arm_fixture "$dir" actionable
-  printf '%s' "$CURSOR_PAYLOAD" | FM_HOME="$dir" "$FAKE_CURSOR" -c '
-      printf "%s\n" "$$" > "$FM_HOME/state/.lock"
-      exec "$FM_HOME/bin/fm-claude-stop-autoarm.sh"
-    ' >/dev/null 2>&1
-  status=$?
-  expect_code 0 "$status" "the Claude auto-arm must stay inert under Cursor"
-  [ ! -e "$dir/state/arm-ran" ] || fail "the Claude auto-arm armed under a Cursor payload; on Cursor it would run synchronously and hold the turn open for its multi-hour timeout"
-  pass "fm-claude-stop-autoarm: inert on a Cursor-delivered payload"
-}
-
-test_sessionstart_run_stands_down_on_cursor_payload() {
-  local dir out
-  dir=$(make_primary_dir "$TMP_ROOT/host-sessionstart")
-  cat > "$dir/bin/fm-session-start.sh" <<'SH'
-#!/usr/bin/env bash
-printf '%s\n' "$$" >> "$FM_HOME/state/digest-ran"
-printf 'DIGEST BODY\n'
-SH
-  chmod +x "$dir/bin/fm-session-start.sh"
-  out=$(printf '%s' "$CURSOR_PAYLOAD" | FM_HOME="$dir" bash "$dir/bin/fm-sessionstart-run.sh" 2>&1)
-  [ -z "$out" ] || fail "the run wrapper emitted a digest for the Cursor duplicate: $out"
-  [ ! -e "$dir/state/digest-ran" ] || fail "the run wrapper took the helm twice under Cursor"
-  out=$(printf '{"source":"startup","session_id":"s"}' | FM_HOME="$dir" bash "$dir/bin/fm-sessionstart-run.sh" 2>&1)
-  case "$out" in *'DIGEST BODY'*) ;; *) fail "a Claude-shaped payload must still run the digest, got: $out" ;; esac
-  pass "fm-sessionstart-run: inert on a Cursor payload, unchanged otherwise"
-}
-
-test_pretool_guards_deduplicate_and_render_cursor_deny() {
+test_pretool_guard_renders_cursor_deny() {
   local dir payload out status decision
   dir=$(make_primary_dir "$TMP_ROOT/host-pretool")
   payload='{"tool_name":"Shell","tool_input":{"command":"bin/fm-watch-arm.sh &"},"cursor_version":"2026.08.11-e8db854"}'
-  out=$(printf '%s' "$payload" | bash "$dir/bin/fm-arm-pretool-check.sh" 2>&1); status=$?
-  expect_code 0 "$status" "the Claude-settings duplicate must allow under Cursor"
-  [ -z "$out" ] || fail "duplicate pretool entry produced output: $out"
-
   out=$(printf '%s' "$payload" | bash "$dir/bin/fm-arm-pretool-check.sh" --cursor 2>/dev/null); status=$?
   expect_code 0 "$status" "Cursor reads the decision object, so the deny path exits 0"
   decision=$(printf '%s' "$out" | jq -r '.permission // empty' 2>/dev/null)
   [ "$decision" = deny ] || fail "expected a Cursor deny object on stdout, got: $out"
   printf '%s' "$out" | jq -e '.user_message | type == "string" and length > 0' >/dev/null 2>&1 \
     || fail "Cursor's deny object must carry a user_message reason, got: $out"
-  pass "fm-arm-pretool-check: Cursor duplicate allows, --cursor denies in Cursor's own shape"
+  pass "fm-arm-pretool-check: --cursor denies in Cursor's own shape"
 }
 
 test_cd_guard_renders_cursor_deny() {
@@ -257,9 +192,7 @@ test_cd_guard_renders_cursor_deny() {
   out=$(printf '%s' "$payload" | FM_HOME="$dir" bash "$dir/bin/fm-cd-pretool-check.sh" --cursor 2>/dev/null)
   decision=$(printf '%s' "$out" | jq -r '.permission // empty' 2>/dev/null)
   [ "$decision" = deny ] || fail "expected a Cursor deny object from the cd guard, got: $out"
-  out=$(printf '%s' "$payload" | FM_HOME="$dir" bash "$dir/bin/fm-cd-pretool-check.sh" 2>&1)
-  [ -z "$out" ] || fail "the cd guard's Claude-settings duplicate produced output under Cursor: $out"
-  pass "fm-cd-pretool-check: Cursor duplicate allows, --cursor denies in Cursor's own shape"
+  pass "fm-cd-pretool-check: --cursor denies in Cursor's own shape"
 }
 
 # --- PARK --------------------------------------------------------------------
@@ -636,11 +569,7 @@ test_default_ceiling_bites_before_the_registered_loop_limit() {
   pass "cursor bounds nest: firstmate's default ceiling stops the loop before Cursor's loop_limit does"
 }
 
-test_turnend_guard_stands_down_on_cursor_payload
-test_turnend_guard_still_blocks_for_claude_payload
-test_autoarm_stands_down_on_cursor_payload
-test_sessionstart_run_stands_down_on_cursor_payload
-test_pretool_guards_deduplicate_and_render_cursor_deny
+test_pretool_guard_renders_cursor_deny
 test_cd_guard_renders_cursor_deny
 test_park_silent_when_nothing_in_flight
 test_park_delivers_actionable_wake_as_followup

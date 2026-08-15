@@ -5,7 +5,6 @@
 #
 # Why this file exists: liveness classification depends on how a harness names
 # its own process, which is a surface the harness vendor controls and changes
-# without notice. Claude Code began reporting its version string as its process
 # name and became unattributable, which silently degraded supervision. A
 # regression that only a real harness release can cause needs a check that runs
 # real harnesses; a stubbed agent cannot see it, and neither can a table of
@@ -96,7 +95,7 @@ SKIPPED=
 # Cursor matters here because it
 # runs as a bundled node script, so its pane title is a bare `node` that no name
 # pattern can own, and identity has to come from its install path or argv[0].
-for harness in claude codex opencode pi pi-signed grok kimi cursor; do
+for harness in codex opencode pi pi-signed grok kimi cursor; do
   if ! bin_path=$(resolve_harness_binary "$harness"); then
     SKIPPED="$SKIPPED $harness"
     note "skip: $harness is not installed on this machine, so its classification is unverified here"
