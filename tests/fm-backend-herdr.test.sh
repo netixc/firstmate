@@ -506,8 +506,8 @@ test_container_ensure_starts_server_and_workspace() {
   printf '{"client":{"version":"0.7.1","protocol":14}}\n' > "$resp/1.out"
   # 2: server_ensure's status --json check -> not running
   printf '{"server":{"running":false}}\n' > "$resp/2.out"
-  # 3: `herdr server` backgrounded launch - no meaningful output
-  # 4: server_ensure poll -> now running
+  # 3/4: backgrounded server launch and server_ensure poll
+  printf '{"server":{"running":true}}\n' > "$resp/3.out"
   printf '{"server":{"running":true}}\n' > "$resp/4.out"
   # 5: workspace list -> empty (no "firstmate" workspace yet)
   printf '{"result":{"workspaces":[]}}\n' > "$resp/5.out"

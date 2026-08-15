@@ -10,29 +10,29 @@ The proof ran 23 candidates with 4 workers and no failures.
 
 | duration_ms | script |
 |---:|---|
-| 66001 | `tests/fm-backend-herdr.test.sh` |
-| 64743 | `tests/fm-decision-hold-lifecycle.test.sh` |
-| 56480 | `tests/fm-relay.test.sh` |
-| 34918 | `tests/fm-arm-pretool-check.test.sh` |
-| 29962 | `tests/fm-crew-state.test.sh` |
-| 28744 | `tests/fm-cd-pretool-check.test.sh` |
-| 27546 | `tests/fm-test-run.test.sh` |
-| 13522 | `tests/fm-herdr-lab.test.sh` |
-| 13423 | `tests/fm-pr-merge.test.sh` |
-| 9678 | `tests/fm-send-popup-settle.test.sh` |
-| 8561 | `tests/fm-composer-ghost.test.sh` |
-| 7739 | `tests/fm-review-diff.test.sh` |
-| 7577 | `tests/fm-lint.test.sh` |
-| 4187 | `tests/fm-tmux-submit-busy.test.sh` |
-| 3654 | `tests/fm-send-strict.test.sh` |
-| 3203 | `tests/fm-composer-lib.test.sh` |
-| 2543 | `tests/fm-send-settle.test.sh` |
-| 2115 | `tests/fm-brief.test.sh` |
-| 1862 | `tests/fm-spawn-batch.test.sh` |
-| 534 | `tests/fm-ensure-agents-md.test.sh` |
-| 292 | `tests/fm-supervision-instructions.test.sh` |
-| 133 | `tests/fm-transition-lib.test.sh` |
-| 28 | `tests/fm-pi-primary-types.test.sh` |
+| 69664 | `tests/fm-backend-herdr.test.sh` |
+| 64778 | `tests/fm-decision-hold-lifecycle.test.sh` |
+| 54828 | `tests/fm-relay.test.sh` |
+| 34763 | `tests/fm-arm-pretool-check.test.sh` |
+| 31431 | `tests/fm-crew-state.test.sh` |
+| 28291 | `tests/fm-cd-pretool-check.test.sh` |
+| 27648 | `tests/fm-test-run.test.sh` |
+| 14398 | `tests/fm-herdr-lab.test.sh` |
+| 12530 | `tests/fm-pr-merge.test.sh` |
+| 9570 | `tests/fm-send-popup-settle.test.sh` |
+| 8045 | `tests/fm-lint.test.sh` |
+| 7888 | `tests/fm-composer-ghost.test.sh` |
+| 7548 | `tests/fm-review-diff.test.sh` |
+| 4474 | `tests/fm-tmux-submit-busy.test.sh` |
+| 3959 | `tests/fm-send-strict.test.sh` |
+| 3507 | `tests/fm-composer-lib.test.sh` |
+| 2559 | `tests/fm-send-settle.test.sh` |
+| 1596 | `tests/fm-spawn-batch.test.sh` |
+| 1496 | `tests/fm-brief.test.sh` |
+| 332 | `tests/fm-ensure-agents-md.test.sh` |
+| 300 | `tests/fm-supervision-instructions.test.sh` |
+| 121 | `tests/fm-transition-lib.test.sh` |
+| 27 | `tests/fm-pi-primary-types.test.sh` |
 
 ## Parallel lanes
 
@@ -40,9 +40,9 @@ The two parallel lanes use longest-processing-time assignment from those measure
 
 | Lane | Script count | Estimated duration |
 |---|---:|---:|
-| `portable-parallel-1` | 11 | 193731 ms (~193.7 s) |
-| `portable-parallel-2` | 12 | 193714 ms (~193.7 s) |
-| imbalance | | 17 ms |
+| `portable-parallel-1` | 13 | 194552 ms (~194.6 s) |
+| `portable-parallel-2` | 10 | 195201 ms (~195.2 s) |
+| imbalance | | 649 ms |
 
 `bin/fm-test-run.sh` contains the exact ordered memberships in `list_portable_parallel_1` and `list_portable_parallel_2`.
 
