@@ -140,6 +140,7 @@ tests/fm-crew-state.test.sh
 
 ## Turn-end guard
 
+The blocking and bounded-follow-up mechanisms were validated across the five enabled integration paths from 2026-07-08 through 2026-08-13.
 
 | Harness | Version verified | Mechanism | Observed result |
 | --- | --- | --- | --- |

@@ -19,6 +19,10 @@ set -u
 TMP_ROOT=$(fm_test_tmproot fm-turnend-guard)
 fm_git_identity fmtest fmtest@example.invalid
 
+# Pin the primary identity so repair guidance does not depend on the harness
+# that happens to launch the test process.
+export PI_CODING_AGENT=true FM_PI_HARNESS=pi
+
 REQUIRED_REASON='repair a missing or failed watcher cycle with the Pi tool fm_watch_arm_pi'
 
 # --- PREDICATE: bin/fm-supervision-lib.sh -----------------------------------
