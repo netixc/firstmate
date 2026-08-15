@@ -93,7 +93,7 @@
 #   profile consultation. A --secondmate spawn is exempt and resolves the SECONDMATE
 #   harness (config/secondmate-harness -> config/crew-harness -> own), so the
 #   secondmate-vs-crewmate split is DURABLE across every respawn (recovery,
-#   /updatefirstmate, restart). A bare adapter name (claude|codex|opencode|pi|pi-signed|grok|kimi|cursor|muse)
+#   /updatefirstmate, restart). A bare adapter name (claude|codex|opencode|pi|pi-signed|grok|kimi|cursor)
 #   overrides it for this spawn (either kind). A non-flag string containing
 #   whitespace is treated as a RAW launch command - the escape hatch for verifying
 #   new adapters. For pi and pi-signed, fm-spawn resolves the selected executable
@@ -155,9 +155,6 @@
 # a firstmate-owned global hook and registry, and a gitignored per-task pointer.
 # grok uses a firstmate-owned global hook under ${GROK_HOME:-$HOME/.grok}/hooks
 # plus a gitignored .fm-grok-turnend worktree pointer and a state token.
-# muse installs no hook at all - its plugin engine is off in the default build - so
-# it writes state/<id>.muse-session to bind the pane to muse's own session event
-# log; muse is crewmate/scout only and is refused for --secondmate.
 # cursor installs no per-task hook either: it writes state/<id>.cursor-session to
 # bind the pane to cursor's own conversation transcript (projects root, the exact
 # workspace path cursor records in .workspace-trusted, and the conversations that
@@ -976,7 +973,7 @@ if [ "$RELAUNCH" -eq 1 ]; then
   }
 elif [ "$KIND" = secondmate ]; then
   case "${POS[1]:-}" in
-    ''|claude|codex|opencode|pi|pi-signed|grok|kimi|cursor|muse)
+    ''|claude|codex|opencode|pi|pi-signed|grok|kimi|cursor)
       ARG3=${POS[1]:-}
       ;;
     *' '*)
@@ -1084,28 +1081,6 @@ launch_template() {
     # Its turn-end signal is a globally configured Stop hook plus a guarded
     # per-task worktree token, so no launch placeholder belongs here.
     kimi) printf '%s' '__KIMIBIN__ __MODELFLAG__--auto' ;;
-    # muse (Muse Code): a positional prompt starts the supervised interactive
-    # session. --yolo is the single flag that makes a crewmate pane viable: muse
-    # ships approval prompts AND a filesystem/network sandbox ON by default
-    # (--sandbox-network defaults to proxy-only, which refuses outright without a
-    # managed proxy), and it gates a fresh workspace behind a trust dialog. One
-    # --yolo disables approval, disables the sandbox so git and network work, and
-    # trusts the workspace for the run, so no dialog appears on the fresh
-    # per-task worktree (verified, muse 0.1.0-R708.1).
-    # MUSE_EXPERIMENTAL_FOREIGN_PERSONAL_CONTEXT_KILL=on is the privacy control:
-    # muse otherwise loads the OPERATOR's foreign personal rules from ~/.claude
-    # into every run and ships them to Meta-hosted inference, even under an
-    # isolated XDG_CONFIG_HOME. exec mode's --no-foreign-personal-context flag is
-    # NOT accepted by the interactive TUI (it exits with "unexpected argument"),
-    # so this env var is the only control that reaches a pane worker. Verified to
-    # drop the foreign rules_file context block while KEEPING the project's own
-    # AGENTS.md rules, which the crewmate contract depends on.
-    # muse's turn-end signal rides neither the launch command nor a hook: its
-    # plugin engine is off in the default build, so firstmate folds muse's own
-    # session event log instead (bin/fm-busy-lib.sh), bound by the sidecar
-    # written below. Nothing to place in the template for it.
-    # codex, opencode, and kimi are also markerless and share this inherited-marker hazard; changing their verified launch boundaries belongs in follow-up work.
-    muse) printf '%s' 'env -u CLAUDECODE -u PI_CODING_AGENT -u GROK_AGENT -u FM_PI_HARNESS XDG_CONFIG_HOME=__MUSECONFIG__ XDG_DATA_HOME=__MUSEDATA__ MUSE_EXPERIMENTAL_FOREIGN_PERSONAL_CONTEXT_KILL=on __MUSEBIN__ --yolo __MODELFLAG____EFFORTFLAG__"$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
     *) return 1 ;;
   esac
 }
@@ -1145,17 +1120,6 @@ case "$ARG3" in
     LAUNCH=$(launch_template "$HARNESS" "$KIND") || { echo "error: unknown harness '$HARNESS'; pass a raw launch command to use an unverified adapter" >&2; exit 1; }
     ;;
 esac
-
-# muse is verified as a CREWMATE/SCOUT adapter only. A secondmate is a firstmate
-# instance, so it needs a primary supervision protocol; muse has none, and its
-# Claude-compatible hook dialect explicitly rejects the model-reawakening and
-# asyncRewake handlers that firstmate's primary turn-end supervision is built on
-# (muse 0.1.0-R708.1). Refusing here keeps that gap loud instead of standing up a
-# secondmate whose supervision cycle could never be armed.
-if [ "$KIND" = secondmate ] && [ "$HARNESS" = muse ]; then
-  echo "error: muse is a verified crewmate/scout adapter only and cannot run a secondmate; it has no primary supervision protocol. Select a harness verified for secondmates." >&2
-  exit 1
-fi
 
 case "$HARNESS" in
   pi|pi-signed)
@@ -1238,60 +1202,11 @@ resolve_kimi_binary() {
   return 1
 }
 
-resolve_muse_binary() {
-  local candidate dir
-  candidate=$(command -v muse 2>/dev/null || true)
-  if [ -n "$candidate" ] && [ -x "$candidate" ]; then
-    case "$candidate" in
-      /*) printf '%s\n' "$candidate"; return 0 ;;
-      *)
-        dir=$(cd "$(dirname "$candidate")" 2>/dev/null && pwd -P) || dir=
-        if [ -n "$dir" ]; then
-          printf '%s/%s\n' "$dir" "$(basename "$candidate")"
-          return 0
-        fi
-        ;;
-    esac
-  fi
-  echo "error: muse executable not found on PATH; install Muse Code or select a different verified harness" >&2
-  return 1
-}
-
-# muse_credential_present: 0 when a launched muse pane can reach its provider
-# without an interactive login. muse offers exactly two credential paths
-# (verified, muse 0.1.0-R708.1): the META_API_KEY environment variable, which
-# always takes priority, and a stored credential written by `muse auth set` or
-# `muse login` into <config>/muse/auth.json. This is a PREFLIGHT rather than a
-# rendered-screen check because an unauthenticated pane does not exit - it sits
-# on an OAuth device-code prompt ("Sign in at this page ... Waiting for
-# approval...") waiting for a human who is not there, which would look to
-# supervision like a wedged worker rather than a missing credential.
-muse_worker_meta_api_key_present() {
-  local session worker_env
-  [ "$BACKEND" = tmux ] || return 1
-  if [ -n "${TMUX:-}" ]; then
-    session=$(tmux display-message -p '#S' 2>/dev/null) || return 1
-  else
-    tmux has-session -t firstmate 2>/dev/null || return 1
-    session=firstmate
-  fi
-  worker_env=$(tmux show-environment -t "$session" META_API_KEY 2>/dev/null) || return 1
-  case "$worker_env" in
-    META_API_KEY=?*) return 0 ;;
-  esac
-  return 1
-}
-
-muse_credential_present() {
-  local auth=$1
-  [ -s "$auth" ] || muse_worker_meta_api_key_present
-}
-
 model_flag_for_harness() {
   local harness=$1 model=$2
   [ -n "$model" ] && [ "$model" != default ] || return 0
   case "$harness" in
-    claude|codex|opencode|pi|pi-signed|grok|kimi|cursor|muse)
+    claude|codex|opencode|pi|pi-signed|grok|kimi|cursor)
       printf -- '--model %s ' "$(shell_quote "$model")"
       ;;
   esac
@@ -1330,20 +1245,6 @@ effort_flag_for_harness() {
         low|medium|high|xhigh|max) printf -- '--thinking %s ' "$(shell_quote "$effort")" ;;
       esac
       ;;
-    muse)
-      # muse 0.1.0-R708.1 --reasoning-effort accepts none|minimal|low|medium|
-      # high|xhigh|ultra and defaults to high, so low..xhigh map straight across.
-      # ultra is muse's max-CLASS level, so firstmate's max maps onto it - but
-      # only ever as an EXPLICIT captain choice, never as a fallback, because
-      # AGENTS.md section 4 forbids selecting max without captain preference and
-      # the omitted effort here leaves muse on its own high default. muse's extra
-      # none/minimal levels sit below firstmate's shared vocabulary and are
-      # deliberately unreachable rather than remapped onto low.
-      case "$effort" in
-        low|medium|high|xhigh) printf -- '--reasoning-effort %s ' "$(shell_quote "$effort")" ;;
-        max) printf -- '--reasoning-effort %s ' "$(shell_quote ultra)" ;;
-      esac
-      ;;
     # opencode's interactive `opencode --prompt` launch has a verified --model
     # flag but no verified effort flag. Its `opencode run --variant` flag belongs
     # to a different, non-interactive launch mode, so fm-spawn does not pass it.
@@ -1353,26 +1254,6 @@ effort_flag_for_harness() {
     # effort flag.
   esac
 }
-
-case "$LAUNCH" in
-  *__MUSEBIN__*)
-    MUSE_BIN=$(resolve_muse_binary) || exit 1
-    MUSE_CONFIG_HOME=$(resolve_directory_input XDG_CONFIG_HOME "${XDG_CONFIG_HOME:-${HOME:-}/.config}") || exit 1
-    MUSE_DATA_HOME=$(resolve_directory_input XDG_DATA_HOME "${XDG_DATA_HOME:-${HOME:-}/.local/share}") || exit 1
-    MUSE_AUTH_FILE="$MUSE_CONFIG_HOME/muse/auth.json"
-    if ! muse_credential_present "$MUSE_AUTH_FILE"; then
-      if [ -n "${META_API_KEY:-}" ]; then
-        echo "error: muse has no worker-reachable credential; META_API_KEY is set for fm-spawn but cannot be proven present in the $BACKEND worker environment. Store the fleet credential at '$MUSE_AUTH_FILE' with 'muse login' or 'muse auth set --api-key-stdin'. The secret will not be copied into the launch command." >&2
-      else
-        echo "error: muse has no worker-reachable credential; META_API_KEY cannot be proven present in the $BACKEND worker environment and '$MUSE_AUTH_FILE' is absent or empty. Store the fleet credential with 'muse login' or 'muse auth set --api-key-stdin'." >&2
-      fi
-      exit 1
-    fi
-    LAUNCH=${LAUNCH//__MUSEBIN__/$(shell_quote "$MUSE_BIN")}
-    LAUNCH=${LAUNCH//__MUSECONFIG__/$(shell_quote "$MUSE_CONFIG_HOME")}
-    LAUNCH=${LAUNCH//__MUSEDATA__/$(shell_quote "$MUSE_DATA_HOME")}
-    ;;
-esac
 
 case "$LAUNCH" in
   *__KIMIBIN__*)
@@ -2375,38 +2256,10 @@ EOF
       printf 'token=%s\n' "${auth_file##*/}" > "$WT/.fm-grok-turnend"
       exclude_path '.fm-grok-turnend'
       ;;
-    muse*)
-      # muse's turn lifecycle is neither a hook nor a launch flag: its plugin
-      # engine (the only hook surface) is disabled in the default build, so
-      # firstmate reads muse's own durable session event log instead
-      # (bin/fm-busy-lib.sh owns the fold). That is a PULL
-      # source with no writer, so nothing is armed and no record is seeded -
-      # exactly the reason standalone Kimi is not armed either.
-      # This sidecar is the whole binding: it pins the sessions root, the
-      # workspace root that muse records in each log's metadata, this pane's
-      # binding identity, and every matching main log that predates this pane.
-      # The classifier then accepts only one new matching log, so it never
-      # guesses between pane incarnations. Recording the resolved root here
-      # also means a later change to XDG_DATA_HOME cannot silently re-point an
-      # already-running task at a different log tree.
-      MUSE_SESSIONS_ROOT="${MUSE_DATA_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}}/muse/sessions"
-      MUSE_BINDING_ID="$$.$RANDOM.$(date +%s)"
-      rm -f "$STATE/$ID.muse-session-current"
-      {
-        printf 'sessions_root=%s\n' "$MUSE_SESSIONS_ROOT"
-        printf 'workspace_root=%s\n' "$WT"
-        printf 'binding_id=%s\n' "$MUSE_BINDING_ID"
-        while IFS= read -r MUSE_PRIOR_LOG; do
-          [ -n "$MUSE_PRIOR_LOG" ] && printf 'prior_log=%s\n' "$MUSE_PRIOR_LOG"
-        done <<EOF
-$(fm_busy_muse_matching_logs "$MUSE_SESSIONS_ROOT" "$WT" || true)
-EOF
-      } > "$STATE/$ID.muse-session"
-      ;;
     cursor*)
       # Cursor's turn lifecycle is neither a hook nor a launch flag: it writes
       # its own durable per-conversation transcript and brackets every turn
-      # there (bin/fm-busy-lib.sh owns the fold). Like muse that is a PULL
+      # there (bin/fm-busy-lib.sh owns the fold). That is a pull
       # source with no writer, so nothing is armed and no record is seeded.
       # This sidecar is the whole binding. It pins the projects root and the
       # exact workspace path cursor records in each project's
@@ -2583,7 +2436,7 @@ case "$HARNESS" in
 esac
 LAUNCH=${LAUNCH//__WORKTREE__/$sq_worktree}
 case "$HARNESS" in
-  claude|codex|opencode|pi|pi-signed|grok|kimi|muse)
+  claude|codex|opencode|pi|pi-signed|grok|kimi)
     LAUNCH="env -u CURSOR_AGENT -u CURSOR_INVOKED_AS $LAUNCH"
     ;;
 esac

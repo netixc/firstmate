@@ -92,8 +92,6 @@ fi
 
 # shellcheck source=bin/fm-backend.sh
 . "$SCRIPT_DIR/fm-backend.sh"
-# shellcheck source=bin/fm-control-lib.sh
-. "$SCRIPT_DIR/fm-control-lib.sh"
 # shellcheck source=bin/fm-marker-lib.sh
 . "$SCRIPT_DIR/fm-marker-lib.sh"
 # shellcheck source=bin/fm-pending-reply-lib.sh
@@ -111,30 +109,6 @@ fm_send_id_from_meta() {  # <meta-file>
   local base
   base=${1##*/}
   printf '%s' "${base%.meta}"
-}
-
-# fm_send_clear_after_interrupt: muse RESTORES the interrupted prompt back into
-# the composer when Escape cancels a turn, as real bright text (verified: fg
-# 38;2;204;211;219, luminance ~210, muse 0.1.0-R708.1), not de-emphasised ghost
-# text. Classifying that as pending input is correct - the text really is
-# unsubmitted - but leaving it there means the NEXT steer types onto the end of
-# it and submits both as one garbled message. Ctrl-U clears the composer
-# (verified), so the interrupt is not complete until it has been sent. A failed
-# clear is loud rather than silent, because the alternative is a corrupted steer.
-# WHICH adapters need that clear, and which key clears them, comes from the one
-# control-plane capability table (bin/fm-control-lib.sh) rather than a second
-# copy here - the same table bin/fm-control.sh's interrupt verb reads.
-fm_send_clear_after_interrupt() {  # <key>
-  local key=$1 family clear
-  [ "$key" = Escape ] || return 0
-  family=$(fm_control_harness_family "$TARGET_HARNESS") || return 0
-  clear=$(fm_control_interrupt_clear_key "$family") || return 0
-  [ -n "$clear" ] || return 0
-  [ "$TARGET_BACKEND" != remote ] || return 0
-  if ! fm_backend_send_key "$TARGET_BACKEND" "$T" "$clear" "$EXPECTED_LABEL"; then
-    echo "error: Escape reached $T, but the $TARGET_HARNESS composer could not be cleared; it still holds the restored prompt. Clear it before sending the next message." >&2
-    return 1
-  fi
 }
 
 fm_send_normalize_key() {  # <key>
@@ -428,7 +402,6 @@ if [ "${1:-}" = "--key" ]; then
     echo "error: key '$key' not sent to $T ($TARGET_BACKEND send failed; tried $RESOLUTION_TRIED)" >&2
     exit 1
   fi
-  fm_send_clear_after_interrupt "$semantic_key" || exit 1
   fm_send_record_interrupt "$semantic_key" || exit 1
 else
   MESSAGE=$*

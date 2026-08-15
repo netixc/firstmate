@@ -18,9 +18,8 @@ The failure repeated across harnesses and homes, and the workaround (remember to
 - The **verb allowlist**: `interrupt`, `exit`, `relaunch`.
   There is no arbitrary-text and no generic raw-key entry point.
   A caller either names an allowlisted verb or is refused.
-- **Per-harness mechanics**: the key that cancels a running turn, how many times it must be delivered, whether the composer needs clearing afterwards, the command that exits the agent, and which task kinds the adapter is verified to run.
+- **Per-harness mechanics**: the key that cancels a running turn, how many times it must be delivered, and the command that exits the agent.
   These were previously carried only in the [`harness-adapters`](../.agents/skills/harness-adapters/SKILL.md) skill's per-adapter tables, which now point here.
-  `bin/fm-send.sh`'s `--key` path reads the composer-clear table from this owner too, rather than keeping a second copy of it.
 - **Per-backend capability**: which named keys a runtime backend can deliver, and whether it has a recovery-grade agent-state classifier able to prove an agent stopped.
 
 A recorded `harness=` is not always an exact adapter name: a task launched from a raw command records that command's basename instead.
@@ -37,12 +36,6 @@ A recorded `harness=` is not always an exact adapter name: a task launched from 
 An exit that delivers lifecycle input but cannot prove the agent stopped fails with `exit=unconfirmed`, reports the observed agent state and any interrupt cancellation claim, and never claims that nothing changed.
 Interrupt never rewrites busy state as proof of its own success.
 Claude exposes no lifecycle acknowledgement for a manual interrupt, so delivery succeeds with `cancel=unconfirmed` and its adapter-owned busy state remains as observed.
-muse's session log records `terminal=cancelled` for the interrupted run, so the control plane reports `cancel=confirmed` only after observing that exact acknowledgement.
-
-An interrupt is not complete until the composer is empty.
-muse is the one verified adapter that restores the cancelled prompt back into its composer as real text, so its interrupt key is followed by a Ctrl+U clear; without it the next submitted line - including this plane's own exit command - would concatenate onto the restored prompt and submit both as one line.
-The clear is refused before anything is sent when the recorded backend cannot deliver it.
-
 **Teardown and discard are not verbs and will not become verbs.**
 `exit` stops an agent and preserves everything else.
 Removing a worktree, closing an endpoint, or discarding work stays with [`bin/fm-teardown.sh`](../bin/fm-teardown.sh), which owns the landed-work test.
@@ -90,9 +83,7 @@ Switching harness is therefore one ordinary relaunch rather than a separate mech
   Drive that lifecycle on its own host and reconcile it through the secondmate recovery path.
 - An unverified harness is refused rather than guessed at.
 - An implicit relaunch from a prefixed raw-command basename is refused before the agent or durable state is touched because its original launch command cannot be reconstructed.
-- An adapter that is not verified for this task's kind is refused **before** the running agent is stopped, not after.
-  Muse is a crewmate and scout adapter only, so relaunching a secondmate onto it refuses while its agent is still up rather than leaving that secondmate with no agent when the launch owner refuses.
-- A backend that cannot deliver the harness's interrupt key, or the composer clear that key needs, is refused rather than sent a different key.
+- A backend that cannot deliver the harness's interrupt key is refused rather than sent a different key.
 - `exit` and `relaunch` require a backend with a recovery-grade agent-state classifier - tmux and herdr - because without one the "the agent stopped" postcondition cannot be proven.
 - An ambiguous or unreadable endpoint state refuses.
   Only a positively classified state acts.
@@ -102,12 +93,12 @@ Switching harness is therefore one ordinary relaunch rather than a separate mech
 
 Backend capability comes from each adapter's real surface, not from a policy choice.
 
-| Backend | Escape | Enter | Ctrl+C | Ctrl+U | Recovery-grade agent state |
-| --- | --- | --- | --- | --- | --- |
-| tmux | yes | yes | yes | yes | yes |
-| herdr | yes | yes | yes | yes | yes |
+| Backend | Escape | Enter | Ctrl+C | Recovery-grade agent state |
+| --- | --- | --- | --- | --- |
+| tmux | yes | yes | yes | yes |
+| herdr | yes | yes | yes | yes |
 
-Per-harness interrupt keys, repeat counts, composer clears, exit commands, and supported task kinds live in `bin/fm-control-lib.sh` and are exercised for every verified harness by `tests/fm-control.test.sh`.
+Per-harness interrupt keys, repeat counts, and exit commands live in `bin/fm-control-lib.sh` and are exercised for every verified harness by `tests/fm-control.test.sh`.
 The empirical basis for each adapter's value is the `harness-adapters` skill's verification record for that adapter.
 
 ## Verification
