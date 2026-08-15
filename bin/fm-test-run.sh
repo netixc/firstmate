@@ -289,34 +289,34 @@ EOF
 list_portable_parallel_1() {
   cat <<'EOF'
 tests/fm-backend-herdr.test.sh
-tests/fm-test-run.test.sh
+tests/fm-arm-pretool-check.test.sh
 tests/fm-crew-state.test.sh
-tests/fm-cd-pretool-check.test.sh
+tests/fm-test-run.test.sh
 tests/fm-pr-merge.test.sh
-tests/fm-spawn-batch.test.sh
-tests/fm-review-diff.test.sh
-tests/fm-tmux-submit-busy.test.sh
-tests/fm-send-settle.test.sh
+tests/fm-composer-ghost.test.sh
+tests/fm-lint.test.sh
+tests/fm-composer-lib.test.sh
 tests/fm-brief.test.sh
-tests/fm-pi-primary-types.test.sh
+tests/fm-supervision-instructions.test.sh
+tests/fm-transition-lib.test.sh
 EOF
 }
 
 # Portable parallel shard 2: the complementary LPT half of the proven set.
 list_portable_parallel_2() {
   cat <<'EOF'
-tests/fm-relay.test.sh
 tests/fm-decision-hold-lifecycle.test.sh
-tests/fm-arm-pretool-check.test.sh
+tests/fm-relay.test.sh
+tests/fm-cd-pretool-check.test.sh
 tests/fm-herdr-lab.test.sh
-tests/fm-composer-ghost.test.sh
 tests/fm-send-popup-settle.test.sh
-tests/fm-lint.test.sh
+tests/fm-review-diff.test.sh
+tests/fm-tmux-submit-busy.test.sh
 tests/fm-send-strict.test.sh
-tests/fm-composer-lib.test.sh
-tests/fm-supervision-instructions.test.sh
+tests/fm-send-settle.test.sh
+tests/fm-spawn-batch.test.sh
 tests/fm-ensure-agents-md.test.sh
-tests/fm-transition-lib.test.sh
+tests/fm-pi-primary-types.test.sh
 EOF
 }
 
