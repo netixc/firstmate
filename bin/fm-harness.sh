@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Detect the agent harness this process tree runs on.
-# Usage: fm-harness.sh                  print own harness: codex|opencode|pi|pi-signed|grok|kimi|cursor|unknown
+# Usage: fm-harness.sh                  print own harness: codex|opencode|pi|pi-signed|grok|kimi|unknown
 #        fm-harness.sh crew             print the effective CREWMATE harness
 #                                        (config/crew-harness; "default" resolves to own)
 #        fm-harness.sh secondmate       print the harness the PRIMARY uses to launch
@@ -27,22 +27,13 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 
-# shellcheck source=bin/fm-cursor-lib.sh
-. "$SCRIPT_DIR/fm-cursor-lib.sh"
-
 detect_own() {
   # Layer 1: environment markers for verified harnesses.
   # Keep marker detection before ancestry detection as an explicit precedence rule.
-  # Pi, Grok, and Cursor set verified markers of their own; codex, OpenCode,
-  # and Kimi are markerless, so a foreign marker retained in a terminal
-  # multiplexer's stored environment can silently misidentify one of them before
-  # ancestry is consulted. Cursor's markers are unambiguous when present and
-  # bin/fm-spawn.sh clears foreign supported-adapter markers at its launch boundary.
-  # Verified live on cursor-agent 2026.08.11-e8db854:
-  # CURSOR_INVOKED_AS=cursor-agent is set on the agent process itself, and
-  # CURSOR_AGENT=1 is set for the child/tool processes this script runs as.
-  [ "${CURSOR_AGENT:-}" = "1" ] && { echo cursor; return; }
-  [ "${CURSOR_INVOKED_AS:-}" = "cursor-agent" ] && { echo cursor; return; }
+  # Pi and Grok set verified markers of their own; codex, OpenCode, and Kimi
+  # are markerless, so a foreign marker retained in a terminal multiplexer's
+  # stored environment can silently misidentify one of them before ancestry is
+  # consulted.
   if [ "${PI_CODING_AGENT:-}" = "true" ]; then
     if [ "${FM_PI_HARNESS:-}" = pi-signed ]; then echo pi-signed; else echo pi; fi
     return
@@ -57,14 +48,9 @@ detect_own() {
   # markers too (see docs/turnend-guard.md).
   [ "${GROK_AGENT:-}" = "1" ] && { echo grok; return; }
   # Layer 2: walk the parent chain and match the command name.
-  local pid=$$ comm args argv0
+  local pid=$$ comm args
   for _ in 1 2 3 4 5 6 7 8; do
     comm=$(ps -o comm= -p "$pid" 2>/dev/null) || break
-    argv0=$(fm_cursor_argv0_for_pid "$pid" "$comm" 2>/dev/null || true)
-    if fm_cursor_process_matches "$comm" '' "$argv0"; then
-      echo cursor
-      return
-    fi
     case "$(basename -- "$comm")" in
       *codex*) echo codex; return ;;
       *opencode*) echo opencode; return ;;

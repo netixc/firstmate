@@ -139,7 +139,7 @@ cmd_launch() {
   validate_id "$id"
   validate_home "$id"
   case "$harness" in
-    codex|opencode|pi|pi-signed|grok|kimi|cursor) ;;
+    codex|opencode|pi|pi-signed|grok|kimi) ;;
     *) die "unverified remote secondmate harness: $harness" ;;
   esac
   case "$effort" in -|low|medium|high|xhigh|max) ;; *) die "invalid remote secondmate effort: $effort" ;; esac

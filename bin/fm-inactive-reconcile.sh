@@ -461,7 +461,10 @@ case "$mode" in
       --startup) startup=1 ;;
       *) printf 'usage: fm-inactive-reconcile.sh scan [--startup]\n' >&2; exit 2 ;;
     esac
-    if fm_run_timed "$FM_INACTIVE_RECONCILE_BUDGET_SECS" "$0" _scan-locked "$startup"; then
+    # The locked scan enforces the work deadline itself. Give its outer process-
+    # group watchdog one extra second to unwind an inner timed state read and
+    # release the scan lock before forced cleanup.
+    if fm_run_timed "$((FM_INACTIVE_RECONCILE_BUDGET_SECS + 1))" "$0" _scan-locked "$startup"; then
       :
     elif [ "$?" -ne 124 ]; then
       exit 1

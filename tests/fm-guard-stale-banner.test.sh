@@ -63,17 +63,6 @@ run_guard_case_read_only() {
     "$ROOT/bin/fm-guard.sh" 2>&1
 }
 
-# The Cursor stop-hook park model: the watcher runs only between turns, so a fresh
-# beacon with no live watcher process is the healthy mid-turn state.
-run_guard_case_autoarm() {
-  local dir=$1
-  FM_ROOT_OVERRIDE="$(case_root "$dir")" \
-    FM_HOME="$(case_home "$dir")" \
-    FM_GUARD_GRACE=999 \
-    FM_SUPERVISION_MODEL=autoarm \
-    "$ROOT/bin/fm-guard.sh" 2>&1
-}
-
 # The Pi extension model: .pi/extensions/fm-primary-pi-watch.ts tears the watcher
 # down on every actionable wake and spawns the replacement itself, so the lock is
 # legitimately unheld during a hand-off.
@@ -343,44 +332,6 @@ test_read_only_never_mutates_stale_banner_state_files() {
   [ "$after" = "$before" ] || fail "no-work read-only guard changed stale-banner state files"$'\n'"before: $before"$'\n'"after: $after"
   [ "$(cat "$marker")" = "sentinel-marker" ] || fail "no-work read-only guard updated the marker content"
   pass "fm-guard stale banner: read-only never mutates stale-banner state files"
-}
-
-test_autoarm_fresh_beacon_without_watcher_is_healthy() {
-  local dir out
-  dir=$(make_guard_case autoarm-fresh)
-  # A fresh beacon and NO live watcher: the healthy mid-turn state under the
-  # Cursor stop-hook park model, where the watcher only runs between turns.
-  touch "$(case_home "$dir")/state/.last-watcher-beat"
-  out=$(run_guard_case_autoarm "$dir")
-  [ -z "$out" ] \
-    || fail "auto-arm model with a fresh beacon and no live watcher must stay silent, got: $out"
-  pass "fm-guard stale banner: auto-arm fresh beacon without a live watcher is healthy"
-}
-
-test_autoarm_stale_beacon_alarms_with_correct_reason() {
-  local dir out
-  dir=$(make_guard_case autoarm-stale)
-  # No beacon at all -> a genuine supervision lapse even under the auto-arm model.
-  out=$(run_guard_case_autoarm "$dir")
-  [ "$(count_text "$out" "WATCHER DOWN - SUPERVISION IS OFF")" -eq 1 ] \
-    || fail "auto-arm model with an absent/stale beacon must alarm: $out"
-  assert_contains "$out" "no watcher has a fresh beacon" \
-    "auto-arm stale-beacon banner must name the stale-beacon reason"
-  pass "fm-guard stale banner: auto-arm stale beacon alarms with the true reason"
-}
-
-test_autoarm_stale_episode_is_stable() {
-  local dir out1 out2
-  dir=$(make_guard_case autoarm-stable-episode)
-  out1=$(run_guard_case_autoarm "$dir")
-  out2=$(run_guard_case_autoarm "$dir")
-  [ "$(count_text "$out1" "WATCHER DOWN - SUPERVISION IS OFF")" -eq 1 ] \
-    || fail "first auto-arm stale call did not print the full banner: $out1"
-  [ "$(count_text "$out2" "WATCHER DOWN - SUPERVISION IS OFF")" -eq 0 ] \
-    || fail "auto-arm stale episode re-printed the full banner instead of deduping: $out2"
-  assert_contains "$out2" "full banner already printed this episode" \
-    "second auto-arm stale call did not print the concise reminder"
-  pass "fm-guard stale banner: auto-arm stale episode stays one episode across calls"
 }
 
 test_persistent_no_watcher_banner_names_missing_process() {
@@ -666,7 +617,7 @@ test_pi_harness_routes_itself_to_the_extension_model() {
     pid=$!
     record_pi_extension_session "$dir" "$pid" || fail "could not record the Pi extension session"
     touch "$home/state/.last-watcher-beat"
-    out=$(env -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u GROK_AGENT -u FM_SUPERVISION_MODEL \
+    out=$(env -u GROK_AGENT -u FM_SUPERVISION_MODEL \
       "${pi_env[@]}" \
       FM_ROOT_OVERRIDE="$(case_root "$dir")" \
       FM_HOME="$home" \
@@ -692,9 +643,6 @@ test_extension_stale_beacon_alarms_despite_live_session
 test_extension_handoff_keeps_queued_wake_warning
 test_persistent_model_ignores_pi_extension_evidence
 test_extension_live_watcher_is_healthy_without_ownership_evidence
-test_autoarm_fresh_beacon_without_watcher_is_healthy
-test_autoarm_stale_beacon_alarms_with_correct_reason
-test_autoarm_stale_episode_is_stable
 test_persistent_no_watcher_banner_names_missing_process
 test_persistent_no_watcher_episode_survives_beacon_touch
 test_fresh_beacon_without_live_watcher_stays_alarm

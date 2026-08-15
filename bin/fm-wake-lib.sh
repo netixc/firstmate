@@ -138,10 +138,6 @@ fm_watcher_healthy() {
 
 # fm_supervision_model
 # Print the supervision model of this home's PRIMARY harness:
-#   autoarm     Cursor's stop-hook park: the
-#               watcher is armed at each turn end and exits on its wake, so it
-#               runs only BETWEEN turns. Mid-turn a fresh beacon with no live
-#               watcher process is the healthy state.
 #   extension   Pi (and pi-signed): .pi/extensions/fm-primary-pi-watch.ts owns
 #               continuity. It tears the watcher down on every actionable wake and
 #               spawns the replacement itself, so a genuinely unheld singleton lock
@@ -156,11 +152,10 @@ fm_watcher_healthy() {
 fm_supervision_model() {
   local harness
   case "${FM_SUPERVISION_MODEL:-}" in
-    autoarm|extension|persistent) printf '%s\n' "$FM_SUPERVISION_MODEL"; return 0 ;;
+    extension|persistent) printf '%s\n' "$FM_SUPERVISION_MODEL"; return 0 ;;
   esac
   harness=$("$FM_WAKE_LIB_DIR/fm-harness.sh" 2>/dev/null || printf unknown)
   case "$harness" in
-    cursor) printf 'autoarm\n' ;;
     pi|pi-signed) printf 'extension\n' ;;
     *) printf 'persistent\n' ;;
   esac
@@ -234,8 +229,6 @@ fm_pi_extension_owns_supervision() {
 #                                             the lock (the beacon is still fresh)
 #                              stale-beacon - the beacon is stale beyond grace or
 #                                             absent (a genuine supervision lapse)
-# autoarm: a fresh beacon within grace is healthy even with no live watcher,
-# because the watcher only runs between turns; only a stale beacon is a lapse.
 # extension: a live identity-matched watcher is the ordinary healthy state, but a
 # genuinely unheld lock is also healthy while the beacon is fresh AND a live Pi
 # session provably owns continuity (fm_pi_extension_owns_supervision) - that is the
@@ -263,10 +256,6 @@ fm_watcher_supervision_verdict() {
     *) [ "$age" -lt "$grace" ] && fresh=true ;;
   esac
   model=$(fm_supervision_model)
-  if [ "$model" = autoarm ]; then
-    [ "$fresh" = true ] && FM_WATCHER_VERDICT_OK=true
-    return 0
-  fi
   if fm_watcher_healthy "$state" "$watch" "$grace" "$home"; then
     # shellcheck disable=SC2034 # Read by callers after the function returns.
     FM_WATCHER_VERDICT_OK=true

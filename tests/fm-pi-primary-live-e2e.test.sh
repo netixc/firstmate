@@ -178,6 +178,17 @@ run_native_ahoy_regressions() {
   git init -q "$AHOY_PROJECT"
   cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$AHOY_PROJECT/.pi/extensions/"
   cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$AHOY_PROJECT/.pi/extensions/lib/"
+  cat > "$AHOY_PROJECT/.pi/extensions/captain-boundary-probe.ts" <<'EOF'
+import { writeFileSync } from "node:fs";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+export default function (pi: ExtensionAPI) {
+  pi.on("before_agent_start", (event) => {
+    if (event.prompt !== "A genuine captain message before Ahoy.") return;
+    writeFileSync(`${process.env.FM_HOME}/state/prior-captain-boundary`, "seen\n");
+  });
+}
+EOF
   cp \
     "$ROOT/bin/fm-sessionstart-nudge.sh" \
     "$ROOT/bin/fm-primary-scope-lib.sh" \
@@ -233,12 +244,13 @@ run_native_ahoy_regressions() {
     cd "$AHOY_PROJECT" &&
       FM_HOME="$later_home" pi --print --approve --no-session --no-context-files --no-extensions \
         -e .pi/extensions/fm-primary-turnend-guard.ts \
+        -e .pi/extensions/captain-boundary-probe.ts \
         --no-skills --skill .agents/skills \
         --model openai-codex/gpt-5.6-sol --thinking low \
-        "Respond exactly PRIOR_BOUNDARY_ACK." "/ahoy"
+        "A genuine captain message before Ahoy." "/ahoy"
   )
-  printf '%s\n' "$later_out" | grep -Fq "PRIOR_BOUNDARY_ACK" \
-    || fail "Pi native later-message setup did not preserve the genuine captain boundary: $later_out"
+  [ "$(sed -n '1p' "$later_home/state/prior-captain-boundary")" = seen ] \
+    || fail "Pi native later-message setup did not preserve the genuine captain boundary"
   printf '%s\n' "$later_out" | grep -Fq "AHOY_BEARINGS_BRANCH" \
     && fail "Pi native later-message Ahoy gathered Bearings: $later_out"
   [ "$(sed -n '1p' "$later_home/state/session-start-count")" = 1 ] \
@@ -258,6 +270,23 @@ cp "$ROOT/.pi/extensions/lib/fm-calm-visibility.ts" "$PROJECT/.pi/extensions/lib
 cp "$ROOT/.pi/extensions/lib/fm-calm-working-ship.ts" "$PROJECT/.pi/extensions/lib/fm-calm-working-ship.ts"
 cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$PROJECT/.pi/extensions/lib/fm-operational-input.ts"
 cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$PROJECT/.pi/extensions/fm-primary-turnend-guard.ts"
+cat > "$PROJECT/.pi/extensions/watcher-settle-probe.ts" <<'EOF'
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+export default function (pi: ExtensionAPI) {
+  pi.on("agent_settled", () => {
+    const home = process.env.FM_HOME;
+    if (!home) return;
+    const exits = `${home}/state/.watch-cycle-exits.log`;
+    const queue = `${home}/state/.wake-queue`;
+    if (!existsSync(exits) || !existsSync(queue)) return;
+    if (!/reason=actionable-signal.*successor=started:[0-9]+/.test(readFileSync(exits, "utf8"))) return;
+    if (readFileSync(queue, "utf8").trim() !== "") return;
+    writeFileSync(`${home}/state/watcher-turn-settled`, "seen\n");
+  });
+}
+EOF
 cp "$ROOT/bin/fm-watch-arm.sh" "$PROJECT/bin/fm-watch-arm.sh"
 cp "$ROOT/bin/fm-operational-input.sh" "$PROJECT/bin/fm-operational-input.sh"
 cp "$ROOT/bin/fm-supervision-instructions.sh" "$PROJECT/bin/fm-supervision-instructions.sh"
@@ -265,7 +294,7 @@ chmod +x "$PROJECT/bin/fm-operational-input.sh"
 mkdir -p "$HOME_DIR/state" "$HOME_DIR/config"
 
 "$TMUX" -L "$SOCKET" new-session -d -s "$SESSION" -c "$PROJECT" \
-  "env FM_HOME='$HOME_DIR' FM_ROOT_OVERRIDE='$PROJECT' FM_POLL=1 FM_SIGNAL_GRACE=0 FM_HEARTBEAT=600 bash -lc 'printf \"%s\\n\" \"\$\$\" > \"\$FM_HOME/state/.lock\"; pi --approve --no-session --no-context-files --no-extensions -e .pi/extensions/fm-calm.ts -e .pi/extensions/fm-primary-turnend-guard.ts -e .pi/extensions/fm-primary-pi-watch.ts --model openai-codex/gpt-5.6-sol --thinking low; rc=\$?; printf \"PI_EXIT=%s\\n\" \"\$rc\"; sleep 300'"
+  "env FM_HOME='$HOME_DIR' FM_ROOT_OVERRIDE='$PROJECT' FM_POLL=1 FM_SIGNAL_GRACE=0 FM_HEARTBEAT=600 bash -lc 'printf \"%s\\n\" \"\$\$\" > \"\$FM_HOME/state/.lock\"; pi --approve --no-session --no-context-files --no-extensions -e .pi/extensions/fm-calm.ts -e .pi/extensions/fm-primary-turnend-guard.ts -e .pi/extensions/fm-primary-pi-watch.ts -e .pi/extensions/watcher-settle-probe.ts --model openai-codex/gpt-5.6-sol --thinking low; rc=\$?; printf \"PI_EXIT=%s\\n\" \"\$rc\"; sleep 300'"
 
 i=0
 while [ "$i" -lt 120 ]; do
@@ -305,7 +334,7 @@ send_prompt "/calm"
 sleep 0.2
 
 : > "$HOME_DIR/state/pi-e2e.meta"
-send_prompt "Start supervision with fm_watch_arm_pi and never use bash to arm supervision. After the watcher wake arrives, run bin/fm-wake-drain.sh and reply exactly HANDLED."
+send_prompt "Start supervision with fm_watch_arm_pi and never use bash to arm supervision. After the watcher wake arrives, run bin/fm-wake-drain.sh, acknowledge the queued wake, and then finish the turn."
 wait_for_text "watcher: started Pi extension arm child 1" || fail "Pi did not render the initial watcher tool result"
 
 printf 'done: pi live e2e watcher fire\n' > "$HOME_DIR/state/pi-e2e.status"
@@ -317,7 +346,14 @@ while [ "$i" -lt 240 ]; do
 done
 grep -Eq 'reason=actionable-signal.*successor=started:[0-9]+' "$HOME_DIR/state/.watch-cycle-exits.log" 2>/dev/null \
   || fail "Pi extension did not start and ledger-link a successor after the actionable close"
-wait_for_exact_line "HANDLED" 120 || fail "Pi did not drain and settle after its extension-owned successor started"
+i=0
+while [ "$i" -lt 120 ]; do
+  [ "$(sed -n '1p' "$HOME_DIR/state/watcher-turn-settled" 2>/dev/null)" = seen ] && break
+  sleep 0.5
+  i=$((i + 1))
+done
+[ "$(sed -n '1p' "$HOME_DIR/state/watcher-turn-settled" 2>/dev/null)" = seen ] \
+  || fail "Pi did not drain and settle after its extension-owned successor started"
 
 pane=$(capture)
 guard_count=$(printf '%s\n' "$pane" | grep -Fc "TURN WOULD END BLIND - supervision is off." || true)

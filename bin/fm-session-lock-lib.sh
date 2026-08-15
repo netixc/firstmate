@@ -6,11 +6,6 @@
 # bin/fm-lock.sh uses it to acquire and inspect state/.lock.
 # This file is sourced by scripts and has no side effects on source.
 
-# Cursor identity is structural rather than a safe command-name pattern, so its
-# dedicated owner handles that adapter.
-# shellcheck source=bin/fm-cursor-lib.sh
-. "$(dirname -- "${BASH_SOURCE[0]}")/fm-cursor-lib.sh"
-
 FM_HARNESS_RE='codex|opencode|grok|kimi|^pi$|^pi-signed$'
 FM_HARNESS_NAMES=(codex opencode grok kimi pi-signed pi)
 
@@ -27,8 +22,8 @@ fm_harness_path_name() {  # <path>
 
 # True when the process described by command name $1 and full argument string $2
 # is a verified harness. Evidence is the command basename, an exact harness path
-# component in the command or argv[0], a bare interpreter running a harness
-# script, or Cursor's structural identity.
+# component in the command or argv[0], or a bare interpreter running a harness
+# script.
 fm_harness_process_matches() {  # <comm> <args>
   local comm=$1 args=$2 base argv0 name
   base=$(basename -- "$comm")
@@ -45,7 +40,7 @@ fm_harness_process_matches() {  # <comm> <args>
       printf '%s' "$args" | grep -qE "$FM_HARNESS_RE" && return 0
       ;;
   esac
-  fm_cursor_process_matches "$comm" "$args" "$argv0"
+  return 1
 }
 
 # Walk up to 16 parents and print the innermost verified harness process.

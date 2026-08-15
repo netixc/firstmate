@@ -401,7 +401,7 @@ EOF
 # _fm_decision_fold_line semantics change, so persisted state from an older
 # interpretation is discarded and rebuilt from byte 0.
 #
-# Cursor invalidation is deliberately minimal, matching how status files are
+# A cursor invalidation is deliberately minimal, matching how status files are
 # ACTUALLY used in this repo: every one is created once (`>`) and only ever
 # appended to (`>>`) - never replaced, renamed, or rewritten in place. So the
 # ways a cursor can go stale are a fold-version mismatch, a shrink (truncated),
