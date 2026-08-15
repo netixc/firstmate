@@ -78,8 +78,6 @@ It streams the hook to completion and retains at most 512 KiB for message delive
 The OpenCode nudge runs only on `session.created`.
 The watcher-arm and turn-end plugins run later on `session.idle`, and the guard lets the watcher coordinator act first, so the plugins do not race for one lifecycle event.
 
-That alternative expands trust and writes outside this repository, so Firstmate never installs it or grants folder trust automatically.
-
 ## Regression coverage
 
 `tests/fm-sessionstart-nudge.test.sh` proves the nudge wrapper's silence for both gate signals, an unmarked linked worktree, a missing state directory, and an already-owned lock, plus its exact U+2063 `FIRSTMATE_OP:`-prefixed, `session-start`-typed one-line output.
