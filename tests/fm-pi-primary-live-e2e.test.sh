@@ -121,8 +121,9 @@ run_ahoy_case() {
   local label=$1 preceding=$2 expected=$3 out status=0
   out=$(
     cd "$PROJECT" &&
+      # Ahoy's pre-branch helm check needs Bash when no session-open hook runs.
       pi --print --approve --no-session --no-context-files --no-extensions \
-        --no-skills --skill .agents/skills --tools read \
+        --no-skills --skill .agents/skills --tools read,bash \
         --model openai-codex/gpt-5.6-sol --thinking low \
         "$preceding" "/ahoy"
   ) || status=$?
