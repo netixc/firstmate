@@ -4079,6 +4079,7 @@ test_apply_transition_defer_and_fallback_are_noops() {
   marker="$state/.herdr-escalated-default_wG_pQ"
   for s in idle "done" unknown ""; do
     local rec
+    rec=$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_record wG:pQ wG "" "$1" pi' "$ROOT" "$s")
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_apply_transition "$1" "$2" "$3"' "$ROOT" "$state" default "$rec"; rc=$?
     [ "$rc" = 1 ] || fail "defer/fallback status '$s' must return 1 (no fast action), got $rc"
     [ ! -e "$marker" ] || fail "defer/fallback status '$s' must not touch the escalation marker"

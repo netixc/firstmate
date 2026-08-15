@@ -120,6 +120,7 @@ SH
 exit 0
 SH
   chmod +x "$fb/sleep"
+  fm_fake_exit0 "$fb" pi
 }
 
 # new_case <name> [id] -> echoes a case dir with a live pi ship task.
