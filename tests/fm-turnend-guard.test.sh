@@ -104,7 +104,7 @@ test_predicate_source_needs_supervision() {
 
 # --- HOOK: bin/fm-turnend-guard.sh ------------------------------------------
 #
-# Each scenario gets its own directory carrying a copy of the two guard scripts
+# Each scenario gets its own directory carrying a copy of the guard script
 # under bin/, so the hook (invoked by absolute path) resolves its own FM_ROOT to
 # that scenario dir regardless of the test's cwd.
 
@@ -112,7 +112,6 @@ install_guard_scripts() {
   local dir=$1
   mkdir -p "$dir/bin"
   cp "$ROOT/bin/fm-turnend-guard.sh" "$dir/bin/fm-turnend-guard.sh"
-  cp "$ROOT/bin/fm-turnend-guard-grok.sh" "$dir/bin/fm-turnend-guard-grok.sh"
   cp "$ROOT/bin/fm-operational-input.sh" "$dir/bin/fm-operational-input.sh"
   cp "$ROOT/bin/fm-supervision-instructions.sh" "$dir/bin/fm-supervision-instructions.sh"
   cp "$ROOT/bin/fm-harness.sh" "$dir/bin/fm-harness.sh"
@@ -121,7 +120,7 @@ install_guard_scripts() {
   cp "$ROOT/bin/fm-wake-lib.sh" "$dir/bin/fm-wake-lib.sh"
   mkdir -p "$dir/docs"
   cp -R "$ROOT/docs/supervision-protocols" "$dir/docs/supervision-protocols"
-  chmod +x "$dir/bin/fm-turnend-guard.sh" "$dir/bin/fm-turnend-guard-grok.sh" "$dir/bin/fm-operational-input.sh" "$dir/bin/fm-supervision-instructions.sh" "$dir/bin/fm-harness.sh"
+  chmod +x "$dir/bin/fm-turnend-guard.sh" "$dir/bin/fm-operational-input.sh" "$dir/bin/fm-supervision-instructions.sh" "$dir/bin/fm-harness.sh"
 }
 
 mark_codex_hook_root() {
@@ -590,158 +589,13 @@ test_hook_runs_fast() {
   pass "fm-turnend-guard: runs well under the generous timing margin (${elapsed_s}s)"
 }
 
-test_grok_adapter_forces_one_resume_when_unhealthy() {
-  local dir fakebin log out status
-  dir=$(make_primary_dir "$TMP_ROOT/grok-adapter-block")
-  : > "$dir/state/task1.meta"
-  fakebin=$(fm_fakebin "$TMP_ROOT/grok-adapter-fakebin")
-  log="$TMP_ROOT/grok-adapter-call.log"
-  cat > "$fakebin/grok" <<EOF
-#!/usr/bin/env bash
-{
-  printf 'active=%s\n' "\${GROK_TURNEND_GUARD_ACTIVE:-}"
-  printf 'home=%s\n' "\${GROK_HOME:-}"
-  printf 'args:'
-  for arg in "\$@"; do
-    printf ' <%s>' "\$arg"
-  done
-  printf '\n'
-} >> "$log"
-EOF
-  chmod +x "$fakebin/grok"
-  out=$(printf '{"sessionId":"session-test","hookEventName":"stop"}' | PATH="$fakebin:$PATH" GROK_WORKSPACE_ROOT="$dir" bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
-  expect_code 0 "$status" "grok adapter must fail open after queuing a forced resume"
-  [ -z "$out" ] || fail "grok adapter printed output: $out"
-  assert_contains "$(cat "$log")" 'active=1' "grok adapter must mark its forced resume as loop-guarded"
-  assert_contains "$(cat "$log")" '<--resume>' "grok adapter must resume the current session"
-  assert_contains "$(cat "$log")" '<session-test>' "grok adapter must pass the hook session id"
-  assert_not_contains "$(cat "$log")" '<--permission-mode>' "grok adapter must not add a stronger permission mode"
-  assert_not_contains "$(cat "$log")" '<bypassPermissions>' "grok adapter must not bypass permissions on forced resume"
-  assert_contains "$(cat "$log")" 'FIRSTMATE_OP: v1 turn-end-guard: TURN WOULD END BLIND' "grok adapter must retain the typed guard kind"
-  pass "fm-turnend-guard-grok: forces one explicitly marked same-session resume when the shared predicate blocks"
-}
 
-test_grok_adapter_loop_guard_skips_resume() {
-  local dir fakebin log out status
-  dir=$(make_primary_dir "$TMP_ROOT/grok-adapter-loop")
-  : > "$dir/state/task1.meta"
-  fakebin=$(fm_fakebin "$TMP_ROOT/grok-adapter-loop-fakebin")
-  log="$TMP_ROOT/grok-adapter-loop-call.log"
-  cat > "$fakebin/grok" <<EOF
-#!/usr/bin/env bash
-printf 'called\n' >> "$log"
-EOF
-  chmod +x "$fakebin/grok"
-  out=$(printf '{"sessionId":"session-test","hookEventName":"stop"}' | PATH="$fakebin:$PATH" GROK_WORKSPACE_ROOT="$dir" GROK_TURNEND_GUARD_ACTIVE=1 bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
-  expect_code 0 "$status" "grok adapter must allow its own forced resume turn to end"
-  [ -z "$out" ] || fail "grok adapter printed output while loop-guarded: $out"
-  [ ! -e "$log" ] || fail "grok adapter spawned another resume while loop-guarded: $(cat "$log")"
-  pass "fm-turnend-guard-grok: legacy environment loop guard prevents a nested resume loop"
-}
 
-test_grok_adapter_native_false_blocks_without_resume() {
-  local dir fakebin log out status
-  dir=$(make_primary_dir "$TMP_ROOT/grok-native-false")
-  : > "$dir/state/task1.meta"
-  fakebin=$(fm_fakebin "$TMP_ROOT/grok-native-false-bin")
-  log="$TMP_ROOT/grok-native-false.log"
-  printf '#!/usr/bin/env bash\nprintf called >> %q\n' "$log" > "$fakebin/grok"
-  chmod +x "$fakebin/grok"
-  out=$(printf '%s' '{"sessionId":"native","stopHookActive":false}' | PATH="$fakebin:$PATH" GROK_WORKSPACE_ROOT="$dir" bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
-  expect_code 2 "$status" "native stopHookActive=false must return the shared blocking status"
-  assert_contains "$out" 'TURN WOULD END BLIND' "native block must pass shared guard feedback to Grok"
-  [ ! -e "$log" ] || fail "native path started grok --resume"
-  pass "fm-turnend-guard-grok: native false delegates blocking feedback with zero resume processes"
-}
 
-test_grok_adapter_native_true_allows_without_resume() {
-  local dir fakebin log out status
-  dir=$(make_primary_dir "$TMP_ROOT/grok-native-true")
-  : > "$dir/state/task1.meta"
-  fakebin=$(fm_fakebin "$TMP_ROOT/grok-native-true-bin")
-  log="$TMP_ROOT/grok-native-true.log"
-  printf '#!/usr/bin/env bash\nprintf called >> %q\n' "$log" > "$fakebin/grok"
-  chmod +x "$fakebin/grok"
-  out=$(printf '%s' '{"sessionId":"native","stopHookActive":true}' | PATH="$fakebin:$PATH" GROK_WORKSPACE_ROOT="$dir" bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
-  expect_code 0 "$status" "native stopHookActive=true must allow the bounded continuation to stop"
-  [ -z "$out" ] || fail "native true produced output: $out"
-  [ ! -e "$log" ] || fail "native true started grok --resume"
-  pass "fm-turnend-guard-grok: native true remains bounded and starts no resume process"
-}
 
-test_grok_adapter_snake_case_native_and_camel_precedence() {
-  local dir out status
-  dir=$(make_primary_dir "$TMP_ROOT/grok-native-spellings")
-  : > "$dir/state/task1.meta"
-  out=$(printf '%s' '{"sessionId":"native","stop_hook_active":false}' | GROK_WORKSPACE_ROOT="$dir" bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
-  expect_code 2 "$status" "typed snake_case false must select native blocking"
-  assert_contains "$out" 'TURN WOULD END BLIND' "snake_case native block lost feedback"
-  out=$(printf '%s' '{"sessionId":"native","stopHookActive":true,"stop_hook_active":false}' | GROK_WORKSPACE_ROOT="$dir" bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
-  expect_code 0 "$status" "camelCase true must win over snake_case false"
-  out=$(printf '%s' '{"sessionId":"native","stopHookActive":false,"stop_hook_active":true}' | GROK_WORKSPACE_ROOT="$dir" bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
-  expect_code 2 "$status" "camelCase false must win over snake_case true"
-  pass "fm-turnend-guard-grok: both spellings are typed and camelCase has deterministic precedence"
-}
 
-test_grok_adapter_invalid_inputs_start_neither_path() {
-  local dir fakebin log payload out status
-  dir=$(make_primary_dir "$TMP_ROOT/grok-invalid-inputs")
-  : > "$dir/state/task1.meta"
-  fakebin=$(fm_fakebin "$TMP_ROOT/grok-invalid-bin")
-  log="$TMP_ROOT/grok-invalid.log"
-  printf '#!/usr/bin/env bash\nprintf called >> %q\n' "$log" > "$fakebin/grok"
-  chmod +x "$fakebin/grok"
-  for payload in \
-    ' ' \
-    '{' \
-    '{"sessionId":"x","stopHookActive":"false"}' \
-    '{"sessionId":"x","stop_hook_active":1}' \
-    '{"sessionId":"x"}{"sessionId":"y"}' \
-    '{"sessionId":"x","stopHookActive":false}{"sessionId":"y","stopHookActive":false}' \
-    '{"sessionId":"x","stopHookActive":"bad","stopHookActive":false}' \
-    '{"sessionId":"x","stop_hook_active":false,"stop_hook_active":false}' \
-    '{"sessionId":"x","sessionId":"y"}'
-  do
-    out=$(printf '%s' "$payload" | PATH="$fakebin:$PATH" GROK_WORKSPACE_ROOT="$dir" bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
-    expect_code 0 "$status" "invalid Grok payload must conservatively allow without choosing a path"
-    [ -z "$out" ] || fail "invalid Grok payload produced output: $out"
-  done
-  [ ! -e "$log" ] || fail "invalid Grok payload started a resume process"
-  out=$(printf '%s' '{"sessionId":"x","stopHookActive":false}' | PATH="$fakebin:$PATH" GROK_WORKSPACE_ROOT="$TMP_ROOT/missing-grok-root" bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
-  expect_code 0 "$status" "missing shared-guard prerequisite must conservatively allow"
-  [ -z "$out" ] || fail "missing prerequisite produced output: $out"
-  [ ! -e "$log" ] || fail "missing prerequisite started a resume process"
-  pass "fm-turnend-guard-grok: malformed, invalidly typed, and missing-prerequisite payloads start neither path"
-}
 
-test_grok_adapter_missing_jq_and_no_supervision_allow() {
-  local dir fakebin log out status tool tool_path
-  dir=$(make_primary_dir "$TMP_ROOT/grok-nojq")
-  : > "$dir/state/task1.meta"
-  fakebin=$(fm_fakebin "$TMP_ROOT/grok-nojq-bin")
-  log="$TMP_ROOT/grok-nojq.log"
-  for tool in bash cat printf; do
-    tool_path=$(command -v "$tool") || fail "test host must provide $tool"
-    ln -s "$tool_path" "$fakebin/$tool"
-  done
-  printf '#!/usr/bin/env bash\nprintf called >> %q\n' "$log" > "$fakebin/grok"
-  chmod +x "$fakebin/grok"
-  out=$(printf '%s' '{"sessionId":"x","stopHookActive":false}' | PATH="$fakebin" GROK_WORKSPACE_ROOT="$dir" bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
-  expect_code 0 "$status" "missing jq must conservatively allow"
-  [ -z "$out" ] || fail "missing jq produced output: $out"
-  [ ! -e "$log" ] || fail "missing jq started a resume process"
 
-  dir=$(make_primary_dir "$TMP_ROOT/grok-native-no-work")
-  out=$(printf '%s' '{"sessionId":"x","stopHookActive":false}' | GROK_WORKSPACE_ROOT="$dir" bash "$dir/bin/fm-turnend-guard-grok.sh" 2>&1); status=$?
-  expect_code 0 "$status" "healthy no-supervision-needed native stop must allow"
-  [ -z "$out" ] || fail "no-supervision-needed native stop produced output: $out"
-  pass "fm-turnend-guard-grok: missing jq and no-supervision-needed stops stay silent and bounded"
-}
-
-# A hook that also has a .grok/hooks/ counterpart must refuse to run under
-# Grok, or the home gets a duplicate path. The regression this pins: the guard
-# once tested GROK_AGENT alone, which a grok 1.0.0 hook process does not carry,
-# so duplicate watcher work wedged the Grok turn for its declared timeout.
 test_codex_hook_uses_process_pwd_when_payload_cwd_is_outside_root() {
   local settings command dir expected_root outside payload out status
   settings="$ROOT/.codex/hooks.json"
@@ -1012,13 +866,6 @@ test_hook_silent_in_crewmate_worktree
 test_hook_silent_without_jq
 test_hook_silent_without_stdin
 test_hook_runs_fast
-test_grok_adapter_forces_one_resume_when_unhealthy
-test_grok_adapter_loop_guard_skips_resume
-test_grok_adapter_native_false_blocks_without_resume
-test_grok_adapter_native_true_allows_without_resume
-test_grok_adapter_snake_case_native_and_camel_precedence
-test_grok_adapter_invalid_inputs_start_neither_path
-test_grok_adapter_missing_jq_and_no_supervision_allow
 test_codex_hook_uses_process_pwd_when_payload_cwd_is_outside_root
 test_codex_hook_ignores_nested_git_root_guard
 test_opencode_plugin_anchors_guard_to_worktree

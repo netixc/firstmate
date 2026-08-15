@@ -910,9 +910,9 @@ test_kimi_capture_fallback_uses_recorded_harness() (
 
   [ "$(fm_pending_reply_backend_observation tmux session:fm-hibit fm-hibit codex)" = fallback-idle ] \
     || fail "Kimi spinner leaked into another harness"
-  export FM_PENDING_KIMI_CAPTURE='Ctrl+c:cancel'
+  export FM_PENDING_KIMI_CAPTURE='Working...'
   [ "$(fm_pending_reply_backend_observation tmux session:fm-hibit fm-hibit kimi)" = fallback-idle ] \
-    || fail "Grok's exact busy token leaked into Kimi pending-reply observation"
+    || fail "Pi's exact busy token leaked into Kimi pending-reply observation"
   export FM_PENDING_KIMI_CAPTURE=' 🌑 · Tip: ask Kimi to schedule tasks, e.g. "remind me at 5pm"'
   fm_pending_reply_tick "$state"
   rec=$(fm_pending_reply_path "$state" "$corr")

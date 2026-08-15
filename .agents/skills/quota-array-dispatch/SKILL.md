@@ -32,7 +32,7 @@ For each candidate, preserve explicit `harness`, `model`, and `provider`; `harne
 - schema notes when runway or pace fields are absent
 
 Stale raw windows are diagnostic, never headroom or fabricated runway.
-Grok's `credits.remaining` is a prepaid balance unrelated to `percentRemaining`; never read it as exhaustion.
+The quota provider named `grok` reports `credits.remaining` as a prepaid balance unrelated to `percentRemaining`; never read it as exhaustion.
 Read all windows named by `boundedBy`, `limitingWindowIds`, `aheadWindowIds`, `behindWindowIds`, `onPaceWindowIds`, `unknownWindowIds`, and `unmeasurableWindowIds`.
 The compact default output intentionally omits numeric reserve, while `--json` and `--full` retain reserve diagnostics.
 
@@ -52,7 +52,7 @@ Name the evidence for each relation you assert so the conclusion is inspectable.
 
 ## Authentication is scoped to the selected surface
 
-A candidate authenticates through its own tuple's surface; another harness's CLI can never gate it, and `harness=pi` with `model=xai/grok-*` is Pi using xAI rather than the standalone Grok CLI.
+A candidate authenticates through its own tuple's surface; another harness's CLI can never gate it, and `harness=pi` with `model=xai/grok-*` is Pi using xAI.
 `quota-axi auth --json` lists each provider's credential sources independently, so read the one source the candidate actually uses rather than collapsing a provider to a single status.
 A provider can carry a healthy source beside a missing or expired one; the unused source's state is not the candidate's state.
 A Pi-hosted family may authenticate through the vendor's own store with no `pi:`-prefixed source at all, which is normal and never evidence against the candidate.
@@ -65,10 +65,7 @@ Uncertainty and ineligibility are different findings:
 - Only concrete contradictory evidence blocks: an authoritative catalog proving the model unsupported, or proof that the credential the candidate actually selects is unusable.
 - Reserve login wording for that proven-unusable case, and name the harness, model, surface, and evidence.
 
-When a credential's local classification is the only thing standing between a candidate and a block, get ground truth before blocking.
-`bin/fm-vendor-auth-probe.sh` is the only approved vendor-credential probe; its `--help` owns the registered probes and mechanics.
-It takes no harness, model, or provider and returns a fact, not a route: only `authenticated` and `unauthenticated` are ground truth, while `indeterminate`, `timeout`, and `unavailable` establish nothing and must never be read as either outcome.
-Never launch a vendor CLI yourself, and never probe a credential store the candidate does not use.
+When a credential's local classification is the only thing standing between a candidate and a block, preserve it as uncertainty rather than launching a vendor CLI or probing a credential store directly.
 
 ## Pace semantics
 
@@ -109,5 +106,5 @@ Never use headroom, runway, pace, or reserve to silently replace that reasoning 
    Report duplicate concrete profiles as a configuration error.
 
 Account for every candidate visibly before selecting or escalating, naming its catalog evidence, provider relation, applicable quota and authentication facts, remaining uncertainty, fit and reasoning class, effective headroom, usable runway, likely-completion reasoning, and later pace or reserve evidence when used.
-A blocked credential report must name `harness`, `model`, authentication surface, and concrete failure evidence; never emit a bare `Grok unauthenticated` statement.
+A blocked credential report must name `harness`, `model`, authentication surface, and concrete failure evidence; never emit a bare provider-level unauthenticated statement.
 Never conclude with an unexplained "best quota" label.

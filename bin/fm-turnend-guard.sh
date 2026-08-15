@@ -6,13 +6,11 @@
 # harness turn-end integrations and applies the shared supervision predicate.
 # Codex can block directly by preserving exit status 2 and stderr. OpenCode and
 # Pi adapters use the same predicate and force one bounded follow-up because
-# their turn-end events are passive. Grok delegates native blocking when its
-# running Stop payload advertises that capability, with one bounded resume
-# fallback for older payloads. See docs/turnend-guard.md for per-harness
+# their turn-end events are passive. See docs/turnend-guard.md for per-harness
 # mechanics and evidence.
 #
-# Codex and Grok use the payload's typed stop-active field as a one-block loop
-# guard. Passive adapters provide their own one-follow-up guard before calling
+# Codex uses the payload's typed stop-active field as a one-block loop guard.
+# Passive adapters provide their own one-follow-up guard before calling
 # this script. This bounds every adapter to at most one forced continuation per
 # turn while preserving a later-turn reminder if supervision remains absent.
 set -u
@@ -37,8 +35,6 @@ command -v jq >/dev/null 2>&1 || exit 0
 
 STOP_HOOK_ACTIVE=$(printf '%s' "$PAYLOAD" | jq -r '
   if type != "object" then error("payload")
-  elif has("stopHookActive") then
-    if ((.stopHookActive | type) == "boolean") then .stopHookActive else error("stopHookActive") end
   elif has("stop_hook_active") then
     if ((.stop_hook_active | type) == "boolean") then .stop_hook_active else error("stop_hook_active") end
   else false

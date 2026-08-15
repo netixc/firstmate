@@ -20,16 +20,6 @@ codex exec --ephemeral --dangerously-bypass-hook-trust \
 
 Observed result: the `SessionStart` hook completed and its stdout reached model context.
 
-Grok command shape:
-
-```sh
-grok --trust -p 'Follow any SessionStart hook context before this prompt.' \
-  --permission-mode bypassPermissions --output-format plain
-```
-
-Observed result: the project hook ran, but its stdout did not reach model context.
-This is the current Grok fail-open limit.
-
 OpenCode was checked in both headless and interactive modes.
 `client.session.promptAsync` accepted the nudge in both cases; the persistent TUI completed the generated turn, while `opencode run` exited before another turn.
 This is the current headless fail-open limit.
@@ -116,7 +106,6 @@ Each pass polled `state/<id>.busy-state` while a real turn ran.
 | OpenCode | 1.17.18 | Plugin `session.status` | In a real TUI pane: seed, then `busy source=opencode-plugin event=session-busy`, then `idle source=opencode-plugin event=session-status-idle`. |
 | Codex | codex-cli 0.145.0 | None usable | See below; classifies `unknown codex-unverified`. |
 | Kimi (standalone) | not installed | None usable | No binary on `PATH`, so the gate stays closed and it classifies `unknown kimi-unverified`. |
-| Grok | 0.2.112 | Isolated rendered-tail fallback | Retained unconverted; the approved audit could not credit a live structured-lifecycle run. |
 
 Codex was probed two ways, both refused:
 
@@ -140,33 +129,13 @@ tests/fm-crew-state.test.sh
 
 ## Turn-end guard
 
-The blocking and bounded-follow-up mechanisms were validated across the four enabled integration paths from 2026-07-08 through 2026-08-13.
+The blocking and bounded-follow-up mechanisms were validated across the three enabled integration paths from 2026-07-08 through 2026-08-13.
 
 | Harness | Version verified | Mechanism | Observed result |
 | --- | --- | --- | --- |
 | Codex | 0.142.1 | Blocking `Stop` hook | Hook process root stayed anchored to the trusted checkout and one continuation ran. |
 | OpenCode | 1.17.6 | Passive `session.idle` callback | Throwing could not block, while `promptAsync` scheduled one TUI follow-up; headless remained fail-open. |
 | Pi | 0.80.5 | Passive `agent_settled` callback | Exactly one guard follow-up ran for an unhealthy cycle, with no recursion across tool turns. |
-| Grok | 0.2.112 native and 0.2.73 pre-native | Running-payload adaptive `Stop` | Native false-to-true continuation stayed in one process with two model turns and zero resume launches; the field-absent pre-native process launched exactly one guarded resume. |
-
-The Grok adaptive matrix ran on 2026-07-28 with separate scratch repositories and homes, dedicated tmux sockets, one target plus one control window, ambient tmux variables removed, and a socket-bound wrapper first in `PATH`.
-
-```sh
-FM_GROK_STOP_LIVE_E2E=1 \
-  FM_GROK_NATIVE_BIN="$native_grok_0_2_112" \
-  FM_GROK_LEGACY_BIN="$official_pre_native_grok_0_2_73" \
-  tests/fm-grok-stop-live-e2e.test.sh
-```
-
-Observed bounded output:
-
-```text
-ok - grok 0.2.112 (9bbd559437aa) [stable] native Stop kept one session across false->true, two model turns, and zero resume processes
-ok - grok 0.2.73 (9ff14c43bbe5) [stable] legacy Stop omitted capability, resumed exactly once, and stopped normally
-ok - Grok adaptive Stop real-process matrix passed with exact target cleanup and control-window survival
-```
-
-That inertness result is scoped to the builds it exercised: it did not establish that `GROK_AGENT` reaches a Grok HOOK process, and on grok 1.0.0 it does not, so the marker set was widened to `GROK_HOOK_EVENT` as well (docs/turnend-guard.md "Harness integrations").
 
 `tests/fm-session-lock-ancestry.test.sh` pins the surviving verified-harness ancestry and exact Pi/pi-signed inner-engine lock owner semantics behind a deterministic process table.
 `tests/fm-watch-arm.test.sh` runs real watcher and arm cycles against durable on-disk state to verify that a delivered reason survives until post-handling acknowledgement and stops replaying after acknowledgement, while an unrelated queue append cannot make a watcher cycle that delivered nothing look successful.
@@ -179,7 +148,6 @@ Current entry points:
 tests/fm-turnend-guard.test.sh
 tests/fm-supervision-instructions.test.sh
 FM_PI_LIVE_E2E=1 tests/fm-pi-primary-live-e2e.test.sh
-FM_GROK_STOP_LIVE_E2E=1 FM_GROK_NATIVE_BIN="$native_grok" FM_GROK_LEGACY_BIN="$pre_native_grok" tests/fm-grok-stop-live-e2e.test.sh
 ```
 
 The Pi extension-model pull-guard correction (`bin/fm-guard.sh` no longer reports a false watcher-down on a Pi primary during the extension's own watcher hand-off) was verified on 2026-08-13 with the installed ShellCheck 0.11.0 and isolated behavior suites.
@@ -238,7 +206,6 @@ No credential material was copied into a fixture.
 codex-cli 0.144.4
 OpenCode 1.17.18
 Pi 0.80.10
-grok 0.2.103 (89c3d36fb6f1) [stable]
 ```
 
 | Harness | Exact opt-in command | Observed guarantee |
@@ -246,7 +213,6 @@ grok 0.2.103 (89c3d36fb6f1) [stable]
 | Codex | `FM_CODEX_LIVE_E2E=1 tests/fm-codex-continuity-live-e2e.test.sh` | The one-second foreground checkpoint returned without switching to the arm wrapper. |
 | OpenCode | `FM_OPENCODE_LIVE_E2E=1 tests/fm-opencode-primary-live-e2e.test.sh` | A verified successor existed before prompt handling, with no model re-arm or turn-end fallback. |
 | Pi | `FM_PI_LIVE_E2E=1 tests/fm-pi-primary-live-e2e.test.sh` | One initial tool call led to extension-owned successors and clean child retirement on exit. |
-| Grok | `FM_GROK_LIVE_E2E=1 tests/fm-grok-continuity-live-e2e.test.sh` | Native task completion surfaced the actionable close and the cycle ledger recorded `reason=actionable-signal`. |
 
 Pi 0.81.1 repeated the continuity and clean-exit lifecycle on 2026-07-23 after the Calm presentation changes.
 

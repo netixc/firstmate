@@ -87,7 +87,7 @@ make_spawn_case() {
 
 enable_dispatch_profile() {
   local home=$1
-  printf '%s\n' '{"rules":[{"when":"current events","use":{"harness":"grok","model":"grok-4","effort":"high"}}],"default":{"harness":"codex","model":"gpt-5","effort":"medium"}}' \
+  printf '%s\n' '{"rules":[{"when":"current events","use":{"harness":"pi","model":"xai/grok-4","effort":"high"}}],"default":{"harness":"codex","model":"gpt-5","effort":"medium"}}' \
     > "$home/config/crew-dispatch.json"
 }
 
@@ -108,7 +108,7 @@ run_spawn() {
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
     FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$wt" TMUX="fake,1,0" \
     FM_FAKE_LAUNCH_LOG="$launchlog" FM_FAKE_PI_VERSION="${FM_TEST_PI_VERSION:-0.84.0}" \
-    GROK_HOME="$home/grok-home" PATH="$fakebin:$PATH" \
+    PATH="$fakebin:$PATH" \
     "$SPAWN" "$@" 2>&1
 }
 
@@ -147,7 +147,7 @@ test_relative_home_overrides_launch_with_absolute_cross_process_paths() {
       FM_PROJECTS_OVERRIDE=home/projects FM_CONFIG_OVERRIDE=home/config \
       FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$WT_DIR" TMUX="fake,1,0" \
       FM_FAKE_LAUNCH_LOG="$LAUNCH_LOG" \
-      GROK_HOME=home/grok-home PATH="$FAKEBIN_DIR:$PATH" \
+      PATH="$FAKEBIN_DIR:$PATH" \
       "$SPAWN" "$id" "$PROJ_DIR" --mode no-mistakes --yolo off 2>&1
   )
   status=$?
@@ -176,7 +176,7 @@ test_home_defaults_preserve_absolute_or_resolve_relative_paths() {
       FM_PROJECTS_OVERRIDE=home/projects FM_CONFIG_OVERRIDE=home/config \
       FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$WT_DIR" TMUX="fake,1,0" \
       FM_FAKE_LAUNCH_LOG="$LAUNCH_LOG" \
-      GROK_HOME=home/grok-home PATH="$FAKEBIN_DIR:$PATH" \
+      PATH="$FAKEBIN_DIR:$PATH" \
       "$SPAWN" "$relative_id" "$PROJ_DIR" --mode no-mistakes --yolo off 2>&1
   )
   status=$?
@@ -196,7 +196,7 @@ test_home_defaults_preserve_absolute_or_resolve_relative_paths() {
       FM_PROJECTS_OVERRIDE="$linked_home/projects" FM_CONFIG_OVERRIDE="$linked_home/config" \
       FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$WT_DIR" TMUX="fake,1,0" \
       FM_FAKE_LAUNCH_LOG="$LAUNCH_LOG" \
-      GROK_HOME="$linked_home/grok-home" PATH="$FAKEBIN_DIR:$PATH" \
+      PATH="$FAKEBIN_DIR:$PATH" \
       "$SPAWN" "$absolute_id" "$PROJ_DIR" --mode no-mistakes --yolo off 2>&1
   )
   status=$?
@@ -224,7 +224,7 @@ test_absolute_override_spelling_is_preserved_in_launch_paths() {
       FM_PROJECTS_OVERRIDE="$linked_home/projects" FM_CONFIG_OVERRIDE="$linked_home/config" \
       FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$WT_DIR" TMUX="fake,1,0" \
       FM_FAKE_LAUNCH_LOG="$LAUNCH_LOG" \
-      GROK_HOME="$linked_home/grok-home" PATH="$FAKEBIN_DIR:$PATH" \
+      PATH="$FAKEBIN_DIR:$PATH" \
       "$SPAWN" "$id" "$PROJ_DIR" --mode no-mistakes --yolo off 2>&1
   )
   status=$?
@@ -396,59 +396,8 @@ test_codex_omits_invalid_max_effort() {
   pass "codex omits unsupported max effort instead of passing a bad config value"
 }
 
-test_grok_threads_model_and_reasoning_effort() {
-  local rec id out status launch
-  id=profile-grok-z5
-  rec=$(make_spawn_case profile-grok grok "$id")
-  read_case_record "$rec"
 
-  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" --model grok-4 --effort high)
-  status=$?
-  expect_code 0 "$status" "grok spawn with profile flags should succeed"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" grok grok-4 high
-  launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "grok --always-approve --model 'grok-4' --reasoning-effort 'high'" \
-    "grok launch did not thread model and reasoning-effort flags"
-  assert_not_contains "$launch" "--effort" "grok launch must use --reasoning-effort, not --effort"
-  pass "grok receives --model and --reasoning-effort profile flags"
-}
 
-test_grok_omits_invalid_max_reasoning_effort() {
-  local rec id out status launch
-  id=profile-grok-max-z6
-  rec=$(make_spawn_case profile-grok-max grok "$id")
-  read_case_record "$rec"
-
-  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" --model grok-4 --effort max)
-  status=$?
-  expect_code 0 "$status" "grok spawn with unsupported max reasoning effort should omit the effort flag"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" grok grok-4 max
-  launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "grok --always-approve --model 'grok-4' \"\$('${ROOT}/bin/fm-operational-input.sh' encode launch-brief < " \
-    "grok launch did not preserve the model flag and typed brief when max effort was omitted"
-  assert_not_contains "$launch" "--reasoning-effort" "grok launch must omit unsupported max reasoning effort"
-  assert_not_contains "$launch" "--effort" "grok launch must not fall back to --effort for reasoning effort"
-  pass "grok omits unsupported max reasoning effort"
-}
-
-test_grok_omits_invalid_xhigh_reasoning_effort() {
-  local rec id out status launch
-  id=profile-grok-xhigh-z6b
-  rec=$(make_spawn_case profile-grok-xhigh grok "$id")
-  read_case_record "$rec"
-
-  # grok 0.2.99 rejects xhigh (accepted set is only low|medium|high).
-  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" --model grok-4 --effort xhigh)
-  status=$?
-  expect_code 0 "$status" "grok spawn with unsupported xhigh reasoning effort should omit the effort flag"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" grok grok-4 xhigh
-  launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "grok --always-approve --model 'grok-4' \"\$('${ROOT}/bin/fm-operational-input.sh' encode launch-brief < " \
-    "grok launch did not preserve the model flag and typed brief when xhigh effort was omitted"
-  assert_not_contains "$launch" "--reasoning-effort" "grok launch must omit unsupported xhigh reasoning effort"
-  assert_not_contains "$launch" "--effort" "grok launch must not fall back to --effort for reasoning effort"
-  pass "grok omits unsupported xhigh reasoning effort"
-}
 
 test_opencode_threads_model_and_ignores_effort_axis() {
   local rec id out status launch
@@ -456,12 +405,12 @@ test_opencode_threads_model_and_ignores_effort_axis() {
   rec=$(make_spawn_case profile-opencode opencode "$id")
   read_case_record "$rec"
 
-  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" --model anthropic/claude-sonnet-4-5 --effort high)
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" --model openai/gpt-5.5 --effort high)
   status=$?
   expect_code 0 "$status" "opencode spawn with model and ignored effort should succeed"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" opencode anthropic/claude-sonnet-4-5 high
+  assert_meta_profile "$HOME_DIR/state/$id.meta" opencode openai/gpt-5.5 high
   launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "opencode --model 'anthropic/claude-sonnet-4-5' --prompt" \
+  assert_contains "$launch" "opencode --model 'openai/gpt-5.5' --prompt" \
     "opencode launch did not thread model"
   assert_not_contains "$launch" "--effort" "opencode launch must not pass unsupported --effort"
   assert_not_contains "$launch" "--variant" "opencode launch must not pass run-only --variant"
@@ -618,17 +567,26 @@ test_batch_forwards_shared_profile_flags() {
 }
 
 test_removed_harness_is_rejected_generically() {
-  local rec id removed out status
+  local rec id config_id removed out status
   id=profile-removed-harness-z20
   rec=$(make_spawn_case profile-removed-harness pi "$id")
   read_case_record "$rec"
-  removed=$(printf 'cur%s' 'sor')
+  removed=grok
   out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" "$removed")
   status=$?
   expect_code 1 "$status" "a removed harness must be refused"
   assert_contains "$out" "error: unknown harness '$removed'" "removed harness refusal did not use generic unknown-harness validation"
   [ ! -e "$HOME_DIR/state/$id.meta" ] || fail "removed harness refusal published task metadata"
-  pass "fm-spawn: a removed harness is rejected through generic unknown-harness validation"
+
+  config_id=profile-stale-config-z21
+  rec=$(make_spawn_case profile-stale-config "$removed" "$config_id")
+  read_case_record "$rec"
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$config_id" "$PROJ_DIR")
+  status=$?
+  expect_code 1 "$status" "stale standalone Grok config must be refused"
+  assert_contains "$out" "error: no launch template for harness '$removed'" "stale config did not use generic unsupported-harness validation"
+  [ ! -e "$HOME_DIR/state/$config_id.meta" ] || fail "stale config refusal published task metadata"
+  pass "fm-spawn: standalone Grok launch and stale configuration are rejected generically"
 }
 
 test_active_dispatch_profile_does_not_block_secondmate_launch() {
@@ -660,9 +618,6 @@ test_active_dispatch_profile_allows_positional_harness
 test_active_dispatch_profile_allows_raw_launch_command
 test_codex_threads_model_and_effort
 test_codex_omits_invalid_max_effort
-test_grok_threads_model_and_reasoning_effort
-test_grok_omits_invalid_max_reasoning_effort
-test_grok_omits_invalid_xhigh_reasoning_effort
 test_opencode_threads_model_and_ignores_effort_axis
 test_pi_threads_model_and_max_effort
 test_pi_tui_mode_probe_is_safe_for_old_and_new_pi

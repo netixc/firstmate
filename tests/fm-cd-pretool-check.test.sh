@@ -156,11 +156,6 @@ run_matrix_entry() {
       printf '%s' "$payload" | "$CHECK" >"$out_file" 2>"$err_file"
       rc=$?
       ;;
-    grok)
-      payload=$(jq -cn --arg command "$cmd" '{toolName:"run_terminal_command",toolInput:{command:$command}}')
-      printf '%s' "$payload" | "$CHECK" >"$out_file" 2>"$err_file"
-      rc=$?
-      ;;
     opencode|pi)
       "$CHECK" --command "$cmd" >"$out_file" 2>"$err_file"
       rc=$?
@@ -180,20 +175,16 @@ run_matrix_entry() {
   [ "$rc" -eq 2 ] || fail "$id via $entry must deny, got exit $rc"
   jq -e '.hookSpecificOutput.permissionDecision == "deny" and (.systemMessage | test("\\[persistent-cd\\]"))' "$err_file" >/dev/null 2>&1 \
     || fail "$id via $entry deny must carry the persistent-cd reason code on stderr: $(cat "$err_file")"
-  if [ "$entry" = grok ]; then
-    jq -e '.decision == "deny"' "$out_file" >/dev/null 2>&1 \
-      || fail "$id via grok deny must carry decision=deny on stdout: $(cat "$out_file")"
-  fi
 }
 
 test_full_acceptance_matrix() {
   local i entry
   for ((i = 0; i < ${#MATRIX_IDS[@]}; i++)); do
-    for entry in codex grok opencode pi; do
+    for entry in codex opencode pi; do
       run_matrix_entry "${MATRIX_IDS[$i]}" "${MATRIX_EXPECTED[$i]}" "$entry" "${MATRIX_COMMANDS[$i]}"
     done
   done
-  pass "cd-guard acceptance matrix: ${#MATRIX_IDS[@]} cases x 4 harness entry forms, block/allow all correct"
+  pass "cd-guard acceptance matrix: ${#MATRIX_IDS[@]} cases x 3 harness entry forms, block/allow all correct"
 }
 
 # --- primary-checkout scoping ----------------------------------------------

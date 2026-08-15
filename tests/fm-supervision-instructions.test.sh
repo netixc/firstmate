@@ -79,15 +79,6 @@ test_cross_harness_ordinary_continuation_and_repair_matrix() {
   out=$("$RENDER" --harness opencode --repair-line)
   assert_contains "$out" "manual recovery probe" "opencode recovery line lost its manual probe"
 
-  out=$("$RENDER" --harness grok)
-  ordinary=$(printf '%s\n' "$out" | grep -F -- '- Ordinary wake:')
-  assert_contains "$ordinary" "re-arm" "grok ordinary-wake line does not tell the model to re-arm"
-  assert_contains "$ordinary" "Grok tracked background task" "grok ordinary-wake line lost tracked background ownership"
-  assert_contains "$ordinary" "bin/fm-watch-arm.sh" "grok ordinary-wake line lost the background arm command"
-  out=$("$RENDER" --harness grok --repair-line)
-  assert_contains "$out" "Grok tracked background task" "grok recovery line lost its tracked background repair"
-  assert_contains "$out" "bin/fm-watch-arm.sh" "grok recovery line lost the arm command"
-
   out=$("$RENDER" --harness codex)
   ordinary=$(printf '%s\n' "$out" | grep -F -- '- Ordinary wake:')
   assert_contains "$ordinary" "next foreground" "codex ordinary-wake line lost its foreground checkpoint"
@@ -97,7 +88,7 @@ test_cross_harness_ordinary_continuation_and_repair_matrix() {
   assert_contains "$out" "foreground checkpoint" "codex recovery line lost its checkpoint repair"
   assert_contains "$out" "bin/fm-watch-checkpoint.sh" "codex recovery line lost the checkpoint command"
 
-  pass "renderer preserves every harness ordinary-continuation and missing-cycle repair path"
+  pass "renderer preserves every supported harness ordinary-continuation and missing-cycle repair path"
 }
 
 test_pi_signed_preserves_identity_with_pi_supervision_protocol() {
@@ -116,29 +107,7 @@ test_pi_signed_preserves_identity_with_pi_supervision_protocol() {
   pass "pi-signed keeps its identity while sharing Pi's supervision protocol"
 }
 
-test_grok_is_background_notify() {
-  local out
-  out=$("$RENDER" --harness grok)
-  assert_contains "$out" "Mode: Grok background-notify supervision." "grok snippet missing background-notify mode"
-  assert_contains "$out" "background: true" "grok snippet missing tracked background tool instruction"
-  assert_contains "$out" "synthetic_reason: task_completed" "grok snippet missing auto-wake synthetic prompt detail"
-  assert_contains "$out" "bin/fm-watch-arm.sh" "grok snippet missing watcher arm"
-  assert_not_contains "$out" "__FM_RELAY_ENV" "renderer leaked a Relay path placeholder"
-  assert_not_contains "$out" "foreground checkpoint" "grok snippet must not be Codex-style foreground checkpoint"
-  out=$("$RENDER" --harness grok --repair-line)
-  assert_contains "$out" "Grok tracked background task" "grok repair line is not background-notify shaped"
-  pass "grok supervision uses background notify with passive Stop-hook backstop"
-}
 
-test_grok_command_sources_effective_config() {
-  local home config out
-  home="$TMP_ROOT/grok-home"
-  config="$TMP_ROOT/grok-config"
-  mkdir -p "$home/state" "$config"
-  out=$(FM_HOME="$home" FM_CONFIG_OVERRIDE="$config" "$RENDER" --harness grok --relay 1)
-  assert_contains "$out" "[ -f '$config/relay.env' ] && . '$config/relay.env'; exec bin/fm-watch-arm.sh" "grok arm command did not use the effective relay config path"
-  pass "grok rendered command sources the effective relay config"
-}
 
 test_pi_snippet_uses_effective_extension_path() {
   local home out turnend watch
@@ -162,6 +131,4 @@ test_conditional_stanzas
 test_repair_lines
 test_cross_harness_ordinary_continuation_and_repair_matrix
 test_pi_signed_preserves_identity_with_pi_supervision_protocol
-test_grok_is_background_notify
-test_grok_command_sources_effective_config
 test_pi_snippet_uses_effective_extension_path

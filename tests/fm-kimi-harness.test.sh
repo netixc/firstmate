@@ -530,7 +530,7 @@ esac
 SH
   chmod +x "$fakebin/ps"
 
-  out=$(env -u PI_CODING_AGENT -u GROK_AGENT \
+  out=$(env -u PI_CODING_AGENT \
     PATH="$fakebin:$BASE_PATH" FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh")
   [ "$out" = kimi ] || fail "kimi ancestry detection returned '$out'"
   out=$(PI_CODING_AGENT=true PATH="$fakebin:$BASE_PATH" FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh")
@@ -601,9 +601,9 @@ test_kimi_busy_signature_is_scoped_to_spinner_lines() {
   if fm_pane_is_busy fake kimi; then
     fail "kimi's independently rotating idle tip was misread as busy"
   fi
-  printf 'Ctrl+c:cancel\n│ > │\n' > "$capture"
+  printf 'Working...\n│ > │\n' > "$capture"
   if fm_pane_is_busy fake kimi; then
-    fail "Grok's exact busy token leaked into Kimi's harness-scoped matcher"
+    fail "Pi's exact busy token leaked into Kimi's harness-scoped matcher"
   fi
   printf 'auto  K2.7 Coding thinking  /some/path\n│ > │\n' > "$capture"
   if fm_pane_is_busy fake kimi; then
@@ -637,13 +637,7 @@ test_watcher_never_classifies_kimi_from_its_spinner() (
   if window_is_busy fake "$busy_capture"; then
     fail "fm-watch applied Kimi's spinner to a recorded Codex task"
   fi
-  printf 'window=fake\nharness=grok\n' > "$state/kimi-watch.meta"
-  if window_is_busy fake "$busy_capture"; then
-    fail "Kimi's spinner classified a recorded Grok task through its isolated fallback"
-  fi
-  window_is_busy fake 'Ctrl+c:cancel' \
-    || fail "Grok's own verified token must still classify a recorded Grok task busy"
-  pass "fm-watch classifies Kimi as unknown rather than from its spinner, and Grok's fallback stays isolated"
+  pass "fm-watch classifies Kimi as unknown rather than from its spinner and keeps signatures isolated"
 )
 
 test_kimi_bordered_prompt_needs_no_override() {

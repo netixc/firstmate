@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Detect the agent harness this process tree runs on.
-# Usage: fm-harness.sh                  print own harness: codex|opencode|pi|pi-signed|grok|kimi|unknown
+# Usage: fm-harness.sh                  print own harness: codex|opencode|pi|pi-signed|kimi|unknown
 #        fm-harness.sh crew             print the effective CREWMATE harness
 #                                        (config/crew-harness; "default" resolves to own)
 #        fm-harness.sh secondmate       print the harness the PRIMARY uses to launch
@@ -30,23 +30,13 @@ CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 detect_own() {
   # Layer 1: environment markers for verified harnesses.
   # Keep marker detection before ancestry detection as an explicit precedence rule.
-  # Pi and Grok set verified markers of their own; codex, OpenCode, and Kimi
-  # are markerless, so a foreign marker retained in a terminal multiplexer's
-  # stored environment can silently misidentify one of them before ancestry is
-  # consulted.
+  # Pi sets a verified marker of its own; codex, OpenCode, and Kimi are
+  # markerless, so a foreign marker retained in a terminal multiplexer's stored
+  # environment can silently misidentify one of them before ancestry is consulted.
   if [ "${PI_CODING_AGENT:-}" = "true" ]; then
     if [ "${FM_PI_HARNESS:-}" = pi-signed ]; then echo pi-signed; else echo pi; fi
     return
   fi
-  # grok set GROK_AGENT=1 for its child/tool processes (verified, grok 0.2.73).
-  # The marker is unambiguous WHEN PRESENT, but it is not guaranteed present. A grok 1.0.0
-  # hook process carries GROK_HOOK_EVENT, GROK_HOOK_NAME, GROK_SESSION_ID, and
-  # GROK_WORKSPACE_ROOT with no GROK_AGENT at all (verified from the live process
-  # environment of a wedged grok 1.0.0 Stop hook, 2026-08-07). Treat this marker as
-  # a fast path only; the ancestry walk below is what actually guarantees grok is
-  # identified, and any rule that must be RELIABLE under grok has to test the hook
-  # markers too (see docs/turnend-guard.md).
-  [ "${GROK_AGENT:-}" = "1" ] && { echo grok; return; }
   # Layer 2: walk the parent chain and match the command name.
   local pid=$$ comm args
   for _ in 1 2 3 4 5 6 7 8; do
@@ -54,7 +44,6 @@ detect_own() {
     case "$(basename -- "$comm")" in
       *codex*) echo codex; return ;;
       *opencode*) echo opencode; return ;;
-      *grok*) echo grok; return ;;
       kimi) echo kimi; return ;;
       pi-signed) echo pi; return ;;
       pi) echo pi; return ;;
@@ -64,7 +53,6 @@ detect_own() {
         case "$args" in
           *codex*) echo codex; return ;;
           *opencode*) echo opencode; return ;;
-          *grok*) echo grok; return ;;
           *" pi "*|*/pi) echo pi; return ;;
         esac ;;
     esac

@@ -128,10 +128,9 @@ test_real_text_is_pending() {
 # correctness matrix (audit data/fm-composer-consolidation-audit-s1, task
 # fm-composer-thin-adapter-refactor-r1).
 #
-# Fixtures are the audit's byte-level captures of five real idle harnesses:
-# + SGR-2 dim hint), Pi (blank row between solid `─` rules), OpenCode 1.14.46
-# (left-bar `┃` rows), and Grok
-# inside styled capture through `dump-screen --ansi` (`ESC[m` `❯` U+00A0).
+# Fixtures cover retained idle composer shapes: Codex with an SGR-2 dim hint,
+# Pi with a blank row between solid `─` rules, OpenCode left-bar `┃` rows, and
+# Kimi's bordered composer.
 #
 # Capability profiles mirror the real adapters' descriptors: tmux
 # (styled+cursor+identity), styled cursorless, and plain capture. Every
@@ -232,27 +231,6 @@ test_matrix_opencode_leftbar_signals() {
   pass "matrix: opencode's left-bar composer reads empty everywhere and scans the full active run"
 }
 
-test_matrix_grok_titled_bottom_border() {
-  # Real idle grok: a bordered box whose BOTTOM border carries the model name.
-  # The audit showed the title alone flipped tmux's geometry check to
-  # ambiguous and the verdict to unknown, stranding every grok steer.
-  local titled plain_border typed placeholder_draft
-  titled=$'  ╭──────────────────────────────────────╮\n  │ ❯                                    │\n  ╰──────────────────── Grok 4.5 (high) ─╯'
-  plain_border=$'  ╭──────────────────────────────────────╮\n  │ ❯                                    │\n  ╰──────────────────────────────────────╯'
-  assert_screen "grok titled on tmux" empty "$CAPS_TMUX" "$titled" 1
-  assert_screen "grok titled on tmux bottom-border cursor" empty "$CAPS_TMUX" "$titled" 2
-  assert_screen "grok titled on herdr" empty "$CAPS_STYLED" "$titled"
-  placeholder_draft=$'  ╭──────────────────────────────────────╮\n  │ ❯ Type a message...                  │\n  ╰──────────────────── Grok 4.5 (high) ─╯'
-  assert_screen "grok bright placeholder-like draft on tmux" pending "$CAPS_TMUX" "$placeholder_draft" 1
-  assert_screen "grok placeholder on plain backends" empty "$CAPS_PLAIN" "$placeholder_draft"
-  assert_screen "grok titled on plain capture" empty "$CAPS_PLAIN" "$titled"
-  assert_screen "grok titled on styled capture" empty "$CAPS_STYLED_NOID" "$titled"
-  # The tolerance is additive: an untitled border still proves the same box.
-  assert_screen "grok untitled border" empty "$CAPS_TMUX" "$plain_border" 1
-  typed=$'  ╭──────────────────────────────────────╮\n  │ ❯ deploy the fix                     │\n  ╰──────────────────── Grok 4.5 (high) ─╯'
-  assert_screen "grok typed on tmux" pending "$CAPS_TMUX" "$typed" 1
-  pass "matrix: grok's titled bottom border is tolerated as a title, not read as ambiguity"
-}
 
 test_matrix_kimi_bordered_shell_glyph_box() {
   # Kimi's bordered `│ > │` composer - the shape fm-spawn.sh's retired
@@ -362,7 +340,7 @@ test_cursorless_bare_wrap_region_classifies() {
 }
 
 test_cursorless_container_rejects_contiguous_lower_activity() {
-  local box leftbar grok kimi opencode
+  local box leftbar kimi opencode
   box=$'╭────────────────────────╮\n│ ❯                      │\n╰────────────────────────╯\nWorking on request...'
   assert_screen "stale box above activity on herdr" unknown "$CAPS_STYLED" "$box"
   assert_screen "stale box above activity on styled capture" unknown "$CAPS_STYLED_NOID" "$box"
@@ -373,10 +351,8 @@ test_cursorless_container_rejects_contiguous_lower_activity() {
   assert_screen "stale left-bar above activity on styled capture" unknown "$CAPS_STYLED_NOID" "$leftbar"
   assert_screen "stale left-bar above activity on plain capture" unknown "$CAPS_PLAIN" "$leftbar"
 
-  grok=$'╭────────────────────────╮\n│ ❯                      │\n╰──────── Grok 4.5 ──────╯\n\nGrok status'
   kimi=$'╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯\n\nKimi status'
   opencode=$'┃\n┃  Ask anything...\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high\n╹▀▀▀▀▀▀▀▀\n\nOpenCode status'
-  assert_screen "blank-separated grok footer" empty "$CAPS_STYLED_NOID" "$grok"
   assert_screen "blank-separated kimi footer" empty "$CAPS_PLAIN" "$kimi"
   assert_screen "left-bar floor and blank-separated footer" empty "$CAPS_STYLED_NOID" "$opencode"
   pass "fm_composer_classify_screen: cursorless containers reject only contiguous unclaimed activity"
@@ -404,13 +380,13 @@ test_incomplete_lower_box_invalidates_stale_candidate() {
   pass "fm_composer_classify_screen: incomplete lower structure invalidates stale boxes"
 }
 
-test_titled_bottom_requires_matching_width() {
+test_mismatched_bottom_requires_matching_width() {
   local screen out
-  screen=$'╭────────────────────────╮\n│ ❯                      │\n╰─ Grok ─╯'
+  screen=$'╭────────────────────────╮\n│ ❯                      │\n╰────────╯'
   out=$(fm_composer_classify_screen "$CAPS_TMUX" "$screen" 1)
   [ "$out" = unknown ] \
-    || fail "a short titled bottom must not prove an empty box, got '$out'"
-  pass "fm_composer_classify_screen: titled bottoms retain full box geometry"
+    || fail "a short mismatched bottom must not prove an empty box, got '$out'"
+  pass "fm_composer_classify_screen: bottom borders retain full box geometry"
 }
 
 test_cursor_on_proven_box_bottom_classifies_content() {
@@ -475,7 +451,6 @@ test_real_text_is_pending
 test_matrix_codex_dim_hint_row
 test_matrix_pi_separated_needs_identity
 test_matrix_opencode_leftbar_signals
-test_matrix_grok_titled_bottom_border
 test_matrix_kimi_bordered_shell_glyph_box
 test_strict_blank_row_divergence
 test_bare_wrap_region_classifies
@@ -485,6 +460,6 @@ test_cursorless_bare_wrap_region_classifies
 test_cursorless_container_rejects_contiguous_lower_activity
 test_bottom_most_candidate_wins
 test_incomplete_lower_box_invalidates_stale_candidate
-test_titled_bottom_requires_matching_width
+test_mismatched_bottom_requires_matching_width
 test_cursor_on_proven_box_bottom_classifies_content
 test_selected_content_is_composer_scoped_and_wrap_normalized

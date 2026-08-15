@@ -37,9 +37,8 @@
 #   fm-spawn         the launch-brief turn seeded at spawn
 #   fm-recovery      a documented recovery reset after relaunch
 # Classifier-only sources (never written into a record):
-#   endpoint-gone, herdr-native, grok-regex, missing,
-#   malformed, gen-mismatch, source-mismatch,
-#   kimi-unverified, codex-unverified, capture-failed, no-target
+#   endpoint-gone, herdr-native, missing, malformed, gen-mismatch,
+#   source-mismatch, kimi-unverified, codex-unverified, no-target
 #
 # Classification (fm_busy_classify): busy | idle | unknown | dead, always
 # with the producing source as the second token. Precedence:
@@ -47,16 +46,11 @@
 #   2. standalone Kimi before verification       -> unknown kimi-unverified
 #   3. a valid, gen-matching, source-trusted record -> its state and source
 #   4. no record at all: herdr's native busy verdict is trusted as busy
-#      (generation state is sufficient for busy, not for idle), then the
-#      Grok-only temporary regex fallback
-#      classifies a Grok task from its rendered tail, then unknown missing
+#      (generation state is sufficient for busy, not for idle), then unknown missing
 #   5. malformed, stale, or untrusted records -> unknown, never a fallback
-# The Grok arm is the ONLY rendered-text classification that survives the
-# redesign, because Grok's structured lifecycle was not credited-live-verified
-# in the approved audit; it is scoped to harness=grok and can never classify
-# another adapter. The delivery guards in bin/fm-composer-lib.sh match rendered
-# footers for submit acknowledgement and away-mode supervisor injection only;
-# neither is a recorded worker state source.
+# The delivery guards in bin/fm-composer-lib.sh match rendered footers for
+# submit acknowledgement and away-mode supervisor injection only; neither is
+# a recorded worker state source.
 #
 # Codex negotiation (fm_busy_codex_appserver_observable,
 # fm_busy_codex_hooks_verified): the approved contract prefers Codex's
@@ -159,10 +153,8 @@ fm_busy_current_gen() {  # <state-dir> <id>
 # fm_busy_sources_for_harness: the semantic sources trusted to classify a
 # task recorded with <harness>. One line, space-separated, possibly empty.
 # The firstmate-owned sources are appended for every converted adapter.
-# Grok deliberately trusts nothing: it has no semantic writer, so it is not
-# armed and reads its rendered tail on demand in the classifier rather than
-# through a stored record. Listing a source here without a writer that can
-# clear it would seed a busy record nothing could ever settle.
+# Listing a source here without a writer that can clear it would seed a busy
+# record nothing could ever settle.
 fm_busy_sources_for_harness() {  # <harness>
   local adapter=
   case "${1:-}" in
@@ -245,23 +237,12 @@ fm_busy_record_read() {  # <state-dir> <id>
   printf '%s %s %s %s' "$r_state" "$r_source" "$r_event" "$r_seq"
 }
 
-# fm_busy_grok_tail_busy: the Grok-only temporary rendered-tail fallback.
-# Consumes the tail on stdin; 0 when Grok's verified busy signature matches.
-# FM_BUSY_REGEX still globally overrides the signature, mirroring the
-# historical operator escape hatch.
-fm_busy_grok_tail_busy() {
-  grep -v '^[[:space:]]*$' | tail -12 \
-    | grep -qiE "${FM_BUSY_REGEX:-${FM_DELIVERY_GROK_BUSY_REGEX_DEFAULT:-Ctrl\\+c:cancel}}"
-}
-
 # fm_busy_classify: semantic classification for a task whose endpoint the
 # caller has already established as present. Prints "<verdict> <source>":
 # busy|idle|unknown plus the producing source (see header). Never probes
-# process state. <tail40> is optional pre-captured plain output used only by
-# the Grok arm; when absent the Grok arm captures through fm_backend_capture
-# if available, else reports unknown capture-failed.
-fm_busy_classify() {  # <backend> <target> <harness> <id> <state-dir> [tail40]
-  local backend=$1 target=$2 harness=$3 id=$4 state=$5 tail40=${6-}
+# process state.
+fm_busy_classify() {  # <backend> <target> <harness> <id> <state-dir>
+  local backend=$1 target=$2 harness=$3 id=$4 state=$5
   local out rc r_state r_source native
   case "$harness" in
     kimi*)
@@ -306,27 +287,6 @@ fm_busy_classify() {  # <backend> <target> <harness> <id> <state-dir> [tail40]
       return 0
     fi
   fi
-  case "$harness" in
-    grok*)
-      if [ -z "$tail40" ]; then
-        if command -v fm_backend_capture >/dev/null 2>&1; then
-          tail40=$(fm_backend_capture "$backend" "$target" 40 2>/dev/null) || {
-            printf 'unknown capture-failed'
-            return 0
-          }
-        else
-          printf 'unknown capture-failed'
-          return 0
-        fi
-      fi
-      if printf '%s' "$tail40" | fm_busy_grok_tail_busy; then
-        printf 'busy grok-regex'
-      else
-        printf 'idle grok-regex'
-      fi
-      return 0
-      ;;
-  esac
   printf 'unknown missing'
 }
 
@@ -348,10 +308,9 @@ fm_busy_classify_live() {  # <backend> <target> <harness> <id> <state-dir> [expe
 
 # fm_busy_classify_meta: classify a task from its recorded metadata, so every
 # consumer resolves backend, target, and harness the same way instead of
-# re-deriving them. Requires fm-backend.sh to be sourced. <tail40> is
-# optional pre-captured plain output reused by the Grok arm.
-fm_busy_classify_meta() {  # <meta-file> <id> <state-dir> [tail40]
-  local meta=$1 id=$2 state=$3 tail40=${4-} backend target harness
+# re-deriving them. Requires fm-backend.sh to be sourced.
+fm_busy_classify_meta() {  # <meta-file> <id> <state-dir>
+  local meta=$1 id=$2 state=$3 backend target harness
   [ -f "$meta" ] || { printf 'unknown missing'; return 0; }
   backend=$(fm_backend_of_meta "$meta")
   target=$(fm_backend_target_of_meta "$meta")
@@ -360,7 +319,7 @@ fm_busy_classify_meta() {  # <meta-file> <id> <state-dir> [tail40]
     printf 'unknown no-target'
     return 0
   fi
-  fm_busy_classify "$backend" "$target" "$harness" "$id" "$state" "$tail40"
+  fm_busy_classify "$backend" "$target" "$harness" "$id" "$state"
 }
 
 # fm_busy_is_busy: boolean view for callers that only gate on provable
@@ -368,7 +327,7 @@ fm_busy_classify_meta() {  # <meta-file> <id> <state-dir> [tail40]
 # and dead all return 1, so an unknown can never be silently promoted to
 # either boolean pole - callers that must distinguish idle from unknown read
 # the full classification instead.
-fm_busy_is_busy() {  # <backend> <target> <harness> <id> <state-dir> [tail40]
+fm_busy_is_busy() {  # <backend> <target> <harness> <id> <state-dir>
   local verdict
   verdict=$(fm_busy_classify "$@")
   [ "${verdict%% *}" = busy ]
