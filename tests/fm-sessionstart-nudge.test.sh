@@ -190,14 +190,14 @@ make_run_primary() {
 run_hook() {  # <root> [args...]
   local root=$1
   shift
-  env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
+  env -u PI_CODING_AGENT -u FM_PI_HARNESS \
     FM_GATE_REFUSE_BYPASS=0 FM_ROOT_OVERRIDE="$root" FM_HOME="$root" PATH="$RUN_PATH" "$RUN" "$@"
 }
 
 run_hook_pi() {  # <root> [args...]
   local root=$1
   shift
-  env -u GROK_AGENT PI_CODING_AGENT=true FM_PI_HARNESS=pi \
+  env PI_CODING_AGENT=true FM_PI_HARNESS=pi \
     FM_GATE_REFUSE_BYPASS=0 FM_ROOT_OVERRIDE="$root" FM_HOME="$root" PATH="$RUN_PATH" "$RUN" "$@"
 }
 

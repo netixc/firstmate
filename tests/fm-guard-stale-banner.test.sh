@@ -562,7 +562,7 @@ test_extension_handoff_keeps_queued_wake_warning() {
 }
 
 # The tolerance is scoped to the extension model alone. Every persistent-watcher
-# primary (codex, opencode, grok, kimi, tmux, unknown) must keep alarming on the
+# primary (codex, opencode, kimi, tmux, unknown) must keep alarming on the
 # same state, even when Pi extension markers happen to be present on disk.
 test_persistent_model_ignores_pi_extension_evidence() {
   local dir home out pid
@@ -617,7 +617,7 @@ test_pi_harness_routes_itself_to_the_extension_model() {
     pid=$!
     record_pi_extension_session "$dir" "$pid" || fail "could not record the Pi extension session"
     touch "$home/state/.last-watcher-beat"
-    out=$(env -u GROK_AGENT -u FM_SUPERVISION_MODEL \
+    out=$(env -u FM_SUPERVISION_MODEL \
       "${pi_env[@]}" \
       FM_ROOT_OVERRIDE="$(case_root "$dir")" \
       FM_HOME="$home" \

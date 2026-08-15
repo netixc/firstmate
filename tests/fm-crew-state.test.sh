@@ -825,26 +825,6 @@ test_no_run_footer_text_alone_is_not_working() {
   pass "a converted adapter never reads working from rendered footer text"
 }
 
-# Grok keeps its isolated temporary rendered-tail fallback until its structured
-# lifecycle is live-verified, so a grok crew still reads working from its own
-# verified signature.
-test_no_run_grok_uses_isolated_fallback() {
-  reset_fakes
-  local d; d=$(new_case busy-grok)
-  make_repo_on_branch "$d/wt" fm/feat-h3
-  make_fakebin "$d" >/dev/null
-  fm_write_meta "$d/state/feat-h3.meta" "window=fm:fm-feat-h3" "worktree=$d/wt" "kind=ship" "harness=grok"
-  FM_FAKE_AXI_STATUS=""
-  FM_FAKE_RUNS_LIST=""
-  FM_FAKE_BUSY=1
-  FM_FAKE_BUSY_TEXT='Ctrl+c:cancel'
-  export FM_FAKE_BUSY_TEXT
-  local out; out=$(run_crew_state "$d" feat-h3)
-  assert_contains "$out" "state: working" "grok busy tail -> working"
-  assert_contains "$out" "grok-regex" "the grok verdict names its isolated fallback source"
-  pass "grok still reads working through its isolated rendered-tail fallback"
-}
-
 test_no_run_herdr_unknown_uses_backend_capture() {
   command -v jq >/dev/null 2>&1 || { pass "herdr pane fallback skipped without jq"; return; }
   reset_fakes
@@ -1335,7 +1315,6 @@ test_coarse_run_does_not_probe_other_branch_ci_log_for_ready_status
 test_other_branch_run_ignored
 test_no_run_busy_pane
 test_no_run_footer_text_alone_is_not_working
-test_no_run_grok_uses_isolated_fallback
 test_no_run_herdr_unknown_uses_backend_capture
 test_no_run_herdr_idle_agent_status_outranked_by_record
 test_no_run_herdr_idle_agent_status_and_idle_record_stays_idle

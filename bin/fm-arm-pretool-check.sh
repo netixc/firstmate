@@ -14,8 +14,7 @@
 #   <PreToolUse JSON on stdin> | bin/fm-arm-pretool-check.sh
 #   bin/fm-arm-pretool-check.sh --command '<cmd>' [--background true|false]
 #
-# Stdin mode extracts .toolInput.command for Grok or .tool_input.command for
-# Codex.
+# Stdin mode extracts Codex's .tool_input.command.
 # CLI mode is used by OpenCode and Pi after their adapters extract the exact
 # command string.
 # --background remains accepted for compatibility, but harness-native tracked
@@ -23,13 +22,11 @@
 #
 # Exit/output contract:
 #   ALLOW - exit 0 and no output.
-#   DENY - exit 2, a hook deny object on stderr, and a Grok decision object on stdout.
+#   DENY - exit 2 and a hook deny object on stderr.
 #   FAIL OPEN - malformed or empty stdin, missing jq for stdin transport,
 #               missing Node or policy owner, or an invalid policy response.
 #
-# Codex blocks on exit 2 and displays stderr.
-# Grok consumes the stdout decision object.
-# OpenCode and Pi consume exit 2 plus stderr.
+# Codex, OpenCode, and Pi consume exit 2 plus stderr.
 set -u
 
 CMD=""
@@ -40,10 +37,9 @@ usage() {
   cat <<'EOF'
 Usage: fm-arm-pretool-check.sh [--command <cmd>] [--background true|false]
 
-With no --command, reads a PreToolUse-style JSON payload on stdin (Grok
-toolInput.command, or Codex tool_input.command).
-Exits 0 to allow and 2 to deny.
-The deny reason is written to stderr, with a Grok decision object on stdout.
+With no --command, reads a Codex PreToolUse-style JSON payload on stdin at
+tool_input.command.
+Exits 0 to allow and 2 to deny, with the deny reason written to stderr.
 Malformed transport and an unavailable classifier runtime fail open.
 EOF
 }
@@ -86,11 +82,11 @@ if [ "$CMD_SET" -eq 0 ]; then
   PAYLOAD=$(cat 2>/dev/null || true)
   [ -n "$PAYLOAD" ] || exit 0
   command -v jq >/dev/null 2>&1 || exit 0
-  CMD=$(printf '%s' "$PAYLOAD" | jq -r '(.toolInput.command // .tool_input.command // empty)' 2>/dev/null) || exit 0
+  CMD=$(printf '%s' "$PAYLOAD" | jq -r '(.tool_input.command // empty)' 2>/dev/null) || exit 0
   [ -n "$CMD" ] || exit 0
   # Kept for transport parity only.
   # shellcheck disable=SC2034
-  BACKGROUND=$(printf '%s' "$PAYLOAD" | jq -r '(.toolInput.background // .tool_input.background // false)' 2>/dev/null) || BACKGROUND=false
+  BACKGROUND=$(printf '%s' "$PAYLOAD" | jq -r '(.tool_input.background // false)' 2>/dev/null) || BACKGROUND=false
 fi
 
 [ -n "$CMD" ] || exit 0
@@ -161,5 +157,4 @@ json_escape() {
 DETAIL="[$CODE] $REASON"
 ESCAPED=$(json_escape "$DETAIL")
 printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"%s"}\n' "$ESCAPED" >&2
-printf '{"decision":"deny","reason":"%s"}\n' "$ESCAPED"
 exit 2

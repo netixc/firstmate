@@ -66,7 +66,7 @@ run_spawn() {  # <home> <wt> <fakebin> <spawn-args...>
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
     FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$wt" TMUX="fake,1,0" \
-    GROK_HOME="$home/grok-home" PATH="$fakebin:$PATH" \
+    PATH="$fakebin:$PATH" \
     "$SPAWN" "$@" 2>&1
 }
 
@@ -266,25 +266,21 @@ test_codex_unverified_until_a_semantic_source_exists() {
   pass "codex classifies unknown until a semantic source is verified, never idle or footer-matched"
 }
 
-test_kimi_and_grok_install_no_unverified_wiring() {
+test_kimi_installs_no_unverified_wiring() {
   local state out
   state="$TMP_ROOT/gates/state"
   mkdir -p "$state"
   [ -z "$(fm_busy_sources_for_harness kimi)" ] \
     || fail "standalone kimi must trust no semantic source until it is verified"
-  [ -z "$(fm_busy_sources_for_harness grok)" ] \
-    || fail "grok must trust no semantic source while its structured path is unverified"
-  out=$(fm_busy_classify tmux fake:w kimi gate-k "$state" '🌒 · thinking')
+  out=$(fm_busy_classify tmux fake:w kimi gate-k "$state")
   [ "$out" = "unknown kimi-unverified" ] || fail "kimi must classify unknown, not from its spinner, got '$out'"
-  out=$(fm_busy_classify tmux fake:w grok gate-g "$state" 'Ctrl+c:cancel')
-  [ "$out" = "busy grok-regex" ] || fail "grok must classify through its isolated fallback, got '$out'"
-  pass "kimi and grok install no unverified semantic wiring and classify through their own gates"
+  pass "kimi installs no unverified semantic wiring and classifies through its own gate"
 }
 
 test_pi_extension_semantic_lifecycle
 test_pi_extension_serializes_settle_before_next_start
 test_pi_extension_stale_incarnation_rejected
-test_kimi_and_grok_install_no_unverified_wiring
+test_kimi_installs_no_unverified_wiring
 test_opencode_plugin_semantic_lifecycle
 test_codex_unverified_until_a_semantic_source_exists
 

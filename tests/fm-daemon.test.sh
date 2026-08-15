@@ -1029,7 +1029,7 @@ test_afk_genuine_done_still_terminal_stale() {
 }
 
 test_pane_input_pending_bordered_idle_not_pending() {
-  # THE regression: an idle Grok or Kimi composer is a bordered box. The old
+  # THE regression: an idle Kimi composer is a bordered box. The old
   # idle regex only matched a bare prompt, so every idle boxed pane read as
   # pending and the away-mode daemon deferred 100% of escalations for 9.5h.
   local dir state fakebin capture line
@@ -1665,10 +1665,10 @@ test_pane_is_busy_defaults_to_tmux_when_backend_omitted() {
   local dir fakebin capture
   dir=$(make_supercase busy-default-backend)
   fakebin="$dir/fakebin"; capture="$dir/pane.txt"
-  printf 'Ctrl+c:cancel\n' > "$capture"
-  PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_STATE_OVERRIDE="$dir/state" FM_DAEMON_PRIMARY_HARNESS=grok pane_is_busy "fakepane" \
+  printf 'Working...\n' > "$capture"
+  PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_STATE_OVERRIDE="$dir/state" FM_DAEMON_PRIMARY_HARNESS=pi pane_is_busy "fakepane" \
     || fail "pane_is_busy with no backend arg should still default to tmux"
-  pass "pane_is_busy: omitted backend defaults to tmux for Grok's isolated fallback"
+  pass "pane_is_busy: omitted backend defaults to tmux for Pi's delivery guard"
 }
 
 test_pane_input_pending_herdr_dispatch() {
