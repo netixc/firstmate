@@ -2900,7 +2900,7 @@ poll_artifact_snapshot() {
 }
 
 test_unsupported_watch_upgrade_safety() {
-  local dir state meta_before queue_before snapshot_before snapshot_after rc
+  local dir state meta_before queue_before snapshot_before snapshot_after rc suffix kind
 
   dir=$(make_case unsupported-watch-quarantine)
   state="$dir/home/state"
@@ -2936,6 +2936,43 @@ test_unsupported_watch_upgrade_safety() {
   snapshot_after=$(state_snapshot "$state")
   [ "$snapshot_after" = "$snapshot_before" ] \
     || fail "unsupported watch quarantine was not idempotent"
+
+  for suffix in pr-poll pr-poll-registration; do
+    dir=$(make_case "unsupported-orphan-$suffix")
+    state="$dir/home/state"
+    seed_unsupported_poll_artifacts "$dir"
+    rm -f "$state/task-a.check.sh"
+    case "$suffix" in
+      pr-poll)
+        kind=data
+        rm -f "$state/task-a.pr-poll-registration"
+        ;;
+      pr-poll-registration)
+        kind=registration
+        rm -f "$state/task-a.pr-poll"
+        ;;
+    esac
+    meta_before=$(cat "$state/task-a.meta")
+    : > "$dir/unsupported-exec.log"
+    FM_TEST_UNSUPPORTED_EXEC_LOG="$dir/unsupported-exec.log" FM_HOME="$dir/home" \
+      PATH="$dir/fakebin:$BASE_PATH" "$MIGRATE" >/dev/null 2> "$dir/migrate.err" \
+      || fail "unsupported orphan $suffix quarantine failed: $(cat "$dir/migrate.err")"
+    [ ! -e "$state/task-a.$suffix" ] && [ ! -L "$state/task-a.$suffix" ] \
+      || fail "unsupported orphan $suffix remained live"
+    find "$state/.pr-check-quarantine" -name "task-a.$kind.*" -type f | grep . >/dev/null \
+      || fail "unsupported orphan $suffix evidence was not quarantined"
+    [ "$(cat "$state/task-a.meta")" = "$meta_before" ] \
+      || fail "unsupported orphan $suffix quarantine changed task metadata"
+    [ ! -s "$dir/unsupported-exec.log" ] || fail "unsupported orphan $suffix executed check bytes"
+    [ ! -s "$dir/gh.log" ] || fail "unsupported orphan $suffix quarantine made a forge query"
+    snapshot_before=$(state_snapshot "$state")
+    FM_TEST_UNSUPPORTED_EXEC_LOG="$dir/unsupported-exec.log" FM_HOME="$dir/home" \
+      PATH="$dir/fakebin:$BASE_PATH" "$MIGRATE" >/dev/null 2> "$dir/migrate-2.err" \
+      || fail "unsupported orphan $suffix quarantine rerun failed"
+    snapshot_after=$(state_snapshot "$state")
+    [ "$snapshot_after" = "$snapshot_before" ] \
+      || fail "unsupported orphan $suffix quarantine was not idempotent"
+  done
 
   dir=$(make_case unsupported-terminal-cleanup)
   state="$dir/home/state"
