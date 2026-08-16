@@ -52,7 +52,7 @@ Its banner names the true failing condition, either a missing live watcher proce
 Pi exposes passive callbacks for this purpose.
 Its adapter steps aside at the hook boundary to protect the user session but schedules one bounded follow-up when the predicate blocks.
 The generated prompts use the canonical `turn-end-guard` kind after the U+2063 `FIRSTMATE_OP: ` prefix, so Ahoy does not treat them as captain messages.
-Each passive adapter owns a loop latch.
+The Pi adapter owns a loop latch.
 Pi keeps the latch across internal tool turns and clears it only when the generated follow-up settles or delivery fails.
 
 If a passive adapter cannot invoke its SDK, the next pull-based `fm-guard.sh` call reports the problem.

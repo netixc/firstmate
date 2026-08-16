@@ -60,7 +60,7 @@ Use that value for interrupt, exit, resume, and skill-invocation facts.
 ## Primary turn-end guard
 
 The primary Pi integration has an empirically validated hook path for the "no turn ends blind" guard.
-They expose passive lifecycle callbacks and force one bounded follow-up when the shared predicate blocks.
+It exposes passive lifecycle callbacks and forces one bounded follow-up when the shared predicate blocks.
 The exact hook files, commands, scoping rules, and fail-open tradeoffs are owned by `docs/turnend-guard.md`.
 `docs/verification/supervision.md` "Turn-end guard" owns active validation evidence.
 When changing any primary turn-end hook, validate the real harness behavior in a scratch project or throwaway home before trusting it, then update that doc and the relevant concise fact below.

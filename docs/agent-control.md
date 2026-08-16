@@ -41,7 +41,7 @@ Removing a worktree, closing an endpoint, or discarding work stays with [`bin/fm
 
 **`resume` is not a verb.**
 Pi has no verified pane-resume contract.
-`relaunch` covers the same need on every adapter, because the brief on disk - not a harness-private session - is the durable instruction.
+`relaunch` covers the same need on Pi, because the brief on disk - not a harness-private session - is the durable instruction.
 
 ## Transactional relaunch
 
