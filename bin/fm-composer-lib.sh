@@ -364,9 +364,9 @@ fm_composer_idle_matches() {
 
 # fm_composer_classify_content: the single shared composer-content verdict.
 #   <bordered> 1 when <content> came from a genuine agent-composer container (a
-#              bordered composer box, an identity-proven separated composer, or
-#              a structurally-identified left-bar row); 0 for a bare
-#              agent-glyph row, where only the agent glyph itself is proof.
+#              bordered composer box or an identity-proven separated composer);
+#              0 for a bare agent-glyph row, where only the agent glyph itself
+#              is proof.
 #   <content>  the candidate composer content, border-stripped by the caller.
 #   [idle_re]  optional idle-placeholder regex; empty means no idle matching.
 #              The screen classifier below passes the resolved fleet-wide idle
