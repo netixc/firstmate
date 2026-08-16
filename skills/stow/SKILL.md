@@ -35,7 +35,7 @@ Everything files to a local destination by default; an external system such as a
 3. **Route each finding using this fixed priority order, local-first.**
    1. **Highest - an explicit instruction wins.** If the user has explicitly said, earlier in this conversation or as a standing choice previously recorded in the discovered user-level memory file (see step 4), to use a particular system for this kind of finding, route it there.
       This is the *only* path to an external or public system such as an issue tracker, hosted project board, or ticketing system.
-      A configured git host remote, a `.github`/`.gitlab` folder, or any other signal that a tracker probably exists is never by itself grounds to file anything there - never route externally on inference.
+      A configured git host remote, a forge-specific metadata folder, or any other signal that a tracker probably exists is never by itself grounds to file anything there - never route externally on inference.
    2. **Otherwise - the local convention the project or user already has.** The discovered project memory file for project facts, operational gotchas, and standing decisions; an existing `TODO`/`BACKLOG`/`NOTES` file for undone next steps; a discovered user-level memory file for user preferences *when one happens to be accessible* - a bonus if reachable, never an assumption or a requirement.
       This is the only tier that writes findings into a tracked, shared file or outside the current directory, and only because the user already established that destination.
    3. **Fallback - `.stow-notes.md` in the current directory, for every finding-kind.** When no existing convention fits, don't improvise a location or invent an ad hoc filename.

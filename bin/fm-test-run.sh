@@ -349,8 +349,8 @@ list_portable_serial() {
   done < <(all_repo_tests)
 }
 
-# Measured portable-serial script durations in milliseconds, from the CI timing
-# artifact recorded in docs/fm-test-portable-shards.md. These are balance hints
+# Measured portable-serial script durations in milliseconds from the timing
+# evidence recorded in docs/fm-test-portable-shards.md. These are balance hints
 # only: the shard partition stays complete and disjoint whatever they say, so a
 # stale hint costs balance rather than coverage. That doc owns the refresh
 # procedure.
@@ -382,7 +382,7 @@ tests/fm-operational-input.test.sh 184
 tests/fm-pending-reply.test.sh 7328
 tests/fm-pi-primary-live-e2e.test.sh 19
 tests/fm-pi-watch-extension.test.sh 16386
-tests/fm-pr-check-security.test.sh 199573
+tests/fm-pr-check-security.test.sh 269158
 tests/fm-procevent.test.sh 42789
 tests/fm-public-followup.test.sh 23365
 tests/fm-quota-array-dispatch-live-e2e.test.sh 19
@@ -921,6 +921,9 @@ families_for_changed_path() {
     bin/fm-tmux-lib.sh|bin/fm-marker-lib.sh|bin/fm-operational-input.sh|bin/fm-tasks-axi-lib.sh|\
     bin/fm-primary-scope-lib.sh|bin/fm-project-mode.sh|bin/fm-promote.sh|\
     bin/fm-ff-lib.sh|bin/fm-gotmp*|bin/*pretool*)
+      printf '%s\n' pure-contract-unit
+      ;;
+    skills/stow/SKILL.md)
       printf '%s\n' pure-contract-unit
       ;;
     .agents/skills/quota-array-dispatch/SKILL.md)

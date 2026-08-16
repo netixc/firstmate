@@ -90,6 +90,41 @@ current_checks_authenticated() {
   done
 }
 
+migration_transaction_pending() {
+  local id=$1 kind path
+  for kind in pending-canonical pending-ambiguous failure-canonical \
+    failure-ambiguous failure-replacement; do
+    path="$QUARANTINE/$id.diagnostic.$kind"
+    [ -e "$path" ] || [ -L "$path" ] || continue
+    return 0
+  done
+  return 1
+}
+
+orphan_poll_artifacts_absent() {
+  local artifact check id
+  for artifact in "$STATE"/*.pr-poll "$STATE"/*.pr-poll-registration; do
+    [ -e "$artifact" ] || [ -L "$artifact" ] || continue
+    case "$artifact" in
+      *.pr-poll) id=$(basename "$artifact" .pr-poll) ;;
+      *.pr-poll-registration) id=$(basename "$artifact" .pr-poll-registration) ;;
+    esac
+    check="$STATE/$id.check.sh"
+    if [ ! -e "$check" ] && [ ! -L "$check" ]; then
+      if [ ! -f "$artifact" ] && [ ! -L "$artifact" ] \
+        && migration_transaction_pending "$id"; then
+        continue
+      fi
+      return 1
+    fi
+    if [ "$id" = relay-watch ] && fm_relay_poll_shim_valid "$check" "$FM_HOME" "$FM_ROOT"; then
+      return 1
+    fi
+    fm_custom_check_registered "$STATE" "$id" && return 1
+  done
+  return 0
+}
+
 private_migration_boundaries_valid() {
   local state_device=$1 artifact
   if [ -e "$LOG" ] || [ -L "$LOG" ]; then
@@ -161,7 +196,7 @@ diagnostic_obligation_message() {
         MIGRATION_DIAGNOSTIC_MESSAGE="task $prefix: replacement poll lacks canonical provenance or metadata binding; poll remains unarmed; republish it through fm-pr-check.sh"
         ;;
       ambiguous)
-        MIGRATION_DIAGNOSTIC_MESSAGE="task $prefix: ambiguous or invalid legacy poll quarantined and unarmed"
+        MIGRATION_DIAGNOSTIC_MESSAGE="task $prefix: unsupported or invalid legacy poll quarantined and unarmed"
         ;;
       validated)
         MIGRATION_DIAGNOSTIC_MESSAGE="task $prefix: validated replacement poll armed after legacy quarantine"
@@ -225,7 +260,7 @@ scan_complete() {
   private_migration_boundaries_valid "$state_device" || return 1
   diagnostic_namespace_valid || return 1
   legacy_noncanonical_namespace_absent || return 1
-  current_checks_authenticated
+  current_checks_authenticated && orphan_poll_artifacts_absent
 }
 
 migration_complete() {
@@ -254,9 +289,19 @@ relay_shim_locked_scan_needed() {
   return 0
 }
 
-# Marker short-circuits apply only when generated artifact identities are current.
+retirement_receipts_present() {
+  local receipt
+  for receipt in "$STATE"/*.pr-poll-retirement; do
+    [ -e "$receipt" ] || [ -L "$receipt" ] || continue
+    return 0
+  done
+  return 1
+}
+
+# Marker short-circuits apply only when generated artifact identities are current
+# and no terminal receipt still requires identity-bound cleanup.
 # Otherwise watcher exclusion comes before every check scan and state mutation.
-if ! relay_shim_locked_scan_needed; then
+if ! relay_shim_locked_scan_needed && ! retirement_receipts_present; then
   migration_complete && exit 0
   [ "$ALLOW_INCOMPLETE_REPAIRS" -eq 1 ] && scan_complete && exit 0
 fi
@@ -345,6 +390,241 @@ if [ ! -d "$STATE" ] || [ -L "$STATE" ]; then
 fi
 STATE_DEVICE=$(fm_pr_file_device "$STATE") || exit 1
 [ -n "$STATE_DEVICE" ] || exit 1
+
+# Removal compatibility is deliberately data-only.
+# An unsupported terminal receipt may finish fixed-path cleanup only when its
+# existing envelope, metadata binding, hashes, and inode identities all match.
+# This path never parses or reconstructs a forge URL and never invokes a CLI.
+FM_PR_UNSUPPORTED_ID=
+FM_PR_UNSUPPORTED_PROVIDER=
+FM_PR_UNSUPPORTED_URL=
+FM_PR_UNSUPPORTED_HOST=
+FM_PR_UNSUPPORTED_PATH=
+FM_PR_UNSUPPORTED_NUMBER=
+FM_PR_UNSUPPORTED_DATA_HASH=
+FM_PR_UNSUPPORTED_TEMPLATE_HASH=
+FM_PR_UNSUPPORTED_DATA_IDENTITY=
+FM_PR_UNSUPPORTED_CHECK_IDENTITY=
+FM_PR_UNSUPPORTED_REG_HASH=
+FM_PR_UNSUPPORTED_REG_IDENTITY=
+FM_PR_UNSUPPORTED_RETIREMENT_REJECTED=
+unsupported_terminal_retired=0
+
+unsupported_retirement_parse() {
+  local file=$1 version id provider url host path number data_hash template_hash
+  local data_identity check_identity reg_hash reg_identity result _extra
+  FM_PR_UNSUPPORTED_ID=
+  [ -f "$file" ] && [ ! -L "$file" ] || return 1
+  exec 5< "$file" || return 1
+  IFS= read -r version <&5 || { exec 5<&-; return 1; }
+  IFS= read -r id <&5 || { exec 5<&-; return 1; }
+  IFS= read -r provider <&5 || { exec 5<&-; return 1; }
+  IFS= read -r url <&5 || { exec 5<&-; return 1; }
+  IFS= read -r host <&5 || { exec 5<&-; return 1; }
+  IFS= read -r path <&5 || { exec 5<&-; return 1; }
+  IFS= read -r number <&5 || { exec 5<&-; return 1; }
+  IFS= read -r data_hash <&5 || { exec 5<&-; return 1; }
+  IFS= read -r template_hash <&5 || { exec 5<&-; return 1; }
+  IFS= read -r data_identity <&5 || { exec 5<&-; return 1; }
+  IFS= read -r check_identity <&5 || { exec 5<&-; return 1; }
+  IFS= read -r reg_hash <&5 || { exec 5<&-; return 1; }
+  IFS= read -r reg_identity <&5 || { exec 5<&-; return 1; }
+  IFS= read -r result <&5 || { exec 5<&-; return 1; }
+  if IFS= read -r _extra <&5; then
+    exec 5<&-
+    return 1
+  fi
+  exec 5<&-
+  [ "$version" = fm-pr-poll-retirement-v1 ] || return 1
+  fm_pr_task_id_valid "$id" || return 1
+  [[ "$provider" =~ ^[a-z][a-z0-9-]{0,31}$ ]] || return 1
+  [ "$provider" != github ] || return 1
+  [ "${#url}" -ge 1 ] && [ "${#url}" -le 4096 ] || return 1
+  [ "${#host}" -ge 1 ] && [ "${#host}" -le 1024 ] || return 1
+  [ "${#path}" -ge 1 ] && [ "${#path}" -le 1024 ] || return 1
+  [[ "$number" =~ ^[1-9][0-9]{0,19}$ ]] || return 1
+  [[ "$data_hash" =~ ^[0-9a-f]{64}$ ]] || return 1
+  [[ "$template_hash" =~ ^[0-9a-f]{64}$ ]] || return 1
+  [[ "$data_identity" =~ ^[0-9]+:[0-9]+$ ]] || return 1
+  [[ "$check_identity" =~ ^[0-9]+:[0-9]+$ ]] || return 1
+  [[ "$reg_hash" =~ ^[0-9a-f]{64}$ ]] || return 1
+  [[ "$reg_identity" =~ ^[0-9]+:[0-9]+$ ]] || return 1
+  [ "$result" = merged ] || return 1
+  FM_PR_UNSUPPORTED_ID=$id
+  FM_PR_UNSUPPORTED_PROVIDER=$provider
+  FM_PR_UNSUPPORTED_URL=$url
+  FM_PR_UNSUPPORTED_HOST=$host
+  FM_PR_UNSUPPORTED_PATH=$path
+  FM_PR_UNSUPPORTED_NUMBER=$number
+  FM_PR_UNSUPPORTED_DATA_HASH=$data_hash
+  FM_PR_UNSUPPORTED_TEMPLATE_HASH=$template_hash
+  FM_PR_UNSUPPORTED_DATA_IDENTITY=$data_identity
+  FM_PR_UNSUPPORTED_CHECK_IDENTITY=$check_identity
+  FM_PR_UNSUPPORTED_REG_HASH=$reg_hash
+  FM_PR_UNSUPPORTED_REG_IDENTITY=$reg_identity
+}
+
+unsupported_retirement_metadata_valid() {
+  local file=$1 line value pr_count=0 seen_pr=0 post_pr_invalid=0
+  [ -f "$file" ] && [ ! -L "$file" ] || return 1
+  [ "$(fm_pr_file_link_count "$file")" = 1 ] || return 1
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      pr=*)
+        pr_count=$((pr_count + 1))
+        [ "$pr_count" -eq 1 ] || continue
+        value=${line#pr=}
+        [ "$value" = "$FM_PR_UNSUPPORTED_URL" ] || post_pr_invalid=1
+        seen_pr=1
+        ;;
+      pr_head=*)
+        if [ "$seen_pr" -eq 1 ]; then
+          value=${line#pr_head=}
+          fm_pr_head_valid "$value" || post_pr_invalid=1
+        fi
+        ;;
+      relay_request=*|relay_request_ts=*|relay_followups=*|relay_platform=*|relay_reply_max_chars=*)
+        ;;
+      *)
+        [ "$seen_pr" -eq 0 ] || post_pr_invalid=1
+        ;;
+    esac
+  done < "$file"
+  [ "$pr_count" -eq 1 ] && [ "$post_pr_invalid" -eq 0 ]
+}
+
+unsupported_retirement_data_valid() {
+  local file=$1 provider url host path number _extra
+  fm_pr_private_file_valid "$file" 600 "$STATE_DEVICE" || return 1
+  exec 5< "$file" || return 1
+  IFS= read -r provider <&5 || { exec 5<&-; return 1; }
+  IFS= read -r url <&5 || { exec 5<&-; return 1; }
+  IFS= read -r host <&5 || { exec 5<&-; return 1; }
+  IFS= read -r path <&5 || { exec 5<&-; return 1; }
+  IFS= read -r number <&5 || { exec 5<&-; return 1; }
+  if IFS= read -r _extra <&5; then exec 5<&-; return 1; fi
+  exec 5<&-
+  [ "$provider" = "$FM_PR_UNSUPPORTED_PROVIDER" ] \
+    && [ "$url" = "$FM_PR_UNSUPPORTED_URL" ] \
+    && [ "$host" = "$FM_PR_UNSUPPORTED_HOST" ] \
+    && [ "$path" = "$FM_PR_UNSUPPORTED_PATH" ] \
+    && [ "$number" = "$FM_PR_UNSUPPORTED_NUMBER" ] \
+    && [ "$(fm_pr_sha256 "$file")" = "$FM_PR_UNSUPPORTED_DATA_HASH" ] \
+    && [ "$(fm_pr_file_identity "$file")" = "$FM_PR_UNSUPPORTED_DATA_IDENTITY" ]
+}
+
+unsupported_retirement_registration_valid() {
+  local file=$1 version id provider url host path number data_hash template_hash
+  local data_identity check_identity _extra
+  fm_pr_private_file_valid "$file" 600 "$STATE_DEVICE" || return 1
+  exec 5< "$file" || return 1
+  IFS= read -r version <&5 || { exec 5<&-; return 1; }
+  IFS= read -r id <&5 || { exec 5<&-; return 1; }
+  IFS= read -r provider <&5 || { exec 5<&-; return 1; }
+  IFS= read -r url <&5 || { exec 5<&-; return 1; }
+  IFS= read -r host <&5 || { exec 5<&-; return 1; }
+  IFS= read -r path <&5 || { exec 5<&-; return 1; }
+  IFS= read -r number <&5 || { exec 5<&-; return 1; }
+  IFS= read -r data_hash <&5 || { exec 5<&-; return 1; }
+  IFS= read -r template_hash <&5 || { exec 5<&-; return 1; }
+  IFS= read -r data_identity <&5 || { exec 5<&-; return 1; }
+  IFS= read -r check_identity <&5 || { exec 5<&-; return 1; }
+  if IFS= read -r _extra <&5; then exec 5<&-; return 1; fi
+  exec 5<&-
+  [ "$version" = fm-pr-poll-registration-v2 ] \
+    && [ "$id" = "$FM_PR_UNSUPPORTED_ID" ] \
+    && [ "$provider" = "$FM_PR_UNSUPPORTED_PROVIDER" ] \
+    && [ "$url" = "$FM_PR_UNSUPPORTED_URL" ] \
+    && [ "$host" = "$FM_PR_UNSUPPORTED_HOST" ] \
+    && [ "$path" = "$FM_PR_UNSUPPORTED_PATH" ] \
+    && [ "$number" = "$FM_PR_UNSUPPORTED_NUMBER" ] \
+    && [ "$data_hash" = "$FM_PR_UNSUPPORTED_DATA_HASH" ] \
+    && [ "$template_hash" = "$FM_PR_UNSUPPORTED_TEMPLATE_HASH" ] \
+    && [ "$data_identity" = "$FM_PR_UNSUPPORTED_DATA_IDENTITY" ] \
+    && [ "$check_identity" = "$FM_PR_UNSUPPORTED_CHECK_IDENTITY" ] \
+    && [ "$(fm_pr_sha256 "$file")" = "$FM_PR_UNSUPPORTED_REG_HASH" ] \
+    && [ "$(fm_pr_file_identity "$file")" = "$FM_PR_UNSUPPORTED_REG_IDENTITY" ]
+}
+
+unsupported_retirement_check_valid() {
+  local file=$1
+  fm_pr_private_file_valid "$file" 600 "$STATE_DEVICE" \
+    && [ "$(fm_pr_sha256 "$file")" = "$FM_PR_UNSUPPORTED_TEMPLATE_HASH" ] \
+    && [ "$(fm_pr_file_identity "$file")" = "$FM_PR_UNSUPPORTED_CHECK_IDENTITY" ]
+}
+
+unsupported_retirement_recover_one() {
+  local id=$1 receipt check data registration has_check=0 has_data=0 has_registration=0
+  local receipt_hash receipt_identity
+  receipt="$STATE/$id.pr-poll-retirement"
+  fm_pr_private_file_valid "$receipt" 600 "$STATE_DEVICE" || return 1
+  unsupported_retirement_parse "$receipt" || return 1
+  [ "$FM_PR_UNSUPPORTED_ID" = "$id" ] || return 1
+  unsupported_retirement_metadata_valid "$STATE/$id.meta" || return 1
+  receipt_hash=$(fm_pr_sha256 "$receipt") || return 1
+  receipt_identity=$(fm_pr_file_identity "$receipt") || return 1
+  check="$STATE/$id.check.sh"
+  data="$STATE/$id.pr-poll"
+  registration="$STATE/$id.pr-poll-registration"
+  [ ! -e "$check" ] && [ ! -L "$check" ] || has_check=1
+  [ ! -e "$data" ] && [ ! -L "$data" ] || has_data=1
+  [ ! -e "$registration" ] && [ ! -L "$registration" ] || has_registration=1
+  if [ "$has_check" -eq 1 ]; then
+    [ "$has_data" -eq 1 ] && [ "$has_registration" -eq 1 ] || return 1
+    unsupported_retirement_check_valid "$check" || return 1
+  fi
+  if [ "$has_registration" -eq 1 ]; then
+    [ "$has_data" -eq 1 ] || return 1
+    unsupported_retirement_registration_valid "$registration" || return 1
+  fi
+  [ "$has_data" -eq 0 ] || unsupported_retirement_data_valid "$data" || return 1
+  if [ "$has_check" -eq 1 ]; then
+    fm_pr_poll_retirement_remove_exact "$check" "$STATE_DEVICE" \
+      "$FM_PR_UNSUPPORTED_CHECK_IDENTITY" "$FM_PR_UNSUPPORTED_TEMPLATE_HASH" || return 1
+  fi
+  if [ "$has_registration" -eq 1 ]; then
+    fm_pr_poll_retirement_remove_exact "$registration" "$STATE_DEVICE" \
+      "$FM_PR_UNSUPPORTED_REG_IDENTITY" "$FM_PR_UNSUPPORTED_REG_HASH" || return 1
+  fi
+  if [ "$has_data" -eq 1 ]; then
+    fm_pr_poll_retirement_remove_exact "$data" "$STATE_DEVICE" \
+      "$FM_PR_UNSUPPORTED_DATA_IDENTITY" "$FM_PR_UNSUPPORTED_DATA_HASH" || return 1
+  fi
+  fm_pr_poll_retirement_remove_exact "$receipt" "$STATE_DEVICE" \
+    "$receipt_identity" "$receipt_hash" || return 1
+}
+
+unsupported_retirement_claims_removed_provider() {
+  local file=$1 version id provider
+  fm_pr_private_file_valid "$file" 600 "$STATE_DEVICE" || return 1
+  exec 5< "$file" || return 1
+  IFS= read -r version <&5 || { exec 5<&-; return 1; }
+  IFS= read -r id <&5 || { exec 5<&-; return 1; }
+  IFS= read -r provider <&5 || { exec 5<&-; return 1; }
+  exec 5<&-
+  [ "$provider" != github ]
+}
+
+unsupported_retirement_recover_all() {
+  local receipt id
+  FM_PR_UNSUPPORTED_RETIREMENT_REJECTED=
+  for receipt in "$STATE"/*.pr-poll-retirement; do
+    [ -e "$receipt" ] || [ -L "$receipt" ] || continue
+    unsupported_retirement_claims_removed_provider "$receipt" || continue
+    id=$(basename "$receipt" .pr-poll-retirement)
+    if unsupported_retirement_recover_one "$id"; then
+      unsupported_terminal_retired=1
+    else
+      FM_PR_UNSUPPORTED_RETIREMENT_REJECTED="$FM_PR_UNSUPPORTED_RETIREMENT_REJECTED $receipt"
+    fi
+  done
+  [ -z "$FM_PR_UNSUPPORTED_RETIREMENT_REJECTED" ]
+}
+
+if ! unsupported_retirement_recover_all; then
+  echo "PR_CHECK_MIGRATION: unsupported terminal PR poll cleanup could not be validated:$FM_PR_UNSUPPORTED_RETIREMENT_REJECTED" >&2
+  exit 1
+fi
 if ! fm_pr_poll_retirement_recover_all "$STATE" "$TEMPLATE"; then
   echo "PR_CHECK_MIGRATION: pending PR poll retirement could not be validated:$FM_PR_POLL_RETIREMENT_REJECTED" >&2
   exit 1
@@ -382,7 +662,7 @@ if [ -e "$SCAN_MARKER" ] || [ -L "$SCAN_MARKER" ]; then
   [ ! -e "$SCAN_MARKER" ] && [ ! -L "$SCAN_MARKER" ] || exit 1
 fi
 migration_needed() {
-  local check id
+  local check artifact id
   for check in "$STATE"/*.check.sh; do
     [ -e "$check" ] || [ -L "$check" ] || continue
     if [ "$(basename "$check")" = relay-watch.check.sh ] \
@@ -394,6 +674,14 @@ migration_needed() {
     if ! fm_pr_poll_artifacts_valid "$STATE" "$id" "$TEMPLATE"; then
       return 0
     fi
+  done
+  for artifact in "$STATE"/*.pr-poll "$STATE"/*.pr-poll-registration; do
+    [ -e "$artifact" ] || [ -L "$artifact" ] || continue
+    case "$artifact" in
+      *.pr-poll) id=$(basename "$artifact" .pr-poll) ;;
+      *.pr-poll-registration) id=$(basename "$artifact" .pr-poll-registration) ;;
+    esac
+    fm_pr_poll_artifacts_valid "$STATE" "$id" "$TEMPLATE" || return 0
   done
   return 1
 }
@@ -711,6 +999,33 @@ quarantined_artifact_exists() {
   return 1
 }
 
+quarantined_poll_artifact_exists() {
+  local prefix=$1 kind
+  for kind in check data registration; do
+    quarantined_artifact_exists "$prefix" "$kind" && return 0
+  done
+  return 1
+}
+
+quarantined_poll_artifact_present() {
+  local prefix=$1 artifact kind
+  for kind in check data registration; do
+    for artifact in "$QUARANTINE/$prefix.$kind."*; do
+      [ -e "$artifact" ] || [ -L "$artifact" ] || continue
+      return 0
+    done
+  done
+  return 1
+}
+
+preserved_nonpoll_check() {
+  local id=$1 check="$STATE/$1.check.sh"
+  if [ "$id" = relay-watch ] && fm_relay_poll_shim_valid "$check" "$FM_HOME" "$FM_ROOT"; then
+    return 0
+  fi
+  fm_custom_check_registered "$STATE" "$id"
+}
+
 diagnostic_obligation_valid() {
   local prefix=$1 kind=$2 path basename
   path="$QUARANTINE/$prefix.diagnostic.$kind"
@@ -741,10 +1056,10 @@ ambiguous_terminal_success() {
   check="$STATE/$id.check.sh"
   data="$STATE/$id.pr-poll"
   registration="$STATE/$id.pr-poll-registration"
-  [ ! -e "$check" ] && [ ! -L "$check" ] \
+  { { [ ! -e "$check" ] && [ ! -L "$check" ]; } || preserved_nonpoll_check "$id"; } \
     && [ ! -e "$data" ] && [ ! -L "$data" ] \
     && [ ! -e "$registration" ] && [ ! -L "$registration" ] \
-    && quarantined_artifact_exists "$id" check
+    && quarantined_poll_artifact_exists "$id"
 }
 
 complete_canonical_outcome() {
@@ -775,7 +1090,7 @@ complete_validated_outcome() {
 
 complete_noncanonical_outcome() {
   local prefix=${1:-$NONCANONICAL_PREFIX}
-  quarantined_artifact_exists "$prefix" check || return 1
+  quarantined_poll_artifact_exists "$prefix" || return 1
   ensure_outcome_obligation "$prefix" noncanonical || return 1
   remove_diagnostic_obligation "$prefix" pending-noncanonical
 }
@@ -908,10 +1223,18 @@ recover_pending_outcomes() {
           migration_failed=1
           continue
         fi
-        if quarantined_artifact_exists "$prefix" check \
+        if quarantined_poll_artifact_exists "$prefix" \
           && { [ -e "$STATE/$prefix.check.sh" ] || [ -L "$STATE/$prefix.check.sh" ]; } \
-          && ! live_check_matches_quarantined "$prefix"; then
+          && ! preserved_nonpoll_check "$prefix" \
+          && { ! quarantined_artifact_exists "$prefix" check \
+            || ! live_check_matches_quarantined "$prefix"; }; then
           quarantine_untrusted_replacement "$prefix" || return 1
+          migration_failed=1
+          continue
+        fi
+        if [ "$ALLOW_INCOMPLETE_REPAIRS" -eq 1 ] \
+          && { [ -e "$failure" ] || [ -L "$failure" ]; } \
+          && ! replacement_artifacts_present "$prefix"; then
           migration_failed=1
           continue
         fi
@@ -924,20 +1247,21 @@ recover_pending_outcomes() {
         fi
         check="$STATE/$prefix.check.sh"
         if [ ! -e "$check" ] && [ ! -L "$check" ]; then
-          if quarantined_artifact_exists "$prefix" check; then
+          if quarantined_poll_artifact_exists "$prefix"; then
             ensure_outcome_obligation "$prefix" failure-ambiguous || return 1
             if ambiguous_repair_from_pending "$prefix"; then
               complete_ambiguous_outcome "$prefix" || return 1
             else
               migration_failed=1
             fi
-          elif [ -e "$failure" ] || [ -L "$failure" ]; then
+          elif { [ -e "$failure" ] || [ -L "$failure" ]; } \
+            && ! replacement_artifacts_present "$prefix"; then
             migration_failed=1
           fi
         fi
         ;;
       pending-noncanonical)
-        if quarantined_artifact_exists "$prefix" check; then
+        if quarantined_poll_artifact_exists "$prefix"; then
           complete_noncanonical_outcome "$prefix" || return 1
         fi
         ;;
@@ -1107,6 +1431,94 @@ if migration_needed; then
       fi
     fi
   done
+
+  for data in "$STATE"/*.pr-poll; do
+    [ -e "$data" ] || [ -L "$data" ] || continue
+    id=$(basename "$data" .pr-poll)
+    if migration_transaction_pending "$id" \
+      && quarantined_poll_artifact_present "$id"; then
+      continue
+    fi
+    check="$STATE/$id.check.sh"
+    if [ -e "$check" ] || [ -L "$check" ]; then
+      preserved_nonpoll_check "$id" || continue
+    fi
+    if fm_pr_task_id_valid "$id"; then
+      message="task $id: migration outcome tracking started before legacy poll handling"
+      if ! ensure_diagnostic_obligation "$id" pending-ambiguous "$message" \
+        || ! process_diagnostic_obligations; then
+        diagnostics_failed=1
+        migration_failed=1
+        continue
+      fi
+      if quarantine_artifact "$data" "$id" data \
+        && quarantine_artifact "$STATE/$id.pr-poll-registration" "$id" registration \
+        && complete_ambiguous_outcome "$id"; then
+        :
+      else
+        migration_failed=1
+        record_ambiguous_failure "$id" || diagnostics_failed=1
+      fi
+    else
+      message='noncanonical task artifact: migration outcome tracking started before legacy poll handling'
+      if ! ensure_diagnostic_obligation "$NONCANONICAL_PREFIX" pending-noncanonical "$message" \
+        || ! process_diagnostic_obligations; then
+        diagnostics_failed=1
+        migration_failed=1
+        continue
+      fi
+      if quarantine_artifact "$data" "$NONCANONICAL_PREFIX" data \
+        && quarantine_artifact "$STATE/$id.pr-poll-registration" "$NONCANONICAL_PREFIX" registration \
+        && complete_noncanonical_outcome; then
+        :
+      else
+        migration_failed=1
+      fi
+    fi
+  done
+
+  for registration in "$STATE"/*.pr-poll-registration; do
+    [ -e "$registration" ] || [ -L "$registration" ] || continue
+    id=$(basename "$registration" .pr-poll-registration)
+    if migration_transaction_pending "$id" \
+      && quarantined_poll_artifact_present "$id"; then
+      continue
+    fi
+    check="$STATE/$id.check.sh"
+    if [ -e "$check" ] || [ -L "$check" ]; then
+      preserved_nonpoll_check "$id" || continue
+    fi
+    if fm_pr_task_id_valid "$id"; then
+      message="task $id: migration outcome tracking started before legacy poll handling"
+      if ! ensure_diagnostic_obligation "$id" pending-ambiguous "$message" \
+        || ! process_diagnostic_obligations; then
+        diagnostics_failed=1
+        migration_failed=1
+        continue
+      fi
+      if quarantine_artifact "$registration" "$id" registration \
+        && complete_ambiguous_outcome "$id"; then
+        :
+      else
+        migration_failed=1
+        record_ambiguous_failure "$id" || diagnostics_failed=1
+      fi
+    else
+      message='noncanonical task artifact: migration outcome tracking started before legacy poll handling'
+      if ! ensure_diagnostic_obligation "$NONCANONICAL_PREFIX" pending-noncanonical "$message" \
+        || ! process_diagnostic_obligations; then
+        diagnostics_failed=1
+        migration_failed=1
+        continue
+      fi
+      if quarantine_artifact "$registration" "$NONCANONICAL_PREFIX" registration \
+        && complete_noncanonical_outcome; then
+        :
+      else
+        migration_failed=1
+      fi
+    fi
+  done
 fi
 
 if ! quarantine_tree_repair_and_validate \
@@ -1143,6 +1555,9 @@ if [ "$migration_failed" -ne 0 ]; then
   exit 1
 fi
 
+if [ "$unsupported_terminal_retired" -eq 1 ]; then
+  echo "PR_CHECK_MIGRATION: exact unsupported terminal poll receipts retired without network access"
+fi
 if [ "$canonical_rebuilt" -eq 1 ]; then
   echo "PR_CHECK_MIGRATION: canonical polls rebuilt and armed; resume supervision for this home"
 fi

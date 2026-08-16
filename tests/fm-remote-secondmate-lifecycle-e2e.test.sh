@@ -572,7 +572,7 @@ forge_project() { # <project> <origin-url>
 }
 forge_project bitbucket-app 'https://bitbucket.org/team/bitbucket-app.git'
 forge_project ghe-app 'https://git.example.com/org/ghe-app.git'
-forge_project gitlab-app 'ssh://git@gitlab.self.hosted:2222/group/subgroup/gitlab-app.git'
+forge_project nested-app 'ssh://git@code.private.example:2222/group/subgroup/nested-app.git'
 forge_project scp-app 'git@host.internal:group/scp-app.git'
 
 cat > "$REMOTE_ROOT/bin/git" <<SH
@@ -601,7 +601,7 @@ out=$(FM_SECONDMATE_CHARTER='Own delivery for projects hosted anywhere.' \
   "$FORGE_HOME" \
   'bitbucket-app=https://bitbucket.org/team/bitbucket-app.git' \
   'ghe-app=https://git.example.com/org/ghe-app.git' \
-  'gitlab-app=ssh://git@gitlab.self.hosted:2222/group/subgroup/gitlab-app.git' \
+  'nested-app=ssh://git@code.private.example:2222/group/subgroup/nested-app.git' \
   'scp-app=git@host.internal:group/scp-app.git' 2>&1) \
   || fail "seeding refused origins hosted outside GitHub"$'\n'"$out"
 
@@ -610,7 +610,7 @@ while IFS="$(printf '\t')" read -r forge_origin _; do
   assert_grep "$forge_origin" "$FORGE_CLONE_LOG" \
     "the remote host did not clone from the supplied origin $forge_origin"
 done < "$FORGE_ORIGIN_MAP"
-for forge_project_name in bitbucket-app ghe-app gitlab-app scp-app; do
+for forge_project_name in bitbucket-app ghe-app nested-app scp-app; do
   assert_present "$FORGE_HOME/projects/$forge_project_name/.git" \
     "the remote home has no clone for $forge_project_name"
   assert_grep "$forge_project_name" "$FORGE_HOME/data/projects.md" \
