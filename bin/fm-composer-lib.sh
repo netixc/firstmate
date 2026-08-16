@@ -237,7 +237,7 @@ fm_composer_strip_ghost() {
 # The harness-less default is the UNION of the per-harness tokens below, used
 # when a caller has no recorded harness for the pane (the submit cores read the
 # baseline and the post-Enter transition this way).
-FM_DELIVERY_BUSY_REGEX_DEFAULT='esc (to )?interrupt|Working\.\.\.'
+FM_DELIVERY_BUSY_REGEX_DEFAULT='esc to interrupt|Working\.\.\.'
 FM_DELIVERY_CODEX_BUSY_REGEX_DEFAULT='esc to interrupt'
 FM_DELIVERY_PI_BUSY_REGEX_DEFAULT='Working\.\.\.'
 

@@ -123,6 +123,28 @@ test_real_text_is_pending() {
   pass "fm_composer_classify_content: real unsubmitted text reads pending (including a popup argument-hint fill)"
 }
 
+test_delivery_busy_signatures_are_limited_to_verified_harnesses() {
+  local codex_footer='esc to interrupt' codex_near_miss
+  codex_near_miss=${codex_footer/ to/}
+  printf '%s\0' "$codex_footer" | fm_busy_lines_match codex \
+    || fail "Codex's verified delivery footer must remain recognized"
+  printf 'Working...\0' | fm_busy_lines_match pi \
+    || fail "Pi's verified delivery footer must remain recognized"
+  printf 'Working...\0' | fm_busy_lines_match pi-signed \
+    || fail "pi-signed must retain Pi's verified delivery footer"
+  printf '%s\0' "$codex_footer" | fm_busy_lines_match \
+    || fail "the harness-neutral matcher must retain the Codex footer"
+  printf 'Working...\0' | fm_busy_lines_match \
+    || fail "the harness-neutral matcher must retain the Pi footer"
+  if printf '%s\0' "$codex_near_miss" | fm_busy_lines_match; then
+    fail "the harness-neutral matcher accepted an unsupported delivery footer"
+  fi
+  if printf '%s\0' "$codex_footer" | fm_busy_lines_match legacy-agent; then
+    fail "an unsupported harness borrowed a verified harness's delivery footer"
+  fi
+  pass "delivery busy matching recognizes only retained Codex and Pi signatures"
+}
+
 # =============================================================================
 # fm_composer_classify_screen: the adapter-facing screen classifier and the
 # correctness matrix (audit data/fm-composer-consolidation-audit-s1, task
@@ -408,6 +430,7 @@ test_empty_content_is_empty
 test_idle_placeholder_is_empty
 test_idle_placeholder_case_mode_is_explicit
 test_real_text_is_pending
+test_delivery_busy_signatures_are_limited_to_verified_harnesses
 test_matrix_codex_dim_hint_row
 test_matrix_pi_separated_needs_identity
 test_matrix_bordered_shell_glyph_box
