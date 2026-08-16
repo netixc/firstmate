@@ -161,7 +161,7 @@ diagnostic_obligation_message() {
         MIGRATION_DIAGNOSTIC_MESSAGE="task $prefix: replacement poll lacks canonical provenance or metadata binding; poll remains unarmed; republish it through fm-pr-check.sh"
         ;;
       ambiguous)
-        MIGRATION_DIAGNOSTIC_MESSAGE="task $prefix: ambiguous or invalid legacy poll quarantined and unarmed"
+        MIGRATION_DIAGNOSTIC_MESSAGE="task $prefix: unsupported or invalid legacy poll quarantined and unarmed"
         ;;
       validated)
         MIGRATION_DIAGNOSTIC_MESSAGE="task $prefix: validated replacement poll armed after legacy quarantine"
@@ -254,9 +254,19 @@ relay_shim_locked_scan_needed() {
   return 0
 }
 
-# Marker short-circuits apply only when generated artifact identities are current.
+retirement_receipts_present() {
+  local receipt
+  for receipt in "$STATE"/*.pr-poll-retirement; do
+    [ -e "$receipt" ] || [ -L "$receipt" ] || continue
+    return 0
+  done
+  return 1
+}
+
+# Marker short-circuits apply only when generated artifact identities are current
+# and no terminal receipt still requires identity-bound cleanup.
 # Otherwise watcher exclusion comes before every check scan and state mutation.
-if ! relay_shim_locked_scan_needed; then
+if ! relay_shim_locked_scan_needed && ! retirement_receipts_present; then
   migration_complete && exit 0
   [ "$ALLOW_INCOMPLETE_REPAIRS" -eq 1 ] && scan_complete && exit 0
 fi
@@ -345,6 +355,241 @@ if [ ! -d "$STATE" ] || [ -L "$STATE" ]; then
 fi
 STATE_DEVICE=$(fm_pr_file_device "$STATE") || exit 1
 [ -n "$STATE_DEVICE" ] || exit 1
+
+# Removal compatibility is deliberately data-only.
+# An unsupported terminal receipt may finish fixed-path cleanup only when its
+# existing envelope, metadata binding, hashes, and inode identities all match.
+# This path never parses or reconstructs a forge URL and never invokes a CLI.
+FM_PR_UNSUPPORTED_ID=
+FM_PR_UNSUPPORTED_PROVIDER=
+FM_PR_UNSUPPORTED_URL=
+FM_PR_UNSUPPORTED_HOST=
+FM_PR_UNSUPPORTED_PATH=
+FM_PR_UNSUPPORTED_NUMBER=
+FM_PR_UNSUPPORTED_DATA_HASH=
+FM_PR_UNSUPPORTED_TEMPLATE_HASH=
+FM_PR_UNSUPPORTED_DATA_IDENTITY=
+FM_PR_UNSUPPORTED_CHECK_IDENTITY=
+FM_PR_UNSUPPORTED_REG_HASH=
+FM_PR_UNSUPPORTED_REG_IDENTITY=
+FM_PR_UNSUPPORTED_RETIREMENT_REJECTED=
+unsupported_terminal_retired=0
+
+unsupported_retirement_parse() {
+  local file=$1 version id provider url host path number data_hash template_hash
+  local data_identity check_identity reg_hash reg_identity result _extra
+  FM_PR_UNSUPPORTED_ID=
+  [ -f "$file" ] && [ ! -L "$file" ] || return 1
+  exec 5< "$file" || return 1
+  IFS= read -r version <&5 || { exec 5<&-; return 1; }
+  IFS= read -r id <&5 || { exec 5<&-; return 1; }
+  IFS= read -r provider <&5 || { exec 5<&-; return 1; }
+  IFS= read -r url <&5 || { exec 5<&-; return 1; }
+  IFS= read -r host <&5 || { exec 5<&-; return 1; }
+  IFS= read -r path <&5 || { exec 5<&-; return 1; }
+  IFS= read -r number <&5 || { exec 5<&-; return 1; }
+  IFS= read -r data_hash <&5 || { exec 5<&-; return 1; }
+  IFS= read -r template_hash <&5 || { exec 5<&-; return 1; }
+  IFS= read -r data_identity <&5 || { exec 5<&-; return 1; }
+  IFS= read -r check_identity <&5 || { exec 5<&-; return 1; }
+  IFS= read -r reg_hash <&5 || { exec 5<&-; return 1; }
+  IFS= read -r reg_identity <&5 || { exec 5<&-; return 1; }
+  IFS= read -r result <&5 || { exec 5<&-; return 1; }
+  if IFS= read -r _extra <&5; then
+    exec 5<&-
+    return 1
+  fi
+  exec 5<&-
+  [ "$version" = fm-pr-poll-retirement-v1 ] || return 1
+  fm_pr_task_id_valid "$id" || return 1
+  [[ "$provider" =~ ^[a-z][a-z0-9-]{0,31}$ ]] || return 1
+  [ "$provider" != github ] || return 1
+  [ "${#url}" -ge 1 ] && [ "${#url}" -le 4096 ] || return 1
+  [ "${#host}" -ge 1 ] && [ "${#host}" -le 1024 ] || return 1
+  [ "${#path}" -ge 1 ] && [ "${#path}" -le 1024 ] || return 1
+  [[ "$number" =~ ^[1-9][0-9]{0,19}$ ]] || return 1
+  [[ "$data_hash" =~ ^[0-9a-f]{64}$ ]] || return 1
+  [[ "$template_hash" =~ ^[0-9a-f]{64}$ ]] || return 1
+  [[ "$data_identity" =~ ^[0-9]+:[0-9]+$ ]] || return 1
+  [[ "$check_identity" =~ ^[0-9]+:[0-9]+$ ]] || return 1
+  [[ "$reg_hash" =~ ^[0-9a-f]{64}$ ]] || return 1
+  [[ "$reg_identity" =~ ^[0-9]+:[0-9]+$ ]] || return 1
+  [ "$result" = merged ] || return 1
+  FM_PR_UNSUPPORTED_ID=$id
+  FM_PR_UNSUPPORTED_PROVIDER=$provider
+  FM_PR_UNSUPPORTED_URL=$url
+  FM_PR_UNSUPPORTED_HOST=$host
+  FM_PR_UNSUPPORTED_PATH=$path
+  FM_PR_UNSUPPORTED_NUMBER=$number
+  FM_PR_UNSUPPORTED_DATA_HASH=$data_hash
+  FM_PR_UNSUPPORTED_TEMPLATE_HASH=$template_hash
+  FM_PR_UNSUPPORTED_DATA_IDENTITY=$data_identity
+  FM_PR_UNSUPPORTED_CHECK_IDENTITY=$check_identity
+  FM_PR_UNSUPPORTED_REG_HASH=$reg_hash
+  FM_PR_UNSUPPORTED_REG_IDENTITY=$reg_identity
+}
+
+unsupported_retirement_metadata_valid() {
+  local file=$1 line value pr_count=0 seen_pr=0 post_pr_invalid=0
+  [ -f "$file" ] && [ ! -L "$file" ] || return 1
+  [ "$(fm_pr_file_link_count "$file")" = 1 ] || return 1
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      pr=*)
+        pr_count=$((pr_count + 1))
+        [ "$pr_count" -eq 1 ] || continue
+        value=${line#pr=}
+        [ "$value" = "$FM_PR_UNSUPPORTED_URL" ] || post_pr_invalid=1
+        seen_pr=1
+        ;;
+      pr_head=*)
+        if [ "$seen_pr" -eq 1 ]; then
+          value=${line#pr_head=}
+          fm_pr_head_valid "$value" || post_pr_invalid=1
+        fi
+        ;;
+      relay_request=*|relay_request_ts=*|relay_followups=*|relay_platform=*|relay_reply_max_chars=*)
+        ;;
+      *)
+        [ "$seen_pr" -eq 0 ] || post_pr_invalid=1
+        ;;
+    esac
+  done < "$file"
+  [ "$pr_count" -eq 1 ] && [ "$post_pr_invalid" -eq 0 ]
+}
+
+unsupported_retirement_data_valid() {
+  local file=$1 provider url host path number _extra
+  fm_pr_private_file_valid "$file" 600 "$STATE_DEVICE" || return 1
+  exec 5< "$file" || return 1
+  IFS= read -r provider <&5 || { exec 5<&-; return 1; }
+  IFS= read -r url <&5 || { exec 5<&-; return 1; }
+  IFS= read -r host <&5 || { exec 5<&-; return 1; }
+  IFS= read -r path <&5 || { exec 5<&-; return 1; }
+  IFS= read -r number <&5 || { exec 5<&-; return 1; }
+  if IFS= read -r _extra <&5; then exec 5<&-; return 1; fi
+  exec 5<&-
+  [ "$provider" = "$FM_PR_UNSUPPORTED_PROVIDER" ] \
+    && [ "$url" = "$FM_PR_UNSUPPORTED_URL" ] \
+    && [ "$host" = "$FM_PR_UNSUPPORTED_HOST" ] \
+    && [ "$path" = "$FM_PR_UNSUPPORTED_PATH" ] \
+    && [ "$number" = "$FM_PR_UNSUPPORTED_NUMBER" ] \
+    && [ "$(fm_pr_sha256 "$file")" = "$FM_PR_UNSUPPORTED_DATA_HASH" ] \
+    && [ "$(fm_pr_file_identity "$file")" = "$FM_PR_UNSUPPORTED_DATA_IDENTITY" ]
+}
+
+unsupported_retirement_registration_valid() {
+  local file=$1 version id provider url host path number data_hash template_hash
+  local data_identity check_identity _extra
+  fm_pr_private_file_valid "$file" 600 "$STATE_DEVICE" || return 1
+  exec 5< "$file" || return 1
+  IFS= read -r version <&5 || { exec 5<&-; return 1; }
+  IFS= read -r id <&5 || { exec 5<&-; return 1; }
+  IFS= read -r provider <&5 || { exec 5<&-; return 1; }
+  IFS= read -r url <&5 || { exec 5<&-; return 1; }
+  IFS= read -r host <&5 || { exec 5<&-; return 1; }
+  IFS= read -r path <&5 || { exec 5<&-; return 1; }
+  IFS= read -r number <&5 || { exec 5<&-; return 1; }
+  IFS= read -r data_hash <&5 || { exec 5<&-; return 1; }
+  IFS= read -r template_hash <&5 || { exec 5<&-; return 1; }
+  IFS= read -r data_identity <&5 || { exec 5<&-; return 1; }
+  IFS= read -r check_identity <&5 || { exec 5<&-; return 1; }
+  if IFS= read -r _extra <&5; then exec 5<&-; return 1; fi
+  exec 5<&-
+  [ "$version" = fm-pr-poll-registration-v2 ] \
+    && [ "$id" = "$FM_PR_UNSUPPORTED_ID" ] \
+    && [ "$provider" = "$FM_PR_UNSUPPORTED_PROVIDER" ] \
+    && [ "$url" = "$FM_PR_UNSUPPORTED_URL" ] \
+    && [ "$host" = "$FM_PR_UNSUPPORTED_HOST" ] \
+    && [ "$path" = "$FM_PR_UNSUPPORTED_PATH" ] \
+    && [ "$number" = "$FM_PR_UNSUPPORTED_NUMBER" ] \
+    && [ "$data_hash" = "$FM_PR_UNSUPPORTED_DATA_HASH" ] \
+    && [ "$template_hash" = "$FM_PR_UNSUPPORTED_TEMPLATE_HASH" ] \
+    && [ "$data_identity" = "$FM_PR_UNSUPPORTED_DATA_IDENTITY" ] \
+    && [ "$check_identity" = "$FM_PR_UNSUPPORTED_CHECK_IDENTITY" ] \
+    && [ "$(fm_pr_sha256 "$file")" = "$FM_PR_UNSUPPORTED_REG_HASH" ] \
+    && [ "$(fm_pr_file_identity "$file")" = "$FM_PR_UNSUPPORTED_REG_IDENTITY" ]
+}
+
+unsupported_retirement_check_valid() {
+  local file=$1
+  fm_pr_private_file_valid "$file" 600 "$STATE_DEVICE" \
+    && [ "$(fm_pr_sha256 "$file")" = "$FM_PR_UNSUPPORTED_TEMPLATE_HASH" ] \
+    && [ "$(fm_pr_file_identity "$file")" = "$FM_PR_UNSUPPORTED_CHECK_IDENTITY" ]
+}
+
+unsupported_retirement_recover_one() {
+  local id=$1 receipt check data registration has_check=0 has_data=0 has_registration=0
+  local receipt_hash receipt_identity
+  receipt="$STATE/$id.pr-poll-retirement"
+  fm_pr_private_file_valid "$receipt" 600 "$STATE_DEVICE" || return 1
+  unsupported_retirement_parse "$receipt" || return 1
+  [ "$FM_PR_UNSUPPORTED_ID" = "$id" ] || return 1
+  unsupported_retirement_metadata_valid "$STATE/$id.meta" || return 1
+  receipt_hash=$(fm_pr_sha256 "$receipt") || return 1
+  receipt_identity=$(fm_pr_file_identity "$receipt") || return 1
+  check="$STATE/$id.check.sh"
+  data="$STATE/$id.pr-poll"
+  registration="$STATE/$id.pr-poll-registration"
+  [ ! -e "$check" ] && [ ! -L "$check" ] || has_check=1
+  [ ! -e "$data" ] && [ ! -L "$data" ] || has_data=1
+  [ ! -e "$registration" ] && [ ! -L "$registration" ] || has_registration=1
+  if [ "$has_check" -eq 1 ]; then
+    [ "$has_data" -eq 1 ] && [ "$has_registration" -eq 1 ] || return 1
+    unsupported_retirement_check_valid "$check" || return 1
+  fi
+  if [ "$has_registration" -eq 1 ]; then
+    [ "$has_data" -eq 1 ] || return 1
+    unsupported_retirement_registration_valid "$registration" || return 1
+  fi
+  [ "$has_data" -eq 0 ] || unsupported_retirement_data_valid "$data" || return 1
+  if [ "$has_check" -eq 1 ]; then
+    fm_pr_poll_retirement_remove_exact "$check" "$STATE_DEVICE" \
+      "$FM_PR_UNSUPPORTED_CHECK_IDENTITY" "$FM_PR_UNSUPPORTED_TEMPLATE_HASH" || return 1
+  fi
+  if [ "$has_registration" -eq 1 ]; then
+    fm_pr_poll_retirement_remove_exact "$registration" "$STATE_DEVICE" \
+      "$FM_PR_UNSUPPORTED_REG_IDENTITY" "$FM_PR_UNSUPPORTED_REG_HASH" || return 1
+  fi
+  if [ "$has_data" -eq 1 ]; then
+    fm_pr_poll_retirement_remove_exact "$data" "$STATE_DEVICE" \
+      "$FM_PR_UNSUPPORTED_DATA_IDENTITY" "$FM_PR_UNSUPPORTED_DATA_HASH" || return 1
+  fi
+  fm_pr_poll_retirement_remove_exact "$receipt" "$STATE_DEVICE" \
+    "$receipt_identity" "$receipt_hash" || return 1
+}
+
+unsupported_retirement_claims_removed_provider() {
+  local file=$1 version id provider
+  fm_pr_private_file_valid "$file" 600 "$STATE_DEVICE" || return 1
+  exec 5< "$file" || return 1
+  IFS= read -r version <&5 || { exec 5<&-; return 1; }
+  IFS= read -r id <&5 || { exec 5<&-; return 1; }
+  IFS= read -r provider <&5 || { exec 5<&-; return 1; }
+  exec 5<&-
+  [ "$provider" != github ]
+}
+
+unsupported_retirement_recover_all() {
+  local receipt id
+  FM_PR_UNSUPPORTED_RETIREMENT_REJECTED=
+  for receipt in "$STATE"/*.pr-poll-retirement; do
+    [ -e "$receipt" ] || [ -L "$receipt" ] || continue
+    unsupported_retirement_claims_removed_provider "$receipt" || continue
+    id=$(basename "$receipt" .pr-poll-retirement)
+    if unsupported_retirement_recover_one "$id"; then
+      unsupported_terminal_retired=1
+    else
+      FM_PR_UNSUPPORTED_RETIREMENT_REJECTED="$FM_PR_UNSUPPORTED_RETIREMENT_REJECTED $receipt"
+    fi
+  done
+  [ -z "$FM_PR_UNSUPPORTED_RETIREMENT_REJECTED" ]
+}
+
+if ! unsupported_retirement_recover_all; then
+  echo "PR_CHECK_MIGRATION: unsupported terminal PR poll cleanup could not be validated:$FM_PR_UNSUPPORTED_RETIREMENT_REJECTED" >&2
+  exit 1
+fi
 if ! fm_pr_poll_retirement_recover_all "$STATE" "$TEMPLATE"; then
   echo "PR_CHECK_MIGRATION: pending PR poll retirement could not be validated:$FM_PR_POLL_RETIREMENT_REJECTED" >&2
   exit 1
@@ -1143,6 +1388,9 @@ if [ "$migration_failed" -ne 0 ]; then
   exit 1
 fi
 
+if [ "$unsupported_terminal_retired" -eq 1 ]; then
+  echo "PR_CHECK_MIGRATION: exact unsupported terminal poll receipts retired without network access"
+fi
 if [ "$canonical_rebuilt" -eq 1 ]; then
   echo "PR_CHECK_MIGRATION: canonical polls rebuilt and armed; resume supervision for this home"
 fi

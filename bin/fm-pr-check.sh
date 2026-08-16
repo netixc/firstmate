@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
-# Record a PR-ready task: store one validated canonical pr=<url> and the forge's
+# Record a PR-ready task: store one validated canonical GitHub pr=<url> and its
 # exact pr_head=<sha> when available, then atomically arm a static merge poll.
 # The watcher check source is byte-for-byte bin/fm-pr-poll.sh; task and PR data
 # live only in a private sidecar and are never interpolated into shell source.
-# A GitHub pull request URL and a GitLab merge request URL are both accepted,
-# including a merge request on a self-hosted GitLab instance.
 # Usage: fm-pr-check.sh <task-id> <pr-url>
 set -eu
 
@@ -41,39 +39,26 @@ if [ ! -f "$META" ] || [ -L "$META" ] || [ "$(fm_pr_file_link_count "$META")" !=
   exit 1
 fi
 
-# A prior exact merged result may have queued its durable wake immediately
-# before interruption.
-# Finish only its identity-bound receipt before publishing a replacement poll.
+# Neutralize every obsolete poll before recovery, recording, or rearming.
+# The migration never executes old artifacts, quarantines unsupported watches,
+# and may finish only exact identity-bound terminal cleanup without a network
+# call while watcher exclusion is held.
+"$SCRIPT_DIR/fm-pr-check-migrate.sh" --checks-safe || exit 1
+
+# A prior exact merged result may have queued its durable notification
+# immediately before interruption.
+# Finish only its identity-bound GitHub receipt before publishing a replacement.
 fm_pr_poll_retirement_recover_one "$STATE" "$ID" "$SCRIPT_DIR/fm-pr-poll.sh" || {
   echo "error: pending PR poll retirement could not be validated" >&2
   exit 1
 }
-
-# Refuse to arm a GitLab watch with no glab on PATH. The poll is silent on
-# every error by design, so a missing CLI would be indistinguishable from a
-# merge request that is never merged. Arming is the one point where that can be
-# reported, so the absent tool stops the watch here instead of watching nothing.
-if [ "$PROVIDER" = gitlab ] && ! command -v glab >/dev/null 2>&1; then
-  echo "error: watching a GitLab merge request requires glab on PATH" >&2
-  exit 1
-fi
-
-# Neutralize any pre-fix poll before recording or arming this task. The
-# migration never executes legacy artifacts and holds watcher exclusion while
-# it quarantines or rebuilds them.
-"$SCRIPT_DIR/fm-pr-check-migrate.sh" --checks-safe || exit 1
 "$FM_ROOT/bin/fm-guard.sh" || true
 
-# pr_head is recorded only when the forge's CLI can supply it. gh exposes the
-# head commit as a selectable field; plain glab exposes it only inside its JSON
-# output, which would need a JSON processor firstmate does not require, so a
-# GitLab task records no pr_head. Both consumers already treat it as optional:
-# bin/fm-teardown.sh reads the head from the forge at teardown rather than from
-# metadata and falls back to its provider-agnostic content check, and
-# bin/fm-review-diff.sh resolves the head from the remote when none is recorded.
+# Record the GitHub head when the CLI can supply one.
+# The consumers retain their established optional-head fallback behavior.
 WT=$(grep '^worktree=' "$META" | tail -1 | cut -d= -f2- || true)
 PR_HEAD=
-if [ "$PROVIDER" = github ] && [ -n "$WT" ] && [ -d "$WT" ] && command -v gh >/dev/null 2>&1; then
+if [ -n "$WT" ] && [ -d "$WT" ] && command -v gh >/dev/null 2>&1; then
   if REMOTE_HEAD=$(cd "$WT" && gh pr view "$URL" --json headRefOid -q .headRefOid 2>/dev/null) \
     && fm_pr_head_valid "$REMOTE_HEAD"; then
     PR_HEAD=$REMOTE_HEAD

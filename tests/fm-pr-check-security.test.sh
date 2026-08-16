@@ -90,19 +90,9 @@ SH
 printf '%s\n' "$*" >> "$FM_TEST_GH_AXI_LOG"
 exit "${FM_TEST_GH_AXI_RC:-0}"
 SH
-  # Plain glab, reproducing the real CLI's contract: its field output on stdout
-  # and exit 0 on success, and a non-zero exit with no stdout on any failure.
-  cat > "$fakebin/glab" <<'SH'
-#!/usr/bin/env bash
-printf '%s\n' "$*" >> "$FM_TEST_GLAB_LOG"
-[ "${FM_TEST_GLAB_FAIL:-0}" = 0 ] || exit 1
-[ "${FM_TEST_GLAB_SLEEP:-0}" = 0 ] || sleep "$FM_TEST_GLAB_SLEEP"
-printf 'title:\tfixture merge request\nstate:\t%s\nauthor:\tsomeone\n' "${FM_TEST_GLAB_STATE:-opened}"
-SH
-  chmod +x "$fakebin/gh" "$fakebin/gh-axi" "$fakebin/glab"
+  chmod +x "$fakebin/gh" "$fakebin/gh-axi"
   : > "$dir/gh.log"
   : > "$dir/gh-axi.log"
-  : > "$dir/glab.log"
   : > "$dir/guard.log"
   printf '%s\n' "$dir"
 }
@@ -249,8 +239,7 @@ run_check_entry() {
   shift
   FM_ROOT_OVERRIDE="$dir/root" FM_HOME="$dir/home" \
     FM_TEST_GUARD_LOG="$dir/guard.log" FM_TEST_GH_LOG="$dir/gh.log" \
-    FM_TEST_GH_AXI_LOG="$dir/gh-axi.log" FM_TEST_GLAB_LOG="$dir/glab.log" \
-    PATH="$dir/fakebin:$BASE_PATH" \
+    FM_TEST_GH_AXI_LOG="$dir/gh-axi.log" PATH="$dir/fakebin:$BASE_PATH" \
     "$PR_CHECK" "$@"
 }
 
@@ -259,30 +248,14 @@ run_merge_entry() {
   shift
   FM_ROOT_OVERRIDE="$dir/root" FM_HOME="$dir/home" \
     FM_TEST_GUARD_LOG="$dir/guard.log" FM_TEST_GH_LOG="$dir/gh.log" \
-    FM_TEST_GH_AXI_LOG="$dir/gh-axi.log" FM_TEST_GLAB_LOG="$dir/glab.log" \
-    PATH="$dir/fakebin:$BASE_PATH" \
+    FM_TEST_GH_AXI_LOG="$dir/gh-axi.log" PATH="$dir/fakebin:$BASE_PATH" \
     "$PR_MERGE" "$@"
 }
 
 # shellcheck disable=SC2016 # Literal rejected URL bytes are parser test data.
 INVALID_URLS=(
-  'https://gitlab.com/single/-/merge_requests/1'
-  'https://gitlab.com/g/p/-/merge_requests/0'
-  'https://gitlab.com/g/p/-/merge_requests/01'
-  'https://GitLab.com/g/p/-/merge_requests/1'
-  'https://gitlab.com:443/g/p/-/merge_requests/1'
-  'https://user@gitlab.com/g/p/-/merge_requests/1'
-  'https://gitlab.com/g/p/-/merge_requests/1/'
-  'https://gitlab.com/-/p/-/merge_requests/1'
-  'https://gitlab.com/g/p.git/-/merge_requests/1'
-  'https://gitlab.com/g/p.atom/-/merge_requests/1'
-  'https://gitlab.com/g/p/-/merge_requests/1?x=1'
-  'https://gitlab.com/g/p/-/merge_requests/1#note'
-  'https://gitlab.com/g/p/-/issues/1'
-  'https://gitlab.com//p/-/merge_requests/1'
-  'https://.gitlab.com/g/p/-/merge_requests/1'
-  'https://gitlab.com./g/p/-/merge_requests/1'
-  'http://gitlab.com/g/p/-/merge_requests/1'
+  'https://forge.example/team/repo/reviews/1'
+  'https://code.example/team/repo/pull/1'
   'https://github.com/o/r/pull/1/'
   ' https://github.com/o/r/pull/1'
   'https://github.com/o/r/pull/1 '
@@ -403,22 +376,6 @@ https://github.com/a/b/pull/1|a|b|1
 https://github.com/my-org/repo/pull/42|my-org|repo|42
 https://github.com/Owner/repo-name_with.parts/pull/123456|Owner|repo-name_with.parts|123456
 EOF
-  while IFS='|' read -r url host path number; do
-    [ -n "$url" ] || continue
-    fm_pr_url_parse "$url" || fail "parser rejected a canonical merge request URL"
-    [ "$FM_PR_PROVIDER" = gitlab ] || fail "parser did not tag a merge request URL as gitlab"
-    [ "$FM_PR_URL" = "$url" ] || fail "parser changed a canonical merge request URL"
-    [ "$FM_PR_HOST" = "$host" ] || fail "parser returned wrong GitLab host"
-    [ "$FM_PR_PATH" = "$path" ] || fail "parser returned wrong GitLab project path"
-    [ "$FM_PR_NUMBER" = "$number" ] || fail "parser returned wrong merge request number"
-    [ -z "$FM_PR_OWNER" ] && [ -z "$FM_PR_REPO" ] \
-      || fail "parser set GitHub owner/repository for a merge request URL"
-  done <<'EOF'
-https://gitlab.com/group/project/-/merge_requests/1|gitlab.com|group/project|1
-https://gitlab.com/group/sub/deep/project/-/merge_requests/42|gitlab.com|group/sub/deep/project|42
-https://gitlab.example.co.uk/g/p/-/merge_requests/7|gitlab.example.co.uk|g/p|7
-https://code.internal/team/tools/ci-runner/-/merge_requests/123456|code.internal|team/tools/ci-runner|123456
-EOF
   fm_pr_url_parse https://github.com/a/b/pull/1 || fail "parser rejected canonical URL"
   [ "$FM_PR_PROVIDER" = github ] || fail "parser did not tag a pull request URL as github"
   [ "$FM_PR_HOST" = github.com ] || fail "parser returned wrong GitHub host"
@@ -475,7 +432,7 @@ test_invalid_entrypoints_have_zero_side_effects() {
     rc=$?
     set -e
     [ "$rc" -ne 0 ] || fail "merge entrypoint accepted invalid URL"
-    [ "$(cat "$dir/stderr")" = 'error: invalid PR merge request' ] || fail "merge invalid URL diagnostic was not fixed"
+    [ "$(cat "$dir/stderr")" = 'error: invalid PR merge operation' ] || fail "merge invalid URL diagnostic was not fixed"
     after=$(state_snapshot "$dir/home/state")
     [ "$after" = "$before" ] || fail "merge invalid URL changed prior state"
   done
@@ -716,8 +673,7 @@ make_poll_fixture() {
 
 run_poll() {
   local dir=$1
-  FM_TEST_GH_LOG="$dir/gh.log" FM_TEST_GLAB_LOG="$dir/glab.log" \
-    PATH="$dir/fakebin:$BASE_PATH" \
+  FM_TEST_GH_LOG="$dir/gh.log" PATH="$dir/fakebin:$BASE_PATH" \
     bash "$dir/home/state/task-a.check.sh"
 }
 
@@ -1154,7 +1110,7 @@ test_marker_and_diagnostic_rename_fail_closed() {
     FM_HOME="$dir/home" PATH="$BASE_PATH" "$MIGRATE" >/dev/null 2>/dev/null \
       || fail "diagnostic rename $action did not recover on retry"
     assert_valid_migration_marker "$state/.pr-check-migration-v1"
-    assert_grep 'task task-a: ambiguous or invalid legacy poll quarantined and unarmed' "$state/.pr-check-migration.log" \
+    assert_grep 'task task-a: unsupported or invalid legacy poll quarantined and unarmed' "$state/.pr-check-migration.log" \
       "diagnostic rename retry forgot the required outcome"
   done
   pass "marker and diagnostic rename errors and signals fail closed and recover durably on retry"
@@ -1214,7 +1170,7 @@ test_postrename_marker_and_diagnostic_validation_retries() {
         || fail "post-rename $artifact $action retry did not recover"
       assert_valid_migration_marker "$state/.pr-check-migration-v1"
       if [ "$artifact" = diagnostic ] || [ "$artifact" = obligation ]; then
-        assert_grep 'task task-a: ambiguous or invalid legacy poll quarantined and unarmed' "$state/.pr-check-migration.log" \
+        assert_grep 'task task-a: unsupported or invalid legacy poll quarantined and unarmed' "$state/.pr-check-migration.log" \
           "$artifact $action retry forgot the durable outcome"
       fi
     done
@@ -2089,7 +2045,7 @@ test_nonexecuting_migration() {
   find "$state/.pr-check-quarantine" -name 'task-b.check.*' -type f | grep . >/dev/null \
     || fail "ambiguous poll was not quarantined"
   [ "$(file_mode "$state/.pr-check-migration.log")" = 600 ] || fail "migration diagnostics were not private"
-  assert_grep 'task task-b: ambiguous or invalid legacy poll quarantined and unarmed' "$state/.pr-check-migration.log" \
+  assert_grep 'task task-b: unsupported or invalid legacy poll quarantined and unarmed' "$state/.pr-check-migration.log" \
     "migration diagnostic did not record the quarantined unarmed outcome"
   assert_valid_migration_marker "$state/.pr-check-migration-v1"
 
@@ -2834,111 +2790,6 @@ SH
   pass "teardown removes safe poll artifacts and refuses quarantine-directory symlinks without traversal"
 }
 
-# The GitLab watch must follow a merge request exactly as the GitHub watch
-# follows a pull request, on any instance, and must never turn an unreadable
-# merge request into a merge. Its evidence against the public fixture project
-# https://gitlab.com/KarotKris/gitlab-merge-watch-fixture is in
-# docs/gitlab-merge-watch.md; this exercises the same paths hermetically.
-test_gitlab_merge_watch() {
-  local dir state out rc url value noglab entry bindir name
-  dir=$(make_case gitlab-merge-watch)
-  state="$dir/home/state"
-  url=https://gitlab.example/group/subgroup/project/-/merge_requests/7
-
-  write_poll_meta "$state" task-a "$url"
-  fm_pr_poll_prepare "$state" task-a gitlab "$url" gitlab.example group/subgroup/project 7 "$POLL" \
-    || fail "could not prepare a GitLab poll"
-  fm_pr_poll_publish_prepared || fail "could not publish a GitLab poll"
-  fm_pr_poll_artifacts_valid "$state" task-a "$POLL" \
-    || fail "published GitLab poll provenance or metadata binding was invalid"
-  [ "$(cat "$state/task-a.pr-poll")" = "gitlab
-$url
-gitlab.example
-group/subgroup/project
-7" ] || fail "published GitLab sidecar bytes were not exact"
-
-  # Only an exact merged state wakes firstmate. Every other reading, including
-  # an unreadable merge request and a changed output format, stays silent.
-  for value in opened closed locked '' not-a-state MERGED merged-but-not; do
-    out=$(FM_TEST_GLAB_STATE="$value" run_poll "$dir")
-    [ -z "$out" ] || fail "GitLab poll emitted for a non-merged state"
-  done
-  out=$(FM_TEST_GLAB_STATE=merged run_poll "$dir")
-  [ "$out" = merged ] || fail "GitLab poll did not emit exactly one merged line"
-  out=$(FM_TEST_GLAB_FAIL=1 run_poll "$dir")
-  [ -z "$out" ] || fail "GitLab poll emitted after a glab failure"
-
-  # glab is addressed by project URL and merge request number, never by the
-  # merge request URL, which the real CLI resolves through the current git
-  # repository the watcher does not have.
-  grep -qF -- "mr view 7 -R https://gitlab.example/group/subgroup/project" "$dir/glab.log" \
-    || fail "GitLab poll did not address glab by project URL and merge request number"
-  ! grep -qF -- "$url" "$dir/glab.log" \
-    || fail "GitLab poll passed a merge request URL to glab"
-
-  # An absent CLI must produce no wake rather than a false merge. The whole
-  # search path is mirrored without glab, because a real glab anywhere on
-  # PATH would make this prove nothing.
-  noglab="$dir/noglab"
-  mkdir -p "$noglab"
-  while IFS= read -r bindir; do
-    [ -d "$bindir" ] || continue
-    for entry in "$bindir"/*; do
-      [ -e "$entry" ] || continue
-      name=$(basename "$entry")
-      [ "$name" = glab ] && continue
-      [ -e "$noglab/$name" ] || ln -s "$entry" "$noglab/$name" 2>/dev/null
-    done
-  done <<EOF
-$dir/fakebin
-$(printf '%s\n' "$BASE_PATH" | tr ':' '\n')
-EOF
-  ! PATH="$noglab" command -v glab >/dev/null 2>&1 \
-    || fail "the glab-free search path still resolved glab"
-  out=$(FM_TEST_GLAB_STATE=merged FM_TEST_GH_LOG="$dir/gh.log" FM_TEST_GLAB_LOG="$dir/glab.log" \
-    PATH="$noglab" \
-    bash "$state/task-a.check.sh")
-  [ -z "$out" ] || fail "GitLab poll emitted with glab absent from PATH"
-
-  # A doctored sidecar cannot redirect the poll: the stored parts must rebuild
-  # the stored URL exactly.
-  printf '%s\n%s\n%s\n%s\n%s\n' gitlab "$url" elsewhere.example group/subgroup/project 7 \
-    > "$state/task-a.pr-poll"
-  out=$(FM_TEST_GLAB_STATE=merged run_poll "$dir")
-  [ -z "$out" ] || fail "GitLab poll emitted for a sidecar whose host was swapped"
-  printf '%s\n%s\n%s\n%s\n%s\n' gitlab "$url" gitlab.example group/subgroup/other 7 \
-    > "$state/task-a.pr-poll"
-  out=$(FM_TEST_GLAB_STATE=merged run_poll "$dir")
-  [ -z "$out" ] || fail "GitLab poll emitted for a sidecar whose project was swapped"
-
-  # Arming is where a missing CLI can still be reported, so it refuses there.
-  write_task_meta "$dir" task-b
-  set +e
-  out=$(FM_ROOT_OVERRIDE="$dir/root" FM_HOME="$dir/home" \
-    FM_TEST_GUARD_LOG="$dir/guard.log" PATH="$noglab" \
-    "$PR_CHECK" task-b "$url" 2>&1)
-  rc=$?
-  set -e
-  [ "$rc" -ne 0 ] || fail "arming a GitLab watch succeeded with glab absent"
-  case "$out" in
-    *"requires glab on PATH"*) ;;
-    *) fail "arming a GitLab watch with glab absent did not report the missing CLI" ;;
-  esac
-  [ ! -e "$state/task-b.check.sh" ] || fail "refused GitLab arming left a poll armed"
-
-  # The merge path still addresses GitHub only, so it refuses rather than
-  # sending a merge request to the wrong forge.
-  write_task_meta "$dir" task-c
-  set +e
-  run_merge_entry "$dir" task-c "$url" >/dev/null 2>&1
-  rc=$?
-  set -e
-  [ "$rc" -eq 2 ] || fail "merge wrapper did not refuse a GitLab merge request URL"
-  [ ! -s "$dir/gh-axi.log" ] || fail "merge wrapper reached the GitHub CLI for a GitLab URL"
-
-  pass "GitLab merge requests are followed on any instance and never wake falsely"
-}
-
 seed_canonical_poll() {
   local dir=$1 id=$2 url=$3 template=${4:-$POLL} state provider host path number
   state="$dir/home/state"
@@ -2953,6 +2804,66 @@ seed_canonical_poll() {
   printf '%s\n' fm-pr-check-migration-scan-v1 > "$state/.pr-check-migration-scan-v1"
   printf '%s\n' fm-pr-check-migration-v1 > "$state/.pr-check-migration-v1"
   chmod 0600 "$state/.pr-check-migration-scan-v1" "$state/.pr-check-migration-v1"
+}
+
+UNSUPPORTED_PROVIDER=legacy-forge
+UNSUPPORTED_URL=https://forge.example/team/tools/reviews/17
+UNSUPPORTED_HOST=forge.example
+UNSUPPORTED_PATH=team/tools
+UNSUPPORTED_NUMBER=17
+
+seed_unsupported_poll_artifacts() {
+  local dir=$1 id=${2:-task-a} state check data registration
+  local data_hash template_hash data_identity check_identity
+  state="$dir/home/state"
+  check="$state/$id.check.sh"
+  data="$state/$id.pr-poll"
+  registration="$state/$id.pr-poll-registration"
+  write_poll_meta "$state" "$id" "$UNSUPPORTED_URL"
+  cat > "$check" <<'SH'
+#!/usr/bin/env bash
+printf 'executed\n' >> "${FM_TEST_UNSUPPORTED_EXEC_LOG:?}"
+SH
+  printf '%s\n%s\n%s\n%s\n%s\n' \
+    "$UNSUPPORTED_PROVIDER" "$UNSUPPORTED_URL" "$UNSUPPORTED_HOST" \
+    "$UNSUPPORTED_PATH" "$UNSUPPORTED_NUMBER" > "$data"
+  chmod 0600 "$check" "$data"
+  data_hash=$(fm_pr_sha256 "$data") || fail "could not hash unsupported sidecar fixture"
+  template_hash=$(fm_pr_sha256 "$check") || fail "could not hash unsupported check fixture"
+  data_identity=$(fm_pr_file_identity "$data") || fail "could not identify unsupported sidecar fixture"
+  check_identity=$(fm_pr_file_identity "$check") || fail "could not identify unsupported check fixture"
+  printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+    fm-pr-poll-registration-v2 "$id" "$UNSUPPORTED_PROVIDER" "$UNSUPPORTED_URL" \
+    "$UNSUPPORTED_HOST" "$UNSUPPORTED_PATH" "$UNSUPPORTED_NUMBER" \
+    "$data_hash" "$template_hash" "$data_identity" "$check_identity" > "$registration"
+  chmod 0600 "$registration"
+}
+
+seed_unsupported_terminal_receipt() {
+  local dir=$1 id=${2:-task-a} state check data registration receipt
+  local data_hash template_hash data_identity check_identity reg_hash reg_identity
+  state="$dir/home/state"
+  seed_unsupported_poll_artifacts "$dir" "$id"
+  check="$state/$id.check.sh"
+  data="$state/$id.pr-poll"
+  registration="$state/$id.pr-poll-registration"
+  receipt="$state/$id.pr-poll-retirement"
+  data_hash=$(fm_pr_sha256 "$data") || fail "could not hash unsupported terminal sidecar"
+  template_hash=$(fm_pr_sha256 "$check") || fail "could not hash unsupported terminal check"
+  data_identity=$(fm_pr_file_identity "$data") || fail "could not identify unsupported terminal sidecar"
+  check_identity=$(fm_pr_file_identity "$check") || fail "could not identify unsupported terminal check"
+  reg_hash=$(fm_pr_sha256 "$registration") || fail "could not hash unsupported terminal registration"
+  reg_identity=$(fm_pr_file_identity "$registration") || fail "could not identify unsupported terminal registration"
+  printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+    fm-pr-poll-retirement-v1 "$id" "$UNSUPPORTED_PROVIDER" "$UNSUPPORTED_URL" \
+    "$UNSUPPORTED_HOST" "$UNSUPPORTED_PATH" "$UNSUPPORTED_NUMBER" \
+    "$data_hash" "$template_hash" "$data_identity" "$check_identity" \
+    "$reg_hash" "$reg_identity" merged > "$receipt"
+  chmod 0600 "$receipt"
+  FM_STATE_OVERRIDE="$state" bash -c '. "$1"; fm_wake_append check "$2" "$3"' _ \
+    "$ROOT/bin/fm-wake-lib.sh" "$state/$id.check.sh" \
+    "check: $state/$id.check.sh: merged" >/dev/null \
+    || fail "could not seed unsupported terminal notification"
 }
 
 add_stop_custom_check() {
@@ -2986,6 +2897,120 @@ poll_artifact_snapshot() {
       printf 'other %s\n' "$suffix"
     fi
   done
+}
+
+test_unsupported_watch_upgrade_safety() {
+  local dir state meta_before queue_before snapshot_before snapshot_after rc
+
+  dir=$(make_case unsupported-watch-quarantine)
+  state="$dir/home/state"
+  seed_unsupported_poll_artifacts "$dir"
+  meta_before=$(cat "$state/task-a.meta")
+  : > "$dir/unsupported-exec.log"
+  FM_TEST_UNSUPPORTED_EXEC_LOG="$dir/unsupported-exec.log" FM_HOME="$dir/home" \
+    PATH="$dir/fakebin:$BASE_PATH" "$MIGRATE" > "$dir/migrate.out" 2> "$dir/migrate.err" \
+    || fail "unsupported watch quarantine failed: $(cat "$dir/migrate.err")"
+  [ ! -e "$state/task-a.check.sh" ] && [ ! -L "$state/task-a.check.sh" ] \
+    || fail "unsupported watch remained executable"
+  [ ! -e "$state/task-a.pr-poll" ] && [ ! -L "$state/task-a.pr-poll" ] \
+    || fail "unsupported watch sidecar remained live"
+  [ ! -e "$state/task-a.pr-poll-registration" ] \
+    && [ ! -L "$state/task-a.pr-poll-registration" ] \
+    || fail "unsupported watch registration remained live"
+  [ "$(cat "$state/task-a.meta")" = "$meta_before" ] \
+    || fail "unsupported watch quarantine changed task metadata"
+  find "$state/.pr-check-quarantine" -name 'task-a.check.*' -type f | grep . >/dev/null \
+    || fail "unsupported watch check evidence was not quarantined"
+  find "$state/.pr-check-quarantine" -name 'task-a.data.*' -type f | grep . >/dev/null \
+    || fail "unsupported watch sidecar evidence was not quarantined"
+  find "$state/.pr-check-quarantine" -name 'task-a.registration.*' -type f | grep . >/dev/null \
+    || fail "unsupported watch registration evidence was not quarantined"
+  assert_grep 'task task-a: unsupported or invalid legacy poll quarantined and unarmed' \
+    "$state/.pr-check-migration.log" "unsupported watch outcome was not recorded"
+  [ ! -s "$dir/unsupported-exec.log" ] || fail "unsupported watch bytes executed during quarantine"
+  [ ! -s "$dir/gh.log" ] || fail "unsupported watch quarantine made a forge query"
+  snapshot_before=$(state_snapshot "$state")
+  FM_TEST_UNSUPPORTED_EXEC_LOG="$dir/unsupported-exec.log" FM_HOME="$dir/home" \
+    PATH="$dir/fakebin:$BASE_PATH" "$MIGRATE" >/dev/null 2> "$dir/migrate-2.err" \
+    || fail "unsupported watch quarantine rerun failed"
+  snapshot_after=$(state_snapshot "$state")
+  [ "$snapshot_after" = "$snapshot_before" ] \
+    || fail "unsupported watch quarantine was not idempotent"
+
+  dir=$(make_case unsupported-terminal-cleanup)
+  state="$dir/home/state"
+  seed_unsupported_terminal_receipt "$dir"
+  meta_before=$(cat "$state/task-a.meta")
+  queue_before=$(cat "$state/.wake-queue")
+  : > "$dir/unsupported-exec.log"
+  FM_TEST_UNSUPPORTED_EXEC_LOG="$dir/unsupported-exec.log" FM_HOME="$dir/home" \
+    PATH="$dir/fakebin:$BASE_PATH" "$MIGRATE" > "$dir/migrate.out" 2> "$dir/migrate.err" \
+    || fail "exact unsupported terminal cleanup failed: $(cat "$dir/migrate.err")"
+  assert_poll_absent "$state" task-a
+  [ "$(cat "$state/task-a.meta")" = "$meta_before" ] \
+    || fail "unsupported terminal cleanup changed task metadata"
+  [ "$(cat "$state/.wake-queue")" = "$queue_before" ] \
+    || fail "unsupported terminal cleanup changed the durable merged notification"
+  [ ! -s "$dir/unsupported-exec.log" ] || fail "unsupported terminal cleanup executed old check bytes"
+  [ ! -s "$dir/gh.log" ] || fail "unsupported terminal cleanup made a forge query"
+  assert_grep 'exact unsupported terminal poll receipts retired without network access' \
+    "$dir/migrate.out" "unsupported terminal cleanup outcome was not reported"
+  snapshot_before=$(state_snapshot "$state")
+  FM_TEST_UNSUPPORTED_EXEC_LOG="$dir/unsupported-exec.log" FM_HOME="$dir/home" \
+    PATH="$dir/fakebin:$BASE_PATH" "$MIGRATE" >/dev/null 2> "$dir/migrate-2.err" \
+    || fail "unsupported terminal cleanup rerun failed"
+  snapshot_after=$(state_snapshot "$state")
+  [ "$snapshot_after" = "$snapshot_before" ] \
+    || fail "unsupported terminal cleanup was not idempotent"
+
+  dir=$(make_case unsupported-terminal-receipt-only)
+  state="$dir/home/state"
+  seed_unsupported_terminal_receipt "$dir"
+  rm -f "$state/task-a.check.sh" "$state/task-a.pr-poll-registration" "$state/task-a.pr-poll"
+  meta_before=$(cat "$state/task-a.meta")
+  queue_before=$(cat "$state/.wake-queue")
+  FM_TEST_UNSUPPORTED_EXEC_LOG="$dir/unsupported-exec.log" FM_HOME="$dir/home" \
+    PATH="$dir/fakebin:$BASE_PATH" "$MIGRATE" >/dev/null 2> "$dir/migrate.err" \
+    || fail "receipt-only unsupported terminal cleanup failed: $(cat "$dir/migrate.err")"
+  assert_poll_absent "$state" task-a
+  [ "$(cat "$state/task-a.meta")" = "$meta_before" ] \
+    && [ "$(cat "$state/.wake-queue")" = "$queue_before" ] \
+    || fail "receipt-only cleanup changed durable task evidence"
+
+  dir=$(make_case unsupported-terminal-tamper)
+  state="$dir/home/state"
+  seed_unsupported_terminal_receipt "$dir"
+  printf 'tamper\n' >> "$state/task-a.pr-poll"
+  snapshot_before=$(state_snapshot "$state")
+  : > "$dir/unsupported-exec.log"
+  set +e
+  FM_TEST_UNSUPPORTED_EXEC_LOG="$dir/unsupported-exec.log" FM_HOME="$dir/home" \
+    PATH="$dir/fakebin:$BASE_PATH" "$MIGRATE" > "$dir/migrate.out" 2> "$dir/migrate.err"
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || fail "tampered unsupported terminal receipt authorized cleanup"
+  snapshot_after=$(state_snapshot "$state")
+  [ "$snapshot_after" = "$snapshot_before" ] \
+    || fail "tampered unsupported terminal cleanup changed evidence"
+  [ ! -s "$dir/unsupported-exec.log" ] || fail "tampered unsupported terminal check executed"
+  [ ! -s "$dir/gh.log" ] || fail "tampered unsupported terminal cleanup made a forge query"
+  assert_grep 'unsupported terminal PR poll cleanup could not be validated' "$dir/migrate.err" \
+    "tampered unsupported terminal cleanup did not report its refusal"
+
+  dir=$(make_case unsupported-terminal-direct-rearm)
+  state="$dir/home/state"
+  seed_unsupported_terminal_receipt "$dir"
+  : > "$dir/unsupported-exec.log"
+  FM_TEST_UNSUPPORTED_EXEC_LOG="$dir/unsupported-exec.log" \
+    run_check_entry "$dir" task-a https://github.com/o/r/pull/29 \
+    > "$dir/rearm.out" 2> "$dir/rearm.err" \
+    || fail "direct GitHub rearm did not retire the exact unsupported receipt: $(cat "$dir/rearm.err")"
+  fm_pr_poll_artifacts_valid "$state" task-a "$POLL" \
+    || fail "direct rearm did not publish a canonical GitHub poll"
+  grep -qxF 'pr=https://github.com/o/r/pull/29' "$state/task-a.meta" \
+    || fail "direct rearm did not replace unsupported metadata with the canonical GitHub URL"
+  [ ! -s "$dir/unsupported-exec.log" ] || fail "direct rearm executed unsupported check bytes"
+  pass "unsupported watches quarantine without execution and exact terminal receipts clean up data-only"
 }
 
 test_merged_poll_retires_once() {
@@ -3362,8 +3387,8 @@ test_retirement_queue_failure_and_receipt_tampering() {
   rc=$?
   set -e
   [ "$rc" -ne 0 ] || fail "rearm accepted an invalid pending retirement receipt"
-  [ "$(cat "$dir/rearm.err")" = 'error: pending PR poll retirement could not be validated' ] \
-    || fail "rearm did not report the invalid pending receipt"
+  assert_grep 'pending PR poll retirement could not be validated' "$dir/rearm.err" \
+    "rearm did not report the invalid pending receipt"
   [ "$(state_snapshot "$state")" = "$before" ] || fail "refused rearm changed poll state"
 
   rm -f "$state/task-a.pr-poll-retirement"
@@ -3378,33 +3403,14 @@ test_retirement_queue_failure_and_receipt_tampering() {
   pass "queue failure and untrusted receipts preserve canonical poll evidence"
 }
 
-test_gitlab_merged_poll_retires() {
-  local dir state url rc
-  dir=$(make_case gitlab-merged-retirement)
-  state="$dir/home/state"
-  url=https://gitlab.example/group/subgroup/project/-/merge_requests/17
-  write_poll_meta "$state" task-a "$url"
-  seed_canonical_poll "$dir" task-a "$url"
-  set +e
-  FM_TEST_GLAB_STATE=merged run_watcher_bounded "$dir/home" "$dir/fakebin" > "$dir/watch.out" 2> "$dir/watch.err"
-  rc=$?
-  set -e
-  [ "$rc" -eq 0 ] || fail "GitLab merged retirement watcher failed: $(cat "$dir/watch.err")"
-  case "$(cat "$dir/watch.out")" in check:*task-a.check.sh:*merged) ;; *) fail "GitLab merged wake was missing" ;; esac
-  assert_poll_absent "$state" task-a
-  grep -qxF "pr=$url" "$state/task-a.meta" || fail "GitLab retirement removed canonical metadata"
-  pass "GitHub and GitLab exact merged results share one retirement path"
-}
-
 test_parser_matrix
-test_gitlab_merge_watch
+test_unsupported_watch_upgrade_safety
 test_merged_poll_retires_once
 test_persistent_secondmate_retirement_is_poll_only
 test_retirement_crash_recovery
 test_external_merge_transition_retires_only_terminal_poll
 test_retirement_refuses_replacement_and_nonterminal_results
 test_retirement_queue_failure_and_receipt_tampering
-test_gitlab_merged_poll_retires
 test_invalid_entrypoints_have_zero_side_effects
 test_valid_recording_and_merge_derivation
 test_rejected_metacharacter_bytes_are_inert

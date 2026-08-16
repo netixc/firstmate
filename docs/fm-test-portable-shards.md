@@ -64,19 +64,21 @@ Each shard is still strictly serial in itself, and separate runners mean no two 
 `.github/workflows/ci.yml` derives the same `n` from `strategy.job-total` rather than a literal, so changing the shard count in either file without the other fails the lane loudly instead of leaving part of the required suite unrun.
 
 Assignment is longest-processing-time bin packing over per-script duration hints embedded in `bin/fm-test-run.sh`.
-The hints came from that run's `fm-test-timing-portable-serial` artifact on 2026-08-02, where the lane ran 69 scripts in 1143762 ms of serial work.
+The unchanged hints came from that run's `fm-test-timing-portable-serial` artifact on 2026-08-02.
+The changed security script was remeasured in the final changed-selection run on 2026-08-16 and completed in 269158 ms with all cases passing.
+The current inventory contains 89 portable-serial scripts with 1407856 ms of estimated work after that measured refresh.
 A script with no hint gets the conservative `PORTABLE_SERIAL_DEFAULT_WEIGHT_MS` default.
 Hints only affect balance: the coverage guard keeps the partition complete and disjoint whatever they say, so a stale hint costs a slower shard rather than lost coverage.
 
 | Lane | Script count | Estimated duration |
 |---|---:|---:|
-| `portable-serial-1of4` | 21 | 285945 ms (~285.9 s) |
-| `portable-serial-2of4` | 24 | 285944 ms (~285.9 s) |
-| `portable-serial-3of4` | 23 | 285929 ms (~285.9 s) |
-| `portable-serial-4of4` | 23 | 285944 ms (~285.9 s) |
-| imbalance | | 16 ms |
+| `portable-serial-1of4` | 17 | 374457 ms (~374.5 s) |
+| `portable-serial-2of4` | 27 | 334474 ms (~334.5 s) |
+| `portable-serial-3of4` | 22 | 354465 ms (~354.5 s) |
+| `portable-serial-4of4` | 23 | 344460 ms (~344.5 s) |
+| imbalance | | 39983 ms |
 
-The single longest script, `tests/fm-pr-check-security.test.sh` at 199573 ms, is the floor for any shard count.
+The single longest script, `tests/fm-pr-check-security.test.sh` at 269158 ms, is the floor for any shard count.
 
 Refresh the hints by downloading the per-shard timing artifacts from a green CI run, replacing the `portable_serial_weight_hints` table in `bin/fm-test-run.sh` with the measured `path`/`duration_ms` pairs, and updating the table above:
 
