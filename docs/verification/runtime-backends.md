@@ -51,7 +51,7 @@ ok - harness liveness: pi 0.84.1 classifies alive
 `#{pane_current_command}` and foreground `ps -o comm=` read different name fields, but which one preserves executable identity is platform-dependent.
 The portable Linux regression observes the reverse role assignment for a version-named native executable, with the identifying path retained in argv[0].
 The classifier therefore accepts the exact Pi basename first, then an exact Pi path component in the full executable path, then the same component in argv[0], without depending on which field carries it on a given platform.
-Exact `pi`, `Pi`, and `pi-launcher` process evidence remains accepted for vanilla Pi, while similar or prefixed helpers are rejected.
+Exact `pi` and `Pi` process evidence remains accepted for vanilla Pi, while similar or prefixed helpers are rejected.
 
 The portable regression is CI-enforced, while the real-harness drift guard is opt-in under the policy in `.agents/skills/firstmate-coding-guidelines/SKILL.md`.
 Run the live guard after any Pi upgrade and update the version and bounded output above.

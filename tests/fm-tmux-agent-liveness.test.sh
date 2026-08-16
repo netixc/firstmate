@@ -54,9 +54,8 @@ export PATH
 ln -s "$SLEEP_BIN" "$LAB/bin/pi"
 ln -s "$SLEEP_BIN" "$LAB/bin/notaharness"
 # A launcher whose own process identity is a bare shell, running the harness as
-# a child in the same foreground process group - the shape the real Pi Launcher
-# path takes, and the one where trusting a single name source can produce a
-# false `dead`.
+# a child in the same foreground process group - the shape where trusting a
+# single name source can produce a false `dead`.
 cat > "$LAB/bin/agent-launcher" <<SH
 #!/bin/sh
 "$LAB/bin/pi" 900 &

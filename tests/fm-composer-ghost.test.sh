@@ -223,6 +223,25 @@ test_pi_identity_requires_readable_busy_state() (
   pass "fm_tmux_composer_identity: unknown busy state cannot become idle identity"
 )
 
+test_pi_identity_rejects_retired_launcher() (
+  local out
+  tmux() {
+    local arg
+    for arg in "$@"; do
+      case "$arg" in
+        *pane_tty*) printf '\n'; return 0 ;;
+        *pane_current_command*) printf 'pi-launcher\n'; return 0 ;;
+      esac
+    done
+    return 1
+  }
+  fm_pane_busy_state() { printf 'idle'; }
+  if out=$(fm_tmux_composer_identity fakepane); then
+    fail "the retired launcher process must not produce Pi composer identity, got '$out'"
+  fi
+  pass "fm_tmux_composer_identity: retired launcher identity is rejected"
+)
+
 test_bordered_busy_signatures_are_pending() {
   local dir fb capture out
   dir="$TMP_ROOT/bordered-busy-signatures"; mkdir -p "$dir"
@@ -477,6 +496,7 @@ test_two_row_composer_reads_text_above_empty_cursor_row
 test_wrapped_composer_reads_all_content_rows
 test_proven_box_bottom_border_cursor_classifies_content
 test_pi_identity_requires_readable_busy_state
+test_pi_identity_rejects_retired_launcher
 test_bordered_busy_signatures_are_pending
 test_non_bordered_busy_footer_is_unknown_strict
 test_clipped_bordered_box_is_unknown

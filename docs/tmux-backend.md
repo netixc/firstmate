@@ -57,7 +57,7 @@ The foreground probe also reads argv[0] so an exact harness install-path compone
 Either source naming a verified harness is enough for `alive`, because a false `dead` is the one verdict that can start a duplicate agent on a live worktree, while a readable foreground process group settles the negative verdicts.
 
 Scoping the second source to the foreground process group rather than to the pane's descendants is deliberate: a harness-named process left running in the background of an otherwise idle pane must not read as an agent.
-The same scoping covers multi-process launchers without a special case, including the exact foreground command `pi-launcher`.
+The same scoping covers multi-process launchers without a special case when an exact Pi process remains in the foreground process group.
 Direct executable identities `pi` and `Pi` remain accepted exactly, and similar or prefixed process names are not accepted through those exact Pi entries.
 
 The CI-enforced portable regression and opt-in real-harness drift guard follow the split owned by `.agents/skills/firstmate-coding-guidelines/SKILL.md`.
