@@ -266,21 +266,9 @@ test_codex_unverified_until_a_semantic_source_exists() {
   pass "codex classifies unknown until a semantic source is verified, never idle or footer-matched"
 }
 
-test_kimi_installs_no_unverified_wiring() {
-  local state out
-  state="$TMP_ROOT/gates/state"
-  mkdir -p "$state"
-  [ -z "$(fm_busy_sources_for_harness kimi)" ] \
-    || fail "standalone kimi must trust no semantic source until it is verified"
-  out=$(fm_busy_classify tmux fake:w kimi gate-k "$state")
-  [ "$out" = "unknown kimi-unverified" ] || fail "kimi must classify unknown, not from its spinner, got '$out'"
-  pass "kimi installs no unverified semantic wiring and classifies through its own gate"
-}
-
 test_pi_extension_semantic_lifecycle
 test_pi_extension_serializes_settle_before_next_start
 test_pi_extension_stale_incarnation_rejected
-test_kimi_installs_no_unverified_wiring
 test_opencode_plugin_semantic_lifecycle
 test_codex_unverified_until_a_semantic_source_exists
 

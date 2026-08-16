@@ -45,13 +45,20 @@ case "${1:-}" in
   has-session|new-session|new-window|kill-window) exit 0 ;;
   send-keys)
     if [ -n "${FM_FAKE_LAUNCH_LOG:-}" ]; then
-      prev=
-      for a in "$@"; do
-        if [ "$prev" = "-l" ]; then
-          printf '%s\n' "$a" >> "$FM_FAKE_LAUNCH_LOG"
-        fi
-        prev=$a
+      shift
+      literal=0
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          -t) shift 2 ;;
+          -l) literal=1; shift ;;
+          *) break ;;
+        esac
       done
+      if [ "$literal" = 1 ]; then
+        printf '%s\n' "${1:-}" >> "$FM_FAKE_LAUNCH_LOG"
+      else
+        printf '%s\n' "${1:-}" >> "$FM_FAKE_LAUNCH_LOG.text"
+      fi
     fi
     exit 0
     ;;
@@ -103,6 +110,7 @@ run_spawn() {
   local home=$1 wt=$2 fakebin=$3 launchlog=$4
   shift 4
   : > "$launchlog"
+  : > "$launchlog.text"
   FM_ROOT_OVERRIDE='' FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
@@ -311,7 +319,7 @@ test_active_dispatch_profile_requires_explicit_harness_for_scout() {
 }
 
 test_active_dispatch_profile_allows_explicit_harness() {
-  local rec id out status launch
+  local rec id out status launch task_tmp
   id=profile-explicit-z13
   rec=$(make_spawn_case profile-explicit pi "$id")
   read_case_record "$rec"
@@ -323,6 +331,11 @@ test_active_dispatch_profile_allows_explicit_harness() {
   expect_code 0 "$status" "explicit harness should satisfy active dispatch-profile requirement"
   assert_contains "$out" "spawned $id harness=codex" "spawn did not report explicit codex harness"
   assert_meta_profile "$HOME_DIR/state/$id.meta" codex gpt-5 high
+  task_tmp="/tmp/fm-$id"
+  assert_present "$task_tmp/gotmp" "spawn did not create its Go temp directory"
+  assert_grep "tasktmp=$task_tmp" "$HOME_DIR/state/$id.meta" "spawn metadata did not record its task temp root"
+  assert_grep "export GOTMPDIR=$task_tmp/gotmp" "$LAUNCH_LOG.text" "spawn did not export its Go temp directory into the pane"
+  rm -rf "$task_tmp"
   launch=$(cat "$LAUNCH_LOG")
   assert_contains "$launch" "codex --model 'gpt-5' -c 'model_reasoning_effort=\"high\"' --dangerously-bypass-approvals-and-sandbox" \
     "explicit harness launch did not thread model and effort"
@@ -566,27 +579,27 @@ test_batch_forwards_shared_profile_flags() {
   pass "batch dispatch forwards shared --harness, --model, and --effort to every pair"
 }
 
-test_removed_harness_is_rejected_generically() {
-  local rec id config_id removed out status
-  id=profile-removed-harness-z20
-  rec=$(make_spawn_case profile-removed-harness pi "$id")
+test_unsupported_harness_is_rejected_generically() {
+  local rec id config_id unsupported out status
+  id=profile-unsupported-harness-z20
+  rec=$(make_spawn_case profile-unsupported-harness pi "$id")
   read_case_record "$rec"
-  removed=grok
-  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" "$removed")
+  unsupported=legacy-agent
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" "$unsupported")
   status=$?
-  expect_code 1 "$status" "a removed harness must be refused"
-  assert_contains "$out" "error: unknown harness '$removed'" "removed harness refusal did not use generic unknown-harness validation"
-  [ ! -e "$HOME_DIR/state/$id.meta" ] || fail "removed harness refusal published task metadata"
+  expect_code 1 "$status" "an unsupported harness must be refused"
+  assert_contains "$out" "error: unknown harness '$unsupported'" "unsupported harness refusal did not use generic unknown-harness validation"
+  [ ! -e "$HOME_DIR/state/$id.meta" ] || fail "unsupported harness refusal published task metadata"
 
   config_id=profile-stale-config-z21
-  rec=$(make_spawn_case profile-stale-config "$removed" "$config_id")
+  rec=$(make_spawn_case profile-stale-config "$unsupported" "$config_id")
   read_case_record "$rec"
   out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$config_id" "$PROJ_DIR")
   status=$?
-  expect_code 1 "$status" "stale standalone Grok config must be refused"
-  assert_contains "$out" "error: no launch template for harness '$removed'" "stale config did not use generic unsupported-harness validation"
+  expect_code 1 "$status" "stale unsupported configuration must be refused"
+  assert_contains "$out" "error: no launch template for harness '$unsupported'" "stale config did not use generic unsupported-harness validation"
   [ ! -e "$HOME_DIR/state/$config_id.meta" ] || fail "stale config refusal published task metadata"
-  pass "fm-spawn: standalone Grok launch and stale configuration are rejected generically"
+  pass "fm-spawn: unsupported launch and stale configuration are rejected generically"
 }
 
 test_active_dispatch_profile_does_not_block_secondmate_launch() {
@@ -625,7 +638,7 @@ test_pi_signed_threads_shared_pi_profile_and_preserves_identity
 test_pi_signed_missing_binary_refuses_before_endpoint_or_metadata
 test_pi_signed_persistent_secondmate_uses_pi_extensions_and_identity
 test_batch_forwards_shared_profile_flags
-test_removed_harness_is_rejected_generically
+test_unsupported_harness_is_rejected_generically
 test_active_dispatch_profile_does_not_block_secondmate_launch
 
 echo "# all fm-spawn-dispatch-profile tests passed"

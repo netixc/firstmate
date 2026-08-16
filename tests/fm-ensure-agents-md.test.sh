@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/fm-ensure-agents-md.XXXXXX")
 trap 'rm -rf "$TMP_ROOT"' EXIT
-LEGACY_NAME=$(printf 'CL%s.md' 'AUDE')
+UNRELATED_NAME=PROJECT_NOTES.md
 
 fail() { echo "not ok - $*" >&2; exit 1; }
 pass() { echo "ok - $*"; }
@@ -92,17 +92,17 @@ test_agents_must_be_real_file() {
   pass "fm-ensure-agents-md: requires AGENTS.md to be a real regular file"
 }
 
-test_unrelated_legacy_file_untouched() {
-  local repo="$TMP_ROOT/legacy" before after
+test_unrelated_file_untouched() {
+  local repo="$TMP_ROOT/unrelated" before after
   mkdir -p "$repo"
-  printf '# Unrelated legacy instructions\n\nDo not move me.\n' > "$repo/$LEGACY_NAME"
-  before=$(shasum -a 256 "$repo/$LEGACY_NAME")
+  printf '# Unrelated project notes\n\nDo not move me.\n' > "$repo/$UNRELATED_NAME"
+  before=$(shasum -a 256 "$repo/$UNRELATED_NAME")
   "$ROOT/bin/fm-ensure-agents-md.sh" "$repo" >/dev/null
-  after=$(shasum -a 256 "$repo/$LEGACY_NAME")
-  [ "$before" = "$after" ] || fail "unrelated legacy memory file changed"
+  after=$(shasum -a 256 "$repo/$UNRELATED_NAME")
+  [ "$before" = "$after" ] || fail "unrelated project file changed"
   [ -f "$repo/AGENTS.md" ] || fail "AGENTS.md was not created beside the unrelated file"
-  [ ! -L "$repo/$LEGACY_NAME" ] || fail "unrelated legacy memory file became a symlink"
-  pass "fm-ensure-agents-md: leaves an unrelated pre-existing legacy memory file untouched"
+  [ ! -L "$repo/$UNRELATED_NAME" ] || fail "unrelated project file became a symlink"
+  pass "fm-ensure-agents-md: leaves an unrelated pre-existing project file untouched"
 }
 
 test_create_skeleton
@@ -111,4 +111,4 @@ test_no_trailing_newline_separator
 test_crlf_preserved
 test_case_variant_refused
 test_agents_must_be_real_file
-test_unrelated_legacy_file_untouched
+test_unrelated_file_untouched

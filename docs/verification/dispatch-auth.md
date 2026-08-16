@@ -38,7 +38,7 @@ Three properties follow and are load-bearing for dispatch:
 - A named-model window can be tighter than the account bound, so it must not be read across models. A model-specific scope applies only to that named model; every other model remains bounded by the provider's applicable account scopes.
 
 `quotaSemantics.status` is `unknown` with no `effectiveAvailability` entries at all for providers whose vendor exposes no window (observed for `copilot`).
-`state.authStatus` is present only for some providers (observed for `grok` alone), so its absence is missing evidence, not a credential fault.
+`state.authStatus` is optional, so its absence is missing evidence, not a credential fault.
 
 ## Completion-runway shape the judgment depends on
 
@@ -124,25 +124,17 @@ Verified 2026-07-30 against quota-axi 0.1.16.
 [
   { "provider": "codex", "sources": [
       { "source": "auth-json", "path": "<home>/.codex/auth.json", "status": "available" },
-      { "source": "cli-rpc", "path": "<path-to>/codex", "status": "available" } ] },
-  { "provider": "grok", "sources": [
-      { "source": "pi:xai", "status": "available" } ] },
-  { "provider": "kimi", "sources": [
-      { "source": "pi:kimi-coding", "status": "available" },
-      { "source": "kimi-code-cli", "status": "expired", "error": "kimi_code_cli_credential_expired" } ] }
+      { "source": "cli-rpc", "path": "<path-to>/codex", "status": "available" } ] }
 ]
 ```
 
-Observed source statuses are `available`, `expired` (with an `error` slug), and `missing`.
+The snapshot reports each source independently rather than collapsing the provider to one credential status.
 
-- A provider can carry a healthy source beside a missing or expired one, so a provider must not be collapsed to a single status. Kimi's standalone CLI credential is expired while its Pi source is available.
-- A `pi:`-prefixed source exists only where Pi holds its own credential for that family (`pi:xai`, `pi:kimi-coding`). Pi's `openai-codex` family has none, because it authenticates through the Codex store that the `codex` provider already lists. A missing `pi:` source is therefore never evidence against a Pi candidate.
+- A provider can carry more than one independent source, so the sources must remain distinct.
+- A source is evidence only for the provider and credential surface that reports it; a missing source with a guessed name is never evidence against a candidate.
 
 Neither this per-source shape nor `state.authStatus` exists before quota-axi 0.1.16.
 `bin/fm-bootstrap.sh` enforces the current compatibility floor through `bin/fm-quota-axi-lib.sh`.
-
-The quota provider named `grok` also reports `credits.remaining: 0` alongside `percentRemaining: 41` on a healthy account.
-That zero is a prepaid balance, not the subscription window, and is never headroom.
 
 ## Regression coverage
 

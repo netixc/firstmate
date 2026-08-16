@@ -139,7 +139,7 @@ family_for_basename() {
     fm-composer-ghost.test.sh|fm-composer-lib.test.sh|\
     fm-crew-state.test.sh|fm-decision-hold-lifecycle.test.sh|\
     fm-documentation-audiences.test.sh|fm-ensure-agents-md.test.sh|\
-    fm-kimi-harness.test.sh|fm-herdr-lab.test.sh|fm-lint.test.sh|\
+    fm-herdr-lab.test.sh|fm-lint.test.sh|\
     fm-operational-input.test.sh|fm-pi-primary-types.test.sh|\
     fm-send-popup-settle.test.sh|fm-send-settle.test.sh|\
     fm-supervision-instructions.test.sh|fm-task-delivery.test.sh|\
@@ -289,15 +289,17 @@ EOF
 list_portable_parallel_1() {
   cat <<'EOF'
 tests/fm-backend-herdr.test.sh
-tests/fm-test-run.test.sh
+tests/fm-arm-pretool-check.test.sh
 tests/fm-crew-state.test.sh
-tests/fm-cd-pretool-check.test.sh
-tests/fm-pr-merge.test.sh
-tests/fm-spawn-batch.test.sh
+tests/fm-test-run.test.sh
+tests/fm-send-popup-settle.test.sh
+tests/fm-lint.test.sh
 tests/fm-review-diff.test.sh
-tests/fm-tmux-submit-busy.test.sh
-tests/fm-send-settle.test.sh
-tests/fm-brief.test.sh
+tests/fm-composer-lib.test.sh
+tests/fm-spawn-batch.test.sh
+tests/fm-ensure-agents-md.test.sh
+tests/fm-supervision-instructions.test.sh
+tests/fm-transition-lib.test.sh
 tests/fm-pi-primary-types.test.sh
 EOF
 }
@@ -305,18 +307,16 @@ EOF
 # Portable parallel shard 2: the complementary LPT half of the proven set.
 list_portable_parallel_2() {
   cat <<'EOF'
-tests/fm-relay.test.sh
 tests/fm-decision-hold-lifecycle.test.sh
-tests/fm-arm-pretool-check.test.sh
+tests/fm-relay.test.sh
+tests/fm-cd-pretool-check.test.sh
 tests/fm-herdr-lab.test.sh
+tests/fm-pr-merge.test.sh
 tests/fm-composer-ghost.test.sh
-tests/fm-send-popup-settle.test.sh
-tests/fm-lint.test.sh
+tests/fm-tmux-submit-busy.test.sh
 tests/fm-send-strict.test.sh
-tests/fm-composer-lib.test.sh
-tests/fm-supervision-instructions.test.sh
-tests/fm-ensure-agents-md.test.sh
-tests/fm-transition-lib.test.sh
+tests/fm-send-settle.test.sh
+tests/fm-brief.test.sh
 EOF
 }
 
@@ -379,7 +379,6 @@ tests/fm-gitignore-config.test.sh 28
 tests/fm-gotmp.test.sh 308
 tests/fm-guard-stale-banner.test.sh 2917
 tests/fm-herdr-session-cleanup.test.sh 4802
-tests/fm-kimi-harness.test.sh 12590
 tests/fm-opencode-primary-live-e2e.test.sh 18
 tests/fm-operational-input.test.sh 184
 tests/fm-pending-reply.test.sh 7328

@@ -522,8 +522,8 @@ new_case Linux with-herdr no-gui
 MANAGER_BIN="$CASE_HOME/.nvm/versions/node/v24/bin"
 mkdir -p "$MANAGER_BIN"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$MANAGER_BIN/codex"
-printf '#!/usr/bin/env bash\nexit 0\n' > "$MANAGER_BIN/kimi"
-chmod +x "$MANAGER_BIN/codex" "$MANAGER_BIN/kimi"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$MANAGER_BIN/opencode"
+chmod +x "$MANAGER_BIN/codex" "$MANAGER_BIN/opencode"
 mv "$CASE_BIN/tasks-axi" "$MANAGER_BIN/tasks-axi"
 doctor
 expect_code 1 "$DOCTOR_RC" "a version-manager-only required tool was reported ready"
@@ -540,13 +540,13 @@ assert_grep '# Firstmate remote tool wrapper v1' "$CASE_HOME/.local/bin/tasks-ax
 assert_grep "$MANAGER_BIN/tasks-axi" "$CASE_HOME/.local/bin/tasks-axi" \
   "the generated wrapper does not execute the discovered absolute target"
 assert_absent "$CASE_HOME/.local/bin/codex" "--fix wrapped an alternate harness when pi already satisfied readiness"
-assert_absent "$CASE_HOME/.local/bin/kimi" "--fix wrapped an alternate harness when pi already satisfied readiness"
+assert_absent "$CASE_HOME/.local/bin/opencode" "--fix wrapped an alternate harness when pi already satisfied readiness"
 
 rm -f "$CASE_BIN/pi"
 doctor --fix
 expect_code 0 "$DOCTOR_RC" "--fix did not wrap one discoverable harness when none resolved"
 assert_present "$CASE_HOME/.local/bin/codex" "--fix did not create the first needed harness wrapper"
-assert_absent "$CASE_HOME/.local/bin/kimi" "--fix created more harness wrappers than readiness requires"
+assert_absent "$CASE_HOME/.local/bin/opencode" "--fix created more harness wrappers than readiness requires"
 
 mv "$CASE_BIN/treehouse" "$MANAGER_BIN/treehouse"
 mkdir -p "$CASE_HOME/.local/bin"
@@ -624,7 +624,7 @@ assert_contains "$DOCTOR_OUT" 'check entrypoint-link=human:' "an operator-owned 
 unset FM_ROOT_OVERRIDE
 pass "the entrypoint symlink is recreated when absent and never overwritten when operator-owned"
 
-# --- remote lifecycle rejects an unsupported standalone harness -------------
+# --- remote lifecycle rejects an unsupported harness ------------------------
 
 REMOTE_REJECT_HOME="$TMP_ROOT/remote-reject-home"
 mkdir -p "$REMOTE_REJECT_HOME/bin" "$REMOTE_REJECT_HOME/state" "$REMOTE_REJECT_HOME/data"
@@ -632,10 +632,10 @@ printf 'remote-reject\n' > "$REMOTE_REJECT_HOME/.fm-secondmate-home"
 printf '# Firstmate\n' > "$REMOTE_REJECT_HOME/AGENTS.md"
 set +e
 REMOTE_REJECT_OUT=$(FM_HOME="$REMOTE_REJECT_HOME" \
-  "$ROOT/bin/fm-remote-secondmate-control.sh" launch remote-reject grok - - herdr 2>&1)
+  "$ROOT/bin/fm-remote-secondmate-control.sh" launch remote-reject legacy-agent - - herdr 2>&1)
 REMOTE_REJECT_RC=$?
 set -e
-expect_code 1 "$REMOTE_REJECT_RC" "standalone Grok must be rejected on the remote launch path"
-assert_contains "$REMOTE_REJECT_OUT" "unverified remote secondmate harness: grok" \
+expect_code 1 "$REMOTE_REJECT_RC" "an unsupported harness must be rejected on the remote launch path"
+assert_contains "$REMOTE_REJECT_OUT" "unverified remote secondmate harness: legacy-agent" \
   "remote launch did not use the generic unsupported-harness rejection"
-pass "remote secondmate launch rejects standalone Grok as an unsupported harness"
+pass "remote secondmate launch rejects an unsupported harness generically"

@@ -33,7 +33,7 @@
 # `resume` is deliberately NOT a verb. It is not deterministic across the
 # verified adapters: codex resumes only from a session id printed at exit,
 # opencode resumes the most recent session for the cwd with --continue,
-# and pi, pi-signed, and kimi have no verified pane-resume contract at
+# and pi and pi-signed have no verified pane-resume contract at
 # all. `relaunch` covers the same need deterministically for every adapter,
 # because the brief on disk - not a harness-private session - is the durable
 # instruction.
@@ -59,7 +59,7 @@ fm_control_verb_allowed() {  # <verb>
 # than guessed at, exactly as a spawn on it would be.
 fm_control_harness_supported() {  # <harness>
   case "${1-}" in
-    codex|opencode|pi|pi-signed|kimi) return 0 ;;
+    codex|opencode|pi|pi-signed) return 0 ;;
   esac
   return 1
 }
@@ -78,7 +78,6 @@ fm_control_harness_family() {  # <recorded-harness>
     pi-signed) printf 'pi-signed' ;;
     codex*) printf 'codex' ;;
     opencode*) printf 'opencode' ;;
-    kimi*) printf 'kimi' ;;
     *) return 1 ;;
   esac
 }
@@ -86,7 +85,7 @@ fm_control_harness_family() {  # <recorded-harness>
 # The key that cancels a running turn.
 fm_control_interrupt_key() {  # <harness>
   case "${1-}" in
-    codex|opencode|pi|pi-signed|kimi) printf 'Escape' ;;
+    codex|opencode|pi|pi-signed) printf 'Escape' ;;
     *) return 1 ;;
   esac
 }
@@ -96,7 +95,7 @@ fm_control_interrupt_key() {  # <harness>
 fm_control_interrupt_repeat() {  # <harness>
   case "${1-}" in
     opencode) printf '2' ;;
-    codex|pi|pi-signed|kimi) printf '1' ;;
+    codex|pi|pi-signed) printf '1' ;;
     *) return 1 ;;
   esac
 }
@@ -104,7 +103,7 @@ fm_control_interrupt_repeat() {  # <harness>
 # The command that exits the agent from its own composer.
 fm_control_exit_command() {  # <harness>
   case "${1-}" in
-    opencode|kimi) printf '/exit' ;;
+    opencode) printf '/exit' ;;
     codex|pi|pi-signed) printf '/quit' ;;
     *) return 1 ;;
   esac
@@ -142,30 +141,5 @@ fm_control_harness_wiring_paths() {  # <harness> <worktree> <state-dir> <id>
   case "$harness" in
     opencode) printf '%s\n' "$wt/.opencode/plugins/fm-busy-state.js" ;;
     pi|pi-signed) printf '%s\n' "$state/$id.pi-ext.ts" ;;
-    kimi)
-      printf '%s\n' "$wt/.fm-kimi-turnend"
-      printf '%s\n' "$state/$id.kimi-turnend-token"
-      ;;
-  esac
-}
-
-# The firstmate-owned global turn-end registry entry a harness mints per task.
-# Kimi's turn-end hook is global and gated by a private token file; every other
-# adapter's wiring is fully covered by
-# fm_control_harness_wiring_paths. Prints the registry path or nothing.
-fm_control_harness_turnend_token_path() {  # <harness> <state-dir> <id>
-  local harness=${1-} state=${2-} id=${3-}
-  [ -n "$state" ] && [ -n "$id" ] || return 1
-  case "$harness" in
-    kimi) printf '%s\n' "$state/$id.kimi-turnend-token" ;;
-  esac
-}
-
-fm_control_harness_turnend_auth_path() {  # <harness> <token>
-  local harness=${1-} token=${2-}
-  case "$token" in ''|*[!A-Za-z0-9._-]*) return 0 ;; esac
-  case "$harness" in
-    kimi) printf '%s\n' "$HOME/.kimi-code/fm-turn-end.d/$token" ;;
-    *) return 0 ;;
   esac
 }

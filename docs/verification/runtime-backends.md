@@ -35,7 +35,7 @@ Pi and pi-signed 0.82.0 were reverified on 2026-07-27 through real isolated `fm-
 The earlier record that every harness is observed under its own `#{pane_current_command}` no longer holds and has been replaced by the per-harness evidence below.
 In this macOS run that reading reflected a rewritable process title rather than stable executable identity, so it is now one of two independent name sources rather than the sole basis of a verdict.
 
-The six verified worker adapters were relaunched on 2026-08-03 with tmux 3.6a on macOS 26.5.2 arm64, each on a private socket in an isolated lab.
+The four verified worker adapters were relaunched on 2026-08-03 with tmux 3.6a on macOS 26.5.2 arm64, each on a private socket in an isolated lab.
 
 ```sh
 tmux -L "$socket" new-window -d -t "$session:" -n "$harness" -c "$wt" -- "$bin"
@@ -51,10 +51,9 @@ Observed identities, and the resulting verdict:
 | opencode | 1.18.11 | `opencode` | `opencode` | alive |
 | pi | 0.82.0 | `pi-launcher` | `pi-signed`, `pi` | alive |
 | pi-signed | 0.82.0 | `pi-launcher` | `pi-signed`, `pi` | alive |
-| kimi | 0.31.1 | `kimi` | `kimi` | alive |
 
-Codex reported `codex-aarch64-a` at 0.145.0 and `codex` at 0.146.0, and Kimi Code reported `kimi-code` as its foreground `comm` at 0.29.1 and `kimi` at 0.31.1, so these identities move between ordinary patch releases in both directions.
-That is the evidence for treating any single process name as a surface under vendor control rather than a stable contract.
+Codex reported `codex-aarch64-a` at 0.145.0 and `codex` at 0.146.0, so a process identity can move between ordinary patch releases.
+That is evidence for treating any single process name as a surface under vendor control rather than a stable contract.
 
 `#{pane_current_command}` and foreground `ps -o comm=` read different name fields, but which one preserves executable identity is platform-dependent.
 On macOS the pane command reflected the rewritable title while the full install path could survive in `ps -o comm=`; in the Linux portable regression those roles reversed for the version-named native executable, with the identifying path retained in argv[0].
@@ -113,7 +112,7 @@ Tmux needs the exact `pi-launcher`, `pi-signed`, `pi`, and `Pi` process identiti
 Herdr uses native registered-agent state and needs no process-name branch.
 
 The current classifier matrix and its refresh guard are recorded in [Composer classification matrix](#composer-classification-matrix), with portable shape coverage in `tests/fm-composer-lib.test.sh` and `tests/fm-composer-ghost.test.sh`.
-Kimi pointer delivery and OpenCode 1.18.4 busy-queue behavior remain pinned by `tests/fm-kimi-harness.test.sh` and `tests/fm-tmux-submit-busy.test.sh`.
+OpenCode 1.18.4 busy-queue behavior remains pinned by `tests/fm-tmux-submit-busy.test.sh`.
 
 ### Cleanup endpoint identity
 
@@ -138,7 +137,7 @@ ok - fm-teardown: dedicated-socket invalid cleanup preserves target/control and 
 The dedicated tmux cell removed ambient tmux variables, required a socket-bound wrapper, kept one target and one independent control window, and proved the wrapper was not called for invalid metadata or a direct empty target.
 Valid cleanup removed only the exact task-bound target and left the control window live.
 The metadata-only validation covers tmux and Herdr before backend dispatch.
-Codex, OpenCode, Pi, pi-signed, and Kimi share that backend cleanup boundary; their harness-specific hook files and tokens are cleaned only after it, so no harness needs a separate endpoint parser.
+Codex, OpenCode, Pi, and pi-signed share that backend cleanup boundary; their harness-specific hook files are cleaned only after it, so no harness needs a separate endpoint parser.
 
 ## Composer classification matrix
 
@@ -155,14 +154,13 @@ Observed output:
 ok - codex (codex-cli 0.146.0): real idle composer classifies empty
 ok - opencode (1.14.46): real idle composer classifies empty
 ok - pi (0.84.0): real idle composer classifies empty
-# harness absent, not verified here: kimi
 ok - strict posture live: a blank shell row classifies unknown and injection defers
-ok - live composer-matrix guard verified 5 live surface(s)
+ok - live composer-matrix guard verified 4 live surface(s)
 ```
 
 All three installed harnesses' real idle composers reached a proven `empty`, including Pi through the tmux foreground-process identity probe and OpenCode through the left-bar shape; Codex and OpenCode first parked on vendor update-available modals that the strict classifier correctly refused until the guard's single non-submitting Escape dismissed them.
 The strict blank-row posture held live: a blank shell row deferred injection.
-Kimi was not installed on the verification machine; its bordered shape is pinned by the portable capture regressions in `tests/fm-composer-lib.test.sh`, which also carry both adapters' capability profiles for every harness under both a UTF-8 locale and `LC_ALL=C`.
+Portable capture regressions in `tests/fm-composer-lib.test.sh` exercise each retained shape and capability profile under both a UTF-8 locale and `LC_ALL=C`.
 This guard is the refresh command after an upgrade to any matrix-covered harness; rerun it and update the versions above rather than trusting this table across releases.
 
 ## Herdr

@@ -90,8 +90,8 @@ test_harness_resolution() {
   done <<'ROWS'
 both absent -> own (backward-compat)^-^-^pi^pi
 crew set, secondmate absent -> crew (backward-compat)^codex^-^codex^codex
-crew set, secondmate set -> secondmate wins, crew untouched^codex^kimi^kimi^codex
-crew absent, secondmate set -> secondmate value, crew own^-^kimi^kimi^pi
+crew set, secondmate set -> secondmate wins, crew untouched^codex^opencode^opencode^codex
+crew absent, secondmate set -> secondmate value, crew own^-^opencode^opencode^pi
 signed Pi wrapper remains a distinct secondmate value^codex^pi-signed^pi-signed^codex
 secondmate=default defers to crew^codex^default^codex^codex
 crew=default resolves to own, secondmate follows^default^-^pi^pi
@@ -132,7 +132,7 @@ harness + model -> model only^pi openai-codex/gpt-5.6-sol^pi^openai-codex/gpt-5.
 harness + model + effort -> both^pi openai-codex/gpt-5.6-sol high^pi^openai-codex/gpt-5.6-sol^high
 signed Pi wrapper + model + effort preserves every token^pi-signed openai-codex/gpt-5.6-sol max^pi-signed^openai-codex/gpt-5.6-sol^max
 default harness token -> falls back to crew, empty model/effort^default^pi^^
-extra whitespace between tokens is tolerated^kimi   kimi-code/k3    xhigh^kimi^kimi-code/k3^xhigh
+extra whitespace between tokens is tolerated^pi   custom-provider/model    xhigh^pi^custom-provider/model^xhigh
 leading/trailing blank lines and a comment are skipped^# a comment\n\npi openai-codex/gpt-5.6-sol low\n^pi^openai-codex/gpt-5.6-sol^low
 ROWS
   pass "C1 fm-harness.sh secondmate-model/secondmate-effort resolve the optional tokens; bare harness stays empty (backward-compat)"
@@ -347,7 +347,7 @@ test_propagate_lib() {
   rm -rf "$dest/crew-harness"
 
   # 5. secondmate-harness is never inherited; backend still is
-  printf 'kimi\n' > "$src/secondmate-harness"
+  printf 'pi-signed\n' > "$src/secondmate-harness"
   printf '{"default":{"harness":"codex"}}\n' > "$src/crew-dispatch.json"
   printf 'codex\n' > "$src/crew-harness"
   printf 'manual\n' > "$src/backlog-backend"
@@ -376,7 +376,7 @@ test_propagate_lib() {
   printf 'guard\n' > "$guard_repo/README.md"
   git -C "$guard_repo" add -A
   git -C "$guard_repo" commit -qm guard
-  printf '{"default":{"harness":"kimi"}}\n' > "$src/crew-dispatch.json"
+  printf '{"default":{"harness":"opencode"}}\n' > "$src/crew-dispatch.json"
   stdout="$d/guard-skip.out"
   stderr="$d/guard-skip.err"
   FM_INHERITABLE_CONFIG=crew-dispatch.json propagate_inheritable_config "$src" "$guard_repo/config" >"$stdout" 2>"$stderr" \
@@ -538,12 +538,12 @@ test_spawn_explicit_harness_wins() {
 # The unverified-adapter guard holds on the resolved secondmate path: an unknown
 # config/secondmate-harness aborts the spawn (no meta written) and names the source.
 test_spawn_unverified_secondmate_harness_refused() {
-  local w sm fakebin err rc removed
+  local w sm fakebin err rc unsupported
   w="$TMP_ROOT/spawn-unverified"
   sm="$w/sm"
   mkdir -p "$w/home/config" "$w/home/state"
-  removed=$(printf 'cur%s' 'sor')
-  printf '%s\n' "$removed" > "$w/home/config/secondmate-harness"
+  unsupported=legacy-agent
+  printf '%s\n' "$unsupported" > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
   fakebin=$(make_noop_tmux "$w/tmux")
   err="$w/spawn.err"
@@ -556,7 +556,7 @@ test_spawn_unverified_secondmate_harness_refused() {
     "$ROOT/bin/fm-spawn.sh" sm "$sm" --secondmate >/dev/null 2>"$err" || rc=$?
 
   [ "$rc" -ne 0 ] || fail "unverified: spawn should have failed"
-  assert_contains "$(cat "$err")" "no launch template for harness '$removed'" \
+  assert_contains "$(cat "$err")" "no launch template for harness '$unsupported'" \
     "unverified: error names the rejected harness"
   assert_contains "$(cat "$err")" "config/secondmate-harness" \
     "unverified: error names the secondmate-harness source"
@@ -1168,13 +1168,13 @@ test_bootstrap_sweep_propagates_and_reconverges() {
   c1=$(git -C "$w/main" rev-parse HEAD)
   add_sm_worktree "$w" sm "$c1"
 
-  # Initial push: primary crew-harness=codex, secondmate-harness=kimi (must NOT flow).
+  # Initial push: primary crew-harness=codex, secondmate-harness=pi-signed (must NOT flow).
   printf '{"default":{"harness":"codex"}}\n' > "$w/home/config/crew-dispatch.json"
   printf 'codex\n' > "$w/home/config/crew-harness"
   printf 'manual\n' > "$w/home/config/backlog-backend"
   printf 'tmux\n' > "$w/home/config/backend"
   : > "$w/home/config/trace-context"
-  printf 'kimi\n' > "$w/home/config/secondmate-harness"
+  printf 'pi-signed\n' > "$w/home/config/secondmate-harness"
   run_bootstrap "$w" >/dev/null
   [ "$(cat "$w/sm/config/crew-harness" 2>/dev/null)" = codex ] \
     || fail "sweep: crew-harness not pushed into the live home"
@@ -1631,7 +1631,7 @@ test_config_reread_per_home_changed_sets_and_exact_bytes() {
   printf 'tasks-axi\n' > "$w/alpha/config/backlog-backend"
   printf '{"default":{"harness":"old"}}\n' > "$w/beta/config/crew-dispatch.json"
 
-  multiline_json=$(printf '{\n  "default": {\n    "harness": "kimi",\n    "model": "kimi-code/k3"\n  },\n  "rules": [\n    {"when": "news", "use": {"harness": "kimi"}}\n  ]\n}\n')
+  multiline_json=$(printf '{\n  "default": {\n    "harness": "pi",\n    "model": "custom-provider/model"\n  },\n  "rules": [\n    {"when": "news", "use": {"harness": "opencode"}}\n  ]\n}\n')
   printf '%s' "$multiline_json" > "$w/home/config/crew-dispatch.json"
   printf 'codex\n' > "$w/home/config/crew-harness"
   printf 'manual\n' > "$w/home/config/backlog-backend"
@@ -1719,7 +1719,7 @@ test_config_reread_per_home_changed_sets_and_exact_bytes() {
   pointer="CONFIG_REREAD: $(reread_instruction_path "$w/alpha")"
   assert_contains "$(cat "$log")" "[fm-from-firstmate]" "reread send must be marked"
   assert_contains "$(cat "$log")" "$pointer" "reread send must point to the durable instruction file"
-  assert_not_contains "$(cat "$log")" '"harness": "kimi"' "sent message must not inline multiline JSON"
+  assert_not_contains "$(cat "$log")" '"harness": "pi"' "sent message must not inline multiline JSON"
   assert_not_contains "$(cat "$log")" $'\n  "default"' "sent message must not contain embedded newlines"
   assert_not_contains "$(cat "$log")" "Default worker" "sent message must not summarize"
   pass "B15 config reread is per-home, exact-byte, ordered, and pointer-only"
@@ -1790,7 +1790,7 @@ test_config_reread_isolation_and_absent_and_send_failure() {
     "helper must omit unchanged items"
 
   # Send failure becomes a retryable diagnostic and non-zero exit.
-  printf 'kimi\n' > "$w/home/config/crew-harness"
+  printf 'opencode\n' > "$w/home/config/crew-harness"
   err="$w/config-reread-send-fail.err"
   out=$(PATH="$(make_fake_toolchain "$w"):$BASE_PATH" \
     FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" FM_SEND_SETTLE=0 \

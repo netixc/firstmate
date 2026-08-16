@@ -686,7 +686,7 @@ secondmate_liveness_one() {  # <meta> <id>
   [ -n "$target" ] || target="$window"
   agent_state=$(fm_backend_agent_state "$backend" "$target" 2>/dev/null) || agent_state=unreadable
   case "$harness" in
-    codex|opencode|pi|pi-signed|kimi) ;;    *)
+    codex|opencode|pi|pi-signed) ;;    *)
       case "$agent_state" in dead|missing) agent_state=unverified-harness ;; esac
       ;;
   esac
@@ -996,13 +996,13 @@ crew_dispatch_validate() {
     return 0
   fi
   err=$(jq -r '
-    def verified($h): ["codex","opencode","pi","pi-signed","kimi"] | index($h);
+    def verified($h): ["codex","opencode","pi","pi-signed"] | index($h);
     def effort_ok($h; $e):
       if $e == null then true
       elif ($e | type) != "string" then false
       elif $h == "codex" then (["low","medium","high","xhigh"] | index($e))
       elif $h == "pi" or $h == "pi-signed" then (["low","medium","high","xhigh","max"] | index($e))
-      elif $h == "opencode" or $h == "kimi" then false
+      elif $h == "opencode" then false
       else true
       end;
     def profiles($value):

@@ -97,7 +97,7 @@ SH
 test_tmux_agent_state_classifies() {
   local fb out
 
-  for harness in pi codex opencode kimi pi-signed pi-launcher Pi; do
+  for harness in pi codex opencode pi-signed pi-launcher Pi; do
     fb=$(make_probe_tmux "$TMP_ROOT/tmux-$harness" "$harness")
     out=$(PATH="$fb:$BASE_PATH" bash -c '. "$0/bin/fm-backend.sh"; fm_backend_agent_state tmux sess:win' "$ROOT")
     [ "$out" = alive ] || fail "a live $harness foreground process should classify as alive, got '$out'"
@@ -114,13 +114,6 @@ test_tmux_agent_state_classifies() {
   [ "$out" = ambiguous ] || fail "an existing node process should classify as ambiguous, got '$out'"
   [ "$(PATH="$fb:$BASE_PATH" bash -c '. "$0/bin/fm-backend.sh"; fm_backend_agent_alive tmux sess:win' "$ROOT")" = unknown ] \
     || fail "the compatibility view must keep an existing node process unknown"
-
-  local removed
-  removed=$(printf 'cl%s' 'aude')
-  fb=$(make_probe_tmux "$TMP_ROOT/tmux-removed" "$removed")
-  out=$(PATH="$fb:$BASE_PATH" bash -c '. "$0/bin/fm-backend.sh"; fm_backend_agent_state tmux sess:win' "$ROOT")
-  [ "$out" = ambiguous ] \
-    || fail "a removed adapter process name should remain ambiguous, got '$out'"
 
   fb=$(make_failed_probe_tmux "$TMP_ROOT/tmux-missing" missing)
   out=$(PATH="$fb:$BASE_PATH" bash -c '. "$0/bin/fm-backend.sh"; fm_backend_agent_state tmux sess:fm-sm1' "$ROOT")

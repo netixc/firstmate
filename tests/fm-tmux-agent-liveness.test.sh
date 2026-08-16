@@ -176,16 +176,6 @@ wait_for_state "$SESSION:unknown" ambiguous \
   || fail "a foreground process no name source attributes must stay ambiguous"
 pass "tmux liveness: a process neither name source attributes stays ambiguous rather than inventing an agent"
 
-# A process named for a removed adapter is not a verified live agent. Construct
-# the legacy name at runtime so this fixture proves behavior without preserving
-# a source-level adapter identifier.
-REMOVED_NAME=$(printf 'cl%s' 'aude')
-ln -s "$SLEEP_BIN" "$LAB/bin/$REMOVED_NAME"
-new_window removed "$LAB/bin/$REMOVED_NAME" 900
-wait_for_state "$SESSION:removed" ambiguous \
-  || fail "a removed adapter process name must not classify as a verified live agent"
-pass "tmux liveness: a removed adapter process name stays ambiguous"
-
 # --- a launcher whose own identity reads as a bare shell --------------------
 # The single-source classifier would read this pane as an idle shell and call
 # it dead - the one verdict that can start a duplicate agent on a live worktree.

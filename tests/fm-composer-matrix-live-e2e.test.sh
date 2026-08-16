@@ -108,7 +108,7 @@ check_harness_idle_empty() {  # <name> <launch-cmd...>
 }
 
 # --- 1. Every installed verified harness must reach a proven-empty composer --
-for h in codex opencode pi kimi; do
+for h in codex opencode pi; do
   if command -v "$h" >/dev/null 2>&1; then
     check_harness_idle_empty "$h" "$h"
   else

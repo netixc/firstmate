@@ -1029,8 +1029,8 @@ test_afk_genuine_done_still_terminal_stale() {
 }
 
 test_pane_input_pending_bordered_idle_not_pending() {
-  # THE regression: an idle Kimi composer is a bordered box. The old
-  # idle regex only matched a bare prompt, so every idle boxed pane read as
+  # THE regression: an idle composer can be a bordered box. The old idle
+  # regex only matched a bare prompt, so every idle boxed pane read as
   # pending and the away-mode daemon deferred 100% of escalations for 9.5h.
   local dir state fakebin capture line
   dir=$(make_supercase pending-bordered-idle)

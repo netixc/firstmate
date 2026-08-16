@@ -66,7 +66,6 @@ Backend-specific setup is linked in [Documentation](#documentation).
 Pi uses its tracked primary watcher extension and has a verified turn-end guard path when launched with the documented setup.
 
 Codex and OpenCode are also verified and supported as primary harnesses; Codex uses bounded foreground checkpoints, and OpenCode uses a TUI plugin.
-Kimi remains a verified worker harness.
 
 ### Install and launch
 

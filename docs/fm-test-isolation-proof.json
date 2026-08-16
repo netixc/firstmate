@@ -1,153 +1,153 @@
 {
   "concurrency": 4,
-  "finished_at": "2026-08-15T15:39:03Z",
+  "finished_at": "2026-08-15T23:26:28Z",
   "fm_test_run_jobs_enabled": false,
   "kind": "isolation-proof",
   "production_sharding_enabled": false,
-  "run_id": "fm-isolation-1786808166384-30828",
+  "run_id": "fm-isolation-1786836170943-91314",
   "scripts": [
     {
-      "duration_ms": 21877,
+      "duration_ms": 34763,
       "exit": 0,
       "path": "tests/fm-arm-pretool-check.test.sh",
       "worker": 1
     },
     {
-      "duration_ms": 54215,
+      "duration_ms": 69664,
       "exit": 0,
       "path": "tests/fm-backend-herdr.test.sh",
       "worker": 2
     },
     {
-      "duration_ms": 1561,
+      "duration_ms": 1496,
       "exit": 0,
       "path": "tests/fm-brief.test.sh",
       "worker": 3
     },
     {
-      "duration_ms": 18017,
+      "duration_ms": 28291,
       "exit": 0,
       "path": "tests/fm-cd-pretool-check.test.sh",
       "worker": 4
     },
     {
-      "duration_ms": 7308,
+      "duration_ms": 7888,
       "exit": 0,
       "path": "tests/fm-composer-ghost.test.sh",
       "worker": 5
     },
     {
-      "duration_ms": 3268,
+      "duration_ms": 3507,
       "exit": 0,
       "path": "tests/fm-composer-lib.test.sh",
       "worker": 6
     },
     {
-      "duration_ms": 23825,
+      "duration_ms": 31431,
       "exit": 0,
       "path": "tests/fm-crew-state.test.sh",
       "worker": 7
     },
     {
-      "duration_ms": 45199,
+      "duration_ms": 64778,
       "exit": 0,
       "path": "tests/fm-decision-hold-lifecycle.test.sh",
       "worker": 8
     },
     {
-      "duration_ms": 305,
+      "duration_ms": 332,
       "exit": 0,
       "path": "tests/fm-ensure-agents-md.test.sh",
       "worker": 9
     },
     {
-      "duration_ms": 10271,
+      "duration_ms": 14398,
       "exit": 0,
       "path": "tests/fm-herdr-lab.test.sh",
       "worker": 10
     },
     {
-      "duration_ms": 5816,
+      "duration_ms": 8045,
       "exit": 0,
       "path": "tests/fm-lint.test.sh",
       "worker": 11
     },
     {
-      "duration_ms": 35,
+      "duration_ms": 27,
       "exit": 0,
       "path": "tests/fm-pi-primary-types.test.sh",
       "worker": 12
     },
     {
-      "duration_ms": 9396,
+      "duration_ms": 12530,
       "exit": 0,
       "path": "tests/fm-pr-merge.test.sh",
       "worker": 13
     },
     {
-      "duration_ms": 48692,
+      "duration_ms": 54828,
       "exit": 0,
       "path": "tests/fm-relay.test.sh",
       "worker": 14
     },
     {
-      "duration_ms": 5244,
+      "duration_ms": 7548,
       "exit": 0,
       "path": "tests/fm-review-diff.test.sh",
       "worker": 15
     },
     {
-      "duration_ms": 7065,
+      "duration_ms": 9570,
       "exit": 0,
       "path": "tests/fm-send-popup-settle.test.sh",
       "worker": 16
     },
     {
-      "duration_ms": 2188,
+      "duration_ms": 2559,
       "exit": 0,
       "path": "tests/fm-send-settle.test.sh",
       "worker": 17
     },
     {
-      "duration_ms": 3515,
+      "duration_ms": 3959,
       "exit": 0,
       "path": "tests/fm-send-strict.test.sh",
       "worker": 18
     },
     {
-      "duration_ms": 6315,
+      "duration_ms": 1596,
       "exit": 0,
       "path": "tests/fm-spawn-batch.test.sh",
       "worker": 19
     },
     {
-      "duration_ms": 325,
+      "duration_ms": 300,
       "exit": 0,
       "path": "tests/fm-supervision-instructions.test.sh",
       "worker": 20
     },
     {
-      "duration_ms": 28659,
+      "duration_ms": 27648,
       "exit": 0,
       "path": "tests/fm-test-run.test.sh",
       "worker": 21
     },
     {
-      "duration_ms": 4272,
+      "duration_ms": 4474,
       "exit": 0,
       "path": "tests/fm-tmux-submit-busy.test.sh",
       "worker": 22
     },
     {
-      "duration_ms": 148,
+      "duration_ms": 121,
       "exit": 0,
       "path": "tests/fm-transition-lib.test.sh",
       "worker": 23
     }
   ],
-  "started_at": "2026-08-15T15:36:06Z",
+  "started_at": "2026-08-15T23:22:50Z",
   "summary": {
-    "duration_ms": 177270,
+    "duration_ms": 217428,
     "failed": 0,
     "total": 23
   }
