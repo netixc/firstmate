@@ -19,8 +19,7 @@ pi -p -e .pi/extensions/fm-primary-turnend-guard.ts \
 
 Observed result: `PI_SMOKE_DONE`, with one session-start execution.
 The earlier `sendUserMessage` counterfactual raced the positional prompt; the current non-triggering `pi.sendMessage` custom message did not.
-The installed pi-signed 0.82.0 wrapper repeated the Pi primary extension and session-start path on 2026-07-27.
-[`runtime-backends.md`](runtime-backends.md#tmux) owns the shared-ancestry evidence and authoritative selection-marker boundary.
+[`runtime-backends.md`](runtime-backends.md#agent-liveness-name-sources) owns the current exact Pi process evidence.
 
 ### Run-tier source vocabulary and context-reset injection
 
@@ -97,7 +96,7 @@ The bounded-follow-up mechanism was validated on the enabled integration path fr
 | --- | --- | --- | --- |
 | Pi | 0.80.5 | Passive `agent_settled` callback | Exactly one guard follow-up ran for an unhealthy cycle, with no recursion across tool turns. |
 
-`tests/fm-session-lock-ancestry.test.sh` pins the surviving verified-harness ancestry and exact Pi/pi-signed inner-engine lock owner semantics behind a deterministic process table.
+`tests/fm-session-lock-ancestry.test.sh` pins exact Pi lock-owner ancestry and competitor isolation behind a deterministic process table.
 `tests/fm-watch-arm.test.sh` runs real watcher and arm cycles against durable on-disk state to verify that a delivered reason survives until post-handling acknowledgement and stops replaying after acknowledgement, while an unrelated queue append cannot make a watcher cycle that delivered nothing look successful.
 The same suite ingests a keyed remote-secondmate parent reply through the real adapter, establishes the incremental OPEN DECISIONS cursor, interrupts supervision, and proves re-arm replays every unacknowledged queue row plus the still-open decision through the ordinary drain path.
 It also covers decision-only recovery, interrupted handling, handling-window generation reuse, non-fatal moved-generation acknowledgement with sequence-bounded consumption, and a persistent successor remaining live after recovery is acknowledged.
@@ -170,7 +169,17 @@ Pi 0.80.10
 | --- | --- | --- |
 | Pi | `FM_PI_LIVE_E2E=1 tests/fm-pi-primary-live-e2e.test.sh` | One initial tool call led to extension-owned successors and clean child retirement on exit. |
 
-Pi 0.81.1 repeated the continuity and clean-exit lifecycle on 2026-07-23 after the Calm presentation changes.
+Pi 0.84.1 repeated the isolated primary continuity regression on 2026-08-16.
+
+```sh
+FM_PI_LIVE_E2E=1 bin/fm-test-run.sh tests/fm-pi-primary-live-e2e.test.sh
+```
+
+Observed bounded output:
+
+```text
+ok - Pi 0.84.1 live E2E covered the Calm working ship, Ahoy first/later messages, legacy transcripts, near misses, and watcher continuity
+```
 
 Pi same-process session-transition ownership was verified on 2026-07-27 against the tracked extension with a faithful in-process factory rebind (module cache retained, real arm children):
 
@@ -182,7 +191,7 @@ tests/fm-pi-primary-types.test.sh
 
 Observed guarantee: after ordinary `session_shutdown` for `/new`, `/resume`, and `/fork`, plus same-instance shutdown-plus-start, the replacement generation armed again without a Pi restart and without the `watcher: not armed - Pi session is shutting down` refusal.
 Stale prior-generation tool callbacks could not mutate the active child, repeated transitions kept exactly one live arm cycle, and terminal `quit` still refused late rearm.
-Plain Pi and pi-signed share the same tracked `.pi/extensions/fm-primary-pi-watch.ts` path, so both inherit the generation owner; other primary harnesses are not applicable because they do not use this Pi extension lifecycle.
+Pi uses the tracked `.pi/extensions/fm-primary-pi-watch.ts` path and inherits the generation owner; other primary harnesses are not applicable because they do not use this Pi extension lifecycle.
 
 Deterministic entry points:
 

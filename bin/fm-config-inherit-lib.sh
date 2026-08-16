@@ -3,8 +3,8 @@
 # set of LOCAL (gitignored) config items down into each secondmate home's
 # config/, so a secondmate's OWN crewmates inherit the primary's settings
 # (e.g. primary config/crew-dispatch.json makes a secondmate use the same dispatch
-# profile rules, primary config/crew-harness=pi-signed makes a secondmate's
-# crewmates use pi-signed too, primary config/backlog-backend=manual makes that home
+# profile rules, primary config/crew-harness=pi makes a secondmate's
+# crewmates use Pi too, primary config/backlog-backend=manual makes that home
 # hand-edit backlog files too, primary config/backend pins that home's local
 # runtime-backend default for future spawns, primary config/startup-memory-budget
 # bounds that home's startup-memory curation, and primary

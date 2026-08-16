@@ -68,12 +68,12 @@ The default path remains local-only; live GitHub enrichment exists only behind t
 Optional Relay integrates with the watcher only after explicit opt-in; [configuration.md](configuration.md#relay-env) owns its generated-artifact and dispatch mechanics.
 
 At session start, `bin/fm-session-start.sh` emits exactly one primary-harness supervision block rendered by `bin/fm-supervision-instructions.sh` from `docs/supervision-protocols/`.
-That block owns the live wait shape for the running primary harness: Pi and pi-signed use the same two tracked primary extensions.
+That block owns the live wait shape for the running primary harness: Pi uses two tracked primary extensions.
 `bin/fm-watch-arm.sh` remains the verified arm wrapper for protocols that call it; it forks the watcher as a tracked child, verifies it is genuinely alive with a fresh liveness beacon, and prints an honest `started`, `attached`, or nonzero `FAILED` status.
 [`watcher-continuity.md`](watcher-continuity.md#arm-layer-cycle-contract) owns the arm layer's successor, terminal-delivery, re-arm recovery, and typed clean-close failure contract.
 The arm layer records one bounded lifecycle row per observed cycle in `state/.watch-cycle-exits.log`; `state/.watch-triage.log` remains exclusively the absorbed-wake debug log.
 Pi verifies session-lock ownership and launches one singleton successor from its child-close handler before delivering an actionable wake prompt, with bounded exponential retry for failed restoration.
-The existing turn-end guard remains the final backstop for every harness-engine protocol, with pi-signed sharing Pi's protocol.
+The existing turn-end guard remains the final backstop for Pi's protocol.
 Its `--restart` mode signals only the watcher recorded in the current home's `state/.watch.lock`, so restarting one home cannot kill sibling secondmate watchers.
 A pull-based guard (`bin/fm-guard.sh`) warns through supervision tool output if the primary checkout is tangled, if work, process-event sources, or Relay polling has an unhealthy model-aware supervision verdict, or if queued wakes are waiting to be drained.
 The drain script calls that guard after presenting the queue; records remain durable, and may keep the queued-wakes warning visible, until the exact generation-bound acknowledgement printed by the drain succeeds after handling.
@@ -107,7 +107,7 @@ Text for a worker to read and commands that drive a worker's process are separat
 `bin/fm-busy-lib.sh` is the single owner of what "this worker is busy" means, and `bin/fm-busy-event.sh` is the only writer of the per-task records it reads.
 Every classification returns a verdict of busy, idle, unknown, or dead together with the source that produced it, so a consumer or a diagnostic can never confuse semantic state with a fallback.
 
-Each converted adapter reports its own turn lifecycle through a machine-readable contract the vendor already exposes, rather than through rendered footer text: Pi and pi-signed use the Firstmate-owned extension's `agent_start` and `agent_settled` confirmed by `ctx.isIdle()`.
+Pi reports its turn lifecycle through the Firstmate-owned extension's machine-readable `agent_start` and `agent_settled` callbacks, with idle confirmed by `ctx.isIdle()` rather than rendered footer text.
 
 Missing, malformed, stale, untrusted, or unverified semantic state is unknown, never idle, and unknown is never promoted to busy either.
 Ordinary task-state consumers act only on an exact busy verdict, so an unreadable worker surfaces for a closer look instead of being absorbed as still-working or written off as finished.
@@ -171,7 +171,7 @@ The session-start bootstrap step keeps valid dispatch configuration silent unles
 When the file exists, `fm-spawn.sh` refuses crewmate and scout launches without an explicit harness, so `config/crew-harness` is only automatic when no dispatch profile file is active.
 Secondmate launches are exempt because they resolve the secondmate harness and any optional secondmate model or effort tokens instead.
 Unsupported effort values are still recorded in task meta when passed to `fm-spawn.sh`, but the launch template omits any effort flag that the selected harness does not accept.
-That keeps spawn launch compatible across pi and pi-signed while preserving the requested profile for later audit.
+That keeps Pi spawn launch compatible while preserving the requested profile for later audit.
 
 ## Optional secondmates
 
@@ -202,13 +202,13 @@ Idle secondmate panes are healthy; teardown is explicit and refuses while the se
 Secondmate homes converge conservatively to the primary's version and declared inherited local material at launch and during locked session start.
 The [`secondmate-provisioning` skill](../.agents/skills/secondmate-provisioning/SKILL.md) owns the full guarded sync, propagation, nudge, and mid-session local-material push contract.
 
-Secondmate agents can run on a different verified harness than crewmates.
-`config/secondmate-harness` controls the primary's secondmate launch harness and may also carry optional model and effort tokens as `<harness> [<model>] [<effort>]` on the first non-empty, non-comment line.
+Secondmate agents can run a different Pi model and effort profile than crewmates.
+`config/secondmate-harness` controls the primary's secondmate launch profile and may carry optional model and effort tokens as `<harness> [<model>] [<effort>]` on the first non-empty, non-comment line.
 A bare harness line remains harness-only, so existing `config/secondmate-harness` files keep their previous behavior.
 When the harness token is unset or `default`, launch falls back to `config/crew-harness`, then to the primary's own harness, and the model and effort tokens are ignored.
 Those optional tokens are re-read on every secondmate spawn or respawn and are overridden by explicit per-spawn `--model` or `--effort` flags.
-For a local route, an explicit per-spawn harness or raw launch command does not inherit model or effort tokens from `config/secondmate-harness`.
-Remote routes accept verified harness adapters only and reject raw launch commands.
+For a local route, an explicit per-spawn harness does not inherit model or effort tokens from `config/secondmate-harness`.
+All routes accept only Pi as the verified harness.
 `config/crew-harness` remains the crewmate harness and is inherited into secondmate homes.
 `config/crew-dispatch.json` is inherited too; secondmates use the same natural-language dispatch profiles when spawning their own crewmates.
 The [`secondmate-provisioning` skill](../.agents/skills/secondmate-provisioning/SKILL.md) owns the complete inherited-local-material allowlist and propagation contract.

@@ -15,7 +15,7 @@
 # Usage:
 #   bin/fm-cd-pretool-check.sh --command '<cmd>'
 #
-# Pi and pi-signed pass the exact command string through CLI mode.
+# Pi passes the exact command string through CLI mode.
 #
 # Exit/output contract (identical shape to bin/fm-arm-pretool-check.sh):
 #   ALLOW - exit 0 and no output.
@@ -24,7 +24,7 @@
 #           non-firstmate repo): exit 0 with no output, exactly like ALLOW.
 #   FAIL OPEN - missing Node or policy owner, or an invalid policy response.
 #
-# Pi and pi-signed consume exit 2 plus stderr.
+# Pi consumes exit 2 plus stderr.
 set -u
 
 CMD=""

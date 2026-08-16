@@ -204,7 +204,7 @@
 #             session lock records AGENTS.md's SHA-256 baseline only after the
 #             digest completion record is published, keyed to that lock's
 #             harness pid. No resume, clear, reset, compact, or other rebuild
-#             creates or replaces it. Pi and pi-signed compaction are the only
+#             creates or replaces it. Pi compaction is the only
 #             supported stale-cache rebuild pair: a missing baseline, a baseline
 #             for another harness pid, or a changed hash causes the complete
 #             current AGENTS.md to print before the bulky digest. The baseline
@@ -577,7 +577,7 @@ agents_baseline_drifted() {  # <rebuilding-session-pid>
 agents_refresh_required() {  # <rebuilding-session-pid>
   local lock_pid=$1
   case "$PRIMARY_HARNESS:$SESSION_SOURCE" in
-    pi:compact|pi-signed:compact) ;;
+    pi:compact) ;;
     *) return 1 ;;
   esac
   agents_baseline_drifted "$lock_pid"
@@ -727,14 +727,13 @@ AFK_PRESENT=0
 RELAY_PRESENT=0
 [ -f "$CONFIG/relay.env" ] && RELAY_PRESENT=1
 
-if [ "$PRIMARY_HARNESS" = pi ] || [ "$PRIMARY_HARNESS" = pi-signed ]; then
+if [ "$PRIMARY_HARNESS" = pi ]; then
   PI_EXT="$FM_ROOT/.pi/extensions/fm-primary-pi-watch.ts"
   PI_TURNEND_EXT="$FM_ROOT/.pi/extensions/fm-primary-turnend-guard.ts"
   PI_WATCH_MARKER="$STATE/.pi-watch-extension-loaded"
   PI_TURNEND_MARKER="$STATE/.pi-turnend-extension-loaded"
   PI_LOCK="$STATE/.lock"
-  PI_RESTART_COMMAND=$PRIMARY_HARNESS
-  [ "$PRIMARY_HARNESS" != pi ] || PI_RESTART_COMMAND='plain pi'
+  PI_RESTART_COMMAND=pi
   PI_WATCH_VERSION=$(fm_pi_extension_version "$PI_EXT" || printf '')
   PI_TURNEND_VERSION=$(fm_pi_extension_version "$PI_TURNEND_EXT" || printf '')
   if ! fm_pi_extension_loaded "$PI_WATCH_MARKER" "$PI_WATCH_VERSION" "$PI_LOCK" \

@@ -8,14 +8,14 @@
     {
       "when": "The task is a big or ambiguous multi-file feature, a risky refactor, or work that requires holding many moving parts in mind.",
       "use": [
-        { "harness": "pi-signed", "model": "openai-codex/gpt-5.6-sol", "effort": "high" },
+        { "harness": "pi", "model": "openai-codex/gpt-5.6-sol", "effort": "high" },
         { "harness": "pi", "model": "openai-codex/gpt-5.6-luna", "effort": "high" }
       ],
       "why": "Use a strong coding profile for big, ambiguous work; resolve the alternatives through quota-array-dispatch."
     }
   ],
   "default": [
-    { "harness": "pi-signed", "model": "openai-codex/gpt-5.6-luna", "effort": "medium" },
+    { "harness": "pi", "model": "openai-codex/gpt-5.6-luna", "effort": "medium" },
     { "harness": "pi", "model": "xai/grok-4.5", "effort": "medium" }
   ]
 }

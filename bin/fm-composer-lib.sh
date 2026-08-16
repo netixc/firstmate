@@ -239,7 +239,7 @@ fm_busy_lines_match() {  # [harness]
     regex=$FM_BUSY_REGEX
   else
     case "$harness" in
-      pi|pi-signed) regex=$FM_DELIVERY_PI_BUSY_REGEX_DEFAULT ;;
+      pi) regex=$FM_DELIVERY_PI_BUSY_REGEX_DEFAULT ;;
       '') regex=$FM_DELIVERY_BUSY_REGEX_DEFAULT ;;
       *)
         # A supplied harness must never borrow another harness's signature.

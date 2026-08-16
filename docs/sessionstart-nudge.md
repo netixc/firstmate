@@ -7,7 +7,7 @@ Firstmate ships two session-open tiers, and the tier is a property of the harnes
 
 | Tier | What the adapter does | Used by |
 | --- | --- | --- |
-| Run | Executes `bin/fm-session-start.sh` through the native adapter and lets its ordered digest land in model context before the first turn. | Pi / pi-signed |
+| Run | Executes `bin/fm-session-start.sh` through the native adapter and lets its ordered digest land in model context before the first turn. | Pi |
 | Nudge | Asks the agent to run the digest through the native adapter or the tracked session-start instruction. | Run-tier sources routed to the nudge |
 
 The run tier exists because the nudge can only ask.
@@ -66,7 +66,7 @@ A lock another session holds and a truncated digest therefore surface as digest 
 
 | Harness | Tier | Tracked transport | Current compatibility |
 | --- | --- | --- | --- |
-| Pi / pi-signed | Run | `.pi/extensions/fm-primary-turnend-guard.ts` maps `session_start` reasons `startup`, `new`, `resume`, and `fork` onto wrapper sources, refines a Pi-reported `startup` to `resume` only when a continuation, resume-selection, or explicit-session flag accompanies a session header older than the current process, maps a fork flag to `fork`, handles `session_compact` as the compaction equivalent, and injects the output with `pi.sendMessage`; setup-created entries such as `--name` are not restoration evidence. | The custom message reaches model context without racing an initial positional prompt; Pi's `reload` reason is deliberately unmapped, as it always was. |
+| Pi | Run | `.pi/extensions/fm-primary-turnend-guard.ts` maps `session_start` reasons `startup`, `new`, `resume`, and `fork` onto wrapper sources, refines a Pi-reported `startup` to `resume` only when a continuation, resume-selection, or explicit-session flag accompanies a session header older than the current process, maps a fork flag to `fork`, handles `session_compact` as the compaction equivalent, and injects the output with `pi.sendMessage`; setup-created entries such as `--name` are not restoration evidence. | The custom message reaches model context without racing an initial positional prompt; Pi's `reload` reason is deliberately unmapped, as it always was. |
 Pi is the only adapter that injects a message rather than hook stdout, so whatever it injects must carry operational provenance or the Ahoy skill would have to guess whether it was captain-authored.
 The extension therefore encodes an unencoded digest as `session-start` operational input before sending it, and leaves the already-encoded nudge alone.
 It streams the hook to completion and retains at most 512 KiB for message delivery; this approved containment keeps the prefix and appends a loud `PI SESSION-START DELIVERY TRUNCATED` marker with direct-inspection guidance whenever the digest is incomplete.

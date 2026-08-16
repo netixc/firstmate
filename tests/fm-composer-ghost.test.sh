@@ -381,24 +381,22 @@ test_wide_composer_text_is_pending() {
   pass "fm_tmux_composer_state: emoji and CJK text remain pending under the C locale"
 }
 
-test_all_tmux_harness_composers_share_classification() {
-  local dir fb capture out harness
-  dir="$TMP_ROOT/all-harness-composers"; mkdir -p "$dir"
+test_pi_tmux_composer_classification() {
+  local dir fb capture out
+  dir="$TMP_ROOT/pi-composer"; mkdir -p "$dir"
   fb=$(make_fake_tmux "$dir")
   capture="$dir/styled.txt"
-  for harness in pi pi-signed; do
-    printf '╭────────────╮\n│            │\n╰────────────╯\n' > "$capture"
-    out=$(PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=1 \
-      fm_tmux_composer_state "fakepane")
-    [ "$out" = empty ] \
-      || fail "$harness aligned idle composer should be empty, got '$out'"
-    printf '╭────────────╮\n│ > fix      │\n╰────────────╯\n' > "$capture"
-    out=$(PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=1 \
-      fm_tmux_composer_state "fakepane")
-    [ "$out" = pending ] \
-      || fail "$harness composer with text should be pending, got '$out'"
-  done
-  pass "fm_tmux_composer_state: Pi-family harnesses share empty and pending classification"
+  printf '╭────────────╮\n│            │\n╰────────────╯\n' > "$capture"
+  out=$(PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=1 \
+    fm_tmux_composer_state "fakepane")
+  [ "$out" = empty ] \
+    || fail "Pi aligned idle composer should be empty, got '$out'"
+  printf '╭────────────╮\n│ > fix      │\n╰────────────╯\n' > "$capture"
+  out=$(PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=1 \
+    fm_tmux_composer_state "fakepane")
+  [ "$out" = pending ] \
+    || fail "Pi composer with text should be pending, got '$out'"
+  pass "fm_tmux_composer_state: Pi retains empty and pending classification"
 }
 
 test_unrecognized_state_defers_input_guard() {
@@ -488,7 +486,7 @@ test_misaligned_box_is_unknown
 test_unproved_empty_geometry_fails_closed
 test_differing_widths_use_asymmetric_verdicts
 test_wide_composer_text_is_pending
-test_all_tmux_harness_composers_share_classification
+test_pi_tmux_composer_classification
 test_unrecognized_state_defers_input_guard
 test_absent_tmux_identity_keeps_enclosed_bare_verdict
 test_legitimate_empty_routes_remain_empty

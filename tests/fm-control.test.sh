@@ -35,14 +35,13 @@ mkdir -p "$TMP_ROOT"
 TMP_ROOT=$(cd "$TMP_ROOT" && pwd)
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
-VERIFIED_HARNESSES="pi pi-signed"
+VERIFIED_HARNESSES="pi"
 
 # The expectation table, written out independently of the implementation so a
 # silent change to either side shows up here.
 verified_adapter_contract() {  # <harness> -> exit command, interrupt key, repeat
   case "$1" in
     pi) printf '/quit\tEscape\t1\n' ;;
-    pi-signed) printf '/quit\tEscape\t1\n' ;;
     *) return 1 ;;
   esac
 }
@@ -227,25 +226,17 @@ test_interrupt_sends_each_harness_verified_key() {
   pass "fm-control interrupt: every verified harness gets its own verified key and repeat count"
 }
 
-# A recorded harness can carry a raw launch command's basename, so the tables
-# are reached through one prefix rule rather than an exact string match.
+# A recorded harness resolves only by exact verified identity.
 test_harness_family_resolution() {
-  local pair recorded want got
-  for pair in pi:pi pi-signed:pi-signed; do
-    recorded=${pair%%:*}
-    want=${pair#*:}
-    got=$(fm_control_harness_family "$recorded") \
-      || fail "'$recorded' should resolve to the $want adapter"
-    [ "$got" = "$want" ] || fail "'$recorded' should resolve to $want, got '$got'"
-  done
+  local got
+  got=$(fm_control_harness_family pi) \
+    || fail "pi should resolve to the verified Pi adapter"
+  [ "$got" = pi ] || fail "pi should resolve to pi, got '$got'"
   fm_control_harness_family someagent \
-    && fail "an unrecognized launch command must not be guessed into an adapter family"
+    && fail "an unrecognized harness must not be guessed into an adapter family"
   fm_control_harness_family '' \
     && fail "an empty harness must not resolve to an adapter family"
-  # The signed adapter is a distinct launch profile, not a pi variant.
-  [ "$(fm_control_harness_family pi-signed)" != "$(fm_control_harness_family pi)" ] \
-    || fail "pi-signed must not collapse into pi"
-  pass "fm-control-lib: a recorded harness resolves to its verified adapter without guessing"
+  pass "fm-control-lib: a recorded harness resolves to Pi without guessing"
 }
 
 test_unverified_harness_is_refused() {
@@ -446,7 +437,7 @@ test_relaunch_only_flags_are_rejected_on_other_verbs() {
   dir=$(new_case flags)
   add_task "$dir" t1 pi
   alive_as "$dir" pi
-  out=$(run_control "$dir" t1 exit --harness pi-signed); rc=$?
+  out=$(run_control "$dir" t1 exit --harness pi); rc=$?
   expect_code 1 "$rc" "--harness should not apply to exit"
   assert_contains "$out" "apply to 'relaunch' only" "the refusal should scope the flags"
   pass "fm-control: profile and note flags belong to relaunch only"

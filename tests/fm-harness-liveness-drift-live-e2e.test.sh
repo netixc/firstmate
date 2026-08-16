@@ -68,16 +68,11 @@ resolve_harness_binary() {  # <harness>
 }
 
 CHECKED=0
-SKIPPED=
+harness=pi
 
-# The verified adapters, in the order .agents/skills/harness-adapters/SKILL.md
-# records them. An adapter that gains a verified launch path belongs here too.
-for harness in pi pi-signed; do
-  if ! bin_path=$(resolve_harness_binary "$harness"); then
-    SKIPPED="$SKIPPED $harness"
-    note "skip: $harness is not installed on this machine, so its classification is unverified here"
-    continue
-  fi
+if ! bin_path=$(resolve_harness_binary "$harness"); then
+  fail "Pi is not installed on this machine, so the live classification guard proved nothing"
+fi
 
   version=$("$bin_path" --version 2>/dev/null | head -1 | tr -d '\r') || version=
   [ -n "$version" ] || version="unknown"
@@ -101,16 +96,11 @@ for harness in pi pi-signed; do
 
   note "$harness $version: title='$title' foreground=[$comms]"
 
-  pass "harness liveness: $harness $version classifies alive"
-  CHECKED=$((CHECKED + 1))
-done
+pass "harness liveness: $harness $version classifies alive"
+CHECKED=$((CHECKED + 1))
 
 [ "$CHECKED" -gt 0 ] || fail \
-  "no verified harness is installed here, so this run proved nothing; install at least one harness before trusting a pass"
-
-if [ -n "$SKIPPED" ]; then
-  note "unverified on this machine (not installed):$SKIPPED"
-fi
+  "Pi was not checked, so this run proved nothing"
 note "checked $CHECKED installed harness(es)"
 
 cleanup_all

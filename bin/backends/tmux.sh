@@ -160,7 +160,7 @@ fm_backend_tmux_classify_process_name() {  # <path> [argv0] -> agent|shell|other
   base=${path##*/}
   base=${base#-}
   case "$base" in
-    pi|pi-signed|pi-launcher|Pi) printf 'agent' ;;
+    pi|pi-launcher|Pi) printf 'agent' ;;
     zsh|bash|sh|dash|ash|ksh|mksh|tcsh|csh|fish) printf 'shell' ;;
     *)
       if fm_harness_path_name "$path" >/dev/null || fm_harness_path_name "$argv0" >/dev/null; then
@@ -189,8 +189,7 @@ fm_backend_tmux_classify_process_name() {  # <path> [argv0] -> agent|shell|other
 # is what keeps the probe honest in the other direction: a harness-named process
 # left running in the background of an otherwise idle pane is deliberately NOT
 # reported, so a genuinely agent-free pane still classifies `dead`. It also
-# reports every member of a multi-process launcher (the Pi Launcher path runs a
-# `pi-signed` wrapper and a `pi` engine in one group), so no launcher needs its
+# reports every member of a multi-process launcher, so no launcher needs its
 # own special case here.
 #
 # Like fm_backend_tmux_current_command this is a RAW pane read: tmux answers an

@@ -28,82 +28,36 @@ zsh
 ```
 
 A persistent parent shell waiting for a child remained reported as the parent process, while a shell that directly execed a simple command changed identity with the process itself.
-Pi and pi-signed 0.82.0 were reverified on 2026-07-27 through real isolated `fm-spawn.sh` launches.
 
 ### Agent liveness name sources
 
-The earlier record that every harness is observed under its own `#{pane_current_command}` no longer holds and has been replaced by the per-harness evidence below.
-In this macOS run that reading reflected a rewritable process title rather than stable executable identity, so it is now one of two independent name sources rather than the sole basis of a verdict.
+The earlier assumption that `#{pane_current_command}` always preserves executable identity no longer holds.
+That reading can reflect a rewritable process title, so it is one of two independent name sources rather than the sole basis of a verdict.
 
-The two verified worker adapters were relaunched on 2026-08-03 with tmux 3.6a on macOS 26.5.2 arm64, each on a private socket in an isolated lab.
-
-```sh
-tmux -L "$socket" new-window -d -t "$session:" -n "$harness" -c "$wt" -- "$bin"
-tmux -L "$socket" display-message -p -t "$session:$harness" '#{pane_current_command}'
-ps -t "${tty#/dev/}" -o pgid=,tpgid=,comm=      # rows where pgid = tpgid
-```
-
-Observed identities, and the resulting verdict:
-
-| Harness | Version | `#{pane_current_command}` | Foreground `comm` | Verdict |
-| --- | --- | --- | --- | --- |
-| pi | 0.82.0 | `pi-launcher` | `pi-signed`, `pi` | alive |
-| pi-signed | 0.82.0 | `pi-launcher` | `pi-signed`, `pi` | alive |
-
-`#{pane_current_command}` and foreground `ps -o comm=` read different name fields, but which one preserves executable identity is platform-dependent.
-On macOS the pane command reflected the rewritable title while the full install path could survive in `ps -o comm=`; in the Linux portable regression those roles reversed for the version-named native executable, with the identifying path retained in argv[0].
-The classifier therefore accepts a harness basename first, then an exact harness path component in the full executable path, then the same component in argv[0], without depending on which field carries it on a given platform.
-
-The portable regression is CI-enforced, while the real-harness drift guard is opt-in under the policy in `.agents/skills/firstmate-coding-guidelines/SKILL.md`.
-Run the live guard after any harness upgrade and before trusting or refreshing the table above:
+Vanilla Pi 0.84.1 was verified on 2026-08-16 with tmux 3.6a on macOS arm64 through the live drift guard.
 
 ```sh
 FM_HARNESS_LIVENESS_DRIFT=1 bin/fm-test-run.sh tests/fm-harness-liveness-drift-live-e2e.test.sh
 ```
 
-Installed-wrapper checks:
-
-```sh
-basename "$(command -v pi-signed)"
-pi-signed --version
-pi --version
-```
-
 Observed bounded output:
 
 ```text
-pi-signed
-0.82.0
-0.82.0
+# pi 0.84.1: title='node' foreground=[pi ]
+ok - harness liveness: pi 0.84.1 classifies alive
+# checked 1 installed harness(es)
 ```
 
-The isolated process and endpoint checks used:
+`#{pane_current_command}` and foreground `ps -o comm=` read different name fields, but which one preserves executable identity is platform-dependent.
+The portable Linux regression observes the reverse role assignment for a version-named native executable, with the identifying path retained in argv[0].
+The classifier therefore accepts the exact Pi basename first, then an exact Pi path component in the full executable path, then the same component in argv[0], without depending on which field carries it on a given platform.
+Exact `pi`, `Pi`, and `pi-launcher` process evidence remains accepted for vanilla Pi, while similar or prefixed helpers are rejected.
 
-```sh
-tmux display-message -p -t "$target" '#{pane_current_command}'
-ps -o comm= -p "$wrapper_pid"
-ps -o comm= -p "$engine_pid"
-FM_HOME="$fixture_home" bin/fm-crew-state.sh "$task_id"
-```
-
-Observed bounded shapes:
-
-```text
-pi-launcher
-.../pi-signed
-.../Pi Launcher.app/Contents/Resources/pi/pi
-state: done ...
-```
-
-Both launches executed a submitted tool instruction and touched the generated `turn_end` marker.
-The pi-signed launch retained `harness=pi-signed`, while the plain comparison retained `harness=pi`.
-The exact wrapper ancestry was `pi-signed` parent to Pi engine child, and the plain Pi Launcher path also traversed the signed wrapper on this installation.
-That shared plain-Pi path is retained as disconfirming evidence against using ancestry as runtime-selection authority.
-Firstmate therefore sets the exact `FM_PI_HARNESS` selection marker on both worker launch paths, while an unmarked Pi-family process remains `pi`.
-Both recorded runtime identities now classify the exact `pi-launcher` foreground command as `alive`.
+The portable regression is CI-enforced, while the real-harness drift guard is opt-in under the policy in `.agents/skills/firstmate-coding-guidelines/SKILL.md`.
+Run the live guard after any Pi upgrade and update the version and bounded output above.
 
 Backend applicability was reviewed across every spawn adapter.
-Tmux needs the exact `pi-launcher`, `pi-signed`, `pi`, and `Pi` process identities for recovery-grade liveness.
+Tmux uses exact Pi process evidence for recovery-grade liveness.
 Herdr uses native registered-agent state and needs no process-name branch.
 
 The current classifier matrix and its refresh guard are recorded in [Composer classification matrix](#composer-classification-matrix), with portable shape coverage in `tests/fm-composer-lib.test.sh` and `tests/fm-composer-ghost.test.sh`.
@@ -131,7 +85,7 @@ ok - fm-teardown: dedicated-socket invalid cleanup preserves target/control and 
 The dedicated tmux cell removed ambient tmux variables, required a socket-bound wrapper, kept one target and one independent control window, and proved the wrapper was not called for invalid metadata or a direct empty target.
 Valid cleanup removed only the exact task-bound target and left the control window live.
 The metadata-only validation covers tmux and Herdr before backend dispatch.
-Pi and pi-signed share that backend cleanup boundary; their harness-specific hook files are cleaned only after it, so no harness needs a separate endpoint parser.
+Pi shares that backend cleanup boundary; its harness-specific hook files are cleaned only after it, so the harness needs no separate endpoint parser.
 
 ## Composer classification matrix
 

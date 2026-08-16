@@ -154,12 +154,10 @@ test_stale_gen_record_unknown() {
 # --- missing and malformed semantic data --------------------------------------
 
 test_missing_record_unknown_not_idle() {
-  local state out h
+  local state out
   state=$(new_state_dir missing)
-  for h in pi pi-signed; do
-    out=$(fm_busy_classify tmux w1 "$h" t1 "$state")
-    [ "$out" = "unknown missing" ] || fail "$h with no record must be 'unknown missing', got '$out'"
-  done
+  out=$(fm_busy_classify tmux w1 pi t1 "$state")
+  [ "$out" = "unknown missing" ] || fail "Pi with no record must be 'unknown missing', got '$out'"
   pass "a converted adapter with no record classifies unknown, never idle"
 }
 
@@ -196,12 +194,10 @@ test_record_without_sidecar_unknown() {
 # --- adapter isolation ---------------------------------------------------------
 
 test_converted_adapters_without_records_are_unknown() {
-  local state out h
+  local state out
   state=$(new_state_dir no-record)
-  for h in pi pi-signed; do
-    out=$(fm_busy_classify tmux w1 "$h" t1 "$state")
-    [ "$out" = "unknown missing" ] || fail "$h must never classify from footer text, got '$out'"
-  done
+  out=$(fm_busy_classify tmux w1 pi t1 "$state")
+  [ "$out" = "unknown missing" ] || fail "Pi must never classify from footer text, got '$out'"
   pass "converted adapters without semantic records remain unknown"
 }
 

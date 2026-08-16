@@ -49,8 +49,8 @@ Its banner names the true failing condition, either a missing live watcher proce
 
 - Pi listens for `agent_settled` in `.pi/extensions/fm-primary-turnend-guard.ts`, runs once per logical agent run, and calls `pi.sendUserMessage(..., { deliverAs: "followUp" })` once when the guard returns 2.
 
-Pi and pi-signed expose passive callbacks for this purpose.
-Their adapters fail open at the hook boundary to protect the user session but schedule one bounded follow-up when the predicate blocks.
+Pi exposes passive callbacks for this purpose.
+Its adapter steps aside at the hook boundary to protect the user session but schedules one bounded follow-up when the predicate blocks.
 The generated prompts use the canonical `turn-end-guard` kind after the U+2063 `FIRSTMATE_OP: ` prefix, so Ahoy does not treat them as captain messages.
 Each passive adapter owns a loop latch.
 Pi keeps the latch across internal tool turns and clears it only when the generated follow-up settles or delivery fails.
@@ -68,8 +68,8 @@ That warning uses `bin/fm-supervision-instructions.sh --repair-line`, so it alwa
 ## Regression coverage
 
 `tests/fm-turnend-guard.test.sh` covers the predicate, main and secondmate primary scope, child-worktree exclusion, `FM_HOME` and `FM_STATE_OVERRIDE` precedence, the live-lock and fresh-beacon guard predicate, Pi logical-run latching, primary registration, and exactly-one-path safety.
-`tests/fm-guard-stale-banner.test.sh` covers the pull-guard predicate, including the persistent-model fresh-leftover-beacon negative control and the extension model's live-watcher path, ownership-qualified fresh hand-off, held-lock failures, independently broken ownership signals, stale-beacon alarm, queued-wake warning, and Pi and pi-signed harness routing.
+`tests/fm-guard-stale-banner.test.sh` covers the pull-guard predicate, including the persistent-model fresh-leftover-beacon negative control and the extension model's live-watcher path, ownership-qualified fresh hand-off, held-lock failures, independently broken ownership signals, stale-beacon alarm, queued-wake warning, and Pi harness routing.
 It also covers true-reason banner wording and reason-keyed episode dedup surviving a beacon mtime change.
-`tests/fm-supervision-instructions.test.sh` covers recovery-line ownership and pi-signed's identity-preserving reuse of Pi's protocol.
+`tests/fm-supervision-instructions.test.sh` covers Pi recovery-line ownership and unknown-harness fallback.
 `FM_PI_LIVE_E2E=1 tests/fm-pi-primary-live-e2e.test.sh` is the opt-in isolated Pi path.
 [`verification/supervision.md`](verification/supervision.md#turn-end-guard) records the active cross-harness empirical evidence.
