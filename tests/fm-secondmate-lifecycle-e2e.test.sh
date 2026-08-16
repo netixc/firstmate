@@ -41,7 +41,8 @@ BETA_ORIGIN=
 
 # --- shared world + seed ----------------------------------------------------
 setup_world() {
-  mkdir -p "$HOME_DIR/projects" "$HOME_DIR/data" "$HOME_DIR/state"
+  mkdir -p "$HOME_DIR/projects" "$HOME_DIR/data" "$HOME_DIR/state" "$HOME_DIR/config"
+  printf 'pi\n' > "$HOME_DIR/config/secondmate-harness"
   fm_git_init_commit "$HOME_DIR/projects/alpha"
   fm_git_init_commit "$HOME_DIR/projects/beta"
   fm_git_init_commit "$HOME_DIR/projects/gamma"
