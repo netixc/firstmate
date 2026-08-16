@@ -20,7 +20,7 @@ It tokenizes the bytes and classifies lexical execution positions only.
 
 ## Transport and fail-open behavior
 
-`bin/fm-arm-pretool-check.sh` accepts `--command <exact string>` from Pi and pi-signed.
+`bin/fm-arm-pretool-check.sh` accepts `--command <exact string>` from Pi.
 
 The wrapper discovers the code root from its own location.
 The active firstmate home is `${FM_HOME:-<code-root>}`.
@@ -140,13 +140,13 @@ Prose may improve without changing adapter behavior.
 
 - Allow returns exit 0 with both streams empty.
 - Deny returns exit 2 and writes `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[code] reason"}` to stderr.
-- Pi and pi-signed return `{block: true}` only when the checker exits 2.
+- Pi returns `{block: true}` only when the checker exits 2.
 
 ## Harness wiring
 
 | Harness | Exact command field | Adapter behavior on checker exit 2 |
 | --- | --- | --- |
-| Pi / pi-signed | `event.input.command` | `.pi/extensions/fm-primary-turnend-guard.ts` passes one `--command` argument and returns `{block: true}` only for exit 2. |
+| Pi | `event.input.command` | `.pi/extensions/fm-primary-turnend-guard.ts` passes one `--command` argument and returns `{block: true}` only for exit 2. |
 
 ## Live validation record, 2026-07-09
 

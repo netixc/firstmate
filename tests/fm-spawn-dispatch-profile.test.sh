@@ -68,7 +68,7 @@ SH
   chmod +x "$fakebin/tmux"
   fm_fake_exit0 "$fakebin" treehouse
   make_spawn_pi_probe "$fakebin" pi
-  make_spawn_pi_probe "$fakebin" pi-signed
+  make_spawn_pi_probe "$fakebin" pi
   printf '%s\n' "$fakebin"
 }
 
@@ -337,7 +337,7 @@ test_active_dispatch_profile_allows_explicit_harness() {
   assert_grep "export GOTMPDIR=$task_tmp/gotmp" "$LAUNCH_LOG.text" "spawn did not export its Go temp directory into the pane"
   rm -rf "$task_tmp"
   launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "FM_PI_HARNESS=pi '$FAKEBIN_DIR/pi' --tui-mode regular --model 'gpt-5' --thinking 'high' -e" \
+  assert_contains "$launch" "'$FAKEBIN_DIR/pi' --tui-mode regular --model 'gpt-5' --thinking 'high' -e" \
     "explicit harness launch did not thread model and effort"
   pass "active crew-dispatch profile allows an explicit resolved harness"
 }
@@ -358,8 +358,8 @@ test_active_dispatch_profile_allows_positional_harness() {
   pass "active crew-dispatch profile allows the legacy positional harness form"
 }
 
-test_active_dispatch_profile_allows_raw_launch_command() {
-  local rec id out status launch
+test_production_spawn_rejects_raw_launch_command() {
+  local rec id out status
   id=profile-raw-z15
   rec=$(make_spawn_case profile-raw pi "$id")
   read_case_record "$rec"
@@ -368,12 +368,12 @@ test_active_dispatch_profile_allows_raw_launch_command() {
   out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
     "$id" "$PROJ_DIR" "custom-agent --flag")
   status=$?
-  expect_code 0 "$status" "raw launch command should satisfy active dispatch-profile requirement"
-  assert_contains "$out" "spawned $id harness=custom-agent" "spawn did not report raw command harness"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" custom-agent default default
-  launch=$(cat "$LAUNCH_LOG")
-  [ "$launch" = "custom-agent --flag" ] || fail "raw launch command changed"$'\n'"actual: $launch"
-  pass "active crew-dispatch profile allows the raw launch-command escape hatch"
+  expect_code 1 "$status" "production spawn must reject a raw launch command"
+  assert_contains "$out" "production spawn accepts only the verified Pi harness" \
+    "raw launch refusal did not name the Pi-only contract"
+  assert_absent "$HOME_DIR/state/$id.meta" "raw launch refusal published task metadata"
+  [ ! -s "$LAUNCH_LOG" ] || fail "raw launch refusal typed a launch command"
+  pass "production spawn rejects raw non-Pi launch commands"
 }
 
 test_pi_threads_model_and_max_effort() {
@@ -388,7 +388,7 @@ test_pi_threads_model_and_max_effort() {
   expect_code 0 "$status" "pi spawn with max effort should succeed"
   assert_meta_profile "$HOME_DIR/state/$id.meta" pi openai-codex/gpt-5.6-luna max
   launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "FM_PI_HARNESS=pi '$FAKEBIN_DIR/pi' --tui-mode regular --model 'openai-codex/gpt-5.6-luna' --thinking 'max' -e" \
+  assert_contains "$launch" "'$FAKEBIN_DIR/pi' --tui-mode regular --model 'openai-codex/gpt-5.6-luna' --thinking 'max' -e" \
     "pi launch did not force the regular TUI while threading the requested model and max thinking level"
   assert_not_contains "$launch" "FM_FIRSTMATE_PI_LAUNCH_BRIEF=" \
     "pi launch still exports the removed Calm input-reroute binding"
@@ -397,27 +397,27 @@ test_pi_threads_model_and_max_effort() {
   pass "pi receives --model and --thinking max profile flags"
 }
 
-test_pi_signed_threads_shared_pi_profile_and_preserves_identity() {
+test_pi_threads_sol_profile_and_preserves_semantic_wiring() {
   local rec id out status launch
-  id=profile-pi-signed-z8b
-  rec=$(make_spawn_case profile-pi-signed pi-signed "$id")
+  id=profile-pi-z8b
+  rec=$(make_spawn_case profile-pi-sol pi "$id")
   read_case_record "$rec"
 
   out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
     --model openai-codex/gpt-5.6-sol --effort max)
   status=$?
-  expect_code 0 "$status" "pi-signed spawn with max effort should succeed"
-  assert_contains "$out" "spawned $id harness=pi-signed" "pi-signed spawn did not preserve its visible identity"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" pi-signed openai-codex/gpt-5.6-sol max
+  expect_code 0 "$status" "pi spawn with max effort should succeed"
+  assert_contains "$out" "spawned $id harness=pi" "pi spawn did not preserve its visible identity"
+  assert_meta_profile "$HOME_DIR/state/$id.meta" pi openai-codex/gpt-5.6-sol max
   launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "FM_PI_HARNESS=pi-signed '$FAKEBIN_DIR/pi-signed' --tui-mode regular --model 'openai-codex/gpt-5.6-sol' --thinking 'max' -e" \
-    "pi-signed launch did not force the regular TUI with Pi's model, thinking, and extension semantics"
+  assert_contains "$launch" "'$FAKEBIN_DIR/pi' --tui-mode regular --model 'openai-codex/gpt-5.6-sol' --thinking 'max' -e" \
+    "pi launch did not force the regular TUI with Pi's model, thinking, and extension semantics"
   assert_contains "$launch" "fm-operational-input.sh' encode launch-brief" \
-    "pi-signed launch lost the canonical typed launch-brief envelope"
-  assert_present "$HOME_DIR/state/$id.pi-ext.ts" "pi-signed launch did not install Pi's turn-end extension"
-  assert_present "$HOME_DIR/state/$id.busy-gen" "pi-signed spawn did not arm the busy-state contract"
+    "pi launch lost the canonical typed launch-brief envelope"
+  assert_present "$HOME_DIR/state/$id.pi-ext.ts" "pi launch did not install Pi's turn-end extension"
+  assert_present "$HOME_DIR/state/$id.busy-gen" "pi spawn did not arm the busy-state contract"
   assert_contains "$(cat "$HOME_DIR/state/$id.busy-state")" "state=busy source=fm-spawn" \
-    "pi-signed spawn did not seed the busy-state record from the launch brief"
+    "pi spawn did not seed the busy-state record from the launch brief"
   local ext gen
   ext=$(cat "$HOME_DIR/state/$id.pi-ext.ts")
   gen=$(cat "$HOME_DIR/state/$id.busy-gen")
@@ -427,13 +427,12 @@ test_pi_signed_threads_shared_pi_profile_and_preserves_identity() {
   assert_contains "$ext" "\"--gen\", \"$gen\"" "pi extension does not carry the armed incarnation gen"
   assert_contains "$ext" '"--source", "pi-ext"' "pi extension does not attribute its semantic source"
   assert_contains "$ext" 'pi.on("turn_end"' "pi extension lost the turn-end notification touch"
-  pass "pi-signed shares Pi launch semantics while preserving its configured and recorded identity"
+  pass "pi shares Pi launch semantics while preserving its configured and recorded identity"
 }
 
 test_pi_tui_mode_probe_is_safe_for_old_and_new_pi() {
-  local harness version rec id out status launch
-  for harness in pi pi-signed; do
-    for version in 0.82.0 0.84.0; do
+  local harness=pi version rec id out status launch
+  for version in 0.82.0 0.84.0; do
       id="profile-${harness}-tui-${version//./}-z8d"
       rec=$(make_spawn_case "profile-__MODELFLAG__-${harness}-tui-${version//./}" "$harness" "$id")
       read_case_record "$rec"
@@ -446,8 +445,6 @@ test_pi_tui_mode_probe_is_safe_for_old_and_new_pi() {
       launch=$(cat "$LAUNCH_LOG")
       assert_contains "$launch" "'$FAKEBIN_DIR/$harness'" \
         "$harness $version launch must use the executable selected for probing"
-      assert_not_contains "$launch" "FM_PI_HARNESS=$harness $harness" \
-        "$harness $version launch must not re-resolve a bare executable in the worker"
       if [ "$version" = 0.82.0 ]; then
         assert_not_contains "$launch" "--tui-mode" \
           "$harness $version launch must omit unsupported --tui-mode"
@@ -455,17 +452,16 @@ test_pi_tui_mode_probe_is_safe_for_old_and_new_pi() {
         assert_contains "$launch" "'$FAKEBIN_DIR/$harness' --tui-mode regular" \
           "$harness $version launch must preserve the regular TUI"
       fi
-    done
   done
   pass "Pi launch probing omits --tui-mode on older Pi and preserves it on supporting Pi"
 }
 
-test_pi_signed_missing_binary_refuses_before_endpoint_or_metadata() {
+test_pi_missing_binary_refuses_before_endpoint_or_metadata() {
   local rec id out status
-  id=profile-pi-signed-missing-z8c
-  rec=$(make_spawn_case profile-pi-signed-missing pi-signed "$id")
+  id=profile-pi-missing-z8c
+  rec=$(make_spawn_case profile-pi-missing pi "$id")
   read_case_record "$rec"
-  rm -f "$FAKEBIN_DIR/pi-signed"
+  rm -f "$FAKEBIN_DIR/pi"
   : > "$LAUNCH_LOG"
 
   out=$(FM_ROOT_OVERRIDE='' FM_HOME="$HOME_DIR" \
@@ -475,34 +471,34 @@ test_pi_signed_missing_binary_refuses_before_endpoint_or_metadata() {
     FM_FAKE_LAUNCH_LOG="$LAUNCH_LOG" PATH="$FAKEBIN_DIR:/usr/bin:/bin:/usr/sbin:/sbin" \
     "$SPAWN" "$id" "$PROJ_DIR" --mode no-mistakes --yolo off 2>&1)
   status=$?
-  expect_code 1 "$status" "a missing pi-signed executable should refuse the spawn"
-  assert_contains "$out" "pi-signed executable not found on PATH" \
-    "missing pi-signed refusal did not name the actionable requirement"
-  assert_absent "$HOME_DIR/state/$id.meta" "missing pi-signed refusal wrote task metadata"
-  [ ! -s "$LAUNCH_LOG" ] || fail "missing pi-signed refusal typed a launch command"
-  pass "pi-signed refuses safely and actionably when the selected executable is unavailable"
+  expect_code 1 "$status" "a missing pi executable should refuse the spawn"
+  assert_contains "$out" "pi executable not found on PATH" \
+    "missing pi refusal did not name the actionable requirement"
+  assert_absent "$HOME_DIR/state/$id.meta" "missing pi refusal wrote task metadata"
+  [ ! -s "$LAUNCH_LOG" ] || fail "missing pi refusal typed a launch command"
+  pass "pi refuses safely and actionably when the selected executable is unavailable"
 }
 
-test_pi_signed_persistent_secondmate_uses_pi_extensions_and_identity() {
+test_pi_persistent_secondmate_uses_primary_extensions() {
   local rec id sm out status launch
-  id=profile-pi-signed-secondmate-z8d
-  rec=$(make_spawn_case profile-pi-signed-secondmate pi "$id")
+  id=profile-pi-secondmate-z8d
+  rec=$(make_spawn_case profile-pi-secondmate pi "$id")
   read_case_record "$rec"
-  printf '%s\n' pi-signed > "$HOME_DIR/config/secondmate-harness"
+  printf '%s\n' pi > "$HOME_DIR/config/secondmate-harness"
   sm="$CASE_DIR/secondmate-home"
   make_seeded_secondmate_home "$sm" "$id"
   sm=$(cd "$sm" && pwd -P)
 
   out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$sm" --secondmate)
   status=$?
-  expect_code 0 "$status" "pi-signed persistent secondmate spawn should succeed"
-  assert_contains "$out" "spawned $id harness=pi-signed kind=secondmate" \
-    "pi-signed secondmate spawn did not preserve its runtime identity"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" pi-signed default default
+  expect_code 0 "$status" "pi persistent secondmate spawn should succeed"
+  assert_contains "$out" "spawned $id harness=pi kind=secondmate" \
+    "pi secondmate spawn did not preserve its runtime identity"
+  assert_meta_profile "$HOME_DIR/state/$id.meta" pi default default
   launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "FM_PI_HARNESS=pi-signed '$FAKEBIN_DIR/pi-signed' --tui-mode regular -e '$sm/.pi/extensions/fm-primary-turnend-guard.ts' -e '$sm/.pi/extensions/fm-primary-pi-watch.ts'" \
-    "pi-signed secondmate did not force the regular TUI with Pi's primary extension launch shape"
-  pass "pi-signed is a distinct persistent secondmate runtime with shared Pi supervision semantics"
+  assert_contains "$launch" "'$FAKEBIN_DIR/pi' --tui-mode regular -e '$sm/.pi/extensions/fm-primary-turnend-guard.ts' -e '$sm/.pi/extensions/fm-primary-pi-watch.ts'" \
+    "pi secondmate did not force the regular TUI with Pi's primary extension launch shape"
+  pass "pi persistent secondmates use Pi supervision semantics"
 }
 
 test_batch_forwards_shared_profile_flags() {
@@ -573,12 +569,12 @@ test_active_dispatch_profile_requires_explicit_harness_for_ship
 test_active_dispatch_profile_requires_explicit_harness_for_scout
 test_active_dispatch_profile_allows_explicit_harness
 test_active_dispatch_profile_allows_positional_harness
-test_active_dispatch_profile_allows_raw_launch_command
+test_production_spawn_rejects_raw_launch_command
 test_pi_threads_model_and_max_effort
 test_pi_tui_mode_probe_is_safe_for_old_and_new_pi
-test_pi_signed_threads_shared_pi_profile_and_preserves_identity
-test_pi_signed_missing_binary_refuses_before_endpoint_or_metadata
-test_pi_signed_persistent_secondmate_uses_pi_extensions_and_identity
+test_pi_threads_sol_profile_and_preserves_semantic_wiring
+test_pi_missing_binary_refuses_before_endpoint_or_metadata
+test_pi_persistent_secondmate_uses_primary_extensions
 test_batch_forwards_shared_profile_flags
 test_unsupported_harness_is_rejected_generically
 test_active_dispatch_profile_does_not_block_secondmate_launch

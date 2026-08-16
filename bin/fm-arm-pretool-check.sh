@@ -12,14 +12,14 @@
 # Usage:
 #   bin/fm-arm-pretool-check.sh --command '<cmd>'
 #
-# Pi and pi-signed pass the exact command string through CLI mode.
+# Pi passes the exact command string through CLI mode.
 #
 # Exit/output contract:
 #   ALLOW - exit 0 and no output.
 #   DENY - exit 2 and a hook deny object on stderr.
 #   FAIL OPEN - missing Node or policy owner, or an invalid policy response.
 #
-# Pi and pi-signed consume exit 2 plus stderr.
+# Pi consumes exit 2 plus stderr.
 set -u
 
 CMD=""

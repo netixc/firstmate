@@ -606,29 +606,24 @@ test_extension_live_watcher_is_healthy_without_ownership_evidence() {
 # a real Pi home. The foreign markers are cleared because fm-harness.sh tests them
 # ahead of Pi, and the host running this suite may carry one.
 test_pi_harness_routes_itself_to_the_extension_model() {
-  local dir home out pid harness
-  local -a pi_env
-  for harness in pi pi-signed; do
-    pi_env=(PI_CODING_AGENT=true)
-    [ "$harness" = pi ] || pi_env+=(FM_PI_HARNESS=pi-signed)
-    dir=$(make_guard_case "harness-routing-$harness")
+  local dir home out pid
+  dir=$(make_guard_case "harness-routing-pi")
     home=$(case_home "$dir")
     sleep 60 &
     pid=$!
     record_pi_extension_session "$dir" "$pid" || fail "could not record the Pi extension session"
     touch "$home/state/.last-watcher-beat"
-    out=$(env -u FM_SUPERVISION_MODEL \
-      "${pi_env[@]}" \
+  out=$(env -u FM_SUPERVISION_MODEL \
+      PI_CODING_AGENT=true \
       FM_ROOT_OVERRIDE="$(case_root "$dir")" \
       FM_HOME="$home" \
       FM_GUARD_GRACE=999 \
       "$ROOT/bin/fm-guard.sh" 2>&1)
     kill "$pid" 2>/dev/null || true
     wait "$pid" 2>/dev/null || true
-    [ -z "$out" ] \
-      || fail "a $harness primary must route itself to the extension model, got: $out"
-  done
-  pass "fm-guard stale banner: Pi and pi-signed primaries route themselves to the extension model"
+  [ -z "$out" ] \
+    || fail "a Pi primary must route itself to the extension model, got: $out"
+  pass "fm-guard stale banner: Pi primaries route themselves to the extension model"
 }
 
 test_first_stale_call_prints_full_banner

@@ -28,7 +28,7 @@
 # per-harness trust table; a record whose source is not trusted for the
 # task's recorded harness classifies unknown, so one adapter's writer can
 # never classify another adapter):
-#   pi-ext           Pi/pi-signed per-task extension (agent_start/agent_settled)
+#   pi-ext           Pi per-task extension (agent_start/agent_settled)
 # Firstmate-owned sources accepted for every converted adapter:
 #   fm-spawn         the launch-brief turn seeded at spawn
 #   fm-recovery      a documented recovery reset after relaunch
@@ -87,7 +87,7 @@ fm_busy_current_gen() {  # <state-dir> <id>
 fm_busy_sources_for_harness() {  # <harness>
   local adapter=
   case "${1:-}" in
-    pi|pi-signed) adapter=pi-ext ;;
+    pi) adapter=pi-ext ;;
     *) printf ''; return 0 ;;
   esac
   printf '%s fm-spawn fm-recovery' "$adapter"

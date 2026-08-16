@@ -106,8 +106,6 @@ test_real_text_is_pending() {
 test_delivery_busy_signatures_are_limited_to_verified_harnesses() {
   printf 'Working...\0' | fm_busy_lines_match pi \
     || fail "Pi's verified delivery footer must remain recognized"
-  printf 'Working...\0' | fm_busy_lines_match pi-signed \
-    || fail "pi-signed must retain Pi's verified delivery footer"
   printf 'Working...\0' | fm_busy_lines_match \
     || fail "the harness-neutral matcher must retain the Pi footer"
   if printf 'Working...\0' | fm_busy_lines_match legacy-agent; then

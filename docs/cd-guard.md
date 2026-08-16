@@ -74,7 +74,7 @@ It does not permit `cd /home/project`, because an absolute-path `cd` remains a p
 
 ## Transport and fail-open behavior
 
-`bin/fm-cd-pretool-check.sh` accepts the exact command string from Pi and pi-signed through `--command <exact string>`.
+`bin/fm-cd-pretool-check.sh` accepts the exact command string from Pi through `--command <exact string>`.
 
 Processing order is cheapest-first: a strict-superset prefilter, then the primary-checkout scope, then the Node policy owner.
 The prefilter removes ordinary single quotes, double quotes, backslashes, carriage returns, and newlines before fast-allowing any command that carries no `cd`, `pushd`, or `popd` substring and no quoting-decoder marker (`$'` ANSI-C or `$"` locale), so quoted or escaped command-word fragments delegate to the policy while most commands never pay for the git scoping calls or the Node process.
@@ -89,7 +89,7 @@ Identical in shape to `docs/arm-pretool-check.md`:
 
 - Allow (and inert-outside-primary) returns exit 0 with both streams empty.
 - Deny returns exit 2 and writes `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[persistent-cd] reason"}` to stderr.
-- Pi and pi-signed return `{block: true}` only when the checker exits 2.
+- Pi returns `{block: true}` only when the checker exits 2.
 
 ## Shared classifier ownership
 

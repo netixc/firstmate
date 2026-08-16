@@ -41,7 +41,8 @@ BETA_ORIGIN=
 
 # --- shared world + seed ----------------------------------------------------
 setup_world() {
-  mkdir -p "$HOME_DIR/projects" "$HOME_DIR/data" "$HOME_DIR/state"
+  mkdir -p "$HOME_DIR/projects" "$HOME_DIR/data" "$HOME_DIR/state" "$HOME_DIR/config"
+  printf 'pi\n' > "$HOME_DIR/config/secondmate-harness"
   fm_git_init_commit "$HOME_DIR/projects/alpha"
   fm_git_init_commit "$HOME_DIR/projects/beta"
   fm_git_init_commit "$HOME_DIR/projects/gamma"
@@ -199,7 +200,7 @@ phase_recovery() {
   # persistent home (no explicit home argument).
   rm -f "$HOME_DIR/state/design.meta"
   PATH="$FAKEBIN:$PATH" FM_HOME="$HOME_DIR" FM_FAKE_TMUX_LOG="$LOG" FM_FAKE_TMUX_CAPTURE="$PANE" \
-    "$ROOT/bin/fm-spawn.sh" design "echo relaunch" --secondmate >/dev/null 2>&1 \
+    "$ROOT/bin/fm-spawn.sh" design --secondmate >/dev/null 2>&1 \
     || fail "recovery respawn failed"
   local meta="$HOME_DIR/state/design.meta"
   assert_grep "home=$SUB_ABS" "$meta" "respawn did not preserve the persistent home from the registry"

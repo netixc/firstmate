@@ -30,8 +30,8 @@
 #      stopped. A verb whose postcondition cannot be proven on the recorded
 #      backend is refused rather than performed blind.
 #
-# `resume` is deliberately NOT a verb. Pi and pi-signed have no verified
-# pane-resume contract. `relaunch` covers the same need deterministically,
+# `resume` is deliberately NOT a verb. Pi has no verified pane-resume
+# contract. `relaunch` covers the same need deterministically,
 # because the brief on disk - not a harness-private session - is the durable
 # instruction.
 
@@ -56,23 +56,16 @@ fm_control_verb_allowed() {  # <verb>
 # than guessed at, exactly as a spawn on it would be.
 fm_control_harness_supported() {  # <harness>
   case "${1-}" in
-    pi|pi-signed) return 0 ;;
+    pi) return 0 ;;
   esac
   return 1
 }
 
-# The verified adapter a RECORDED harness value belongs to. Every table below
-# is keyed by the exact verified adapter name, but a task launched from a raw
-# command records the command's basename instead (bin/fm-spawn.sh derives
-# harness= that way), which is why several spawn adapters match a name prefix.
-# This is the one place that prefix rule is stated. `pi` and
-# `pi-signed` are exact because a `pi*` prefix would swallow the signed adapter,
-# and an unrecognized value returns nonzero rather than being guessed into a
-# family.
+# The verified adapter a RECORDED harness value belongs to.
+# An unrecognized value returns nonzero rather than being guessed into a family.
 fm_control_harness_family() {  # <recorded-harness>
   case "${1-}" in
     pi) printf 'pi' ;;
-    pi-signed) printf 'pi-signed' ;;
     *) return 1 ;;
   esac
 }
@@ -80,7 +73,7 @@ fm_control_harness_family() {  # <recorded-harness>
 # The key that cancels a running turn.
 fm_control_interrupt_key() {  # <harness>
   case "${1-}" in
-    pi|pi-signed) printf 'Escape' ;;
+    pi) printf 'Escape' ;;
     *) return 1 ;;
   esac
 }
@@ -88,7 +81,7 @@ fm_control_interrupt_key() {  # <harness>
 # How many times the interrupt key must be delivered.
 fm_control_interrupt_repeat() {  # <harness>
   case "${1-}" in
-    pi|pi-signed) printf '1' ;;
+    pi) printf '1' ;;
     *) return 1 ;;
   esac
 }
@@ -96,7 +89,7 @@ fm_control_interrupt_repeat() {  # <harness>
 # The command that exits the agent from its own composer.
 fm_control_exit_command() {  # <harness>
   case "${1-}" in
-    pi|pi-signed) printf '/quit' ;;
+    pi) printf '/quit' ;;
     *) return 1 ;;
   esac
 }
@@ -131,6 +124,6 @@ fm_control_harness_wiring_paths() {  # <harness> <worktree> <state-dir> <id>
   local harness=${1-} wt=${2-} state=${3-} id=${4-}
   [ -n "$wt" ] && [ -n "$state" ] && [ -n "$id" ] || return 1
   case "$harness" in
-    pi|pi-signed) printf '%s\n' "$state/$id.pi-ext.ts" ;;
+    pi) printf '%s\n' "$state/$id.pi-ext.ts" ;;
   esac
 }

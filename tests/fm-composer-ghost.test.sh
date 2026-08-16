@@ -223,6 +223,25 @@ test_pi_identity_requires_readable_busy_state() (
   pass "fm_tmux_composer_identity: unknown busy state cannot become idle identity"
 )
 
+test_pi_identity_rejects_retired_launcher() (
+  local out
+  # shellcheck disable=SC2329 # Mock invoked indirectly by the sourced adapter.
+  tmux() {
+    local arg
+    for arg in "$@"; do
+      case "$arg" in
+        *pane_tty*) printf '\n'; return 0 ;;
+        *pane_current_command*) printf 'pi-launcher\n'; return 0 ;;
+      esac
+    done
+    return 1
+  }
+  if out=$(fm_tmux_composer_identity fakepane); then
+    fail "the retired launcher process must not produce Pi composer identity, got '$out'"
+  fi
+  pass "fm_tmux_composer_identity: retired launcher identity is rejected"
+)
+
 test_bordered_busy_signatures_are_pending() {
   local dir fb capture out
   dir="$TMP_ROOT/bordered-busy-signatures"; mkdir -p "$dir"
@@ -381,24 +400,22 @@ test_wide_composer_text_is_pending() {
   pass "fm_tmux_composer_state: emoji and CJK text remain pending under the C locale"
 }
 
-test_all_tmux_harness_composers_share_classification() {
-  local dir fb capture out harness
-  dir="$TMP_ROOT/all-harness-composers"; mkdir -p "$dir"
+test_pi_tmux_composer_classification() {
+  local dir fb capture out
+  dir="$TMP_ROOT/pi-composer"; mkdir -p "$dir"
   fb=$(make_fake_tmux "$dir")
   capture="$dir/styled.txt"
-  for harness in pi pi-signed; do
-    printf '╭────────────╮\n│            │\n╰────────────╯\n' > "$capture"
-    out=$(PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=1 \
-      fm_tmux_composer_state "fakepane")
-    [ "$out" = empty ] \
-      || fail "$harness aligned idle composer should be empty, got '$out'"
-    printf '╭────────────╮\n│ > fix      │\n╰────────────╯\n' > "$capture"
-    out=$(PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=1 \
-      fm_tmux_composer_state "fakepane")
-    [ "$out" = pending ] \
-      || fail "$harness composer with text should be pending, got '$out'"
-  done
-  pass "fm_tmux_composer_state: Pi-family harnesses share empty and pending classification"
+  printf '╭────────────╮\n│            │\n╰────────────╯\n' > "$capture"
+  out=$(PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=1 \
+    fm_tmux_composer_state "fakepane")
+  [ "$out" = empty ] \
+    || fail "Pi aligned idle composer should be empty, got '$out'"
+  printf '╭────────────╮\n│ > fix      │\n╰────────────╯\n' > "$capture"
+  out=$(PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=1 \
+    fm_tmux_composer_state "fakepane")
+  [ "$out" = pending ] \
+    || fail "Pi composer with text should be pending, got '$out'"
+  pass "fm_tmux_composer_state: Pi retains empty and pending classification"
 }
 
 test_unrecognized_state_defers_input_guard() {
@@ -479,6 +496,7 @@ test_two_row_composer_reads_text_above_empty_cursor_row
 test_wrapped_composer_reads_all_content_rows
 test_proven_box_bottom_border_cursor_classifies_content
 test_pi_identity_requires_readable_busy_state
+test_pi_identity_rejects_retired_launcher
 test_bordered_busy_signatures_are_pending
 test_non_bordered_busy_footer_is_unknown_strict
 test_clipped_bordered_box_is_unknown
@@ -488,7 +506,7 @@ test_misaligned_box_is_unknown
 test_unproved_empty_geometry_fails_closed
 test_differing_widths_use_asymmetric_verdicts
 test_wide_composer_text_is_pending
-test_all_tmux_harness_composers_share_classification
+test_pi_tmux_composer_classification
 test_unrecognized_state_defers_input_guard
 test_absent_tmux_identity_keeps_enclosed_bare_verdict
 test_legitimate_empty_routes_remain_empty

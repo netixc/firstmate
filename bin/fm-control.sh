@@ -4,7 +4,7 @@
 #
 # Usage: fm-control.sh <task-id> interrupt
 #        fm-control.sh <task-id> exit
-#        fm-control.sh <task-id> relaunch [--harness <name>] [--model <name>]
+#        fm-control.sh <task-id> relaunch [--harness pi] [--model <name>]
 #                                         [--effort <level>]
 #                                         (--note <text> | --note-file <path>)
 #
@@ -31,15 +31,13 @@
 #              busy, then submits the harness's exit command. Postcondition:
 #              the backend's recovery-grade classifier reports the agent gone.
 #              Already-stopped is success (idempotent).
-#   relaunch   Transactionally replace the running agent with a new one, in the
-#              SAME endpoint and SAME worktree, on the same or a newly chosen
-#              harness/model/effort - so switching harness is one ordinary use
-#              of this verb. With no explicit axis, a secondmate re-resolves its
-#              durable config/secondmate-harness pin (harness plus its optional
-#              model and effort tokens) exactly as any other respawn does, while
-#              a ship or scout keeps the exact adapter already recorded for it.
-#              A prefixed raw-command basename cannot reconstruct its launch
-#              command, so relaunch requires an explicit --harness for it.
+#   relaunch   Transactionally replace the running Pi agent with a new one, in
+#              the SAME endpoint and SAME worktree, optionally changing model
+#              or effort. With no explicit axis, a secondmate re-resolves its
+#              durable config/secondmate-harness pin (Pi plus its optional model
+#              and effort tokens) exactly as any other respawn does, while a
+#              ship or scout keeps the exact Pi adapter already recorded for it.
+#              An unsupported recorded harness refuses before any lifecycle action.
 #              --note is required for a ship or scout, whose replacement
 #              inherits the local copy but none of the conversation; a
 #              secondmate reconciles its own home's records at startup, so its
@@ -170,7 +168,7 @@ shift 2
 if ! fm_control_verb_allowed "$VERB"; then
   {
     if [ "$VERB" = resume ]; then
-      echo "error: 'resume' is not a control verb: pi and pi-signed have no verified pane-resume contract. Use 'relaunch', which carries the brief plus a progress note into a fresh agent on either adapter."
+      echo "error: 'resume' is not a control verb: Pi has no verified pane-resume contract. Use 'relaunch', which carries the brief plus a progress note into a fresh Pi agent."
     else
       echo "error: '$VERB' is not a control verb"
     fi
@@ -557,10 +555,6 @@ resolve_relaunch_profile() {
   PRIOR_EFFORT=$(fm_meta_get "$META" effort)
   [ -n "$PRIOR_MODEL" ] || PRIOR_MODEL=default
   [ -n "$PRIOR_EFFORT" ] || PRIOR_EFFORT=default
-  if [ "$HARNESS_SET" = 0 ] \
-     && [ "$PRIOR_RECORDED_HARNESS" != "$PRIOR_HARNESS" ]; then
-    die "task $ID records harness '$PRIOR_RECORDED_HARNESS', whose original launch command cannot be reconstructed from its recorded basename; relaunching without --harness would substitute the canonical adapter '$PRIOR_HARNESS' for the command actually running. Pass an explicit --harness to choose the replacement runtime deliberately"
-  fi
   CONFIG_HARNESS=
   CONFIG_MODEL=
   CONFIG_EFFORT=

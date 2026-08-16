@@ -81,7 +81,7 @@ if [ -z "$HARNESS" ]; then
 fi
 
 case "$HARNESS" in
-  pi) SNIPPET="$DOC_DIR/pi.md" ;;  pi-signed) SNIPPET="$DOC_DIR/pi.md" ;;
+  pi) SNIPPET="$DOC_DIR/pi.md" ;;
   *) HARNESS=unknown; SNIPPET="$DOC_DIR/unknown.md" ;;
 esac
 [ -f "$SNIPPET" ] || SNIPPET="$DOC_DIR/unknown.md"
@@ -132,7 +132,7 @@ repair_line() {
   fi
 
   case "$HARNESS" in
-    pi|pi-signed)
+    pi)
       printf '%s%s%s%s%s%s\n' "$prefix" 'repair a missing or failed watcher cycle with the Pi tool fm_watch_arm_pi, or restart Pi with -e ' "$pi_turnend_ext" ' -e ' "$pi_ext" ' if the extensions are not loaded.'
       ;;
     *)
@@ -143,7 +143,7 @@ repair_line() {
 
 ordinary_wake_line() {
   case "$HARNESS" in
-    pi|pi-signed)
+    pi)
       printf '%s\n' '- Ordinary wake: the Pi extension already owns watcher continuity; do not arm another cycle.'
       ;;
     *)
