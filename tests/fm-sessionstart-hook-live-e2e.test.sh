@@ -143,15 +143,6 @@ while [ $# -gt 0 ]; do
     *) shift ;;
   esac
 done
-if [ -z "$source" ]; then
-  source=$(cat 2>/dev/null | awk '
-    BEGIN { RS = "\"" }
-    seen == 2 { print; exit }
-    seen == 1 && $0 ~ /^[[:space:]]*:[[:space:]]*$/ { seen = 2; next }
-    seen == 1 { seen = 0 }
-    $0 == "source" { seen = 1 }
-  ')
-fi
 [ -n "$source" ] || source=none
 printf '%s\n' "$source" >> "$record"
 # Exactly what bin/fm-session-start.sh does after taking the lock.
