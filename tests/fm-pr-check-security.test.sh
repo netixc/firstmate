@@ -3005,6 +3005,44 @@ test_unsupported_watch_upgrade_safety() {
     snapshot_after=$(state_snapshot "$state")
     [ "$snapshot_after" = "$snapshot_before" ] \
       || fail "unsupported orphan $suffix quarantine was not idempotent"
+
+    dir=$(make_case "unsupported-orphan-pending-retry-$suffix")
+    state="$dir/home/state"
+    seed_unsupported_poll_artifacts "$dir"
+    rm -f "$state/task-a.check.sh"
+    case "$suffix" in
+      pr-poll)
+        kind=data
+        rm -f "$state/task-a.pr-poll-registration"
+        ;;
+      pr-poll-registration)
+        kind=registration
+        rm -f "$state/task-a.pr-poll"
+        ;;
+    esac
+    install_mv_fault "$dir"
+    set +e
+    FM_TEST_MV_MATCH="task-a.$kind." FM_TEST_MV_ACTION=fail FM_TEST_REAL_MV="$REAL_MV" \
+      FM_HOME="$dir/home" PATH="$dir/fakebin:$BASE_PATH" \
+      "$MIGRATE" >/dev/null 2> "$dir/migrate-interrupted.err"
+    rc=$?
+    set -e
+    [ "$rc" -ne 0 ] || fail "interrupted orphan $suffix quarantine unexpectedly completed"
+    [ -e "$state/task-a.$suffix" ] || [ -L "$state/task-a.$suffix" ] \
+      || fail "interrupted orphan $suffix quarantine lost live evidence"
+    [ -f "$state/.pr-check-quarantine/task-a.diagnostic.pending-ambiguous" ] \
+      || fail "interrupted orphan $suffix quarantine lost its pending transaction"
+    ! find "$state/.pr-check-quarantine" -name "task-a.$kind.*" -print | grep . >/dev/null \
+      || fail "interrupted orphan $suffix fixture unexpectedly quarantined evidence"
+    rm -f "$dir/fakebin/mv"
+    FM_HOME="$dir/home" PATH="$BASE_PATH" "$MIGRATE" \
+      >/dev/null 2> "$dir/migrate-retry.err" \
+      || fail "pending orphan $suffix quarantine did not resume: $(cat "$dir/migrate-retry.err")"
+    [ ! -e "$state/task-a.$suffix" ] && [ ! -L "$state/task-a.$suffix" ] \
+      || fail "pending orphan $suffix remained live after retry"
+    find "$state/.pr-check-quarantine" -name "task-a.$kind.*" -type f | grep . >/dev/null \
+      || fail "pending orphan $suffix retry did not preserve evidence"
+    [ ! -s "$dir/gh.log" ] || fail "pending orphan $suffix retry made a forge query"
   done
 
   dir=$(make_case unsupported-terminal-cleanup)

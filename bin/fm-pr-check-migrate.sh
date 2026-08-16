@@ -1007,6 +1007,17 @@ quarantined_poll_artifact_exists() {
   return 1
 }
 
+quarantined_poll_artifact_present() {
+  local prefix=$1 artifact kind
+  for kind in check data registration; do
+    for artifact in "$QUARANTINE/$prefix.$kind."*; do
+      [ -e "$artifact" ] || [ -L "$artifact" ] || continue
+      return 0
+    done
+  done
+  return 1
+}
+
 preserved_nonpoll_check() {
   local id=$1 check="$STATE/$1.check.sh"
   if [ "$id" = relay-watch ] && fm_relay_poll_shim_valid "$check" "$FM_HOME" "$FM_ROOT"; then
@@ -1243,7 +1254,8 @@ recover_pending_outcomes() {
             else
               migration_failed=1
             fi
-          elif [ -e "$failure" ] || [ -L "$failure" ]; then
+          elif { [ -e "$failure" ] || [ -L "$failure" ]; } \
+            && ! replacement_artifacts_present "$prefix"; then
             migration_failed=1
           fi
         fi
@@ -1423,7 +1435,10 @@ if migration_needed; then
   for data in "$STATE"/*.pr-poll; do
     [ -e "$data" ] || [ -L "$data" ] || continue
     id=$(basename "$data" .pr-poll)
-    migration_transaction_pending "$id" && continue
+    if migration_transaction_pending "$id" \
+      && quarantined_poll_artifact_present "$id"; then
+      continue
+    fi
     check="$STATE/$id.check.sh"
     if [ -e "$check" ] || [ -L "$check" ]; then
       preserved_nonpoll_check "$id" || continue
@@ -1465,7 +1480,10 @@ if migration_needed; then
   for registration in "$STATE"/*.pr-poll-registration; do
     [ -e "$registration" ] || [ -L "$registration" ] || continue
     id=$(basename "$registration" .pr-poll-registration)
-    migration_transaction_pending "$id" && continue
+    if migration_transaction_pending "$id" \
+      && quarantined_poll_artifact_present "$id"; then
+      continue
+    fi
     check="$STATE/$id.check.sh"
     if [ -e "$check" ] || [ -L "$check" ]; then
       preserved_nonpoll_check "$id" || continue
