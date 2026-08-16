@@ -37,7 +37,7 @@ case "${1:-}" in
       *pane_current_command*)
         case "$target" in
           *dead-secondmate*) printf 'zsh\n' ;;
-          *) printf 'codex\n' ;;
+          *) printf 'pi\n' ;;
         esac
         ;;
       *) printf '%%1\n' ;;
@@ -107,7 +107,7 @@ EOF
     "window=firstmate:fm-scout-task" \
     "worktree=$home/projects/scout-worktree" \
     "project=alpha" \
-    "harness=codex" \
+    "harness=pi" \
     "kind=scout" \
     "mode=scout" \
     "yolo=off"
@@ -116,7 +116,7 @@ EOF
     "window=firstmate:fm-secondmate-task" \
     "worktree=$home/secondmate-home" \
     "project=$home/secondmate-home" \
-    "harness=codex" \
+    "harness=pi" \
     "kind=secondmate" \
     "mode=secondmate" \
     "home=$home/secondmate-home" \
@@ -127,7 +127,7 @@ EOF
     "window=default:pane" \
     "worktree=$home/projects/missing-herdr" \
     "project=alpha" \
-    "harness=codex" \
+    "harness=pi" \
     "kind=ship" \
     "mode=ship"
 }
@@ -219,7 +219,7 @@ EOF
     "window=firstmate:fm-visible-ship" \
     "worktree=$home/projects/visible" \
     "project=alpha" \
-    "harness=codex" \
+    "harness=pi" \
     "kind=ship" \
     "mode=ship"
   printf 'working: visible\n' > "$home/state/visible-ship.status"
@@ -247,7 +247,7 @@ EOF
     "window=firstmate:fm-orphan-ship" \
     "worktree=$home/projects/visible" \
     "project=alpha" \
-    "harness=codex" \
+    "harness=pi" \
     "kind=ship" \
     "mode=ship"
   printf 'working: orphan now live\n' > "$home/state/orphan-ship.status"
@@ -281,7 +281,7 @@ test_normalized_roles_and_plural_blocker_readiness() {
 EOF
   fm_write_meta "$home/state/worker.meta" \
     "window=firstmate:fm-worker" "worktree=$home/projects/worker" "project=alpha" \
-    "harness=codex" "kind=ship" "mode=ship"
+    "harness=pi" "kind=ship" "mode=ship"
   printf 'working: preparing canary\n' > "$home/state/worker.status"
   fakebin=$(make_fakebin "$home")
   out=$(PATH="$fakebin:$PATH" FM_HOME="$home" "$SNAPSHOT" --json)
@@ -589,7 +589,7 @@ test_view_renders_dead_secondmate_agent_status() {
   fm_write_meta "$home/state/dead-secondmate.meta" \
     "window=firstmate:fm-dead-secondmate" \
     "project=$home/secondmate-home" \
-    "harness=codex" \
+    "harness=pi" \
     "kind=secondmate" \
     "mode=secondmate" \
     "home=$home/secondmate-home" \
@@ -616,7 +616,7 @@ test_open_decision_survives_later_unrelated_event() {
     "window=firstmate:fm-masked-decision" \
     "worktree=$home/secondmate-home" \
     "project=$home/secondmate-home" \
-    "harness=codex" \
+    "harness=pi" \
     "kind=secondmate" \
     "mode=secondmate" \
     "home=$home/secondmate-home" \
@@ -645,7 +645,7 @@ test_secondmate_open_decision_survives_live_endpoint() {
     "window=firstmate:fm-active-secondmate" \
     "worktree=$home/secondmate-home" \
     "project=$home/secondmate-home" \
-    "harness=codex" \
+    "harness=pi" \
     "kind=secondmate" \
     "mode=secondmate" \
     "home=$home/secondmate-home" \
@@ -672,7 +672,7 @@ test_open_decision_transfers_to_captain_hold() {
     "window=firstmate:fm-transferred-decision" \
     "worktree=$home/secondmate-home" \
     "project=$home/secondmate-home" \
-    "harness=codex" \
+    "harness=pi" \
     "kind=secondmate" \
     "mode=secondmate" \
     "home=$home/secondmate-home" \
@@ -697,7 +697,7 @@ test_open_decision_clears_on_keyed_resolution() {
     "window=firstmate:fm-resolved-decision" \
     "worktree=$home/secondmate-home" \
     "project=$home/secondmate-home" \
-    "harness=codex" \
+    "harness=pi" \
     "kind=secondmate" \
     "mode=secondmate" \
     "home=$home/secondmate-home" \

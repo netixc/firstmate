@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Opt-in live guard for the Codex exec and Pi RUN-tier session-open adapters.
+# Opt-in live guard for the Pi RUN-tier session-open adapter.
 #
 # Three facts in this area come from the vendor, not from Firstmate, so a stub
 # can only confirm the assumption already written into the stub:
@@ -164,7 +164,6 @@ SH
   chmod +x "$lab/bin/fm-sessionstart-run.sh"
 
   case "$harness" in
-    codex) mkdir -p "$lab/.codex"; cp "$ROOT/.codex/hooks.json" "$lab/.codex/hooks.json" ;;
     pi)
       mkdir -p "$lab/.pi/extensions/lib"
       cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$lab/.pi/extensions/"
@@ -319,7 +318,8 @@ probe_context_reset() {  # <harness> <version> <lab> <clear-command> <launch-arg
 
 # --- per-harness drivers ------------------------------------------------------
 
-for harness in codex pi; do
+HARNESSES=(pi)
+for harness in "${HARNESSES[@]}"; do
   if ! command -v "$harness" >/dev/null 2>&1; then
     ABSENT="$ABSENT $harness"
     note "$harness: not installed on this host, so its run-tier evidence was NOT refreshed"
@@ -330,12 +330,6 @@ for harness in codex pi; do
   lab=$(make_lab "$harness")
 
   case "$harness" in
-    codex)
-      probe_process_opens codex "$version" "$lab" resume \
-        codex exec --dangerously-bypass-hook-trust --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check \
-        -- codex exec resume --last --dangerously-bypass-hook-trust --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check
-      note "codex $version: codex exec run-tier evidence refreshed; the interactive TUI remains uncovered because tracked project hooks provide no session-open or re-emit channel there"
-      ;;
     pi)
       probe_process_opens pi "$version" "$lab" resume \
         pi -p -e "$lab/.pi/extensions/fm-primary-turnend-guard.ts" --no-context-files --no-tools \
@@ -348,7 +342,7 @@ for harness in codex pi; do
 done
 
 [ "$CHECKED" -gt 0 ] \
-  || fail "no run-tier harness was installed, so this guard verified nothing; install codex or pi before trusting its evidence"
+  || fail "the Pi run-tier harness was not installed, so this guard verified nothing"
 [ -z "$ABSENT" ] \
   || note "run-tier evidence was refreshed for $CHECKED harness(es); still missing:$ABSENT"
 echo "# fm-sessionstart-hook-live-e2e.test.sh: all live assertions passed"

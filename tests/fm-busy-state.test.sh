@@ -160,8 +160,6 @@ test_missing_record_unknown_not_idle() {
     out=$(fm_busy_classify tmux w1 "$h" t1 "$state")
     [ "$out" = "unknown missing" ] || fail "$h with no record must be 'unknown missing', got '$out'"
   done
-  out=$(fm_busy_classify tmux w1 codex t1 "$state")
-  [ "$out" = "unknown codex-unverified" ] || fail "codex with no verified source must be 'unknown codex-unverified', got '$out'"
   pass "a converted adapter with no record classifies unknown, never idle"
 }
 
@@ -204,23 +202,9 @@ test_converted_adapters_without_records_are_unknown() {
     out=$(fm_busy_classify tmux w1 "$h" t1 "$state")
     [ "$out" = "unknown missing" ] || fail "$h must never classify from footer text, got '$out'"
   done
-  out=$(fm_busy_classify tmux w1 codex t1 "$state")
-  [ "$out" = "unknown codex-unverified" ] || fail "codex without a verified source must remain unknown, got '$out'"
   pass "converted adapters without semantic records remain unknown"
 }
 
-
-test_codex_unverified_gate() {
-  local state gen out
-  state=$(new_state_dir codex-gate)
-  gen=$("$EV" arm "$state" t1)
-  "$EV" apply "$state" t1 busy --gen "$gen" --source codex-hook --event user-prompt-submit
-  out=$(fm_busy_classify tmux w1 codex t1 "$state")
-  [ "$out" = "unknown codex-unverified" ] || fail "unverified codex must classify unknown, got '$out'"
-  [ -z "$(fm_busy_sources_for_harness codex)" ] \
-    || fail "codex must trust no semantic source until one is verified"
-  pass "codex classifies unknown until a semantic source passes its verification gate"
-}
 
 # --- endpoint death and native fallbacks ----------------------------------------
 
@@ -318,7 +302,6 @@ test_missing_record_unknown_not_idle
 test_malformed_record_unknown
 test_record_without_sidecar_unknown
 test_converted_adapters_without_records_are_unknown
-test_codex_unverified_gate
 test_dead_endpoint_overrides
 test_herdr_native_busy_only
 test_record_read_leaves_caller_shell_intact

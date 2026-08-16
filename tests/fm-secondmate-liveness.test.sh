@@ -97,7 +97,7 @@ SH
 test_tmux_agent_state_classifies() {
   local fb out
 
-  for harness in pi codex pi-signed pi-launcher Pi; do
+  for harness in pi pi-signed pi-launcher Pi; do
     fb=$(make_probe_tmux "$TMP_ROOT/tmux-$harness" "$harness")
     out=$(PATH="$fb:$BASE_PATH" bash -c '. "$0/bin/fm-backend.sh"; fm_backend_agent_state tmux sess:win' "$ROOT")
     [ "$out" = alive ] || fail "a live $harness foreground process should classify as alive, got '$out'"
@@ -206,7 +206,7 @@ test_agent_state_dispatcher_and_compatibility() {
 make_toolchain() {
   local dir=$1 fakebin
   fakebin=$(fm_fakebin "$dir")
-  fm_fake_exit0 "$fakebin" node chrome-devtools-axi pi-signed
+  fm_fake_exit0 "$fakebin" node chrome-devtools-axi pi pi-signed
   fm_fake_version_tool "$fakebin" lavish-axi FM_FAKE_LAVISH_AXI_VERSION 0.1.46
   cat > "$fakebin/gh-axi" <<'SH'
 #!/usr/bin/env bash
@@ -322,7 +322,7 @@ new_world() {
   w="$TMP_ROOT/$name"
   mkdir -p "$w/home/state" "$w/home/config"
   touch "$w/home/state/.last-watcher-beat"
-  printf 'codex\n' > "$w/home/config/crew-harness"
+  printf 'pi\n' > "$w/home/config/crew-harness"
   printf '%s\n' "$w"
 }
 
@@ -509,7 +509,7 @@ test_sweep_skipped_under_detect_only() {
   w=$(new_world sweep-detect-only)
   add_sm_home "$w" sm1 firstmate:fm-sm1
   mkdir -p "$w/home/config"
-  printf 'codex\n' > "$w/home/config/crew-harness"
+  printf 'pi\n' > "$w/home/config/crew-harness"
   fb=$(make_toolchain "$w"); tmuxfb=$(make_liveness_tmux "$w")
   log="$w/calls.log"; : > "$log"
 

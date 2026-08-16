@@ -108,10 +108,10 @@ test_routine_then_terminal_after_restart() {
   # submission (one typed line + one Enter), then the buffer clears.
   local sent
   sent="$dir/sent.log"; : > "$sent"
-  printf '›\n' > "$dir/pane.txt"
+  printf '╭────╮\n│ >  │\n╰────╯\n' > "$dir/pane.txt"
   afk_enter "$state"
   PATH="$fakebin:$PATH" FM_FAKE_TMUX_PANE_ALIVE=1 FM_FAKE_TMUX_SENT="$sent" \
-    FM_FAKE_TMUX_CAPTURE="$dir/pane.txt" FM_ESCALATE_BATCH_SECS=0 escalate_flush "$state" \
+    FM_FAKE_TMUX_CAPTURE="$dir/pane.txt" FM_FAKE_TMUX_CURSOR_Y=1 FM_ESCALATE_BATCH_SECS=0 escalate_flush "$state" \
     || fail "escalate_flush failed for the buffered digest"
   [ "$(grep -c '\[ENTER\]' "$sent")" -eq 1 ] || fail "buffered digest was not submitted exactly once"
   [ ! -s "$state/.subsuper-escalations" ] || fail "buffer not cleared after a successful flush"

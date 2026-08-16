@@ -94,7 +94,7 @@ make_spawn_case() {
 
 enable_dispatch_profile() {
   local home=$1
-  printf '%s\n' '{"rules":[{"when":"current events","use":{"harness":"pi","model":"xai/grok-4","effort":"high"}}],"default":{"harness":"codex","model":"gpt-5","effort":"medium"}}' \
+  printf '%s\n' '{"rules":[{"when":"current events","use":{"harness":"pi","model":"xai/grok-4","effort":"high"}}],"default":{"harness":"pi","model":"gpt-5","effort":"medium"}}' \
     > "$home/config/crew-dispatch.json"
 }
 
@@ -326,18 +326,18 @@ test_active_dispatch_profile_allows_explicit_harness() {
   enable_dispatch_profile "$HOME_DIR"
 
   out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id" "$PROJ_DIR" --harness codex --model gpt-5 --effort high)
+    "$id" "$PROJ_DIR" --harness pi --model gpt-5 --effort high)
   status=$?
   expect_code 0 "$status" "explicit harness should satisfy active dispatch-profile requirement"
-  assert_contains "$out" "spawned $id harness=codex" "spawn did not report explicit codex harness"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" codex gpt-5 high
+  assert_contains "$out" "spawned $id harness=pi" "spawn did not report explicit pi harness"
+  assert_meta_profile "$HOME_DIR/state/$id.meta" pi gpt-5 high
   task_tmp="/tmp/fm-$id"
   assert_present "$task_tmp/gotmp" "spawn did not create its Go temp directory"
   assert_grep "tasktmp=$task_tmp" "$HOME_DIR/state/$id.meta" "spawn metadata did not record its task temp root"
   assert_grep "export GOTMPDIR=$task_tmp/gotmp" "$LAUNCH_LOG.text" "spawn did not export its Go temp directory into the pane"
   rm -rf "$task_tmp"
   launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "codex --model 'gpt-5' -c 'model_reasoning_effort=\"high\"' --dangerously-bypass-approvals-and-sandbox" \
+  assert_contains "$launch" "FM_PI_HARNESS=pi '$FAKEBIN_DIR/pi' --tui-mode regular --model 'gpt-5' --thinking 'high' -e" \
     "explicit harness launch did not thread model and effort"
   pass "active crew-dispatch profile allows an explicit resolved harness"
 }
@@ -350,11 +350,11 @@ test_active_dispatch_profile_allows_positional_harness() {
   enable_dispatch_profile "$HOME_DIR"
 
   out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id" "$PROJ_DIR" codex --model gpt-5 --effort high)
+    "$id" "$PROJ_DIR" pi --model gpt-5 --effort high)
   status=$?
   expect_code 0 "$status" "positional harness should satisfy active dispatch-profile requirement"
-  assert_contains "$out" "spawned $id harness=codex" "spawn did not report positional codex harness"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" codex gpt-5 high
+  assert_contains "$out" "spawned $id harness=pi" "spawn did not report positional pi harness"
+  assert_meta_profile "$HOME_DIR/state/$id.meta" pi gpt-5 high
   pass "active crew-dispatch profile allows the legacy positional harness form"
 }
 
@@ -376,42 +376,6 @@ test_active_dispatch_profile_allows_raw_launch_command() {
   pass "active crew-dispatch profile allows the raw launch-command escape hatch"
 }
 
-test_codex_threads_model_and_effort() {
-  local rec id out status launch
-  id=profile-codex-z3
-  rec=$(make_spawn_case profile-codex codex "$id")
-  read_case_record "$rec"
-
-  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" --model gpt-5 --effort high)
-  status=$?
-  expect_code 0 "$status" "codex spawn with profile flags should succeed"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" codex gpt-5 high
-  launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "codex --model 'gpt-5' -c 'model_reasoning_effort=\"high\"' --dangerously-bypass-approvals-and-sandbox" \
-    "codex launch did not thread model and reasoning effort config"
-  pass "codex receives --model and model_reasoning_effort profile flags"
-}
-
-test_codex_omits_invalid_max_effort() {
-  local rec id out status launch
-  id=profile-codex-max-z4
-  rec=$(make_spawn_case profile-codex-max codex "$id")
-  read_case_record "$rec"
-
-  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" --model gpt-5 --effort max)
-  status=$?
-  expect_code 0 "$status" "codex spawn with unsupported max effort should omit the effort flag"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" codex gpt-5 max
-  launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "codex --model 'gpt-5' --dangerously-bypass-approvals-and-sandbox" \
-    "codex launch did not preserve the model flag when max effort was omitted"
-  assert_not_contains "$launch" "model_reasoning_effort" "codex launch must omit unsupported max reasoning effort"
-  pass "codex omits unsupported max effort instead of passing a bad config value"
-}
-
-
-
-
 test_pi_threads_model_and_max_effort() {
   local rec id out status launch
   id=profile-pi-z8
@@ -419,12 +383,12 @@ test_pi_threads_model_and_max_effort() {
   read_case_record "$rec"
 
   out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
-    --model openai-codex/gpt-5.6-sol --effort max)
+    --model openai-codex/gpt-5.6-luna --effort max)
   status=$?
   expect_code 0 "$status" "pi spawn with max effort should succeed"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" pi openai-codex/gpt-5.6-sol max
+  assert_meta_profile "$HOME_DIR/state/$id.meta" pi openai-codex/gpt-5.6-luna max
   launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "FM_PI_HARNESS=pi '$FAKEBIN_DIR/pi' --tui-mode regular --model 'openai-codex/gpt-5.6-sol' --thinking 'max' -e" \
+  assert_contains "$launch" "FM_PI_HARNESS=pi '$FAKEBIN_DIR/pi' --tui-mode regular --model 'openai-codex/gpt-5.6-luna' --thinking 'max' -e" \
     "pi launch did not force the regular TUI while threading the requested model and max thinking level"
   assert_not_contains "$launch" "FM_FIRSTMATE_PI_LAUNCH_BRIEF=" \
     "pi launch still exports the removed Calm input-reroute binding"
@@ -522,7 +486,7 @@ test_pi_signed_missing_binary_refuses_before_endpoint_or_metadata() {
 test_pi_signed_persistent_secondmate_uses_pi_extensions_and_identity() {
   local rec id sm out status launch
   id=profile-pi-signed-secondmate-z8d
-  rec=$(make_spawn_case profile-pi-signed-secondmate codex "$id")
+  rec=$(make_spawn_case profile-pi-signed-secondmate pi "$id")
   read_case_record "$rec"
   printf '%s\n' pi-signed > "$HOME_DIR/config/secondmate-harness"
   sm="$CASE_DIR/secondmate-home"
@@ -550,13 +514,13 @@ test_batch_forwards_shared_profile_flags() {
   enable_dispatch_profile "$HOME_DIR"
 
   out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id1=$PROJ_DIR" "$id2=$PROJ_DIR" --harness codex --model gpt-5 --effort high)
+    "$id1=$PROJ_DIR" "$id2=$PROJ_DIR" --harness pi --model gpt-5 --effort high)
   status=$?
   expect_code 0 "$status" "batch spawn with shared profile flags should succeed"
-  assert_contains "$out" "spawned $id1 harness=codex" "first batch task did not use shared harness"
-  assert_contains "$out" "spawned $id2 harness=codex" "second batch task did not use shared harness"
-  assert_meta_profile "$HOME_DIR/state/$id1.meta" codex gpt-5 high
-  assert_meta_profile "$HOME_DIR/state/$id2.meta" codex gpt-5 high
+  assert_contains "$out" "spawned $id1 harness=pi" "first batch task did not use shared harness"
+  assert_contains "$out" "spawned $id2 harness=pi" "second batch task did not use shared harness"
+  assert_meta_profile "$HOME_DIR/state/$id1.meta" pi gpt-5 high
+  assert_meta_profile "$HOME_DIR/state/$id2.meta" pi gpt-5 high
   pass "batch dispatch forwards shared --harness, --model, and --effort to every pair"
 }
 
@@ -586,7 +550,7 @@ test_unsupported_harness_is_rejected_generically() {
 test_active_dispatch_profile_does_not_block_secondmate_launch() {
   local rec id sm out status
   id=profile-secondmate-z16
-  rec=$(make_spawn_case profile-secondmate codex "$id")
+  rec=$(make_spawn_case profile-secondmate pi "$id")
   read_case_record "$rec"
   enable_dispatch_profile "$HOME_DIR"
   sm="$CASE_DIR/secondmate-home"
@@ -595,9 +559,9 @@ test_active_dispatch_profile_does_not_block_secondmate_launch() {
   out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$sm" --secondmate)
   status=$?
   expect_code 0 "$status" "secondmate spawn should be exempt from the dispatch-profile explicit harness requirement"
-  assert_contains "$out" "spawned $id harness=codex kind=secondmate" "secondmate launch did not use secondmate harness resolution"
+  assert_contains "$out" "spawned $id harness=pi kind=secondmate" "secondmate launch did not use secondmate harness resolution"
   assert_grep "kind=secondmate" "$HOME_DIR/state/$id.meta" "secondmate meta missing kind=secondmate"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" codex default default
+  assert_meta_profile "$HOME_DIR/state/$id.meta" pi default default
   pass "active crew-dispatch profile does not block secondmate launches"
 }
 
@@ -610,8 +574,6 @@ test_active_dispatch_profile_requires_explicit_harness_for_scout
 test_active_dispatch_profile_allows_explicit_harness
 test_active_dispatch_profile_allows_positional_harness
 test_active_dispatch_profile_allows_raw_launch_command
-test_codex_threads_model_and_effort
-test_codex_omits_invalid_max_effort
 test_pi_threads_model_and_max_effort
 test_pi_tui_mode_probe_is_safe_for_old_and_new_pi
 test_pi_signed_threads_shared_pi_profile_and_preserves_identity

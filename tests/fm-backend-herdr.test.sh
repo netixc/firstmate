@@ -3133,63 +3133,6 @@ test_composer_state_pi_separator_requires_safe_native_identity() {
   pass "fm_backend_herdr_composer_state: Pi separators never authorize working, non-Pi, unreadable, or over-tall targets"
 }
 
-# --- composer_state: unbordered (bare) composer rows -------------------------
-# Regression coverage for the away-mode redelivery-loop incident
-# (docs/herdr-backend.md "Incident (2026-07-07)"): real codex
-# composer rows carry NO border glyph at all - the fixtures below are captured
-# verbatim (character-for-character) from a real herdr session running real
-# `codex` (see the dated evidence entry). Before the fix these all
-# read "unknown" (codex fixtures) or produced a false "empty" from a
-# stale decorative box (the banner-priority fixture) - none of them correctly
-# tracked the live composer, which is exactly what caused
-# bin/fm-supervise-daemon.sh's fm_backend_herdr_send_text_submit to never
-# confirm a landed injection, so escalate_flush never cleared
-# state/.subsuper-escalations and the same digest was redelivered every cycle.
-
-test_composer_state_bare_prompt_below_stale_bordered_banner_wins() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/composer-banner-priority"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '\xe2\x95\xad\xe2\x94\x80 Codex \xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x95\xae\n\xe2\x94\x82           Welcome back Kun!           \xe2\x94\x82\n\xe2\x94\x82                                       \xe2\x94\x82\n\xe2\x95\xb0\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x95\xaf\n\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n\xe2\x80\xba still typing captain\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n' > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
-  [ "$out" = pending ] || fail "the live unbordered prompt row below a stale bordered banner must win (pending, real text present), got '$out'"
-  pass "fm_backend_herdr_composer_state: a live unbordered prompt row below a stale bordered decorative box still wins (not misread as the box's own row)"
-}
-
-test_composer_state_codex_bare_prompt_glyph_is_empty() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/composer-codex-bare"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '\xe2\x80\xa2 You have 2 usage limit resets available.\n\n\xe2\x80\xba\n\n  gpt-5.5 xhigh \xc2\xb7 Context 100%% left\n' > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
-  [ "$out" = empty ] || fail "a bare '›' (codex) prompt glyph with no trailing text should read empty, got '$out'"
-  pass "fm_backend_herdr_composer_state: a real-codex unbordered '›' prompt row reads empty"
-}
-
-test_composer_state_codex_faint_suggestion_is_empty() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/composer-codex-faint-suggestion"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '\xe2\x80\xa2 You have 2 usage limit resets available. Run /usage\nto use one.\n\n\x1b[0m\x1b[1m\xe2\x80\xba \x1b[0m\x1b[2mFind and fix a bug in @filename\x1b[0m\n\n  gpt-5.5 xhigh \xc2\xb7 Context 100%% left\n' > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
-  [ "$out" = empty ] || fail "a faint real-codex ghost suggestion should read empty, not pending, got '$out'"
-  pass "fm_backend_herdr_composer_state: a faint real-codex ghost suggestion reads empty"
-}
-
-test_composer_state_codex_non_faint_same_text_is_pending() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/composer-codex-non-faint-same-text"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '\xe2\x80\xa2 You have 2 usage limit resets available. Run /usage\nto use one.\n\n\x1b[0m\x1b[1m\xe2\x80\xba \x1b[0mFind and fix a bug in @filename\n\n  gpt-5.5 xhigh \xc2\xb7 Context 100%% left\n' > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
-  [ "$out" = pending ] || fail "the same words without faint styling should still protect real typed input, got '$out'"
-  pass "fm_backend_herdr_composer_state: non-faint codex prompt text still reads pending"
-}
-
 # --- wait_for_working: the native agent-state poll-and-classify primitive ---
 # Direct unit coverage for fm_backend_herdr_wait_for_working, the helper
 # fm_backend_herdr_send_text_submit now uses instead of composer scraping
@@ -3300,10 +3243,8 @@ test_wait_for_working_treats_blocked_as_submit_active() {
 }
 
 # --- send_text_submit: native agent-state (agent get) verify-and-retry ------
-# Rewritten for the 2026-07-07 incident (docs/herdr-backend.md): confirmation
-# no longer reads composer content in the normal idle-baseline path, so a
-# harness whose IDLE composer shows dynamic tip text (real codex) can no
-# longer misread as "pending" and block/mis-confirm a send.
+# Confirmation no longer reads composer content in the normal idle-baseline
+# path, so dynamic idle text cannot block or mis-confirm a send.
 # FM_BACKEND_HERDR_SUBMIT_POLLS=1 pins most tests
 # below to exactly one agent-get sample per Enter attempt for simple,
 # deterministic call-count assertions; the multi-sample behavior itself is
@@ -3385,75 +3326,6 @@ test_send_text_submit_confirms_blocked_after_enter() {
   enter_count=$(grep -c $'\x1f''pane'$'\x1f''send-keys'$'\x1f''w1:p2'$'\x1f''enter' "$log")
   [ "$enter_count" -eq 1 ] || fail "blocked after Enter must not provoke a retry into the prompt, sent $enter_count Enter(s)"
   pass "fm_backend_herdr_send_text_submit: a post-Enter blocked state confirms delivery without retrying into the prompt"
-}
-
-test_send_text_submit_preexisting_working_does_not_false_confirm_swallowed_enter() {
-  local dir log resp fb out enter_count read_count
-  dir="$TMP_ROOT/submit-preexisting-working-swallow"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  # 1: send-text
-  # 2: agent get - pre-Enter baseline is working, so the composer branch runs
-  # 3: send-keys enter; 4: pane read - the composer still holds the message
-  printf '{"result":{"agent":{"agent_status":"working"}}}\n' > "$resp/2.out"
-  printf '  \xe2\x80\xba hello captain\n' > "$resp/4.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_send_text_submit default:w1:p2 "hello captain" 1 0.01 0.01' "$ROOT" )
-  [ "$out" = pending ] || fail "send_text_submit must not accept preexisting working as proof that this Enter landed, got '$out'"
-  enter_count=$(grep -c $'\x1f''pane'$'\x1f''send-keys'$'\x1f''w1:p2'$'\x1f''enter' "$log")
-  [ "$enter_count" -eq 1 ] || fail "preexisting-working swallowed Enter should use the configured retry count, sent $enter_count Enter(s)"
-  read_count=$(grep -c $'\x1f''pane'$'\x1f''read' "$log")
-  [ "$read_count" -eq 1 ] || fail "preexisting-working confirmation should read only the composer verdict, made $read_count read(s)"
-  pass "fm_backend_herdr_send_text_submit: preexisting working is not accepted as submit proof when the composer still holds the message"
-}
-
-# Regression for the submit-confirmation side of the 2026-07-07 incident:
-# even if a Codex idle composer displays suggestion text, an idle-baseline
-# submit must confirm from native agent-state rather than composer scraping.
-# The pre-injection composer guard has its own faint-suggestion coverage below.
-test_send_text_submit_confirms_despite_codex_idle_tip_composer() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/submit-codex-idle-tip"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/2.out"
-  printf '{"result":{"agent":{"agent_status":"working"}}}\n' > "$resp/4.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_BACKEND_HERDR_SUBMIT_POLLS=1 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_send_text_submit default:w1:p2 "reply with just OK" 3 0.01 0.01' "$ROOT" )
-  [ "$out" = empty ] || fail "send_text_submit should confirm via agent_status alone even for a harness whose idle composer shows dynamic tip text, got '$out'"
-  [ "$(grep -c $'\x1f''pane'$'\x1f''read' "$log")" -eq 0 ] || fail "send_text_submit must never call 'pane read' - a codex-style dynamic idle-tip composer can never mislead a confirmation path that does not read it"
-  pass "fm_backend_herdr_send_text_submit: confirms submission via native agent-state alone, immune to a codex-style dynamic idle-tip composer that would have misread as 'pending' under the old composer-based confirmation"
-}
-
-# Companion regression for the pre-injection empty-box guard itself
-# (bin/fm-supervise-daemon.sh's pane_input_pending): a real Codex idle
-# composer can show faint ghost suggestions after the bare `›` prompt.
-# The guard must ignore that faint suggestion text, otherwise away-mode
-# escalation delivery defers forever even though the human has typed nothing.
-test_composer_state_codex_dynamic_idle_tip_reads_empty_when_faint() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/composer-codex-dynamic-tip"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '\xe2\x80\xa2 OK\n\n\n\x1b[0m\x1b[1m\xe2\x80\xba \x1b[0m\x1b[2mSummarize recent commits\x1b[0m\n\n  gpt-5.5 xhigh \xc2\xb7 Context 97%% left \xc2\xb7 /private/tmp \xc2\xb7 2\xe2\x80\xa6\n' > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
-  [ "$out" = empty ] || fail "a faint real-codex dynamic idle-tip row should read empty, got '$out'"
-  pass "fm_backend_herdr_composer_state: a faint real-codex dynamic idle-tip composer row reads empty"
-}
-
-# Regression guard for the PRE-injection empty-box guard itself
-# (bin/fm-supervise-daemon.sh's pane_input_pending, dispatched via
-# fm_backend_composer_state -> fm_backend_herdr_composer_state): this task
-# changes ONLY submit confirmation, so genuine unsubmitted text in the
-# composer must still read 'pending' and the guard must still refuse to
-# inject into it.
-test_composer_state_guard_still_refuses_real_pending_text_after_submit_confirmation_change() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/composer-guard-still-refuses"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '  \xe2\x80\xba hello there this is a test message\n' > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/fm-backend.sh"; fm_backend_composer_state herdr default:w1:p2' "$ROOT" )
-  [ "$out" = pending ] || fail "the pre-injection empty-box guard must still refuse real unsubmitted composer text after this change, got '$out'"
-  pass "fm_backend_composer_state (herdr): the pre-injection empty-box guard still refuses a genuinely non-empty composer, unaffected by the submit-confirmation change"
 }
 
 # A slow transition landing partway through a single Enter attempt's own
@@ -4222,10 +4094,6 @@ test_composer_state_pi_separator_idle_is_empty
 test_composer_state_pi_separator_real_text_is_pending
 test_composer_state_pi_incomplete_separator_below_stale_generic_is_unknown
 test_composer_state_pi_separator_requires_safe_native_identity
-test_composer_state_bare_prompt_below_stale_bordered_banner_wins
-test_composer_state_codex_bare_prompt_glyph_is_empty
-test_composer_state_codex_faint_suggestion_is_empty
-test_composer_state_codex_non_faint_same_text_is_pending
 test_wait_for_working_returns_busy_on_first_poll
 test_wait_for_working_catches_a_slow_transition_mid_window
 test_wait_for_working_samples_budget_endpoint_without_final_sleep
@@ -4237,10 +4105,6 @@ test_send_text_submit_detects_landed_send
 test_send_text_submit_detects_swallowed_enter
 test_send_text_submit_popup_autocomplete_requires_second_enter
 test_send_text_submit_confirms_blocked_after_enter
-test_send_text_submit_preexisting_working_does_not_false_confirm_swallowed_enter
-test_send_text_submit_confirms_despite_codex_idle_tip_composer
-test_composer_state_codex_dynamic_idle_tip_reads_empty_when_faint
-test_composer_state_guard_still_refuses_real_pending_text_after_submit_confirmation_change
 test_send_text_submit_slow_transition_within_one_enter_needs_no_extra_enter
 test_send_text_submit_send_failed
 test_send_text_submit_unknown_on_capture_failure

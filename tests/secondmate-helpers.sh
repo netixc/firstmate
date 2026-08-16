@@ -21,7 +21,7 @@ make_fake_tmux() {
   capture="$dir/pane.txt"
   # A real, positively identified empty agent composer. A blank capture is
   # deliberately unknown under the fleet-wide strict blank-row posture.
-  printf '›\n' > "$capture"
+  printf '╭────╮\n│ >  │\n╰────╯\n' > "$capture"
   cat > "$fakebin/tmux" <<'SH'
 #!/usr/bin/env bash
 set -u
@@ -38,7 +38,7 @@ case "${1:-}" in
     ;;
   display-message)
     case "$*" in
-      *'#{cursor_y}'*) printf '0\n' ;;
+      *'#{cursor_y}'*) printf '1\n' ;;
       *) printf 'firstmate\n' ;;
     esac
     exit 0

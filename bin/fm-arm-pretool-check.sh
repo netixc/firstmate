@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Stable PreToolUse transport for the watcher-arm command policy.
 #
-# A firstmate primary must arm the watcher or run a Codex checkpoint as a
-# standalone verified harness call.
+# A firstmate primary must arm the watcher as a standalone verified harness call.
 # bin/fm-arm-command-policy.mjs is the sole owner of shell classification,
 # protected execution identity, the blessed setup tree, and deny reason codes.
 # This wrapper only acquires the harness payload, discovers the active roots,
@@ -11,36 +10,28 @@
 # See docs/arm-pretool-check.md for the complete contract and validation record.
 #
 # Usage:
-#   <PreToolUse JSON on stdin> | bin/fm-arm-pretool-check.sh
-#   bin/fm-arm-pretool-check.sh --command '<cmd>' [--background true|false]
+#   bin/fm-arm-pretool-check.sh --command '<cmd>'
 #
-# Stdin mode extracts Codex's .tool_input.command.
-# CLI mode is used by Pi and pi-signed after their adapters extract the exact
-# command string.
-# --background remains accepted for compatibility, but harness-native tracked
-# background execution is not itself a policy signal.
+# Pi and pi-signed pass the exact command string through CLI mode.
 #
 # Exit/output contract:
 #   ALLOW - exit 0 and no output.
 #   DENY - exit 2 and a hook deny object on stderr.
-#   FAIL OPEN - malformed or empty stdin, missing jq for stdin transport,
-#               missing Node or policy owner, or an invalid policy response.
+#   FAIL OPEN - missing Node or policy owner, or an invalid policy response.
 #
-# Codex, Pi, and pi-signed consume exit 2 plus stderr.
+# Pi and pi-signed consume exit 2 plus stderr.
 set -u
 
 CMD=""
 CMD_SET=0
-BACKGROUND=""
 
 usage() {
   cat <<'EOF'
-Usage: fm-arm-pretool-check.sh [--command <cmd>] [--background true|false]
+Usage: fm-arm-pretool-check.sh --command <cmd>
 
-With no --command, reads a Codex PreToolUse-style JSON payload on stdin at
-tool_input.command.
+Requires --command with the exact shell command.
 Exits 0 to allow and 2 to deny, with the deny reason written to stderr.
-Malformed transport and an unavailable classifier runtime fail open.
+An unavailable classifier runtime fails open.
 EOF
 }
 
@@ -57,15 +48,6 @@ while [ "$#" -gt 0 ]; do
       CMD_SET=1
       shift
       ;;
-    --background)
-      [ "$#" -gt 1 ] || { echo "error: --background requires a value" >&2; exit 2; }
-      BACKGROUND=$2
-      shift 2
-      ;;
-    --background=*)
-      BACKGROUND=${1#--background=}
-      shift
-      ;;
     -h|--help)
       usage
       exit 0
@@ -78,18 +60,7 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-if [ "$CMD_SET" -eq 0 ]; then
-  PAYLOAD=$(cat 2>/dev/null || true)
-  [ -n "$PAYLOAD" ] || exit 0
-  command -v jq >/dev/null 2>&1 || exit 0
-  CMD=$(printf '%s' "$PAYLOAD" | jq -r '(.tool_input.command // empty)' 2>/dev/null) || exit 0
-  [ -n "$CMD" ] || exit 0
-  # Kept for transport parity only.
-  # shellcheck disable=SC2034
-  BACKGROUND=$(printf '%s' "$PAYLOAD" | jq -r '(.tool_input.background // false)' 2>/dev/null) || BACKGROUND=false
-fi
-
-[ -n "$CMD" ] || exit 0
+[ "$CMD_SET" -eq 1 ] && [ -n "$CMD" ] || exit 0
 
 # Strict-superset prefilter (transport only; owns zero classification semantics).
 # Every protected watcher execution and every broad watcher kill resolves to the

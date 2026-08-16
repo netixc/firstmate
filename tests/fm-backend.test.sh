@@ -17,7 +17,7 @@
 #      exact-selector change lands on the default branch, merge-base with main
 #      collapses to HEAD and can no longer supply that baseline.
 #   3. Asserts the `--backend`/`FM_BACKEND` selection refuses unknown backends
-#      and the blocked `codex-app` backend loudly.
+#      loudly.
 #
 # fm-watch.sh's signal/stale/check/heartbeat wake-string contract is already
 # exercised end-to-end against this refactor by tests/fm-watch-triage.test.sh
@@ -179,7 +179,7 @@ test_backend_validate_refuses_unknown() {
   for backend in tmux herdr; do
     fm_backend_validate "$backend" 2>/dev/null || fail "fm_backend_validate should accept $backend"
   done
-  for backend in bogus codex-app "tmux herdr"; do
+  for backend in bogus spaceship "tmux herdr"; do
     out=$(fm_backend_validate "$backend" 2>&1) && fail "fm_backend_validate should refuse $backend"
     assert_contains "$out" "unknown backend '$backend'" "validation should name rejected backend $backend"
   done
@@ -216,7 +216,7 @@ test_backend_validate_spawn_accepts_supported() {
   for backend in tmux herdr; do
     fm_backend_validate_spawn "$backend" 2>/dev/null || fail "spawn validation should accept $backend"
   done
-  for backend in bogus codex-app "tmux herdr"; do
+  for backend in bogus spaceship "tmux herdr"; do
     out=$(fm_backend_validate_spawn "$backend" 2>&1) && fail "spawn validation should refuse $backend"
     assert_contains "$out" "unknown backend '$backend'" "spawn validation should name $backend"
   done
@@ -703,17 +703,6 @@ test_spawn_refuses_unknown_backend_flag() {
   pass "fm-spawn.sh --backend bogus is refused loudly"
 }
 
-test_spawn_refuses_codex_app_backend_flag() {
-  local out status
-  out=$(FM_ROOT_OVERRIDE='' FM_HOME='' FM_STATE_OVERRIDE='' FM_DATA_OVERRIDE='' \
-    FM_PROJECTS_OVERRIDE='' FM_CONFIG_OVERRIDE='' FM_SPAWN_NO_GUARD=1 \
-    "$ROOT/bin/fm-spawn.sh" nope-codex-app-z1 projects/none pi --mode no-mistakes --yolo off --backend codex-app 2>&1)
-  status=$?
-  [ "$status" -ne 0 ] || fail "fm-spawn --backend codex-app should refuse"
-  assert_contains "$out" "unknown backend 'codex-app'" "fm-spawn did not preserve the blocked codex-app contract"
-  pass "fm-spawn.sh --backend codex-app is refused"
-}
-
 test_spawn_refuses_unknown_fm_backend_env() {
   local out status
   out=$(FM_ROOT_OVERRIDE='' FM_HOME='' FM_STATE_OVERRIDE='' FM_DATA_OVERRIDE='' \
@@ -817,7 +806,6 @@ test_peek_conformance_old_vs_new
 test_spawn_symlinked_project_prefix_avoids_false_refusal
 test_teardown_conformance_old_vs_new
 test_spawn_refuses_unknown_backend_flag
-test_spawn_refuses_codex_app_backend_flag
 test_spawn_refuses_unknown_fm_backend_env
 test_spawn_default_backend_writes_no_meta_field
 test_spawn_explicit_backend_flag_beats_autodetect_herdr_env

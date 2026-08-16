@@ -43,7 +43,6 @@
 #   is authorized). Without it, the script resolves FM_BACKEND, then
 #   config/backend, then runtime auto-detection from $TMUX or HERDR_ENV=1, then
 #   tmux. The supported backends are tmux and Herdr.
-#   Codex App is not a runtime backend; docs/codex-app-backend.md owns that boundary.
 #   Default tmux spawns do not write backend= to meta; absent backend= means tmux.
 #   A backend spawn refusal is terminal for that selected backend; callers must
 #   surface it instead of silently retrying another backend.
@@ -141,8 +140,7 @@
 #     __BRIEF__    absolute path to data/<task-id>/brief.md
 #     __PIBIN__    quoted concrete Pi-family executable path resolved from PATH
 #     __PITUIMODE__ optional --tui-mode regular when that executable advertises it
-#     __TURNEND__  absolute path to state/<task-id>.turn-ended (for harnesses whose
-#                  turn-end signal rides the launch command, e.g. codex -c notify=[...])
+#     __TURNEND__  absolute path to state/<task-id>.turn-ended
 #     __PIEXT__    absolute path to state/<task-id>.pi-ext.ts (pi turn-end extension,
 #                  written by this script; outside the worktree to avoid pi's trust gate)
 #     __PITURNEND__ absolute path to .pi/extensions/fm-primary-turnend-guard.ts in a pi secondmate home
@@ -411,7 +409,7 @@ spawn_remote_secondmate() {
     harness=$("$FM_ROOT/bin/fm-harness.sh" secondmate)
   fi
   case "$harness" in
-    codex|pi|pi-signed) ;;
+    pi|pi-signed) ;;
     *)
       fm_lock_release "$registry_lock" || true
       fm_lock_release "$SPAWN_TASK_LOCK" || true
@@ -950,7 +948,7 @@ if [ "$RELAUNCH" -eq 1 ]; then
   }
 elif [ "$KIND" = secondmate ]; then
   case "${POS[1]:-}" in
-    ''|codex|pi|pi-signed)
+    ''|pi|pi-signed)
       ARG3=${POS[1]:-}
       ;;
     *' '*)
@@ -1006,13 +1004,6 @@ launch_template() {
   local harness=$1 kind=${2:-ship}
   # shellcheck disable=SC2016  # single quotes are deliberate: $(cat ...) expands in the crewmate pane, not here
   case "$harness" in
-    codex)
-      if [ "$kind" = secondmate ]; then
-        printf '%s' 'codex __MODELFLAG____EFFORTFLAG__--dangerously-bypass-approvals-and-sandbox "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
-      else
-        printf '%s' 'codex __MODELFLAG____EFFORTFLAG__--dangerously-bypass-approvals-and-sandbox -c "notify=[\"bash\",\"-c\",\"touch __TURNEND__\"]" "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
-      fi
-      ;;
     pi|pi-signed)
       printf '%s' '__PIBIN____PITUIMODE__'
       if [ "$kind" = secondmate ]; then
@@ -1106,7 +1097,7 @@ model_flag_for_harness() {
   local harness=$1 model=$2
   [ -n "$model" ] && [ "$model" != default ] || return 0
   case "$harness" in
-    codex|pi|pi-signed)
+    pi|pi-signed)
       printf -- '--model %s ' "$(shell_quote "$model")"
       ;;
   esac
@@ -1116,14 +1107,6 @@ effort_flag_for_harness() {
   local harness=$1 effort=$2
   [ -n "$effort" ] && [ "$effort" != default ] || return 0
   case "$harness" in
-    codex)
-      # The installed codex config schema uses model_reasoning_effort, and the
-      # bundled model catalog advertises low|medium|high|xhigh. Omit max rather
-      # than passing an unsupported value.
-      case "$effort" in
-        low|medium|high|xhigh) printf -- '-c %s ' "$(shell_quote "model_reasoning_effort=\"$effort\"")" ;;
-      esac
-      ;;
     pi|pi-signed)
       # Pi 0.80.6 accepts the full shared effort vocabulary, including max, through
       # its --thinking flag.
@@ -1865,14 +1848,6 @@ if [ "$KIND" != secondmate ]; then
   # incarnation is rejected as stale.
   BUSY_GEN=
   case "$HARNESS" in
-    codex*)
-      if fm_busy_codex_semantic_source; then
-        echo "error: codex semantic busy-state wiring is not implemented; extend the probe only together with verified wiring" >&2
-        exit 1
-      fi
-      ;;
-  esac
-  case "$HARNESS" in
     pi|pi-signed)
       BUSY_GEN=$("$FM_ROOT/bin/fm-busy-event.sh" arm "$STATE_REAL" "$ID") || {
         echo "error: failed to arm the busy-state contract for $ID" >&2
@@ -1914,16 +1889,6 @@ export default function (pi: any) {
   pi.on("turn_end", () => execFile("touch", ["$TURNEND"]));
 }
 EOF
-      ;;
-    codex*)
-      # Semantic busy-state source negotiation (bin/fm-busy-lib.sh owns the
-      # probes and the evidence). Neither Codex path is usable on the
-      # installed binary: a pane worker's turns are not observable through
-      # the app-server protocol, and its lifecycle hooks did not fire for a
-      # firstmate-launched worker. Codex therefore classifies unknown with
-      # an explicit reason rather than falling back to idle, and no busy
-      # wiring is installed. The turn-end NOTIFICATION marker still rides
-      # the launch command via -c notify=[...] and __TURNEND__.
       ;;
   esac
 fi

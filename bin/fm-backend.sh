@@ -4,7 +4,6 @@
 #
 # The default tmux path remains compatible with metadata that omits `backend=`.
 # Herdr is the only non-default backend and records `backend=herdr`.
-# Codex App is intentionally not a runtime backend; docs/codex-app-backend.md owns that boundary.
 #
 # Event-source framing: backend supervision produces task events that map onto
 # firstmate's existing notification vocabulary. tmux synthesizes those events

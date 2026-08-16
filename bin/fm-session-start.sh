@@ -573,8 +573,7 @@ agents_baseline_drifted() {  # <rebuilding-session-pid>
 }
 
 # Only run-tier source pairs with both a stale native instruction cache and a
-# working Firstmate delivery path arrive here. Other adapters fresh-read on reset, and
-# Codex has no tracked interactive reset delivery path.
+# working Firstmate delivery path arrive here. Other adapters fresh-read on reset.
 agents_refresh_required() {  # <rebuilding-session-pid>
   local lock_pid=$1
   case "$PRIMARY_HARNESS:$SESSION_SOURCE" in

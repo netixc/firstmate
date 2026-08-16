@@ -29,29 +29,29 @@ matrix_case() {
 matrix_case A01 allow 'bin/fm-watch-arm.sh'
 matrix_case A02 allow './bin/fm-watch-arm.sh --restart'
 matrix_case A03 allow 'exec bin/fm-watch-arm.sh'
-matrix_case A04 allow 'bin/fm-watch-checkpoint.sh --seconds 180'
-matrix_case A05 allow 'exec bin/fm-watch-checkpoint.sh --seconds 180'
-matrix_case A06 allow "$ROOT/bin/fm-watch-checkpoint.sh --seconds 180"
+matrix_case A04 allow 'bin/fm-watch-arm.sh'
+matrix_case A05 allow 'exec bin/fm-watch-arm.sh'
+matrix_case A06 allow "$ROOT/bin/fm-watch-arm.sh"
 matrix_case A07 allow "cd '$ROOT'; exec bin/fm-watch-arm.sh"
-matrix_case A08 allow "cd '../firstmate'; bin/fm-watch-checkpoint.sh --seconds 180"
-matrix_case A09 allow "export FM_HOME='$ROOT'; bin/fm-watch-checkpoint.sh --seconds 180"
-matrix_case A10 allow 'source config/relay.env; bin/fm-watch-checkpoint.sh --seconds 180'
-matrix_case A11 allow "source 'config/relay.env'; bin/fm-watch-checkpoint.sh --seconds 180"
-matrix_case A12 allow "source './config/relay.env'; bin/fm-watch-checkpoint.sh --seconds 180"
-matrix_case A13 allow "source '$ROOT/config/relay.env'; bin/fm-watch-checkpoint.sh --seconds 180"
+matrix_case A08 allow "cd '../firstmate'; bin/fm-watch-arm.sh"
+matrix_case A09 allow "export FM_HOME='$ROOT'; bin/fm-watch-arm.sh"
+matrix_case A10 allow 'source config/relay.env; bin/fm-watch-arm.sh'
+matrix_case A11 allow "source 'config/relay.env'; bin/fm-watch-arm.sh"
+matrix_case A12 allow "source './config/relay.env'; bin/fm-watch-arm.sh"
+matrix_case A13 allow "source '$ROOT/config/relay.env'; bin/fm-watch-arm.sh"
 matrix_case A14 allow "[ -f 'config/relay.env' ] && source 'config/relay.env'; exec bin/fm-watch-arm.sh"
 matrix_case A15 allow "cd $ROOT && exec bin/fm-watch-arm.sh"
-matrix_case A16 allow "export FM_HOME=$ROOT && bin/fm-watch-checkpoint.sh --seconds 180"
-matrix_case A17 allow $'source "config/relay.env"\nbin/fm-watch-checkpoint.sh --seconds 180'
+matrix_case A16 allow "export FM_HOME=$ROOT && bin/fm-watch-arm.sh"
+matrix_case A17 allow $'source "config/relay.env"\nbin/fm-watch-arm.sh'
 
 matrix_case R01 allow "pgrep -fl '/bin/fm-watch.sh' || true"
 matrix_case R02 allow "ps aux | rg '/bin/fm-watch.sh'"
 matrix_case R03 allow "rg -n 'fm-watch-arm.sh &' docs tests"
 matrix_case R04 allow "rg -n 'bin/fm-watch-arm.sh; echo bad' docs"
-matrix_case R05 allow "git grep 'fm-watch-checkpoint.sh && echo bad'"
-matrix_case R06 allow "sed -n '/fm-watch-checkpoint.sh/p' docs/arm-pretool-check.md"
+matrix_case R05 allow "git grep 'fm-watch-arm.sh && echo bad'"
+matrix_case R06 allow "sed -n '/fm-watch-arm.sh/p' docs/arm-pretool-check.md"
 matrix_case R07 allow 'assert_contains "$content" '\''fm-watch-arm.sh &'\'''
-matrix_case R08 allow "printf '%s\\n' 'bin/fm-watch-checkpoint.sh --seconds 180 >/tmp/out'"
+matrix_case R08 allow "printf '%s\\n' 'bin/fm-watch-arm.sh >/tmp/out'"
 matrix_case R09 allow "tmux send-keys -t isolated-pi-lab 'bin/fm-watch-arm.sh &' Enter"
 matrix_case R10 allow "tmux send-keys -t isolated-pi-lab \"printf '%s\\n' 'bin/fm-watch-arm.sh &'\"; tmux send-keys -t isolated-pi-lab Enter"
 matrix_case R11 allow "python3 -c 'print(\"bin/fm-watch-arm.sh; echo data\")'"
@@ -70,18 +70,18 @@ matrix_case D03 deny 'bin/fm-watch-arm.sh & disown'
 matrix_case D04 deny '(bin/fm-watch-arm.sh) &'
 matrix_case D05 deny "bash -lc 'bin/fm-watch-arm.sh &'"
 matrix_case D06 deny '$(bin/fm-watch-arm.sh)'
-matrix_case D07 deny 'echo "$(bin/fm-watch-checkpoint.sh --seconds 180)"'
+matrix_case D07 deny 'echo "$(bin/fm-watch-arm.sh)"'
 matrix_case D08 deny 'cat <(bin/fm-watch-arm.sh)'
 matrix_case D09 deny 'bin/fm-watch-arm.sh >/tmp/out'
-matrix_case D10 deny 'bin/fm-watch-checkpoint.sh --seconds 180 </dev/null'
+matrix_case D10 deny 'bin/fm-watch-arm.sh </dev/null'
 matrix_case D11 deny 'bin/fm-watch-arm.sh 2>&1 | head -2'
 matrix_case D12 deny 'bin/fm-watch-arm.sh | cat'
-matrix_case D13 deny 'bin/fm-watch-checkpoint.sh --seconds 180 | timeout 1 cat'
+matrix_case D13 deny 'bin/fm-watch-arm.sh | timeout 1 cat'
 matrix_case D14 deny 'echo before; bin/fm-watch-arm.sh'
-matrix_case D15 deny 'bin/fm-watch-checkpoint.sh --seconds 180; echo after'
+matrix_case D15 deny 'bin/fm-watch-arm.sh; echo after'
 matrix_case D16 deny 'true && bin/fm-watch-arm.sh'
-matrix_case D17 deny 'bin/fm-watch-checkpoint.sh --seconds 180 || true'
-matrix_case D18 deny $'bin/fm-watch-arm.sh\nbin/fm-watch-checkpoint.sh --seconds 180'
+matrix_case D17 deny 'bin/fm-watch-arm.sh || true'
+matrix_case D18 deny $'bin/fm-watch-arm.sh\nbin/fm-watch-arm.sh'
 matrix_case D19 deny "pkill -f '/bin/fm-watch.sh'"
 matrix_case D20 deny "command pkill -f '/bin/fm-watch.sh'"
 matrix_case D21 deny "/usr/bin/pkill -f '/bin/fm-watch.sh'"
@@ -105,7 +105,6 @@ matrix_case D38 deny "bash <<< 'bin/fm-watch-arm.sh &'"
 matrix_case D39 deny "eval 'true;' 'bin/fm-watch-arm.sh &'"
 matrix_case D40 deny 'timeout 30 bin/fm-watch-arm.sh &'
 matrix_case D41 deny 'gtimeout 30 bin/fm-watch-arm.sh &'
-matrix_case D42 deny 'bin/fm-watch-{arm,checkpoint}.sh &'
 matrix_case D43 deny 'bin/fm-watch-arm.sh* &'
 matrix_case D44 deny "pattern='fm-watch'; pkill -f \"\$pattern\""
 matrix_case D45 deny "p=\$(pgrep -f '/bin/fm-watch.sh'); q=\$p; kill \$q"
@@ -123,22 +122,22 @@ matrix_case D56 deny 'for x in 1; do pkill -f fm-watch; done'
 matrix_case D57 deny 'case x in x) pkill -f fm-watch ;; esac'
 matrix_case D58 deny 'until false; do kill $(pgrep -f fm-watch); done'
 
-matrix_case E01 allow "bin/fm-watch-checkpoint.sh --seconds '180;still-one-arg'"
-matrix_case E02 allow "bin/fm-watch-checkpoint.sh --label 'fm-watch-arm.sh; literal argument'"
+matrix_case E01 allow "bin/fm-watch-arm.sh --seconds '180;still-one-arg'"
+matrix_case E02 allow "bin/fm-watch-arm.sh --label 'fm-watch-arm.sh; literal argument'"
 matrix_case E03 allow 'bin/fm-watch-arm.sh # output > file &'
-matrix_case E04 allow $'# setup comment with fm-watch.sh; && >\nsource "config/relay.env"\nbin/fm-watch-checkpoint.sh --seconds 180'
-matrix_case E05 deny "FM_HOME=$ROOT bin/fm-watch-checkpoint.sh --seconds 180"
+matrix_case E04 allow $'# setup comment with fm-watch.sh; && >\nsource "config/relay.env"\nbin/fm-watch-arm.sh'
+matrix_case E05 deny "FM_HOME=$ROOT bin/fm-watch-arm.sh"
 matrix_case E06 deny "env FM_HOME=$ROOT bin/fm-watch-arm.sh"
-matrix_case E07 deny "source '/tmp/not-firstmate/config/relay.env'; bin/fm-watch-checkpoint.sh --seconds 180"
-matrix_case E08 deny "bash -lc 'bin/fm-watch-checkpoint.sh --seconds 180'"
-matrix_case E09 deny '(bin/fm-watch-checkpoint.sh --seconds 180)'
+matrix_case E07 deny "source '/tmp/not-firstmate/config/relay.env'; bin/fm-watch-arm.sh"
+matrix_case E08 deny "bash -lc 'bin/fm-watch-arm.sh'"
+matrix_case E09 deny '(bin/fm-watch-arm.sh)'
 matrix_case E10 deny "eval 'bin/fm-watch-arm.sh &'"
 matrix_case E11 deny "exec bash -lc 'bin/fm-watch-arm.sh &'"
 matrix_case E12 allow 'bash -lc "$WATCHER_COMMAND" # fm-watch-arm.sh'
 matrix_case E13 allow "printf '%s\\n' 'argument has ; and fm-watch-arm.sh and &&'"
 matrix_case E14 allow '$FM_HOME/bin/fm-teardown.sh &'
 matrix_case E15 allow '$FM_HOME/bin/fm-watch-arm.sh'
-matrix_case E16 allow '~/firstmate/bin/fm-watch-checkpoint.sh --seconds 180'
+matrix_case E16 allow '~/firstmate/bin/fm-watch-arm.sh'
 matrix_case E17 allow 'for f in 1; do echo fm-watch; done'
 
 MATRIX_TMP=$(mktemp -d "${TMPDIR:-/tmp}/fm-arm-policy-matrix.XXXXXX")
@@ -146,16 +145,11 @@ FM_TEST_CLEANUP_DIRS+=("$MATRIX_TMP")
 trap fm_test_cleanup EXIT
 
 run_matrix_entry() {
-  local id=$1 expected=$2 entry=$3 cmd=$4 payload out_file err_file rc
+  local id=$1 expected=$2 entry=$3 cmd=$4 out_file err_file rc
   out_file="$MATRIX_TMP/$id-$entry.out"
   err_file="$MATRIX_TMP/$id-$entry.err"
 
   case "$entry" in
-    codex)
-      payload=$(jq -cn --arg command "$cmd" '{tool_name:"Bash",tool_input:{command:$command}}')
-      printf '%s' "$payload" | "$CHECK" >"$out_file" 2>"$err_file"
-      rc=$?
-      ;;
     pi)
       "$CHECK" --command "$cmd" >"$out_file" 2>"$err_file"
       rc=$?
@@ -179,11 +173,12 @@ run_matrix_entry() {
 
 test_full_acceptance_matrix() {
   local i entry
+  local -a entries=(pi)
   for ((i = 0; i < ${#MATRIX_IDS[@]}; i++)); do
-    for entry in codex pi; do
+    for entry in "${entries[@]}"; do
       run_matrix_entry "${MATRIX_IDS[$i]}" "${MATRIX_EXPECTED[$i]}" "$entry" "${MATRIX_COMMANDS[$i]}"
     done
-    pass "matrix ${MATRIX_IDS[$i]}: ${MATRIX_EXPECTED[$i]} through all three surviving entry forms"
+    pass "matrix ${MATRIX_IDS[$i]}: ${MATRIX_EXPECTED[$i]} through the Pi entry form"
   done
 }
 
@@ -210,7 +205,7 @@ test_direct_policy_contract() {
   assert_policy direct-unclassifiable $'deny\tunclassifiable-protected-command' "bin/fm-watch-arm.sh 'unterminated"
   assert_policy direct-unsupported $'deny\tunclassifiable-protected-command' 'if true; then bin/fm-watch-arm.sh; fi'
   assert_policy direct-constructed-payload $'deny\twatcher-nested' "WATCHER='bin/fm-watch-arm.sh &'; bash -lc \"\$WATCHER\""
-  assert_policy direct-parameter-export allow 'export FM_HOME=${HOME}; bin/fm-watch-checkpoint.sh --seconds 180'
+  assert_policy direct-parameter-export allow 'export FM_HOME=${HOME}; bin/fm-watch-arm.sh'
   assert_policy direct-expanded-arm-blessed allow '$FM_HOME/bin/fm-watch-arm.sh'
   assert_policy direct-expanded-arm-background $'deny\twatcher-background' '$FM_HOME/bin/fm-watch-arm.sh &'
   assert_policy direct-expanded-arm-pipeline $'deny\twatcher-pipeline' '$HOME/firstmate/bin/fm-watch-arm.sh | cat'
@@ -231,49 +226,12 @@ test_command_equals_form() {
   pass "--command=<val> equals-form parses correctly"
 }
 
-test_background_flag_accepted_and_non_gating() {
-  local rc_bg rc_nobg
-  "$CHECK" --command 'exec bin/fm-watch-arm.sh' --background true >/dev/null 2>&1
-  rc_bg=$?
-  "$CHECK" --command 'exec bin/fm-watch-arm.sh' >/dev/null 2>&1
-  rc_nobg=$?
-  [ "$rc_bg" -eq 0 ] || fail "--background true must not change the allow decision on its own, got exit $rc_bg"
-  [ "$rc_bg" -eq "$rc_nobg" ] || fail "--background flag must be accepted without altering the decision"
-  pass "--background is accepted for interface parity and is never itself a deny signal"
-}
-
 test_unknown_flag_errors() {
   "$CHECK" --bogus-flag >/dev/null 2>&1
   [ "$?" -eq 2 ] || fail "an unrecognized flag must exit non-zero, not silently allow"
   pass "unknown CLI flag is rejected"
 }
 
-# --- stdin JSON mode ----------------------------------------------------------
-
-
-test_stdin_codex_schema_allow() {
-  local rc
-  printf '%s' '{"tool_input":{"command":"exec bin/fm-watch-arm.sh"},"tool_name":"Bash"}' | "$CHECK" >/dev/null 2>&1
-  rc=$?
-  [ "$rc" -eq 0 ] || fail "codex tool_input.command schema must be read and allowed for the blessed shape, got exit $rc"
-  pass "stdin codex schema (tool_input.command): blessed shape allowed"
-}
-
-test_stdin_codex_schema_deny() {
-  local rc
-  printf '%s' '{"tool_input":{"command":"bin/fm-watch-arm.sh &"},"tool_name":"Bash"}' | "$CHECK" >/dev/null 2>&1
-  rc=$?
-  [ "$rc" -eq 2 ] || fail "codex tool_input.command schema must be denied for the backgrounded shape, got exit $rc"
-  pass "stdin codex schema (tool_input.command): backgrounded shape denied"
-}
-
-test_stdin_unrelated_command_allowed() {
-  local rc
-  printf '%s' '{"tool_input":{"command":"ls -la"},"tool_name":"Bash"}' | "$CHECK" >/dev/null 2>&1
-  rc=$?
-  [ "$rc" -eq 0 ] || fail "an unrelated command must pass through allowed, got exit $rc"
-  pass "stdin: unrelated command is a fast allow"
-}
 
 test_prefilter_is_strict_superset() {
   local rc
@@ -329,38 +287,6 @@ test_prefilter_is_strict_superset() {
 
 # --- fail-open ----------------------------------------------------------------
 
-test_failopen_empty_stdin() {
-  local rc
-  printf '' | "$CHECK" >/dev/null 2>&1
-  rc=$?
-  [ "$rc" -eq 0 ] || fail "empty stdin must fail open (exit 0), got exit $rc"
-  pass "fail-open: empty stdin"
-}
-
-test_failopen_garbage_stdin() {
-  local rc
-  printf 'not json at all {{{' | "$CHECK" >/dev/null 2>&1
-  rc=$?
-  [ "$rc" -eq 0 ] || fail "unparseable stdin must fail open (exit 0), got exit $rc"
-  pass "fail-open: unparseable JSON on stdin"
-}
-
-test_failopen_missing_jq() {
-  local dir fakebin rc real
-  dir=$(fm_test_tmproot fm-arm-pretool-check)
-  fakebin="$dir/fakebin"
-  mkdir -p "$fakebin"
-  local tool
-  for tool in bash grep sed tr; do
-    real=$(command -v "$tool")
-    ln -sf "$real" "$fakebin/$tool"
-  done
-  PATH="$fakebin" bash -c "printf '%s' '{\"tool_input\":{\"command\":\"bin/fm-watch-arm.sh &\"}}' | '$CHECK'" >/dev/null 2>&1
-  rc=$?
-  [ "$rc" -eq 0 ] || fail "missing jq must fail open (exit 0) rather than crash-deny, got exit $rc"
-  pass "fail-open: missing jq on stdin path"
-}
-
 test_failopen_missing_node() {
   local dir fakebin rc real tool
   dir=$(fm_test_tmproot fm-arm-pretool-node)
@@ -406,15 +332,8 @@ test_shellcheck_clean() {
 test_full_acceptance_matrix
 test_direct_policy_contract
 test_command_equals_form
-test_background_flag_accepted_and_non_gating
 test_unknown_flag_errors
-test_stdin_codex_schema_allow
-test_stdin_codex_schema_deny
-test_stdin_unrelated_command_allowed
 test_prefilter_is_strict_superset
-test_failopen_empty_stdin
-test_failopen_garbage_stdin
-test_failopen_missing_jq
 test_failopen_missing_node
 test_allow_is_silent
 test_shellcheck_clean

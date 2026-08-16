@@ -17,8 +17,7 @@
 # Submission dispatches through the target's recorded backend; the tmux adapter
 # shares its composer/submit core with the away-mode daemon via bin/fm-tmux-lib.sh.
 # Tune with FM_SEND_RETRIES (default 3) / FM_SEND_SLEEP (0.4).
-# Slash commands, and codex `$...` skill invocations resolved through harness
-# meta, get a longer pre-Enter settle so completion popups do not swallow Enter.
+# Slash commands get a longer pre-Enter settle so completion popups do not swallow Enter.
 #
 # From-firstmate marker: when the resolved target is a task selector whose meta
 # records kind=secondmate, the text uses the live-charter-compatible
@@ -134,7 +133,6 @@ fm_send_resolve_target() {  # <raw-target>
 
   RESOLVED_TARGET=""
   TARGET_BACKEND=""
-  TARGET_HARNESS=""
   EXPECTED_LABEL=""
   TARGET_META=""
   TARGET_SELECTOR=""
@@ -148,7 +146,6 @@ fm_send_resolve_target() {  # <raw-target>
       RESOLVED_TARGET="remote:$id"
       TARGET_BACKEND=remote
       TARGET_META=$meta
-      TARGET_HARNESS=$(fm_meta_get "$meta" harness)
       EXPECTED_LABEL="fm-$id"
       TARGET_SELECTOR=1
       TARGET_REMOTE_ID=$id
@@ -165,7 +162,6 @@ fm_send_resolve_target() {  # <raw-target>
     RESOLVED_TARGET=$target
     TARGET_BACKEND=$backend
     TARGET_META=$meta
-    TARGET_HARNESS=$(fm_meta_get "$meta" harness)
     EXPECTED_LABEL=$(fm_backend_expected_label_of_selector "$raw" "$STATE")
     TARGET_SELECTOR=1
     return 0
@@ -203,7 +199,6 @@ fm_send_resolve_target() {  # <raw-target>
     RESOLVED_TARGET=$target
     TARGET_BACKEND=$(fm_backend_of_meta "$meta")
     TARGET_META=$meta
-    TARGET_HARNESS=$(fm_meta_get "$meta" harness)
     RESOLUTION_TRIED="explicit target '$raw' matched $meta; backend=$TARGET_BACKEND"
     return 0
   fi
@@ -345,10 +340,6 @@ fm_send_close_resolved_keys() {  # <answer-text>
   done
 }
 
-# Resolve the target's harness from its meta (recorded by fm-spawn), used only to
-# scope the codex `$<skill>` popup-settle below. A task selector carries
-# meta; an explicit backend-target escape hatch has none, so its harness is
-# unknown and treated as non-codex (the safe default that keeps the fast path).
 # The target's BACKEND comes from selector meta, from matching an explicit target
 # back to recorded meta, or from strict explicit-target shape validation.
 # Do not add a separate passive liveness preflight here. Active send paths own
@@ -404,19 +395,11 @@ else
       exit 1
     fi
   fi
-  # Slash commands open a completion popup in some TUIs (verified on codex);
-  # submitting too fast selects nothing, so give the popup time to settle before
-  # the (retried) Enter. Codex opens the same kind of popup for a `$<skill>`
-  # invocation, so a `$...` message to a codex target gets the same settle. That
-  # `$` case is scoped to codex on purpose: unlike `/`, a leading `$` commonly
-  # starts ordinary text ("$5/month", "$HOME"), so a universal `$` rule would
-  # needlessly slow plain text to other harnesses. The target backend's
-  # verified submit retry still backs the settle up either way.
+  # Slash commands open a completion popup in some TUIs. Submitting too fast
+  # selects nothing, so give the popup time to settle before the retried Enter.
+  # The target backend's verified submit retry still backs the settle up.
   case "$*" in
     /*) settle=1.2 ;;
-    \$*)
-      if [ "$TARGET_HARNESS" = codex ]; then settle=1.2; else settle=0.3; fi
-      ;;
     *) settle=0.3 ;;
   esac
   retries=${FM_SEND_RETRIES:-3}

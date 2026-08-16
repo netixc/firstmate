@@ -38,7 +38,7 @@ trap cleanup_all EXIT
 
 # A `tmux` shim on PATH so bin/backends/tmux.sh's bare `tmux` calls reach the
 # private socket and never touch the host's real sessions.
-mkdir -p "$LAB/shim" "$LAB/bin" "$LAB/bin/codex" "$LAB/bin/decoy" "$LAB/wt"
+mkdir -p "$LAB/shim" "$LAB/bin" "$LAB/opt/pi" "$LAB/opt/decoy" "$LAB/wt"
 cat > "$LAB/shim/tmux" <<SH
 #!/usr/bin/env bash
 exec "$REAL_TMUX" -L "$SOCKET" "\$@"
@@ -51,7 +51,6 @@ export PATH
 # binary, never copies: a copied platform binary fails code-signing validation
 # and is killed on macOS arm64. The symlink name is what the kernel records as
 # the executable identity, which is exactly the signal under test.
-ln -s "$SLEEP_BIN" "$LAB/bin/codex-link"
 ln -s "$SLEEP_BIN" "$LAB/bin/pi"
 ln -s "$SLEEP_BIN" "$LAB/bin/notaharness"
 # A launcher whose own process identity is a bare shell, running the harness as
@@ -138,7 +137,7 @@ assert_sources_disagree() {  # <target> <label>
 # tmux and ps, while Linux can expose the symlink name through both, so the
 # version-string case below owns the cross-platform divergence assertion.
 
-new_window agent "$LAB/bin/codex-link" 900
+new_window agent "$LAB/bin/pi" 900
 wait_for_state "$SESSION:agent" alive \
   || fail "a running harness-named foreground process must classify alive"
 pass "tmux liveness: a harness-named foreground process classifies alive"
@@ -153,15 +152,15 @@ pass "tmux liveness: a harness-named foreground process classifies alive"
 CC_BIN=$(command -v cc 2>/dev/null || command -v gcc 2>/dev/null || true)
 if [ -n "$CC_BIN" ] &&
   printf '%s\n' '#include <unistd.h>' 'int main(void){for(;;)sleep(60);return 0;}' > "$LAB/spin.c" &&
-  "$CC_BIN" -o "$LAB/bin/codex/2.1.220" "$LAB/spin.c" 2>/dev/null &&
-  "$CC_BIN" -o "$LAB/bin/decoy/2.1.220" "$LAB/spin.c" 2>/dev/null; then
-  new_window titled "$LAB/bin/codex/2.1.220"
+  "$CC_BIN" -o "$LAB/opt/pi/2.1.220" "$LAB/spin.c" 2>/dev/null &&
+  "$CC_BIN" -o "$LAB/opt/decoy/2.1.220" "$LAB/spin.c" 2>/dev/null; then
+  new_window titled "$LAB/opt/pi/2.1.220"
   wait_for_state "$SESSION:titled" alive \
     || fail "a version-named executable under a harness install path must classify alive"
   assert_sources_disagree "$SESSION:titled" "version-string process name"
   pass "tmux liveness: a version-named executable under a harness install path classifies alive"
 
-  new_window path-decoy "$LAB/bin/decoy/2.1.220"
+  new_window path-decoy "$LAB/opt/decoy/2.1.220"
   wait_for_state "$SESSION:path-decoy" ambiguous \
     || fail "a version-named executable without a whole harness path component must stay ambiguous"
   pass "tmux liveness: a version-named executable under a decoy path stays ambiguous"
@@ -199,7 +198,7 @@ pass "tmux liveness: an idle shell pane classifies dead"
 # `set -m` gives the background job its own process group, which is what an
 # interactive shell does for a job an exited agent left behind.
 
-new_window background bash -c "set -m; '$LAB/bin/codex-link' 900 & printf '%s\n' \"\$!\" > '$LAB/bg.pid'; exec /bin/sh"
+new_window background bash -c "set -m; '$LAB/bin/pi' 900 & printf '%s\n' \"\$!\" > '$LAB/bg.pid'; exec /bin/sh"
 bg_pid=
 for _ in $(seq 1 100); do
   [ -s "$LAB/bg.pid" ] && bg_pid=$(cat "$LAB/bg.pid") && break

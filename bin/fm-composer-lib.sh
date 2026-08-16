@@ -45,9 +45,6 @@
 # docs/verification/runtime-backends.md):
 #   bordered   - a complete boxed composer: a top border, side-bordered content
 #                rows of the same family, and a matching bottom border.
-#   bare       - an agent prompt glyph row with no border at all (codex `›`).
-#                The agent glyph is itself the container
-#                proof; a bare SHELL glyph (`>` `$` `%` `#`) never is.
 #   separated  - pi: content rows between two solid horizontal `─` rules, no
 #                glyph and no side border. Provable only with a live agent
 #                identity reporting an idle/done/blocked pi (herdr `agent
@@ -59,14 +56,10 @@
 # what a pane shows once its agent has exited to a plain login shell - is a
 # genuine empty agent composer ONLY inside a bordered container. On a bare row
 # it is a dead-shell prompt and classifies `unknown` (never a safe injection
-# target). The AGENT glyph `›` (codex) is a genuine empty agent composer
-# either way.
-# Both glyph sets are declared
-# exactly once below; every decision reaches them through the declarations.
+# target).
 #
-# GHOST/PLACEHOLDER TEXT (task afk-herdr-false-pending): a harness fills an
-# otherwise-empty composer with de-emphasized ghost text - Codex's idle
-# suggestion - which a plain capture cannot tell apart from text a human typed.
+# GHOST/PLACEHOLDER TEXT: a harness may fill an otherwise-empty composer with
+# de-emphasized ghost text that a plain capture cannot tell apart from text a human typed.
 # fm_composer_strip_ghost is the ONE ANSI-aware extractor of "real typed
 # content": it drops every dim/faint (SGR 2) run and keeps only normal-intensity,
 # normally-coloured text.
@@ -158,7 +151,7 @@ fm_composer_normalize_trim_var() {  # <varname>
 # (from `tmux capture-pane -e`, `herdr pane read --format ansi`, or
 # a styled capture) and prints the
 # plain, non-ghost text on stdout, dropping:
-#   - dim/faint runs (SGR 2): how Codex renders suggestion text.
+#   - dim/faint runs (SGR 2): de-emphasized suggestion text.
 #     A reset (SGR 0) or normal-intensity (SGR 22) ends a dim run.
 # Codes are processed left to right within a sequence, so "ESC[0;2m" reads as dim.
 # LC_ALL=C makes awk walk bytes, so multibyte glyphs (e.g. ❯) and de-emphasised
@@ -232,13 +225,11 @@ fm_composer_strip_ghost() {
 # bin/fm-busy-lib.sh, which forbids classifying a harness from rendered text.
 # Matching a footer to confirm a keystroke landed is a different question from
 # asking what a worker is doing, and the two must not be conflated.
-# Delivery-only rendered busy footers per harness. Codex: "esc to interrupt";
-# Pi: "Working...".
+# Delivery-only rendered busy footers per harness. Pi renders "Working...".
 # The harness-less default is the UNION of the per-harness tokens below, used
 # when a caller has no recorded harness for the pane (the submit cores read the
 # baseline and the post-Enter transition this way).
-FM_DELIVERY_BUSY_REGEX_DEFAULT='esc to interrupt|Working\.\.\.'
-FM_DELIVERY_CODEX_BUSY_REGEX_DEFAULT='esc to interrupt'
+FM_DELIVERY_BUSY_REGEX_DEFAULT='Working\.\.\.'
 FM_DELIVERY_PI_BUSY_REGEX_DEFAULT='Working\.\.\.'
 
 fm_busy_lines_match() {  # [harness]
@@ -248,7 +239,6 @@ fm_busy_lines_match() {  # [harness]
     regex=$FM_BUSY_REGEX
   else
     case "$harness" in
-      codex) regex=$FM_DELIVERY_CODEX_BUSY_REGEX_DEFAULT ;;
       pi|pi-signed) regex=$FM_DELIVERY_PI_BUSY_REGEX_DEFAULT ;;
       '') regex=$FM_DELIVERY_BUSY_REGEX_DEFAULT ;;
       *)
@@ -261,13 +251,10 @@ fm_busy_lines_match() {  # [harness]
   [ -n "$regex" ] && printf '%s' "$lines" | grep -qiE "$regex"
 }
 
-# The prompt glyphs, each declared exactly once (see THE SAFETY RULE above).
-# AGENT glyphs are a genuine empty agent composer on any row, bordered or bare.
-# SHELL glyphs are one only INSIDE a composer container; on a bare row they are
-# a dead-shell prompt and must never read `empty`. Newline-separated and
-# consumed by `read` rather than word splitting, so `$`, `%`, and `#` stay
-# literal and no entry is ever exposed to pathname expansion.
-FM_COMPOSER_AGENT_PROMPT_GLYPHS=$(printf '%s\n' '›')
+# Shell prompt glyphs are genuine empty composers only inside a verified
+# composer container. Newline-separated and consumed by `read` rather than
+# word splitting, so `$`, `%`, and `#` stay literal and no entry is ever
+# exposed to pathname expansion.
 FM_COMPOSER_SHELL_PROMPT_GLYPHS=$(printf '%s\n' '>' '❯' '$' '%' '#')
 
 # FM_COMPOSER_IDLE_RE lets an unverified harness declare composer text it
@@ -314,27 +301,9 @@ fm_composer_leading_prompt_glyph_var() {  # <out-varname> <content>
       "$__fmpg_glyph"*) printf -v "$__fmpg_out" '%s' "$__fmpg_glyph"; return 0 ;;
     esac
   done <<EOF
-$FM_COMPOSER_AGENT_PROMPT_GLYPHS
 $FM_COMPOSER_SHELL_PROMPT_GLYPHS
 EOF
   printf -v "$__fmpg_out" '%s' ''
-  return 1
-}
-
-# fm_composer_leading_agent_glyph_var: like the above but AGENT glyphs only.
-# The bare-row shape must never be anchored by a shell glyph (dead-shell rule).
-fm_composer_leading_agent_glyph_var() {  # <out-varname> <content>
-  local __fmag_out=$1 __fmag_text=$2 __fmag_glyph
-  __fmag_text="${__fmag_text#"${__fmag_text%%[![:space:]]*}"}"
-  while IFS= read -r __fmag_glyph; do
-    [ -n "$__fmag_glyph" ] || continue
-    case "$__fmag_text" in
-      "$__fmag_glyph"*) printf -v "$__fmag_out" '%s' "$__fmag_glyph"; return 0 ;;
-    esac
-  done <<EOF
-$FM_COMPOSER_AGENT_PROMPT_GLYPHS
-EOF
-  printf -v "$__fmag_out" '%s' ''
   return 1
 }
 
@@ -364,18 +333,14 @@ fm_composer_idle_matches() {
 
 # fm_composer_classify_content: the single shared composer-content verdict.
 #   <bordered> 1 when <content> came from a genuine agent-composer container (a
-#              bordered composer box or an identity-proven separated composer);
-#              0 for a bare agent-glyph row, where only the agent glyph itself
-#              is proof.
+#              bordered composer box or an identity-proven separated composer).
 #   <content>  the candidate composer content, border-stripped by the caller.
 #   [idle_re]  optional idle-placeholder regex; empty means no idle matching.
 #              The screen classifier below passes the resolved fleet-wide idle
 #              set; this parameter stays pure so a direct caller's semantics
 #              cannot shift underneath it.
 #   [idle_case] `sensitive` (default) or `insensitive`.
-#   [plain_content] the UNSTRIPPED plain row, consulted when ghost stripping
-#              emptied an unbordered row so verified agent glyphs remain
-#              distinguishable from a dead shell prompt.
+#   [plain_content] the unstripped plain row.
 # Content and plain_content are normalized and re-trimmed on entry, so the
 # verdict never depends on which whitespace alphabet the calling adapter
 # trimmed with.
@@ -387,13 +352,7 @@ fm_composer_classify_content() {  # <bordered> <content> [idle_re] [idle_case] [
   plain_content=${5:-$2}
   fm_composer_normalize_trim_var plain_content
   if [ "$bordered" != 1 ] && [ -z "$content" ] && [ -n "$plain_content" ]; then
-    if _fm_composer_is_prompt_glyph "$plain_content" "$FM_COMPOSER_AGENT_PROMPT_GLYPHS"; then
-      printf 'empty'; return 0
-    fi
     printf 'unknown'; return 0
-  fi
-  if _fm_composer_is_prompt_glyph "$content" "$FM_COMPOSER_AGENT_PROMPT_GLYPHS"; then
-    printf 'empty'; return 0
   fi
   if _fm_composer_is_prompt_glyph "$content" "$FM_COMPOSER_SHELL_PROMPT_GLYPHS"; then
     if [ "$bordered" = 1 ]; then printf 'empty'; else printf 'unknown'; fi
@@ -470,7 +429,6 @@ _fm_composer_scan_screen() {  # <plain-screen> <cursor-or-empty> [extract-wrap]
   FM_COMPOSER_SCAN_INCOMPLETE_BOX_FROM=-1
   FM_COMPOSER_SCAN_UNSAFE=0
   FM_COMPOSER_SCAN_CURSOR_EDGE=0
-  FM_COMPOSER_SCAN_BARE_ROW=-1
   FM_COMPOSER_SCAN_SHELL_ROW=-1
   FM_COMPOSER_SCAN_PI_PAIR_FOUND=0
   FM_COMPOSER_SCAN_PI_PAIR_VALID=0
@@ -518,13 +476,9 @@ _fm_composer_scan_screen() {  # <plain-screen> <cursor-or-empty> [extract-wrap]
     elif [ "$pi_open" -ge 0 ]; then
       pi_lines=$((pi_lines + 1))
     fi
-    # Bare agent-glyph rows: the glyph itself is the container proof. Bare
-    # shell glyphs are deliberately not candidates (dead-shell rule). Keep
-    # lower shell prompts as staleness evidence for cursorless selection.
+    # Keep lower shell prompts as staleness evidence for cursorless selection.
     if [ "$top" -lt 0 ] && fm_composer_leading_shell_glyph_var glyph "$trimmed"; then
       FM_COMPOSER_SCAN_SHELL_ROW=$row
-    elif fm_composer_leading_agent_glyph_var glyph "$trimmed"; then
-      FM_COMPOSER_SCAN_BARE_ROW=$row
     fi
     # Terminal-cursor safety: a cursor sitting on a structural edge row is never an
     # input row.
@@ -731,69 +685,6 @@ _fm_composer_classify_rows() {  # <screen> <styled> <ambiguous> <first-row> <las
   fi
 }
 
-# _fm_composer_classify_bare_row: the bare agent-glyph row verdict, including
-# the styled=0 degradation: without styling, trailing text after the glyph may
-# be the harness's own idle suggestion (codex's dim hint,
-# `Use /skills ...`), so it must read `unknown` rather than a false `pending`.
-_fm_composer_classify_bare_row() {  # <screen> <styled> <row>
-  local screen=$1 styled=$2 row=$3 raw content plain state
-  raw=$(_fm_composer_screen_row "$row" "$screen")
-  content=$(_fm_composer_row_content "$raw" "$styled")
-  plain=$(_fm_composer_row_content "$raw" 0)
-  state=$(fm_composer_classify_content 0 "$content" \
-    "${FM_COMPOSER_IDLE_RE:-$FM_COMPOSER_IDLE_RE_DEFAULT}" insensitive "$plain" 0 "$styled")
-  if [ "$styled" != 1 ] && [ "$state" = pending ]; then
-    printf 'unknown'
-    return 0
-  fi
-  printf '%s' "$state"
-}
-
-# _fm_composer_wrap_region_ok: 0 when every row STRICTLY BELOW <glyph-row>
-# through <cursor-row> is non-blank and carries no structural edge - the
-# contiguity proof that those rows are the bare composer's wrapped input
-# rather than unrelated screen content.
-_fm_composer_wrap_region_ok() {  # <plain-screen> <glyph-row> <cursor-row>
-  local plain=$1 g=$2 cy=$3 row line trimmed glyph
-  row=$((g + 1))
-  while [ "$row" -le "$cy" ]; do
-    line=$(_fm_composer_screen_row "$row" "$plain")
-    trimmed=$line
-    fm_composer_normalize_trim_var trimmed
-    [ -n "$trimmed" ] || return 1
-    if fm_composer_row_has_edge "$trimmed"; then return 1; fi
-    if fm_composer_leading_shell_glyph_var glyph "$trimmed"; then return 1; fi
-    row=$((row + 1))
-  done
-  return 0
-}
-
-# _fm_composer_classify_bare_wrap: the bare composer plus its wrap region.
-# Content is the glyph row (glyph stripped) plus every continuation row down
-# to the cursor. Ghost-stripped-to-nothing rows are an empty composer whose
-# suggestion happened to wrap; any surviving text is pending when styling can
-# prove it real and unknown otherwise (the same styled=0 degradation as the
-# glyph row itself).
-_fm_composer_classify_bare_wrap() {  # <screen> <styled> <glyph-row> <cursor-row>
-  local screen=$1 styled=$2 g=$3 cy=$4 row raw content glyph='' text_seen=0
-  row=$g
-  while [ "$row" -le "$cy" ]; do
-    raw=$(_fm_composer_screen_row "$row" "$screen")
-    content=$(_fm_composer_row_content "$raw" "$styled")
-    if [ "$row" -eq "$g" ] && fm_composer_leading_agent_glyph_var glyph "$content"; then
-      content=${content#*"$glyph"}
-    fi
-    fm_composer_normalize_trim_var content
-    [ -z "$content" ] || text_seen=1
-    row=$((row + 1))
-  done
-  if [ "$text_seen" = 0 ]; then
-    printf 'empty'
-    return 0
-  fi
-  if [ "$styled" = 1 ]; then printf 'pending'; else printf 'unknown'; fi
-}
-
 _fm_composer_select_cursorless() {
   local plain=$1 generic=-1 next boundary raw trimmed
   FM_COMPOSER_SELECTED_KIND=
@@ -806,12 +697,6 @@ _fm_composer_select_cursorless() {
     FM_COMPOSER_SELECTED_FIRST=$((FM_COMPOSER_SCAN_BOX_TOP + 1))
     FM_COMPOSER_SELECTED_LAST=$((FM_COMPOSER_SCAN_BOX_BOTTOM - 1))
     FM_COMPOSER_SELECTED_AMBIG=$FM_COMPOSER_SCAN_BOX_AMBIG
-  fi
-  if [ "$FM_COMPOSER_SCAN_BARE_ROW" -gt "$generic" ]; then
-    generic=$FM_COMPOSER_SCAN_BARE_ROW
-    FM_COMPOSER_SELECTED_KIND=bare
-    FM_COMPOSER_SELECTED_FIRST=$FM_COMPOSER_SCAN_BARE_ROW
-    FM_COMPOSER_SELECTED_LAST=$FM_COMPOSER_SCAN_BARE_ROW
   fi
   if [ "$FM_COMPOSER_SCAN_INCOMPLETE_BOX_FROM" -gt "$generic" ]; then
     FM_COMPOSER_SELECTED_KIND=
@@ -833,18 +718,6 @@ _fm_composer_select_cursorless() {
   if [ "$FM_COMPOSER_SCAN_SHELL_ROW" -gt "$generic" ]; then
     FM_COMPOSER_SELECTED_KIND=
     return 1
-  fi
-  if [ "$FM_COMPOSER_SELECTED_KIND" = bare ]; then
-    next=$((FM_COMPOSER_SELECTED_LAST + 1))
-    while :; do
-      raw=$(_fm_composer_screen_row "$next" "$plain")
-      trimmed=$raw
-      fm_composer_normalize_trim_var trimmed
-      [ -n "$trimmed" ] || break
-      fm_composer_row_has_edge "$trimmed" && break
-      FM_COMPOSER_SELECTED_LAST=$next
-      next=$((next + 1))
-    done
   fi
   if [ "$FM_COMPOSER_SELECTED_KIND" = box ]; then
     boundary=$FM_COMPOSER_SCAN_BOX_BOTTOM
@@ -877,12 +750,6 @@ EOF
     content=$(_fm_composer_row_content "$raw" "$styled")
     placeholder_position=0
     case "$FM_COMPOSER_SELECTED_KIND" in
-      bare)
-        if [ "$row" -eq "$FM_COMPOSER_SELECTED_FIRST" ] \
-           && fm_composer_leading_agent_glyph_var glyph "$content"; then
-          content=${content#*"$glyph"}
-        fi
-        ;;
       box)
         if [ "$prompt_row" -lt 0 ] \
            && fm_composer_leading_prompt_glyph_var glyph "$content"; then
@@ -945,28 +812,6 @@ EOF
         "$((FM_COMPOSER_SCAN_BOX_TOP + 1))" "$((FM_COMPOSER_SCAN_BOX_BOTTOM - 1))"
       return 0
     fi
-    if [ "$FM_COMPOSER_SCAN_BARE_ROW" -ge 0 ] && [ "$cy" -eq "$FM_COMPOSER_SCAN_BARE_ROW" ]; then
-      if [ "$FM_COMPOSER_SCAN_PI_PAIR_FOUND" = 1 ] \
-         && [ "$cy" -gt "$FM_COMPOSER_SCAN_PI_OPEN" ] \
-         && [ "$cy" -lt "$FM_COMPOSER_SCAN_PI_CLOSE" ]; then
-        _fm_composer_classify_bare_pi_overlap "$screen" "$styled" "$has_identity" "$identity" "$cy"
-      else
-        _fm_composer_classify_bare_row "$screen" "$styled" "$cy"
-      fi
-      return 0
-    fi
-    # A bare composer's WRAP region: long typed input wraps below the glyph
-    # row, and the cursor lands on a continuation row that carries no glyph of
-    # its own. When every row from the glyph row down to the cursor is
-    # non-blank and non-structural, the cursor is inside that composer's
-    # wrapped input - an IDENTIFIED region, so the strict blank-row rule does
-    # not apply and a swallowed Enter on a long message still reads pending
-    # and earns its retry.
-    if [ "$FM_COMPOSER_SCAN_BARE_ROW" -ge 0 ] && [ "$cy" -gt "$FM_COMPOSER_SCAN_BARE_ROW" ] \
-       && _fm_composer_wrap_region_ok "$plain" "$FM_COMPOSER_SCAN_BARE_ROW" "$cy"; then
-      _fm_composer_classify_bare_wrap "$screen" "$styled" "$FM_COMPOSER_SCAN_BARE_ROW" "$cy"
-      return 0
-    fi
     if [ "$FM_COMPOSER_SCAN_PI_PAIR_FOUND" = 1 ] \
        && [ "$cy" -gt "$FM_COMPOSER_SCAN_PI_OPEN" ] \
        && [ "$cy" -lt "$FM_COMPOSER_SCAN_PI_CLOSE" ]; then
@@ -996,19 +841,6 @@ EOF
     box)
       _fm_composer_classify_rows "$screen" "$styled" "$FM_COMPOSER_SELECTED_AMBIG" \
         "$FM_COMPOSER_SELECTED_FIRST" "$FM_COMPOSER_SELECTED_LAST"
-      ;;
-    bare)
-      if [ "$FM_COMPOSER_SELECTED_LAST" -gt "$FM_COMPOSER_SELECTED_FIRST" ]; then
-        _fm_composer_classify_bare_wrap "$screen" "$styled" \
-          "$FM_COMPOSER_SELECTED_FIRST" "$FM_COMPOSER_SELECTED_LAST"
-      elif [ "$FM_COMPOSER_SCAN_PI_PAIR_FOUND" = 1 ] \
-         && [ "$FM_COMPOSER_SCAN_BARE_ROW" -gt "$FM_COMPOSER_SCAN_PI_OPEN" ] \
-         && [ "$FM_COMPOSER_SCAN_BARE_ROW" -lt "$FM_COMPOSER_SCAN_PI_CLOSE" ]; then
-        _fm_composer_classify_bare_pi_overlap "$screen" "$styled" "$has_identity" "$identity" \
-          "$FM_COMPOSER_SCAN_BARE_ROW"
-      else
-        _fm_composer_classify_bare_row "$screen" "$styled" "$FM_COMPOSER_SCAN_BARE_ROW"
-      fi
       ;;
   esac
 }
@@ -1055,28 +887,6 @@ _fm_composer_classify_pi_rows() {  # <screen> <styled>
     row=$((row + 1))
   done
   printf 'empty'
-}
-
-_fm_composer_classify_bare_pi_overlap() {  # <screen> <styled> <has-identity> <identity> <bare-row>
-  local screen=$1 styled=$2 has_identity=$3 identity=$4 row=$5 agent
-  if [ "$has_identity" != 1 ]; then
-    _fm_composer_classify_bare_row "$screen" "$styled" "$row"
-    return 0
-  fi
-  if [ -z "$identity" ]; then
-    printf 'need-identity'
-    return 0
-  fi
-  if [ "$identity" = probe-absent ]; then
-    _fm_composer_classify_bare_row "$screen" "$styled" "$row"
-    return 0
-  fi
-  agent=${identity%%$'\t'*}
-  if [ "$agent" = pi ]; then
-    _fm_composer_pi_verdict "$screen" "$styled" "$has_identity" "$identity"
-  else
-    _fm_composer_classify_bare_row "$screen" "$styled" "$row"
-  fi
 }
 
 # The pi separated-shape verdict: identity + structure conjunction (herdr's

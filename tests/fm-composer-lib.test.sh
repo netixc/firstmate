@@ -9,9 +9,7 @@
 #      (unsafe-for-injection), never `empty`. This is the safety fix.
 #   2. The SAME shell glyph INSIDE a bordered composer box is the harness's own
 #      prompt and still reads `empty` (existing behavior preserved).
-#   3. The AGENT prompt glyph `›` (codex) is a genuine empty agent composer
-#      either way, bordered or bare.
-#   4. Real unsubmitted text reads `pending`; a known idle placeholder reads
+#   3. Real unsubmitted text reads `pending`; a known idle placeholder reads
 #      `empty`.
 set -u
 
@@ -43,11 +41,7 @@ test_stripped_unbordered_content_uses_plain_content() {
     [ "$out" = unknown ] \
       || fail "stripped unbordered content '$plain' must retain its unknown safety verdict, got '$out'"
   done
-  plain='›'
-  out=$(classify 0 '' '' sensitive "$plain")
-  [ "$out" = empty ] \
-    || fail "a stripped agent glyph '$plain' must remain empty, got '$out'"
-  pass "fm_composer_classify_content: stripped unbordered content is unknown except verified agent glyphs"
+  pass "fm_composer_classify_content: stripped unbordered content remains unknown"
 }
 
 test_bare_shell_prompt_with_command_is_not_empty() {
@@ -70,15 +64,6 @@ test_bordered_shell_glyph_is_empty() {
   pass "fm_composer_classify_content: a bare agent prompt glyph reads empty inside a bordered composer"
 }
 
-# --- Agent glyphs are empty either way --------------------------------------
-
-test_agent_glyphs_are_empty_bordered_and_bare() {
-  local out
-  out=$(classify 0 '›'); [ "$out" = empty ] || fail "bare codex '›' should read empty, got '$out'"
-  out=$(classify 1 '›'); [ "$out" = empty ] || fail "bordered codex '›' should read empty, got '$out'"
-  pass "fm_composer_classify_content: codex's agent prompt glyph reads empty bordered or bare"
-}
-
 # --- Empty content and idle placeholder -------------------------------------
 
 test_empty_content_is_empty() {
@@ -94,10 +79,6 @@ test_idle_placeholder_is_empty() {
   [ "$out" = pending ] || fail "placeholder-like text surviving a styled box capture should read pending, got '$out'"
   out=$(classify 1 '❯ Type a message...' "$idle" sensitive '❯ Type a message...' 1 0)
   [ "$out" = empty ] || fail "a glyph-bearing plain box placeholder should read empty, got '$out'"
-  out=$(classify 0 '› Type a message...' "$idle" sensitive '› Type a message...' 0 1)
-  [ "$out" = pending ] || fail "placeholder text on a styled bare input row must be pending, got '$out'"
-  out=$(classify 0 '› Type a message...' "$idle" sensitive '› Type a message...' 0 0)
-  [ "$out" = unknown ] || fail "placeholder text on a plain bare input row must be unknown, got '$out'"
   out=$(classify 1 'Type a message...')
   [ "$out" = pending ] || fail "without an idle regex the placeholder text is pending, got '$out'"
   pass "fm_composer_classify_content: idle matching is limited to proven placeholder positions"
@@ -116,7 +97,6 @@ test_idle_placeholder_case_mode_is_explicit() {
 
 test_real_text_is_pending() {
   local out
-  out=$(classify 0 '› fix findings 1 and 3'); [ "$out" = pending ] || fail "bare '› <text>' should be pending, got '$out'"
   out=$(classify 1 '> deploy staging now'); [ "$out" = pending ] || fail "bordered '> <text>' should be pending, got '$out'"
   # A slash-command popup argument-hint placeholder is still unsubmitted text.
   out=$(classify 1 '/compact compaction instructions'); [ "$out" = pending ] || fail "a popup placeholder fill should be pending, got '$out'"
@@ -124,25 +104,16 @@ test_real_text_is_pending() {
 }
 
 test_delivery_busy_signatures_are_limited_to_verified_harnesses() {
-  local codex_footer='esc to interrupt' codex_near_miss
-  codex_near_miss=${codex_footer/ to/}
-  printf '%s\0' "$codex_footer" | fm_busy_lines_match codex \
-    || fail "Codex's verified delivery footer must remain recognized"
   printf 'Working...\0' | fm_busy_lines_match pi \
     || fail "Pi's verified delivery footer must remain recognized"
   printf 'Working...\0' | fm_busy_lines_match pi-signed \
     || fail "pi-signed must retain Pi's verified delivery footer"
-  printf '%s\0' "$codex_footer" | fm_busy_lines_match \
-    || fail "the harness-neutral matcher must retain the Codex footer"
   printf 'Working...\0' | fm_busy_lines_match \
     || fail "the harness-neutral matcher must retain the Pi footer"
-  if printf '%s\0' "$codex_near_miss" | fm_busy_lines_match; then
-    fail "the harness-neutral matcher accepted an unsupported delivery footer"
-  fi
-  if printf '%s\0' "$codex_footer" | fm_busy_lines_match legacy-agent; then
+  if printf 'Working...\0' | fm_busy_lines_match legacy-agent; then
     fail "an unsupported harness borrowed a verified harness's delivery footer"
   fi
-  pass "delivery busy matching recognizes only retained Codex and Pi signatures"
+  pass "delivery busy matching recognizes only the retained Pi signature"
 }
 
 # =============================================================================
@@ -150,9 +121,8 @@ test_delivery_busy_signatures_are_limited_to_verified_harnesses() {
 # correctness matrix (audit data/fm-composer-consolidation-audit-s1, task
 # fm-composer-thin-adapter-refactor-r1).
 #
-# Fixtures cover retained idle composer shapes: Codex with an SGR-2 dim hint,
-# Pi with a blank row between solid `─` rules, and a generic bordered
-# shell-glyph composer.
+# Fixtures cover Pi with a blank row between solid `─` rules and a generic
+# bordered shell-glyph composer.
 #
 # Capability profiles mirror the real adapters' descriptors: tmux
 # (styled+cursor+identity), styled cursorless, and plain capture. Every
@@ -161,7 +131,6 @@ test_delivery_busy_signatures_are_limited_to_verified_harnesses() {
 # =============================================================================
 
 ESC=$(printf '\033')
-NBSP=$(printf '\302\240')
 CAPS_TMUX=$'styled=1\ncursor=1\nidentity=1\nrows=0'
 CAPS_STYLED=$'styled=1\ncursor=0\nidentity=1\nrows=20'      # herdr
 CAPS_STYLED_NOID=$'styled=1\ncursor=0\nidentity=0\nrows=20' # styled-capture
@@ -176,20 +145,6 @@ assert_screen() {
   [ "$out" = "$want" ] || fail "$label: expected $want, got '$out'"
   out=$(LC_ALL=C fm_composer_classify_screen "$@")
   [ "$out" = "$want" ] || fail "$label under LC_ALL=C: expected $want, got '$out'"
-}
-
-test_matrix_codex_dim_hint_row() {
-  # Real idle codex: bold `›`, reset, then an SGR-2 dim hint. Styled captures
-  # strip the ghost and prove empty; plain captures must defer as unknown -
-  # NEVER the old false `pending` that read the hint as unsent text.
-  local styled plain
-  styled=$'banner\n'"${ESC}[1m›${ESC}[0m ${ESC}[2m"'Use /skills to list available skills'"${ESC}[0m"
-  plain=$'banner\n› Use /skills to list available skills'
-  assert_screen "codex idle on tmux" empty "$CAPS_TMUX" "$styled" 1
-  assert_screen "codex idle on herdr" empty "$CAPS_STYLED" "$styled"
-  assert_screen "codex idle on styled capture" empty "$CAPS_STYLED_NOID" "$styled"
-  assert_screen "codex idle on plain backends" unknown "$CAPS_PLAIN" "$plain"
-  pass "matrix: codex's dim hint is empty when styling proves it, unknown (never pending) when it cannot"
 }
 
 test_matrix_pi_separated_needs_identity() {
@@ -264,74 +219,6 @@ test_strict_blank_row_divergence() {
   pass "strict posture: blank and unidentified rows are unknown, never injectable empty"
 }
 
-test_bare_wrap_region_classifies() {
-  # Long typed input wraps below the glyph row; the cursor rides the wrapped
-  # continuation. The region is IDENTIFIED (glyph row + contiguous non-blank,
-  # non-structural rows), so a swallowed Enter still reads pending and earns
-  # its retry; a wrapped GHOST suggestion still proves empty.
-  local wrapped ghost_wrapped out
-  wrapped=$'› a very long steer message that\nwraps onto the following line'
-  assert_screen "wrapped typed input" pending "$CAPS_TMUX" "$wrapped" 1
-  wrapped=$'› wrapped typed input\ncontinues without a terminal-inserted glyph'
-  assert_screen "ordinary wrapped input" pending "$CAPS_TMUX" "$wrapped" 1
-  ghost_wrapped=$'› '"${ESC}[2ma long rotating suggestion that${ESC}[0m"$'\n'"${ESC}[2mwraps onto the next line${ESC}[0m"
-  out=$(fm_composer_classify_screen "$CAPS_TMUX" "$ghost_wrapped" 1)
-  [ "$out" = empty ] || fail "a wrapped ghost suggestion should still prove empty, got '$out'"
-  # A structural row between the glyph and the cursor breaks the wrap claim.
-  out=$(fm_composer_classify_screen "$CAPS_TMUX" $'› text\n────────────────\nbelow the rule' 2)
-  [ "$out" = unknown ] || fail "a rule between glyph and cursor must break the wrap region, got '$out'"
-  out=$(fm_composer_classify_screen "$CAPS_TMUX" $'› text\n$ live shell' 1)
-  [ "$out" = unknown ] || fail "a shell prompt below a glyph row must not become wrapped input, got '$out'"
-  pass "fm_composer_classify_screen: the bare composer's wrap region stays identified; structure breaks it"
-}
-
-test_contiguous_transcript_reanchors_on_live_prompt() {
-  local screen
-  screen=$'› hi\nHello!\n›'
-  assert_screen "contiguous transcript live prompt on cursorless styled backend" empty "$CAPS_STYLED_NOID" "$screen"
-  assert_screen "contiguous transcript live prompt on cursorless plain backend" empty "$CAPS_PLAIN" "$screen"
-  assert_screen "contiguous transcript live prompt with cursor" empty "$CAPS_TMUX" "$screen" 2
-  pass "fm_composer_classify_screen: a row-leading agent glyph reanchors the live composer"
-}
-
-test_lower_dead_shell_invalidates_cursorless_candidate() {
-  local stale live out
-  stale=$'old transcript\n›\nprocess exited\n$'
-  assert_screen "stale composer above dead shell on herdr" unknown "$CAPS_STYLED" "$stale"
-  assert_screen "stale composer above dead shell on styled capture" unknown "$CAPS_STYLED_NOID" "$stale"
-  assert_screen "stale composer above dead shell on plain capture" unknown "$CAPS_PLAIN" "$stale"
-  out=$(fm_composer_classify_screen "$CAPS_TMUX" "$stale" 1)
-  [ "$out" = empty ] \
-    || fail "cursor mode must keep the cursor-anchored composer verdict, got '$out'"
-
-  live=$'transcript shell snippet\n$ echo old output\nmore transcript\n›'
-  assert_screen "shell transcript above live composer on herdr" empty "$CAPS_STYLED" "$live"
-  assert_screen "shell transcript above live composer on styled capture" empty "$CAPS_STYLED_NOID" "$live"
-  assert_screen "shell transcript above live composer on plain capture" empty "$CAPS_PLAIN" "$live"
-  pass "fm_composer_classify_screen: a lower dead shell invalidates only cursorless stale composers"
-}
-
-test_cursorless_bare_wrap_region_classifies() {
-  local activity status ghost out
-  activity=$'›\nWorking on request...'
-  assert_screen "cursorless activity below bare row on herdr" pending "$CAPS_STYLED" "$activity"
-  assert_screen "cursorless activity below bare row on styled capture" pending "$CAPS_STYLED_NOID" "$activity"
-  assert_screen "cursorless activity below bare row on plain capture" unknown "$CAPS_PLAIN" "$activity"
-
-  status=$'›\n\ncodex status line'
-  assert_screen "blank-separated codex status on herdr" empty "$CAPS_STYLED" "$status"
-  assert_screen "blank-separated codex status on styled capture" empty "$CAPS_STYLED_NOID" "$status"
-  assert_screen "blank-separated codex status on plain capture" empty "$CAPS_PLAIN" "$status"
-
-
-  ghost=$'› '"${ESC}[2ma long rotating suggestion that${ESC}[0m"$'\n'"${ESC}[2mwraps onto the next line${ESC}[0m"
-  out=$(fm_composer_classify_screen "$CAPS_STYLED" "$ghost")
-  [ "$out" = empty ] || fail "cursorless ghost wrap on herdr should be empty, got '$out'"
-  out=$(fm_composer_classify_screen "$CAPS_STYLED_NOID" "$ghost")
-  [ "$out" = empty ] || fail "cursorless ghost wrap on styled capture should be empty, got '$out'"
-  pass "fm_composer_classify_screen: cursorless bare wrap regions participate in verdicts"
-}
-
 test_cursorless_container_rejects_contiguous_lower_activity() {
   local box boxed
   box=$'╭────────────────────────╮\n│ ❯                      │\n╰────────────────────────╯\nWorking on request...'
@@ -342,19 +229,6 @@ test_cursorless_container_rejects_contiguous_lower_activity() {
   boxed=$'╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯\n\nstatus line'
   assert_screen "blank-separated bordered footer" empty "$CAPS_PLAIN" "$boxed"
   pass "fm_composer_classify_screen: cursorless containers reject only contiguous unclaimed activity"
-}
-
-test_bottom_most_candidate_wins() {
-  # The one ranking rule: the live composer is bottom-anchored, so a stale
-  # decorative box (codex's startup banner) can never outrank the real row
-  # below it - the confidently-wrong plain capture case from the audit.
-  local screen out
-  screen=$'╭────────────────────────╮\n│ permissions: YOLO mode │\n╰────────────────────────╯\n❯'"$NBSP"
-  out=$(fm_composer_classify_screen "$CAPS_PLAIN" $'╭────────────────────────╮\n│ permissions: YOLO mode │\n╰────────────────────────╯\n› Use /skills to list available skills')
-  [ "$out" != pending ] || fail "a stale banner must never classify as pending composer text"
-  screen=$'› old draft\n\n›'
-  assert_screen "blank-separated newer bare composer" empty "$CAPS_STYLED_NOID" "$screen"
-  pass "fm_composer_classify_screen: the bottom-most candidate wins; stale banners cannot"
 }
 
 test_incomplete_lower_box_invalidates_stale_candidate() {
@@ -402,18 +276,6 @@ test_selected_content_is_composer_scoped_and_wrap_normalized() {
   out=$(fm_composer_extract_selected_content "$CAPS_STYLED_NOID" "$screen")
   [ "$out" = 'Type a message...' ] \
     || fail "surviving placeholder-like input should remain extracted user content, got '$out'"
-  screen=$'› a legitimately long steer that\nwraps across the next bare row\n\ntranscript below the break'
-  out=$(fm_composer_extract_selected_content "$CAPS_STYLED_NOID" "$screen")
-  [ "$out" = 'a legitimately long steer that wraps across the next bare row' ] \
-    || fail "bare extraction should include only its contiguous wrap region, got '$out'"
-  screen=$'› wrapped user content\ncontinuation preserves a mid-row › glyph'
-  out=$(fm_composer_extract_selected_content "$CAPS_STYLED_NOID" "$screen")
-  [ "$out" = 'wrapped user content continuation preserves a mid-row › glyph' ] \
-    || fail "bare extraction should preserve mid-row agent glyph bytes, got '$out'"
-  screen=$'› stale composer\n$ live shell'
-  if out=$(fm_composer_extract_selected_content "$CAPS_STYLED_NOID" "$screen"); then
-    fail "a lower live shell must invalidate composer extraction, got '$out'"
-  fi
   screen=$'╭──────────────────────────────╮\n│ > wrapped user content       │\n│ ❯ preserves its leading glyph│\n╰──────────────────────────────╯'
   out=$(fm_composer_extract_selected_content "$CAPS_STYLED_NOID" "$screen")
   [ "$out" = 'wrapped user content ❯ preserves its leading glyph' ] \
@@ -425,22 +287,15 @@ test_bare_shell_glyphs_are_unknown
 test_stripped_unbordered_content_uses_plain_content
 test_bare_shell_prompt_with_command_is_not_empty
 test_bordered_shell_glyph_is_empty
-test_agent_glyphs_are_empty_bordered_and_bare
 test_empty_content_is_empty
 test_idle_placeholder_is_empty
 test_idle_placeholder_case_mode_is_explicit
 test_real_text_is_pending
 test_delivery_busy_signatures_are_limited_to_verified_harnesses
-test_matrix_codex_dim_hint_row
 test_matrix_pi_separated_needs_identity
 test_matrix_bordered_shell_glyph_box
 test_strict_blank_row_divergence
-test_bare_wrap_region_classifies
-test_contiguous_transcript_reanchors_on_live_prompt
-test_lower_dead_shell_invalidates_cursorless_candidate
-test_cursorless_bare_wrap_region_classifies
 test_cursorless_container_rejects_contiguous_lower_activity
-test_bottom_most_candidate_wins
 test_incomplete_lower_box_invalidates_stale_candidate
 test_mismatched_bottom_requires_matching_width
 test_cursor_on_proven_box_bottom_classifies_content

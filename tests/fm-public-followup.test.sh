@@ -1114,7 +1114,7 @@ test_cleanup_refuses_while_a_public_reply_is_owed() {
     "window=firstmate:fm-ship-task" \
     "worktree=$home/projects/gone" \
     "project=$home/projects/sample" \
-    "harness=codex" \
+    "harness=pi" \
     "kind=ship" \
     "mode=no-mistakes"
 

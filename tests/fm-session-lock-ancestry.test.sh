@@ -43,8 +43,8 @@ case "${FM_TEST_SHAPE:-pi}:$pid:$field" in
   gap:710:comm=) printf '%s\n' bash ;;
   gap:710:args=) printf '%s\n' 'bash tests/run.sh' ;;
   gap:710:ppid=) printf '%s\n' 720 ;;
-  gap:720:comm=) printf '%s\n' codex ;;
-  gap:720:args=) printf '%s\n' codex ;;
+  gap:720:comm=) printf '%s\n' pi-signed ;;
+  gap:720:args=) printf '%s\n' pi-signed ;;
   gap:720:ppid=) printf '%s\n' 1 ;;
   competitor:600:comm=) printf '%s\n' pi-signed ;;
   competitor:600:args=) printf '%s\n' pi-signed ;;

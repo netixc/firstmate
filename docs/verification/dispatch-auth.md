@@ -9,6 +9,7 @@ Task chronology, incident transcripts, and credential metadata stay in private r
 Firstmate resolves a candidate's provider family, credential surface, and applicable quota by reading the evidence below and reasoning in the open.
 No script maps a model to a provider, a provider to a credential store, or a name prefix to a family, so the facts here are what that reasoning rests on.
 Credential paths below are shown with the home directory replaced by `<home>`.
+The `codex` quota provider key and its CLI/auth-store paths are evidence for Pi's `openai-codex/*` model authentication only; they do not name a Firstmate worker harness.
 
 ## Quota granularity the judgment depends on
 

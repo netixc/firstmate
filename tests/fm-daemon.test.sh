@@ -561,12 +561,12 @@ test_escalate_batches_into_one_digest() {
   state="$dir/state"
   fakebin="$dir/fakebin"
   sent="$dir/sent.log"; : > "$sent"
-  capture="$dir/pane.txt"; printf '\342\200\272 \n' > "$capture"  # a proven-empty bare Codex composer: strict injection needs positive proof
+  capture="$dir/pane.txt"; printf '╭────╮\n│ >  │\n╰────╯\n' > "$capture"
   escalate_add "$state" "event A: done: PR 1"
   escalate_add "$state" "event B: done: PR 2"
   afk_enter "$state"
   PATH="$fakebin:$PATH" FM_FAKE_TMUX_PANE_ALIVE=1 FM_FAKE_TMUX_SENT="$sent" \
-    FM_FAKE_TMUX_CAPTURE="$capture" FM_ESCALATE_BATCH_SECS=0 escalate_flush "$state" \
+    FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=1 FM_ESCALATE_BATCH_SECS=0 escalate_flush "$state" \
     || fail "escalate_flush failed"
   grep -F 'FIRSTMATE_OP: v1 away-supervisor: ' "$sent" >/dev/null \
     || fail "batch digest lacks the exact current away-supervisor kind"
@@ -587,13 +587,13 @@ test_escalate_batch_age_uses_first_append() {
   state="$dir/state"
   fakebin="$dir/fakebin"
   sent="$dir/sent.log"; : > "$sent"
-  capture="$dir/pane.txt"; printf '\342\200\272 \n' > "$capture"  # a proven-empty bare Codex composer: strict injection needs positive proof
+  capture="$dir/pane.txt"; printf '╭────╮\n│ >  │\n╰────╯\n' > "$capture"
   escalate_add "$state" "event A: done: PR 1"
   escalate_add "$state" "event B: done: PR 2"
   echo $(( $(date +%s) - 100 )) > "$state/.subsuper-escalations.since"
   afk_enter "$state"
   PATH="$fakebin:$PATH" FM_FAKE_TMUX_PANE_ALIVE=1 FM_FAKE_TMUX_SENT="$sent" \
-    FM_FAKE_TMUX_CAPTURE="$capture" FM_ESCALATE_BATCH_SECS=90 FM_HOUSEKEEPING_TICK=0 \
+    FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=1 FM_ESCALATE_BATCH_SECS=90 FM_HOUSEKEEPING_TICK=0 \
     housekeeping "$state"
   grep -F 'event A: done: PR 1 | event B: done: PR 2' "$sent" >/dev/null \
     || fail "backdated batch did not flush as a joined digest (max-delay measured from last append)"
@@ -704,11 +704,11 @@ test_afk_absent_daemon_does_not_inject() {
   state="$dir/state"
   fakebin="$dir/fakebin"
   sent="$dir/sent.log"; : > "$sent"
-  capture="$dir/pane.txt"; printf '\342\200\272 \n' > "$capture"  # a proven-empty bare Codex composer: strict injection needs positive proof
+  capture="$dir/pane.txt"; printf '╭────╮\n│ >  │\n╰────╯\n' > "$capture"
   escalate_add "$state" "done: PR 1"
   # afk flag deliberately NOT set
   if PATH="$fakebin:$PATH" FM_FAKE_TMUX_PANE_ALIVE=1 FM_FAKE_TMUX_SENT="$sent" \
-    FM_FAKE_TMUX_CAPTURE="$capture" FM_ESCALATE_BATCH_SECS=0 escalate_flush "$state"; then
+    FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=1 FM_ESCALATE_BATCH_SECS=0 escalate_flush "$state"; then
     fail "escalate_flush succeeded while afk inactive"
   fi
   [ -s "$sent" ] && fail "daemon injected while afk inactive"
@@ -727,7 +727,7 @@ test_busy_guard_defers_when_supervisor_busy() {
   escalate_add "$state" "done: PR 1"
   afk_enter "$state"
   if PATH="$fakebin:$PATH" FM_FAKE_TMUX_PANE_ALIVE=1 FM_FAKE_TMUX_SENT="$sent" \
-    FM_FAKE_TMUX_CAPTURE="$capture" FM_ESCALATE_BATCH_SECS=0 escalate_flush "$state"; then
+    FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=1 FM_ESCALATE_BATCH_SECS=0 escalate_flush "$state"; then
     fail "escalate_flush should defer when supervisor pane busy"
   fi
   [ -s "$sent" ] && fail "daemon injected into a busy pane"
@@ -850,7 +850,7 @@ test_pane_input_pending_blank_defers_strict() {
   pass "pane_input_pending: a blank unidentified cursor row defers (strict container-proof rule)"
 }
 
-test_pane_input_pending_requires_proven_empty_prompt() {
+test_pane_input_pending_rejects_bare_prompts() {
   local dir state fakebin capture prompt
   dir=$(make_supercase pending-prompt)
   state="$dir/state"
@@ -862,13 +862,7 @@ test_pane_input_pending_requires_proven_empty_prompt() {
       pane_input_pending "fakepane" \
       || fail "bare shell prompt '$prompt' should defer as unknown"
   done
-  prompt='›'
-  printf 'output\noutput\n%s \n' "$prompt" > "$capture"
-  if PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=2 \
-    pane_input_pending "fakepane"; then
-    fail "proven empty agent prompt '$prompt' should not defer"
-  fi
-  pass "pane_input_pending: only proven empty agent prompts pass"
+  pass "pane_input_pending: bare prompts always defer"
 }
 
 # The safety fix at the tmux classifier (task fm-composer-shellglyph-safety): a
@@ -890,10 +884,8 @@ test_tmux_composer_state_bare_shell_is_unknown() {
   pass "fm_tmux_composer_state: a bare shell prompt (\$/%/#/>) reads unknown, never empty (dead-shell injection safety)"
 }
 
-# The other side of the fix: a bordered composer box (the harness draws its own
-# prompt glyph inside it) and Codex's surviving bare agent prompt glyph are
-# genuine empty agent composers and must still read `empty`.
-test_tmux_composer_state_bordered_and_agent_rows_are_empty() {
+# A bordered composer box remains a genuine empty composer.
+test_tmux_composer_state_bordered_rows_are_empty() {
   local dir fakebin capture out
   dir=$(make_supercase composer-empty-agent)
   fakebin="$dir/fakebin"; capture="$dir/pane.txt"
@@ -901,11 +893,7 @@ test_tmux_composer_state_bordered_and_agent_rows_are_empty() {
   out=$(PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=1 \
     fm_tmux_composer_state "fakepane")
   [ "$out" = empty ] || fail "a bordered '│ > │' composer should read empty, got '$out'"
-  printf '%s\n' "› " > "$capture"
-  out=$(PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=0 \
-    fm_tmux_composer_state "fakepane")
-  [ "$out" = empty ] || fail "a bare codex '›' composer should read empty, got '$out'"
-  pass "fm_tmux_composer_state: a bordered composer box and Codex's bare agent glyph still read empty"
+  pass "fm_tmux_composer_state: a bordered composer box reads empty"
 }
 
 test_tmux_composer_state_requires_matching_box_borders() {
@@ -1651,12 +1639,12 @@ test_pane_is_busy_herdr_native_busy_state() {
 test_primary_busy_guard_is_harness_scoped() {
   (
     fm_backend_busy_state() { printf 'unknown'; }
-    fm_backend_capture() { printf 'esc to interrupt\n'; }
-    if FM_DAEMON_PRIMARY_HARNESS=pi pane_is_busy "default:w1:p2" herdr; then
-      fail "Codex's rendered signature must not classify a Pi primary busy"
+    fm_backend_capture() { printf 'Working...\n'; }
+    FM_DAEMON_PRIMARY_HARNESS=pi pane_is_busy "default:w1:p2" herdr \
+      || fail "Pi's rendered signature should classify a Pi primary busy"
+    if FM_DAEMON_PRIMARY_HARNESS=spaceship pane_is_busy "default:w1:p2" herdr; then
+      fail "an unsupported harness must not borrow Pi's rendered signature"
     fi
-    FM_DAEMON_PRIMARY_HARNESS=codex pane_is_busy "default:w1:p2" herdr \
-      || fail "Codex's rendered signature should classify a Codex primary busy"
   ) || fail "harness-scoped primary busy guard subshell failed"
   pass "primary busy guard isolates rendered signatures by detected harness"
 }
@@ -1843,9 +1831,9 @@ test_should_exit_afk_when_afk_inactive
 test_strip_injection_marker
 test_pane_input_pending_detects_partial_input
 test_pane_input_pending_blank_defers_strict
-test_pane_input_pending_requires_proven_empty_prompt
+test_pane_input_pending_rejects_bare_prompts
 test_tmux_composer_state_bare_shell_is_unknown
-test_tmux_composer_state_bordered_and_agent_rows_are_empty
+test_tmux_composer_state_bordered_rows_are_empty
 test_tmux_composer_state_requires_matching_box_borders
 test_pane_input_pending_preserves_bright_placeholder_like_draft
 test_classify_signal_dedup_against_scan
