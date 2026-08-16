@@ -26,8 +26,8 @@
 #     backend (herdr tab/workspace, tmux detached session) and passes the
 #     captain pane in as FM_SUPERVISOR_TARGET so injection targets it, not the
 #     daemon's own new pane.
-# Do not wrap this in `nohup ... &`: Codex/herdr can reap fire-and-forget shell
-# children after the tool call returns, while a tracked background terminal stays
+# Do not wrap this in `nohup ... &`: Herdr can reap fire-and-forget shell children
+# after the tool call returns, while a tracked background terminal stays
 # attached and has a real lifecycle.
 set -eu
 

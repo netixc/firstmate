@@ -75,12 +75,9 @@ check_harness_idle_empty() {  # <name> <launch-cmd...>
     verdict=$(fm_tmux_composer_state "$SESSION:$win")
     [ "$verdict" = empty ] && break
     i=$((i + 1))
-    # A fresh harness may park on a vendor update-available modal (observed
-    # live for codex 0.146.0), which the strict classifier
-    # correctly refuses to call a composer. Dismiss it once, mid-budget, with
-    # a single Escape - the one key that submits nothing anywhere and is how
-    # the audit declined the same prompts. Never Enter: on codex's dialog
-    # Enter would RUN the upgrade.
+    # A fresh harness may park on a startup modal, which the strict classifier
+    # correctly refuses to call a composer. Dismiss a non-trust modal once,
+    # mid-budget, with a single Escape; never submit it with Enter.
     if [ "$dismissed" -eq 0 ] && [ "$i" -ge $((budget / 3)) ]; then
       # Trust prompts also accept Escape, but there it exits the harness and
       # erases the actionable failure surface. Preserve those prompts; only
@@ -108,7 +105,8 @@ check_harness_idle_empty() {  # <name> <launch-cmd...>
 }
 
 # --- 1. Every installed verified harness must reach a proven-empty composer --
-for h in codex pi; do
+HARNESSES=(pi)
+for h in "${HARNESSES[@]}"; do
   if command -v "$h" >/dev/null 2>&1; then
     check_harness_idle_empty "$h" "$h"
   else

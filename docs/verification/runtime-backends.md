@@ -35,7 +35,7 @@ Pi and pi-signed 0.82.0 were reverified on 2026-07-27 through real isolated `fm-
 The earlier record that every harness is observed under its own `#{pane_current_command}` no longer holds and has been replaced by the per-harness evidence below.
 In this macOS run that reading reflected a rewritable process title rather than stable executable identity, so it is now one of two independent name sources rather than the sole basis of a verdict.
 
-The three verified worker adapters were relaunched on 2026-08-03 with tmux 3.6a on macOS 26.5.2 arm64, each on a private socket in an isolated lab.
+The two verified worker adapters were relaunched on 2026-08-03 with tmux 3.6a on macOS 26.5.2 arm64, each on a private socket in an isolated lab.
 
 ```sh
 tmux -L "$socket" new-window -d -t "$session:" -n "$harness" -c "$wt" -- "$bin"
@@ -47,12 +47,8 @@ Observed identities, and the resulting verdict:
 
 | Harness | Version | `#{pane_current_command}` | Foreground `comm` | Verdict |
 | --- | --- | --- | --- | --- |
-| codex | codex-cli 0.146.0 | `codex` | `codex` | alive |
 | pi | 0.82.0 | `pi-launcher` | `pi-signed`, `pi` | alive |
 | pi-signed | 0.82.0 | `pi-launcher` | `pi-signed`, `pi` | alive |
-
-Codex reported `codex-aarch64-a` at 0.145.0 and `codex` at 0.146.0, so a process identity can move between ordinary patch releases.
-That is evidence for treating any single process name as a surface under vendor control rather than a stable contract.
 
 `#{pane_current_command}` and foreground `ps -o comm=` read different name fields, but which one preserves executable identity is platform-dependent.
 On macOS the pane command reflected the rewritable title while the full install path could survive in `ps -o comm=`; in the Linux portable regression those roles reversed for the version-named native executable, with the identifying path retained in argv[0].
@@ -135,7 +131,7 @@ ok - fm-teardown: dedicated-socket invalid cleanup preserves target/control and 
 The dedicated tmux cell removed ambient tmux variables, required a socket-bound wrapper, kept one target and one independent control window, and proved the wrapper was not called for invalid metadata or a direct empty target.
 Valid cleanup removed only the exact task-bound target and left the control window live.
 The metadata-only validation covers tmux and Herdr before backend dispatch.
-Codex, Pi, and pi-signed share that backend cleanup boundary; their harness-specific hook files are cleaned only after it, so no harness needs a separate endpoint parser.
+Pi and pi-signed share that backend cleanup boundary; their harness-specific hook files are cleaned only after it, so no harness needs a separate endpoint parser.
 
 ## Composer classification matrix
 
@@ -149,13 +145,12 @@ FM_COMPOSER_MATRIX_LIVE=1 tests/fm-composer-matrix-live-e2e.test.sh
 Observed output:
 
 ```text
-ok - codex (codex-cli 0.146.0): real idle composer classifies empty
-ok - pi (0.84.0): real idle composer classifies empty
+ok - pi (0.84.1): real idle composer classifies empty
 ok - strict posture live: a blank shell row classifies unknown and injection defers
-ok - live composer-matrix guard verified 3 live surface(s)
+ok - live composer-matrix guard verified 2 live surface(s)
 ```
 
-Both installed agent harnesses' real idle composers reached a proven `empty`, including Pi through the tmux foreground-process identity probe; Codex first parked on a vendor update-available modal that the strict classifier correctly refused until the guard's single non-submitting Escape dismissed it.
+The installed Pi harness's real idle composer reached a proven `empty` through the tmux foreground-process identity probe.
 The strict blank-row posture held live: a blank shell row deferred injection.
 Portable capture regressions in `tests/fm-composer-lib.test.sh` exercise each retained shape and capability profile under both a UTF-8 locale and `LC_ALL=C`.
 This guard is the refresh command after an upgrade to any matrix-covered harness; rerun it and update the versions above rather than trusting this table across releases.
@@ -477,7 +472,6 @@ ok - forced teardown retains a nested secondmate home and its grandchild's Herdr
 
 Real captures verified these active distinctions:
 
-- Codex uses a bare `›` agent composer.
 - Pi uses content between complete separator rows and requires exact native Pi identity.
 - Dim or faint suggestion text is ghost content, while normally styled text is pending input.
 - A bare shell prompt has no safe agent-composer container and is unknown.
@@ -541,23 +535,3 @@ FM_AFK_PI_HERDR_E2E=1 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
 
 Observed guarantees: pending composer input refused injection and raised one alert; idle Pi accepted one marked escalation; the return gate refused ordinary work while a live blocker remained; resolving the blocker allowed the return flow.
 The dedicated Herdr daemon workspace topology is covered by `tests/fm-afk-launch.test.sh` and preserves the captain tab's pane count.
-
-## Codex App host tools
-
-A reusable Desktop host-tool smoke ran on 2026-07-06 against Codex Desktop bundle version 26.623.101652, build 4674, bundle id `com.openai.codex`.
-Local paths and task-specific ids are intentionally not retained here.
-
-The host-tool sequence was:
-
-1. list a saved project;
-2. create a Desktop-owned worktree thread;
-3. recover and read the thread while active and after completion;
-4. verify the thread appended a Firstmate status line and wrote its report;
-5. send a follow-up to the same thread;
-6. read the completed follow-up;
-7. archive the exact thread;
-8. read the archived transcript with state `notLoaded`.
-
-Observed guarantee: a Desktop-owned thread can write Firstmate lifecycle files when the prompt provides an authorized absolute path, and create, send, read, and archive work at the Desktop host-tool layer.
-The missing guarantee remains a supported shell-callable bridge that lets Firstmate perform those operations against the same visible Desktop endpoint.
-App-server partial methods and raw socket experiments do not satisfy that bridge contract.

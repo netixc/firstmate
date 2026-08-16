@@ -75,21 +75,22 @@ case "\${1:-}" in
   display-message)
     case "\$*" in
       *'#{pane_current_path}'*) cut -d'|' -f2- "\$state" ;;
-      *'#{pane_current_command}'*) printf 'codex\n' ;;
-      *'#{cursor_y}'*) printf '0\n' ;;
+      *'#{pane_current_command}'*) printf 'pi\n' ;;
+      *'#{cursor_y}'*) printf '1\n' ;;
       *'#S'*) printf 'firstmate\n' ;;
       *) printf '%%1\n' ;;
     esac
     exit 0
     ;;
-  capture-pane) printf '›\n'; exit 0 ;;
+  capture-pane) printf '╭────╮\n│ >  │\n╰────╯\n'; exit 0 ;;
   send-keys) exit 0 ;;
   kill-window) rm -f -- "\$state"; exit 0 ;;
-  list-panes) printf 'codex\n'; exit 0 ;;
+  list-panes) printf 'pi\n'; exit 0 ;;
 esac
 exit 0
 SH
 chmod +x "$REMOTE_ROOT/bin/tmux"
+fm_fake_exit0 "$REMOTE_ROOT/bin" pi
 install_remote_herdr_fixture "$REMOTE_ROOT" "$HERDR_STATE" "$HERDR_LOG" \
   "$TMP_ROOT/herdr-send-fail" "$TMP_ROOT/herdr.sock"
 git -C "$REMOTE_ROOT" init -q -b main
@@ -120,9 +121,9 @@ exec "$FM_FAKE_REMOTE_ENTRYPOINT" "$@"
 SH
 chmod +x "$FAKEBIN/fake-ssh"
 
-printf 'codex\n' > "$PARENT/config/secondmate-harness"
+printf 'pi\n' > "$PARENT/config/secondmate-harness"
 printf 'tmux\n' > "$PARENT/config/backend"
-printf 'codex\n' > "$PARENT/config/crew-harness"
+printf 'pi\n' > "$PARENT/config/crew-harness"
 printf '## In flight\n\n## Queued\n\n## Done\n' > "$PARENT/data/backlog.md"
 
 remote_env() {

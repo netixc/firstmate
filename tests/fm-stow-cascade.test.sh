@@ -58,11 +58,11 @@ set -u
 case "$*" in
   *list-windows*) printf '%s\n' "${FM_FAKE_TMUX_WINDOW:-}" ;;
   *list-panes*) printf '%s\n' "${FM_FAKE_TMUX_PANE:-}" ;;
-  *display-message*'#{pane_current_command}'*) printf '%s\n' "${FM_FAKE_TMUX_COMMAND:-codex}" ;;
+  *display-message*'#{pane_current_command}'*) printf '%s\n' "${FM_FAKE_TMUX_COMMAND:-pi}" ;;
   *display-message*'#{pane_pid}'*) printf '%s\n' "$$" ;;
   *display-message*'#{pane_id}'*) printf '%s\n' '%1' ;;
-  *display-message*'#{cursor_y}'*) printf '%s\n' 0 ;;
-  *capture-pane*) printf '›\n' ;;
+  *display-message*'#{cursor_y}'*) printf '%s\n' 1 ;;
+  *capture-pane*) printf '╭────╮\n│ >  │\n╰────╯\n' ;;
 esac
 exit 0
 SH

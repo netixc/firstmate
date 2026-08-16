@@ -505,8 +505,7 @@ SH
 # Drop every harness env marker from bin/fm-harness.sh detect_own so the
 # surrounding interactive shell cannot leak past the suite's fake ps harness.
 # Markers today: PI_CODING_AGENT plus FM_PI_HARNESS (Pi family).
-# Codex has no env marker (ancestry only). Without this, a local
-# Pi session fails cases that pin a different fake harness while CI
+# Without this, a local Pi session fails cases that pin a different fake harness while CI
 # (no ambient markers) still passes.
 run_session_start() {
   local home=$1 root=$2 path=$3 pi_harness=${4:-}
@@ -2077,33 +2076,6 @@ EOF
   pass "read-only Pi compact refreshes against the rebuilding session identity without mutation"
 }
 
-test_codex_unreachable_reset_sources_do_not_claim_instruction_refresh() {
-  local rec root home fakebin startup baseline clear_out compact_out
-  rec=$(new_world codex-instruction-refresh)
-  IFS='|' read -r root home fakebin <<EOF
-$rec
-EOF
-  make_fake_toolchain "$fakebin"
-  make_fake_ps_harness "$fakebin" codex
-  printf '%s\n' 'CODEX_TEST_INSTRUCTION=original' > "$root/AGENTS.md"
-
-  startup=$(run_named_harness_session_start codex "$home" "$root" "$fakebin:$BASE_PATH" --source startup)
-  assert_contains "$startup" "primary harness: codex" "codex fixture did not select the codex run tier"
-  baseline=$(cat "$home/state/.session-start-agents-baseline")
-  printf '%s\n' 'CODEX_TEST_INSTRUCTION=updated' > "$root/AGENTS.md"
-
-  clear_out=$(run_named_harness_session_start codex "$home" "$root" "$fakebin:$BASE_PATH" --reemit --source clear)
-  compact_out=$(run_named_harness_session_start codex "$home" "$root" "$fakebin:$BASE_PATH" --reemit --source compact)
-  assert_not_contains "$clear_out" "CURRENT AGENTS.md - INSTRUCTION REFRESH" \
-    "Codex clear claimed an instruction-refresh channel unavailable to the tracked transport"
-  assert_not_contains "$compact_out" "CURRENT AGENTS.md - INSTRUCTION REFRESH" \
-    "Codex compact claimed an instruction-refresh channel unavailable to the tracked transport"
-  [ "$(cat "$home/state/.session-start-agents-baseline")" = "$baseline" ] \
-    || fail "an unsupported Codex rebuild rewrote the true-start baseline"
-
-  pass "Codex reset sources do not claim an unavailable instruction-refresh channel"
-}
-
 test_agents_baseline_requires_sha256_and_successful_completion() {
   local rec root home fakebin compact_out
   rec=$(new_world agents-baseline-failures)
@@ -2440,7 +2412,6 @@ test_runtime_bound_leaves_harness_ancestry_headroom
 test_reemit_skips_startup_sweeps_but_keeps_the_wake_drain
 test_agents_baseline_stays_at_true_start_and_reemits_on_every_drifted_pi_compact
 test_read_only_pi_compact_refreshes_against_its_own_session_identity
-test_codex_unreachable_reset_sources_do_not_claim_instruction_refresh
 test_agents_baseline_requires_sha256_and_successful_completion
 test_reemit_keeps_repair_ownership_with_the_lock_holder
 

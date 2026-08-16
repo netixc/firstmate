@@ -81,8 +81,8 @@ write_fixture <<'JSON'
 JSON
 run_case \
   "higher headroom and viable runway beat a less-negative reserve" \
-  "SELECTED=codex" \
-  "Resolve this matched dispatch profile array now. Load quota-array-dispatch and run quota-axi --json exactly once. Both profiles have comparable required task fit and the same strongest reasoning class. The authoritative catalogs already prove Pi/xAI and Codex/GPT models supported in their stated provider families, and their selected authentication surfaces are usable. The likely task-completion horizon is two hours with established confidence. Return exact lines FACT=grok|headroom=1|runway_seconds=600|reserve=-1 and FACT=codex|headroom=55|runway_seconds=14400|reserve=-40 to preserve candidate accounting, then an exact final line SELECTED=<grok|codex>. Do not use other vendor or model commands and do not modify files." \
+  "SELECTED=pi/openai-codex" \
+  "Resolve this matched dispatch profile array now. Load quota-array-dispatch and run quota-axi --json exactly once. Both profiles have comparable required task fit and the same strongest reasoning class. The authoritative catalogs already prove Pi/xAI and Pi/openai-codex models supported in their stated provider families, and their selected authentication surfaces are usable. The likely task-completion horizon is two hours with established confidence. Return exact lines FACT=grok|headroom=1|runway_seconds=600|reserve=-1 and FACT=codex|headroom=55|runway_seconds=14400|reserve=-40 to preserve candidate accounting, then an exact final line SELECTED=<grok|pi/openai-codex>. Do not use other vendor or model commands and do not modify files." \
   "FACT=grok|headroom=1|runway_seconds=600|reserve=-1" \
   "FACT=codex|headroom=55|runway_seconds=14400|reserve=-40"
 
@@ -91,8 +91,8 @@ write_fixture <<'JSON'
 JSON
 run_case \
   "unmeasurable runway stays eligible and is accounted for explicitly" \
-  "DECISION=CODEX" \
-  "Resolve this matched dispatch profile array now. Load quota-array-dispatch and run quota-axi --json exactly once. Both profiles have comparable required task fit and the same strongest reasoning class. The authoritative catalogs already prove both models supported in their stated provider families, and their selected authentication surfaces are usable. The likely task-completion horizon is two hours with established confidence. Pi's xAI provider has higher known headroom but explicitly unmeasurable runway, while Codex has lower known headroom and established runway that supports completion. The snapshot cannot prove Pareto dominance in either direction, but the known completion-supporting runway justifies Codex while Pi/xAI remains eligible and its uncertainty must be disclosed. Return exact lines FACT=grok|eligible=yes|headroom=55|runway=unknown|unmeasurable=weekly and FACT=codex|eligible=yes|headroom=45|runway_seconds=14400|supports_horizon=yes, then an exact final line DECISION=CODEX. Do not use other vendor or model commands and do not modify files." \
+  "DECISION=PI_OPENAI_CODEX" \
+  "Resolve this matched dispatch profile array now. Load quota-array-dispatch and run quota-axi --json exactly once. Both profiles have comparable required task fit and the same strongest reasoning class. The authoritative catalogs already prove both models supported in their stated provider families, and their selected authentication surfaces are usable. The likely task-completion horizon is two hours with established confidence. Pi's xAI provider has higher known headroom but explicitly unmeasurable runway, while Pi/openai-codex has lower known headroom and established runway that supports completion. The snapshot cannot prove Pareto dominance in either direction, but the known completion-supporting runway justifies Pi/openai-codex while Pi/xAI remains eligible and its uncertainty must be disclosed. Return exact lines FACT=grok|eligible=yes|headroom=55|runway=unknown|unmeasurable=weekly and FACT=codex|eligible=yes|headroom=45|runway_seconds=14400|supports_horizon=yes, then an exact final line DECISION=PI_OPENAI_CODEX. Do not use other vendor or model commands and do not modify files." \
   "FACT=grok|eligible=yes|headroom=55|runway=unknown|unmeasurable=weekly" \
   "FACT=codex|eligible=yes|headroom=45|runway_seconds=14400|supports_horizon=yes"
 
@@ -102,7 +102,7 @@ JSON
 run_case \
   "required strongest reasoning class is not downgraded for quota" \
   "SELECTED=grok" \
-  "Resolve this matched dispatch profile array now. Load quota-array-dispatch and run quota-axi --json exactly once. The likely task-completion horizon is two hours with established confidence. Pi/xAI is catalog-supported with usable authentication and is the only profile that meets the task's required strongest reasoning class. Codex/GPT is catalog-supported with usable authentication but is a weaker reasoning class and cannot meet the requirement. Return exact lines FACT=grok|reasoning=required|headroom=1|runway_seconds=10800 and FACT=codex|reasoning=weaker|headroom=80|runway_seconds=28800, then an exact final line SELECTED=<grok|codex>. Do not use other vendor or model commands and do not modify files." \
+  "Resolve this matched dispatch profile array now. Load quota-array-dispatch and run quota-axi --json exactly once. The likely task-completion horizon is two hours with established confidence. Pi/xAI is catalog-supported with usable authentication and is the only profile that meets the task's required strongest reasoning class. Pi/openai-codex is catalog-supported with usable authentication but is a weaker reasoning class and cannot meet the requirement. Return exact lines FACT=grok|reasoning=required|headroom=1|runway_seconds=10800 and FACT=codex|reasoning=weaker|headroom=80|runway_seconds=28800, then an exact final line SELECTED=<grok|pi/openai-codex>. Do not use other vendor or model commands and do not modify files." \
   "FACT=grok|reasoning=required|headroom=1|runway_seconds=10800" \
   "FACT=codex|reasoning=weaker|headroom=80|runway_seconds=28800"
 

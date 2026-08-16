@@ -2376,7 +2376,7 @@ test_bootstrap_isolates_incomplete_poll_migration() {
   fm_write_meta "$state/secondmate-a.meta" \
     'window=firstmate:fm-secondmate-a' \
     'kind=secondmate' \
-    'harness=codex' \
+    'harness=pi' \
     'backend=tmux'
   printf 'FMX_PAIRING_TOKEN=test-token\n' > "$dir/home/.env"
   mkdir -p "$dir/home/projects"

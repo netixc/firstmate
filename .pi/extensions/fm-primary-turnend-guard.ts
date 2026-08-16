@@ -155,7 +155,7 @@ async function injectSessionstart(pi: ExtensionAPI, source: string): Promise<voi
 function runGuard(): Promise<{ code: number; stderr: string }> {
   return new Promise((resolveResult) => {
     const child = spawn(`${root}/bin/fm-turnend-guard.sh`, {
-      stdio: ["pipe", "ignore", "pipe"],
+      stdio: ["ignore", "ignore", "pipe"],
     });
     let stderr = "";
     child.stderr.on("data", (chunk) => {
@@ -163,7 +163,6 @@ function runGuard(): Promise<{ code: number; stderr: string }> {
     });
     child.on("error", () => resolveResult({ code: 0, stderr: "" }));
     child.on("close", (code) => resolveResult({ code: code ?? 0, stderr }));
-    child.stdin.end('{"stop_hook_active":false}');
   });
 }
 

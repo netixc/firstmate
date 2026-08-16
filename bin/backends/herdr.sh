@@ -2664,9 +2664,8 @@ fm_backend_herdr_composer_state() {  # <target> -> empty|pending|pending-unprove
 # (Enter only, never retyped) until herdr's NATIVE agent-state (agent get)
 # confirms a real turn started. Verified hazard (herdr-verification-p2.md
 # "slash/$ autocomplete popup"): a `/`- or `$`-prefixed send opens a
-# completion popup within ~0.1s, exactly like tmux's codex popup, so
-# the caller's <settle> before the first Enter matters here the same way it
-# does for tmux.
+# completion popup within ~0.1s, so the caller's <settle> before the first
+# Enter matters here the same way it does for tmux.
 #
 # Confirmation signal (rewritten for the 2026-07-07 incident below;
 # superseded a composer-content read that itself replaced a delta-based check
@@ -2679,11 +2678,9 @@ fm_backend_herdr_composer_state() {  # <target> -> empty|pending|pending-unprove
 #
 # Incident (2026-07-07, followed up on 2026-07-08): a redelivery loop in the
 # away-mode daemon. Root cause: composer-content submit confirmation was too
-# sensitive to harness rendering details. Real codex uses a bare prompt
-# rows, and real codex adds dynamic idle suggestions after `›`; the later
-# ANSI-aware composer classifier now handles the pre-injection guard for that
-# Codex shape, but idle-baseline submit confirmation deliberately stays on
-# native agent-state so delivery does not depend on composer text. Composer
+# sensitive to harness rendering details. Idle-baseline submit confirmation
+# deliberately stays on native agent-state so delivery does not depend on
+# composer text. Composer
 # content is retained for other callers (the away-mode daemon's PRE-injection
 # empty-box guard, still dispatched via fm_backend_composer_state /
 # fm_backend_herdr_composer_state) and for submit attempts whose pre-Enter
@@ -2706,9 +2703,8 @@ fm_backend_herdr_composer_state() {  # <target> -> empty|pending|pending-unprove
 #     loop gives up and sends a needless extra Enter.
 #   - Instant round-trip (a turn starts AND returns to idle between two
 #     polls): unavoidable in the absolute, but bounded by how tightly polls
-#     are packed into the budget; real codex measured first-working
-#     at 90-490ms, comfortably inside a several-hundred-ms, multiply-sampled
-#     window, so this has not been observed in practice. On the (unobserved)
+#     are packed into the budget; the several-hundred-ms, multiply-sampled
+#     window keeps this gap narrow. On the (unobserved)
 #     residual chance it happens, the verdict is "pending" and the caller
 #     never retypes - only re-sends Enter, which lands on an already-empty
 #     composer and is a no-op, not a duplicate delivery of <text> (see
@@ -2906,9 +2902,9 @@ fm_backend_herdr_busy_state() {  # <target>
 #             confirmation that a real turn started or reached a prompt -
 #             the submit landed - independent of
 #             whatever the composer's own text happens to show (docs/
-#             herdr-backend.md "Incident (2026-07-07)": composer content is
-#             what fooled the OLD confirmation on codex's dynamic idle-tip
-#             text). Returned the INSTANT it is seen, without waiting out the
+#             herdr-backend.md "Incident (2026-07-07)": dynamic composer content
+#             fooled the old confirmation). Returned the instant it is seen,
+#             without waiting out the
 #             rest of the budget.
 #   idle    - the target was legibly read at least once and never reported
 #             "busy" across the whole window - a genuine "not (yet)
@@ -2924,10 +2920,8 @@ fm_backend_herdr_busy_state() {  # <target>
 # several samples across that window instead of a single one, so a transition
 # that lands partway through is not missed just because it had not landed by
 # the FIRST sample.
-# Empirical evidence (docs/herdr-backend.md "Native agent-state submit
-# confirmation"): real codex observed first-working at 90-490ms
-# after Enter, so a several-hundred-ms budget sampled repeatedly reliably
-# catches it. The remaining, inherent gap - a turn so fast it starts AND
+# A several-hundred-ms budget sampled repeatedly catches ordinary transitions.
+# The remaining, inherent gap - a turn so fast it starts AND
 # returns to idle between two samples - is bounded by how tightly <polls> is
 # packed into <budget-seconds>; nothing observed in real testing has come
 # close to that, but it is a residual risk, not a mathematical impossibility

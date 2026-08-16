@@ -1,20 +1,9 @@
 #!/usr/bin/env bash
-# fm-send pre-submit popup-settle selection (the codex `$<skill>` fix).
+# fm-send pre-submit popup-settle selection.
 #
-# Some TUIs open a completion popup when the composer's first character triggers
-# it: codex (and others) for a leading `/` slash command, and codex specifically
-# for a leading `$<skill>` invocation (e.g. `$no-mistakes`). Submitting before the
-# popup settles lets it swallow the Enter, so the line never submits. fm-send
-# absorbs this by pausing `settle` seconds AFTER typing and BEFORE the (retried)
-# Enter - the first sleep fm_tmux_submit_core makes. These tests pin the
-# settle-SELECTION matrix hermetically (stubbed tmux + sleep, no real agent):
-#
-#   /...            -> 1.2  (universal; `/` only starts a command, never plain text)
-#   $... to codex   -> 1.2  (scoped: codex opens a `$<skill>` popup)
-#   $... to pi  -> 0.3  (NOT codex: `$` commonly starts plain text "$5", "$HOME")
-#   $... explicit   -> 0.3  (session:window target has no meta -> harness unknown
-#                            -> non-codex safe default)
-#   plain text      -> 0.3  (fast path)
+# Slash commands can open a completion popup. Submitting before the popup
+# settles lets it swallow Enter, so fm-send waits before the first Enter for
+# `/...` messages and keeps the fast path for ordinary text, including `$...`.
 #
 # The popup-settle is the FIRST sleep recorded: fm_tmux_submit_core types the text,
 # then `sleep "$settle"`, then the Enter-retry loop (sleep 0.4 each) and finally
@@ -109,30 +98,17 @@ first_settle() {  # <expected> <label> <harness|--explicit> <message> [selector-
   pass "fm-send popup-settle: $label -> ${expected}s"
 }
 
-# Codex `$<skill>` gets the long settle so its `$` popup clears (the fix).
-first_settle 1.2 'codex $skill -> long settle' codex '$no-mistakes'
-
-# The same Codex `$<skill>` path must work when the target is addressed by exact
-# task id, not only by the legacy `fm-<id>` window label.
-first_settle 1.2 'codex $skill exact task id -> long settle' codex '$no-mistakes' exact
-
 # Same `$` message to pi keeps the fast path: `$` is ordinary text there.
 first_settle 0.3 'pi $-message -> fast path' pi '$no-mistakes'
 
-# `$`-prefixed plain text to pi (a price) must NOT popup-settle - the regression
-# the codex scoping exists to prevent.
+# `$`-prefixed plain text to pi must not popup-settle.
 first_settle 0.3 'pi "$5/month" -> fast path' pi '$5/month is cheap'
 
-# An explicit session:window target has no meta, so the harness is unknown and
-# treated as non-codex: the safe default keeps the fast path even for a `$` message.
+# An explicit session:window target keeps the fast path for a `$` message.
 first_settle 0.3 'explicit target $message -> fast path (unknown harness)' --explicit '$no-mistakes'
 
-# The `/` slash case stays universal and unchanged: long settle regardless of
-# harness (here a non-codex pi target).
+# The `/` slash case uses the long settle.
 first_settle 1.2 'pi /command -> long settle (slash unchanged)' pi '/no-mistakes'
 
-# A `/` to codex is likewise still the long settle (slash path untouched).
-first_settle 1.2 'codex /command -> long settle (slash unchanged)' codex '/help'
-
-# Plain text to codex takes the fast path - the codex scope is `$`-prefixed only.
-first_settle 0.3 'codex plain text -> fast path' codex 'just a normal steer'
+# Plain text to pi takes the fast path.
+first_settle 0.3 'pi plain text -> fast path' pi 'just a normal steer'

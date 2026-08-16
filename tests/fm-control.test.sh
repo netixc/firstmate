@@ -35,13 +35,12 @@ mkdir -p "$TMP_ROOT"
 TMP_ROOT=$(cd "$TMP_ROOT" && pwd)
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
-VERIFIED_HARNESSES="codex pi pi-signed"
+VERIFIED_HARNESSES="pi pi-signed"
 
 # The expectation table, written out independently of the implementation so a
 # silent change to either side shows up here.
 verified_adapter_contract() {  # <harness> -> exit command, interrupt key, repeat
   case "$1" in
-    codex) printf '/quit\tEscape\t1\n' ;;
     pi) printf '/quit\tEscape\t1\n' ;;
     pi-signed) printf '/quit\tEscape\t1\n' ;;
     *) return 1 ;;
@@ -232,7 +231,7 @@ test_interrupt_sends_each_harness_verified_key() {
 # are reached through one prefix rule rather than an exact string match.
 test_harness_family_resolution() {
   local pair recorded want got
-  for pair in codex:codex codex-cli:codex pi:pi pi-signed:pi-signed; do
+  for pair in pi:pi pi-signed:pi-signed; do
     recorded=${pair%%:*}
     want=${pair#*:}
     got=$(fm_control_harness_family "$recorded") \
@@ -247,30 +246,6 @@ test_harness_family_resolution() {
   [ "$(fm_control_harness_family pi-signed)" != "$(fm_control_harness_family pi)" ] \
     || fail "pi-signed must not collapse into pi"
   pass "fm-control-lib: a recorded harness resolves to its verified adapter without guessing"
-}
-
-test_prefixed_recorded_harness_reaches_each_control_verb() {
-  local dir out rc
-  dir=$(new_case prefixed-interrupt)
-  add_task "$dir" t1 codex-cli
-  alive_as "$dir" codex-cli
-  out=$(run_control "$dir" t1 interrupt); rc=$?
-  expect_code 0 "$rc" "interrupt should resolve a prefixed recorded harness"$'\n'"$out"
-  [ "$(keys_sent "$dir")" = Escape ] \
-    || fail "a codex-prefixed task should receive Codex's interrupt key"
-  assert_contains "$out" "harness=codex" \
-    "interrupt should report the verified adapter that supplied its mechanics"
-
-  dir=$(new_case prefixed-exit)
-  add_task "$dir" t1 codex-cli
-  alive_as "$dir" codex-cli
-  out=$(run_control "$dir" t1 exit); rc=$?
-  expect_code 0 "$rc" "exit should resolve a prefixed recorded harness"$'\n'"$out"
-  [ "$(literals "$dir")" = /quit ] \
-    || fail "a codex-prefixed task should receive Codex's exit command"
-  assert_contains "$out" "stopped t1 harness=codex" \
-    "exit should report the verified adapter that supplied its mechanics"
-  pass "fm-control: prefixed recorded harnesses reach interrupt and exit mechanics"
 }
 
 test_unverified_harness_is_refused() {
@@ -460,7 +435,7 @@ test_resume_is_refused_with_its_reason() {
   add_task "$dir" t1 pi
   out=$(run_control "$dir" t1 resume); rc=$?
   expect_code 2 "$rc" "resume should be refused"
-  assert_contains "$out" "not deterministic across the verified adapters" \
+  assert_contains "$out" "no verified pane-resume contract" \
     "the refusal should explain why resume is excluded"
   assert_contains "$out" "relaunch" "the refusal should point at the deterministic alternative"
   pass "fm-control: resume is refused with the determinism reason and the alternative"
@@ -471,7 +446,7 @@ test_relaunch_only_flags_are_rejected_on_other_verbs() {
   dir=$(new_case flags)
   add_task "$dir" t1 pi
   alive_as "$dir" pi
-  out=$(run_control "$dir" t1 exit --harness codex); rc=$?
+  out=$(run_control "$dir" t1 exit --harness pi-signed); rc=$?
   expect_code 1 "$rc" "--harness should not apply to exit"
   assert_contains "$out" "apply to 'relaunch' only" "the refusal should scope the flags"
   pass "fm-control: profile and note flags belong to relaunch only"
@@ -683,7 +658,6 @@ test_exit_types_each_harness_verified_command
 test_interrupt_sends_each_harness_verified_key
 test_unverified_harness_is_refused
 test_harness_family_resolution
-test_prefixed_recorded_harness_reaches_each_control_verb
 test_backend_key_capability_matrix
 test_state_verified_backends_are_exactly_tmux_and_herdr
 test_window_label_is_refused_with_the_exact_id

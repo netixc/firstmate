@@ -40,7 +40,7 @@ Interrupt never rewrites busy state as proof of its own success.
 Removing a worktree, closing an endpoint, or discarding work stays with [`bin/fm-teardown.sh`](../bin/fm-teardown.sh), which owns the landed-work test.
 
 **`resume` is not a verb.**
-It is not deterministic across the verified adapters: codex resumes only from a session id printed at exit, while pi and pi-signed have no verified pane-resume contract.
+Pi and pi-signed have no verified pane-resume contract.
 `relaunch` covers the same need on every adapter, because the brief on disk - not a harness-private session - is the durable instruction.
 
 ## Transactional relaunch

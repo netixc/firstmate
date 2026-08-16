@@ -14,9 +14,9 @@ set -u
 # portable regression pass locally while failing on a harness-free CI runner.
 if [ "${FM_SESSIONSTART_TEST_HARNESS:-0}" != 1 ]; then
   HARNESS_FIXTURE=$(mktemp -d "${TMPDIR:-/tmp}/fm-sessionstart-harness.XXXXXX") || exit 1
-  ln -s /bin/bash "$HARNESS_FIXTURE/codex" || exit 1
+  ln -s /bin/bash "$HARNESS_FIXTURE/pi" || exit 1
   # shellcheck disable=SC2016 # Expand in the fixture shell, not this parent.
-  FM_SESSIONSTART_TEST_HARNESS=1 "$HARNESS_FIXTURE/codex" \
+  FM_SESSIONSTART_TEST_HARNESS=1 PI_CODING_AGENT=true FM_PI_HARNESS=pi "$HARNESS_FIXTURE/pi" \
     -c '"$@"; rc=$?; :; exit "$rc"' _ "$0" "$@"
   HARNESS_STATUS=$?
   rm -rf "$HARNESS_FIXTURE"
@@ -432,27 +432,6 @@ test_run_resume_delegates_to_the_nudge() {
   pass "run wrapper: resume delegates to the nudge instead of re-running the digest"
 }
 
-test_run_reads_source_from_the_hook_payload() {
-  local root="$TMP_ROOT/run-payload" out status=0
-  make_run_primary "$root"
-  run_hook "$root" --source startup </dev/null >/dev/null
-  out=$(printf '{"session_id":"s1","hook_event_name":"SessionStart","source":"compact"}' |
-    run_hook "$root") || status=$?
-  expect_code 0 "$status" "run wrapper payload compact"
-  assert_contains "$out" "$REEMIT_BANNER$root" "a compact hook payload was not routed to a re-emit"
-
-  # A fresh root, because the compact case above legitimately took the lock and
-  # an owned lock is exactly when the nudge is supposed to stay silent.
-  root="$TMP_ROOT/run-payload-resume"
-  make_run_primary "$root"
-  status=0
-  out=$(printf '{"source":"resume","cwd":"/nowhere"}' | run_hook "$root") || status=$?
-  expect_code 0 "$status" "run wrapper payload resume"
-  assert_contains "$out" "FIRSTMATE_OP" "a resume hook payload did not delegate to the nudge"
-  assert_not_contains "$out" "SESSION START" "a resume hook payload still ran the digest"
-  pass "run wrapper: the hook payload's source field drives routing with no explicit argument"
-}
-
 test_run_unknown_source_takes_the_helm() {
   local root="$TMP_ROOT/run-unknown" out status=0
   make_run_primary "$root"
@@ -507,7 +486,6 @@ test_run_compact_without_completion_refreshes_before_finishing_startup
 test_run_clear_without_completion_finishes_startup
 test_run_clear_rejects_previous_owner_completion
 test_run_resume_delegates_to_the_nudge
-test_run_reads_source_from_the_hook_payload
 test_run_unknown_source_takes_the_helm
 test_run_gate_and_scope_are_silent
 test_run_reports_a_failed_session_start_as_digest_text

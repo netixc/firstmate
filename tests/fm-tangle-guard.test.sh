@@ -170,7 +170,7 @@ esac
 exit 0
 SH
   chmod +x "$fakebin/tmux"
-  fm_fake_exit0 "$fakebin" treehouse
+  fm_fake_exit0 "$fakebin" treehouse pi
   printf '%s\n' "$fakebin"
 }
 
@@ -183,7 +183,7 @@ run_spawn() {
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
     FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$pane" TMUX="fake,1,0" \
     PATH="$fakebin:$PATH" \
-    "$ROOT/bin/fm-spawn.sh" "$id" "$proj" codex --mode no-mistakes --yolo off 2>&1
+    "$ROOT/bin/fm-spawn.sh" "$id" "$proj" pi --mode no-mistakes --yolo off 2>&1
 }
 
 test_spawn_isolation_abort() {
@@ -249,7 +249,7 @@ esac
 exit 0
 SH
   chmod +x "$fakebin/tmux"
-  fm_fake_exit0 "$fakebin" treehouse
+  fm_fake_exit0 "$fakebin" treehouse pi
   printf '%s\n' "$fakebin"
 }
 
@@ -263,7 +263,7 @@ run_spawn_record() {
     FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$pane" TMUX="fake,1,0" \
     FM_TMUX_REC="$rec" \
     PATH="$fakebin:$PATH" \
-    "$ROOT/bin/fm-spawn.sh" "$id" "$proj" codex --mode no-mistakes --yolo off 2>&1
+    "$ROOT/bin/fm-spawn.sh" "$id" "$proj" pi --mode no-mistakes --yolo off 2>&1
 }
 
 test_spawn_tmux_window_construction() {

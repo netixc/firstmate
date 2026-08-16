@@ -10,7 +10,7 @@
 # by SPLITTING the captain's active pane visibly shrinks it - the regression this
 # script fixes. Instead this creates a non-visible tracked terminal (a herdr tab/
 # workspace with --no-focus, or a detached tmux session) that never touches the
-# captain's active tab, and NEVER uses shell `&` (which herdr/codex can reap).
+# captain's active tab, and NEVER uses shell `&` (which Herdr can reap).
 #
 # Correct supervisor targeting: the daemon finds the captain pane to inject into
 # from its OWN inherited env (discover_supervisor_target). Running it in a

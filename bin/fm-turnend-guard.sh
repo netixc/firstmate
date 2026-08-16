@@ -4,15 +4,9 @@
 #
 # fm-guard.sh is pull-based. This push-based guard is invoked by verified
 # harness turn-end integrations and applies the shared supervision predicate.
-# Codex can block directly by preserving exit status 2 and stderr. Pi adapters
-# use the same predicate and force one bounded follow-up because their turn-end
-# events are passive. See docs/turnend-guard.md for per-harness
-# mechanics and evidence.
-#
-# Codex uses the payload's typed stop-active field as a one-block loop guard.
-# Passive adapters provide their own one-follow-up guard before calling
-# this script. This bounds every adapter to at most one forced continuation per
-# turn while preserving a later-turn reminder if supervision remains absent.
+# Pi adapters force one bounded follow-up because their turn-end events are
+# passive. See docs/turnend-guard.md for the mechanics and evidence.
+# The adapter provides its own one-follow-up guard before calling this script.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,19 +22,6 @@ WATCH="$SCRIPT_DIR/fm-watch.sh"
 . "$SCRIPT_DIR/fm-supervision-lib.sh"
 # shellcheck source=bin/fm-primary-scope-lib.sh
 . "$SCRIPT_DIR/fm-primary-scope-lib.sh"
-
-PAYLOAD=$(cat 2>/dev/null || true)
-[ -n "$PAYLOAD" ] || exit 0
-command -v jq >/dev/null 2>&1 || exit 0
-
-STOP_HOOK_ACTIVE=$(printf '%s' "$PAYLOAD" | jq -r '
-  if type != "object" then error("payload")
-  elif has("stop_hook_active") then
-    if ((.stop_hook_active | type) == "boolean") then .stop_hook_active else error("stop_hook_active") end
-  else false
-  end
-' 2>/dev/null) || exit 0
-[ "$STOP_HOOK_ACTIVE" != "true" ] || exit 0
 
 fm_primary_scope_matches "$FM_ROOT" "$STATE" || exit 0
 

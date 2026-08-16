@@ -120,7 +120,7 @@ SH
 exit 0
 SH
   chmod +x "$fb/sleep"
-  fm_fake_exit0 "$fb" pi
+  fm_fake_exit0 "$fb" pi pi-signed
 }
 
 # new_case <name> [id] -> echoes a case dir with a live pi ship task.
@@ -412,22 +412,24 @@ test_relaunch_requires_a_note_for_a_ship_task() {
 
 # --- 2. harness switch -------------------------------------------------------
 
-test_harness_switch_moves_the_record_and_clears_prior_wiring() {
+test_harness_switch_moves_the_record_and_replaces_prior_wiring() {
   local dir out rc
   dir=$(new_case switch rl4)
   add_ship_task "$dir" rl4 pi
   # Wiring the previous Pi incarnation left in the task state.
   printf '// prior Pi extension\n' > "$dir/home/state/rl4.pi-ext.ts"
-  printf 'codex' > "$dir/fake/becomes"
-  out=$(run_control "$dir" rl4 relaunch --harness codex --note "switching runtime"); rc=$?
+  printf 'pi-signed' > "$dir/fake/becomes"
+  out=$(run_control "$dir" rl4 relaunch --harness pi-signed --note "switching runtime"); rc=$?
   expect_code 0 "$rc" "a harness switch should succeed"$'\n'"$out"
-  assert_contains "$out" "harness=codex from=pi" "the outcome should name both harnesses"
-  [ "$(meta_field "$dir" rl4 harness)" = codex ] || fail "the record should follow the switch"
-  [ ! -e "$dir/home/state/rl4.pi-ext.ts" ] \
-    || fail "the previous harness's per-task wiring must be cleared on a switch"
-  assert_grep "codex" "$dir/fake/literal" "the replacement launch should be the new harness"
+  assert_contains "$out" "harness=pi-signed from=pi" "the outcome should name both harnesses"
+  [ "$(meta_field "$dir" rl4 harness)" = pi-signed ] || fail "the record should follow the switch"
+  [ -e "$dir/home/state/rl4.pi-ext.ts" ] \
+    || fail "the replacement Pi-family harness must publish fresh per-task wiring"
+  assert_no_grep 'prior Pi extension' "$dir/home/state/rl4.pi-ext.ts" \
+    "the previous incarnation's wiring survived the switch"
+  assert_grep "pi-signed" "$dir/fake/literal" "the replacement launch should be the new harness"
   [ "$(journal_field "$dir" rl4 from_harness)" = pi ] || fail "the journal should record the origin harness"
-  [ "$(journal_field "$dir" rl4 to_harness)" = codex ] || fail "the journal should record the target harness"
+  [ "$(journal_field "$dir" rl4 to_harness)" = pi-signed ] || fail "the journal should record the target harness"
   pass "fm-control relaunch: switching harness is one ordinary relaunch, and the old wiring goes with the old agent"
 }
 
@@ -435,11 +437,11 @@ test_harness_switch_does_not_carry_the_old_profile_axes() {
   local dir out rc
   dir=$(new_case profile rl5)
   add_ship_task "$dir" rl5 pi
-  sed 's#^model=default$#model=openai-codex/gpt-5.6-sol#; s#^effort=default$#effort=xhigh#' \
+  sed 's#^model=default$#model=openai/gpt-5#; s#^effort=default$#effort=xhigh#' \
     "$dir/home/state/rl5.meta" > "$dir/home/state/rl5.meta.tmp"
   mv "$dir/home/state/rl5.meta.tmp" "$dir/home/state/rl5.meta"
-  printf 'codex' > "$dir/fake/becomes"
-  out=$(run_control "$dir" rl5 relaunch --harness codex --note "switching runtime"); rc=$?
+  printf 'pi-signed' > "$dir/fake/becomes"
+  out=$(run_control "$dir" rl5 relaunch --harness pi-signed --note "switching runtime"); rc=$?
   expect_code 0 "$rc" "a harness switch should succeed"$'\n'"$out"
   [ "$(meta_field "$dir" rl5 model)" = default ] \
     || fail "a model chosen for the old harness must not carry to a different one"
@@ -448,66 +450,16 @@ test_harness_switch_does_not_carry_the_old_profile_axes() {
   pass "fm-control relaunch: a harness switch resets model and effort unless they are named too"
 }
 
-test_harness_switch_resolves_a_prefixed_recorded_harness() {
-  local dir out rc
-  dir=$(new_case prefixcontrol rl32)
-  add_ship_task "$dir" rl32 codex-cli
-  printf 'codex-cli' > "$dir/fake/command"
-
-  out=$(run_control "$dir" rl32 relaunch --harness pi --note "switching runtime"); rc=$?
-  expect_code 0 "$rc" "relaunch should resolve a prefixed recorded harness"$'\n'"$out"
-  [ "$(sed -n '1p' "$dir/fake/literal")" = /quit ] \
-    || fail "relaunch should stop a codex-prefixed task with Codex's exit command"
-  [ "$(meta_field "$dir" rl32 harness)" = pi ] \
-    || fail "relaunch should publish the explicitly selected replacement harness"
-  [ "$(journal_field "$dir" rl32 from_harness)" = codex-cli ] \
-    || fail "relaunch should retain the recorded harness basename in its provenance"
-  assert_contains "$out" "harness=pi from=codex-cli" \
-    "relaunch should report the recorded-to-selected harness transition"
-  pass "fm-control relaunch: a prefixed recorded harness can switch adapters transactionally"
-}
-
-test_prefixed_recorded_harness_requires_explicit_replacement() {
-  local dir out rc meta brief
-  dir=$(new_case prefixrefuse rl34)
-  add_ship_task "$dir" rl34 codex-cli
-  printf 'codex-cli' > "$dir/fake/command"
-  meta="$dir/home/state/rl34.meta"
-  brief="$dir/home/data/rl34/brief.md"
-  cp "$meta" "$dir/meta.before"
-  cp "$brief" "$dir/brief.before"
-
-  out=$(run_control "$dir" rl34 relaunch --note "continue safely"); rc=$?
-  expect_code 1 "$rc" "implicit relaunch from a prefixed command should refuse"
-  assert_contains "$out" "original launch command cannot be reconstructed from its recorded basename" \
-    "the refusal should name the missing launch identity"
-  assert_contains "$out" "would substitute the canonical adapter 'codex'" \
-    "the refusal should name the unsafe substitution"
-  assert_contains "$out" "Pass an explicit --harness" \
-    "the refusal should name the deliberate replacement path"
-  cmp -s "$meta" "$dir/meta.before" \
-    || fail "a refused prefixed relaunch must leave metadata byte-identical"
-  cmp -s "$brief" "$dir/brief.before" \
-    || fail "a refused prefixed relaunch must leave instructions byte-identical"
-  [ "$(cat "$dir/fake/command")" = codex-cli ] \
-    || fail "a refused prefixed relaunch must leave the original agent alive"
-  [ -z "$(cat "$dir/fake/literal")" ] && [ -z "$(cat "$dir/fake/keys")" ] \
-    || fail "a refused prefixed relaunch must deliver no lifecycle input"
-  [ ! -e "$dir/home/state/rl34.control-relaunch" ] \
-    || fail "a refused prefixed relaunch must not create a durable journal"
-  pass "fm-control relaunch: a prefixed command requires an explicit replacement harness"
-}
-
 test_same_harness_relaunch_keeps_the_profile_axes() {
   local dir out rc
   dir=$(new_case keepprofile rl6)
   add_ship_task "$dir" rl6 pi
-  sed 's#^model=default$#model=openai-codex/gpt-5.6-sol#; s#^effort=default$#effort=high#' \
+  sed 's#^model=default$#model=openai/gpt-5#; s#^effort=default$#effort=high#' \
     "$dir/home/state/rl6.meta" > "$dir/home/state/rl6.meta.tmp"
   mv "$dir/home/state/rl6.meta.tmp" "$dir/home/state/rl6.meta"
   out=$(run_control "$dir" rl6 relaunch --note "same runtime"); rc=$?
   expect_code 0 "$rc" "a same-harness relaunch should succeed"$'\n'"$out"
-  [ "$(meta_field "$dir" rl6 model)" = openai-codex/gpt-5.6-sol ] || fail "the model should carry across a same-harness relaunch"
+  [ "$(meta_field "$dir" rl6 model)" = openai/gpt-5 ] || fail "the model should carry across a same-harness relaunch"
   [ "$(meta_field "$dir" rl6 effort)" = high ] || fail "the effort should carry across a same-harness relaunch"
   pass "fm-control relaunch: a same-harness relaunch keeps the profile axes it was running with"
 }
@@ -516,9 +468,9 @@ test_explicit_model_wins_over_the_recorded_one() {
   local dir out rc
   dir=$(new_case explicit rl7)
   add_ship_task "$dir" rl7 pi
-  out=$(run_control "$dir" rl7 relaunch --model openai-codex/gpt-5.5 --effort low --note "dialling down"); rc=$?
+  out=$(run_control "$dir" rl7 relaunch --model openai/gpt-5-mini --effort low --note "dialling down"); rc=$?
   expect_code 0 "$rc" "relaunch with explicit axes should succeed"$'\n'"$out"
-  [ "$(meta_field "$dir" rl7 model)" = openai-codex/gpt-5.5 ] || fail "an explicit model should be recorded"
+  [ "$(meta_field "$dir" rl7 model)" = openai/gpt-5-mini ] || fail "an explicit model should be recorded"
   [ "$(meta_field "$dir" rl7 effort)" = low ] || fail "an explicit effort should be recorded"
   pass "fm-control relaunch: explicit model and effort win over the recorded ones"
 }
@@ -563,7 +515,7 @@ test_secondmate_relaunch_picks_up_the_configured_harness_pin() {
   dir=$(new_case smpin sm3)
   home="$dir/home"
   mkdir -p "$home/config"
-  printf 'codex some-model high\n' > "$home/config/secondmate-harness"
+  printf 'pi-signed some-model high\n' > "$home/config/secondmate-harness"
   mkdir -p "$home/data/sm3"
   printf '# secondmate brief\n' > "$home/data/sm3/brief.md"
   fm_git_worktree "$dir/proj" "$dir/smhome" sm-branch
@@ -585,16 +537,16 @@ test_secondmate_relaunch_picks_up_the_configured_harness_pin() {
   } > "$home/state/sm3.meta"
   printf '%s\n' "fm-sm3" > "$dir/fake/windows"
   printf '%s' "$dir/smhome" > "$dir/fake/cwd"
-  printf 'codex' > "$dir/fake/becomes"
+  printf 'pi-signed' > "$dir/fake/becomes"
   out=$(run_control "$dir" sm3 relaunch); rc=$?
   expect_code 0 "$rc" "a configured secondmate harness should relaunch"$'\n'"$out"
-  [ "$(journal_field "$dir" sm3 to_harness)" = codex ] \
+  [ "$(journal_field "$dir" sm3 to_harness)" = pi-signed ] \
     || fail "a secondmate relaunch should pick up the configured harness pin, got '$(journal_field "$dir" sm3 to_harness)'"
   [ "$(journal_field "$dir" sm3 to_model)" = some-model ] \
     || fail "the configured model token should come with the pin"
   [ "$(journal_field "$dir" sm3 to_effort)" = high ] \
     || fail "the configured effort token should come with the pin"
-  assert_not_contains "$out" "not a verified harness" "codex is a verified harness"
+  assert_not_contains "$out" "not a verified harness" "pi-signed is a verified harness"
   pass "fm-control relaunch: a secondmate relaunch re-resolves its durable configured harness pin"
 }
 
@@ -603,7 +555,7 @@ test_secondmate_relaunch_ignores_invalid_configured_effort_before_stop() {
   dir=$(new_case invalid-effort sm6)
   home="$dir/home"
   mkdir -p "$home/config" "$home/data/sm6"
-  printf 'codex some-model impossible\n' > "$home/config/secondmate-harness"
+  printf 'pi-signed some-model impossible\n' > "$home/config/secondmate-harness"
   printf '# secondmate brief\n' > "$home/data/sm6/brief.md"
   fm_git_worktree "$dir/proj" "$dir/smhome" sm-branch
   mkdir -p "$dir/smhome/state" "$dir/smhome/data" "$dir/smhome/bin"
@@ -624,7 +576,7 @@ test_secondmate_relaunch_ignores_invalid_configured_effort_before_stop() {
   } > "$home/state/sm6.meta"
   printf '%s\n' "fm-sm6" > "$dir/fake/windows"
   printf '%s' "$dir/smhome" > "$dir/fake/cwd"
-  printf 'codex' > "$dir/fake/becomes"
+  printf 'pi-signed' > "$dir/fake/becomes"
   out=$(run_control "$dir" sm6 relaunch); rc=$?
   expect_code 0 "$rc" "an invalid configured effort should be ignored before stop"$'\n'"$out"
   assert_contains "$out" "effort token 'impossible'" \
@@ -639,7 +591,7 @@ test_explicit_secondmate_harness_ignores_configured_profile_axes() {
   dir=$(new_case smexplicit sm4)
   home="$dir/home"
   mkdir -p "$home/config"
-  printf 'pi openai-codex/gpt-5.6-sol high\n' > "$home/config/secondmate-harness"
+  printf 'pi openai/gpt-5 high\n' > "$home/config/secondmate-harness"
   mkdir -p "$home/data/sm4"
   printf '# secondmate brief\n' > "$home/data/sm4/brief.md"
   fm_git_worktree "$dir/proj" "$dir/smhome" sm-branch
@@ -655,14 +607,14 @@ test_explicit_secondmate_harness_ignores_configured_profile_axes() {
     echo "kind=secondmate"
     echo "mode=secondmate"
     echo "yolo=off"
-    echo "model=openai-codex/gpt-5.6-sol"
+    echo "model=openai/gpt-5"
     echo "effort=high"
     echo "home=$dir/smhome"
   } > "$home/state/sm4.meta"
   printf '%s\n' "fm-sm4" > "$dir/fake/windows"
   printf '%s' "$dir/smhome" > "$dir/fake/cwd"
-  printf 'codex' > "$dir/fake/becomes"
-  out=$(run_control "$dir" sm4 relaunch --harness codex); rc=$?
+  printf 'pi-signed' > "$dir/fake/becomes"
+  out=$(run_control "$dir" sm4 relaunch --harness pi-signed); rc=$?
   expect_code 0 "$rc" "an explicit secondmate harness should relaunch"$'\n'"$out"
   [ "$(meta_field "$dir" sm4 model)" = default ] \
     || fail "an explicit secondmate harness must not inherit the configured model"
@@ -676,7 +628,7 @@ test_ship_relaunch_ignores_the_crew_harness_config() {
   dir=$(new_case crewcfg rl20)
   add_ship_task "$dir" rl20 pi
   mkdir -p "$dir/home/config"
-  printf 'codex\n' > "$dir/home/config/crew-harness"
+  printf 'pi-signed\n' > "$dir/home/config/crew-harness"
   out=$(run_control "$dir" rl20 relaunch --note "same worker, same runtime")
   assert_contains "$out" "harness=pi from=pi" \
     "a ship relaunch must keep its recorded harness rather than re-reading crew config"
@@ -690,7 +642,7 @@ test_spawn_relaunch_without_a_harness_reuses_the_recorded_one() {
   dir=$(new_case spawnharness rl21)
   add_ship_task "$dir" rl21 pi
   mkdir -p "$dir/home/config"
-  printf 'codex\n' > "$dir/home/config/crew-harness"
+  printf 'pi-signed\n' > "$dir/home/config/crew-harness"
   printf 'zsh' > "$dir/fake/command"
   out=$(run_spawn "$dir" rl21 --relaunch)
   [ "$(meta_field "$dir" rl21 harness)" = pi ] \
@@ -772,7 +724,7 @@ test_launch_failure_keeps_the_prior_record_and_reports_it() {
   # The endpoint's shell is not in the recorded worktree, so the launch owner
   # refuses AFTER the previous agent has already been stopped.
   printf '%s' "$dir/proj" > "$dir/fake/cwd"
-  out=$(run_control "$dir" rl13 relaunch --harness codex --note "carry this forward"); rc=$?
+  out=$(run_control "$dir" rl13 relaunch --harness pi-signed --note "carry this forward"); rc=$?
   expect_code 1 "$rc" "a failed launch should fail closed"$'\n'"$out"
   assert_contains "$out" "no agent is running" "the failure should say no agent is running"
   assert_contains "$out" "$dir/wt" "the failure should say where the work is preserved"
@@ -793,7 +745,7 @@ test_prepublication_failure_keeps_concurrent_durable_metadata() {
   add_ship_task "$dir" rl30 pi
   printf '%s' "$dir/proj" > "$dir/fake/cwd"
   FM_FAKE_CWD_RACE_READY="$dir/cwd-race-ready" \
-    run_control "$dir" rl30 relaunch --harness codex --note "preserve concurrent metadata" \
+    run_control "$dir" rl30 relaunch --harness pi-signed --note "preserve concurrent metadata" \
       > "$dir/control.out" &
   control_pid=$!
   while [ ! -e "$dir/cwd-race-ready" ] && [ "$i" -lt 200 ]; do
@@ -824,11 +776,11 @@ test_post_publication_launch_failure_keeps_the_new_record() {
   local dir out rc
   dir=$(new_case published rl24)
   add_ship_task "$dir" rl24 pi
-  printf 'codex' > "$dir/fake/becomes"
+  printf 'pi-signed' > "$dir/fake/becomes"
   out=$(FM_FAKE_LAUNCH_TRANSPORT_FAIL_AFTER_START=1 \
-    run_control "$dir" rl24 relaunch --harness codex --note "keep the published record"); rc=$?
+    run_control "$dir" rl24 relaunch --harness pi-signed --note "keep the published record"); rc=$?
   expect_code 1 "$rc" "a post-publication launch failure should fail closed"$'\n'"$out"
-  [ "$(meta_field "$dir" rl24 harness)" = codex ] \
+  [ "$(meta_field "$dir" rl24 harness)" = pi-signed ] \
     || fail "a published replacement record must not be rewritten to the prior harness"
   [ -n "$(meta_field "$dir" rl24 control_relaunch_tx)" ] \
     || fail "the published replacement record should identify its relaunch transaction"
@@ -859,17 +811,17 @@ test_complete_journal_failure_rolls_back_from_durable_phase() {
   local dir out rc real_mv
   dir=$(new_case completejournal rl27)
   add_ship_task "$dir" rl27 pi
-  printf 'codex' > "$dir/fake/becomes"
+  printf 'pi-signed' > "$dir/fake/becomes"
   real_mv=$(command -v mv)
   make_mv_failure_stub "$dir"
   out=$(FM_REAL_MV="$real_mv" FM_FAKE_COMPLETE_JOURNAL_MV_FAIL=1 \
-    run_control "$dir" rl27 relaunch --harness codex --note "keep durable phase honest"); rc=$?
+    run_control "$dir" rl27 relaunch --harness pi-signed --note "keep durable phase honest"); rc=$?
   expect_code 1 "$rc" "a failed complete journal replacement should fail closed"$'\n'"$out"
   [ "$(journal_field "$dir" rl27 phase)" = failed:launching ] \
     || fail "rollback should start from the last durable launching phase"
   [ "$(journal_field "$dir" rl27 rollback)" = none-new-agent-confirmed ] \
     || fail "rollback should retain the confirmed-running replacement"
-  [ "$(meta_field "$dir" rl27 harness)" = codex ] \
+  [ "$(meta_field "$dir" rl27 harness)" = pi-signed ] \
     || fail "journal failure must not rewrite the published replacement record"
   assert_contains "$out" "replacement is running" \
     "journal failure should report the confirmed-running replacement"
@@ -1174,10 +1126,8 @@ test_relaunch_serializes_concurrent_durable_metadata_publication
 test_disabled_relaunch_clears_prior_trace_context
 test_relaunch_appends_the_progress_note_to_the_instructions
 test_relaunch_requires_a_note_for_a_ship_task
-test_harness_switch_moves_the_record_and_clears_prior_wiring
+test_harness_switch_moves_the_record_and_replaces_prior_wiring
 test_harness_switch_does_not_carry_the_old_profile_axes
-test_harness_switch_resolves_a_prefixed_recorded_harness
-test_prefixed_recorded_harness_requires_explicit_replacement
 test_same_harness_relaunch_keeps_the_profile_axes
 test_explicit_model_wins_over_the_recorded_one
 test_relaunch_onto_an_unverified_harness_is_refused

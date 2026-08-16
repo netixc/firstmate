@@ -170,7 +170,7 @@ shift 2
 if ! fm_control_verb_allowed "$VERB"; then
   {
     if [ "$VERB" = resume ]; then
-      echo "error: 'resume' is not a control verb: resuming an exited agent is not deterministic across the verified adapters (codex needs a session id printed at exit, and pi and pi-signed have no verified pane-resume contract). Use 'relaunch', which carries the brief plus a progress note into a fresh agent on any adapter."
+      echo "error: 'resume' is not a control verb: pi and pi-signed have no verified pane-resume contract. Use 'relaunch', which carries the brief plus a progress note into a fresh agent on either adapter."
     else
       echo "error: '$VERB' is not a control verb"
     fi

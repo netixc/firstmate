@@ -10,11 +10,10 @@ RENDER="$ROOT/bin/fm-supervision-instructions.sh"
 
 test_selected_harness_block_only() {
   local out
-  out=$("$RENDER" --harness codex)
-  assert_contains "$out" "SUPERVISION OPERATING INSTRUCTIONS - primary harness: codex" "codex heading missing"
-  assert_contains "$out" "Mode: Codex foreground checkpoint." "codex snippet missing"
-  assert_contains "$out" "bin/fm-watch-checkpoint.sh" "codex checkpoint helper missing"
-  assert_not_contains "$out" "Mode: Pi extension background wake." "renderer printed the pi snippet too"
+  out=$("$RENDER" --harness pi)
+  assert_contains "$out" "SUPERVISION OPERATING INSTRUCTIONS - primary harness: pi" "Pi heading missing"
+  assert_contains "$out" "Mode: Pi extension background wake." "Pi snippet missing"
+  assert_not_contains "$out" "Mode: Unknown harness fallback." "renderer printed the fallback snippet too"
   pass "renderer prints exactly the selected harness block"
 }
 
@@ -31,12 +30,12 @@ test_conditional_stanzas() {
   home="$TMP_ROOT/conditional-home"
   config="$TMP_ROOT/conditional-config"
   mkdir -p "$home/state" "$home/config" "$config"
-  out=$(FM_HOME="$home" FM_CONFIG_OVERRIDE="$config" "$RENDER" --harness codex --read-only 1 --afk 1 --relay 1)
+  out=$(FM_HOME="$home" FM_CONFIG_OVERRIDE="$config" "$RENDER" --harness pi --read-only 1 --afk 1 --relay 1)
   assert_contains "$out" "- Lock: read-only" "read-only stanza missing"
   assert_contains "$out" "- Away mode: active" "afk stanza missing"
   assert_contains "$out" "- Relay: active" "relay stanza missing"
   assert_contains "$out" "$config/relay.env" "relay stanza did not render the effective config path"
-  assert_contains "$out" 'Mode: Codex foreground checkpoint.' "codex snippet missing"
+  assert_contains "$out" 'Mode: Pi extension background wake.' "Pi snippet missing"
   assert_not_contains "$out" "Source \`config/relay.env\`" "snippet kept the repo-relative relay config path"
   pass "renderer includes read-only, afk, and effective relay current-state stanzas"
 }
@@ -45,13 +44,10 @@ test_repair_lines() {
   local home out
   home="$TMP_ROOT/repair-home"
   mkdir -p "$home/state" "$home/config"
-  out=$(FM_HOME="$home" FM_CODEX_WATCH_CHECKPOINT=7 "$RENDER" --harness codex --repair-line)
-  assert_contains "$out" "bin/fm-watch-checkpoint.sh --seconds 7" "codex repair line did not use checkpoint helper and env override"
-
   : > "$home/config/relay.env"
-  out=$(FM_HOME="$home" FM_CODEX_WATCH_CHECKPOINT=7 "$RENDER" --harness codex --relay 1 --repair-line)
+  out=$(FM_HOME="$home" "$RENDER" --harness pi --relay 1 --repair-line)
   assert_contains "$out" "source '$home/config/relay.env' first" "relay repair line did not source the effective cadence config"
-  assert_contains "$out" "bin/fm-watch-checkpoint.sh --seconds 7" "relay codex repair line lost the checkpoint helper"
+  assert_contains "$out" "fm_watch_arm_pi" "relay Pi repair line lost the extension-owned repair tool"
 
   out=$(FM_HOME="$home" "$RENDER" --harness legacy-agent --read-only 1 --repair-line)
   assert_contains "$out" "session holding the fleet lock" "read-only repair line missing"
@@ -71,15 +67,6 @@ test_cross_harness_ordinary_continuation_and_repair_matrix() {
   assert_not_contains "$ordinary" "fm_watch_arm_pi" "pi ordinary-wake line incorrectly calls the recovery tool"
   out=$("$RENDER" --harness pi --repair-line)
   assert_contains "$out" "fm_watch_arm_pi" "pi recovery line lost the extension-owned repair tool"
-
-  out=$("$RENDER" --harness codex)
-  ordinary=$(printf '%s\n' "$out" | grep -F -- '- Ordinary wake:')
-  assert_contains "$ordinary" "next foreground" "codex ordinary-wake line lost its foreground checkpoint"
-  assert_contains "$ordinary" "bin/fm-watch-checkpoint.sh" "codex ordinary-wake line lost the checkpoint command"
-  assert_not_contains "$ordinary" "bin/fm-watch-arm.sh" "codex ordinary-wake line incorrectly uses a background arm"
-  out=$("$RENDER" --harness codex --repair-line)
-  assert_contains "$out" "foreground checkpoint" "codex recovery line lost its checkpoint repair"
-  assert_contains "$out" "bin/fm-watch-checkpoint.sh" "codex recovery line lost the checkpoint command"
 
   pass "renderer preserves every supported harness ordinary-continuation and missing-cycle repair path"
 }

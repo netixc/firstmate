@@ -146,16 +146,11 @@ MATRIX_TMP=$(mktemp -d "${TMPDIR:-/tmp}/fm-cd-policy-matrix.XXXXXX")
 FM_TEST_CLEANUP_DIRS+=("$MATRIX_TMP")
 
 run_matrix_entry() {
-  local id=$1 expected=$2 entry=$3 cmd=$4 payload out_file err_file rc
+  local id=$1 expected=$2 entry=$3 cmd=$4 out_file err_file rc
   out_file="$MATRIX_TMP/$id-$entry.out"
   err_file="$MATRIX_TMP/$id-$entry.err"
 
   case "$entry" in
-    codex)
-      payload=$(jq -cn --arg command "$cmd" '{tool_name:"Bash",tool_input:{command:$command}}')
-      printf '%s' "$payload" | "$CHECK" >"$out_file" 2>"$err_file"
-      rc=$?
-      ;;
     pi)
       "$CHECK" --command "$cmd" >"$out_file" 2>"$err_file"
       rc=$?
@@ -179,12 +174,13 @@ run_matrix_entry() {
 
 test_full_acceptance_matrix() {
   local i entry
+  local -a entries=(pi)
   for ((i = 0; i < ${#MATRIX_IDS[@]}; i++)); do
-    for entry in codex pi; do
+    for entry in "${entries[@]}"; do
       run_matrix_entry "${MATRIX_IDS[$i]}" "${MATRIX_EXPECTED[$i]}" "$entry" "${MATRIX_COMMANDS[$i]}"
     done
   done
-  pass "cd-guard acceptance matrix: ${#MATRIX_IDS[@]} cases x 3 harness entry forms, block/allow all correct"
+  pass "cd-guard acceptance matrix: ${#MATRIX_IDS[@]} cases through the Pi entry form, block/allow all correct"
 }
 
 # --- primary-checkout scoping ----------------------------------------------
@@ -267,22 +263,6 @@ test_e2e_cwd_leak_regression() {
 
 # --- fail-open transport behavior ------------------------------------------
 
-test_fail_open_empty_stdin() {
-  local out rc
-  out=$("$CHECK" < /dev/null 2>&1); rc=$?
-  expect_code 0 "$rc" "transport must exit 0 on empty stdin"
-  [ -z "$out" ] || fail "transport produced output on empty stdin: $out"
-  pass "cd-guard: fails open on empty stdin"
-}
-
-test_fail_open_unparseable_json() {
-  local out rc
-  out=$(printf 'not json at all' | "$CHECK" 2>&1); rc=$?
-  expect_code 0 "$rc" "transport must exit 0 on unparseable stdin JSON"
-  [ -z "$out" ] || fail "transport produced output on unparseable JSON: $out"
-  pass "cd-guard: fails open on unparseable stdin JSON"
-}
-
 test_fail_open_missing_node() {
   local fakebin tool tool_path out rc
   fakebin=$(fm_fakebin "$TMP_ROOT/nonode")
@@ -295,20 +275,6 @@ test_fail_open_missing_node() {
   expect_code 0 "$rc" "transport must fail open when node is unavailable"
   [ -z "$out" ] || fail "transport produced output without node: $out"
   pass "cd-guard: fails open (never blocks) when node is missing"
-}
-
-test_fail_open_missing_jq_on_stdin() {
-  local fakebin tool tool_path out rc
-  fakebin=$(fm_fakebin "$TMP_ROOT/nojq")
-  for tool in bash sh git dirname cat printf sed tr node; do
-    tool_path=$(command -v "$tool") || continue
-    ln -s "$tool_path" "$fakebin/$tool"
-  done
-  # jq deliberately absent: the stdin transport cannot extract the command.
-  out=$(printf '{"tool_input":{"command":"cd projects/foo"}}' | PATH="$fakebin" "$CHECK" 2>&1); rc=$?
-  expect_code 0 "$rc" "stdin transport must fail open when jq is unavailable"
-  [ -z "$out" ] || fail "transport produced output without jq on the stdin path: $out"
-  pass "cd-guard: fails open on the stdin path when jq is missing"
 }
 
 # --- prefilter fast path ----------------------------------------------------
@@ -374,10 +340,7 @@ test_inert_in_child_worktree
 test_inert_when_not_firstmate_repo
 test_inert_when_not_a_git_repo
 test_e2e_cwd_leak_regression
-test_fail_open_empty_stdin
-test_fail_open_unparseable_json
 test_fail_open_missing_node
-test_fail_open_missing_jq_on_stdin
 test_prefilter_skips_node_without_cd_substring
 test_policy_cli_direct
 test_scripts_are_shellcheck_clean
