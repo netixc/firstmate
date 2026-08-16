@@ -90,6 +90,17 @@ current_checks_authenticated() {
   done
 }
 
+migration_transaction_pending() {
+  local id=$1 kind path
+  for kind in pending-canonical pending-ambiguous failure-canonical \
+    failure-ambiguous failure-replacement; do
+    path="$QUARANTINE/$id.diagnostic.$kind"
+    [ -e "$path" ] || [ -L "$path" ] || continue
+    return 0
+  done
+  return 1
+}
+
 orphan_poll_artifacts_absent() {
   local artifact check id
   for artifact in "$STATE"/*.pr-poll "$STATE"/*.pr-poll-registration; do
@@ -99,7 +110,13 @@ orphan_poll_artifacts_absent() {
       *.pr-poll-registration) id=$(basename "$artifact" .pr-poll-registration) ;;
     esac
     check="$STATE/$id.check.sh"
-    [ -e "$check" ] || [ -L "$check" ] || return 1
+    if [ ! -e "$check" ] && [ ! -L "$check" ]; then
+      if [ ! -f "$artifact" ] && [ ! -L "$artifact" ] \
+        && migration_transaction_pending "$id"; then
+        continue
+      fi
+      return 1
+    fi
     if [ "$id" = relay-watch ] && fm_relay_poll_shim_valid "$check" "$FM_HOME" "$FM_ROOT"; then
       return 1
     fi
@@ -243,7 +260,7 @@ scan_complete() {
   private_migration_boundaries_valid "$state_device" || return 1
   diagnostic_namespace_valid || return 1
   legacy_noncanonical_namespace_absent || return 1
-  current_checks_authenticated
+  current_checks_authenticated && orphan_poll_artifacts_absent
 }
 
 migration_complete() {
@@ -261,7 +278,6 @@ migration_complete() {
       return 1
     done
   fi
-  orphan_poll_artifacts_absent || return 1
   fm_pr_private_file_valid "$MARKER" 600 "$state_device" || return 1
   migration_marker_content_valid "$MARKER"
 }
@@ -997,17 +1013,6 @@ preserved_nonpoll_check() {
     return 0
   fi
   fm_custom_check_registered "$STATE" "$id"
-}
-
-migration_transaction_pending() {
-  local id=$1 kind path
-  for kind in pending-canonical pending-ambiguous failure-canonical \
-    failure-ambiguous failure-replacement; do
-    path="$QUARANTINE/$id.diagnostic.$kind"
-    [ -e "$path" ] || [ -L "$path" ] || continue
-    return 0
-  done
-  return 1
 }
 
 diagnostic_obligation_valid() {

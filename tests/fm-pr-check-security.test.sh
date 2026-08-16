@@ -2937,6 +2937,22 @@ test_unsupported_watch_upgrade_safety() {
   [ "$snapshot_after" = "$snapshot_before" ] \
     || fail "unsupported watch quarantine was not idempotent"
 
+  dir=$(make_case unsupported-orphan-direct-rearm)
+  state="$dir/home/state"
+  seed_unsupported_poll_artifacts "$dir"
+  rm -f "$state/task-a.check.sh" "$state/task-a.pr-poll-registration"
+  printf '%s\n' fm-pr-check-migration-scan-v1 > "$state/.pr-check-migration-scan-v1"
+  printf '%s\n' fm-pr-check-migration-v1 > "$state/.pr-check-migration-v1"
+  chmod 0600 "$state/.pr-check-migration-scan-v1" "$state/.pr-check-migration-v1"
+  run_check_entry "$dir" task-a https://github.com/o/r/pull/29 \
+    > "$dir/rearm.out" 2> "$dir/rearm.err" \
+    || fail "direct rearm did not quarantine marker-masked orphan evidence: $(cat "$dir/rearm.err")"
+  fm_pr_poll_artifacts_valid "$state" task-a "$POLL" \
+    || fail "direct rearm did not publish a canonical GitHub poll"
+  find "$state/.pr-check-quarantine" -name 'task-a.data.*' -type f | grep . >/dev/null \
+    || fail "direct rearm overwrote marker-masked orphan evidence"
+  [ ! -s "$dir/gh.log" ] || fail "direct orphan rearm made a forge query"
+
   for suffix in pr-poll pr-poll-registration; do
     dir=$(make_case "unsupported-orphan-$suffix")
     state="$dir/home/state"
