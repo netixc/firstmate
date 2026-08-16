@@ -225,6 +225,7 @@ test_pi_identity_requires_readable_busy_state() (
 
 test_pi_identity_rejects_retired_launcher() (
   local out
+  # shellcheck disable=SC2329 # Mock invoked indirectly by the sourced adapter.
   tmux() {
     local arg
     for arg in "$@"; do
@@ -235,7 +236,6 @@ test_pi_identity_rejects_retired_launcher() (
     done
     return 1
   }
-  fm_pane_busy_state() { printf 'idle'; }
   if out=$(fm_tmux_composer_identity fakepane); then
     fail "the retired launcher process must not produce Pi composer identity, got '$out'"
   fi
