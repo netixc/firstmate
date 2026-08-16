@@ -2900,7 +2900,7 @@ poll_artifact_snapshot() {
 }
 
 test_unsupported_watch_upgrade_safety() {
-  local dir state meta_before queue_before snapshot_before snapshot_after rc suffix kind
+  local dir state meta_before queue_before snapshot_before snapshot_after rc suffix kind evidence_before evidence_after
 
   dir=$(make_case unsupported-watch-quarantine)
   state="$dir/home/state"
@@ -2953,6 +2953,9 @@ test_unsupported_watch_upgrade_safety() {
         ;;
     esac
     meta_before=$(cat "$state/task-a.meta")
+    printf '%s\n' fm-pr-check-migration-scan-v1 > "$state/.pr-check-migration-scan-v1"
+    printf '%s\n' fm-pr-check-migration-v1 > "$state/.pr-check-migration-v1"
+    chmod 0600 "$state/.pr-check-migration-scan-v1" "$state/.pr-check-migration-v1"
     : > "$dir/unsupported-exec.log"
     FM_TEST_UNSUPPORTED_EXEC_LOG="$dir/unsupported-exec.log" FM_HOME="$dir/home" \
       PATH="$dir/fakebin:$BASE_PATH" "$MIGRATE" >/dev/null 2> "$dir/migrate.err" \
@@ -2965,6 +2968,20 @@ test_unsupported_watch_upgrade_safety() {
       || fail "unsupported orphan $suffix quarantine changed task metadata"
     [ ! -s "$dir/unsupported-exec.log" ] || fail "unsupported orphan $suffix executed check bytes"
     [ ! -s "$dir/gh.log" ] || fail "unsupported orphan $suffix quarantine made a forge query"
+    evidence_before=$(find "$state/.pr-check-quarantine" -name "task-a.$kind.*" -type f | wc -l | tr -d ' ')
+    rm -f "$state/.pr-check-migration-scan-v1" "$state/.pr-check-migration-v1"
+    printf 'later orphan evidence\n' > "$state/task-a.$suffix"
+    chmod 0600 "$state/task-a.$suffix"
+    FM_TEST_UNSUPPORTED_EXEC_LOG="$dir/unsupported-exec.log" FM_HOME="$dir/home" \
+      PATH="$dir/fakebin:$BASE_PATH" "$MIGRATE" >/dev/null 2> "$dir/migrate-later.err" \
+      || fail "later unsupported orphan $suffix quarantine failed: $(cat "$dir/migrate-later.err")"
+    [ ! -e "$state/task-a.$suffix" ] && [ ! -L "$state/task-a.$suffix" ] \
+      || fail "prior terminal outcome suppressed later orphan $suffix quarantine"
+    evidence_after=$(find "$state/.pr-check-quarantine" -name "task-a.$kind.*" -type f | wc -l | tr -d ' ')
+    [ "$evidence_after" -eq $((evidence_before + 1)) ] \
+      || fail "later unsupported orphan $suffix evidence was not preserved independently"
+    [ ! -s "$dir/unsupported-exec.log" ] || fail "later unsupported orphan $suffix executed check bytes"
+    [ ! -s "$dir/gh.log" ] || fail "later unsupported orphan $suffix quarantine made a forge query"
     snapshot_before=$(state_snapshot "$state")
     FM_TEST_UNSUPPORTED_EXEC_LOG="$dir/unsupported-exec.log" FM_HOME="$dir/home" \
       PATH="$dir/fakebin:$BASE_PATH" "$MIGRATE" >/dev/null 2> "$dir/migrate-2.err" \

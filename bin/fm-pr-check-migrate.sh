@@ -90,6 +90,24 @@ current_checks_authenticated() {
   done
 }
 
+orphan_poll_artifacts_absent() {
+  local artifact check id
+  for artifact in "$STATE"/*.pr-poll "$STATE"/*.pr-poll-registration; do
+    [ -e "$artifact" ] || [ -L "$artifact" ] || continue
+    case "$artifact" in
+      *.pr-poll) id=$(basename "$artifact" .pr-poll) ;;
+      *.pr-poll-registration) id=$(basename "$artifact" .pr-poll-registration) ;;
+    esac
+    check="$STATE/$id.check.sh"
+    [ -e "$check" ] || [ -L "$check" ] || return 1
+    if [ "$id" = relay-watch ] && fm_relay_poll_shim_valid "$check" "$FM_HOME" "$FM_ROOT"; then
+      return 1
+    fi
+    fm_custom_check_registered "$STATE" "$id" && return 1
+  done
+  return 0
+}
+
 private_migration_boundaries_valid() {
   local state_device=$1 artifact
   if [ -e "$LOG" ] || [ -L "$LOG" ]; then
@@ -243,6 +261,7 @@ migration_complete() {
       return 1
     done
   fi
+  orphan_poll_artifacts_absent || return 1
   fm_pr_private_file_valid "$MARKER" 600 "$state_device" || return 1
   migration_marker_content_valid "$MARKER"
 }
@@ -980,10 +999,10 @@ preserved_nonpoll_check() {
   fm_custom_check_registered "$STATE" "$id"
 }
 
-migration_outcome_tracked() {
+migration_transaction_pending() {
   local id=$1 kind path
-  for kind in pending-canonical pending-ambiguous canonical failure-canonical \
-    failure-ambiguous failure-replacement ambiguous validated; do
+  for kind in pending-canonical pending-ambiguous failure-canonical \
+    failure-ambiguous failure-replacement; do
     path="$QUARANTINE/$id.diagnostic.$kind"
     [ -e "$path" ] || [ -L "$path" ] || continue
     return 0
@@ -1399,7 +1418,7 @@ if migration_needed; then
   for data in "$STATE"/*.pr-poll; do
     [ -e "$data" ] || [ -L "$data" ] || continue
     id=$(basename "$data" .pr-poll)
-    migration_outcome_tracked "$id" && continue
+    migration_transaction_pending "$id" && continue
     check="$STATE/$id.check.sh"
     if [ -e "$check" ] || [ -L "$check" ]; then
       preserved_nonpoll_check "$id" || continue
@@ -1441,7 +1460,7 @@ if migration_needed; then
   for registration in "$STATE"/*.pr-poll-registration; do
     [ -e "$registration" ] || [ -L "$registration" ] || continue
     id=$(basename "$registration" .pr-poll-registration)
-    migration_outcome_tracked "$id" && continue
+    migration_transaction_pending "$id" && continue
     check="$STATE/$id.check.sh"
     if [ -e "$check" ] || [ -L "$check" ]; then
       preserved_nonpoll_check "$id" || continue
