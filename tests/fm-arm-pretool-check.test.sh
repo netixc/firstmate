@@ -156,7 +156,7 @@ run_matrix_entry() {
       printf '%s' "$payload" | "$CHECK" >"$out_file" 2>"$err_file"
       rc=$?
       ;;
-    opencode|pi)
+    pi)
       "$CHECK" --command "$cmd" >"$out_file" 2>"$err_file"
       rc=$?
       ;;
@@ -180,7 +180,7 @@ run_matrix_entry() {
 test_full_acceptance_matrix() {
   local i entry
   for ((i = 0; i < ${#MATRIX_IDS[@]}; i++)); do
-    for entry in codex opencode pi; do
+    for entry in codex pi; do
       run_matrix_entry "${MATRIX_IDS[$i]}" "${MATRIX_EXPECTED[$i]}" "$entry" "${MATRIX_COMMANDS[$i]}"
     done
     pass "matrix ${MATRIX_IDS[$i]}: ${MATRIX_EXPECTED[$i]} through all three surviving entry forms"

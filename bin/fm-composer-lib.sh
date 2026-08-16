@@ -18,7 +18,7 @@
 # judged; they never change what the shapes ARE:
 #   styled=1    the capture preserves ANSI styling, so ghost/placeholder text
 #               is detectable and can be stripped (tmux -e and Herdr ANSI).
-#               With styled=0, ghost text is unreadable, so a bare glyph row or left-bar row
+#               With styled=0, ghost text is unreadable, so a bare glyph row
 #               carrying trailing non-idle text degrades to `unknown` rather
 #               than `pending`: the text may be the harness's own idle
 #               suggestion, and a false `pending` blocks every safe caller.
@@ -48,9 +48,6 @@
 #   bare       - an agent prompt glyph row with no border at all (codex `›`).
 #                The agent glyph is itself the container
 #                proof; a bare SHELL glyph (`>` `$` `%` `#`) never is.
-#   left-bar   - opencode: rows prefixed by a heavy left bar `┃` with no
-#                closing border, holding the idle hint, blank rows, and a
-#                mode/model footer line.
 #   separated  - pi: content rows between two solid horizontal `─` rules, no
 #                glyph and no side border. Provable only with a live agent
 #                identity reporting an idle/done/blocked pi (herdr `agent
@@ -236,13 +233,12 @@ fm_composer_strip_ghost() {
 # Matching a footer to confirm a keystroke landed is a different question from
 # asking what a worker is doing, and the two must not be conflated.
 # Delivery-only rendered busy footers per harness. Codex: "esc to interrupt";
-# OpenCode: "esc interrupt"; Pi: "Working...".
+# Pi: "Working...".
 # The harness-less default is the UNION of the per-harness tokens below, used
 # when a caller has no recorded harness for the pane (the submit cores read the
 # baseline and the post-Enter transition this way).
 FM_DELIVERY_BUSY_REGEX_DEFAULT='esc (to )?interrupt|Working\.\.\.'
 FM_DELIVERY_CODEX_BUSY_REGEX_DEFAULT='esc to interrupt'
-FM_DELIVERY_OPENCODE_BUSY_REGEX_DEFAULT='esc interrupt'
 FM_DELIVERY_PI_BUSY_REGEX_DEFAULT='Working\.\.\.'
 
 fm_busy_lines_match() {  # [harness]
@@ -253,7 +249,6 @@ fm_busy_lines_match() {  # [harness]
   else
     case "$harness" in
       codex) regex=$FM_DELIVERY_CODEX_BUSY_REGEX_DEFAULT ;;
-      opencode) regex=$FM_DELIVERY_OPENCODE_BUSY_REGEX_DEFAULT ;;
       pi|pi-signed) regex=$FM_DELIVERY_PI_BUSY_REGEX_DEFAULT ;;
       '') regex=$FM_DELIVERY_BUSY_REGEX_DEFAULT ;;
       *)
@@ -275,17 +270,10 @@ fm_busy_lines_match() {  # [harness]
 FM_COMPOSER_AGENT_PROMPT_GLYPHS=$(printf '%s\n' '›')
 FM_COMPOSER_SHELL_PROMPT_GLYPHS=$(printf '%s\n' '>' '❯' '$' '%' '#')
 
-# The ONE fleet-wide idle-placeholder set: composer text a harness renders in
-# an EMPTY composer that a plain capture cannot tell from typed text. OpenCode's
-# left-bar hint continues with a rotating quoted suggestion, hence the unanchored tail.
-# FM_COMPOSER_IDLE_RE overrides for an unverified harness; matching is
-# case-insensitive.
-FM_COMPOSER_IDLE_RE_DEFAULT='^Ask anything\.\.\.'
-
-# Opencode draws a mode/model footer line INSIDE its left-bar composer
-# ("Build · GPT-5.5 Fast OpenAI · high"). It is composer furniture, not typed
-# text, and only the run's LAST row is ever matched against it.
-FM_COMPOSER_LEFTBAR_FOOTER_RE_DEFAULT='^(Build|Plan)[[:space:]]+·[[:space:]]+'
+# FM_COMPOSER_IDLE_RE lets an unverified harness declare composer text it
+# renders in an empty composer that a plain capture cannot distinguish from
+# typed text. The default deliberately matches nothing.
+FM_COMPOSER_IDLE_RE_DEFAULT='a^'
 
 # The bounded row window adapters should capture for a composer read. One
 # shared policy (previously three per-backend variables that had drifted to
@@ -484,14 +472,12 @@ _fm_composer_scan_screen() {  # <plain-screen> <cursor-or-empty> [extract-wrap]
   FM_COMPOSER_SCAN_CURSOR_EDGE=0
   FM_COMPOSER_SCAN_BARE_ROW=-1
   FM_COMPOSER_SCAN_SHELL_ROW=-1
-  FM_COMPOSER_SCAN_LEFTBAR_START=-1
-  FM_COMPOSER_SCAN_LEFTBAR_END=-1
   FM_COMPOSER_SCAN_PI_PAIR_FOUND=0
   FM_COMPOSER_SCAN_PI_PAIR_VALID=0
   FM_COMPOSER_SCAN_PI_OPEN=-1
   FM_COMPOSER_SCAN_PI_CLOSE=-1
   FM_COMPOSER_SCAN_PI_LAST_SEPARATOR=-1
-  local leftbar_start=-1 pi_open=-1 pi_lines=0 pi_max
+  local pi_open=-1 pi_lines=0 pi_max
   pi_max=$FM_COMPOSER_PI_MAX_LINES
   case "$pi_max" in ''|*[!0-9]*|0) pi_max=8 ;; esac
   while IFS= read -r line; do
@@ -532,17 +518,6 @@ _fm_composer_scan_screen() {  # <plain-screen> <cursor-or-empty> [extract-wrap]
     elif [ "$pi_open" -ge 0 ]; then
       pi_lines=$((pi_lines + 1))
     fi
-    # Left-bar rows (opencode): a heavy left bar `┃` opening the row with no
-    # closing side border. A `┃…┃` row is a bordered box row, not a left bar.
-    case "$trimmed" in
-      '┃'*'┃') leftbar_start=-1 ;;
-      '┃'*)
-        if [ "$leftbar_start" -lt 0 ]; then leftbar_start=$row; fi
-        FM_COMPOSER_SCAN_LEFTBAR_START=$leftbar_start
-        FM_COMPOSER_SCAN_LEFTBAR_END=$row
-        ;;
-      *) leftbar_start=-1 ;;
-    esac
     # Bare agent-glyph rows: the glyph itself is the container proof. Bare
     # shell glyphs are deliberately not candidates (dead-shell rule). Keep
     # lower shell prompts as staleness evidence for cursorless selection.
@@ -819,56 +794,6 @@ _fm_composer_classify_bare_wrap() {  # <screen> <styled> <glyph-row> <cursor-row
   if [ "$styled" = 1 ]; then printf 'pending'; else printf 'unknown'; fi
 }
 
-# _fm_composer_classify_leftbar: opencode's left-bar composer. Blank rows and
-# the idle hint read empty; the run's LAST row may be the mode/model footer
-# (composer furniture, never typed text). Real content is pending when styling
-# can prove it real, unknown otherwise.
-_fm_composer_classify_leftbar() {  # <screen> <styled> <first-row> <last-row>
-  local screen=$1 styled=$2 first=$3 last=$4
-  local row raw content pending_seen=0 footer_re leading_blank=1 placeholder_position=0
-  footer_re=${FM_COMPOSER_LEFTBAR_FOOTER_RE:-$FM_COMPOSER_LEFTBAR_FOOTER_RE_DEFAULT}
-  row=$first
-  while [ "$row" -le "$last" ]; do
-    raw=$(_fm_composer_screen_row "$row" "$screen")
-    content=$(_fm_composer_row_content "$raw" "$styled")
-    case "$content" in
-      '┃'*) content=${content#┃} ;;
-    esac
-    fm_composer_normalize_trim_var content
-    if [ -z "$content" ]; then row=$((row + 1)); continue; fi
-    if [ "$leading_blank" = 1 ] && [ "$row" -gt "$first" ]; then
-      placeholder_position=1
-    else
-      placeholder_position=0
-    fi
-    leading_blank=0
-    if [ "$placeholder_position" = 1 ] \
-       && fm_composer_idle_matches "$content" "${FM_COMPOSER_IDLE_RE:-$FM_COMPOSER_IDLE_RE_DEFAULT}" insensitive; then
-      row=$((row + 1)); continue
-    fi
-    if [ "$row" -eq "$last" ] \
-       && fm_composer_idle_matches "$content" "$footer_re" sensitive; then
-      row=$((row + 1)); continue
-    fi
-    pending_seen=1
-    row=$((row + 1))
-  done
-  if [ "$pending_seen" = 1 ]; then
-    if [ "$styled" = 1 ]; then printf 'pending'; else printf 'unknown'; fi
-  else
-    printf 'empty'
-  fi
-}
-
-_fm_composer_leftbar_floor_row() {  # <trimmed-row>
-  local row=$1 blocks
-  case "$row" in
-    '╹▀'*) blocks=${row#╹} ;;
-    *) return 1 ;;
-  esac
-  [ -z "${blocks//▀/}" ]
-}
-
 _fm_composer_select_cursorless() {
   local plain=$1 generic=-1 next boundary raw trimmed
   FM_COMPOSER_SELECTED_KIND=
@@ -887,12 +812,6 @@ _fm_composer_select_cursorless() {
     FM_COMPOSER_SELECTED_KIND=bare
     FM_COMPOSER_SELECTED_FIRST=$FM_COMPOSER_SCAN_BARE_ROW
     FM_COMPOSER_SELECTED_LAST=$FM_COMPOSER_SCAN_BARE_ROW
-  fi
-  if [ "$FM_COMPOSER_SCAN_LEFTBAR_END" -gt "$generic" ]; then
-    generic=$FM_COMPOSER_SCAN_LEFTBAR_END
-    FM_COMPOSER_SELECTED_KIND=leftbar
-    FM_COMPOSER_SELECTED_FIRST=$FM_COMPOSER_SCAN_LEFTBAR_START
-    FM_COMPOSER_SELECTED_LAST=$FM_COMPOSER_SCAN_LEFTBAR_END
   fi
   if [ "$FM_COMPOSER_SCAN_INCOMPLETE_BOX_FROM" -gt "$generic" ]; then
     FM_COMPOSER_SELECTED_KIND=
@@ -927,20 +846,8 @@ _fm_composer_select_cursorless() {
       next=$((next + 1))
     done
   fi
-  if [ "$FM_COMPOSER_SELECTED_KIND" = box ] \
-     || [ "$FM_COMPOSER_SELECTED_KIND" = leftbar ]; then
-    boundary=$FM_COMPOSER_SELECTED_LAST
-    if [ "$FM_COMPOSER_SELECTED_KIND" = box ]; then
-      boundary=$FM_COMPOSER_SCAN_BOX_BOTTOM
-    else
-      next=$((boundary + 1))
-      raw=$(_fm_composer_screen_row "$next" "$plain")
-      trimmed=$raw
-      fm_composer_normalize_trim_var trimmed
-      if _fm_composer_leftbar_floor_row "$trimmed"; then
-        boundary=$next
-      fi
-    fi
+  if [ "$FM_COMPOSER_SELECTED_KIND" = box ]; then
+    boundary=$FM_COMPOSER_SCAN_BOX_BOTTOM
     next=$((boundary + 1))
     raw=$(_fm_composer_screen_row "$next" "$plain")
     trimmed=$raw
@@ -954,9 +861,8 @@ _fm_composer_select_cursorless() {
 }
 
 fm_composer_extract_selected_content() {  # <caps> <screen>
-  local caps=$1 screen=$2 styled=0 kv plain row raw content glyph joined='' footer_re prompt_row=-1
-  local leading_blank=1 placeholder_position=0 prompt_is_shell=0
-  footer_re=${FM_COMPOSER_LEFTBAR_FOOTER_RE:-$FM_COMPOSER_LEFTBAR_FOOTER_RE_DEFAULT}
+  local caps=$1 screen=$2 styled=0 kv plain row raw content glyph joined='' prompt_row=-1
+  local placeholder_position=0 prompt_is_shell=0
   while IFS= read -r kv; do
     [ "$kv" = styled=1 ] && styled=1
   done <<EOF
@@ -975,18 +881,6 @@ EOF
         if [ "$row" -eq "$FM_COMPOSER_SELECTED_FIRST" ] \
            && fm_composer_leading_agent_glyph_var glyph "$content"; then
           content=${content#*"$glyph"}
-        fi
-        ;;
-      leftbar)
-        case "$content" in '┃'*) content=${content#┃} ;; esac
-        fm_composer_normalize_trim_var content
-        if [ -z "$content" ]; then
-          :
-        elif [ "$leading_blank" = 1 ] && [ "$row" -gt "$FM_COMPOSER_SELECTED_FIRST" ]; then
-          placeholder_position=1
-          leading_blank=0
-        else
-          leading_blank=0
         fi
         ;;
       box)
@@ -1008,17 +902,12 @@ EOF
     # A styled agent-glyph placeholder disappears above when ghost stripping
     # proves it is furniture. If the same placeholder-looking bytes survive
     # styling, they are real user input and must remain in the extracted content.
-    # OpenCode's left-bar hint and an unstyled boxed placeholder have no such
-    # styling proof, so their structurally fixed positions remain the two
-    # idle-regex exceptions here.
+    # An unstyled boxed placeholder has no styling proof, so its structurally
+    # fixed position remains the idle-regex exception here.
     if [ -z "$content" ] \
-       || { { [ "$FM_COMPOSER_SELECTED_KIND" = leftbar ] \
-              || { [ "$FM_COMPOSER_SELECTED_KIND" = box ] && [ "$prompt_is_shell" = 1 ] && [ "$styled" != 1 ]; }; } \
+       || { [ "$FM_COMPOSER_SELECTED_KIND" = box ] && [ "$prompt_is_shell" = 1 ] && [ "$styled" != 1 ] \
             && [ "$placeholder_position" = 1 ] \
-            && fm_composer_idle_matches "$content" "${FM_COMPOSER_IDLE_RE:-$FM_COMPOSER_IDLE_RE_DEFAULT}" insensitive; } \
-       || { [ "$FM_COMPOSER_SELECTED_KIND" = leftbar ] \
-            && [ "$row" -eq "$FM_COMPOSER_SELECTED_LAST" ] \
-            && fm_composer_idle_matches "$content" "$footer_re" sensitive; }; then
+            && fm_composer_idle_matches "$content" "${FM_COMPOSER_IDLE_RE:-$FM_COMPOSER_IDLE_RE_DEFAULT}" insensitive; }; then
       row=$((row + 1))
       continue
     fi
@@ -1054,13 +943,6 @@ EOF
     if [ "$FM_COMPOSER_SCAN_BOX_TOP" -ge 0 ]; then
       _fm_composer_classify_rows "$screen" "$styled" "$FM_COMPOSER_SCAN_BOX_AMBIG" \
         "$((FM_COMPOSER_SCAN_BOX_TOP + 1))" "$((FM_COMPOSER_SCAN_BOX_BOTTOM - 1))"
-      return 0
-    fi
-    if [ "$FM_COMPOSER_SCAN_LEFTBAR_START" -ge 0 ] \
-       && [ "$cy" -ge "$FM_COMPOSER_SCAN_LEFTBAR_START" ] \
-       && [ "$cy" -le "$FM_COMPOSER_SCAN_LEFTBAR_END" ]; then
-      _fm_composer_classify_leftbar "$screen" "$styled" \
-        "$FM_COMPOSER_SCAN_LEFTBAR_START" "$FM_COMPOSER_SCAN_LEFTBAR_END"
       return 0
     fi
     if [ "$FM_COMPOSER_SCAN_BARE_ROW" -ge 0 ] && [ "$cy" -eq "$FM_COMPOSER_SCAN_BARE_ROW" ]; then
@@ -1128,10 +1010,6 @@ EOF
         _fm_composer_classify_bare_row "$screen" "$styled" "$FM_COMPOSER_SCAN_BARE_ROW"
       fi
       ;;
-    leftbar)
-      _fm_composer_classify_leftbar "$screen" "$styled" \
-        "$FM_COMPOSER_SELECTED_FIRST" "$FM_COMPOSER_SELECTED_LAST"
-      ;;
   esac
 }
 
@@ -1144,8 +1022,8 @@ EOF
 # retyping would duplicate it. Proven pending (and pending-unproven) retries
 # consume the budget; any other verdict returns immediately, so `unknown`
 # stays a loud refusal rather than a blind retry into an unreadable pane.
-# tmux keeps its own richer core (bin/fm-tmux-lib.sh: the busy-queued-Enter
-# and idle-baseline turn-started conversions its busy primitive enables), and
+# tmux keeps its own richer core (bin/fm-tmux-lib.sh: the idle-baseline
+# turn-started conversion its busy primitive enables), and
 # herdr confirms through native agent-state; both consume the same shared
 # verdict, so no shape knowledge lives in any of the three loops.
 fm_composer_submit_retry_core() {  # <send-key-fn> <state-fn> <target> <retries> <enter-sleep> [expected-label]

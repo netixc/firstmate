@@ -505,7 +505,7 @@ SH
 # Drop every harness env marker from bin/fm-harness.sh detect_own so the
 # surrounding interactive shell cannot leak past the suite's fake ps harness.
 # Markers today: PI_CODING_AGENT plus FM_PI_HARNESS (Pi family).
-# Codex and OpenCode have no env markers (ancestry only). Without this, a local
+# Codex has no env marker (ancestry only). Without this, a local
 # Pi session fails cases that pin a different fake harness while CI
 # (no ambient markers) still passes.
 run_session_start() {

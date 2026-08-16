@@ -53,7 +53,7 @@ test_repair_lines() {
   assert_contains "$out" "source '$home/config/relay.env' first" "relay repair line did not source the effective cadence config"
   assert_contains "$out" "bin/fm-watch-checkpoint.sh --seconds 7" "relay codex repair line lost the checkpoint helper"
 
-  out=$(FM_HOME="$home" "$RENDER" --harness opencode --read-only 1 --repair-line)
+  out=$(FM_HOME="$home" "$RENDER" --harness legacy-agent --read-only 1 --repair-line)
   assert_contains "$out" "session holding the fleet lock" "read-only repair line missing"
 
   out=$(FM_HOME="$home" "$RENDER" --harness pi --repair-line)
@@ -71,13 +71,6 @@ test_cross_harness_ordinary_continuation_and_repair_matrix() {
   assert_not_contains "$ordinary" "fm_watch_arm_pi" "pi ordinary-wake line incorrectly calls the recovery tool"
   out=$("$RENDER" --harness pi --repair-line)
   assert_contains "$out" "fm_watch_arm_pi" "pi recovery line lost the extension-owned repair tool"
-
-  out=$("$RENDER" --harness opencode)
-  ordinary=$(printf '%s\n' "$out" | grep -F -- '- Ordinary wake:')
-  assert_contains "$ordinary" "plugin already owns watcher continuity" "opencode ordinary-wake line does not leave continuity to the plugin"
-  assert_not_contains "$ordinary" "bin/fm-watch-arm.sh" "opencode ordinary-wake line incorrectly calls the recovery probe"
-  out=$("$RENDER" --harness opencode --repair-line)
-  assert_contains "$out" "manual recovery probe" "opencode recovery line lost its manual probe"
 
   out=$("$RENDER" --harness codex)
   ordinary=$(printf '%s\n' "$out" | grep -F -- '- Ordinary wake:')

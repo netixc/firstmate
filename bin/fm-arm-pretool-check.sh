@@ -15,7 +15,7 @@
 #   bin/fm-arm-pretool-check.sh --command '<cmd>' [--background true|false]
 #
 # Stdin mode extracts Codex's .tool_input.command.
-# CLI mode is used by OpenCode and Pi after their adapters extract the exact
+# CLI mode is used by Pi and pi-signed after their adapters extract the exact
 # command string.
 # --background remains accepted for compatibility, but harness-native tracked
 # background execution is not itself a policy signal.
@@ -26,7 +26,7 @@
 #   FAIL OPEN - malformed or empty stdin, missing jq for stdin transport,
 #               missing Node or policy owner, or an invalid policy response.
 #
-# Codex, OpenCode, and Pi consume exit 2 plus stderr.
+# Codex, Pi, and pi-signed consume exit 2 plus stderr.
 set -u
 
 CMD=""

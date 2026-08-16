@@ -411,7 +411,7 @@ spawn_remote_secondmate() {
     harness=$("$FM_ROOT/bin/fm-harness.sh" secondmate)
   fi
   case "$harness" in
-    codex|opencode|pi|pi-signed) ;;
+    codex|pi|pi-signed) ;;
     *)
       fm_lock_release "$registry_lock" || true
       fm_lock_release "$SPAWN_TASK_LOCK" || true
@@ -950,7 +950,7 @@ if [ "$RELAUNCH" -eq 1 ]; then
   }
 elif [ "$KIND" = secondmate ]; then
   case "${POS[1]:-}" in
-    ''|codex|opencode|pi|pi-signed)
+    ''|codex|pi|pi-signed)
       ARG3=${POS[1]:-}
       ;;
     *' '*)
@@ -1013,7 +1013,6 @@ launch_template() {
         printf '%s' 'codex __MODELFLAG____EFFORTFLAG__--dangerously-bypass-approvals-and-sandbox -c "notify=[\"bash\",\"-c\",\"touch __TURNEND__\"]" "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
       fi
       ;;
-    opencode) printf '%s' 'OPENCODE_CONFIG_CONTENT='\''{"permission":{"*":"allow"}}'\'' opencode __MODELFLAG__--prompt "$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
     pi|pi-signed)
       printf '%s' '__PIBIN____PITUIMODE__'
       if [ "$kind" = secondmate ]; then
@@ -1107,7 +1106,7 @@ model_flag_for_harness() {
   local harness=$1 model=$2
   [ -n "$model" ] && [ "$model" != default ] || return 0
   case "$harness" in
-    codex|opencode|pi|pi-signed)
+    codex|pi|pi-signed)
       printf -- '--model %s ' "$(shell_quote "$model")"
       ;;
   esac
@@ -1132,9 +1131,6 @@ effort_flag_for_harness() {
         low|medium|high|xhigh|max) printf -- '--thinking %s ' "$(shell_quote "$effort")" ;;
       esac
       ;;
-    # opencode's interactive `opencode --prompt` launch has a verified --model
-    # flag but no verified effort flag. Its `opencode run --variant` flag belongs
-    # to a different, non-interactive launch mode, so fm-spawn does not pass it.
   esac
 }
 
@@ -1877,7 +1873,7 @@ if [ "$KIND" != secondmate ]; then
       ;;
   esac
   case "$HARNESS" in
-    opencode*|pi|pi-signed)
+    pi|pi-signed)
       BUSY_GEN=$("$FM_ROOT/bin/fm-busy-event.sh" arm "$STATE_REAL" "$ID") || {
         echo "error: failed to arm the busy-state contract for $ID" >&2
         exit 1
@@ -1886,59 +1882,6 @@ if [ "$KIND" != secondmate ]; then
       ;;
   esac
   case "$HARNESS" in
-    opencode*)
-      mkdir -p "$WT/.opencode/plugins"
-      cat > "$WT/.opencode/plugins/fm-busy-state.js" <<EOF
-// Firstmate semantic busy-state events + turn-end notification; written by
-// fm-spawn under the contract owned by bin/fm-busy-lib.sh.
-// Semantic state comes from OpenCode's session.status events: busy and retry
-// are active, idle is inactive. Scoping latches the first session that
-// reports activity (the worker's main session - a subagent child session can
-// only start while the main session is already busy) and ignores other
-// sessions' status until the latched session settles, so a child's idle can
-// never clear the worker's busy state. The session.idle touch stays the
-// watcher's wake NOTIFICATION, never current-state truth.
-import { execFile } from "node:child_process";
-const busyEvent = (state, event) =>
-  new Promise((resolve) => {
-    execFile("$FM_ROOT/bin/fm-busy-event.sh", [
-      "apply", "$STATE_REAL", "$ID", state,
-      "--gen", "$BUSY_GEN", "--source", "opencode-plugin", "--event", event,
-    ], () => resolve());
-  });
-export const FmBusyState = async () => {
-  let activeSession = null;
-  return {
-    event: async ({ event }) => {
-      if (event.type === "session.status") {
-        const sessionID = event.properties.sessionID;
-        const statusType = event.properties.status && event.properties.status.type;
-        if (statusType === "busy" || statusType === "retry") {
-          if (activeSession === null) activeSession = sessionID;
-          if (sessionID === activeSession) await busyEvent("busy", "session-" + statusType);
-          return;
-        }
-        if (statusType === "idle" && sessionID === activeSession) {
-          activeSession = null;
-          await busyEvent("idle", "session-status-idle");
-        }
-        return;
-      }
-      if (event.type === "session.idle") {
-        if (event.properties.sessionID === activeSession) {
-          activeSession = null;
-          await busyEvent("idle", "session-idle");
-        }
-        await new Promise((resolve) => {
-          execFile("touch", ["$TURNEND"], () => resolve());
-        });
-      }
-    },
-  };
-};
-EOF
-      exclude_path '.opencode/plugins/fm-busy-state.js'
-      ;;
     pi|pi-signed)
       # Written OUTSIDE the worktree: pi's project-trust gate fires on any extension
       # loaded from inside the project (verified live), but an explicit -e path

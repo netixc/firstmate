@@ -16,9 +16,8 @@
 #   <PreToolUse JSON on stdin> | bin/fm-cd-pretool-check.sh
 #   bin/fm-cd-pretool-check.sh --command '<cmd>'
 #
-# Stdin mode extracts Codex's .tool_input.command. CLI mode is used by OpenCode
-# and Pi after their adapters extract the
-# exact command string.
+# Stdin mode extracts Codex's .tool_input.command. CLI mode is used by Pi and
+# pi-signed after their adapters extract the exact command string.
 #
 # Exit/output contract (identical shape to bin/fm-arm-pretool-check.sh):
 #   ALLOW - exit 0 and no output.
@@ -28,7 +27,7 @@
 #   FAIL OPEN - malformed or empty stdin, missing jq for stdin transport,
 #               missing Node or policy owner, or an invalid policy response.
 #
-# Codex, OpenCode, and Pi consume exit 2 plus stderr.
+# Codex, Pi, and pi-signed consume exit 2 plus stderr.
 set -u
 
 CMD=""

@@ -29,7 +29,6 @@
 # task's recorded harness classifies unknown, so one adapter's writer can
 # never classify another adapter):
 #   pi-ext           Pi/pi-signed per-task extension (agent_start/agent_settled)
-#   opencode-plugin  OpenCode per-task plugin (session.status)
 #   codex-hook, codex-appserver  reserved: Codex, gated by
 #                    fm_busy_codex_semantic_source
 # Firstmate-owned sources accepted for every converted adapter:
@@ -136,7 +135,6 @@ fm_busy_sources_for_harness() {  # <harness>
       fm_busy_codex_semantic_source || { printf ''; return 0; }
       adapter='codex-hook codex-appserver'
       ;;
-    opencode*) adapter=opencode-plugin ;;
     pi|pi-signed) adapter=pi-ext ;;
     *) printf ''; return 0 ;;
   esac

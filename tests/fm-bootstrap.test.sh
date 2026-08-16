@@ -1012,7 +1012,7 @@ test_crew_dispatch_active_rules_are_verbose_bootstrap_info() {
   case_dir="$TMP_ROOT/dispatch-active"
   mkdir -p "$case_dir/home/config"
   printf '%s\n' manual > "$case_dir/home/config/backlog-backend"
-  printf '%s\n' '{"rules":[{"when":"fresh news","use":{"harness":"opencode"},"why":"current context"},{"when":"big feature","use":[{"harness":"pi-signed","model":"openai-codex/gpt-5.6-sol","effort":"high"},{"harness":"codex","model":"gpt-5.5","effort":"high"}]},{"when":"legacy feature","use":[{"harness":"pi-signed"},{"harness":"codex"}],"select":"quota-balanced"}],"default":[{"harness":"pi","model":"custom-provider/model","effort":"high"},{"harness":"codex","model":"gpt-5.5","effort":"high"}]}' > "$case_dir/home/config/crew-dispatch.json"
+  printf '%s\n' '{"rules":[{"when":"fresh news","use":{"harness":"pi"},"why":"current context"},{"when":"big feature","use":[{"harness":"pi-signed","model":"openai-codex/gpt-5.6-sol","effort":"high"},{"harness":"codex","model":"gpt-5.5","effort":"high"}]},{"when":"legacy feature","use":[{"harness":"pi-signed"},{"harness":"codex"}],"select":"quota-balanced"}],"default":[{"harness":"pi","model":"custom-provider/model","effort":"high"},{"harness":"codex","model":"gpt-5.5","effort":"high"}]}' > "$case_dir/home/config/crew-dispatch.json"
   fakebin=$(make_fake_toolchain "$case_dir")
   add_real_jq "$fakebin"
 
@@ -1023,7 +1023,7 @@ test_crew_dispatch_active_rules_are_verbose_bootstrap_info() {
   out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$case_dir/home" FM_ROOT_OVERRIDE="$case_dir/home" \
     FM_BOOTSTRAP_VERBOSE_FACTS=1 FM_FAKE_TREEHOUSE_LEASE_HELP=1 "$ROOT/bin/fm-bootstrap.sh")
 
-  expect=$'BOOTSTRAP_INFO: crew dispatch active config/crew-dispatch.json\nBOOTSTRAP_INFO: crew dispatch rule: fresh news -> opencode\nBOOTSTRAP_INFO: crew dispatch rule: big feature -> quota-balanced[pi-signed/openai-codex/gpt-5.6-sol/high, codex/gpt-5.5/high]\nBOOTSTRAP_INFO: crew dispatch rule: legacy feature -> quota-balanced[pi-signed, codex]\nBOOTSTRAP_INFO: crew dispatch default: quota-balanced[pi/custom-provider/model/high, codex/gpt-5.5/high]'
+  expect=$'BOOTSTRAP_INFO: crew dispatch active config/crew-dispatch.json\nBOOTSTRAP_INFO: crew dispatch rule: fresh news -> pi\nBOOTSTRAP_INFO: crew dispatch rule: big feature -> quota-balanced[pi-signed/openai-codex/gpt-5.6-sol/high, codex/gpt-5.5/high]\nBOOTSTRAP_INFO: crew dispatch rule: legacy feature -> quota-balanced[pi-signed, codex]\nBOOTSTRAP_INFO: crew dispatch default: quota-balanced[pi/custom-provider/model/high, codex/gpt-5.5/high]'
   [ "$out" = "$expect" ] || fail "active dispatch verbose info block mismatch"$'\n'"expected: $expect"$'\n'"actual:   $out"
   pass "bootstrap surfaces active crew-dispatch rules only as verbose BOOTSTRAP_INFO"
 }
@@ -1056,7 +1056,6 @@ unsupported harness is rejected as unverified^{"rules":[{"when":"anything","use"
 unsupported codex max effort is flagged^{"rules":[{"when":"big feature","use":{"harness":"codex","model":"gpt-5","effort":"max"}}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - invalid effort: codex:max
 pi max effort is accepted^{"rules":[{"when":"deep coding","use":{"harness":"pi","model":"openai-codex/gpt-5.6-sol","effort":"max"}}]}^empty^
 pi-signed max effort is accepted^{"rules":[{"when":"signed coding","use":{"harness":"pi-signed","model":"openai-codex/gpt-5.6-sol","effort":"max"}}]}^empty^
-unsupported opencode effort is flagged^{"rules":[{"when":"opencode work","use":{"harness":"opencode","model":"openai/gpt-5.5","effort":"high"}}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - invalid effort: opencode:high
 array use with quota-balanced is accepted^{"rules":[{"when":"big feature","use":[{"harness":"pi-signed","model":"openai-codex/gpt-5.6-sol","effort":"high"},{"harness":"codex","model":"gpt-5.5","effort":"high"}],"select":"quota-balanced"}]}^empty^
 array use without select is accepted^{"rules":[{"when":"big feature","use":[{"harness":"pi-signed"},{"harness":"codex"}]}]}^empty^
 one-element array use is accepted^{"rules":[{"when":"focused feature","use":[{"harness":"pi-signed"}]}]}^empty^

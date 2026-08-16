@@ -562,7 +562,7 @@ test_extension_handoff_keeps_queued_wake_warning() {
 }
 
 # The tolerance is scoped to the extension model alone. Every persistent-watcher
-# primary (codex, opencode, tmux, unknown) must keep alarming on the
+# primary (codex, tmux, unknown) must keep alarming on the
 # same state, even when Pi extension markers happen to be present on disk.
 test_persistent_model_ignores_pi_extension_evidence() {
   local dir home out pid

@@ -32,9 +32,7 @@
 #
 # `resume` is deliberately NOT a verb. It is not deterministic across the
 # verified adapters: codex resumes only from a session id printed at exit,
-# opencode resumes the most recent session for the cwd with --continue,
-# and pi and pi-signed have no verified pane-resume contract at
-# all. `relaunch` covers the same need deterministically for every adapter,
+# while pi and pi-signed have no verified pane-resume contract at all. `relaunch` covers the same need deterministically for every adapter,
 # because the brief on disk - not a harness-private session - is the durable
 # instruction.
 
@@ -59,7 +57,7 @@ fm_control_verb_allowed() {  # <verb>
 # than guessed at, exactly as a spawn on it would be.
 fm_control_harness_supported() {  # <harness>
   case "${1-}" in
-    codex|opencode|pi|pi-signed) return 0 ;;
+    codex|pi|pi-signed) return 0 ;;
   esac
   return 1
 }
@@ -77,7 +75,6 @@ fm_control_harness_family() {  # <recorded-harness>
     pi) printf 'pi' ;;
     pi-signed) printf 'pi-signed' ;;
     codex*) printf 'codex' ;;
-    opencode*) printf 'opencode' ;;
     *) return 1 ;;
   esac
 }
@@ -85,16 +82,14 @@ fm_control_harness_family() {  # <recorded-harness>
 # The key that cancels a running turn.
 fm_control_interrupt_key() {  # <harness>
   case "${1-}" in
-    codex|opencode|pi|pi-signed) printf 'Escape' ;;
+    codex|pi|pi-signed) printf 'Escape' ;;
     *) return 1 ;;
   esac
 }
 
-# How many times the interrupt key must be delivered. OpenCode needs a double
-# Escape; every other verified adapter interrupts on a single press.
+# How many times the interrupt key must be delivered.
 fm_control_interrupt_repeat() {  # <harness>
   case "${1-}" in
-    opencode) printf '2' ;;
     codex|pi|pi-signed) printf '1' ;;
     *) return 1 ;;
   esac
@@ -103,7 +98,6 @@ fm_control_interrupt_repeat() {  # <harness>
 # The command that exits the agent from its own composer.
 fm_control_exit_command() {  # <harness>
   case "${1-}" in
-    opencode) printf '/exit' ;;
     codex|pi|pi-signed) printf '/quit' ;;
     *) return 1 ;;
   esac
@@ -139,7 +133,6 @@ fm_control_harness_wiring_paths() {  # <harness> <worktree> <state-dir> <id>
   local harness=${1-} wt=${2-} state=${3-} id=${4-}
   [ -n "$wt" ] && [ -n "$state" ] && [ -n "$id" ] || return 1
   case "$harness" in
-    opencode) printf '%s\n' "$wt/.opencode/plugins/fm-busy-state.js" ;;
     pi|pi-signed) printf '%s\n' "$state/$id.pi-ext.ts" ;;
   esac
 }

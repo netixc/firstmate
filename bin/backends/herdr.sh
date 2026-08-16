@@ -2609,7 +2609,7 @@ fm_backend_herdr_capture_ansi() {  # <target> <lines>
 # These functions are the ONLY herdr-specific composer knowledge left: the
 # ANSI pane capture (with its small-N workaround), the native `agent get`
 # identity probe, and the capability descriptor. Every shape - the bordered
-# box, the bare agent-glyph row, opencode's left-bar, and pi's
+# box, the bare agent-glyph row, and pi's
 # identity-gated separated pair (which this adapter pioneered) - now lives in
 # the shared owner (bin/fm-composer-lib.sh, fm_composer_classify_screen), so
 # a new harness shape is taught there once and every backend learns it in the

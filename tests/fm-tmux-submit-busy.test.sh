@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# tests/fm-tmux-submit-busy.test.sh - regression: busy pane + pending composer
-# after Enter retries must return "empty" (message queued), not "pending".
+# tests/fm-tmux-submit-busy.test.sh - verified tmux submit acknowledgement and
+# swallowed-Enter retry regressions.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -50,7 +50,7 @@ case "${1:-}" in
       [ -z "${FM_FAKE_SENT:-}" ] || printf 'Enter\n' >> "$FM_FAKE_SENT"
       if [ -n "${FM_FAKE_SWALLOW:-}" ] && [ -f "$FM_FAKE_SWALLOW" ]; then
         [ "${FM_FAKE_PERSIST_SWALLOW:-0}" = 1 ] || rm -f "$FM_FAKE_SWALLOW"
-        [ "${FM_FAKE_APPEND_BUSY:-0}" != 1 ] || printf '✻ Working…\n' >> "$COMPOSER"
+        [ "${FM_FAKE_APPEND_BUSY:-0}" != 1 ] || printf 'Working...\n' >> "$COMPOSER"
       else
         printf '╭─────╮\n│ >   │\n╰─────╯\n' > "$COMPOSER"
       fi
@@ -62,29 +62,6 @@ exit 1
 SH
   chmod +x "$fakebin/tmux"
   printf '%s\n' "$fakebin"
-}
-
-test_busy_pane_pending_returns_empty() {
-  local dir fakebin composer sent vfile
-  dir="$TMP_ROOT/busy-accepted"
-  fakebin=$(make_submit_mock "$dir")
-  composer="$dir/composer"
-  sent="$dir/sent.log"
-  vfile="$dir/verdict"
-  printf '╭────────────╮\n│ > fix      │\n╰────────────╯\n' > "$composer"
-  : > "$sent"
-  touch "$dir/.swallow"
-  # Pre-check: composer state should be pending (via function, not $()).
-  PATH="$fakebin:$PATH" FM_FAKE_COMPOSER="$composer" fm_tmux_composer_state "win" > "$vfile" 2>/dev/null
-  [ "$(cat "$vfile")" = pending ] || fail "pre-check: composer state expected pending, got '$(cat "$vfile")'"
-  # Now test the submit - write verdict to file to avoid nested $().
-  PATH="$fakebin:$PATH" FM_FAKE_COMPOSER="$composer" FM_FAKE_SENT="$sent" \
-    FM_FAKE_SWALLOW="$dir/.swallow" FM_FAKE_PERSIST_SWALLOW=1 FM_FAKE_PANE_BUSY=1 \
-    fm_tmux_submit_enter_core "win" 3 0.05 > "$vfile" 2>/dev/null
-  [ "$(cat "$vfile")" = empty ] || fail "busy-pane pending should return empty, got '$(cat "$vfile")'"
-  [ "$(grep -c '^Enter$' "$sent" 2>/dev/null || true)" -eq 3 ] \
-    || fail "proven pending should consume the configured Enter retry budget"
-  pass "fm_tmux_submit_enter_core: busy pane + pending composer returns empty (message queued)"
 }
 
 test_idle_pane_pending_returns_pending() {
@@ -190,6 +167,24 @@ test_busy_pane_unknown_stays_unknown() {
   pass "fm_tmux_submit_enter_core: busy conversion is limited to proven pending input"
 }
 
+test_idle_to_busy_transition_confirms_unknown_pi_composer() {
+  local dir fakebin composer vfile
+  dir="$TMP_ROOT/pi-idle-to-busy"
+  fakebin=$(make_submit_mock "$dir")
+  composer="$dir/composer"
+  vfile="$dir/verdict"
+  printf '│ > unbounded\n' > "$composer"
+  touch "$dir/.swallow"
+  PATH="$fakebin:$PATH" FM_FAKE_COMPOSER="$composer" \
+    FM_FAKE_SWALLOW="$dir/.swallow" FM_FAKE_PERSIST_SWALLOW=1 FM_FAKE_APPEND_BUSY=1 FM_FAKE_PANE_BUSY=1 \
+    fm_tmux_submit_core "win" "fix" 3 0.05 0.05 > "$vfile" 2>/dev/null
+  [ "$(cat "$vfile")" = empty ] \
+    || fail "an observed idle-to-busy transition must confirm Pi delivery, got '$(cat "$vfile")'"
+  grep -q 'Working' "$composer" \
+    || fail "Pi transition regression did not render the post-Enter busy footer"
+  pass "fm_tmux_submit_core: Pi idle-to-busy transition confirms an unknown working composer"
+}
+
 test_failed_baseline_capture_keeps_busy_unknown_unconfirmed() {
   local dir fakebin composer vfile
   dir="$TMP_ROOT/failed-baseline"
@@ -255,13 +250,13 @@ test_unrecognized_state_skips_busy_conversion() {
   pass "fm_tmux_submit_enter_core: unrecognized states skip busy conversion"
 }
 
-test_busy_pane_pending_returns_empty
 test_idle_pane_pending_returns_pending
 test_wrapped_continuation_retries_swallowed_enter
 test_placeholder_like_bare_input_retries_swallowed_enter
 test_busy_pane_composer_clears_first_try
 test_idle_pane_composer_clears_first_try
 test_busy_pane_unknown_stays_unknown
+test_idle_to_busy_transition_confirms_unknown_pi_composer
 test_failed_baseline_capture_keeps_busy_unknown_unconfirmed
 test_busy_pane_ambiguous_pending_retries_without_conversion
 test_unrecognized_state_skips_busy_conversion

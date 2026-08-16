@@ -90,8 +90,8 @@ test_harness_resolution() {
   done <<'ROWS'
 both absent -> own (backward-compat)^-^-^pi^pi
 crew set, secondmate absent -> crew (backward-compat)^codex^-^codex^codex
-crew set, secondmate set -> secondmate wins, crew untouched^codex^opencode^opencode^codex
-crew absent, secondmate set -> secondmate value, crew own^-^opencode^opencode^pi
+crew set, secondmate set -> secondmate wins, crew untouched^codex^pi^pi^codex
+crew absent, secondmate set -> secondmate value, crew own^-^pi-signed^pi-signed^pi
 signed Pi wrapper remains a distinct secondmate value^codex^pi-signed^pi-signed^codex
 secondmate=default defers to crew^codex^default^codex^codex
 crew=default resolves to own, secondmate follows^default^-^pi^pi
@@ -376,7 +376,7 @@ test_propagate_lib() {
   printf 'guard\n' > "$guard_repo/README.md"
   git -C "$guard_repo" add -A
   git -C "$guard_repo" commit -qm guard
-  printf '{"default":{"harness":"opencode"}}\n' > "$src/crew-dispatch.json"
+  printf '{"default":{"harness":"pi"}}\n' > "$src/crew-dispatch.json"
   stdout="$d/guard-skip.out"
   stderr="$d/guard-skip.err"
   FM_INHERITABLE_CONFIG=crew-dispatch.json propagate_inheritable_config "$src" "$guard_repo/config" >"$stdout" 2>"$stderr" \
@@ -1631,7 +1631,7 @@ test_config_reread_per_home_changed_sets_and_exact_bytes() {
   printf 'tasks-axi\n' > "$w/alpha/config/backlog-backend"
   printf '{"default":{"harness":"old"}}\n' > "$w/beta/config/crew-dispatch.json"
 
-  multiline_json=$(printf '{\n  "default": {\n    "harness": "pi",\n    "model": "custom-provider/model"\n  },\n  "rules": [\n    {"when": "news", "use": {"harness": "opencode"}}\n  ]\n}\n')
+  multiline_json=$(printf '{\n  "default": {\n    "harness": "pi",\n    "model": "custom-provider/model"\n  },\n  "rules": [\n    {"when": "news", "use": {"harness": "codex"}}\n  ]\n}\n')
   printf '%s' "$multiline_json" > "$w/home/config/crew-dispatch.json"
   printf 'codex\n' > "$w/home/config/crew-harness"
   printf 'manual\n' > "$w/home/config/backlog-backend"
@@ -1790,7 +1790,7 @@ test_config_reread_isolation_and_absent_and_send_failure() {
     "helper must omit unchanged items"
 
   # Send failure becomes a retryable diagnostic and non-zero exit.
-  printf 'opencode\n' > "$w/home/config/crew-harness"
+  printf 'pi-signed\n' > "$w/home/config/crew-harness"
   err="$w/config-reread-send-fail.err"
   out=$(PATH="$(make_fake_toolchain "$w"):$BASE_PATH" \
     FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" FM_SEND_SETTLE=0 \

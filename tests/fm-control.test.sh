@@ -35,14 +35,13 @@ mkdir -p "$TMP_ROOT"
 TMP_ROOT=$(cd "$TMP_ROOT" && pwd)
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
-VERIFIED_HARNESSES="codex opencode pi pi-signed"
+VERIFIED_HARNESSES="codex pi pi-signed"
 
 # The expectation table, written out independently of the implementation so a
 # silent change to either side shows up here.
 verified_adapter_contract() {  # <harness> -> exit command, interrupt key, repeat
   case "$1" in
     codex) printf '/quit\tEscape\t1\n' ;;
-    opencode) printf '/exit\tEscape\t2\n' ;;
     pi) printf '/quit\tEscape\t1\n' ;;
     pi-signed) printf '/quit\tEscape\t1\n' ;;
     *) return 1 ;;
@@ -87,7 +86,7 @@ case "${1:-}" in
     if [ "$literal" = 1 ]; then
       printf '%s\n' "$payload" >> "$D/literal"
       if [ -z "${FM_FAKE_NEVER_DIES:-}" ] \
-         && { [ "$payload" = /exit ] || [ "$payload" = /quit ]; }; then
+         && [ "$payload" = /quit ]; then
         printf 'zsh' > "$D/command"
       fi
       case "$payload" in
@@ -233,8 +232,7 @@ test_interrupt_sends_each_harness_verified_key() {
 # are reached through one prefix rule rather than an exact string match.
 test_harness_family_resolution() {
   local pair recorded want got
-  for pair in codex:codex codex-cli:codex \
-      opencode:opencode pi:pi pi-signed:pi-signed; do
+  for pair in codex:codex codex-cli:codex pi:pi pi-signed:pi-signed; do
     recorded=${pair%%:*}
     want=${pair#*:}
     got=$(fm_control_harness_family "$recorded") \
@@ -273,25 +271,6 @@ test_prefixed_recorded_harness_reaches_each_control_verb() {
   assert_contains "$out" "stopped t1 harness=codex" \
     "exit should report the verified adapter that supplied its mechanics"
   pass "fm-control: prefixed recorded harnesses reach interrupt and exit mechanics"
-}
-
-test_opencode_interrupts_twice_and_others_once() {
-  # The one adapter that differs, asserted through the delivered keys rather
-  # than the table, so a regression in either shows up here.
-  local dir
-  dir=$(new_case int-double)
-  add_task "$dir" t1 opencode
-  alive_as "$dir" opencode
-  run_control "$dir" t1 interrupt >/dev/null
-  [ "$(keys_sent "$dir" | wc -l | tr -d ' ')" = 2 ] \
-    || fail "opencode should receive a double Escape"
-  dir=$(new_case int-single)
-  add_task "$dir" t1 pi
-  alive_as "$dir" pi
-  run_control "$dir" t1 interrupt >/dev/null
-  [ "$(keys_sent "$dir" | wc -l | tr -d ' ')" = 1 ] \
-    || fail "pi should receive a single Escape"
-  pass "fm-control interrupt: opencode needs a double Escape, pi a single one"
 }
 
 test_unverified_harness_is_refused() {
@@ -702,7 +681,6 @@ test_fm_send_still_marks_the_same_secondmate_task() {
 
 test_exit_types_each_harness_verified_command
 test_interrupt_sends_each_harness_verified_key
-test_opencode_interrupts_twice_and_others_once
 test_unverified_harness_is_refused
 test_harness_family_resolution
 test_prefixed_recorded_harness_reaches_each_control_verb
