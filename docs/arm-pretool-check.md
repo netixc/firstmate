@@ -23,7 +23,7 @@ It tokenizes the bytes and classifies lexical execution positions only.
 `bin/fm-arm-pretool-check.sh` supports these entry forms:
 
 - Stdin JSON at `.tool_input.command` for Codex.
-- `--command <exact string>` for OpenCode, Pi, and pi-signed.
+- `--command <exact string>` for Pi and pi-signed.
 - `--background` as a compatibility-only field that never changes the decision.
 
 The wrapper discovers the code root from its own location.
@@ -146,7 +146,6 @@ Prose may improve without changing adapter behavior.
 - Allow returns exit 0 with both streams empty.
 - Deny returns exit 2 and writes `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[code] reason"}` to stderr.
 - Codex blocks on exit 2 and displays stderr.
-- OpenCode throws only when the checker exits 2.
 - Pi and pi-signed return `{block: true}` only when the checker exits 2.
 
 ## Harness wiring
@@ -154,7 +153,6 @@ Prose may improve without changing adapter behavior.
 | Harness | Exact command field | Adapter behavior on checker exit 2 |
 | --- | --- | --- |
 | Codex | `.tool_input.command` | The `.codex/hooks.json` command forwards the complete stdin payload and Codex blocks on exit 2. |
-| OpenCode | `output.args.command` | `.opencode/plugins/fm-primary-pretool-check.js` passes one `--command` argument and throws only for exit 2. |
 | Pi / pi-signed | `event.input.command` | `.pi/extensions/fm-primary-turnend-guard.ts` passes one `--command` argument and returns `{block: true}` only for exit 2. |
 
 ## Live validation record, 2026-07-09
@@ -163,13 +161,10 @@ Validation ran in a git-initialized scratch firstmate-shaped project under this 
 The scratch project contained copies of the modified checker and policy, unchanged tracked adapters, a dummy checkpoint, a dummy arm script, a harmless `tmux` argument-capture fixture, and a private sentinel path.
 No modified file was installed into the primary checkout or a live harness configuration.
 No live watcher, fleet state, or herdr lifecycle command was used.
-The OpenCode interactive check used the dedicated tmux socket `fm-pretool-smoke`.
-
 Harness versions were:
 
 ```text
 codex-cli 0.144.0
-OpenCode 1.17.15
 Pi 0.80.5
 ```
 
@@ -187,7 +182,6 @@ The real harness launch commands were:
 
 ```sh
 codex exec --dangerously-bypass-hook-trust --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check "$PROMPT"
-OPENCODE_CONFIG_CONTENT='{"permission":{"*":"allow"}}' opencode run --print-logs --log-level INFO "$PROMPT"
 pi -p -e .pi/extensions/fm-primary-turnend-guard.ts --no-context-files --no-session "$PROMPT"
 ```
 
@@ -195,16 +189,14 @@ Observed output for the four allowed calls was `UNRELATED_EXECUTED`, a successfu
 Each harness blocked the final command with exit 2 mapped through its native adapter behavior.
 The stable reason was `[watcher-background] a protected watcher command cannot run in an asynchronous shell list or through nohup/disown`.
 The dummy arm body would have created `<harness>.sentinel` if the denied command executed.
-All three sentinel files remained absent.
+Both sentinel files remained absent.
 
 The Codex transcript showed `PreToolUse Completed` for all three originally reported false-positive shapes and `PreToolUse Blocked` only for the backgrounded arm.
-OpenCode displayed the four allowed command outputs and then `bin/fm-watch-arm.sh & failed` with the stderr deny object.
 Pi reported that calls one through four ran and the final call was blocked.
 
 Native supervision paths were also validated in the same scratch project:
 
 - Codex ran the foreground checkpoint above and produced `CHECKPOINT_EXECUTED`.
-- OpenCode ran in an interactive TUI on `tmux -L fm-pretool-smoke`, reached `session.idle`, and its unchanged watch-arm plugin created the scratch automatic-arm marker.
 - Pi loaded both primary extensions, called `fm_watch_arm_pi`, and created the scratch automatic-arm marker.
 
 Every native-path automatic marker was present and every deny sentinel remained absent.
@@ -212,7 +204,7 @@ Every native-path automatic marker was present and every deny sentinel remained 
 ## Automated validation
 
 `tests/fm-arm-pretool-check.test.sh` owns the adversarial acceptance matrix.
-Every row runs through Codex-shaped stdin plus OpenCode-shaped and Pi-shaped CLI entry forms.
+Every row runs through Codex-shaped stdin plus Pi-shaped CLI entry forms.
 The suite also verifies real newline bytes, direct classifier reason codes, comments, heredoc data, malformed and unsupported protected syntax, constructed dynamic payloads, malformed transport fail-open behavior, missing runtime fail-open behavior, output shapes, and exact adapter field forwarding plus exit-2 mapping.
 
 Run:

@@ -699,25 +699,6 @@ test_spawn_relaunch_without_a_harness_reuses_the_recorded_one() {
   pass "fm-spawn --relaunch: with no explicit harness it reuses the task's recorded one, never the crew default"
 }
 
-# fm-spawn arms per-task wiring on harness PREFIXES, because a task launched
-# from a raw command records that command's basename rather than the exact
-# adapter name. Retirement must resolve the same way, or a task recorded as
-# a prefixed OpenCode command could leave its worktree plugin armed and never
-# retired.
-test_prefixed_prior_harness_wiring_is_still_retired() {
-  local dir plugin
-  dir=$(new_case prefixwiring rl30)
-  add_ship_task "$dir" rl30 opencode-cli
-  mkdir -p "$dir/wt/.opencode/plugins"
-  plugin="$dir/wt/.opencode/plugins/fm-busy-state.js"
-  printf '// stale plugin\n' > "$plugin"
-  printf 'zsh' > "$dir/fake/command"
-  run_spawn "$dir" rl30 --relaunch --harness pi >/dev/null
-  [ ! -e "$plugin" ] \
-    || fail "a prefixed prior harness must still have its worktree plugin removed"
-  pass "fm-spawn --relaunch: wiring armed under a prefixed harness name is still retired"
-}
-
 # --- 3 and 4. refusals before the agent is touched ---------------------------
 
 test_missing_worktree_refuses_before_stopping_anything() {
@@ -1206,7 +1187,6 @@ test_secondmate_relaunch_ignores_invalid_configured_effort_before_stop
 test_explicit_secondmate_harness_ignores_configured_profile_axes
 test_ship_relaunch_ignores_the_crew_harness_config
 test_spawn_relaunch_without_a_harness_reuses_the_recorded_one
-test_prefixed_prior_harness_wiring_is_still_retired
 test_missing_worktree_refuses_before_stopping_anything
 test_missing_instructions_refuse_before_stopping_anything
 test_checkpoint_refusal_leaves_the_record_byte_identical

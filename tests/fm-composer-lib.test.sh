@@ -123,14 +123,36 @@ test_real_text_is_pending() {
   pass "fm_composer_classify_content: real unsubmitted text reads pending (including a popup argument-hint fill)"
 }
 
+test_delivery_busy_signatures_are_limited_to_verified_harnesses() {
+  local codex_footer='esc to interrupt' codex_near_miss
+  codex_near_miss=${codex_footer/ to/}
+  printf '%s\0' "$codex_footer" | fm_busy_lines_match codex \
+    || fail "Codex's verified delivery footer must remain recognized"
+  printf 'Working...\0' | fm_busy_lines_match pi \
+    || fail "Pi's verified delivery footer must remain recognized"
+  printf 'Working...\0' | fm_busy_lines_match pi-signed \
+    || fail "pi-signed must retain Pi's verified delivery footer"
+  printf '%s\0' "$codex_footer" | fm_busy_lines_match \
+    || fail "the harness-neutral matcher must retain the Codex footer"
+  printf 'Working...\0' | fm_busy_lines_match \
+    || fail "the harness-neutral matcher must retain the Pi footer"
+  if printf '%s\0' "$codex_near_miss" | fm_busy_lines_match; then
+    fail "the harness-neutral matcher accepted an unsupported delivery footer"
+  fi
+  if printf '%s\0' "$codex_footer" | fm_busy_lines_match legacy-agent; then
+    fail "an unsupported harness borrowed a verified harness's delivery footer"
+  fi
+  pass "delivery busy matching recognizes only retained Codex and Pi signatures"
+}
+
 # =============================================================================
 # fm_composer_classify_screen: the adapter-facing screen classifier and the
 # correctness matrix (audit data/fm-composer-consolidation-audit-s1, task
 # fm-composer-thin-adapter-refactor-r1).
 #
 # Fixtures cover retained idle composer shapes: Codex with an SGR-2 dim hint,
-# Pi with a blank row between solid `─` rules, OpenCode left-bar `┃` rows, and
-# a generic bordered shell-glyph composer.
+# Pi with a blank row between solid `─` rules, and a generic bordered
+# shell-glyph composer.
 #
 # Capability profiles mirror the real adapters' descriptors: tmux
 # (styled+cursor+identity), styled cursorless, and plain capture. Every
@@ -203,34 +225,6 @@ test_matrix_pi_separated_needs_identity() {
   assert_screen "lone glyph with non-pi identity" unknown "$CAPS_STYLED" "$typed" '' "$none"
   pass "matrix: pi's separated composer needs identity + structure; the blank row alone never proves it"
 }
-
-test_matrix_opencode_leftbar_signals() {
-  # Real idle opencode: `┃`-prefixed rows holding the "Ask anything..." hint,
-  # blanks, and a Build-mode footer. Two independent idle signals: the shared
-  # idle-placeholder pattern (works on plain captures) and the ghost strip
-  # (works on styled captures even if the pattern is overridden away).
-  local screen typed dim_screen out
-  screen=$'  ┃\n  ┃  Ask anything... "What is the tech stack?"\n  ┃\n  ┃  Build · GPT-5.5 Fast OpenAI · high\n  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀'
-  dim_screen=$'  ┃\n  ┃  '"${ESC}[2mAsk anything...${ESC}[0m"$'\n  ┃\n  ┃  Build · GPT-5.5 Fast OpenAI · high\n  ╹▀▀▀▀'
-  assert_screen "opencode idle on tmux (cursor on hint)" empty "$CAPS_TMUX" "$dim_screen" 1
-  assert_screen "opencode idle on herdr" empty "$CAPS_STYLED" "$dim_screen"
-  assert_screen "opencode idle on styled capture" empty "$CAPS_STYLED_NOID" "$dim_screen"
-  assert_screen "opencode idle on plain capture" empty "$CAPS_PLAIN" "$screen"
-  # Signal separation: with the idle pattern overridden to something that
-  # cannot match, a DIM-styled hint still proves empty through the ghost strip.
-  out=$(FM_COMPOSER_IDLE_RE='^NEVER-MATCHES$' fm_composer_classify_screen "$CAPS_TMUX" "$dim_screen" 1)
-  [ "$out" = empty ] || fail "a dim opencode hint must stay empty via the ghost strip alone, got '$out'"
-  typed=$'┃\n┃  refactor the parser please\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high\n╹▀▀▀▀'
-  assert_screen "opencode typed on tmux" pending "$CAPS_TMUX" "$typed" 1
-  assert_screen "opencode typed on plain backends" unknown "$CAPS_PLAIN" "$typed"
-  typed=$'┃  Ask anything... please investigate\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high\n╹▀▀▀▀'
-  assert_screen "opencode placeholder-like input on tmux" pending "$CAPS_TMUX" "$typed" 0
-  assert_screen "opencode placeholder-like input on plain backends" unknown "$CAPS_PLAIN" "$typed"
-  typed=$'┃  refactor the parser please\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high'
-  assert_screen "opencode multiline draft above blank cursor row" pending "$CAPS_TMUX" "$typed" 1
-  pass "matrix: opencode's left-bar composer reads empty everywhere and scans the full active run"
-}
-
 
 test_matrix_bordered_shell_glyph_box() {
   # A bordered `│ > │` composer remains generic safety coverage: a shell-like
@@ -339,21 +333,14 @@ test_cursorless_bare_wrap_region_classifies() {
 }
 
 test_cursorless_container_rejects_contiguous_lower_activity() {
-  local box leftbar boxed opencode
+  local box boxed
   box=$'╭────────────────────────╮\n│ ❯                      │\n╰────────────────────────╯\nWorking on request...'
   assert_screen "stale box above activity on herdr" unknown "$CAPS_STYLED" "$box"
   assert_screen "stale box above activity on styled capture" unknown "$CAPS_STYLED_NOID" "$box"
   assert_screen "stale box above activity on plain capture" unknown "$CAPS_PLAIN" "$box"
 
-  leftbar=$'┃\n┃  Ask anything...\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high\n╹▀▀▀▀▀▀▀▀\nWorking on request...'
-  assert_screen "stale left-bar above activity on herdr" unknown "$CAPS_STYLED" "$leftbar"
-  assert_screen "stale left-bar above activity on styled capture" unknown "$CAPS_STYLED_NOID" "$leftbar"
-  assert_screen "stale left-bar above activity on plain capture" unknown "$CAPS_PLAIN" "$leftbar"
-
   boxed=$'╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯\n\nstatus line'
-  opencode=$'┃\n┃  Ask anything...\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high\n╹▀▀▀▀▀▀▀▀\n\nOpenCode status'
   assert_screen "blank-separated bordered footer" empty "$CAPS_PLAIN" "$boxed"
-  assert_screen "left-bar floor and blank-separated footer" empty "$CAPS_STYLED_NOID" "$opencode"
   pass "fm_composer_classify_screen: cursorless containers reject only contiguous unclaimed activity"
 }
 
@@ -403,10 +390,6 @@ test_selected_content_is_composer_scoped_and_wrap_normalized() {
   out=$(fm_composer_extract_selected_content "$CAPS_STYLED_NOID" "$screen")
   [ "$out" = 'unrelated draft' ] \
     || fail "box extraction should contain only normalized selected composer rows, got '$out'"
-  screen=$'hello captain in transcript\n┃ hello\n┃ captain\n┃ Build · GPT-5.5 Fast OpenAI · high'
-  out=$(fm_composer_extract_selected_content "$CAPS_STYLED_NOID" "$screen")
-  [ "$out" = 'hello captain' ] \
-    || fail "left-bar extraction should join user rows without footer furniture, got '$out'"
   screen=$'╭────────────────────╮\n│ ❯ '"${ESC}[2mType a message...${ESC}[0m"$'│\n╰────────────────────╯'
   out=$(fm_composer_extract_selected_content "$CAPS_STYLED_NOID" "$screen")
   [ -z "$out" ] \
@@ -447,9 +430,9 @@ test_empty_content_is_empty
 test_idle_placeholder_is_empty
 test_idle_placeholder_case_mode_is_explicit
 test_real_text_is_pending
+test_delivery_busy_signatures_are_limited_to_verified_harnesses
 test_matrix_codex_dim_hint_row
 test_matrix_pi_separated_needs_identity
-test_matrix_opencode_leftbar_signals
 test_matrix_bordered_shell_glyph_box
 test_strict_blank_row_divergence
 test_bare_wrap_region_classifies

@@ -156,7 +156,7 @@ test_stale_gen_record_unknown() {
 test_missing_record_unknown_not_idle() {
   local state out h
   state=$(new_state_dir missing)
-  for h in opencode pi pi-signed; do
+  for h in pi pi-signed; do
     out=$(fm_busy_classify tmux w1 "$h" t1 "$state")
     [ "$out" = "unknown missing" ] || fail "$h with no record must be 'unknown missing', got '$out'"
   done
@@ -197,22 +197,10 @@ test_record_without_sidecar_unknown() {
 
 # --- adapter isolation ---------------------------------------------------------
 
-test_source_mismatch_cross_adapter() {
-  local state gen out
-  state=$(new_state_dir cross-adapter)
-  gen=$("$EV" arm "$state" t1)
-  "$EV" apply "$state" t1 busy --gen "$gen" --source opencode-plugin --event agent-start
-  out=$(fm_busy_classify tmux w1 pi t1 "$state")
-  [ "$out" = "unknown source-mismatch" ] || fail "opencode-plugin record on a pi task must be untrusted, got '$out'"
-  out=$(fm_busy_classify tmux w1 opencode t1 "$state")
-  [ "$out" = "busy opencode-plugin" ] || fail "opencode-plugin record on an opencode task must classify, got '$out'"
-  pass "a record is trusted only by the adapter whose source wrote it"
-}
-
 test_converted_adapters_without_records_are_unknown() {
   local state out h
   state=$(new_state_dir no-record)
-  for h in opencode pi pi-signed; do
+  for h in pi pi-signed; do
     out=$(fm_busy_classify tmux w1 "$h" t1 "$state")
     [ "$out" = "unknown missing" ] || fail "$h must never classify from footer text, got '$out'"
   done
@@ -329,7 +317,6 @@ test_stale_gen_record_unknown
 test_missing_record_unknown_not_idle
 test_malformed_record_unknown
 test_record_without_sidecar_unknown
-test_source_mismatch_cross_adapter
 test_converted_adapters_without_records_are_unknown
 test_codex_unverified_gate
 test_dead_endpoint_overrides

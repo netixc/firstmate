@@ -235,8 +235,6 @@ The original cross-harness inspection was performed on 2026-07-22, with every in
 ```text
 $ codex --version
 codex-cli 0.144.6
-$ opencode --version
-1.17.18
 $ pi --version
 0.81.1
 ```
@@ -244,12 +242,11 @@ $ pi --version
 | Harness | Conclusion | Evidence |
 | --- | --- | --- |
 | Codex CLI 0.144.6 | Not feasible through the inspected supported project surface. | The tracked hooks expose session, pre-tool, and stop handling, while the plugin and feature inventories expose no TUI tool-row renderer or transcript redraw control. |
-| OpenCode 1.17.18 | Not feasible without violating the preservation boundary. | Plugins expose events and tool execution hooks, not a built-in transcript-row renderer; same-name tool replacement changes execution rather than presentation alone. |
 | Pi (verified 0.81.1 through 0.82.0) | Partially feasible with two API-probed exported-class adapters. | Public APIs control working visibility, collapsed labels, known tool slots, custom entries, and expansion redraws; exported assistant and interactive-mode classes provide the collapsed-thinking and operational-user layout boundaries, gated on the exact method's presence rather than a version number, while generic user, tool, and status filtering remains unavailable. |
 
 These conclusions are deliberately limited to the named versions and supported surfaces.
 They do not claim that a harness can never add the missing renderer API.
-For the duplicate-turn fix and the latest presentation change, the launch templates for Codex, OpenCode, and Pi plus the watcher, turn-end, session-start, away-supervisor, and from-firstmate producers were re-inspected.
+For the duplicate-turn fix and the latest presentation change, the launch templates for Codex and Pi plus the watcher, turn-end, session-start, away-supervisor, and from-firstmate producers were re-inspected.
 The canonical encoder and every non-Pi delivery path remain unchanged, and the tmux and Herdr runtime surfaces continue to transport the same input selected by the harness adapter.
 Only Pi's Calm presentation implementation changed; every producer and non-Pi transport remains unchanged.
 

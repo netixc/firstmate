@@ -4,9 +4,9 @@
 #
 # fm-guard.sh is pull-based. This push-based guard is invoked by verified
 # harness turn-end integrations and applies the shared supervision predicate.
-# Codex can block directly by preserving exit status 2 and stderr. OpenCode and
-# Pi adapters use the same predicate and force one bounded follow-up because
-# their turn-end events are passive. See docs/turnend-guard.md for per-harness
+# Codex can block directly by preserving exit status 2 and stderr. Pi adapters
+# use the same predicate and force one bounded follow-up because their turn-end
+# events are passive. See docs/turnend-guard.md for per-harness
 # mechanics and evidence.
 #
 # Codex uses the payload's typed stop-active field as a one-block loop guard.

@@ -5,34 +5,35 @@
 
 ## Verification inputs
 
-The current candidate timings came from the 2026-08-15 concurrent proof recorded in [fm-test-isolation-proof.md](fm-test-isolation-proof.md).
+The current candidate timings came from the 2026-08-16 concurrent proof recorded in [fm-test-isolation-proof.md](fm-test-isolation-proof.md).
 The proof ran 23 candidates with 4 workers and no failures.
 
 | duration_ms | script |
 |---:|---|
-| 69664 | `tests/fm-backend-herdr.test.sh` |
-| 64778 | `tests/fm-decision-hold-lifecycle.test.sh` |
-| 54828 | `tests/fm-relay.test.sh` |
-| 34763 | `tests/fm-arm-pretool-check.test.sh` |
-| 31431 | `tests/fm-crew-state.test.sh` |
-| 28291 | `tests/fm-cd-pretool-check.test.sh` |
-| 27648 | `tests/fm-test-run.test.sh` |
-| 14398 | `tests/fm-herdr-lab.test.sh` |
-| 12530 | `tests/fm-pr-merge.test.sh` |
-| 9570 | `tests/fm-send-popup-settle.test.sh` |
-| 8045 | `tests/fm-lint.test.sh` |
-| 7888 | `tests/fm-composer-ghost.test.sh` |
-| 7548 | `tests/fm-review-diff.test.sh` |
-| 4474 | `tests/fm-tmux-submit-busy.test.sh` |
-| 3959 | `tests/fm-send-strict.test.sh` |
-| 3507 | `tests/fm-composer-lib.test.sh` |
-| 2559 | `tests/fm-send-settle.test.sh` |
-| 1596 | `tests/fm-spawn-batch.test.sh` |
-| 1496 | `tests/fm-brief.test.sh` |
-| 332 | `tests/fm-ensure-agents-md.test.sh` |
-| 300 | `tests/fm-supervision-instructions.test.sh` |
-| 121 | `tests/fm-transition-lib.test.sh` |
-| 27 | `tests/fm-pi-primary-types.test.sh` |
+| 67643 | `tests/fm-relay.test.sh` |
+| 61341 | `tests/fm-backend-herdr.test.sh` |
+| 60961 | `tests/fm-decision-hold-lifecycle.test.sh` |
+| 60685 | `tests/fm-test-run.test.sh` |
+| 31997 | `tests/fm-crew-state.test.sh` |
+| 20653 | `tests/fm-arm-pretool-check.test.sh` |
+| 19247 | `tests/fm-spawn-batch.test.sh` |
+| 17302 | `tests/fm-cd-pretool-check.test.sh` |
+| 16582 | `tests/fm-pr-merge.test.sh` |
+| 13032 | `tests/fm-herdr-lab.test.sh` |
+| 12482 | `tests/fm-send-popup-settle.test.sh` |
+| 10295 | `tests/fm-review-diff.test.sh` |
+| 9029 | `tests/fm-composer-ghost.test.sh` |
+| 8544 | `tests/fm-tmux-submit-busy.test.sh` |
+| 8258 | `tests/fm-send-strict.test.sh` |
+| 6390 | `tests/fm-lint.test.sh` |
+| 3580 | `tests/fm-composer-lib.test.sh` |
+| 3239 | `tests/fm-send-settle.test.sh` |
+| 2014 | `tests/fm-brief.test.sh` |
+| 750 | `tests/fm-supervision-instructions.test.sh` |
+| 432 | `tests/fm-ensure-agents-md.test.sh` |
+| 261 | `tests/fm-transition-lib.test.sh` |
+| 38 | `tests/fm-pi-primary-types.test.sh` |
+
 
 ## Parallel lanes
 
@@ -40,9 +41,9 @@ The two parallel lanes use longest-processing-time assignment from those measure
 
 | Lane | Script count | Estimated duration |
 |---|---:|---:|
-| `portable-parallel-1` | 13 | 194552 ms (~194.6 s) |
-| `portable-parallel-2` | 10 | 195201 ms (~195.2 s) |
-| imbalance | | 649 ms |
+| `portable-parallel-1` | 13 | 228151 ms (~228.2 s) |
+| `portable-parallel-2` | 10 | 206604 ms (~206.6 s) |
+| imbalance | | 21547 ms |
 
 `bin/fm-test-run.sh` contains the exact ordered memberships in `list_portable_parallel_1` and `list_portable_parallel_2`.
 
@@ -69,10 +70,10 @@ Hints only affect balance: the coverage guard keeps the partition complete and d
 
 | Lane | Script count | Estimated duration |
 |---|---:|---:|
-| `portable-serial-1of4` | 15 | 285945 ms (~285.9 s) |
-| `portable-serial-2of4` | 18 | 285944 ms (~285.9 s) |
-| `portable-serial-3of4` | 17 | 285929 ms (~285.9 s) |
-| `portable-serial-4of4` | 19 | 285944 ms (~285.9 s) |
+| `portable-serial-1of4` | 21 | 285945 ms (~285.9 s) |
+| `portable-serial-2of4` | 24 | 285944 ms (~285.9 s) |
+| `portable-serial-3of4` | 23 | 285929 ms (~285.9 s) |
+| `portable-serial-4of4` | 23 | 285944 ms (~285.9 s) |
 | imbalance | | 16 ms |
 
 The single longest script, `tests/fm-pr-check-security.test.sh` at 199573 ms, is the floor for any shard count.

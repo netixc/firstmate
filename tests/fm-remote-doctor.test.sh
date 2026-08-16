@@ -522,8 +522,8 @@ new_case Linux with-herdr no-gui
 MANAGER_BIN="$CASE_HOME/.nvm/versions/node/v24/bin"
 mkdir -p "$MANAGER_BIN"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$MANAGER_BIN/codex"
-printf '#!/usr/bin/env bash\nexit 0\n' > "$MANAGER_BIN/opencode"
-chmod +x "$MANAGER_BIN/codex" "$MANAGER_BIN/opencode"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$MANAGER_BIN/pi-signed"
+chmod +x "$MANAGER_BIN/codex" "$MANAGER_BIN/pi-signed"
 mv "$CASE_BIN/tasks-axi" "$MANAGER_BIN/tasks-axi"
 doctor
 expect_code 1 "$DOCTOR_RC" "a version-manager-only required tool was reported ready"
@@ -540,13 +540,13 @@ assert_grep '# Firstmate remote tool wrapper v1' "$CASE_HOME/.local/bin/tasks-ax
 assert_grep "$MANAGER_BIN/tasks-axi" "$CASE_HOME/.local/bin/tasks-axi" \
   "the generated wrapper does not execute the discovered absolute target"
 assert_absent "$CASE_HOME/.local/bin/codex" "--fix wrapped an alternate harness when pi already satisfied readiness"
-assert_absent "$CASE_HOME/.local/bin/opencode" "--fix wrapped an alternate harness when pi already satisfied readiness"
+assert_absent "$CASE_HOME/.local/bin/pi-signed" "--fix wrapped an alternate harness when pi already satisfied readiness"
 
 rm -f "$CASE_BIN/pi"
 doctor --fix
 expect_code 0 "$DOCTOR_RC" "--fix did not wrap one discoverable harness when none resolved"
 assert_present "$CASE_HOME/.local/bin/codex" "--fix did not create the first needed harness wrapper"
-assert_absent "$CASE_HOME/.local/bin/opencode" "--fix created more harness wrappers than readiness requires"
+assert_absent "$CASE_HOME/.local/bin/pi-signed" "--fix created more harness wrappers than readiness requires"
 
 mv "$CASE_BIN/treehouse" "$MANAGER_BIN/treehouse"
 mkdir -p "$CASE_HOME/.local/bin"

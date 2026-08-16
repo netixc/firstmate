@@ -12,12 +12,8 @@
 # Styled captures remain internal; fm-peek and every human-facing capture stay
 # plain.
 #
-# OpenCode's busy-queued Enter conversion accepts only structurally proven
-# pending text after retries, while the separate turn-started conversion accepts
-# an unknown post-Enter composer only after this submit observed an idle baseline
-# become busy.
-# Herdr's OpenCode busy-queue limitation remains documented in
-# docs/herdr-backend.md.
+# The turn-started conversion accepts an unknown post-Enter composer only after
+# this submit observed an idle baseline become busy.
 #
 # FM_COMPOSER_IDLE_RE is interpreted by the shared classifier with its structural
 # and styling safety gates.
@@ -179,14 +175,6 @@ fm_pane_is_busy() {  # <target> [harness]
 # swallowed Enter leaves our text in the composer and retyping would duplicate
 # it. Echoes the final proof-carrying verdict on stdout so callers can require
 # exact `empty` before treating submission as confirmed.
-# Busy-queued Enter (opencode 1.18.4): the harness accepts Enter while mid-turn
-# and queues it for after the current turn, but keeps the typed text visible in
-# the composer. Once the Enter-retry budget is spent and a structurally proven
-# composer still reads "pending", the submit core falls back to
-# `fm_pane_is_busy`: a busy pane means the Enter was accepted and queued (report
-# `empty` so the caller does not re-send), while an idle pane keeps `pending` as
-# a genuine swallow. Pending-unproven receives the same Enter retry budget but
-# never reaches this exception.
 # Turn-started confirmation (the strict blank-row posture's counterpart): a
 # harness whose mid-turn screen the classifier cannot positively identify (pi
 # replaces its separated composer while working) reads `unknown` right after a
@@ -227,20 +215,7 @@ fm_tmux_submit_enter_core() {  # <target> <retries> <enter-sleep> [baseline-idle
     i=$((i + 1))
     [ "$i" -lt "$retries" ] || break
   done
-  if [ "$state" != pending ]; then
-    printf '%s' "$state"
-    return 0
-  fi
-  # Retries exhausted, composer still shows proven pending.
-  # If the pane is busy (agent mid-turn), the harness accepted the Enter
-  # and queued the message for processing when the current turn ends.
-  # Treat it as submitted so the caller does not re-send.
-  # On an idle pane, keep reporting pending - a genuine swallow.
-  if fm_pane_is_busy "$target"; then
-    printf 'empty'
-  else
-    printf 'pending'
-  fi
+  printf '%s' "$state"
 }
 
 fm_tmux_submit_core() {  # <target> <text> <retries> <enter-sleep> <settle>
