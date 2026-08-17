@@ -441,6 +441,9 @@ Pi source evidence, from the installed release's own changelog and interactive m
 $ pi --version
 0.84.1
 
+$ /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --version
+Google Chrome 151.0.7922.138
+
 CHANGELOG.md, 0.83.0 "Fixed":
 - Added a status line when the tool output expansion is toggled ([#7180](https://github.com/earendil-works/pi/issues/7180)).
 
@@ -454,6 +457,7 @@ interactive-mode setToolsExpanded:
 ```
 
 The regression is pinned by the real-terminal same-process `/reload` then `/export` case in `tests/fm-calm-pi-extension.test.sh`, which now asserts the confirmation is still on screen after Calm's redraw has settled and that the redraw restored every Calm-hidden row.
+The same run renders the exported HTML through Google Chrome 151 and asserts its DOM retains genuine conversation and session-tree provenance while omitting hidden operational rows from the main transcript.
 The in-process lifecycle case in the same test preserves restored-row invalidators across `/reload` and verifies that new, resumed, and forked session replacements do not repaint retired rows.
 Reverting only the extension fix fails that assertion deterministically rather than racing the roughly 50ms window the confirmation used to survive:
 
