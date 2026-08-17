@@ -1324,7 +1324,42 @@ if (
 
 await calmCommand.handler("", commandContext);
 for (const reason of ["startup", "new", "resume", "fork", "reload"]) {
+  let restoredReloadRow;
+  if (reason === "reload") {
+    restoredReloadRow = new ToolExecutionComponent(
+      "read",
+      "restored-reload-read",
+      { path: "sample.txt" },
+      { showImages: false },
+      tools.find((tool) => tool.name === "read"),
+      renderUi,
+      process.cwd(),
+    );
+    restoredReloadRow.markExecutionStarted();
+    restoredReloadRow.setArgsComplete();
+    restoredReloadRow.updateResult({
+      content: [{ type: "text", text: "RESTORED_RELOAD_READ_OUTPUT" }],
+      details: {},
+      isError: false,
+    });
+    if (restoredReloadRow.render(100).length !== 0) {
+      throw new Error("restored reload row was visible before session_start");
+    }
+  }
   await handlers.get("session_start")[0]({ reason }, commandContext);
+  if (restoredReloadRow) {
+    editorText = "/export reload.html";
+    terminalInputHandler("\x1bs");
+    restoredReloadRow.invalidate();
+    if (!restoredReloadRow.render(100).join("\n").includes("RESTORED_RELOAD_READ_OUTPUT")) {
+      throw new Error("restored reload row did not use stock rendering during export");
+    }
+    editorText = "";
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    if (restoredReloadRow.render(100).length !== 0) {
+      throw new Error("post-reload export did not restore Calm rendering for the restored row");
+    }
+  }
   for (const row of rows) row.actual.setExpanded(expanded);
   for (const { name, actual } of rows) {
     if (actual.render(100).length !== 0) {
