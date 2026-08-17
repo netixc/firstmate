@@ -1743,6 +1743,42 @@ SH
   chmod +x "$fakebin/timeout"
 }
 
+make_deadline_status_race_timeout() {
+  local fakebin=$1
+  cat > "$fakebin/timeout" <<'SH'
+#!/usr/bin/env perl
+use strict;
+use warnings;
+(shift @ARGV) eq '-k' or exit 64;
+shift @ARGV;
+my $seconds = shift @ARGV;
+my $status_file = $ARGV[4];
+setpgrp(0, 0);
+my $wrapper_pid = fork;
+defined $wrapper_pid or die "fork failed";
+if (!$wrapper_pid) {
+  exec @ARGV;
+}
+select undef, undef, undef, $seconds;
+open my $pid_fh, '<', $ENV{FM_TIMEOUT_TEST_PID_FILE} or die "missing command pid";
+my $command_pid = <$pid_fh>;
+close $pid_fh;
+chomp $command_pid;
+kill 'TERM', $command_pid;
+waitpid $wrapper_pid, 0;
+my $wrapper_rc = $? >> 8;
+open my $status_fh, '<', $status_file or die "missing wrapper status";
+my $status = <$status_fh>;
+close $status_fh;
+chomp $status;
+open my $evidence_fh, '>', $ENV{FM_TIMEOUT_TEST_EVIDENCE} or die "missing evidence path";
+print {$evidence_fh} "runner=124 wrapper=$wrapper_rc status=$status\n";
+close $evidence_fh;
+exit 124;
+SH
+  chmod +x "$fakebin/timeout"
+}
+
 test_runtime_bound_truncates_loudly_and_exits_zero() {
   local rec root home fakebin out status=0 stray mechanism
   rec=$(new_world runtime-bound)
@@ -1820,9 +1856,39 @@ SH
   expect_code 124 "$status" "portable timeout TERM-resistant escalation"
   status=0
   env PATH="$fakebin:$BASE_PATH" "$driver" "$ROOT/bin/fm-timeout-lib.sh" \
-    bash -c 'exit 137' || status=$?
-  expect_code 137 "$status" "natural command exit 137"
+    bash -c 'kill -KILL "$$"' || status=$?
+  expect_code 137 "$status" "natural command SIGKILL exit"
+  status=0
+  env PATH="$fakebin:$BASE_PATH" "$driver" "$ROOT/bin/fm-timeout-lib.sh" \
+    bash -c 'kill -TERM "$$"' || status=$?
+  expect_code 143 "$status" "natural command SIGTERM exit"
   pass "the portable timeout path force-kills a command that ignores TERM"
+}
+
+test_portable_timeout_keeps_deadline_status_authoritative() {
+  local fakebin="$TMP_ROOT/portable-deadline-status" driver pid_file evidence status=0
+  mkdir -p "$fakebin"
+  make_deadline_status_race_timeout "$fakebin"
+  driver="$TMP_ROOT/portable-deadline-status-driver.sh"
+  pid_file="$TMP_ROOT/portable-deadline-status-command.pid"
+  evidence="$TMP_ROOT/portable-deadline-status-evidence"
+  cat > "$driver" <<'SH'
+#!/usr/bin/env bash
+. "$1"
+shift
+fm_run_timed 1 "$@"
+SH
+  chmod +x "$driver"
+
+  # shellcheck disable=SC2016  # Expansion is deliberately deferred to the test command.
+  env FM_TIMEOUT_TEST_PID_FILE="$pid_file" FM_TIMEOUT_TEST_EVIDENCE="$evidence" \
+    PATH="$fakebin:$BASE_PATH" "$driver" "$ROOT/bin/fm-timeout-lib.sh" \
+    bash -c 'printf "%s\n" "$$" > "$FM_TIMEOUT_TEST_PID_FILE"; exec sleep 600' || status=$?
+
+  expect_code 124 "$status" "portable timeout authoritative deadline status"
+  [ "$(cat "$evidence")" = 'runner=124 wrapper=143 status=143' ] \
+    || fail "deadline fixture did not reproduce the status race: $(cat "$evidence" 2>/dev/null)"
+  pass "the portable timeout path keeps an expired deadline authoritative over wrapper unwinding"
 }
 
 test_runtime_bound_leaves_a_healthy_digest_untouched() {
@@ -2383,6 +2449,7 @@ test_pi_diagnostic_rejects_missing_turnend_guard_marker
 test_pi_diagnostic_rejects_previous_session_loaded_marker
 test_runtime_bound_truncates_loudly_and_exits_zero
 test_portable_timeout_escalates_term_resistant_process
+test_portable_timeout_keeps_deadline_status_authoritative
 test_runtime_bound_leaves_a_healthy_digest_untouched
 test_runtime_bound_leaves_harness_ancestry_headroom
 test_reemit_skips_startup_sweeps_but_keeps_the_wake_drain
