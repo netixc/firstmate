@@ -1,0 +1,3 @@
+no-mistakes evidence configuration
+test.evidence.store_in_repo=true
+result=repository-backed evidence enabled

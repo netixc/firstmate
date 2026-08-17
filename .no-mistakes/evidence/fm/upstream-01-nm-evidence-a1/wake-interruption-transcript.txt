@@ -1,0 +1,2 @@
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 2 --recovery-generation 63739.1786971753.PS3SBg
+ok - interruptions preserve durable rows until post-handling acknowledgement
