@@ -730,16 +730,11 @@ spawn_herdr_presentation_order_lock_acquire() {
 }
 
 clear_relaunch_harness_wiring() {
-  local harness=$1 wt=$2 state=$3 id=$4 path gen
+  local harness=$1 wt=$2 state=$3 id=$4 path
   # Resolve the recorded value through the exact verified-adapter table before
   # retiring that adapter's per-task wiring.
   # An unrecognized value resolves to no adapter and has no trusted wiring.
   harness=$(fm_control_harness_family "$harness") || harness=
-  if [ "$harness" = pi ] \
-    && { [ -e "$state/$id.pi-admission" ] || [ -L "$state/$id.pi-admission" ]; }; then
-    gen=$(fm_busy_current_gen "$state" "$id") || return 1
-    "$FM_ROOT/bin/fm-pi-admission.sh" retire "$state" "$id" --gen "$gen" || return 1
-  fi
   while IFS= read -r path; do
     [ -n "$path" ] || continue
     rm -f -- "$path" || return 1
@@ -1867,51 +1862,29 @@ if [ "$KIND" != secondmate ]; then
       # loaded from inside the project (verified live), but an explicit -e path
       # elsewhere loads without a dialog. Lives in state/, cleaned by teardown.
       cat > "$STATE/$ID.pi-ext.ts" <<EOF
-// Firstmate semantic busy-state events, exact user-message admission receipts,
-// and turn-end notification; written by fm-spawn under the contracts owned by
-// bin/fm-busy-lib.sh and bin/fm-pi-admission.sh.
+// Firstmate semantic busy-state events + turn-end notification; written by
+// fm-spawn under the contract owned by bin/fm-busy-lib.sh.
 // Semantic state: "agent_start" -> busy when a low-level agent run begins;
 // "agent_settled" -> idle only when ctx.isIdle() confirms Pi will not
 // continue automatically - auto-retries, auto-compaction retries, tool
 // loops, and queued continuations all keep the run un-settled, and a settle
 // that raced another extension's fresh run keeps state busy via isIdle().
-// One accepted user message represented by exactly one plain text block emits
-// privacy-safe digest/length metadata from "message_start". Every other user
-// shape emits no receipt. "turn_end" stays a wake notification touch.
+// "turn_end" fires at every inner turn boundary (one LLM response plus its
+// tool calls) and stays a wake NOTIFICATION touch for the watcher, never
+// current-state truth.
 import { execFile } from "node:child_process";
-import { createHash } from "node:crypto";
-const run = (file: string, args: string[]) =>
-  new Promise<void>((resolve) => execFile(file, args, () => resolve()));
 const busyEvent = (state: string, event: string) =>
-  run("$FM_ROOT/bin/fm-busy-event.sh", [
-    "apply", "$STATE_REAL", "$ID", state,
-    "--gen", "$BUSY_GEN", "--source", "pi-ext", "--event", event,
-  ]);
-const plainUserText = (event: any): string | undefined => {
-  const message = event && event.message;
-  if (!message || message.role !== "user" || !Array.isArray(message.content) || message.content.length !== 1) return;
-  const block = message.content[0];
-  if (!block || typeof block !== "object" || Array.isArray(block)) return;
-  const keys = Object.keys(block).sort();
-  if (keys.length !== 2 || keys[0] !== "text" || keys[1] !== "type") return;
-  if (block.type !== "text" || typeof block.text !== "string") return;
-  return block.text;
-};
+  new Promise<void>((resolve) => {
+    execFile("$FM_ROOT/bin/fm-busy-event.sh", [
+      "apply", "$STATE_REAL", "$ID", state,
+      "--gen", "$BUSY_GEN", "--source", "pi-ext", "--event", event,
+    ], () => resolve());
+  });
 export default function (pi: any) {
   pi.on("agent_start", () => busyEvent("busy", "agent-start"));
   pi.on("agent_settled", (_event: any, ctx: any) => {
     if (ctx && typeof ctx.isIdle === "function" && !ctx.isIdle()) return;
     return busyEvent("idle", "agent-settled");
-  });
-  pi.on("message_start", (event: any) => {
-    const text = plainUserText(event);
-    if (text === undefined) return;
-    const body = Buffer.from(text, "utf8");
-    return run("$FM_ROOT/bin/fm-pi-admission.sh", [
-      "record", "$STATE_REAL", "$ID", "--gen", "$BUSY_GEN",
-      "--sha256", createHash("sha256").update(body).digest("hex"),
-      "--bytes", String(body.length), "--ts", String(Date.now()),
-    ]);
   });
   pi.on("turn_end", () => execFile("touch", ["$TURNEND"]));
 }
