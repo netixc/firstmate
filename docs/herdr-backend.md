@@ -216,6 +216,11 @@ On an idle or done native baseline, submit confirmation waits for `working` or `
 On an already active or unreadable baseline, it falls back to conservative composer clearance.
 A fully unreadable target stops retrying and reports unknown.
 
+For an exact metadata-routed Pi task only, `fm-send` also snapshots the generated Pi integration's current-generation admission sequence before typing and hashes the exact final payload.
+If ordinary Herdr proof remains unknown or pending, a newer receipt for the same generation, SHA-256 digest, and UTF-8 byte length proves that Pi admitted that message even when native state remains working and the composer is unknown.
+The receipt contains metadata only, and missing, malformed, stale, mismatched, mixed-content, unreadable, truncated, or unsafe-path records remain unconfirmed under the contract owned by `bin/fm-pi-admission.sh`.
+This does not reinterpret working, unknown UI, rendered footer changes, or Herdr command success, and the text body remains single-shot.
+
 `pane read --lines N` can return empty output when N is below the viewport height.
 The capture owner requests at least 200 lines from Herdr and trims locally to the caller's bound.
 This generous floor is required for small composer and peek reads.
@@ -326,6 +331,8 @@ tests/fm-herdr-session-cleanup.test.sh
 tests/fm-herdr-session-cleanup-e2e.test.sh
 tests/fm-afk-inject-herdr-e2e.test.sh
 tests/fm-afk-pi-herdr-return-e2e.test.sh
+tests/fm-send-pi-admission.test.sh
+tests/fm-send-pi-admission-herdr-e2e.test.sh
 ```
 
 Real Herdr tests use the named lab helper and default-session tripwire.

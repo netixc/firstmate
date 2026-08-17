@@ -438,6 +438,31 @@ FM_SEND_MARKER_HERDR_E2E=1 \
   tests/fm-send-secondmate-marker-herdr-e2e.test.sh
 ```
 
+### Busy Pi steer admission
+
+The exact Pi admission receipt was verified on 2026-08-17 with Herdr 0.8.0, Pi 0.84.1, and the named-session helper's unchanged-default tripwire:
+
+```sh
+HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
+  FM_SEND_PI_ADMISSION_HERDR_E2E=1 \
+  tests/fm-send-pi-admission-herdr-e2e.test.sh
+```
+
+Observed output:
+
+```text
+ok - real guarded Pi/Herdr busy steer appears exactly once, returns success, and stays working before and after
+```
+
+The fixture uses an isolated deterministic provider whose first active turn releases only after the terminal Enter is delivered, then keeps the next turn active.
+The production `fm-send` path therefore sees working before and after with an unknown working composer, while the transcript contains the exact steer once and the current-generation journal contains its exact SHA-256 digest and UTF-8 byte length.
+The portable public-interface regression drives the generated extension and real `fm-send` against a stateful fake Herdr, including old, malformed, stale-generation, wrong-digest, wrong-length, mixed-content, unreadable, truncated, unrelated, unsafe-path, transport-failure, swallowed-Enter, existing-proof, and concurrent-identical-send cases:
+
+```sh
+tests/fm-busy-adapter-wiring.test.sh
+tests/fm-send-pi-admission.test.sh
+```
+
 ### Native blocked event
 
 The protocol-16 event path was measured on 2026-07-11 with Herdr 0.7.3 and Python 3.13:

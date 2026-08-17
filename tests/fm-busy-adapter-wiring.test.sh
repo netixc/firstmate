@@ -81,11 +81,10 @@ classify() {  # <harness> <id> <state-dir>
   fm_busy_classify tmux fake:w "$1" "$2" "$3"
 }
 
-# drive_pi_ext <ext-path> <mode>: load the generated Pi extension in a plain
-# Node host and fire one lifecycle handler. Modes: agent-start, settle-idle,
-# settle-continuing, turn-end.
+# drive_pi_ext <ext-path> <mode> [text]: load the generated Pi extension in a
+# plain Node host and fire one lifecycle handler.
 drive_pi_ext() {
-  EXT_PATH="$1" MODE="$2" node --input-type=module 2>&1 <<'EOF'
+  EXT_PATH="$1" MODE="$2" MESSAGE_TEXT=${3:-} node --input-type=module 2>&1 <<'EOF'
 import { pathToFileURL } from "node:url";
 const mod = await import(pathToFileURL(process.env.EXT_PATH).href);
 const handlers = {};
@@ -100,6 +99,23 @@ switch (process.env.MODE) {
     await handlers["agent_start"]({}, ctx);
     break;
   case "turn-end": await handlers["turn_end"]({}, ctx); break;
+  case "message-text":
+    await handlers["message_start"]({ message: { role: "user", content: [{ type: "text", text: process.env.MESSAGE_TEXT }] } }, ctx);
+    break;
+  case "message-mixed":
+    await handlers["message_start"]({ message: { role: "user", content: [
+      { type: "text", text: process.env.MESSAGE_TEXT },
+      { type: "image", data: "not-written" },
+    ] } }, ctx);
+    break;
+  case "message-extra-field":
+    await handlers["message_start"]({ message: { role: "user", content: [
+      { type: "text", text: process.env.MESSAGE_TEXT, extra: true },
+    ] } }, ctx);
+    break;
+  case "message-assistant":
+    await handlers["message_start"]({ message: { role: "assistant", content: [{ type: "text", text: process.env.MESSAGE_TEXT }] } }, ctx);
+    break;
   default: throw new Error("unknown mode " + process.env.MODE);
 }
 if (process.env.MODE === "turn-end") {
@@ -145,6 +161,38 @@ test_pi_extension_semantic_lifecycle() {
   pass "pi extension reports agent_start busy, settles idle only via ctx.isIdle(), and keeps turn_end a notification"
 }
 
+test_pi_extension_plain_text_admission_receipt() {
+  local rec id=busy-pi-admission out state ext gen message hash bytes
+  rec=$(make_spawn_case pi-admission pi "$id")
+  read_case_record "$rec"
+  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$id" "$PROJ_DIR")
+  expect_code 0 $? "pi spawn should succeed: $out"
+  state="$HOME_DIR/state"
+  ext="$state/$id.pi-ext.ts"
+  gen=$(sed -n 's/^busy_gen=//p' "$state/$id.meta" | tail -1)
+  message=$'exact UTF-8 steer: café\nsecond line'
+  IFS=$'\t' read -r hash bytes <<EOF
+$(printf '%s' "$message" | "$ROOT/bin/fm-pi-admission.sh" hash)
+EOF
+
+  out=$(drive_pi_ext "$ext" message-text "$message") || fail "plain user-message drive failed: $out"
+  "$ROOT/bin/fm-pi-admission.sh" match "$state" "$id" --gen "$gen" --after 0 \
+    --sha256 "$hash" --bytes "$bytes" \
+    || fail "generated Pi extension did not publish the exact current-generation receipt"
+  if grep -F "$message" "$state/$id.pi-admission" >/dev/null 2>&1; then
+    fail "Pi admission receipt stored instruction text"
+  fi
+
+  rm -f "$state/$id.pi-admission"
+  out=$(drive_pi_ext "$ext" message-mixed "$message") || fail "mixed user-message drive failed: $out"
+  assert_absent "$state/$id.pi-admission" "a mixed text/image user message emitted a positive receipt"
+  out=$(drive_pi_ext "$ext" message-extra-field "$message") || fail "extra-field user-message drive failed: $out"
+  assert_absent "$state/$id.pi-admission" "an ambiguous text block emitted a positive receipt"
+  out=$(drive_pi_ext "$ext" message-assistant "$message") || fail "assistant-message drive failed: $out"
+  assert_absent "$state/$id.pi-admission" "an assistant message emitted a user admission receipt"
+  pass "generated Pi extension receipts only one strict plain-text accepted user message, generation-bound and without instruction text"
+}
+
 test_pi_extension_serializes_settle_before_next_start() {
   local rec id=busy-pi-order out state ext
   rec=$(make_spawn_case pi-order pi "$id")
@@ -161,23 +209,34 @@ test_pi_extension_serializes_settle_before_next_start() {
 }
 
 test_pi_extension_stale_incarnation_rejected() {
-  local rec id=busy-pi-2 out state ext
+  local rec id=busy-pi-2 out state ext old_gen
   rec=$(make_spawn_case pi-stale pi "$id")
   read_case_record "$rec"
   out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$id" "$PROJ_DIR")
   expect_code 0 $? "pi spawn should succeed: $out"
   state="$HOME_DIR/state"
   ext="$state/$id.pi-ext.ts"
+  old_gen=$(sed -n 's/^busy_gen=//p' "$state/$id.meta" | tail -1)
+  out=$(drive_pi_ext "$ext" message-text "old incarnation receipt") \
+    || fail "old-incarnation message drive failed: $out"
+  assert_present "$state/$id.pi-admission" "old incarnation did not publish its setup receipt"
+  "$ROOT/bin/fm-pi-admission.sh" retire "$state" "$id" --gen "$old_gen" \
+    || fail "relaunch-style receipt retirement failed"
+  assert_absent "$state/$id.pi-admission" "relaunch-style retirement preserved the old receipt"
   # A re-arm (a rewired incarnation) supersedes the gen embedded in the old
   # extension file: its late events must be rejected and never change state.
   "$ROOT/bin/fm-busy-event.sh" arm "$state" "$id" >/dev/null
   out=$(drive_pi_ext "$ext" settle-idle) || fail "stale settle drive failed: $out"
   out=$(classify pi "$id" "$state")
   [ "$out" = "busy fm-spawn" ] || fail "a stale extension event must not change state, got '$out'"
-  pass "pi extension events from a superseded incarnation are rejected as stale"
+  out=$(drive_pi_ext "$ext" message-text "stale receipt must be rejected") \
+    || fail "stale message drive failed: $out"
+  assert_absent "$state/$id.pi-admission" "a stale extension generation published an admission receipt"
+  pass "Pi extension lifecycle and admission events from a superseded incarnation are rejected as stale"
 }
 
 test_pi_extension_semantic_lifecycle
+test_pi_extension_plain_text_admission_receipt
 test_pi_extension_serializes_settle_before_next_start
 test_pi_extension_stale_incarnation_rejected
 
