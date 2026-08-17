@@ -1,0 +1,9 @@
+TARGET bab456fb1b52b8eabdff105b4dd6708be2b08370
+expired deadline fixture: runner=124 wrapper=143 status_file=143; public_status=124
+natural SIGKILL command: public_status=137
+natural SIGTERM command: public_status=143
+
+BASE f1d302ed59d5985da645c0b352ee5c61c41977c6 (counterfactual)
+expired deadline fixture: runner=124 wrapper=143 status_file=143; public_status=143
+natural SIGKILL command: public_status=137
+natural SIGTERM command: public_status=143
