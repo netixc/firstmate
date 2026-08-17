@@ -1,0 +1,71 @@
+ATTEMPT 1: route work while promised-final ownership still names main
+public commitment pf-handoff is still pending-work for main/promised-item
+error: refusing to hand off promised-item while it still owes a public reply bound to main/promised-item; rebind it to secondmate:design first (tasks-axi public-followup supersede-work, then bin/fm-public-followup.sh register <obligation-id> --relation <relation-id> --work-home secondmate:design --work-id promised-item --generation <n>).
+       nothing new was moved or delivered.
+exit=1
+
+MAIN BACKLOG AFTER REFUSAL
+## Queued
+- [ ] promised-item - fix the sign-in redirect (repo: alpha)
+- [ ] plain-item - unrelated work (repo: alpha)
+
+- [ ] pf-handoff - looking into sign-in (kind: public-followup) (since 2026-08-17)
+## Done
+## In flight
+
+SECOND-MATE BACKLOG AFTER REFUSAL
+<absent>
+
+REBIND PROMISED-FINAL RELATION TO secondmate:design, THEN RETRY
+handed off 2 item(s) to design: promised-item plain-item
+  into <evidence-fixture>/sub/data/backlog.md
+
+MAIN BACKLOG AFTER REBOUND HANDOFF
+## Queued
+- [ ] pf-handoff - looking into sign-in (kind: public-followup) (since 2026-08-17)
+## Done
+## In flight
+
+SECOND-MATE BACKLOG AFTER REBOUND HANDOFF
+## In flight
+
+## Queued
+- [ ] promised-item - fix the sign-in redirect (repo: alpha)
+- [ ] plain-item - unrelated work (repo: alpha)
+
+## Done
+
+TYPED PROMISE BINDING AFTER HANDOFF
+{
+  "id": "pf-handoff",
+  "relations": [
+    {
+      "relation_id": "rel-code",
+      "work_ref": {
+        "home_id": "main",
+        "task_id": "promised-item"
+      },
+      "role": "fulfills",
+      "required": true,
+      "generation": 1,
+      "state": "superseded",
+      "successor_relation_id": "rel-routed",
+      "accepted_event_ids": [],
+      "accepted_events": []
+    },
+    {
+      "relation_id": "rel-routed",
+      "work_ref": {
+        "home_id": "secondmate:design",
+        "task_id": "promised-item"
+      },
+      "role": "fulfills",
+      "required": true,
+      "generation": 2,
+      "state": "bound",
+      "successor_relation_id": null,
+      "accepted_event_ids": [],
+      "accepted_events": []
+    }
+  ]
+}
