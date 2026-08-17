@@ -408,9 +408,16 @@ assert_present "$HSELF/state/procevent-inbox/self-src.1.handled" "the self-annou
 if [ -e "$HSELF/state/.wake-queue" ] && grep -q 'procevent selfann self-src 1' "$HSELF/state/.wake-queue"; then
   fail "a fully autohandled self-announcing capture still published a duplicate check wake"
 fi
+# Retire before reconciling the handled capture so liveness repair cannot start
+# the still-registered immediate source while this test prepares its next run.
+out=$(pe_adapter "$HSELF" retire self-src)
+assert_contains "$out" "retired: self-src" "the handled self-announcing fixture could not be retired between runs"
 out=$(pe_adapter "$HSELF" reconcile)
-assert_contains "$out" "published=0" "reconcile re-announced a capture its adapter already acknowledged"
+assert_contains "$out" "published=0 started=0" \
+  "reconcile re-announced a capture its adapter already acknowledged or started a retired fixture"
 : > "$HSELF/state/selfann-fail"
+out=$(pe_adapter "$HSELF" register selfann self-src -- /bin/echo "self announced")
+assert_contains "$out" "registered: self-src" "the failed-application fixture could not be re-registered"
 out=$(pe_adapter "$HSELF" start self-src 2>&1)
 assert_contains "$out" "not-autohandled: self-src" "a failed self-announcing application was reported as applied"
 assert_absent "$HSELF/state/procevent-inbox/self-src.2.handled" "a failed self-announcing application was acknowledged anyway"
