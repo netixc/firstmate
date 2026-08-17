@@ -612,7 +612,7 @@ test_interruption_before_and_after_raw_commit() {
     i=$((i + 1))
   done
   [ -e "$state/.wake-queue.lock" ] || { kill "$pid" 2>/dev/null || true; fail "pre-commit drain never entered its serialized read boundary"; }
-  kill -TERM "$pid" 2>/dev/null || fail "could not interrupt drain before raw commitment"
+  kill -KILL "$pid" 2>/dev/null || fail "could not interrupt drain before raw commitment"
   set +e
   wait "$pid"
   rc=$?
@@ -633,7 +633,7 @@ test_interruption_before_and_after_raw_commit() {
     || { kill "$pid" 2>/dev/null || true; fail "post-commit drain did not print its raw row"; }
   [ -s "$state/.wake-queue" ] \
     || { kill "$pid" 2>/dev/null || true; fail "post-commit drain consumed its raw row before handling acknowledgement"; }
-  kill -TERM "$pid" 2>/dev/null || fail "could not interrupt drain after raw presentation"
+  kill -KILL "$pid" 2>/dev/null || fail "could not interrupt drain after raw presentation"
   set +e
   wait "$pid"
   set -e
