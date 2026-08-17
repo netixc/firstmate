@@ -1,0 +1,20 @@
+$ git show -s --format=%H%n%P%n%s ced428a
+ced428a3852a9c7c54101a7565316cea177a0ceb
+e867eb1f40e8ab783c8ac4b63de6a35534ff89d6 7a3259e5bca780a53ace49d77d086c89536f6f15
+Merge upstream commit 7a3259e5 (integration 4/10)
+
+$ ancestor checks
+exact upstream parent remains an ancestor: yes
+integration 1-3 base remains an ancestor: yes
+
+$ additive commits after integration merge
+e0c8e1c no-mistakes(document): Document Relay promise ownership and routing limits
+a1f2415 Revert "no-mistakes(document): Document Relay promise ownership and routing limits"
+c7f9fb7 no-mistakes(document): Document local Relay promise ownership limits
+17c9b3d Revert "no-mistakes(document): Document local Relay promise ownership limits"
+
+$ effective tree versus accepted integration merge
+identical: yes
+
+$ forbidden transport/API additions in effective diff
+none

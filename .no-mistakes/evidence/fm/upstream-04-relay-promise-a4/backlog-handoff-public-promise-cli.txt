@@ -1,0 +1,15 @@
+$ bin/fm-backlog-handoff.sh design promised-item plain-item
+handed off 2 item(s) to design: promised-item plain-item
+  into /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/no-mistakes-evidence/01M087Q2X4A2TR1A8G6D9GR1RT/handoff-state.3F3HMv/secondmate/data/backlog.md
+public commitment pf-handoff is still pending-work for main/promised-item
+warning: promised-item still owes a public reply bound to main/promised-item; rebind it to secondmate:design (tasks-axi public-followup bind-work, then bin/fm-public-followup.sh register <obligation-id> --relation <relation-id> --work-home secondmate:design --work-id promised-item --generation <n>) or the promised reply will be reconciled against work this home no longer owns.
+[exit 0]
+
+$ destination backlog after successful move
+## In flight
+
+## Queued
+- [ ] promised-item - fix sign-in redirect (repo: alpha)
+- [ ] plain-item - unrelated work (repo: alpha)
+
+## Done

@@ -1,0 +1,1 @@
+- design - feature work (home: /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/no-mistakes-evidence/01M087Q2X4A2TR1A8G6D9GR1RT/handoff-state.3F3HMv/secondmate; scope: feature work; projects: alpha; added 2026-07-09)

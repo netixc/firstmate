@@ -1,0 +1,10 @@
+{
+  "relation_id": "rel-code",
+  "work_ref": {
+    "home_id": "main",
+    "task_id": "promised-item"
+  },
+  "role": "fulfills",
+  "required": true,
+  "generation": 1
+}

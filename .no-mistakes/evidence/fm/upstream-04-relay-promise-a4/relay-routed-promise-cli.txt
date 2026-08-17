@@ -1,0 +1,12 @@
+$ bin/fm-relay-link.sh routed-k1 req-routed
+fm-relay-link: no such task: state/routed-k1.meta
+fm-relay-link: routed-k1 is a second mate task (found in: sm-axi), so this home cannot link it - a link only binds work whose record lives here.
+fm-relay-link: bind the public promise through the promised-final path instead: tasks-axi public-followup add + bind-work, then bin/fm-public-followup.sh register <obligation-id> --relation <relation-id> --work-home secondmate:sm-axi --work-id routed-k1 --generation <n>, and put the bin/fm-public-followup.sh brief <obligation-id> command into the routed worker instructions.
+[exit 1]
+
+$ observable task records after refusal
+main: no local routed-k1 record created
+secondmate record:
+window=w
+worktree=/wt
+kind=ship
