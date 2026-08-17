@@ -1,0 +1,7 @@
+ROOT SCRATCHPAD (expected: ignored)
+.gitignore:4:/scratchpad/	scratchpad/captain-note.md
+PASS: repository-root scratchpad content is ignored by Git
+NESTED PROJECT SCRATCHPAD (expected: visible/unignored)
+PASS: nested project scratchpad content remains visible to Git
+DEEPER NESTED USER SCRATCHPAD (expected: visible/unignored)
+PASS: deeper nested scratchpad content remains visible to Git
