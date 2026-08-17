@@ -986,14 +986,16 @@ pass "healthy runtime behavior remains registration-only"
 # --- argv boundaries, stderr, exit status, bounds, malformed output ---------
 HD="$TMP_ROOT/hd"; new_home "$HD"
 TRIG3="$TMP_ROOT/trigger-three"
-pe_register "$HD" lavish argv-src -- "$BLOCKER" "$TRIG3" "one arg with spaces" "second; rm -rf /tmp/nope" >/dev/null
+SHELL_SENTINEL="$TMP_ROOT/shell-interpretation-sentinel"
+: > "$SHELL_SENTINEL"
+pe_register "$HD" lavish argv-src -- "$BLOCKER" "$TRIG3" "one arg with spaces" "second; rm -rf $SHELL_SENTINEL" >/dev/null
 pe "$HD" reconcile >/dev/null
 : > "$TRIG3"
 wait_for "$HD/state/.wake-queue" || fail "argv source published no event"
 R=$(first_result "$HD" argv-src || true)
 assert_grep 'one arg with spaces' "$R" "an argument containing spaces survives as one argument"
-assert_grep 'second; rm -rf /tmp/nope' "$R" "a shell-looking argument is passed literally, never interpreted"
-assert_absent /tmp/nope "no shell interpretation occurred"
+assert_grep "second; rm -rf $SHELL_SENTINEL" "$R" "a shell-looking argument is passed literally, never interpreted"
+assert_present "$SHELL_SENTINEL" "no shell interpretation occurred"
 assert_not_contains "$(wake_payloads "$HD")" "rm -rf" "argv content never reaches the event line"
 
 newline_status=0
