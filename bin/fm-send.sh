@@ -14,6 +14,19 @@
 # submit or reports an inconclusive send. If a swallowed Enter is positively
 # confirmed, fm-send exits NON-ZERO so the caller knows the steer did not land
 # instead of silently leaving an unsubmitted instruction.
+#
+# An exact metadata-routed Herdr/Pi task has one additional attributable proof.
+# fm-send serializes sends to that task, snapshots its current-generation Pi
+# admission sequence before injection, and hashes the exact final payload. If
+# native Herdr state is working before injection and remains working afterward,
+# normal backend proof remains unknown or pending, and a newer exact digest,
+# UTF-8 byte length, and generation accepted by bin/fm-pi-admission.sh confirms
+# admission. Missing, malformed, stale, mismatched, unsafe, or lock-blocked
+# receipts preserve the nonzero result without injecting on a serialization
+# failure. Receipt-only confirmation makes six reads 0.1 seconds apart after
+# backend uncertainty. A transport failure is never rescued, generic working
+# or unknown state alone is never success, and the text body is still never
+# retried.
 # Submission dispatches through the target's recorded backend; the tmux adapter
 # shares its composer/submit core with the away-mode daemon via bin/fm-tmux-lib.sh.
 # Tune with FM_SEND_RETRIES (default 3) / FM_SEND_SLEEP (0.4).
@@ -103,6 +116,24 @@ fi
 . "$SCRIPT_DIR/fm-wake-lib.sh"
 
 FM_GUARD_CONTINUE_LINE='This is a supervision warning only; the requested message WILL still be sent.' "$SCRIPT_DIR/fm-guard.sh" || true
+
+PI_ADMISSION_SEND_LOCK=
+PI_ADMISSION_SEND_LOCK_HELD=0
+PI_ADMISSION_ARMED=0
+PI_ADMISSION_GEN=
+PI_ADMISSION_AFTER=
+PI_ADMISSION_SHA=
+PI_ADMISSION_BYTES=
+PI_ADMISSION_TASK_ID=
+PI_ADMISSION_PRE_WORKING=0
+fm_send_release_pi_admission_lock() {
+  if [ "$PI_ADMISSION_SEND_LOCK_HELD" = 1 ]; then
+    PI_ADMISSION_SEND_LOCK_HELD=0
+    fm_lock_release "$PI_ADMISSION_SEND_LOCK" || true
+  fi
+  return 0
+}
+trap fm_send_release_pi_admission_lock EXIT
 
 fm_send_id_from_meta() {  # <meta-file>
   local base
@@ -325,6 +356,57 @@ fi
 # answered the decision, so it goes through the guarded self-announced append
 # (bin/fm-wake-lib.sh) and does not wake this same session again; any
 # concurrent foreign status bytes leave the watcher's wake path untouched.
+fm_send_pi_admission_arm() {  # <exact-final-payload>
+  local payload=$1 task_id harness gen hash_out extra
+  PI_ADMISSION_ARMED=0
+  PI_ADMISSION_PRE_WORKING=0
+  [ "$TARGET_BACKEND" = herdr ] && [ -n "$TARGET_SELECTOR" ] && [ -n "$TARGET_META" ] || return 0
+  harness=$(fm_meta_get "$TARGET_META" harness)
+  [ "$harness" = pi ] || return 0
+  task_id=$(fm_send_id_from_meta "$TARGET_META")
+  case "$task_id" in ''|*[!A-Za-z0-9._-]*) return 0 ;; esac
+  gen=$(fm_meta_get "$TARGET_META" busy_gen)
+  [ -n "$gen" ] || return 0
+
+  # Serialize exact task sends across the snapshot, single body injection, and
+  # proof read. This prevents two quickly repeated identical sends from sharing
+  # one receipt boundary; Pi lifecycle events use their own writer lock.
+  PI_ADMISSION_SEND_LOCK="$STATE/.$task_id.pi-admission-send.lock"
+  fm_lock_acquire_bounded "$PI_ADMISSION_SEND_LOCK" \
+    "${FM_PI_ADMISSION_LOCK_ATTEMPTS:-50}" "${FM_PI_ADMISSION_LOCK_SLEEP:-0.1}" || return 1
+  PI_ADMISSION_SEND_LOCK_HELD=1
+
+  hash_out=$(printf '%s' "$payload" | "$SCRIPT_DIR/fm-pi-admission.sh" hash 2>/dev/null) || return 0
+  IFS=$'\t' read -r PI_ADMISSION_SHA PI_ADMISSION_BYTES extra <<EOF
+$hash_out
+EOF
+  [ -n "$PI_ADMISSION_SHA" ] && [ -n "$PI_ADMISSION_BYTES" ] && [ -z "$extra" ] || return 0
+  PI_ADMISSION_AFTER=$("$SCRIPT_DIR/fm-pi-admission.sh" snapshot "$STATE" "$task_id" --gen "$gen" 2>/dev/null) || return 0
+  case "$PI_ADMISSION_AFTER" in ''|*[!0-9]*) return 0 ;; esac
+  PI_ADMISSION_GEN=$gen
+  PI_ADMISSION_TASK_ID=$task_id
+  [ "$(fm_backend_busy_state "$TARGET_BACKEND" "$T")" = busy ] && PI_ADMISSION_PRE_WORKING=1
+  PI_ADMISSION_ARMED=1
+}
+
+fm_send_pi_admission_match() {
+  local i=0 polls=6 wait_s=0.1
+  [ "$PI_ADMISSION_ARMED" = 1 ] || return 1
+  while [ "$i" -lt "$polls" ]; do
+    if [ "$PI_ADMISSION_PRE_WORKING" = 1 ] \
+      && "$SCRIPT_DIR/fm-pi-admission.sh" match "$STATE" "$PI_ADMISSION_TASK_ID" \
+      --gen "$PI_ADMISSION_GEN" --after "$PI_ADMISSION_AFTER" \
+      --sha256 "$PI_ADMISSION_SHA" --bytes "$PI_ADMISSION_BYTES" 2>/dev/null \
+      && [ "$(fm_backend_busy_state "$TARGET_BACKEND" "$T")" = busy ]; then
+      return 0
+    fi
+    i=$((i + 1))
+    [ "$i" -lt "$polls" ] || break
+    sleep "$wait_s"
+  done
+  return 1
+}
+
 fm_send_close_resolved_keys() {  # <answer-text>
   local note=$1 k line append_rc
   note=$(printf '%s' "$note" | tr '\n\r\t' '   ' | LC_ALL=C tr -d '\000-\037\177')
@@ -404,8 +486,13 @@ else
   esac
   retries=${FM_SEND_RETRIES:-3}
   sleep_s=${FM_SEND_SLEEP:-0.4}
-  # Type once, submit, verify. Only exact empty confirms delivery; every other
-  # verdict preserves the loud refusal boundary.
+  # Type once, submit, verify. An exact Herdr/Pi receipt is armed before the
+  # body is injected; every path still calls the backend exactly once.
+  if ! fm_send_pi_admission_arm "$MESSAGE"; then
+    fm_send_release_pi_admission_lock
+    echo "error: text not sent to $T (Pi admission serialization unavailable; tried $RESOLUTION_TRIED)" >&2
+    exit 1
+  fi
   send_rc=0
   if [ "$TARGET_BACKEND" = remote ]; then
     if "$SCRIPT_DIR/fm-on.sh" "$TARGET_REMOTE_ID" fm-remote-secondmate-control.sh send "$TARGET_REMOTE_ID" "$MESSAGE" < /dev/null >/dev/null; then
@@ -419,6 +506,13 @@ else
   else
     send_rc=$?
   fi
+  # Preserve every native/composer proof first. Only an otherwise uncertain
+  # successful transport may consult the exact post-boundary Pi receipt.
+  if [ "$send_rc" -eq 0 ] && [ "$verdict" != empty ] && [ "$verdict" != send-failed ] \
+    && fm_send_pi_admission_match; then
+    verdict=empty
+  fi
+  fm_send_release_pi_admission_lock
   if [ "$send_rc" -ne 0 ]; then
     if [ "$TARGET_BACKEND" = remote ] && [ "$send_rc" -eq 255 ] && [ -n "$PENDING_REPLY_CORR" ]; then
       fm_pending_reply_mark_delivery_unknown "$STATE" "$PENDING_REPLY_CORR" || true
@@ -469,9 +563,9 @@ else
   if [ -n "$RESOLVE_KEYS" ]; then
     fm_send_close_resolved_keys "$RESOLVE_ANSWER_TEXT" || exit 1
   fi
-  # Submit landed with exact empty. Confirmation only proves the text was
-  # accepted; the harness still needs a beat to spin up the
-  # turn before its busy footer shows. Pause so an immediate peek catches the
+  # Submit landed with a native/composer proof or an exact Pi admission receipt.
+  # Confirmation only proves the text was accepted; the harness still needs a
+  # beat to spin up the turn before its busy footer shows. Pause so an immediate peek catches the
   # crewmate actually working instead of the stale idle pane. FM_SEND_SETTLE=0
   # disables it. Scoped to this path only, never the shared submit core.
   [ "${FM_SEND_SETTLE:-1}" = 0 ] || sleep "${FM_SEND_SETTLE:-1}"

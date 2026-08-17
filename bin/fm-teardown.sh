@@ -610,6 +610,14 @@ meta_value() {
   fm_meta_get "$meta" "$key"
 }
 
+retire_pi_admission() {
+  local state_dir=$1 id=$2 gen=${3:-}
+  if [ -e "$state_dir/$id.pi-admission" ] || [ -L "$state_dir/$id.pi-admission" ]; then
+    [ -n "$gen" ] || { echo "error: Pi admission receipt for $id has no generation binding" >&2; return 1; }
+    "$SCRIPT_DIR/fm-pi-admission.sh" retire "$state_dir" "$id" --gen "$gen"
+  fi
+}
+
 retire_busy_state() {
   local state_dir=$1 id=$2 gen=${3:-}
   if [ -n "$gen" ]; then
@@ -2138,6 +2146,7 @@ cleanup_firstmate_home_children() {
     if [ -z "$child_busy_gen" ]; then
       child_busy_gen=$(cat "$sub_state/$child_id.busy-gen" 2>/dev/null || true)
     fi
+    retire_pi_admission "$sub_state" "$child_id" "$child_busy_gen" || return 1
     retire_busy_state "$sub_state" "$child_id" "$child_busy_gen" || return 1
     status_retire_presentation_task "$sub_state" "$child_id" || return 1
     rm -f "$sub_state/$child_id.turn-ended" \
@@ -2383,6 +2392,7 @@ fm_backend_clear_transition "$BACKEND" "$STATE" "$T" || true
 # Read before the state-file rm below; empty (pre-fix tasks without tasktmp=) is a no-op.
 [ -n "$TASK_TMP" ] && rm -rf "$TASK_TMP"
 remove_pr_poll_artifacts "$STATE" "$ID" || exit 1
+retire_pi_admission "$STATE" "$ID" "$BUSY_GEN" || exit 1
 retire_busy_state "$STATE" "$ID" "$BUSY_GEN" || exit 1
 status_retire_presentation_task "$STATE" "$ID" || exit 1
 rm -f "$STATE/$ID.turn-ended" "$STATE/$ID.meta" \

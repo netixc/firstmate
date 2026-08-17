@@ -1326,6 +1326,32 @@ test_teardown_missing_busy_sidecar_completes() {
   pass "teardown completes when an exact busy-state sidecar is already absent"
 }
 
+test_teardown_retires_pi_admission_receipt() {
+  local case_dir gen hash bytes rc
+  case_dir=$(make_case pi-admission-cleanup)
+  write_meta "$case_dir" local-only ship
+  gen=$("$ROOT/bin/fm-busy-event.sh" arm "$case_dir/state" task-x1)
+  printf 'busy_gen=%s\n' "$gen" >> "$case_dir/state/task-x1.meta"
+  IFS=$'\t' read -r hash bytes <<EOF
+$(printf 'cleanup fixture' | "$ROOT/bin/fm-pi-admission.sh" hash)
+EOF
+  "$ROOT/bin/fm-pi-admission.sh" record "$case_dir/state" task-x1 --gen "$gen" \
+    --sha256 "$hash" --bytes "$bytes" --ts 1786941000000 \
+    || fail "pi-admission-cleanup: could not create the receipt fixture"
+
+  set +e
+  run_teardown "$case_dir" --force > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 0 "$rc" "pi-admission-cleanup: teardown should succeed"
+  assert_absent "$case_dir/state/task-x1.pi-admission" \
+    "pi-admission-cleanup: teardown preserved the admission receipt"
+  assert_absent "$case_dir/state/task-x1.busy-gen" \
+    "pi-admission-cleanup: teardown preserved the retired generation"
+  pass "teardown retires the exact Pi admission receipt before its generation"
+}
+
 test_herdr_teardown_clears_escalation_marker() {
   local case_dir marker
   case_dir=$(make_case herdr-marker-cleanup)
@@ -2600,6 +2626,7 @@ test_no_mistakes_origin_remote_allows
 test_no_mistakes_truly_unpushed_refuses
 test_local_only_force_overrides_unpushed
 test_teardown_missing_busy_sidecar_completes
+test_teardown_retires_pi_admission_receipt
 test_herdr_teardown_clears_escalation_marker
 test_herdr_flat_teardown_refuses_orphaning_records_then_retry_completes
 test_herdr_flat_teardown_refuses_records_on_unparseable_presence

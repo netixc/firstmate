@@ -413,11 +413,19 @@ test_relaunch_requires_a_note_for_a_ship_task() {
 # --- 2. Pi wiring and profile continuity ------------------------------------
 
 test_explicit_pi_relaunch_replaces_prior_wiring() {
-  local dir out rc
+  local dir out rc old_gen hash bytes
   dir=$(new_case switch rl4)
   add_ship_task "$dir" rl4 pi
-  # Wiring the previous Pi incarnation left in the task state.
+  # Wiring and an admission journal the previous Pi incarnation left in task state.
   printf '// prior Pi extension\n' > "$dir/home/state/rl4.pi-ext.ts"
+  old_gen=$("$ROOT/bin/fm-busy-event.sh" arm "$dir/home/state" rl4)
+  printf 'busy_gen=%s\n' "$old_gen" >> "$dir/home/state/rl4.meta"
+  IFS=$'\t' read -r hash bytes <<EOF
+$(printf 'old admitted message' | "$ROOT/bin/fm-pi-admission.sh" hash)
+EOF
+  "$ROOT/bin/fm-pi-admission.sh" record "$dir/home/state" rl4 --gen "$old_gen" \
+    --sha256 "$hash" --bytes "$bytes" --ts 1786941000000 \
+    || fail "prior Pi admission fixture could not be recorded"
   printf 'pi' > "$dir/fake/becomes"
   out=$(run_control "$dir" rl4 relaunch --harness pi --note "switching runtime"); rc=$?
   expect_code 0 "$rc" "an explicit Pi relaunch should succeed"$'\n'"$out"
@@ -427,6 +435,10 @@ test_explicit_pi_relaunch_replaces_prior_wiring() {
     || fail "the replacement Pi harness must publish fresh per-task wiring"
   assert_no_grep 'prior Pi extension' "$dir/home/state/rl4.pi-ext.ts" \
     "the previous incarnation's wiring survived the switch"
+  assert_absent "$dir/home/state/rl4.pi-admission" \
+    "the previous incarnation's admission journal survived the switch"
+  [ "$(meta_field "$dir" rl4 busy_gen)" != "$old_gen" ] \
+    || fail "the replacement Pi incarnation reused the old admission generation"
   assert_grep "pi" "$dir/fake/literal" "the replacement launch should be the new harness"
   [ "$(journal_field "$dir" rl4 from_harness)" = pi ] || fail "the journal should record the origin harness"
   [ "$(journal_field "$dir" rl4 to_harness)" = pi ] || fail "the journal should record the target harness"
