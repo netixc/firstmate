@@ -198,8 +198,10 @@ It refuses a selected item with a single-space or tab-indented continuation rath
 It accepts in-scope `## Queued` entries only and refuses `## In flight` and historical `## Done` entries.
 Done records stay with their home for pruning or archiving.
 It is idempotent; an item already in the secondmate backlog is skipped.
-After a successful move it warns for any moved key that still owes a public Relay reply bound to `main/<key>`, because that binding no longer names the home owning the work; rebind the commitment to `secondmate:<id>` through the `relay-respond` promised-final procedure, which owns those commands.
-That same rule governs routing generally: a Relay-linked request whose work goes to a secondmate cannot use the home-local mention link at all and needs a promised-final commitment bound to that secondmate's home.
+Before moving, it refuses any selected key that still owes a public Relay reply bound to `main/<key>`, because moving that binding would orphan the promised final response.
+For a local destination, rebind the commitment to `secondmate:<id>` through the `relay-respond` promised-final procedure, which owns those commands, then retry the handoff.
+Do not hand Relay-bound work to a remote destination because the promised-final event path is same-filesystem only; `docs/remote-secondmates.md` owns that supported limit.
+That same rule governs routing generally: a Relay-linked request whose work goes to a local secondmate cannot use the home-local mention link and needs a promised-final commitment bound to that secondmate's home.
 It refuses any destination that is not a genuine seeded firstmate home with safe operational directories and a matching `.fm-secondmate-home` marker, so a move can never land in a project.
 Do not hand off `local-only` items.
 

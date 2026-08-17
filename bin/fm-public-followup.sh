@@ -13,6 +13,9 @@
 #   bin/fm-relay-reply.sh           posting to the relay, thread splitting, dry run.
 #   bin/fm-public-followup-lib.sh  the activation gate and private transport.
 # This script composes them; it never restates their contracts or schemas.
+# The Relay home that registers the obligation remains its owner through outward
+# delivery. A work-home of secondmate:<id> identifies same-filesystem child work;
+# it does not transfer the obligation, consent, or Discord thread binding.
 #
 # ZERO OVERHEAD FOR HOMES THAT DO NOT USE THE RELAY: every subcommand gates
 # first on the authoritative activation contract (a non-empty FMX_PAIRING_TOKEN

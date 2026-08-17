@@ -7,6 +7,11 @@
 # outbound message, and later resolves that expectation only from a correlated
 # parent status line or status-pointed document - never from transport success,
 # chat content, or unrelated status activity.
+# The expectation stays in that originating parent when the request also carries
+# a promised-final Relay reporting command. This library recovers or escalates a
+# missing parent report, but never transfers, closes, or posts the independently
+# owned public-followup obligation; the typed event command remains part of the
+# routed worker instructions.
 #
 # Safety property (captain direction 2026-07-22): a secondmate agent may ignore
 # the marker and answer only in its visible conversation. The parent must notice

@@ -37,7 +37,9 @@ This preference is local to each Firstmate home and is not part of secondmate in
 
 The tracked `.tasks.toml` pins the default `tasks-axi` markdown backend to `data/backlog.md`, with `done_keep = 10` and an archive at `data/done-archive.md`.
 When the default backend is selected and compatible `tasks-axi` is on `PATH`, firstmate uses its verbs for routine backlog mutations.
-Secondmate handoffs are separate and unconditional: `fm-backlog-handoff.sh` keeps only its own fleet-level validation and always delegates the item move to `tasks-axi mv`, the single owner of the backlog format.
+Secondmate handoffs are separate: `fm-backlog-handoff.sh` keeps only its own fleet-level validation and delegates an accepted item move to `tasks-axi mv`, the single owner of the backlog format.
+It refuses before moving work that still owes a public Relay reply bound to the main home.
+For a local destination, rebind that promised-final relation to the destination secondmate first; remote second mates cannot carry the same-filesystem promised-final event path described in [Remote second mates](remote-secondmates.md#provision-a-route).
 It moves in-scope `## Queued` items only and refuses `## In flight` and historical `## Done` records, which stay with their home for pruning or archiving.
 Handoff item bodies must use at least two leading spaces, and the helper refuses a selected item with a single-space or tab-indented continuation rather than risk orphaning it.
 Because bootstrap requires `tasks-axi` on `PATH` on every profile, that delegation works fleet-wide, and the `config/backlog-backend=manual` knob governs firstmate's own hand-editing of its backlog, not this validated helper.
@@ -351,7 +353,8 @@ Splitting preserves fenced-code, paragraph, line, and word boundaries where poss
 `bin/fm-relay-dismiss.sh` sends `POST /connector/dismiss` with `{request_id}` and no text.
 A successful dismissal prevents re-offer and offline auto-reply behavior, then clears the request context while retaining the bounded offer marker.
 `bin/fm-relay-link.sh` stores `relay_request`, `relay_request_ts`, `relay_followups`, `relay_platform=discord`, and `relay_reply_max_chars` in task metadata for work that continues after the acknowledgement.
-The link is home-local by construction because it lives in that home's own task record: work routed to a second mate has no record here, so `bin/fm-relay-link.sh` refuses it, names the registered second mate home when it can, and points at the promised-final path (`bin/fm-public-followup.sh register ... --work-home secondmate:<id>`), which is the only follow-up mechanism that binds work in another home.
+The link is home-local by construction because it lives in that home's own task record: work routed to a second mate has no record here, so `bin/fm-relay-link.sh` refuses it, names the registered second mate home when it can, and points at the promised-final path.
+That path can bind another home only on the same filesystem; [Remote second mates](remote-secondmates.md#provision-a-route) owns the cross-host limit.
 A successor task uses paired `--carry-count <n> --carry-ts <epoch> --carry-platform discord --carry-max <n>` arguments to preserve the consumed count, original window, and Discord budget.
 
 `bin/fm-relay-followup.sh` posts through `POST /connector/followup` up to three times within seven days.
@@ -370,7 +373,8 @@ Preview records live under `state/relay-outbox/<request_id>.json` and replace at
 A promised final reply is a typed `kind=public-followup` obligation owned by `tasks-axi public-followup`, while full request context remains in `state/relay-context/`.
 `bin/fm-public-followup.sh` registers the commitment, reconciles typed terminal work results, posts the final Discord reply through `bin/fm-relay-reply.sh --followup`, validates its receipt, and clears the bound task link.
 Only the home holding the pairing token and opaque thread binding can post the reply.
-Remote work reports typed terminal results through `bin/fm-public-followup-emit.sh` and never receives Discord credentials or thread context.
+Binding `--work-home secondmate:<id>` identifies a local secondmate's work without transferring that originating home's ownership of the obligation or outward reply.
+Local child work reports typed terminal results through `bin/fm-public-followup-emit.sh` and never receives Discord credentials or thread context.
 Unreconciled terminal results ride the existing Relay poll, and session start lists any still-open commitment from disk.
 A home without the pairing token stops before any public-followup state creation, tasks-axi call, or backlog scan.
 `bin/fm-teardown.sh` refuses cleanup while the exact work still owes a public reply unless explicit discard authority is carried by `--force`.
