@@ -376,13 +376,8 @@ do_interrupt() {
 }
 
 retire_busy_incarnation() {
-  local gen
-  if [ -e "$STATE/$ID.pi-admission" ] || [ -L "$STATE/$ID.pi-admission" ]; then
-    gen=$(fm_busy_current_gen "$STATE" "$ID") || return 1
-    "$SCRIPT_DIR/fm-pi-admission.sh" retire "$STATE" "$ID" --gen "$gen" || return 1
-  fi
   if [ -f "$STATE/$ID.busy-gen" ]; then
-    "$SCRIPT_DIR/fm-busy-event.sh" retire "$STATE" "$ID" --current-gen >/dev/null 2>&1 || return 1
+    "$SCRIPT_DIR/fm-busy-event.sh" retire "$STATE" "$ID" --current-gen >/dev/null 2>&1 || true
   fi
 }
 
@@ -408,8 +403,7 @@ do_exit() {
       state=$(agent_state)
       case "$state" in
         dead)
-          retire_busy_incarnation \
-            || die "task $ID stopped, but its Pi incarnation records could not be retired safely"
+          retire_busy_incarnation
           printf 'stopped'
           return 0
           ;;
@@ -435,8 +429,7 @@ do_exit() {
   }
   # The incarnation is over: retire its busy wiring so no stale record or
   # orphaned generation survives the agent that produced it.
-  retire_busy_incarnation \
-    || die "task $ID stopped, but its Pi incarnation records could not be retired safely"
+  retire_busy_incarnation
   printf 'stopped'
 }
 
