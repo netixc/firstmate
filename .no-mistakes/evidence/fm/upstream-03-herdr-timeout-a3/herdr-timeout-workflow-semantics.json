@@ -1,0 +1,25 @@
+{
+  "workflow_yaml": "parsed",
+  "job": "tests-herdr",
+  "job_backstop_minutes": 75,
+  "bounded_step": "Run real-Herdr family (serial, required)",
+  "step_timeout_minutes": 20,
+  "post_timeout_steps": [
+    {
+      "name": "Cleanup job-owned Herdr lab sessions",
+      "condition": "always()"
+    },
+    {
+      "name": "Upload Herdr timing and diagnostics",
+      "condition": "always()",
+      "includes_timing_json": true
+    }
+  ],
+  "all_step_timeouts": [
+    {
+      "job": "tests-herdr",
+      "step": "Run real-Herdr family (serial, required)",
+      "minutes": 20
+    }
+  ]
+}
