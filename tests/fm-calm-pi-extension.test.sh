@@ -1325,6 +1325,30 @@ if (
 await calmCommand.handler("", commandContext);
 for (const reason of ["startup", "new", "resume", "fork", "reload"]) {
   let restoredReloadRow;
+  let retiredRowRenderRequests = 0;
+  if (["new", "resume", "fork"].includes(reason)) {
+    const retiredRow = new ToolExecutionComponent(
+      "read",
+      `retired-${reason}-read`,
+      { path: "sample.txt" },
+      { showImages: false },
+      tools.find((tool) => tool.name === "read"),
+      { requestRender: () => { retiredRowRenderRequests += 1; } },
+      process.cwd(),
+    );
+    retiredRow.markExecutionStarted();
+    retiredRow.setArgsComplete();
+    retiredRow.updateResult({
+      content: [{ type: "text", text: `RETIRED_${reason.toUpperCase()}_READ_OUTPUT` }],
+      details: {},
+      isError: false,
+    });
+    if (retiredRow.render(100).length !== 0) {
+      throw new Error(`${reason} retired row was visible before session shutdown`);
+    }
+    retiredRowRenderRequests = 0;
+    await handlers.get("session_shutdown")[0]({ reason }, commandContext);
+  }
   if (reason === "reload") {
     restoredReloadRow = new ToolExecutionComponent(
       "read",
@@ -1347,6 +1371,15 @@ for (const reason of ["startup", "new", "resume", "fork", "reload"]) {
     }
   }
   await handlers.get("session_start")[0]({ reason }, commandContext);
+  if (["new", "resume", "fork"].includes(reason)) {
+    editorText = `/export ${reason}.html`;
+    terminalInputHandler("\x1bs");
+    editorText = "";
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    if (retiredRowRenderRequests !== 0) {
+      throw new Error(`${reason} export repainted a retired session row`);
+    }
+  }
   if (restoredReloadRow) {
     editorText = "/export reload.html";
     terminalInputHandler("\x1bs");

@@ -201,7 +201,7 @@ export default function (pi: ExtensionAPI) {
   // invalidates itself once its diff is ready - so a row can be redrawn during the
   // window where /export forces stock rendering and keep that stock content
   // afterwards. Rows Pi's exporter renders are excluded: those use throwaway state
-  // and never appear on screen. Each extension instance owns one session lifetime.
+  // and never appear on screen.
   const calmToolRowRepaints = new Map<object, () => void>();
   const rememberCalmToolRow = (state: object, invalidate: unknown): void => {
     if (exportRendering || typeof invalidate !== "function") return;
@@ -468,6 +468,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("session_shutdown", (_event, ctx) => {
+    calmToolRowRepaints.clear();
     agentRunActive = false;
     applyWorkingPresentation(ctx.ui);
   });
