@@ -1,0 +1,20 @@
+Target branch ancestry evidence
+===============================
+
+Target: 2f74dda3afb88ecc8534ce0f25dbf5963d8f0f51
+Target parent: 19b030402695f937be28b8aed645078096f2eef9
+Target subject: no-mistakes(review): Captain, fix unresolved stow decision persistence
+
+Integration merge: 19b030402695f937be28b8aed645078096f2eef9
+First parent: f1d302ed59d5985da645c0b352ee5c61c41977c6
+Second parent: e518906a09b40513cb3b3d64d2cbf2775e209c55
+Merge subject: Merge upstream commit e518906a (integration 7/10)
+
+`git merge-base --is-ancestor e518906a09b40513cb3b3d64d2cbf2775e209c55 2f74dda3afb88ecc8534ce0f25dbf5963d8f0f51`
+exited 0.
+
+The change from base to target touches only:
+- .agents/skills/stow/SKILL.md
+- AGENTS.md
+- README.md
+- docs/architecture.md

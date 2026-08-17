@@ -1,0 +1,46 @@
+End-user scenario
+=================
+
+The current session knew that task stow-e2e's local test had passed, but its
+existing durable record still said to deploy immediately. Production approval
+was undecided. A real Pi 0.84.1 process loaded the changed internal stow skill
+and was asked to invoke /stow in an isolated Firstmate home.
+
+Persisted task record after /stow
+---------------------------------
+
+# stow-e2e
+
+Status: local test passed; deployment must not happen yet.
+
+Blocked next step: obtain a production-deployment approval decision before deploying.
+
+Unresolved production-approval question: Is deployment to production approved? This remains open because production approval is still undecided; do not deploy unless and until approval is explicitly granted.
+
+Agent completion receipt
+------------------------
+
+## Stow receipt
+
+- Startup memory: 40 / 7,500 estimated tokens before; 40 / 7,500 after.
+- data/captain.md: rewritten - added memory-tier pointer.
+- data/captain-shared.md: rewritten - added memory-tier pointer.
+- data/learnings.md: rewritten - added memory-tier pointer and legacy grace marker; no new durable findings.
+- Open record corrected: stow-e2e now records that the local test passed, deployment must not occur yet, and production approval remains undecided.
+- Unresolved question durably held by: task record stow-e2e - whether production deployment is approved; retained because approval is still undecided.
+- No entries archived or offloaded. No exceptions or budget decisions.
+- Primary home has no registered secondmates.
+
+Safe to reset: nothing this session knew has been lost. This is bounded to the
+records and facts named by this session, not a claim that all durable records
+are correct.
+
+Post-run executable state
+-------------------------
+
+role=primary
+effective_budget_tokens=7500
+total_estimated_tokens=40
+budget_status=within-budget
+role=primary
+secondmates=0
