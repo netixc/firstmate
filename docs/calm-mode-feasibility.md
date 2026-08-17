@@ -192,7 +192,8 @@ Calm classifies only at Pi's transcript-presentation owner through the canonical
 The session-start nudge already originates as a non-displayed custom message, so it remains on that existing path while retaining model context and session persistence.
 Legacy Calm custom entries and messages remain in existing session artifacts, and their presentation entry still uses the supported zero-height renderer while active.
 Toggling Calm cycles tool expansion and restores its original value, which rebuilds controllable rows and leaves final `Ctrl+O` state unchanged.
-Returning from stock export rendering instead invalidates only the tool rows Calm currently presents: Pi 0.83.0 made every expansion change emit its own status line, and Pi coalesces consecutive status lines, so an expansion cycle there overwrote the `Session exported to:` confirmation the export had just printed.
+Returning from stock export rendering instead invalidates the tool rows Calm has presented during the current session lifetime: their callbacks survive same-process `/reload` so restored rows redraw correctly, and `session_shutdown` retires them before session replacement.
+Pi 0.83.0 made every expansion change emit its own status line, and Pi coalesces consecutive status lines, so an expansion cycle after export overwrote the `Session exported to:` confirmation the export had just printed.
 Exported and shared HTML retain genuine user prompts, genuine assistant responses, current operational user messages, ordinary tool rendering, and the complete session artifact.
 Serialized session data and Pi 0.81.1's sidebar tree also retain legacy hidden operational custom messages.
 
@@ -432,7 +433,7 @@ Escape aborted the run leaving `Operation aborted`, no boat, and no stale sprite
 Pi 0.83.0 added a status line to every tool-expansion change, which silently broke the `/export` confirmation under Calm on Pi 0.83.0 and newer.
 Pi appends `Session exported to: <path>` through `showStatus`, which updates the previous status line in place whenever two status messages arrive back to back with nothing else added to the chat.
 Calm's post-export redraw cycled tool expansion on the macrotask right after that, so both of its expansion status lines coalesced over the confirmation and left no record of where the export landed.
-Calm now invalidates only the tool rows it presents and requests the redraw through `setStatus`, neither of which appends to the transcript.
+Calm now retains row-local invalidators through same-process `/reload`, retires them at session replacement, and requests the remaining presentation redraw through `setStatus`; none of those actions append to the transcript.
 
 Pi source evidence, from the installed release's own changelog and interactive mode:
 
@@ -452,7 +453,8 @@ interactive-mode setToolsExpanded:
   }
 ```
 
-The regression is pinned by the real-terminal `/export` case in `tests/fm-calm-pi-extension.test.sh`, which now asserts the confirmation is still on screen after Calm's redraw has settled and that the redraw restored every Calm-hidden row.
+The regression is pinned by the real-terminal same-process `/reload` then `/export` case in `tests/fm-calm-pi-extension.test.sh`, which now asserts the confirmation is still on screen after Calm's redraw has settled and that the redraw restored every Calm-hidden row.
+The in-process lifecycle case in the same test preserves restored-row invalidators across `/reload` and verifies that new, resumed, and forked session replacements do not repaint retired rows.
 Reverting only the extension fix fails that assertion deterministically rather than racing the roughly 50ms window the confirmation used to survive:
 
 ```text

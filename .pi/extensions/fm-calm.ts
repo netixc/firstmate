@@ -195,13 +195,15 @@ export default function (pi: ExtensionAPI) {
 
   registerFirstmateSyntheticPresentation(pi);
 
-  // Every on-screen tool row Calm currently presents, keyed by the row-local state Pi
-  // hands its render slots, so Calm can repaint exactly those rows without touching
-  // Pi's transcript. Pi can re-render a row at any time - the built-in edit row
-  // invalidates itself once its diff is ready - so a row can be redrawn during the
-  // window where /export forces stock rendering and keep that stock content
-  // afterwards. Rows Pi's exporter renders are excluded: those use throwaway state
-  // and never appear on screen.
+  // Tool rows Calm has presented in the current session lifetime, keyed by the
+  // row-local state Pi hands its render slots, so Calm can repaint them without
+  // touching Pi's transcript. Keep these callbacks across same-process /reload,
+  // which restores rows into the same session, and retire them on session_shutdown
+  // before Pi replaces the session. Pi can re-render a row at any time - the built-in
+  // edit row invalidates itself once its diff is ready - so a row can be redrawn
+  // during the window where /export forces stock rendering and keep that stock
+  // content afterwards. Rows Pi's exporter renders are excluded: those use
+  // throwaway state and never appear on screen.
   const calmToolRowRepaints = new Map<object, () => void>();
   const rememberCalmToolRow = (state: object, invalidate: unknown): void => {
     if (exportRendering || typeof invalidate !== "function") return;
@@ -447,9 +449,9 @@ export default function (pi: ExtensionAPI) {
         // status lines coalesce, so a tools-expanded round-trip here silently
         // overwrote the confirmation and left the captain no record of where their
         // export landed. Invalidating the rows individually repaints the same
-        // content with no status line of its own, and setStatus adds the redraw the
-        // rows that consult Calm live in render(), such as operational user rows,
-        // need without appending anything to the transcript.
+        // content with no status line of its own, and setStatus supplies the redraw
+        // needed by rows that consult Calm live in render(), such as operational
+        // user rows, without appending anything to the transcript.
         repaintCalmToolRows();
         ctx.ui.setStatus("firstmate-calm", undefined);
       }, 0);
