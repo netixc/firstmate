@@ -1324,7 +1324,75 @@ if (
 
 await calmCommand.handler("", commandContext);
 for (const reason of ["startup", "new", "resume", "fork", "reload"]) {
+  let restoredReloadRow;
+  let retiredRowRenderRequests = 0;
+  if (["new", "resume", "fork"].includes(reason)) {
+    const retiredRow = new ToolExecutionComponent(
+      "read",
+      `retired-${reason}-read`,
+      { path: "sample.txt" },
+      { showImages: false },
+      tools.find((tool) => tool.name === "read"),
+      { requestRender: () => { retiredRowRenderRequests += 1; } },
+      process.cwd(),
+    );
+    retiredRow.markExecutionStarted();
+    retiredRow.setArgsComplete();
+    retiredRow.updateResult({
+      content: [{ type: "text", text: `RETIRED_${reason.toUpperCase()}_READ_OUTPUT` }],
+      details: {},
+      isError: false,
+    });
+    if (retiredRow.render(100).length !== 0) {
+      throw new Error(`${reason} retired row was visible before session shutdown`);
+    }
+    retiredRowRenderRequests = 0;
+    await handlers.get("session_shutdown")[0]({ reason }, commandContext);
+  }
+  if (reason === "reload") {
+    restoredReloadRow = new ToolExecutionComponent(
+      "read",
+      "restored-reload-read",
+      { path: "sample.txt" },
+      { showImages: false },
+      tools.find((tool) => tool.name === "read"),
+      renderUi,
+      process.cwd(),
+    );
+    restoredReloadRow.markExecutionStarted();
+    restoredReloadRow.setArgsComplete();
+    restoredReloadRow.updateResult({
+      content: [{ type: "text", text: "RESTORED_RELOAD_READ_OUTPUT" }],
+      details: {},
+      isError: false,
+    });
+    if (restoredReloadRow.render(100).length !== 0) {
+      throw new Error("restored reload row was visible before session_start");
+    }
+  }
   await handlers.get("session_start")[0]({ reason }, commandContext);
+  if (["new", "resume", "fork"].includes(reason)) {
+    editorText = `/export ${reason}.html`;
+    terminalInputHandler("\x1bs");
+    editorText = "";
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    if (retiredRowRenderRequests !== 0) {
+      throw new Error(`${reason} export repainted a retired session row`);
+    }
+  }
+  if (restoredReloadRow) {
+    editorText = "/export reload.html";
+    terminalInputHandler("\x1bs");
+    restoredReloadRow.invalidate();
+    if (!restoredReloadRow.render(100).join("\n").includes("RESTORED_RELOAD_READ_OUTPUT")) {
+      throw new Error("restored reload row did not use stock rendering during export");
+    }
+    editorText = "";
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    if (restoredReloadRow.render(100).length !== 0) {
+      throw new Error("post-reload export did not restore Calm rendering for the restored row");
+    }
+  }
   for (const row of rows) row.actual.setExpanded(expanded);
   for (const { name, actual } of rows) {
     if (actual.render(100).length !== 0) {
@@ -3079,7 +3147,7 @@ JS
 }
 
 test_interactive_terminal_e2e() {
-  local project config home session_file export_file export_dom default_snapshot expanded_snapshot hidden_snapshot active_before_snapshot active_hidden_snapshot export_snapshot restored_snapshot working_snapshot working_response_snapshot restarted_snapshot resumed_restored_snapshot hash_before hash_after now version chrome chrome_pid chrome_wait active_wait active_screen_wait boat_frame_one boat_frame_two boat_resized_snapshot boat_focus_snapshot boat_cleared_snapshot boat_hull_line boat_sail_line boat_column_one boat_column_two boat_line boat_color_snapshot boat_color_line boat_water_snapshot boat_water_line boat_water_first boat_water_changed boat_narrow_snapshot boat_narrow_sails boat_freeze_snapshot boat_resume_snapshot boat_freeze_column boat_freeze_sail boat_resume_column boat_resume_sail
+  local project config home session_file export_file export_dom default_snapshot expanded_snapshot hidden_snapshot active_before_snapshot active_hidden_snapshot export_snapshot export_settled_snapshot restored_snapshot working_snapshot working_response_snapshot restarted_snapshot resumed_restored_snapshot hash_before hash_after now version chrome chrome_pid chrome_wait active_wait active_screen_wait reload_seen boat_frame_one boat_frame_two boat_resized_snapshot boat_focus_snapshot boat_cleared_snapshot boat_hull_line boat_sail_line boat_column_one boat_column_two boat_line boat_color_snapshot boat_color_line boat_water_snapshot boat_water_line boat_water_first boat_water_changed boat_narrow_snapshot boat_narrow_sails boat_freeze_snapshot boat_resume_snapshot boat_freeze_column boat_freeze_sail boat_resume_column boat_resume_sail
   if ! command -v pi >/dev/null 2>&1 || ! command -v tmux >/dev/null 2>&1; then
     echo "skip: pi or tmux not found for Pi calm interactive E2E"
     return 0
@@ -3099,6 +3167,7 @@ test_interactive_terminal_e2e() {
   active_before_snapshot="$TMP_ROOT/active-before.txt"
   active_hidden_snapshot="$TMP_ROOT/active-hidden.txt"
   export_snapshot="$TMP_ROOT/export.txt"
+  export_settled_snapshot="$TMP_ROOT/export-settled.txt"
   restored_snapshot="$TMP_ROOT/restored.txt"
   working_snapshot="$TMP_ROOT/working.txt"
   working_response_snapshot="$TMP_ROOT/working-response.txt"
@@ -3501,6 +3570,33 @@ JS
   done
   assert_contains "$(cat "$active_hidden_snapshot")" "Warning: CALM_TRANSIENT_DIAGNOSTIC" "operational arrival lost its preceding transient diagnostic"
   assert_contains "$(cat "$active_hidden_snapshot")" " Error:" "operational delivery did not produce a transient provider diagnostic"
+
+  # Exercise the captain's exact regression path in one running Pi process. Reload
+  # reconstructs the visible transcript before /export temporarily forces stock
+  # rendering, so the restored row invalidators must survive this session_start.
+  tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" -l "/reload"
+  tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" M-s
+  reload_seen=0
+  active_screen_wait=0
+  while [ "$active_screen_wait" -lt 600 ]; do
+    tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" -S -600 >"$active_hidden_snapshot"
+    if grep -Fq "Reloading keybindings, extensions, skills, prompts, themes, and context files..." "$active_hidden_snapshot"; then
+      reload_seen=1
+    elif [ "$reload_seen" -eq 1 ] &&
+      grep -Fq "The deterministic tool example is complete." "$active_hidden_snapshot" &&
+      ! grep -Fq "fm_watch_arm_pi" "$active_hidden_snapshot"; then
+      break
+    fi
+    sleep 0.01
+    active_screen_wait=$((active_screen_wait + 1))
+  done
+  [ "$reload_seen" -eq 1 ] \
+    || fail "Pi calm E2E did not enter the interactive /reload transition before /export"
+  assert_contains "$(cat "$active_hidden_snapshot")" "The deterministic tool example is complete." \
+    "interactive /reload did not restore genuine conversation before /export"
+  assert_not_contains "$(cat "$active_hidden_snapshot")" "fm_watch_arm_pi" \
+    "interactive /reload restored a Calm-hidden tool row before /export"
+
   hash_before=$(shasum -a 256 "$session_file" | awk '{print $1}')
 
   tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" -l "/export $export_file"
@@ -3556,6 +3652,46 @@ for (const current of ["CURRENT_WATCHER_E2E", "CURRENT_TURN_END_E2E", "CURRENT_A
 }
 if (!tree.includes("firstmate-synthetic-input") || !tree.includes("/tmp/probe.status")) process.exit(1);
 JS
+  # Calm returns the transcript to its own presentation once the export has been
+  # rendered. That repaint runs on the macrotask right after Pi prints the export
+  # confirmation, so it must not overwrite it: the captain has to keep seeing where
+  # their export landed. The export-data assertions above take seconds of real time,
+  # so this snapshot is taken well after that repaint has settled rather than racing it.
+  tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" -S -600 >"$export_settled_snapshot"
+  assert_contains "$(cat "$export_settled_snapshot")" "Session exported to: $export_file" \
+    "Calm's post-export repaint overwrote Pi's export confirmation"
+  assert_not_contains "$(cat "$export_settled_snapshot")" "fm_watch_arm_pi" \
+    "/export left the Firstmate watcher tool call shell in the Calm transcript"
+  assert_not_contains "$(cat "$export_settled_snapshot")" "watcher: started Pi extension arm child" \
+    "/export left the Firstmate watcher tool result in the Calm transcript"
+  assert_not_contains "$(cat "$export_settled_snapshot")" "FIRSTMATE WATCHER WAKE: signal: /tmp/probe.status" \
+    "/export left a synthetic Firstmate user-role presentation in the Calm transcript"
+  assert_not_contains "$(cat "$export_settled_snapshot")" "Thinking..." \
+    "/export left collapsed thinking labels in the Calm transcript"
+  assert_not_contains "$(cat "$export_settled_snapshot")" "I will run one command." \
+    "/export left a mid-turn assistant working note in the Calm transcript"
+  for hidden in \
+    CURRENT_WATCHER_E2E \
+    CURRENT_TURN_END_E2E \
+    CURRENT_AWAY_E2E \
+    CURRENT_FROM_FIRSTMATE_E2E \
+    CURRENT_LAUNCH_BRIEF_E2E
+  do
+    assert_not_contains "$(cat "$export_settled_snapshot")" "$hidden" \
+      "/export left operational input $hidden in the Calm transcript"
+  done
+  assert_contains "$(cat "$export_settled_snapshot")" "Show a deterministic tool example." \
+    "/export removed a genuine user prompt from the Calm transcript"
+  assert_contains "$(cat "$export_settled_snapshot")" "The deterministic tool example is complete." \
+    "/export removed genuine assistant conversation from the Calm transcript"
+
+  # /reload intentionally rebuilds the transcript without ephemeral UI notifications.
+  # Recreate the fixture after the consecutive reload/export path so the following
+  # Calm toggle still proves that redraws preserve a currently visible diagnostic.
+  tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" -l "/calm-diagnostic-e2e"
+  tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" M-s
+  wait_for_text "$active_before_snapshot" "Warning: CALM_TRANSIENT_DIAGNOSTIC" \
+    || fail "post-reload transient diagnostic fixture was not shown"
 
   tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" -l "/calm"
   tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" M-s
