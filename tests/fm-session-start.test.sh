@@ -1822,6 +1822,18 @@ SH
   env PATH="$fakebin:$BASE_PATH" "$driver" "$ROOT/bin/fm-timeout-lib.sh" \
     bash -c 'exit 137' || status=$?
   expect_code 137 "$status" "natural command exit 137"
+
+  cat > "$fakebin/timeout" <<'SH'
+#!/usr/bin/env bash
+# Model the deadline race where the terminated wrapper records SIGTERM while
+# the timeout program authoritatively reports that its deadline expired.
+printf '143\n' > "$8"
+exit 124
+SH
+  status=0
+  env PATH="$fakebin:$BASE_PATH" "$driver" "$ROOT/bin/fm-timeout-lib.sh" \
+    bash -c 'sleep 30' || status=$?
+  expect_code 124 "$status" "external deadline outranks a TERM-derived command status"
   pass "the portable timeout path force-kills a command that ignores TERM"
 }
 

@@ -110,6 +110,13 @@ fm_run_external_timeout() {
   else
     runner_rc=$?
   fi
+  # The wrapper can record its command's TERM status while unwinding, but the
+  # timeout runner's 124 remains the authoritative proof that the bound fired.
+  if [ "$runner_rc" -eq 124 ]; then
+    kill -KILL -- "-$runner_pid" 2>/dev/null || true
+    rm -f "$status_file" 2>/dev/null || true
+    return 124
+  fi
   command_rc=$(cat "$status_file" 2>/dev/null || true)
   rm -f "$status_file" 2>/dev/null || true
   case "$command_rc" in
