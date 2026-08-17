@@ -1,0 +1,17 @@
+AMBIENT_BEFORE inode=42141656 size=3647 mtime=1786742465
+bf7a0d947a4a79f8689d346e155b80c5655e6fdf36badb706d7d1aa69d2b4650  /tmp/nope
+SENTINEL_BEFORE present=yes sha256=8417eaa341f06f8ec95e965ce8388214b22a9f190ff7db6d84ee2d2c8b64a41e
+registered: argv-proof (lavish)
+reconciled: published=0 started=1 stopped=0 uncertain=0
+CAPTURED_RESULT_BEGIN
+one arg with spaces
+second; rm -rf /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-procevent-hermetic-e2e.9gdsNs/shell-interpretation-sentinel
+CAPTURED_RESULT_END
+SENTINEL_AFTER_EVENT present=yes sha256=8417eaa341f06f8ec95e965ce8388214b22a9f190ff7db6d84ee2d2c8b64a41e
+WAKE_PAYLOAD check: procevent lavish argv-proof 1
+retired: argv-proof
+swept: attempted=1
+FIXTURE_REMOVED yes
+AMBIENT_AFTER inode=42141656 size=3647 mtime=1786742465
+bf7a0d947a4a79f8689d346e155b80c5655e6fdf36badb706d7d1aa69d2b4650  /tmp/nope
+E2E_RESULT pass

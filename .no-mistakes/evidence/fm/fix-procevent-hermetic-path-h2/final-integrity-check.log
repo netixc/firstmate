@@ -1,0 +1,14 @@
+TARGETED_SELECTION
+tests/fm-procevent.test.sh
+COMMIT_SCOPE
+de74b1b test: make process-event argv sentinel hermetic
+M	tests/fm-procevent.test.sh
+AMBIENT_FINAL
+type=Regular File mode=-rw-r--r-- size=3647 inode=42141656 mtime=1786742465
+bf7a0d947a4a79f8689d346e155b80c5655e6fdf36badb706d7d1aa69d2b4650  /tmp/nope
+LEFTOVER_FIXTURES
+none
+LEFTOVER_TEST_PROCESSES
+none
+WORKTREE_STATUS
+clean
