@@ -174,8 +174,8 @@ GEN=$(sed -n 's/^busy_gen=//p' "$META" | tail -1)
 [ -n "$PANE" ] && [ -n "$TARGET" ] && [ -n "$GEN" ] || fail "spawn omitted the live target identity"
 
 wait_for_working() {
-  local i status
-  for i in $(seq 1 240); do
+  local status
+  for _ in $(seq 1 240); do
     status=$("$LAB_HELPER" run "$SESSION" agent get "$PANE" 2>/dev/null \
       | jq -r '.result.agent.agent_status // empty' 2>/dev/null || true)
     [ "$status" = working ] && return 0
@@ -206,7 +206,7 @@ count=0
 for _ in $(seq 1 80); do
   count=$(jq -r --arg text "$MESSAGE" \
     'select(.type == "message" and .message.role == "user") | .message.content | if type == "array" then map(select(.type == "text") | .text) else [.] end | .[]' \
-    "$SESSION_FILE" 2>/dev/null | grep -Fx "$MESSAGE" | wc -l | tr -d ' ')
+    "$SESSION_FILE" 2>/dev/null | grep -Fxc "$MESSAGE" || true)
   [ "$count" -eq 1 ] && break
   sleep 0.1
 done

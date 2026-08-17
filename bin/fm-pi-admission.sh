@@ -123,16 +123,20 @@ sha_valid() {
 
 case "$CMD" in
   record)
-    sha_valid "$SHA" && uint_valid "$BYTES" 1 && uint_valid "$TS" 0 \
-      || { echo "error: invalid receipt metadata" >&2; exit 1; }
+    if ! sha_valid "$SHA" || ! uint_valid "$BYTES" 1 || ! uint_valid "$TS" 0; then
+      echo "error: invalid receipt metadata" >&2
+      exit 1
+    fi
     [ -z "$AFTER" ] || usage
     ;;
   snapshot|retire)
     [ -z "$SHA$BYTES$TS$AFTER" ] || usage
     ;;
   match)
-    sha_valid "$SHA" && uint_valid "$BYTES" 1 && uint_valid "$AFTER" 1 \
-      || { echo "error: invalid receipt match" >&2; exit 1; }
+    if ! sha_valid "$SHA" || ! uint_valid "$BYTES" 1 || ! uint_valid "$AFTER" 1; then
+      echo "error: invalid receipt match" >&2
+      exit 1
+    fi
     [ -z "$TS" ] || usage
     ;;
 esac
@@ -307,6 +311,7 @@ EOF
 FM_STATE_OVERRIDE=$STATE
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
+# shellcheck disable=SC2329 # Invoked by the EXIT and record cleanup traps.
 release_lock() {
   local status=$?
   fm_lock_release "$LOCK" || true
@@ -372,6 +377,7 @@ fi
 [ "$old_seq" -lt 999999999999999 ] || { echo "error: admission sequence exhausted" >&2; exit 1; }
 next_seq=$((old_seq + 1))
 tmp=$(umask 077; mktemp "$STATE/.$ID.pi-admission.XXXXXX") || exit 1
+# shellcheck disable=SC2329 # Invoked by the record cleanup trap.
 cleanup_tmp() { rm -f -- "$tmp" 2>/dev/null || true; }
 trap 'status=$?; cleanup_tmp; release_lock; exit $status' EXIT HUP INT TERM
 if [ "$keep_existing" = 1 ] && [ "$JOURNAL_COUNT" -ge "$FM_PI_ADMISSION_MAX_RECORDS" ]; then

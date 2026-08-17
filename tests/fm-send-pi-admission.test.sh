@@ -338,7 +338,7 @@ test_quick_identical_sends_have_distinct_boundaries() {
 }
 
 test_held_send_lock_refuses_before_injection() {
-  local lock ready holder rc i=0
+  local lock ready holder rc
   reset_case
   lock="$HOME_DIR/state/.$ID.pi-admission-send.lock"
   ready="$CASE/lock-ready"
@@ -351,9 +351,9 @@ test_held_send_lock_refuses_before_injection() {
     sleep 2
   ) &
   holder=$!
-  while [ ! -e "$ready" ] && [ "$i" -lt 100 ]; do
+  for _ in $(seq 1 100); do
+    [ ! -e "$ready" ] || break
     sleep 0.01
-    i=$((i + 1))
   done
   [ -e "$ready" ] || { kill "$holder" 2>/dev/null || true; fail "could not stage the held admission send lock"; }
   FM_PI_ADMISSION_LOCK_ATTEMPTS=2 FM_PI_ADMISSION_LOCK_SLEEP=0.01 run_send exact; rc=$?
