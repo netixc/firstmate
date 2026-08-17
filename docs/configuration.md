@@ -351,6 +351,7 @@ Splitting preserves fenced-code, paragraph, line, and word boundaries where poss
 `bin/fm-relay-dismiss.sh` sends `POST /connector/dismiss` with `{request_id}` and no text.
 A successful dismissal prevents re-offer and offline auto-reply behavior, then clears the request context while retaining the bounded offer marker.
 `bin/fm-relay-link.sh` stores `relay_request`, `relay_request_ts`, `relay_followups`, `relay_platform=discord`, and `relay_reply_max_chars` in task metadata for work that continues after the acknowledgement.
+The link is home-local by construction because it lives in that home's own task record: work routed to a second mate has no record here, so `bin/fm-relay-link.sh` refuses it, names the registered second mate home when it can, and points at the promised-final path (`bin/fm-public-followup.sh register ... --work-home secondmate:<id>`), which is the only follow-up mechanism that binds work in another home.
 A successor task uses paired `--carry-count <n> --carry-ts <epoch> --carry-platform discord --carry-max <n>` arguments to preserve the consumed count, original window, and Discord budget.
 
 `bin/fm-relay-followup.sh` posts through `POST /connector/followup` up to three times within seven days.
