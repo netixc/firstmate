@@ -89,10 +89,10 @@ seed_public_commitment() {
 }
 
 # A public promise binds its work by home AND id. Handing that work to a
-# secondmate while it still names main would orphan the promised reply. The
-# handoff must refuse without changing either backlog until the caller rebinds
-# the typed relation to the secondmate home.
-test_handoff_refuses_until_public_reply_work_is_rebound() {
+# secondmate leaves the binding naming a home that no longer owns it, which used
+# to go unnoticed until the promised reply was never delivered. The move itself
+# stays safe; the staleness must be reported at the moment it is created.
+test_handoff_warns_when_a_moved_item_still_owes_a_public_reply() {
   local home="$TMP_ROOT/pf-stale-main"
   local sub="$TMP_ROOT/pf-stale-sub"
   command -v jq >/dev/null 2>&1 || { echo "skip: jq not found (required by the public-commitment guard)"; return 0; }
@@ -108,37 +108,22 @@ EOF
 
   local out rc=0
   out=$(FM_HOME="$home" "$ROOT/bin/fm-backlog-handoff.sh" design promised-item plain-item 2>&1) || rc=$?
-  [ "$rc" -ne 0 ] || fail "handoff must refuse while the public commitment still names main"
-  assert_grep 'promised-item' "$home/data/backlog.md" "a refused handoff removed the promised item from main"
-  assert_grep 'plain-item' "$home/data/backlog.md" "a refused atomic handoff moved an unrelated selected item"
-  assert_absent "$sub/data/backlog.md" "a refused handoff created the secondmate backlog"
-  assert_contains "$out" "refusing to hand off promised-item while it still owes a public reply bound to main/promised-item" \
-    "the stale public-commitment binding was not refused"
-  # The refusal must come from a genuinely unresolved commitment, not from a state
+  [ "$rc" -eq 0 ] || fail "handoff must still succeed while reporting the stale binding: $out"
+  assert_contains "$out" "handed off 2 item(s)" "the move itself must still be reported"
+  assert_grep 'promised-item' "$sub/data/backlog.md" "the promised item did not reach the secondmate backlog"
+  assert_contains "$out" "promised-item still owes a public reply bound to main/promised-item" \
+    "the stale public-commitment binding was not reported"
+  # The report must come from a genuinely unresolved commitment, not from a state
   # the guard merely could not verify.
   assert_contains "$out" "public commitment pf-handoff is still" \
-    "the refusal did not carry the unresolved commitment the guard actually found"
+    "the report did not carry the unresolved commitment the guard actually found"
   assert_contains "$out" "--work-home secondmate:design" \
-    "the refusal did not name the rebinding that keeps the promise reachable"
+    "the report did not name the rebinding that keeps the promise reachable"
   case "$out" in
-    *"refusing to hand off plain-item"*) fail "an item with no public commitment must not be refused independently" ;;
+    *"plain-item still owes"*) fail "an item with no public commitment must not be reported" ;;
   esac
 
-  jq -n '{relation_id:"rel-routed", work_ref:{home_id:"secondmate:design", task_id:"promised-item"},
-      role:"fulfills", required:true, generation:2}' > "$home/relation-rebound.json"
-  out=$(cd "$home" && tasks-axi public-followup supersede-work pf-handoff --relation rel-code \
-    --successor-file "$home/relation-rebound.json" 2>&1) \
-    || fail "could not rebind the public commitment to the secondmate: $out"
-  FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" "$ROOT/bin/fm-public-followup.sh" register \
-    pf-handoff --relation rel-routed --work-home secondmate:design --work-id promised-item \
-    --generation 2 >/dev/null || fail "could not register the rebound commitment"
-
-  out=$(FM_HOME="$home" "$ROOT/bin/fm-backlog-handoff.sh" design promised-item plain-item 2>&1) || \
-    fail "handoff did not proceed after the public commitment was rebound: $out"
-  assert_contains "$out" "handed off 2 item(s)" "the rebound work was not handed off"
-  assert_grep 'promised-item' "$sub/data/backlog.md" "the rebound promised item did not reach the secondmate"
-  assert_no_grep 'promised-item' "$home/data/backlog.md" "the rebound promised item remained in main"
-  pass "handoff refuses stale public-reply ownership and proceeds after rebinding"
+  pass "handoff reports a moved item whose public commitment still binds this home"
 }
 
 # A home that never opted into the relay must pay nothing and say nothing here.
@@ -658,7 +643,7 @@ test_noncanonical_indented_continuations_refuse_without_changes
 test_indented_heading_is_not_section_boundary
 test_registry_home_with_pre_home_parentheses
 test_registry_home_missing_field_fails_cleanly
-test_handoff_refuses_until_public_reply_work_is_rebound
+test_handoff_warns_when_a_moved_item_still_owes_a_public_reply
 test_handoff_is_silent_about_public_commitments_without_the_relay
 
 echo "ALL TESTS PASSED"

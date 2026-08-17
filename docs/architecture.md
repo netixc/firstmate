@@ -244,13 +244,11 @@ The `relay-respond` skill owns owner-only request classification, public-safety 
 `bin/fm-relay-reply.sh` sends request-bound answers and follow-ups through the hosted connector endpoints, splits long text into Discord-sized ordered chunks, and attaches an optional image to the opening message.
 `bin/fm-relay-dismiss.sh` drops mentions that need no reply.
 `bin/fm-relay-link.sh` and `bin/fm-relay-followup.sh` preserve the original request binding, Discord budget, seven-day window, and three-follow-up cap across long-running work and safe recovery.
-That link reaches only work whose task record lives in the answering home; work routed to a local second mate is bound instead by a typed promised-final commitment registered with `--work-home secondmate:<id>`, and `bin/fm-relay-link.sh` refuses a non-local task with that path named rather than leaving the public promise unbound.
-The typed event transport is same-filesystem only, so the remote-secondmate limit remains owned by [`remote-secondmates.md`](remote-secondmates.md#provision-a-route).
+That link reaches only work whose task record lives in the answering home; work routed to a second mate is bound instead by a typed promised-final commitment registered with `--work-home secondmate:<id>`, and `bin/fm-relay-link.sh` refuses a non-local task with that path named rather than leaving the public promise unbound.
 
 A promised final reply becomes a typed `tasks-axi public-followup` obligation rather than conversation memory.
 `bin/fm-public-followup.sh` owns home-side registration, typed terminal-result reconciliation, idempotent hosted delivery, receipt validation, and task-link cleanup.
-Local child workers report only typed outcomes through `bin/fm-public-followup-emit.sh`; the originating home retains the obligation, Relay consent, and Discord thread context and remains the sole outward poster.
-The independent parent-owned pending-reply lifecycle detects and escalates a missing routed report; `bin/fm-pending-reply-lib.sh` owns that recovery boundary and never takes ownership of the public obligation.
+Remote workers report only typed outcomes through `bin/fm-public-followup-emit.sh`; the home that owns Relay consent and Discord thread context remains the sole outward poster.
 Reconciliation rides the existing Relay poll and session-start digest, so it adds no second process, timer, or transport.
 The [Relay configuration reference](configuration.md#relay-env) owns the operator setup, wire fields, generated state, limits, migration, and opt-out contract.
 
