@@ -216,7 +216,8 @@ So before the reset, make sure the important open work you are holding in contex
 Judge for yourself what is important and which record each thing belongs to, and write it through the owner that already governs that record.
 One bound holds: this covers the open work you are actually holding in context, not the records at large.
 It is not a reconciliation of durable records against repositories or GitHub, cannot become one on input this volatile, and must never be reported as one.
-Where the right correction is a judgment you cannot make, leave the record alone and raise the question instead of guessing.
+Where the right correction is a judgment you cannot make, leave the record alone, durably file the question and reason through that record's existing owner or the authoritative decision owner, and then raise it instead of guessing.
+If neither owner can capture them, report an unresolved exception and do not call the session reset-safe.
 
 ## One-time migration of unmarked entries
 
@@ -238,8 +239,8 @@ Report the outcome in plain captain-facing language with all of these facts:
 - each durable finding filed outside memory and its authoritative owner;
 - each archived entry's reason, each autonomous offload's live destination and actual relief, and, when a pinned candidate was proposed, the `proposed-offload` section with every candidate's fields;
 - every unresolved exception, including a primary-owned shared-file constraint in a secondmate home, and every concrete captain decision opened for an over-budget result;
-- each open record this pass filed or corrected, and each one it deliberately left alone with the judgment it is waiting on;
-- whether the session is safe to reset, only when all durable findings are captured, every important open record this session held is filed or explicitly left with its reason, and the post-pass result is within budget with no exception or pending budget decision.
+- each open record this pass filed or corrected, and each one it deliberately left alone with the judgment it is waiting on and the authoritative owner that durably holds its question and reason;
+- whether the session is safe to reset, only when all durable findings are captured, every important open record this session held is filed, corrected, or represented by a durably owned unresolved question and reason, and the post-pass result is within budget with no exception or pending budget decision.
 
 State what reset-safe means in the same breath as the claim: nothing this session knew has been lost.
 It is never a claim that the home's durable records are correct, because this pass checks no record the session did not name.
