@@ -36,7 +36,7 @@ document:
 commands:
   lint: 'bin/fm-lint.sh'
 
-# Store test evidence in this repo so it is committed alongside the change instead of kept in a temp dir.
+# Publish test evidence to this repository's orphan evidence branch instead of keeping it in a temp directory.
 test:
   evidence:
     store_in_repo: true
