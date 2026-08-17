@@ -799,6 +799,18 @@ fm_lock_acquire_wait() {
   done
 }
 
+fm_lock_acquire_bounded() {  # <lockdir> <attempts> <sleep-seconds>
+  local lockdir=$1 attempts=$2 sleep_s=$3 i=0
+  case "$attempts" in ''|*[!0-9]*|0) return 1 ;; esac
+  while [ "$i" -lt "$attempts" ]; do
+    fm_lock_try_acquire "$lockdir" && return 0
+    i=$((i + 1))
+    [ "$i" -lt "$attempts" ] || break
+    sleep "$sleep_s"
+  done
+  return 1
+}
+
 fm_lock_release() {
   local lockdir=$1 pid current ownerdir
   current=${BASHPID:-$$}

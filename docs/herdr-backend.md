@@ -217,7 +217,7 @@ On an already active or unreadable baseline, it falls back to conservative compo
 A fully unreadable target stops retrying and reports unknown.
 
 For an exact metadata-routed Pi task only, `fm-send` also snapshots the generated Pi integration's current-generation admission sequence before typing and hashes the exact final payload.
-If ordinary Herdr proof remains unknown or pending, a newer receipt for the same generation, SHA-256 digest, and UTF-8 byte length proves that Pi admitted that message even when native state remains working and the composer is unknown.
+If native Herdr state is working both before injection and after admission while ordinary Herdr proof remains unknown or pending, a newer receipt for the same generation, SHA-256 digest, and UTF-8 byte length proves that Pi admitted that message.
 The receipt contains metadata only, and missing, malformed, stale, mismatched, mixed-content, unreadable, truncated, or unsafe-path records remain unconfirmed under the contract owned by `bin/fm-pi-admission.sh`.
 This does not reinterpret working, unknown UI, rendered footer changes, or Herdr command success, and the text body remains single-shot.
 

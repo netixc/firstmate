@@ -456,7 +456,7 @@ ok - real guarded Pi/Herdr busy steer appears exactly once, returns success, and
 
 The fixture uses an isolated deterministic provider whose first active turn releases only after the terminal Enter is delivered, then keeps the next turn active.
 The production `fm-send` path therefore sees working before and after with an unknown working composer, while the transcript contains the exact steer once and the current-generation journal contains its exact SHA-256 digest and UTF-8 byte length.
-The portable public-interface regression drives the generated extension and real `fm-send` against a stateful fake Herdr, including old, malformed, stale-generation, wrong-digest, wrong-length, mixed-content, unreadable, truncated, unrelated, unsafe-path, transport-failure, swallowed-Enter, existing-proof, and concurrent-identical-send cases:
+The portable public-interface regression drives the generated extension and real `fm-send` against a stateful fake Herdr, including old, malformed, stale-generation, wrong-digest, wrong-length, mixed-content, unreadable, truncated, unrelated, unsafe-path, working-boundary, lock-contention, transport-failure, swallowed-Enter, existing-proof, and concurrent-identical-send cases:
 
 ```sh
 tests/fm-busy-adapter-wiring.test.sh

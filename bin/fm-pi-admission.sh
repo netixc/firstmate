@@ -11,10 +11,11 @@
 #
 #   v1 gen=<busy-gen> seq=<uint> sha256=<64-lower-hex> bytes=<uint> ts=<epoch-ms>
 #
-# `record` binds every append to state/<id>.busy-gen under a per-task writer
-# lock, advances a strictly increasing per-generation sequence, and publishes
-# the bounded journal by atomic replacement. A stale extension generation is
-# rejected. Relaunch retires the old journal before arming its replacement.
+# `record` binds every append to state/<id>.busy-gen under a bounded per-task
+# writer lock, advances a strictly increasing per-generation sequence, and
+# publishes the bounded journal by atomic replacement. A stale extension
+# generation is rejected. Relaunch retires the old journal before arming its
+# replacement.
 #
 # `snapshot` prints the current generation's monotonic sequence boundary, or 0
 # when no current-generation receipt exists. `match` succeeds only when the
@@ -190,10 +191,48 @@ safe_regular() {  # <path>
   [ "$size" -le "$FM_PI_ADMISSION_MAX_BYTES" ] || return 1
 }
 
+SAFE_REGULAR_CONTENT=
+safe_regular_read() {  # <path>
+  local path=$1 raw
+  raw=$(node - "$path" "$FM_PI_ADMISSION_MAX_BYTES" <<'JS'
+const fs = require("node:fs");
+const path = process.argv[2];
+const max = Number(process.argv[3]);
+let fd;
+try {
+  fd = fs.openSync(path, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+  const before = fs.fstatSync(fd);
+  if (!before.isFile() || before.nlink !== 1 || (before.mode & 0o777) !== 0o600 ||
+      before.uid !== process.getuid() || before.size > max) process.exit(1);
+  const body = Buffer.alloc(before.size);
+  let offset = 0;
+  while (offset < body.length) {
+    const read = fs.readSync(fd, body, offset, body.length - offset, offset);
+    if (read === 0) process.exit(1);
+    offset += read;
+  }
+  const after = fs.fstatSync(fd);
+  if (after.dev !== before.dev || after.ino !== before.ino || after.size !== before.size ||
+      after.nlink !== 1 || (after.mode & 0o777) !== 0o600 || after.uid !== process.getuid() ||
+      body.length === 0 || body[body.length - 1] !== 10 || body.includes(0)) process.exit(1);
+  process.stdout.write(body);
+  process.stdout.write(".");
+} catch (_) {
+  process.exit(1);
+} finally {
+  if (fd !== undefined) fs.closeSync(fd);
+}
+JS
+  ) || return 1
+  case "$raw" in *$'\n'.) : ;; *) return 1 ;; esac
+  raw=${raw%.}
+  SAFE_REGULAR_CONTENT=${raw%$'\n'}
+}
+
 current_gen_exact() {
   local current
-  safe_regular "$GEN_FILE" || return 1
-  { IFS= read -r current && [ -n "$current" ] && ! IFS= read -r _extra; } < "$GEN_FILE" 2>/dev/null || return 1
+  safe_regular_read "$GEN_FILE" || return 1
+  current=$SAFE_REGULAR_CONTENT
   fm_busy_token_valid "$current" || return 1
   [ "$current" = "$GEN" ]
 }
@@ -225,16 +264,16 @@ JOURNAL_GEN=
 JOURNAL_LAST_SEQ=0
 JOURNAL_COUNT=0
 JOURNAL_MATCHED=0
+JOURNAL_CONTENT=
 scan_journal() {  # [match]
-  local mode=${1:-scan} line last_seq=0 count=0 last_byte
+  local mode=${1:-scan} line last_seq=0 count=0
   JOURNAL_GEN=
   JOURNAL_LAST_SEQ=0
   JOURNAL_COUNT=0
   JOURNAL_MATCHED=0
-  safe_regular "$REC" || return 1
-  [ -s "$REC" ] || return 1
-  last_byte=$(tail -c 1 "$REC" 2>/dev/null | od -An -tuC | tr -d '[:space:]')
-  [ "$last_byte" = 10 ] || return 1
+  safe_regular_read "$REC" || return 1
+  JOURNAL_CONTENT=$SAFE_REGULAR_CONTENT
+  [ -n "$JOURNAL_CONTENT" ] || return 1
   while IFS= read -r line; do
     count=$((count + 1))
     [ "$count" -le "$FM_PI_ADMISSION_MAX_RECORDS" ] || return 1
@@ -251,7 +290,9 @@ scan_journal() {  # [match]
       && [ "$R_BYTES" = "$BYTES" ]; then
       JOURNAL_MATCHED=1
     fi
-  done < "$REC"
+  done <<EOF
+$JOURNAL_CONTENT
+EOF
   [ "$count" -gt 0 ] || return 1
   JOURNAL_LAST_SEQ=$last_seq
   JOURNAL_COUNT=$count
@@ -276,11 +317,13 @@ release_lock() {
   return "$status"
 }
 trap release_lock EXIT
+FM_PI_ADMISSION_LOCK_ATTEMPTS=${FM_PI_ADMISSION_LOCK_ATTEMPTS:-50}
+FM_PI_ADMISSION_LOCK_SLEEP=${FM_PI_ADMISSION_LOCK_SLEEP:-0.1}
 if [ "$CMD" = retire ]; then
-  fm_lock_acquire_wait "$SEND_LOCK" || exit 1
+  fm_lock_acquire_bounded "$SEND_LOCK" "$FM_PI_ADMISSION_LOCK_ATTEMPTS" "$FM_PI_ADMISSION_LOCK_SLEEP" || exit 1
   SEND_LOCK_HELD=1
 fi
-fm_lock_acquire_wait "$LOCK" || exit 1
+fm_lock_acquire_bounded "$LOCK" "$FM_PI_ADMISSION_LOCK_ATTEMPTS" "$FM_PI_ADMISSION_LOCK_SLEEP" || exit 1
 
 if [ "$CMD" = snapshot ]; then
   current_gen_exact || exit 1
@@ -332,9 +375,9 @@ tmp=$(umask 077; mktemp "$STATE/.$ID.pi-admission.XXXXXX") || exit 1
 cleanup_tmp() { rm -f -- "$tmp" 2>/dev/null || true; }
 trap 'status=$?; cleanup_tmp; release_lock; exit $status' EXIT HUP INT TERM
 if [ "$keep_existing" = 1 ] && [ "$JOURNAL_COUNT" -ge "$FM_PI_ADMISSION_MAX_RECORDS" ]; then
-  tail -n $((FM_PI_ADMISSION_MAX_RECORDS - 1)) "$REC" > "$tmp" || exit 1
+  printf '%s\n' "$JOURNAL_CONTENT" | tail -n $((FM_PI_ADMISSION_MAX_RECORDS - 1)) > "$tmp" || exit 1
 elif [ "$keep_existing" = 1 ]; then
-  cat "$REC" > "$tmp" || exit 1
+  printf '%s\n' "$JOURNAL_CONTENT" > "$tmp" || exit 1
 fi
 printf 'v1 gen=%s seq=%s sha256=%s bytes=%s ts=%s\n' \
   "$GEN" "$next_seq" "$SHA" "$BYTES" "$TS" >> "$tmp" || exit 1

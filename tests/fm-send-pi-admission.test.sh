@@ -136,6 +136,7 @@ case "${1:-} ${2:-}" in
       idle-native) status=idle; [ "$enter_count" -eq 0 ] || status=working ;;
       swallowed-enter) status=idle; [ "$enter_count" -lt 2 ] || status=working ;;
       empty-composer) status=blocked ;;
+      stops-working) status=working; [ "$enter_count" -eq 0 ] || status=idle ;;
       *) status=working ;;
     esac
     printf '{"result":{"agent":{"agent":"pi","agent_status":"%s"}}}\n' "$status"
@@ -186,6 +187,16 @@ EOF
         printf 'v1 gen=%s seq=1 sha256=%s bytes=%s ts=%s\n' "$gen" "$hash" "$bytes" "$(($(date +%s) * 1000))" > "$outside"
         ln -s "$outside" "$receipt"
         ;;
+      unsafe-hardlink)
+        IFS=$'\t' read -r hash bytes <<EOF
+$(body_hash)
+EOF
+        outside="$state/outside-receipt"
+        printf 'v1 gen=%s seq=1 sha256=%s bytes=%s ts=%s\n' "$gen" "$hash" "$bytes" "$(($(date +%s) * 1000))" > "$outside"
+        chmod 600 "$outside"
+        ln "$outside" "$receipt"
+        ;;
+      stops-working) record_exact ;;
     esac
     ;;
   "pane read")
@@ -245,7 +256,7 @@ test_busy_exact_receipt_confirms_once() {
 
 test_no_or_unusable_receipt_never_confirms() {
   local action rc
-  for action in none malformed stale wrong-digest wrong-length mixed unreadable truncated unrelated unsafe-symlink; do
+  for action in none malformed stale wrong-digest wrong-length mixed unreadable truncated unrelated unsafe-symlink unsafe-hardlink stops-working; do
     reset_case
     run_send "$action"; rc=$?
     [ "$rc" -ne 0 ] || fail "$action receipt case falsely confirmed delivery"
@@ -326,11 +337,39 @@ test_quick_identical_sends_have_distinct_boundaries() {
   pass "fm-send Pi admission: concurrent identical task sends serialize across distinct monotonic receipt boundaries"
 }
 
+test_held_send_lock_refuses_before_injection() {
+  local lock ready holder rc i=0
+  reset_case
+  lock="$HOME_DIR/state/.$ID.pi-admission-send.lock"
+  ready="$CASE/lock-ready"
+  rm -f "$ready"
+  (
+    FM_STATE_OVERRIDE="$HOME_DIR/state"
+    . "$ROOT/bin/fm-wake-lib.sh"
+    fm_lock_try_acquire "$lock" || exit 1
+    touch "$ready"
+    sleep 2
+  ) &
+  holder=$!
+  while [ ! -e "$ready" ] && [ "$i" -lt 100 ]; do
+    sleep 0.01
+    i=$((i + 1))
+  done
+  [ -e "$ready" ] || { kill "$holder" 2>/dev/null || true; fail "could not stage the held admission send lock"; }
+  FM_PI_ADMISSION_LOCK_ATTEMPTS=2 FM_PI_ADMISSION_LOCK_SLEEP=0.01 run_send exact; rc=$?
+  kill "$holder" 2>/dev/null || true
+  wait "$holder" 2>/dev/null || true
+  [ "$rc" -ne 0 ] || fail "a held admission send lock did not refuse the send"
+  assert_injection_counts 0 0 "held admission send lock"
+  pass "fm-send Pi admission: a live-held serialization lock refuses promptly before injection"
+}
+
 test_busy_exact_receipt_confirms_once
 test_no_or_unusable_receipt_never_confirms
 test_old_boundary_never_confirms
 test_literal_failure_cannot_be_rescued
 test_enter_retry_and_existing_proofs_unchanged
 test_quick_identical_sends_have_distinct_boundaries
+test_held_send_lock_refuses_before_injection
 
 echo "all fm-send Pi admission tests passed"
