@@ -4,7 +4,7 @@ Audience: maintainer verification.
 
 This record supports two active guarantees for promised public replies made through the myfirstmate relay:
 
-1. A promised final reply survives compaction and restart, reconciles from disk alone, and lands in the original thread exactly once.
+1. A promised final reply survives compaction and restart, remains owned by the originating Relay home when bound to local-secondmate work, reconciles from disk alone, and lands in the original thread exactly once.
 2. A home that never opted into the relay pays nothing for any of it.
 
 [`docs/configuration.md`](../configuration.md#promised-public-replies-statepublic-followup) owns the operator-facing contract, [`docs/architecture.md`](../architecture.md#optional-relay) owns the mechanism boundary, and `tasks-axi public-followup --help` owns the typed obligation schema.
@@ -49,8 +49,7 @@ Recorded 2026-08-14 on Darwin 25.6.0 (arm64) with GNU bash 3.2.57, tasks-axi 0.2
 The Relay test uses fake `curl` responses for the unchanged myfirstmate.io connector endpoints and makes no public post.
 
 ```sh
-bash tests/fm-relay.test.sh | tee /tmp/fm-relay.out
-grep -c '^ok -' /tmp/fm-relay.out
+bash tests/fm-relay.test.sh
 ```
 
 ```
@@ -61,11 +60,13 @@ ok - a delayed Discord follow-up stays one message after inbox cleanup via the d
 ok - fm-relay-dismiss posts a request-bound dismiss and echoes only the request_id
 ok - fm-relay-followup posts a follow-up, increments the counter, and keeps the link under the cap
 ok - bootstrap migrates existing Discord Relay state and optional settings exactly once
-102
 ```
 
 This verifies the current Discord-only source boundary, request-id-bound answer and dismissal shapes, images, per-request Discord budgets, delayed follow-ups, and the one-time local-state migration.
 The same suite keeps the no-token hard no-op and generated activation cleanup cases executable through the public scripts.
+The routed-work regressions in `tests/fm-relay.test.sh` exercise the local-link refusal and promised-final pointer.
+The handoff regressions in `tests/fm-backlog-handoff.test.sh` exercise the post-move warning for an existing main-home binding and silence in a Relay-free home.
+The cross-host limit remains covered by `tests/fm-remote-secondmate-parent-binding.test.sh` and documented in [`docs/remote-secondmates.md`](../remote-secondmates.md#provision-a-route).
 
 ## Relay-disabled zero overhead
 
