@@ -1,0 +1,32 @@
+Firstmate integration 1/10 — repository-backed test evidence verification
+
+Normalized .no-mistakes.yaml policy (parsed with Ruby Psych/YAML):
+{
+  "effective_test_evidence_destination": "repository evidence branch",
+  "store_in_repo": true,
+  "lint_command": "bin/fm-lint.sh",
+  "disable_project_settings": true
+}
+
+Code-branch isolation:
+.gitignore:4:.no-mistakes/  .no-mistakes/evidence/reviewer-proof.txt
+code_branch_tracking=none
+
+Exact upstream integration proof:
+upstream_patch_id=88992f9ff3de92332307e789f9fe0bc465325f5e
+merge_patch_id=88992f9ff3de92332307e789f9fe0bc465325f5e
+merge_config_matches_exact_upstream=true
+upstream_commit_is_HEAD_ancestor=true
+
+Merge ancestry:
+67ce72f docs: align evidence guidance with repository storage
+3098783 Merge upstream commit 12384026 (integration 1/10)
+|\
+| 1238402 chore: store no-mistakes test evidence in the repo (#2355)
+697656b Revert "fix(bin): confirm admitted Pi steers on Herdr (#13)" (#15)
+
+Focused documentation audience behavior test:
+ok - documentation inventory classifies every maintained prose surface exactly once
+ok - classification, setup routing, and maintained-prose scope fail safely
+ok - required documentation owner pointers cannot silently disappear
+ok - local links resolve while dates, versions, commands, and incident prose remain semantically reviewed
