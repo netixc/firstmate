@@ -112,12 +112,16 @@ fm_run_external_timeout() {
   fi
   command_rc=$(cat "$status_file" 2>/dev/null || true)
   rm -f "$status_file" 2>/dev/null || true
+  if [ "$runner_rc" -eq 124 ]; then
+    kill -KILL -- "-$runner_pid" 2>/dev/null || true
+    return 124
+  fi
   case "$command_rc" in
     ''|*[!0-9]*) ;;
     *) [ "$command_rc" -le 255 ] && return "$command_rc" ;;
   esac
   case "$runner_rc" in
-    124|137)
+    137)
       kill -KILL -- "-$runner_pid" 2>/dev/null || true
       return 124
       ;;
