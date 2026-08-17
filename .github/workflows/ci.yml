@@ -285,9 +285,6 @@ jobs:
   tests-timing-aggregate:
     name: Behavior timing aggregate
     runs-on: ubuntu-latest
-    permissions:
-      actions: read
-      contents: read
     needs:
       - tests-portable-parallel-1
       - tests-portable-parallel-2
@@ -297,25 +294,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Download lane timing artifacts
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -eu
-          destination="$RUNNER_TEMP/fm-test-aggregate"
-          artifact_list="$RUNNER_TEMP/fm-test-artifacts.tsv"
-          mkdir -p "$destination"
-          gh api \
-            "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" \
-            --jq '.artifacts[] | select(.name | startswith("fm-test-timing-")) | [.id, .name] | @tsv' \
-            >"$artifact_list"
-          while IFS="$(printf '\t')" read -r artifact_id artifact_name; do
-            [ -n "$artifact_id" ] || continue
-            archive="$RUNNER_TEMP/${artifact_name}.zip"
-            gh api \
-              "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" \
-              >"$archive"
-            unzip -oq "$archive" -d "$destination"
-          done <"$artifact_list"
+        uses: actions/download-artifact@v4
+        with:
+          pattern: fm-test-timing-*
+          path: ${{ runner.temp }}/fm-test-aggregate
+          merge-multiple: true
       - name: Build aggregate timing summary
         run: |
           set -eu
