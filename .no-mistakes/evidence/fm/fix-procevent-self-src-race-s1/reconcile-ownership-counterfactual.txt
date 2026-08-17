@@ -1,0 +1,11 @@
+WITH_RECONCILE
+registered: unique-reconcile-src-58537 (lavish)
+reconciled: published=0 started=1 stopped=0 uncertain=0
+manual-start=already owned: unique-reconcile-src-58537
+cleanup-claim=absent
+WITHOUT_RECONCILE
+registered: unique-reconcile-src-58537 (lavish)
+not-autohandled: unique-reconcile-src-58537 (left for the handler; still unacknowledged)
+captured: /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-reconcile-counterfactual.6aAzQu/home/state/procevent-inbox/unique-reconcile-src-58537.2.result
+cleanup-registration=absent
+cleanup-claim=absent

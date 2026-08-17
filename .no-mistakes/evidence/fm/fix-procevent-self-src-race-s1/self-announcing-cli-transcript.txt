@@ -1,0 +1,17 @@
+SOURCE_ID=self-src-evidence-76567
+registered: self-src-evidence-76567 (selfann)
+autohandled: self-src-evidence-76567
+captured: /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-selfann-evidence.qPD2rK/home/state/procevent-inbox/self-src-evidence-76567.1.result
+HANDLED_MARKER_1=present
+retired: self-src-evidence-76567
+reconciled: published=0 started=0 stopped=0 uncertain=0
+REGISTERED_AFTER_RECONCILE=no
+CLAIM_AFTER_RECONCILE=no
+registered: self-src-evidence-76567 (selfann)
+not-autohandled: self-src-evidence-76567 (left for the handler; still unacknowledged)
+captured: /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-selfann-evidence.qPD2rK/home/state/procevent-inbox/self-src-evidence-76567.2.result
+HANDLED_MARKER_2=missing
+WAKE_2=check: procevent selfann self-src-evidence-76567 2
+retired: self-src-evidence-76567
+REGISTERED_AFTER_CLEANUP=no
+CLAIM_AFTER_CLEANUP=no
