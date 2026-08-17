@@ -17,11 +17,6 @@
 # records, and never treat wrong-home or structured-home heuristics as
 # acknowledgement.
 #
-# This recovery lifecycle is independent of a typed public-followup obligation.
-# It detects and escalates a missing routed report, but never transfers ownership
-# of the originating Relay home's public promise and never closes that promise;
-# the public-followup consumer alone reconciles the typed result and posts it.
-#
 # Record location (parent FM_HOME):
 #   state/pending-replies/<corr_id>
 # Each record is a key=value file owned by this library. Schema:
