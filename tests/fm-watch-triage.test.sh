@@ -62,6 +62,23 @@ wait_live() {
   return 0
 }
 
+# Wait for a concrete suppressor signature while treating a dead watcher as an
+# immediate failure rather than spending the remaining readiness budget.
+wait_for_seen_signature() {  # <pid> <seen-file> <expected-signature> [ticks]
+  local pid=$1 file=$2 expected=$3 limit=${4:-240} i=0 actual
+  while [ "$i" -lt "$limit" ]; do
+    if ! is_live_non_zombie "$pid"; then
+      wait "$pid" 2>/dev/null || true
+      return 1
+    fi
+    actual=$(cat "$file" 2>/dev/null || true)
+    [ "$actual" = "$expected" ] && return 0
+    sleep 0.1
+    i=$((i + 1))
+  done
+  return 1
+}
+
 wait_numeric_file() {
   local file=$1 limit=${2:-30} i=0 value
   while [ "$i" -lt "$limit" ]; do
@@ -383,14 +400,16 @@ test_provably_working_signal_absorbed() {
   # still working, so a no-verb working: signal is absorbed (the original low-churn
   # case during a long validation).
   export FM_FAKE_CREW_STATE='state: working · source: run-step · validating (running)'
+  expected_sig=$(seen_sig "$status_file")
   watch_bg "$state" "$fakebin" "$out"
   pid=$!
-  if ! wait_live "$pid" 30; then
-    reap "$pid"; fail "watcher exited for a working: signal whose crew is provably working (should absorb): $(cat "$out")"
+  if ! wait_for_seen_signature "$pid" "$state/.seen-task_status" "$expected_sig"; then
+    reap "$pid"; fail "watcher did not advance the exact .seen-* signature before dying or the readiness deadline: $(cat "$out")"
   fi
   [ ! -s "$out" ] || fail "provably-working signal printed a wake reason: $(cat "$out")"
   [ ! -s "$state/.wake-queue" ] || fail "provably-working signal enqueued a durable wake record"
-  [ -s "$state/.seen-task_status" ] || fail "provably-working signal did not advance its .seen-* suppressor"
+  [ "$(cat "$state/.seen-task_status" 2>/dev/null || true)" = "$expected_sig" ] \
+    || fail "provably-working signal did not retain the exact .seen-* signature"
   [ -e "$state/.last-watcher-beat" ] || fail "watcher beacon was not touched while absorbing"
   reap "$pid"
   pass "a no-verb signal whose crew is provably working is absorbed (no exit, no queue, suppressor advanced, beacon present)"
