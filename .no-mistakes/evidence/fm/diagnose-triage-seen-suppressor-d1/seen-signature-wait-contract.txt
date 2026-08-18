@@ -1,0 +1,7 @@
+exact-signature branch: PASS
+observed suppressor: 26:1787077000.123456789
+watch output: empty
+durable wake queue: empty
+dead-watcher branch: PASS (returned before signature)
+dead-watcher signature: absent
+cleanup: live helper process reaped

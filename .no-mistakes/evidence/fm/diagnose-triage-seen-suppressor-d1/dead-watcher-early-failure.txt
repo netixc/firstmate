@@ -1,0 +1,3 @@
+dead_watcher_wait_rc=1
+elapsed_seconds=0
+readiness_budget_seconds=24

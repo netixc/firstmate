@@ -1,0 +1,7 @@
+expected_signature=26:1787079284.366535748
+actual_signature=26:1787079284.366535748
+watcher_at_observation=live
+watch_output_bytes=0
+wake_queue_bytes=0
+beacon=present
+watcher_after_cleanup=stopped
