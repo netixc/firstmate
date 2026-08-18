@@ -795,7 +795,8 @@ test_lock_ownership_without_bashpid() {
       ) || exit $?
       printf "%s\n" "$inner_owner"
     ) || exit $?
-    [ "$nested_owner" = "$(cat "$2/nested.actual")" ] || exit 42
+    IFS=" " read -r nested_actual < "$2/nested.actual" || exit 42
+    [ "$nested_owner" = "$nested_actual" ] || exit 42
     [ ! -e "$lock" ] && [ ! -L "$lock" ] || exit 43
   ' _ "$ROOT/bin/fm-wake-lib.sh" "$state" || rc=$?
   [ "$rc" -eq 0 ] || fail "lock ownership was not isolated without BASHPID (rc=$rc)"

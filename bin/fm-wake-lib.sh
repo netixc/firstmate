@@ -33,6 +33,7 @@ fm_current_pid() {
     export LC_ALL
     command -p ps -p "$$" -o ppid= > "$1"
   ' fm-current-pid "$probe/pid" 2>/dev/null; then
+    rm -f "$probe/pid" 2>/dev/null || true
     rmdir "$probe" 2>/dev/null || true
     return 1
   fi
