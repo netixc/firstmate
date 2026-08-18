@@ -244,6 +244,14 @@ fm_remote_job_worker_identity_matches "$REMOTE_ROOT" "$ACCOUNT_HOME" \
   || fail "the replacement worker did not publish the current code identity"
 pass "ensure replaces a live worker after its code changes"
 
+# Keep the independent code-root replacement fixture from inheriting the
+# preceding replacement's supervisor shutdown race under suite contention.
+fm_remote_job_stop_worker_tree "$NEW_WORKER_PID" \
+  || fail "the code-change replacement worker did not stop before the code-root fixture"
+fm_remote_job_ensure_worker "$REMOTE_ROOT" "$ACCOUNT_HOME" \
+  || fail "$FM_REMOTE_JOB_ERROR"
+NEW_WORKER_PID=$(cat "$STATE_ROOT/worker.pid")
+
 RELOCATED_ROOT="$TMP_ROOT/relocated-root"
 cp -R "$REMOTE_ROOT" "$RELOCATED_ROOT"
 OLD_WORKER_PID=$NEW_WORKER_PID
