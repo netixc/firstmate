@@ -15,8 +15,35 @@ FM_LOCK_STALE_AFTER="${FM_LOCK_STALE_AFTER:-2}"
 _FM_UNAME=$(uname 2>/dev/null || echo unknown)
 mkdir -p "$STATE"
 
+# Set FM_CURRENT_PID to this shell frame's actual OS process id.
+# Call this function directly: command substitution would measure the helper
+# subshell instead of the calling frame. Bash 4+ exposes BASHPID directly; stock
+# macOS Bash 3.2 needs a direct child to report its parent through a private path.
+FM_CURRENT_PID=
 fm_current_pid() {
-  printf '%s\n' "${BASHPID:-$$}"
+  local probe pid
+  FM_CURRENT_PID=
+  if [ "${BASH_VERSINFO[0]:-0}" -ge 4 ] && [ -n "${BASHPID:-}" ]; then
+    FM_CURRENT_PID=$BASHPID
+    return 0
+  fi
+  probe=$(mktemp -d "${TMPDIR:-/tmp}/fm-current-pid.XXXXXX") || return 1
+  if ! /bin/sh -c '
+    LC_ALL=C
+    export LC_ALL
+    command -p ps -p "$$" -o ppid= > "$1"
+  ' fm-current-pid "$probe/pid" 2>/dev/null; then
+    rm -f "$probe/pid" 2>/dev/null || true
+    rmdir "$probe" 2>/dev/null || true
+    return 1
+  fi
+  IFS=' ' read -r pid < "$probe/pid" || pid=
+  rm -f "$probe/pid" 2>/dev/null || true
+  rmdir "$probe" 2>/dev/null || true
+  case "$pid" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  FM_CURRENT_PID=$pid
 }
 
 fm_pid_alive() {
@@ -297,8 +324,11 @@ fm_lock_owner_dir() {
 }
 
 fm_lock_prepare_owner() {
-  local ownerdir=$1 mypid back
-  mypid=${BASHPID:-$$}
+  local ownerdir=$1 mypid=${2:-} back
+  if [ -z "$mypid" ]; then
+    fm_current_pid || return 1
+    mypid=$FM_CURRENT_PID
+  fi
   printf '%s\n' "$mypid" > "$ownerdir/pid" 2>/dev/null || return 1
   back=$(cat "$ownerdir/pid" 2>/dev/null || true)
   [ "$back" = "$mypid" ]
@@ -346,8 +376,11 @@ fm_lock_claim_blocked_by_steal() {
 }
 
 fm_lock_claim() {
-  local lockdir=$1 ownerdir=$2 allowed_steal_owner=${3:-} mypid back
-  mypid=${BASHPID:-$$}
+  local lockdir=$1 ownerdir=$2 allowed_steal_owner=${3:-} mypid=${4:-} back
+  if [ -z "$mypid" ]; then
+    fm_current_pid || return 1
+    mypid=$FM_CURRENT_PID
+  fi
   if ! { printf '%s\n' "$mypid" > "$ownerdir/pid"; } 2>/dev/null; then
     fm_lock_discard_owner "$ownerdir"
     return 1
@@ -372,19 +405,23 @@ fm_lock_claim() {
 }
 
 fm_lock_try_create() {
-  local lockdir=$1 allowed_steal_owner=${2:-} ownerdir
+  local lockdir=$1 allowed_steal_owner=${2:-} mypid=${3:-} ownerdir
   FM_LOCK_OWNER_DIR=
+  if [ -z "$mypid" ]; then
+    fm_current_pid || return 1
+    mypid=$FM_CURRENT_PID
+  fi
   ownerdir=$(fm_lock_owner_dir "$lockdir") || return 1
   if [ -e "$lockdir" ] || [ -L "$lockdir" ]; then
     fm_lock_discard_owner "$ownerdir"
     return 1
   fi
-  if ! fm_lock_prepare_owner "$ownerdir"; then
+  if ! fm_lock_prepare_owner "$ownerdir" "$mypid"; then
     fm_lock_discard_owner "$ownerdir"
     return 1
   fi
   if ln -s "$ownerdir" "$lockdir" 2>/dev/null && fm_lock_points_to_owner "$lockdir" "$ownerdir"; then
-    if fm_lock_claim "$lockdir" "$ownerdir" "$allowed_steal_owner"; then
+    if fm_lock_claim "$lockdir" "$ownerdir" "$allowed_steal_owner" "$mypid"; then
       FM_LOCK_OWNER_DIR=$ownerdir
       return 0
     fi
@@ -469,7 +506,10 @@ _fm_recovery_marker_write_locked() {
   local marker=$1 kind=$2 generation=${3:-} tmp
   case "$kind" in handling|downtime) ;; *) return 1 ;; esac
   tmp=$(mktemp "${marker}.tmp.XXXXXX") || return 1
-  [ -n "$generation" ] || generation="$(fm_current_pid).$(date +%s).${tmp##*.}"
+  if [ -z "$generation" ]; then
+    fm_current_pid || { rm -f -- "$tmp"; return 1; }
+    generation="$FM_CURRENT_PID.$(date +%s).${tmp##*.}"
+  fi
   if ! printf 'pending:%s:%s\n' "$kind" "$generation" > "$tmp" \
     || ! chmod 0600 "$tmp" \
     || ! _fm_atomic_replace "$tmp" "$marker"; then
@@ -692,19 +732,19 @@ fm_recovery_marker_arm_check() {
 }
 
 fm_lock_try_acquire() {
-  local lockdir=$1 pid steal cur rc steal_owner primary_owner
+  local lockdir=$1 pid current steal cur rc steal_owner primary_owner
   FM_LOCK_HELD_PID=
   FM_LOCK_OWNER_DIR=
   FM_LOCK_RECOVERED_PID=
 
-  if fm_lock_try_create "$lockdir"; then
+  fm_current_pid || return 1
+  current=$FM_CURRENT_PID
+  if fm_lock_try_create "$lockdir" '' "$current"; then
     return 0
   fi
 
-  # Compare against ${BASHPID:-$$} inline, never via a command substitution:
-  # $() forks a subshell whose BASHPID is not this frame's pid.
   pid=$(cat "$lockdir/pid" 2>/dev/null || true)
-  if [ -n "$pid" ] && [ "$pid" = "${BASHPID:-$$}" ]; then
+  if [ -n "$pid" ] && [ "$pid" = "$current" ]; then
     # The recorded holder is THIS very process. Single-threaded bash can only
     # observe that when an interrupting trap abandoned the frame that held the
     # lock mid-critical-section (e.g. TERM inside a recovery-marker section,
@@ -714,7 +754,7 @@ fm_lock_try_acquire() {
     # - the hang reproduced by the self-held reclaim regression in
     # tests/fm-wake-queue.test.sh - so reclaim the abandoned hold instead.
     fm_lock_remove_path "$lockdir" || true
-    if fm_lock_try_create "$lockdir"; then
+    if fm_lock_try_create "$lockdir" '' "$current"; then
       return 0
     fi
     FM_LOCK_HELD_PID=$(cat "$lockdir/pid" 2>/dev/null || true)
@@ -778,7 +818,7 @@ fm_lock_try_acquire() {
   fi
   fm_lock_remove_path "$lockdir" || true
   rc=1
-  if fm_lock_try_create "$lockdir" "$steal_owner"; then
+  if fm_lock_try_create "$lockdir" "$steal_owner" "$current"; then
     rc=0
     # shellcheck disable=SC2034 # Read by sourcing callers after lock acquisition.
     FM_LOCK_RECOVERED_PID=$cur
@@ -801,7 +841,8 @@ fm_lock_acquire_wait() {
 
 fm_lock_release() {
   local lockdir=$1 pid current ownerdir
-  current=${BASHPID:-$$}
+  fm_current_pid || return 0
+  current=$FM_CURRENT_PID
   if [ -L "$lockdir" ]; then
     ownerdir=$(fm_lock_link_owner "$lockdir" 2>/dev/null || true)
     [ -n "$ownerdir" ] || return 0
@@ -915,7 +956,8 @@ fm_wake_queued_keys_locked() {
 
 fm_wake_restore_queue() {
   local drained=$1 restore
-  restore="$STATE/.wake-queue.restore.$(fm_current_pid)"
+  fm_current_pid || return 1
+  restore="$STATE/.wake-queue.restore.$FM_CURRENT_PID"
   if [ -e "$FM_WAKE_QUEUE" ]; then
     cat "$drained" "$FM_WAKE_QUEUE" > "$restore" && mv "$restore" "$FM_WAKE_QUEUE"
   else

@@ -607,11 +607,18 @@ test_interruption_before_and_after_raw_commit() {
   FM_STATE_OVERRIDE="$state" FM_WAKE_DRAIN_TEST_DELAY_BEFORE_COMMIT=5 "$DRAIN" > "$before_out" &
   pid=$!
   i=0
-  while [ "$i" -lt 100 ] && [ ! -e "$state/.wake-queue.lock" ]; do
+  while [ "$i" -lt 100 ] && ! ps -axo ppid=,comm= | awk -v parent="$pid" '
+    $1 == parent && ($2 == "sleep" || $2 ~ /\/sleep$/) { found=1 }
+    END { exit !found }
+  '; do
     sleep 0.05
     i=$((i + 1))
   done
-  [ -e "$state/.wake-queue.lock" ] || { kill "$pid" 2>/dev/null || true; fail "pre-commit drain never entered its serialized read boundary"; }
+  ps -axo ppid=,comm= | awk -v parent="$pid" '
+    $1 == parent && ($2 == "sleep" || $2 ~ /\/sleep$/) { found=1 }
+    END { exit !found }
+  ' || { kill "$pid" 2>/dev/null || true; fail "pre-commit drain never reached its interruption boundary"; }
+  [ -e "$state/.wake-queue.lock" ] || { kill "$pid" 2>/dev/null || true; fail "pre-commit drain released its serialized read boundary too early"; }
   kill -TERM "$pid" 2>/dev/null || fail "could not interrupt drain before raw commitment"
   set +e
   wait "$pid"
@@ -714,33 +721,93 @@ test_self_announced_append_guards() {
 # A trap that fires inside a lock's critical section abandons the holding
 # frame, and the exit path then re-acquires the same lock (a TERM inside a
 # recovery-marker section is the reproduced case: the watcher's reap wedged
-# forever spinning against its own pid). The same-process re-acquire must
-# reclaim the abandoned hold, while a SUBSHELL still waits on its parent's
-# live hold exactly as before.
-test_self_held_lock_reclaims_instead_of_deadlocking() {
+# forever spinning against its own pid). Exercise the public lock functions
+# with BASHPID unavailable, including a forged value on stock macOS Bash 3.2,
+# so the portable identity path must preserve self-recovery without confusing
+# parent, sibling, nested, or background shells.
+test_lock_ownership_without_bashpid() {
   local dir state rc
-  dir=$(make_case self-held-lock)
+  dir=$(make_case lock-ownership)
   state="$dir/state"
   rc=0
   FM_STATE_OVERRIDE="$state" bash -c '
+    unset BASHPID 2>/dev/null || true
+    if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ]; then
+      BASHPID=424242
+      export BASHPID
+    fi
     . "$1"
-    lock="$2/.fixture.lock"
+
+    wait_for_file() {
+      i=0
+      while [ "$i" -lt 100 ] && [ ! -e "$1" ]; do
+        sleep 0.02
+        i=$((i + 1))
+      done
+      [ -e "$1" ]
+    }
+
+    actual_pid_to() {
+      /bin/sh -c '\''
+        LC_ALL=C
+        export LC_ALL
+        command -p ps -p "$$" -o ppid= > "$1"
+      '\'' actual-pid "$1"
+    }
+
+    lock="$2/.self.lock"
     fm_lock_acquire_wait "$lock" || exit 10
     fm_lock_try_acquire "$lock" || exit 11
     fm_lock_release "$lock"
     [ ! -e "$lock" ] && [ ! -L "$lock" ] || exit 12
-  ' _ "$ROOT/bin/fm-wake-lib.sh" "$state" || rc=$?
-  [ "$rc" -eq 0 ] || fail "self-held lock was not reclaimed cleanly (rc=$rc)"
-  rc=0
-  FM_STATE_OVERRIDE="$state" bash -c '
-    . "$1"
-    lock="$2/.fixture2.lock"
-    fm_lock_acquire_wait "$lock" || exit 10
-    ( fm_lock_try_acquire "$lock" && exit 13; exit 0 ) || exit 13
+
+    lock="$2/.parent.lock"
+    fm_lock_acquire_wait "$lock" || exit 20
+    ( fm_lock_try_acquire "$lock" && exit 21; exit 0 ) || exit 21
+    ( fm_lock_release "$lock" )
+    [ -L "$lock" ] && [ -f "$lock/pid" ] || exit 22
     fm_lock_release "$lock"
+
+    lock="$2/.siblings.lock"
+    ready="$2/sibling.ready"
+    checked="$2/sibling.checked"
+    (
+      fm_lock_acquire_wait "$lock" || exit 30
+      : > "$ready"
+      wait_for_file "$checked" || exit 31
+      [ -L "$lock" ] && [ -f "$lock/pid" ] || exit 32
+      fm_lock_release "$lock"
+    ) &
+    holder=$!
+    wait_for_file "$ready" || { kill "$holder" 2>/dev/null || true; exit 33; }
+    [ "$(cat "$lock/pid")" = "$holder" ] || { : > "$checked"; wait "$holder"; exit 34; }
+    contender_rc=0
+    (
+      fm_lock_try_acquire "$lock" && exit 35
+      fm_lock_release "$lock"
+      [ -L "$lock" ] && [ -f "$lock/pid" ] || exit 36
+    ) || contender_rc=$?
+    : > "$checked"
+    wait "$holder" || exit 37
+    [ "$contender_rc" -eq 0 ] || exit "$contender_rc"
+    [ ! -e "$lock" ] && [ ! -L "$lock" ] || exit 38
+
+    lock="$2/.nested.lock"
+    nested_owner=$(
+      inner_owner=$(
+        actual_pid_to "$2/nested.actual" || exit 40
+        fm_lock_acquire_wait "$lock" || exit 41
+        cat "$lock/pid"
+        fm_lock_release "$lock"
+      ) || exit $?
+      printf "%s\n" "$inner_owner"
+    ) || exit $?
+    IFS=" " read -r nested_actual < "$2/nested.actual" || exit 42
+    [ "$nested_owner" = "$nested_actual" ] || exit 42
+    [ ! -e "$lock" ] && [ ! -L "$lock" ] || exit 43
   ' _ "$ROOT/bin/fm-wake-lib.sh" "$state" || rc=$?
-  [ "$rc" -eq 0 ] || fail "a subshell reclaimed its parent's live hold (rc=$rc)"
-  pass "an abandoned same-process lock hold is reclaimed; a parent's live hold is not"
+  [ "$rc" -eq 0 ] || fail "lock ownership was not isolated without BASHPID (rc=$rc)"
+  pass "lock ownership without BASHPID isolates self, parent, siblings, nested shells, and background jobs"
 }
 
 # Drain-time historical annotation staleness: a turn-ended-only wake row must
@@ -792,7 +859,7 @@ test_historical_annotation_skips_announced_status() {
   pass "historical annotations replay nothing already announced and keep everything new"
 }
 
-test_self_held_lock_reclaims_instead_of_deadlocking
+test_lock_ownership_without_bashpid
 test_self_announced_append_guards
 test_historical_annotation_skips_announced_status
 test_concurrent_append_and_drain
