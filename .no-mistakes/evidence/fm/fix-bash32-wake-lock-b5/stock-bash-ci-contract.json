@@ -1,0 +1,7 @@
+{
+  "contract": "GitHub Actions stock macOS Bash compatibility lane",
+  "runner": "macos-latest",
+  "shell": "/bin/bash {0}",
+  "wake_queue_command": "/bin/bash tests/fm-wake-queue.test.sh",
+  "result": "valid"
+}

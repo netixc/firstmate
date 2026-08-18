@@ -1,0 +1,47 @@
+GNU bash, version 3.2.57(1)-release (arm64-apple-darwin25)
+ISOLATED_WAKE_QUEUE_RUN=clean
+ok - lock ownership without BASHPID isolates self, parent, siblings, nested shells, and background jobs
+ok - self-announced appends suppress only their own bytes and fail toward waking
+ok - historical annotations replay nothing already announced and keep everything new
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 7 --recovery-generation 23736.1787015319.b2ed8l
+ok - concurrent append plus drain preserves durable records through acknowledgement
+ok - signal written while no watcher runs is caught on next run
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 62927.1787015348.cA3TdC
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no live watcher process holds this home lock (last beat: 2s ago).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  After draining queued wakes, repair missing watcher supervision according to the session-start block for this harness; do not use shell &.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WARNING: queued wakes pending - drain them with bin/fm-wake-drain.sh before anything else.
+ok - stale wake is queued before suppressor state is advanced
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 64736.1787015351.pc469n
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no live watcher process holds this home lock (last beat: 2s ago).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  After draining queued wakes, repair missing watcher supervision according to the session-start block for this harness; do not use shell &.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WARNING: queued wakes pending - drain them with bin/fm-wake-drain.sh before anything else.
+ok - a not-provably-working stale wake is queued before its suppressor is advanced
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 66683.1787015353.zF153a
+ok - registered custom check output is queued before cadence suppression
+ok - concurrent drains replay until one post-handling acknowledgement consumes records
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 4 --recovery-generation 69556.1787015356.SbFDKk
+ok - drain collapses obvious duplicate heartbeat and signal records
+ok - drain asserts watcher liveness: warns on a lapse, stays silent for a live watcher with a fresh beacon
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 8 --recovery-generation 72203.1787015357.DSkG7Y
+ok - structural signal enrichment is separate, deduped, home-local, and tier-zero for other wakes
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 13 --recovery-generation 73732.1787015359.FhXT9v
+ok - every readable unread status line is annotated in full while invalid status files preserve their raw wakes
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 76396.1787015362.nLhUkZ
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 2 --recovery-generation 76396.1787015362.nLhUkZ
+ok - slow annotation releases the append lock and a deleted status file fails open
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 1 --recovery-generation existing
+ok - wake append publishes atomic recovery evidence before durable rows
+ok - wake drain: generation-less legacy wakes are adopted and acknowledged
+ok - wake drain: a stale acknowledgement cannot retire or consume a newer recovery episode
+ok - wake drain: recovery acknowledgement failures are explicit and retryable
+ok - interruptions preserve durable rows until post-handling acknowledgement
