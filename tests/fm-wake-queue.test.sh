@@ -607,11 +607,18 @@ test_interruption_before_and_after_raw_commit() {
   FM_STATE_OVERRIDE="$state" FM_WAKE_DRAIN_TEST_DELAY_BEFORE_COMMIT=5 "$DRAIN" > "$before_out" &
   pid=$!
   i=0
-  while [ "$i" -lt 100 ] && [ ! -e "$state/.wake-queue.lock" ]; do
+  while [ "$i" -lt 100 ] && ! ps -axo ppid=,comm= | awk -v parent="$pid" '
+    $1 == parent && ($2 == "sleep" || $2 ~ /\/sleep$/) { found=1 }
+    END { exit !found }
+  '; do
     sleep 0.05
     i=$((i + 1))
   done
-  [ -e "$state/.wake-queue.lock" ] || { kill "$pid" 2>/dev/null || true; fail "pre-commit drain never entered its serialized read boundary"; }
+  ps -axo ppid=,comm= | awk -v parent="$pid" '
+    $1 == parent && ($2 == "sleep" || $2 ~ /\/sleep$/) { found=1 }
+    END { exit !found }
+  ' || { kill "$pid" 2>/dev/null || true; fail "pre-commit drain never reached its interruption boundary"; }
+  [ -e "$state/.wake-queue.lock" ] || { kill "$pid" 2>/dev/null || true; fail "pre-commit drain released its serialized read boundary too early"; }
   kill -TERM "$pid" 2>/dev/null || fail "could not interrupt drain before raw commitment"
   set +e
   wait "$pid"
