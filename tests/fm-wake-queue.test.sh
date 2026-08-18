@@ -715,8 +715,9 @@ test_self_announced_append_guards() {
 # frame, and the exit path then re-acquires the same lock (a TERM inside a
 # recovery-marker section is the reproduced case: the watcher's reap wedged
 # forever spinning against its own pid). Exercise the public lock functions
-# with BASHPID unavailable so the stock macOS Bash identity path must preserve
-# self-recovery without confusing parent, sibling, nested, or background shells.
+# with BASHPID unavailable, including a forged value on stock macOS Bash 3.2,
+# so the portable identity path must preserve self-recovery without confusing
+# parent, sibling, nested, or background shells.
 test_lock_ownership_without_bashpid() {
   local dir state rc
   dir=$(make_case lock-ownership)
@@ -724,6 +725,10 @@ test_lock_ownership_without_bashpid() {
   rc=0
   FM_STATE_OVERRIDE="$state" bash -c '
     unset BASHPID 2>/dev/null || true
+    if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ]; then
+      BASHPID=424242
+      export BASHPID
+    fi
     . "$1"
 
     wait_for_file() {

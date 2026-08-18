@@ -23,7 +23,7 @@ FM_CURRENT_PID=
 fm_current_pid() {
   local probe pid
   FM_CURRENT_PID=
-  if [ -n "${BASHPID:-}" ]; then
+  if [ "${BASH_VERSINFO[0]:-0}" -ge 4 ] && [ -n "${BASHPID:-}" ]; then
     FM_CURRENT_PID=$BASHPID
     return 0
   fi
