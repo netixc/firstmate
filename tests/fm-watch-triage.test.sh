@@ -65,7 +65,7 @@ wait_live() {
 # Wait for a concrete suppressor signature while treating a dead watcher as an
 # immediate failure rather than spending the remaining readiness budget.
 wait_for_seen_signature() {  # <pid> <seen-file> <expected-signature> [ticks]
-  local pid=$1 file=$2 expected=$3 limit=${4:-240} i=0 actual
+  local pid=$1 file=$2 expected=$3 limit=${4:-80} i=0 actual
   while [ "$i" -lt "$limit" ]; do
     if ! is_live_non_zombie "$pid"; then
       wait "$pid" 2>/dev/null || true
