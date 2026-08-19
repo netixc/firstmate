@@ -934,7 +934,7 @@ test_exited_declared_pause_is_bounded_but_live_gate_surfaces() {
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" >> "$out" &
   pid=$!
   i=0
-  while [ "$i" -lt 30 ]; do
+  while [ "$i" -lt 80 ]; do
     is_live_non_zombie "$pid" \
       || { reap "$pid"; fail "live external-decision gate escalated on the wedge timer after its immediate surface: $(cat "$out")"; }
     [ ! -e "$state/.stale-since-$key" ] && break
