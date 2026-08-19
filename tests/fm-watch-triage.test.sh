@@ -1227,7 +1227,7 @@ test_wedge_escalation_marks_demand_deep_inspection_after_threshold() {
 }
 
 test_wedge_escalation_resets_when_pane_becomes_active() {
-  local dir state fakebin out capture_file window key pane_hash sig pid
+  local dir state fakebin out capture_file window key pane_hash sig pid i
   dir=$(make_case wedge-escalation-reset); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; capture_file="$dir/pane.txt"
   window="test:fm-wedged-reset"
@@ -1246,12 +1246,26 @@ test_wedge_escalation_resets_when_pane_becomes_active() {
   # The pane content changes (the crew is active again): the hash no longer
   # matches, so the watcher resets escalation bookkeeping instead of escalating.
   printf 'new output, crew active again' > "$capture_file"
+  pane_hash=$(hash_text "new output, crew active again")
   PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
     FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=240 FM_POLL=1 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
   pid=$!
-  if ! wait_live "$pid" 30; then
-    reap "$pid"; fail "watcher exited on a fresh (changed) pane hash: $(cat "$out")"
+  i=0
+  while [ "$i" -lt 80 ]; do
+    is_live_non_zombie "$pid" \
+      || { reap "$pid"; fail "watcher exited on a fresh (changed) pane hash: $(cat "$out")"; }
+    if [ "$(cat "$state/.hash-$key" 2>/dev/null || true)" = "$pane_hash" ] \
+      && [ ! -e "$state/.wedge-escalations-$key" ]; then
+      break
+    fi
+    sleep 0.1
+    i=$((i + 1))
+  done
+  if [ "$(cat "$state/.hash-$key" 2>/dev/null || true)" != "$pane_hash" ] \
+    || [ -e "$state/.wedge-escalations-$key" ]; then
+    reap "$pid"
+    fail "watcher did not publish changed-pane reset readiness before the deadline"
   fi
   [ ! -e "$state/.wedge-escalations-$key" ] || fail "a changed pane hash did not reset the wedge-escalation counter"
   reap "$pid"
