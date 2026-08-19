@@ -1517,7 +1517,7 @@ test_busy_pane_repeated_escalation_reaches_demand_deep_inspection() {
 # wedge timer, while one 66 minutes old must - bracketing the default around 3600
 # without waiting a literal hour.
 test_busy_pane_default_turn_age_bound_is_3600s() {
-  local dir state fakebin out capture_file window key pane_hash sig pid
+  local dir state fakebin out capture_file window key pane_hash sig pid i
   dir=$(make_case busy-default-turn-age); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="test:fm-busy-default"
   printf 'Working...' > "$capture_file"
@@ -1536,10 +1536,19 @@ test_busy_pane_default_turn_age_bound_is_3600s() {
     FM_STATE_OVERRIDE="$state" FM_STALE_ESCALATE_SECS=999 FM_POLL=1 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
   pid=$!
-  if ! wait_live "$pid" 30; then
-    reap "$pid"; fail "a 5-minute-old completed turn tripped the default busy-turn-age bound: $(cat "$out")"
+  i=0
+  while [ "$i" -lt 80 ]; do
+    is_live_non_zombie "$pid" \
+      || { reap "$pid"; fail "a 5-minute-old completed turn tripped the default busy-turn-age bound: $(cat "$out")"; }
+    [ -e "$state/.last-watcher-beat" ] && break
+    sleep 0.1
+    i=$((i + 1))
+  done
+  if [ ! -e "$state/.last-watcher-beat" ]; then
+    reap "$pid"
+    fail "watcher did not complete the five-minute-bound readiness poll"
   fi
-  [ ! -e "$state/.stale-since-$key" ] || fail "a 5-minute-old completed turn started a wedge timer under the default bound"
+  [ ! -e "$state/.stale-since-$key" ] || { reap "$pid"; fail "a 5-minute-old completed turn started a wedge timer under the default bound"; }
   reap "$pid"
   ack_stopped_cycle "$state" || fail "could not acknowledge the intentional five-minute-bound stop"
 
@@ -1550,10 +1559,19 @@ test_busy_pane_default_turn_age_bound_is_3600s() {
     FM_STATE_OVERRIDE="$state" FM_STALE_ESCALATE_SECS=999 FM_POLL=1 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
   pid=$!
-  if ! wait_live "$pid" 30; then
-    reap "$pid"; fail "a 66-minute-old completed turn escalated before the wedge threshold under the default bound: $(cat "$out")"
+  i=0
+  while [ "$i" -lt 80 ]; do
+    is_live_non_zombie "$pid" \
+      || { reap "$pid"; fail "a 66-minute-old completed turn escalated before the wedge threshold under the default bound: $(cat "$out")"; }
+    [ -s "$state/.stale-since-$key" ] && break
+    sleep 0.1
+    i=$((i + 1))
+  done
+  if [ ! -s "$state/.stale-since-$key" ]; then
+    reap "$pid"
+    fail "watcher did not publish 66-minute-bound readiness before the deadline"
   fi
-  [ -s "$state/.stale-since-$key" ] || fail "a 66-minute-old completed turn did not start a wedge timer under the default bound (default is not 3600s)"
+  [ -s "$state/.stale-since-$key" ] || { reap "$pid"; fail "a 66-minute-old completed turn did not start a wedge timer under the default bound (default is not 3600s)"; }
   reap "$pid"
   pass "the production default busy-turn-age bound is 3600s (5min under does not wedge, 66min over does)"
 }
