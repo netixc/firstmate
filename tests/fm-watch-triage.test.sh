@@ -1620,7 +1620,8 @@ test_busy_pane_default_turn_age_bound_is_3600s() {
 }
 
 test_nonterminal_stale_repairs_missing_or_corrupt_timer() {
-  local dir state fakebin out capture_file window key pane_hash sig pid since= i
+  local dir state fakebin out capture_file window key pane_hash sig pid since i
+  since=
   dir=$(make_case nonterminal-stale-timer-repair); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; capture_file="$dir/pane.txt"
   window="test:fm-quiet-timer"
