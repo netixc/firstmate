@@ -36,9 +36,75 @@ TMP_ROOT=$(fm_test_tmproot fm-control-relaunch)
 mkdir -p "$TMP_ROOT"
 TMP_ROOT=$(cd "$TMP_ROOT" && pwd)
 TASK_TMPS=()
+RELAUNCH_PROCESS_ROOTS=()
+
+relaunch_track_process() {  # <pid>
+  RELAUNCH_PROCESS_ROOTS+=("$1")
+}
+
+relaunch_untrack_process() {  # <pid>
+  local target=$1 pid kept=()
+  for pid in "${RELAUNCH_PROCESS_ROOTS[@]:-}"; do
+    [ "$pid" = "$target" ] || kept+=("$pid")
+  done
+  RELAUNCH_PROCESS_ROOTS=()
+  if [ "${#kept[@]}" -gt 0 ]; then
+    RELAUNCH_PROCESS_ROOTS=("${kept[@]}")
+  fi
+}
+
+relaunch_collect_process_tree() {  # <root-pid>
+  local pid=$1 child
+  kill -0 "$pid" 2>/dev/null || return 0
+  kill -STOP "$pid" 2>/dev/null || true
+  for child in $(pgrep -P "$pid" 2>/dev/null || true); do
+    relaunch_collect_process_tree "$child"
+  done
+  printf '%s\n' "$pid"
+}
+
+relaunch_process_is_live() {  # <pid>
+  local process_state
+  process_state=$(ps -o stat= -p "$1" 2>/dev/null | tr -d ' ' || true)
+  case "$process_state" in
+    ''|Z*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+relaunch_terminate_process_trees() {  # <root-pid>...
+  local root pid pids='' i=0 any_live
+  for root in "$@"; do
+    [ -n "$root" ] || continue
+    kill -STOP "$root" 2>/dev/null || true
+    pids="$pids $(relaunch_collect_process_tree "$root")"
+  done
+  for pid in $pids; do kill -TERM "$pid" 2>/dev/null || true; done
+  for pid in $pids; do kill -CONT "$pid" 2>/dev/null || true; done
+  while [ "$i" -lt 100 ]; do
+    any_live=0
+    for pid in $pids; do
+      relaunch_process_is_live "$pid" && any_live=1
+    done
+    [ "$any_live" -eq 1 ] || break
+    /bin/sleep 0.01
+    i=$((i + 1))
+  done
+  for pid in $pids; do
+    relaunch_process_is_live "$pid" && kill -KILL "$pid" 2>/dev/null || true
+  done
+  for root in "$@"; do
+    [ -n "$root" ] || continue
+    wait "$root" 2>/dev/null || true
+    relaunch_untrack_process "$root"
+  done
+}
 
 relaunch_cleanup() {
   local d
+  if [ "${#RELAUNCH_PROCESS_ROOTS[@]}" -gt 0 ]; then
+    relaunch_terminate_process_trees "${RELAUNCH_PROCESS_ROOTS[@]}"
+  fi
   for d in "${TASK_TMPS[@]:-}"; do
     [ -n "$d" ] && rm -rf "$d"
   done
@@ -85,6 +151,7 @@ case "${1:-}" in
       case "$payload" in
         'export GOTMPDIR='*)
           if [ -n "${FM_FAKE_TRACE_PREPARE:-}" ]; then
+            [ -z "${FM_FAKE_BLOCKED_TRANSPORT_PID:-}" ] || printf '%s\n' "$$" > "$FM_FAKE_BLOCKED_TRANSPORT_PID"
             : > "$FM_FAKE_TRACE_PREPARE"
             while [ ! -e "$FM_FAKE_META_WRITER_READY" ]; do /bin/sleep 0.01; done
           fi
@@ -173,6 +240,7 @@ run_control() {  # <case-dir> <args...>
     FM_FAKE_TRACE_PREPARE="${FM_FAKE_TRACE_PREPARE:-}" \
     FM_FAKE_META_WRITER_READY="${FM_FAKE_META_WRITER_READY:-}" \
     FM_FAKE_TRACE_EXPORTED="${FM_FAKE_TRACE_EXPORTED:-}" \
+    FM_FAKE_BLOCKED_TRANSPORT_PID="${FM_FAKE_BLOCKED_TRANSPORT_PID:-}" \
     "$CONTROL" "$@" 2>&1
 }
 
@@ -316,13 +384,13 @@ test_relaunch_serializes_concurrent_durable_metadata_publication() {
     FM_FAKE_TRACE_EXPORTED="$exported" \
     run_control "$dir" rl28 relaunch --note "continue after publication" > "$dir/control.out" &
   control_pid=$!
-  while [ ! -e "$prepare" ] && [ "$i" -lt 200 ]; do
+  relaunch_track_process "$control_pid"
+  while [ ! -e "$prepare" ] && [ "$i" -lt 800 ]; do
     /bin/sleep 0.01
     i=$((i + 1))
   done
   [ -e "$prepare" ] || {
-    kill "$control_pid" 2>/dev/null || true
-    wait "$control_pid" 2>/dev/null || true
+    relaunch_terminate_process_trees "$control_pid"
     fail "relaunch did not reach trace delivery"
   }
   env PATH="$dir/fakebin:$PATH" FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" \
@@ -333,22 +401,22 @@ test_relaunch_serializes_concurrent_durable_metadata_publication() {
     "$RELAY_LINK" rl28 request-28 --carry-count 1 --carry-ts 1700000000 \
       --carry-platform discord --carry-max 1900 > "$dir/link.out" 2>&1 &
   link_pid=$!
+  relaunch_track_process "$link_pid"
   i=0
   while { [ ! -e "$ready" ] || [ ! -e "$exported" ]; } && [ "$i" -lt 200 ]; do
     /bin/sleep 0.01
     i=$((i + 1))
   done
   [ -e "$ready" ] && [ -e "$exported" ] || {
-    : > "$release"
-    kill "$link_pid" "$control_pid" 2>/dev/null || true
-    wait "$link_pid" 2>/dev/null || true
-    wait "$control_pid" 2>/dev/null || true
+    relaunch_terminate_process_trees "$link_pid" "$control_pid"
     fail "trace publication did not overlap the concurrent metadata writer"
   }
   : > "$release"
   wait "$link_pid"; rc=$?
+  relaunch_untrack_process "$link_pid"
   expect_code 0 "$rc" "concurrent Relay metadata publication should serialize"$'\n'"$(cat "$dir/link.out")"
   wait "$control_pid"; rc=$?
+  relaunch_untrack_process "$control_pid"
   expect_code 0 "$rc" "relaunch should complete after serialized metadata publication"$'\n'"$(cat "$dir/control.out")"
   [ "$(meta_field "$dir" rl28 relay_request)" = request-28 ] \
     || fail "relaunch erased metadata published concurrently through the Relay interface"
@@ -358,6 +426,67 @@ test_relaunch_serializes_concurrent_durable_metadata_publication() {
   fm_trace_context_valid "$traceparent" \
     || fail "concurrent metadata publication erased the replacement's trace carrier"
   pass "fm-control relaunch: trace and concurrent task metadata publications serialize"
+}
+
+test_relaunch_timeout_cleanup_reaps_blocked_transport_tree() {
+  local dir control_pid output_reader_pid rc i=0 prepare ready blocked_pid tree_pids commands pid output_fifo
+  dir=$(new_case timeout-cleanup rl34)
+  add_ship_task "$dir" rl34 pi
+  printf '%s\n' "$$" > "$dir/home/state/.lock"
+  printf '%s on\n' "$$" > "$dir/home/state/.trace-context-effective"
+  prepare="$dir/trace-prepare"
+  ready="$dir/meta-writer-ready"
+  output_fifo="$dir/control-output"
+  mkfifo "$output_fifo"
+  cat "$output_fifo" > "$dir/control.out" &
+  output_reader_pid=$!
+  relaunch_track_process "$output_reader_pid"
+  FM_FAKE_TRACE_PREPARE="$prepare" \
+    FM_FAKE_META_WRITER_READY="$ready" \
+    FM_FAKE_BLOCKED_TRANSPORT_PID="$dir/blocked-transport.pid" \
+    run_control "$dir" rl34 relaunch --note "exercise timeout cleanup" > "$output_fifo" &
+  control_pid=$!
+  relaunch_track_process "$control_pid"
+  while { [ ! -e "$prepare" ] || [ ! -s "$dir/blocked-transport.pid" ]; } && [ "$i" -lt 800 ]; do
+    /bin/sleep 0.01
+    i=$((i + 1))
+  done
+  [ -e "$prepare" ] && [ -s "$dir/blocked-transport.pid" ] || {
+    relaunch_terminate_process_trees "$control_pid"
+    fail "timeout cleanup fixture did not reach its blocked fake transport"
+  }
+  blocked_pid=$(cat "$dir/blocked-transport.pid")
+  tree_pids=$(relaunch_collect_process_tree "$control_pid")
+  commands=
+  for pid in $tree_pids; do
+    commands="$commands$(ps -o command= -p "$pid" 2>/dev/null || true)\n"
+  done
+  printf '%s\n' "$tree_pids" | grep -Fx "$blocked_pid" >/dev/null \
+    || fail "blocked fake transport was not owned by the relaunch process tree"
+  printf '%b' "$commands" | grep -F 'fm-control.sh' >/dev/null \
+    || fail "timeout fixture did not include the control process"
+  printf '%b' "$commands" | grep -F 'fm-spawn.sh' >/dev/null \
+    || fail "timeout fixture did not include the relaunch spawn process"
+  printf '%b' "$commands" | grep -F '/fakebin/tmux' >/dev/null \
+    || fail "timeout fixture did not include the blocked fake transport"
+
+  relaunch_terminate_process_trees "$control_pid"
+  for pid in $tree_pids; do
+    relaunch_process_is_live "$pid" && fail "timeout cleanup left test-owned process $pid alive"
+  done
+  i=0
+  while relaunch_process_is_live "$output_reader_pid" && [ "$i" -lt 800 ]; do
+    /bin/sleep 0.01
+    i=$((i + 1))
+  done
+  relaunch_process_is_live "$output_reader_pid" && {
+    relaunch_terminate_process_trees "$output_reader_pid"
+    fail "fixture output writer remained open after timeout cleanup"
+  }
+  wait "$output_reader_pid"; rc=$?
+  relaunch_untrack_process "$output_reader_pid"
+  expect_code 0 "$rc" "fixture output did not reach clean EOF after timeout cleanup"
+  pass "fm-control relaunch: timeout cleanup reaps control, spawn, and blocked transport without later output"
 }
 
 test_disabled_relaunch_clears_prior_trace_context() {
@@ -731,13 +860,13 @@ test_prepublication_failure_keeps_concurrent_durable_metadata() {
     run_control "$dir" rl30 relaunch --harness pi --note "preserve concurrent metadata" \
       > "$dir/control.out" &
   control_pid=$!
+  relaunch_track_process "$control_pid"
   while [ ! -e "$dir/cwd-race-ready" ] && [ "$i" -lt 200 ]; do
     /bin/sleep 0.01
     i=$((i + 1))
   done
   [ -e "$dir/cwd-race-ready" ] || {
-    kill "$control_pid" 2>/dev/null || true
-    wait "$control_pid" 2>/dev/null || true
+    relaunch_terminate_process_trees "$control_pid"
     fail "relaunch did not reach its pre-publication endpoint check"
   }
   link_out=$(env PATH="$dir/fakebin:$PATH" FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" \
@@ -745,6 +874,7 @@ test_prepublication_failure_keeps_concurrent_durable_metadata() {
       --carry-platform discord --carry-max 1900 2>&1); rc=$?
   expect_code 0 "$rc" "concurrent durable metadata publication should succeed"$'\n'"$link_out"
   wait "$control_pid"; rc=$?
+  relaunch_untrack_process "$control_pid"
   expect_code 1 "$rc" "the staged pre-publication launch failure should fail closed"
   [ "$(meta_field "$dir" rl30 relay_request)" = request-30 ] \
     || fail "rollback erased the concurrent Relay request"
@@ -978,15 +1108,18 @@ test_concurrent_relaunch_is_refused() {
     sleep 30
   ) &
   holder=$!
+  relaunch_track_process "$holder"
   i=0
   while [ ! -e "$lock" ] && [ "$i" -lt 100 ]; do
     sleep 0.1
     i=$((i + 1))
   done
-  [ -e "$lock" ] || { kill "$holder" 2>/dev/null; fail "could not stage a held control lock"; }
+  [ -e "$lock" ] || {
+    relaunch_terminate_process_trees "$holder"
+    fail "could not stage a held control lock"
+  }
   out=$(run_control "$dir" rl19 relaunch --note "concurrent"); rc=$?
-  kill "$holder" 2>/dev/null || true
-  wait "$holder" 2>/dev/null || true
+  relaunch_terminate_process_trees "$holder"
   expect_code 1 "$rc" "a second concurrent control action should refuse"
   assert_contains "$out" "another lifecycle action is already running" \
     "the refusal should name the concurrent action"
@@ -1008,14 +1141,17 @@ test_direct_spawn_relaunch_participates_in_the_lifecycle_lock() {
     sleep 30
   ) &
   holder=$!
+  relaunch_track_process "$holder"
   while [ ! -e "$lock" ] && [ "$i" -lt 100 ]; do
     sleep 0.1
     i=$((i + 1))
   done
-  [ -e "$lock" ] || fail "could not stage the lifecycle lock"
+  [ -e "$lock" ] || {
+    relaunch_terminate_process_trees "$holder"
+    fail "could not stage the lifecycle lock"
+  }
   out=$(run_spawn "$dir" rl26 --relaunch --harness pi); rc=$?
-  kill "$holder" 2>/dev/null || true
-  wait "$holder" 2>/dev/null || true
+  relaunch_terminate_process_trees "$holder"
   expect_code 1 "$rc" "direct relaunch spawn should refuse a held lifecycle lock"
   assert_contains "$out" "another lifecycle action is already running" \
     "direct relaunch spawn should name lifecycle contention"
@@ -1035,14 +1171,17 @@ test_promotion_participates_in_the_lifecycle_lock_before_metadata_resolution() {
     sleep 30
   ) &
   holder=$!
+  relaunch_track_process "$holder"
   while [ ! -e "$lock" ] && [ "$i" -lt 100 ]; do
     sleep 0.1
     i=$((i + 1))
   done
-  [ -e "$lock" ] || fail "could not stage the promotion lifecycle lock"
+  [ -e "$lock" ] || {
+    relaunch_terminate_process_trees "$holder"
+    fail "could not stage the promotion lifecycle lock"
+  }
   out=$(FM_HOME="$dir/home" "$PROMOTE" rl29 --mode direct-PR --yolo on 2>&1); rc=$?
-  kill "$holder" 2>/dev/null || true
-  wait "$holder" 2>/dev/null || true
+  relaunch_terminate_process_trees "$holder"
   expect_code 1 "$rc" "promotion should refuse a concurrent lifecycle action"
   assert_contains "$out" "another lifecycle action is already running" \
     "promotion should lock before interpreting the task metadata"
@@ -1106,6 +1245,7 @@ test_spawn_relaunch_refuses_a_pane_outside_the_worktree() {
 test_same_harness_relaunch_keeps_identity_and_reuses_the_endpoint
 test_relaunch_preserves_durable_task_metadata
 test_relaunch_serializes_concurrent_durable_metadata_publication
+test_relaunch_timeout_cleanup_reaps_blocked_transport_tree
 test_disabled_relaunch_clears_prior_trace_context
 test_relaunch_appends_the_progress_note_to_the_instructions
 test_relaunch_requires_a_note_for_a_ship_task
