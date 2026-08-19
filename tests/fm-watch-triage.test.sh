@@ -1107,7 +1107,7 @@ test_nonterminal_stale_pause_transitions_reclassify_unchanged_hash() {
 }
 
 test_nonterminal_paused_rechecks_authoritative_state() {
-  local dir state fakebin out capture_file window key pane_hash sig pid
+  local dir state fakebin out capture_file window key pane_hash sig pid i
   dir=$(make_case nonterminal-paused-recheck); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="test:fm-pause-recheck"
   printf 'idle awaiting external\n' > "$capture_file"
@@ -1126,8 +1126,21 @@ test_nonterminal_paused_rechecks_authoritative_state() {
     FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=999 FM_POLL=1 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
   pid=$!
-  if ! wait_live "$pid" 30; then
-    reap "$pid"; fail "an active run behind a declared pause surfaced instead of resuming wedge tracking: $(cat "$out")"
+  i=0
+  while [ "$i" -lt 80 ]; do
+    is_live_non_zombie "$pid" \
+      || { reap "$pid"; fail "an active run behind a declared pause surfaced instead of resuming wedge tracking: $(cat "$out")"; }
+    if [ ! -e "$state/.paused-$key" ] \
+      && [ -s "$state/.stale-since-$key" ]; then
+      break
+    fi
+    sleep 0.1
+    i=$((i + 1))
+  done
+  if [ -e "$state/.paused-$key" ] \
+    || [ ! -s "$state/.stale-since-$key" ]; then
+    reap "$pid"
+    fail "watcher did not publish authoritative active-run readiness before the deadline"
   fi
   [ ! -e "$state/.paused-$key" ] || { reap "$pid"; fail "authoritative active run retained paused mode"; }
   [ -s "$state/.stale-since-$key" ] || { reap "$pid"; fail "authoritative active run did not resume wedge tracking"; }
