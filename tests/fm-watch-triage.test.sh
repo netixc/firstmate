@@ -1416,7 +1416,7 @@ test_busy_pane_changing_hash_escalates_past_turn_age_bound() {
 }
 
 test_busy_pane_turn_end_touch_resets_age() {
-  local dir state fakebin out capture_file window key pane_hash sig pid
+  local dir state fakebin out capture_file window key pane_hash sig pid i
   dir=$(make_case busy-turn-end-resets-age); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="test:fm-busy-reset"
   printf 'Working...' > "$capture_file"
@@ -1439,8 +1439,21 @@ test_busy_pane_turn_end_touch_resets_age() {
     FM_STATE_OVERRIDE="$state" FM_BUSY_TURN_MAX_SECS=3600 FM_STALE_ESCALATE_SECS=240 FM_POLL=1 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
   pid=$!
-  if ! wait_live "$pid" 30; then
-    reap "$pid"; fail "a freshly completed turn on a busy pane was still escalated: $(cat "$out")"
+  i=0
+  while [ "$i" -lt 80 ]; do
+    is_live_non_zombie "$pid" \
+      || { reap "$pid"; fail "a freshly completed turn on a busy pane was still escalated: $(cat "$out")"; }
+    if [ ! -e "$state/.stale-since-$key" ] \
+      && [ ! -e "$state/.wedge-escalations-$key" ]; then
+      break
+    fi
+    sleep 0.1
+    i=$((i + 1))
+  done
+  if [ -e "$state/.stale-since-$key" ] \
+    || [ -e "$state/.wedge-escalations-$key" ]; then
+    reap "$pid"
+    fail "watcher did not publish completed-turn reset readiness before the deadline"
   fi
   [ ! -s "$out" ] || fail "a freshly completed turn on a busy pane printed a wake reason"
   [ ! -e "$state/.stale-since-$key" ] || fail "a freshly completed turn did not clear the wedge timer"
