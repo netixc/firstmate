@@ -10,6 +10,8 @@ set -u
 
 # shellcheck source=tests/wake-helpers.sh
 . "$(dirname "${BASH_SOURCE[0]}")/wake-helpers.sh"
+# shellcheck source=bin/fm-timeout-lib.sh
+. "$ROOT/bin/fm-timeout-lib.sh"
 
 WATCH="$ROOT/bin/fm-watch.sh"
 DRAIN="$ROOT/bin/fm-wake-drain.sh"
@@ -718,6 +720,35 @@ test_self_announced_append_guards() {
   pass "self-announced appends suppress only their own bytes and fail toward waking"
 }
 
+test_lock_owner_publication_ignores_unusable_tmpdir() {
+  local dir state badtmp lock rc=0 owner_glob
+  dir=$(make_case lock-owner-tmpdir)
+  state="$dir/state"
+  badtmp="$dir/missing-tmp"
+  lock="$state/.tmpdir-independent.lock"
+
+  # shellcheck disable=SC2016 # Variables expand inside the bounded child shell.
+  fm_run_timed 5 env TMPDIR="$badtmp" FM_STATE_OVERRIDE="$state" bash -c '
+    unset BASHPID 2>/dev/null || true
+    if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ]; then
+      BASHPID=424242
+      export BASHPID
+    fi
+    . "$1"
+    fm_lock_acquire_wait "$2" || exit 10
+    [ -L "$2" ] && [ -f "$2/pid" ] || exit 11
+    fm_current_pid || exit 12
+    [ "$(cat "$2/pid")" = "$FM_CURRENT_PID" ] || exit 13
+    fm_lock_release "$2"
+    [ ! -e "$2" ] && [ ! -L "$2" ] || exit 14
+  ' _ "$ROOT/bin/fm-wake-lib.sh" "$lock" || rc=$?
+
+  [ "$rc" -eq 0 ] || fail "lock owner publication depended on unusable TMPDIR (rc=$rc)"
+  owner_glob=$(find "$state" -maxdepth 1 -name '.tmpdir-independent.lock.owner.*' -print)
+  [ -z "$owner_glob" ] || fail "TMPDIR-independent lock release left owner residue"
+  pass "portable lock owner publication and release ignore an unusable TMPDIR"
+}
+
 # A trap that fires inside a lock's critical section abandons the holding
 # frame, and the exit path then re-acquires the same lock (a TERM inside a
 # recovery-marker section is the reproduced case: the watcher's reap wedged
@@ -859,6 +890,7 @@ test_historical_annotation_skips_announced_status() {
   pass "historical annotations replay nothing already announced and keep everything new"
 }
 
+test_lock_owner_publication_ignores_unusable_tmpdir
 test_lock_ownership_without_bashpid
 test_self_announced_append_guards
 test_historical_annotation_skips_announced_status
