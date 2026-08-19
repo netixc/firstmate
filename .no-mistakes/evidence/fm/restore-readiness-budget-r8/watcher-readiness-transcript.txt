@@ -1,0 +1,7 @@
+WATCHER SUPPRESSOR END-TO-END
+ok - a no-verb signal whose crew is provably working is absorbed (no exit, no queue, suppressor advanced, beacon present)
+READINESS BUDGET REGRESSION
+baseline-240 missing-signature result=1 ticks=240 nominal-seconds=24.0
+target-80 missing-signature result=1 ticks=80 nominal-seconds=8.0
+target-80 early-watcher-death result=1 elapsed=0.4s
+RESULT: baseline consumed 240 ticks; target consumes 80 ticks and still fails immediately on watcher death
