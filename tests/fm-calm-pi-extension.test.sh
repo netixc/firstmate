@@ -3624,6 +3624,7 @@ JS
   chrome=$(find_chrome) || fail "Chrome or Chromium is required for rendered export DOM assertions"
   "$chrome" \
     --headless=new \
+    --incognito \
     --disable-gpu \
     --no-sandbox \
     --user-data-dir="$TMP_ROOT/chrome-profile" \
