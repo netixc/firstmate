@@ -1150,7 +1150,7 @@ test_nonterminal_paused_rechecks_authoritative_state() {
 }
 
 test_paused_authoritative_working_preserves_wedge_timer() {
-  local dir state fakebin out capture_file window key pane_hash sig pid since
+  local dir state fakebin out capture_file window key pane_hash sig pid since i
   dir=$(make_case paused-working-preserves-wedge-timer); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="test:fm-paused-working"
   printf 'idle awaiting external\n' > "$capture_file"
@@ -1169,8 +1169,21 @@ test_paused_authoritative_working_preserves_wedge_timer() {
     FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=999 FM_POLL=1 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
   pid=$!
-  wait_numeric_file "$state/.stale-since-$key" 30 || { reap "$pid"; fail "authoritative working state did not start wedge tracking"; }
-  since=$(cat "$state/.stale-since-$key")
+  i=0
+  while [ "$i" -lt 80 ]; do
+    is_live_non_zombie "$pid" \
+      || { reap "$pid"; fail "authoritative working state exited before starting wedge tracking: $(cat "$out")"; }
+    since=$(cat "$state/.stale-since-$key" 2>/dev/null || true)
+    case "$since" in
+      ''|*[!0-9]*) ;;
+      *) break ;;
+    esac
+    sleep 0.1
+    i=$((i + 1))
+  done
+  case "$since" in
+    ''|*[!0-9]*) reap "$pid"; fail "authoritative working state did not start wedge tracking" ;;
+  esac
   sleep 2
   [ "$(cat "$state/.stale-since-$key" 2>/dev/null || true)" = "$since" ] \
     || { reap "$pid"; fail "repeat authoritative working recheck reset the wedge timer"; }
