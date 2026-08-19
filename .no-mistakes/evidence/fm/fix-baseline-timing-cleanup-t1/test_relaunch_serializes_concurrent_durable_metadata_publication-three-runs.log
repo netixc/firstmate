@@ -1,0 +1,6 @@
+RUN 1/3: test_relaunch_serializes_concurrent_durable_metadata_publication
+ok - fm-control relaunch: trace and concurrent task metadata publications serialize
+RUN 2/3: test_relaunch_serializes_concurrent_durable_metadata_publication
+ok - fm-control relaunch: trace and concurrent task metadata publications serialize
+RUN 3/3: test_relaunch_serializes_concurrent_durable_metadata_publication
+ok - fm-control relaunch: trace and concurrent task metadata publications serialize

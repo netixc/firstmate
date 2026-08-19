@@ -1,0 +1,6 @@
+RUN 1/3: test_signal_catchup_without_running_watcher
+ok - signal written while no watcher runs is caught on next run
+RUN 2/3: test_signal_catchup_without_running_watcher
+ok - signal written while no watcher runs is caught on next run
+RUN 3/3: test_signal_catchup_without_running_watcher
+ok - signal written while no watcher runs is caught on next run

@@ -1,0 +1,12 @@
+DEBUG_NODE_OUTPUT_BEGIN
+file:///Users/control/.no-mistakes/worktrees/874f0de57f61/01M0D77ZPQ8KA1S10W1YSMVJPS/[eval1]:96
+    throw new Error(`${reason} expected exactly one live arm child, got ${live.join(",") || "(none)"}`);
+          ^
+
+Error: resume expected exactly one live arm child, got (none)
+    at replaceSession (file:///Users/control/.no-mistakes/worktrees/874f0de57f61/01M0D77ZPQ8KA1S10W1YSMVJPS/[eval1]:96:11)
+    at async file:///Users/control/.no-mistakes/worktrees/874f0de57f61/01M0D77ZPQ8KA1S10W1YSMVJPS/[eval1]:141:13
+
+Node.js v26.4.0
+DEBUG_NODE_OUTPUT_END
+not ok - Pi session transitions must rearm through an explicit generation owner: expected exit 0, got 1

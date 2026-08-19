@@ -1,0 +1,134 @@
+{
+  "families": [
+    {
+      "count": 14,
+      "duration_ms": 766425,
+      "failed": 0,
+      "name": "backend-dispatch"
+    }
+  ],
+  "finished_at": "2026-08-19T15:27:54Z",
+  "run_id": "fm-test-run-1787152506873-81853",
+  "scripts": [
+    {
+      "duration_ms": 340540,
+      "exit": 0,
+      "expected_gate_skip": "none",
+      "family": "backend-dispatch",
+      "gate_skip": false,
+      "path": "tests/fm-backend-herdr.test.sh"
+    },
+    {
+      "duration_ms": 1176,
+      "exit": 0,
+      "expected_gate_skip": "none",
+      "family": "backend-dispatch",
+      "gate_skip": false,
+      "path": "tests/fm-backend-tmux-smoke.test.sh"
+    },
+    {
+      "duration_ms": 40024,
+      "exit": 0,
+      "expected_gate_skip": "none",
+      "family": "backend-dispatch",
+      "gate_skip": false,
+      "path": "tests/fm-backend.test.sh"
+    },
+    {
+      "duration_ms": 100551,
+      "exit": 0,
+      "expected_gate_skip": "none",
+      "family": "backend-dispatch",
+      "gate_skip": false,
+      "path": "tests/fm-control-relaunch.test.sh"
+    },
+    {
+      "duration_ms": 37982,
+      "exit": 0,
+      "expected_gate_skip": "none",
+      "family": "backend-dispatch",
+      "gate_skip": false,
+      "path": "tests/fm-control.test.sh"
+    },
+    {
+      "duration_ms": 24036,
+      "exit": 0,
+      "expected_gate_skip": "none",
+      "family": "backend-dispatch",
+      "gate_skip": false,
+      "path": "tests/fm-herdr-session-cleanup.test.sh"
+    },
+    {
+      "duration_ms": 37374,
+      "exit": 0,
+      "expected_gate_skip": "none",
+      "family": "backend-dispatch",
+      "gate_skip": false,
+      "path": "tests/fm-send-resolve-key.test.sh"
+    },
+    {
+      "duration_ms": 7654,
+      "exit": 0,
+      "expected_gate_skip": "none",
+      "family": "backend-dispatch",
+      "gate_skip": false,
+      "path": "tests/fm-send-strict.test.sh"
+    },
+    {
+      "duration_ms": 4360,
+      "exit": 0,
+      "expected_gate_skip": "none",
+      "family": "backend-dispatch",
+      "gate_skip": false,
+      "path": "tests/fm-spawn-batch.test.sh"
+    },
+    {
+      "duration_ms": 56455,
+      "exit": 0,
+      "expected_gate_skip": "none",
+      "family": "backend-dispatch",
+      "gate_skip": false,
+      "path": "tests/fm-spawn-dispatch-profile.test.sh"
+    },
+    {
+      "duration_ms": 10244,
+      "exit": 0,
+      "expected_gate_skip": "none",
+      "family": "backend-dispatch",
+      "gate_skip": false,
+      "path": "tests/fm-spawn-worktree-settle.test.sh"
+    },
+    {
+      "duration_ms": 32711,
+      "exit": 0,
+      "expected_gate_skip": "none",
+      "family": "backend-dispatch",
+      "gate_skip": false,
+      "path": "tests/fm-teardown-endpoint-safety.test.sh"
+    },
+    {
+      "duration_ms": 2673,
+      "exit": 0,
+      "expected_gate_skip": "none",
+      "family": "backend-dispatch",
+      "gate_skip": false,
+      "path": "tests/fm-tmux-agent-liveness.test.sh"
+    },
+    {
+      "duration_ms": 70645,
+      "exit": 0,
+      "expected_gate_skip": "none",
+      "family": "backend-dispatch",
+      "gate_skip": false,
+      "path": "tests/fm-trace-context-spawn.test.sh"
+    }
+  ],
+  "selection": "family=backend-dispatch",
+  "started_at": "2026-08-19T15:15:06Z",
+  "summary": {
+    "duration_ms": 767709,
+    "failed": 0,
+    "skipped_gate": 0,
+    "total": 14
+  }
+}

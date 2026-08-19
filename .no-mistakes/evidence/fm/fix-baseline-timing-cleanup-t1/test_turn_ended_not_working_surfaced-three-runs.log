@@ -1,0 +1,6 @@
+RUN 1/3: test_turn_ended_not_working_surfaced
+ok - a bare turn-end whose crew is not provably working is surfaced (the swallowed-finish fix)
+RUN 2/3: test_turn_ended_not_working_surfaced
+ok - a bare turn-end whose crew is not provably working is surfaced (the swallowed-finish fix)
+RUN 3/3: test_turn_ended_not_working_surfaced
+ok - a bare turn-end whose crew is not provably working is surfaced (the swallowed-finish fix)
