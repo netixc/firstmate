@@ -1,0 +1,5 @@
+stress iteration 1: ok - exited declared-pause and captain-held panes use bounded pause cadence while a live decision gate still surfaces once
+stress iteration 2: ok - exited declared-pause and captain-held panes use bounded pause cadence while a live decision gate still surfaces once
+stress iteration 3: ok - exited declared-pause and captain-held panes use bounded pause cadence while a live decision gate still surfaces once
+stress iteration 4: ok - exited declared-pause and captain-held panes use bounded pause cadence while a live decision gate still surfaces once
+stress iteration 5: ok - exited declared-pause and captain-held panes use bounded pause cadence while a live decision gate still surfaces once
