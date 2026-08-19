@@ -1194,8 +1194,8 @@ test_wedge_escalation_marks_demand_deep_inspection_after_threshold() {
     FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=999 FM_POLL=1 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
   pid=$!
-  if ! wait_live "$pid" 30; then
-    reap "$pid"; fail "watcher exited on the priming round (should absorb): $(cat "$out")"
+  if ! wait_for_stale_readiness "$pid" "$state/.stale-$key" "$pane_hash" "$state/.stale-since-$key"; then
+    reap "$pid"; fail "watcher exited or did not publish wedge priming readiness before the deadline: $(cat "$out")"
   fi
   reap "$pid"
   ack_stopped_cycle "$state" || fail "could not acknowledge the intentional wedge priming stop"
