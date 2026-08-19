@@ -429,17 +429,22 @@ test_relaunch_serializes_concurrent_durable_metadata_publication() {
 }
 
 test_relaunch_timeout_cleanup_reaps_blocked_transport_tree() {
-  local dir control_pid i=0 prepare ready blocked_pid tree_pids commands pid size
+  local dir control_pid output_reader_pid rc i=0 prepare ready blocked_pid tree_pids commands pid output_fifo
   dir=$(new_case timeout-cleanup rl34)
   add_ship_task "$dir" rl34 pi
   printf '%s\n' "$$" > "$dir/home/state/.lock"
   printf '%s on\n' "$$" > "$dir/home/state/.trace-context-effective"
   prepare="$dir/trace-prepare"
   ready="$dir/meta-writer-ready"
+  output_fifo="$dir/control-output"
+  mkfifo "$output_fifo"
+  cat "$output_fifo" > "$dir/control.out" &
+  output_reader_pid=$!
+  relaunch_track_process "$output_reader_pid"
   FM_FAKE_TRACE_PREPARE="$prepare" \
     FM_FAKE_META_WRITER_READY="$ready" \
     FM_FAKE_BLOCKED_TRANSPORT_PID="$dir/blocked-transport.pid" \
-    run_control "$dir" rl34 relaunch --note "exercise timeout cleanup" > "$dir/control.out" &
+    run_control "$dir" rl34 relaunch --note "exercise timeout cleanup" > "$output_fifo" &
   control_pid=$!
   relaunch_track_process "$control_pid"
   while { [ ! -e "$prepare" ] || [ ! -s "$dir/blocked-transport.pid" ]; } && [ "$i" -lt 800 ]; do
@@ -469,14 +474,18 @@ test_relaunch_timeout_cleanup_reaps_blocked_transport_tree() {
   for pid in $tree_pids; do
     relaunch_process_is_live "$pid" && fail "timeout cleanup left test-owned process $pid alive"
   done
-  size=$(wc -c < "$dir/control.out" | tr -d ' ')
   i=0
-  while [ "$i" -lt 20 ]; do
-    [ "$(wc -c < "$dir/control.out" | tr -d ' ')" = "$size" ] \
-      || fail "fixture output kept growing after timeout cleanup"
+  while relaunch_process_is_live "$output_reader_pid" && [ "$i" -lt 800 ]; do
     /bin/sleep 0.01
     i=$((i + 1))
   done
+  relaunch_process_is_live "$output_reader_pid" && {
+    relaunch_terminate_process_trees "$output_reader_pid"
+    fail "fixture output writer remained open after timeout cleanup"
+  }
+  wait "$output_reader_pid"; rc=$?
+  relaunch_untrack_process "$output_reader_pid"
+  expect_code 0 "$rc" "fixture output did not reach clean EOF after timeout cleanup"
   pass "fm-control relaunch: timeout cleanup reaps control, spawn, and blocked transport without later output"
 }
 
