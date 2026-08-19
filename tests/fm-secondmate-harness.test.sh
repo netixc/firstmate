@@ -2041,7 +2041,8 @@ SH
       "$ROOT/bin/fm-config-push.sh" > "$first_out" 2>&1
   ) &
   first_pid=$!
-  for _ in $(seq 1 100); do
+  trap 'wait "$first_pid" 2>/dev/null || true; fm_test_cleanup' EXIT
+  for _ in $(seq 1 500); do
     [ -e "$entered" ] && break
     sleep 0.02
   done
@@ -2055,6 +2056,7 @@ SH
     "$ROOT/bin/fm-config-push.sh" > "$second_out" 2>&1
   second_status=$?
   wait "$first_pid"; first_status=$?
+  trap fm_test_cleanup EXIT
   expect_code 0 "$first_status" "first serialized config push failed"
   expect_code 0 "$second_status" "second serialized config push failed"
   second_instr=$(reread_instruction_path "$w/sm") \
