@@ -27,7 +27,9 @@ fm_current_pid() {
     FM_CURRENT_PID=$BASHPID
     return 0
   fi
-  probe=$(mktemp -d "${TMPDIR:-/tmp}/fm-current-pid.XXXXXX") || return 1
+  probe=$(mktemp -d "${TMPDIR:-/tmp}/fm-current-pid.XXXXXX" 2>/dev/null) \
+    || probe=$(mktemp -d "$STATE/.fm-current-pid.XXXXXX" 2>/dev/null) \
+    || return 1
   if ! /bin/sh -c '
     LC_ALL=C
     export LC_ALL
