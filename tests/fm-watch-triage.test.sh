@@ -1620,7 +1620,7 @@ test_busy_pane_default_turn_age_bound_is_3600s() {
 }
 
 test_nonterminal_stale_repairs_missing_or_corrupt_timer() {
-  local dir state fakebin out capture_file window key pane_hash sig pid since
+  local dir state fakebin out capture_file window key pane_hash sig pid since= i
   dir=$(make_case nonterminal-stale-timer-repair); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; capture_file="$dir/pane.txt"
   window="test:fm-quiet-timer"
@@ -1638,7 +1638,20 @@ test_nonterminal_stale_repairs_missing_or_corrupt_timer() {
     FM_STATE_OVERRIDE="$state" FM_STALE_ESCALATE_SECS=999 FM_POLL=1 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
   pid=$!
-  wait_numeric_file "$state/.stale-since-$key" 30 || { reap "$pid"; fail "matching stale suppressor with missing timer did not initialize stale-since"; }
+  i=0
+  while [ "$i" -lt 80 ]; do
+    is_live_non_zombie "$pid" || break
+    since=$(cat "$state/.stale-since-$key" 2>/dev/null || true)
+    case "$since" in
+      ''|*[!0-9]*) ;;
+      *) break ;;
+    esac
+    sleep 0.1
+    i=$((i + 1))
+  done
+  case "$since" in
+    ''|*[!0-9]*) reap "$pid"; fail "matching stale suppressor with missing timer did not initialize stale-since" ;;
+  esac
   if ! kill -0 "$pid" 2>/dev/null; then
     wait "$pid" 2>/dev/null || true
     fail "watcher exited while repairing a missing stale-since timer: $(cat "$out")"
@@ -1653,8 +1666,20 @@ test_nonterminal_stale_repairs_missing_or_corrupt_timer() {
     FM_STATE_OVERRIDE="$state" FM_STALE_ESCALATE_SECS=999 FM_POLL=1 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
   pid=$!
-  wait_numeric_file "$state/.stale-since-$key" 30 || { reap "$pid"; fail "matching stale suppressor with corrupt timer did not repair stale-since"; }
-  since=$(cat "$state/.stale-since-$key" 2>/dev/null || true)
+  i=0
+  while [ "$i" -lt 80 ]; do
+    is_live_non_zombie "$pid" || break
+    since=$(cat "$state/.stale-since-$key" 2>/dev/null || true)
+    case "$since" in
+      ''|*[!0-9]*) ;;
+      *) break ;;
+    esac
+    sleep 0.1
+    i=$((i + 1))
+  done
+  case "$since" in
+    ''|*[!0-9]*) reap "$pid"; fail "matching stale suppressor with corrupt timer did not repair stale-since" ;;
+  esac
   [ "$since" != "corrupt" ] || { reap "$pid"; fail "corrupt stale-since value was left in place"; }
   [ ! -s "$state/.wake-queue" ] || { reap "$pid"; fail "corrupt stale-since repair enqueued a wake"; }
   reap "$pid"
