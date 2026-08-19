@@ -1007,7 +1007,7 @@ test_secondmate_nonpaused_stale_remains_suppressed() {
 }
 
 test_secondmate_unpause_clears_pause_tracking() {
-  local dir state fakebin out statusf window key pid
+  local dir state fakebin out statusf window key pid i
   dir=$(make_case secondmate-unpause-clears); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; statusf="$state/secondmate-resumed.status"; window="test:fm-secondmate-resumed"
   printf 'window=%s\nkind=secondmate\n' "$window" > "$state/secondmate-resumed.meta"
@@ -1024,7 +1024,24 @@ test_secondmate_unpause_clears_pause_tracking() {
   : > "$state/.wedge-escalations-$key"
   watch_bg "$state" "$fakebin" "$out"
   pid=$!
-  wait_live "$pid" 20 || fail "watcher exited while reconciling a resumed secondmate: $(cat "$out")"
+  i=0
+  while [ "$i" -lt 80 ]; do
+    is_live_non_zombie "$pid" \
+      || { reap "$pid"; fail "watcher exited while reconciling a resumed secondmate: $(cat "$out")"; }
+    if [ ! -e "$state/.paused-$key" ] \
+      && [ ! -e "$state/.stale-$key" ] \
+      && [ ! -e "$state/.wedge-escalations-$key" ]; then
+      break
+    fi
+    sleep 0.1
+    i=$((i + 1))
+  done
+  if [ -e "$state/.paused-$key" ] \
+    || [ -e "$state/.stale-$key" ] \
+    || [ -e "$state/.wedge-escalations-$key" ]; then
+    reap "$pid"
+    fail "watcher did not publish resumed-secondmate cleanup readiness before the deadline"
+  fi
   [ ! -e "$state/.paused-$key" ] || { reap "$pid"; fail "resumed secondmate retained the pause marker"; }
   [ ! -e "$state/.stale-$key" ] || { reap "$pid"; fail "resumed secondmate retained stale tracking"; }
   [ ! -e "$state/.wedge-escalations-$key" ] || { reap "$pid"; fail "resumed secondmate retained wedge tracking"; }
