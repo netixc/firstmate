@@ -1,0 +1,8 @@
+User-visible regression exercise: portable lock acquisition with missing TMPDIR
+Shell: GNU bash, version 3.2.57(1)-release (arm64-apple-darwin25)
+Missing TMPDIR exists before run: no
+Base commit bounded result: rc=124 (124 means the reproduced hang hit the 2s bound)
+acquired=yes published_pid=53712 current_pid=53712 ownership_match=yes
+released=yes lock_present=no
+Fixed commit bounded result: rc=0
+Owner/probe residue: no
