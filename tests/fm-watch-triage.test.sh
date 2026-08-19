@@ -79,6 +79,21 @@ wait_for_seen_signature() {  # <pid> <seen-file> <expected-signature> [ticks]
   return 1
 }
 
+wait_for_stale_readiness() {  # <pid> <stale-file> <expected-hash> <timer-file> [ticks]
+  local pid=$1 stale_file=$2 expected_hash=$3 timer_file=$4 limit=${5:-80} i=0 actual
+  while [ "$i" -lt "$limit" ]; do
+    is_live_non_zombie "$pid" || return 1
+    actual=$(cat "$stale_file" 2>/dev/null || true)
+    if [ "$actual" = "$expected_hash" ] && [ -s "$timer_file" ]; then
+      is_live_non_zombie "$pid" && return 0
+      return 1
+    fi
+    sleep 0.1
+    i=$((i + 1))
+  done
+  return 1
+}
+
 wait_numeric_file() {
   local file=$1 limit=${2:-30} i=0 value
   while [ "$i" -lt "$limit" ]; do
@@ -578,9 +593,16 @@ test_terminal_stale_surfaced() {
 # must get a chance to override a captain-relevant-but-stale status line, exactly
 # as it already does for a plain non-terminal one.
 test_stale_terminal_status_overridden_by_active_run() {
-  local dir state fakebin out drain_out capture_file window key pane_hash sig pid
+  local dir state fakebin out drain_out capture_file delayed_watch window key pane_hash sig pid
   dir=$(make_case terminal-stale-overridden); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; drain_out="$dir/drain.out"; capture_file="$dir/pane.txt"
+  delayed_watch="$dir/delayed-watch.sh"
+  cat > "$delayed_watch" <<EOF
+#!/usr/bin/env bash
+sleep 4
+exec "$WATCH"
+EOF
+  chmod +x "$delayed_watch"
   window="test:fm-validating"
   printf 'no-mistakes axi run: validating...' > "$capture_file"
   printf 'window=%s\nkind=ship\n' "$window" > "$state/validating.meta"
@@ -599,10 +621,10 @@ test_stale_terminal_status_overridden_by_active_run() {
   # not surfaced, despite the captain-relevant "done:" status-log line.
   PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
     FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=999 FM_POLL=1 FM_SIGNAL_GRACE=1 \
-    FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+    FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$delayed_watch" > "$out" &
   pid=$!
-  if ! wait_live "$pid" 30; then
-    reap "$pid"; fail "watcher exited for a stale terminal-looking status the run-step overrides (should absorb): $(cat "$out")"
+  if ! wait_for_stale_readiness "$pid" "$state/.stale-$key" "$pane_hash" "$state/.stale-since-$key"; then
+    reap "$pid"; fail "watcher exited or did not publish overridden stale readiness before the deadline: $(cat "$out")"
   fi
   [ ! -s "$out" ] || fail "the overridden stale terminal status printed a wake reason during absorb"
   [ ! -s "$state/.wake-queue" ] || fail "the overridden stale terminal status enqueued a wake during absorb"
