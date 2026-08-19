@@ -799,7 +799,7 @@ test_nonterminal_stale_paused_absorbed_then_resurfaced() {
 # must surface once, while the unchanged hash must not append the same wake on
 # every watcher re-arm.
 test_exited_declared_pause_is_bounded_but_live_gate_surfaces() {
-  local dir state fakebin out capture_file statusf window key pane_hash sig pid back round wakes bare
+  local dir state fakebin out capture_file statusf window key pane_hash sig pid back round wakes bare i
   dir=$(make_case exited-declared-pause); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; capture_file="$dir/pane.txt"; statusf="$state/held.status"
   window="test:fm-held"
@@ -896,12 +896,18 @@ test_exited_declared_pause_is_bounded_but_live_gate_surfaces() {
     FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=240 FM_PAUSE_RESURFACE_SECS=999 FM_POLL=1 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" >> "$out" &
   pid=$!
-  if ! wait_live "$pid" 30; then
-    reap "$pid"
-    fail "live external-decision gate escalated on the wedge timer after its immediate surface: $(cat "$out")"
-  fi
+  i=0
+  while [ "$i" -lt 30 ]; do
+    is_live_non_zombie "$pid" \
+      || { reap "$pid"; fail "live external-decision gate escalated on the wedge timer after its immediate surface: $(cat "$out")"; }
+    [ ! -e "$state/.stale-since-$key" ] && break
+    sleep 0.1
+    i=$((i + 1))
+  done
+  is_live_non_zombie "$pid" \
+    || { reap "$pid"; fail "live external-decision gate exited before completing its unchanged-hash fallback: $(cat "$out")"; }
   [ -e "$state/.paused-$key" ] || { reap "$pid"; fail "live external-decision gate lost its pause cadence marker"; }
-  [ ! -e "$state/.stale-since-$key" ] || { reap "$pid"; fail "live external-decision gate retained the wedge timer"; }
+  [ ! -e "$state/.stale-since-$key" ] || { reap "$pid"; fail "live external-decision gate retained the wedge timer after the readiness deadline"; }
   reap "$pid"
   wakes=$(awk -F '\t' -v w="$window" '$3 == "stale" && $4 == w { n++ } END { print n + 0 }' "$state/.wake-queue")
   bare=$(awk -F '\t' -v w="$window" '$3 == "stale" && $4 == w && $5 == "stale: " w { n++ } END { print n + 0 }' "$state/.wake-queue")
