@@ -2048,20 +2048,24 @@ test_heartbeat_backstop_surfaces_unsurfaced_status() {
 # --- beacon stays fresh while absorbing -------------------------------------
 
 test_beacon_stays_fresh_while_absorbing() {
-  local dir state fakebin out status_file pid m1 m2 now
+  local dir state fakebin out status_file pid m1 m2 now sig
   dir=$(make_case beacon-fresh); state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"
   status_file="$state/task.status"
   printf 'working: a\n' > "$status_file"
   # Provably working so the working: notes are absorbed (the path that must keep the
   # beacon fresh).
   export FM_FAKE_CREW_STATE='state: working · source: run-step · validating (running)'
+  sig=$(seen_sig "$status_file")
   watch_bg "$state" "$fakebin" "$out"
   pid=$!
-  wait_live "$pid" 15 || { reap "$pid"; fail "watcher exited while absorbing the first benign signal"; }
+  wait_for_seen_signature "$pid" "$state/.seen-task_status" "$sig" \
+    || { reap "$pid"; fail "watcher did not complete the first benign-signal absorb"; }
   m1=$(file_mtime "$state/.last-watcher-beat")
   # A second benign signal keeps it absorbing; the beacon must keep advancing.
   printf 'working: b\n' >> "$status_file"
-  wait_live "$pid" 20 || { reap "$pid"; fail "watcher exited while absorbing a second benign signal"; }
+  sig=$(seen_sig "$status_file")
+  wait_for_seen_signature "$pid" "$state/.seen-task_status" "$sig" \
+    || { reap "$pid"; fail "watcher did not complete the second benign-signal absorb"; }
   m2=$(file_mtime "$state/.last-watcher-beat")
   now=$(date +%s)
   if [ -z "$m1" ] || [ -z "$m2" ]; then
