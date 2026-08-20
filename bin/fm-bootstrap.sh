@@ -752,7 +752,7 @@ install_cmd() {
     tmux|node|git|gh|curl|jq) echo "brew install $1  # or the platform's package manager" ;;
     treehouse) echo "curl -fsSL https://kunchenguid.github.io/treehouse/install.sh | sh" ;;
     no-mistakes) echo "curl -fsSL https://raw.githubusercontent.com/kunchenguid/no-mistakes/main/docs/install.sh | sh" ;;
-    gh-axi|chrome-devtools-axi|lavish-axi) echo "npm install -g $1 && $1 setup hooks" ;;
+    gh-axi|lavish-axi) echo "npm install -g $1 && $1 setup hooks" ;;
     tasks-axi|quota-axi) echo "npm install -g $1" ;;
     *) return 1 ;;
   esac
@@ -760,6 +760,7 @@ install_cmd() {
 
 manual_install_url() {
   case "$1" in
+    ego-browser|ego-browser-skill) echo "https://lite.ego.app/" ;;
     herdr) echo "https://herdr.dev" ;;
     *) return 1 ;;
   esac
@@ -779,7 +780,7 @@ missing_tool_diagnostic() {
 # fm_backend_required_tools (bin/fm-backend.sh). A Herdr home is never told
 # tmux is missing. A backend value with
 # no verified dependency set is reported before the universal checks continue.
-COMMON_TOOLS="node git gh no-mistakes gh-axi chrome-devtools-axi lavish-axi tasks-axi quota-axi"
+COMMON_TOOLS="node git gh no-mistakes gh-axi ego-browser lavish-axi tasks-axi quota-axi"
 BACKEND=$(fm_backend_name)
 BACKEND_VALID=1
 if ! BACKEND_TOOLS=$(fm_backend_required_tools "$BACKEND"); then
@@ -1127,6 +1128,7 @@ fi
 # Local detection: presence, version floors, and configuration. Nothing here
 # leaves this machine, so it stays on the session-start critical path.
 detect_local_tools() {
+  local t ego_browser_skill
   if [ "$BACKEND_VALID" -eq 0 ]; then
     echo "BACKEND_INVALID: $BACKEND (known: $FM_BACKEND_KNOWN)"
   fi
@@ -1137,6 +1139,12 @@ detect_local_tools() {
   for t in $COMMON_TOOLS; do
     command -v "$t" >/dev/null || missing_tool_diagnostic "$t"
   done
+  ego_browser_skill="$HOME/.agents/skills/ego-browser/SKILL.md"
+  if [ "${FM_GATE_REFUSE_BYPASS:-0}" = 1 ] && [ -n "${FM_TEST_EGO_BROWSER_SKILL_PATH:-}" ]; then
+    ego_browser_skill=$FM_TEST_EGO_BROWSER_SKILL_PATH
+  fi
+  [ -f "$ego_browser_skill" ] && [ -r "$ego_browser_skill" ] \
+    || missing_tool_diagnostic ego-browser-skill
   # Both supported backends use treehouse, whose durable lease support is required.
   if fm_backend_list_contains "$TOOLS" treehouse \
     && command -v treehouse >/dev/null 2>&1 && ! treehouse_supports_lease; then
