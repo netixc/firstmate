@@ -1,0 +1,47 @@
+=== CAPTURED CHANNEL ANSWER ===
+closed: sample-review-decision-route
+answers: closed=1 skipped=0 origin=sample-review
+=== PERSISTED HOLD AFTER ANSWER ===
+task:
+  id: sample-review-decision-route
+  title: Choose the route
+  state: done
+  blocked: no
+  blocked_by: none
+  held: no
+  hold_reason: captain route choice pending
+  hold_kind: captain
+  hold_until: "-"
+  kind: captain
+  repo: sample
+  priority: "-"
+  created: "-"
+  closed: 2026-08-20
+  deps: none
+  links: none
+  body: "Resolution recorded by fm-decision-hold.\nDecision digest: 77f620e85ddd1726dfe37f6082840bf4bae849e753f6d2f07e0fe48b7c0579d2\nRouted identities: (none)\nResolution mode: answered\n\nCaptain decision:\nCaptain answered this decision through captured result demo-src sequence 1.\nDecision key: route\nAnswer: north\nAnswer as shown to the captain: Route selection\n\nRouted work:\n(none)"
+=== EXACT REPLAY ===
+closed: sample-review-decision-route
+answers: closed=1 skipped=0 origin=sample-review
+=== ROUTED-WORK GUARD ===
+skipped: sample-review-decision-routed-phase (captain hold sample-review-decision-routed-phase still blocks routed work (sample-followup); use resolve to record that work)
+answers: closed=0 skipped=1 origin=sample-review
+exit_status: 1
+task:
+  id: sample-review-decision-routed-phase
+  title: Choose routed phase
+  state: queued
+  blocked: no
+  blocked_by: none
+  held: yes
+  hold_reason: captain routed phase pending
+  hold_kind: captain
+  hold_until: "-"
+  kind: captain
+  repo: sample
+  priority: "-"
+  created: 2026-08-20
+  closed: "-"
+  deps: none
+  links: none
+  body: "Origin: sample-review\nDecision key: routed-phase\nState: awaiting captain decision."

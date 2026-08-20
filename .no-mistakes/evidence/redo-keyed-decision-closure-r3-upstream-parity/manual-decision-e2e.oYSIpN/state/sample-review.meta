@@ -1,0 +1,10 @@
+window=firstmate:fm-sample-review
+worktree=/Users/control/.no-mistakes/evidence/01M0FS91HCGNJN1B0QFH6WZMKF/manual-decision-e2e.oYSIpN/projects/missing-sample-review
+project=/Users/control/.no-mistakes/evidence/01M0FS91HCGNJN1B0QFH6WZMKF/manual-decision-e2e.oYSIpN/projects/sample
+harness=pi
+kind=scout
+mode=scout
+decisions_reviewed=1
+decision_keys=route
+decisions_reviewed=1
+decision_keys=route,routed-phase

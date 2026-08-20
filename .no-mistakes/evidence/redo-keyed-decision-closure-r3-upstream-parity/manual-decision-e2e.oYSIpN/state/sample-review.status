@@ -1,0 +1,2 @@
+needs-decision [key=route]: choose north or south
+captain-held [key=route]: tracked by sample-review-decision-route
