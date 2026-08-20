@@ -626,12 +626,12 @@ EOF
   if ! wait_for_stale_readiness "$pid" "$state/.stale-$key" "$pane_hash" "$state/.stale-since-$key"; then
     reap "$pid"; fail "watcher exited or did not publish overridden stale readiness before the deadline: $(cat "$out")"
   fi
+  reap "$pid"
   [ ! -s "$out" ] || fail "the overridden stale terminal status printed a wake reason during absorb"
   [ ! -s "$state/.wake-queue" ] || fail "the overridden stale terminal status enqueued a wake during absorb"
   [ "$(cat "$state/.stale-$key" 2>/dev/null || true)" = "$pane_hash" ] || fail "stale suppressor not advanced on absorb"
   [ -s "$state/.stale-since-$key" ] || fail "stale-since escalation timer was not recorded on absorb"
   [ ! -e "$state/.hb-surfaced-validating" ] || fail "an absorbed wake must not mark the status line as surfaced"
-  reap "$pid"
   ack_stopped_cycle "$state" || fail "could not acknowledge the intentional phase-A watcher stop"
 
   # Phase B: backdate the idle timer past the threshold; the run genuinely
@@ -680,11 +680,11 @@ test_nonterminal_stale_provably_working_absorbed_then_escalated() {
   if ! wait_for_stale_readiness "$pid" "$state/.stale-$key" "$pane_hash" "$state/.stale-since-$key"; then
     reap "$pid"; fail "watcher exited or did not publish non-terminal stale readiness before the deadline: $(cat "$out")"
   fi
+  reap "$pid"
   [ ! -s "$out" ] || fail "fresh provably-working stale printed a wake reason during absorb"
   [ ! -s "$state/.wake-queue" ] || fail "fresh provably-working stale enqueued a wake during absorb"
   [ "$(cat "$state/.stale-$key" 2>/dev/null || true)" = "$pane_hash" ] || fail "stale suppressor not advanced on absorb"
   [ -s "$state/.stale-since-$key" ] || fail "stale-since escalation timer was not recorded on absorb"
-  reap "$pid"
   ack_stopped_cycle "$state" || fail "could not acknowledge the intentional phase-A watcher stop"
 
   # Phase B: backdate the idle timer past the threshold; the next run escalates.
@@ -795,12 +795,12 @@ test_nonterminal_stale_paused_absorbed_then_resurfaced() {
     reap "$pid"
     fail "watcher did not complete the fresh declared pause absorb before the readiness deadline"
   fi
+  reap "$pid"
   [ ! -s "$out" ] || fail "fresh paused stale printed a wake reason during absorb"
   [ ! -s "$state/.wake-queue" ] || fail "fresh paused stale enqueued a wake during absorb"
   [ "$(cat "$state/.stale-$key" 2>/dev/null || true)" = "$pane_hash" ] || fail "stale suppressor not advanced on paused absorb"
   [ -e "$state/.paused-$key" ] || fail "paused flag not recorded on absorb"
   [ ! -e "$state/.stale-since-$key" ] || fail "a paused absorb must not start the wedge timer"
-  reap "$pid"
   ack_stopped_cycle "$state" || fail "could not acknowledge the intentional paused phase-A stop"
 
   # Phase B: age the pause past the (now normal) threshold by backdating its
@@ -1042,10 +1042,10 @@ test_secondmate_unpause_clears_pause_tracking() {
     reap "$pid"
     fail "watcher did not publish resumed-secondmate cleanup readiness before the deadline"
   fi
-  [ ! -e "$state/.paused-$key" ] || { reap "$pid"; fail "resumed secondmate retained the pause marker"; }
-  [ ! -e "$state/.stale-$key" ] || { reap "$pid"; fail "resumed secondmate retained stale tracking"; }
-  [ ! -e "$state/.wedge-escalations-$key" ] || { reap "$pid"; fail "resumed secondmate retained wedge tracking"; }
   reap "$pid"
+  [ ! -e "$state/.paused-$key" ] || fail "resumed secondmate retained the pause marker"
+  [ ! -e "$state/.stale-$key" ] || fail "resumed secondmate retained stale tracking"
+  [ ! -e "$state/.wedge-escalations-$key" ] || fail "resumed secondmate retained wedge tracking"
   pass "a resumed secondmate clears pause and stale tracking before stale exemption"
 }
 
@@ -1142,9 +1142,9 @@ test_nonterminal_paused_rechecks_authoritative_state() {
     reap "$pid"
     fail "watcher did not publish authoritative active-run readiness before the deadline"
   fi
-  [ ! -e "$state/.paused-$key" ] || { reap "$pid"; fail "authoritative active run retained paused mode"; }
-  [ -s "$state/.stale-since-$key" ] || { reap "$pid"; fail "authoritative active run did not resume wedge tracking"; }
   reap "$pid"
+  [ ! -e "$state/.paused-$key" ] || fail "authoritative active run retained paused mode"
+  [ -s "$state/.stale-since-$key" ] || fail "authoritative active run did not resume wedge tracking"
   unset FM_FAKE_CREW_STATE
   pass "a declared pause is periodically rechecked against authoritative active-run state"
 }
@@ -1310,8 +1310,8 @@ test_wedge_escalation_resets_when_pane_becomes_active() {
     reap "$pid"
     fail "watcher did not publish changed-pane reset readiness before the deadline"
   fi
-  [ ! -e "$state/.wedge-escalations-$key" ] || fail "a changed pane hash did not reset the wedge-escalation counter"
   reap "$pid"
+  [ ! -e "$state/.wedge-escalations-$key" ] || fail "a changed pane hash did not reset the wedge-escalation counter"
   unset FM_FAKE_CREW_STATE
   pass "a pane becoming active again resets the consecutive wedge-escalation counter"
 }
@@ -1387,8 +1387,8 @@ test_busy_pane_stable_hash_escalates_past_turn_age_bound() {
     reap "$pid"
     fail "watcher did not publish stable-hash busy readiness before the deadline"
   fi
-  [ -s "$state/.stale-since-$key" ] || fail "a stable-hash busy pane past the turn-age bound did not start a wedge timer"
   reap "$pid"
+  [ -s "$state/.stale-since-$key" ] || fail "a stable-hash busy pane past the turn-age bound did not start a wedge timer"
   ack_stopped_cycle "$state" || fail "could not acknowledge the intentional stable-hash phase-A stop"
 
   # Phase B: backdate the wedge timer past the threshold; the next poll escalates.
@@ -1439,8 +1439,8 @@ test_busy_pane_changing_hash_escalates_past_turn_age_bound() {
     reap "$pid"
     fail "watcher did not publish changing-hash busy readiness before the deadline"
   fi
-  [ -s "$state/.stale-since-$key" ] || fail "a changing-hash busy pane past the turn-age bound did not start a wedge timer"
   reap "$pid"
+  [ -s "$state/.stale-since-$key" ] || fail "a changing-hash busy pane past the turn-age bound did not start a wedge timer"
   ack_stopped_cycle "$state" || fail "could not acknowledge the intentional changing-hash phase-A stop"
 
   # Phase B: another tick (still a fresh, never-before-seen hash) plus a
@@ -1498,10 +1498,10 @@ test_busy_pane_turn_end_touch_resets_age() {
     reap "$pid"
     fail "watcher did not publish completed-turn reset readiness before the deadline"
   fi
+  reap "$pid"
   [ ! -s "$out" ] || fail "a freshly completed turn on a busy pane printed a wake reason"
   [ ! -e "$state/.stale-since-$key" ] || fail "a freshly completed turn did not clear the wedge timer"
   [ ! -e "$state/.wedge-escalations-$key" ] || fail "a freshly completed turn did not clear the escalation counter"
-  reap "$pid"
   pass "touching a busy worker's completed-turn marker resets the age and prevents an old-age escalation"
 }
 
@@ -1591,8 +1591,8 @@ test_busy_pane_default_turn_age_bound_is_3600s() {
     reap "$pid"
     fail "watcher did not complete the five-minute-bound readiness poll"
   fi
-  [ ! -e "$state/.stale-since-$key" ] || { reap "$pid"; fail "a 5-minute-old completed turn started a wedge timer under the default bound"; }
   reap "$pid"
+  [ ! -e "$state/.stale-since-$key" ] || fail "a 5-minute-old completed turn started a wedge timer under the default bound"
   ack_stopped_cycle "$state" || fail "could not acknowledge the intentional five-minute-bound stop"
 
   set_mtime $(( $(date +%s) - 4000 )) "$state/busy-default.turn-ended"
@@ -1614,8 +1614,8 @@ test_busy_pane_default_turn_age_bound_is_3600s() {
     reap "$pid"
     fail "watcher did not publish 66-minute-bound readiness before the deadline"
   fi
-  [ -s "$state/.stale-since-$key" ] || { reap "$pid"; fail "a 66-minute-old completed turn did not start a wedge timer under the default bound (default is not 3600s)"; }
   reap "$pid"
+  [ -s "$state/.stale-since-$key" ] || fail "a 66-minute-old completed turn did not start a wedge timer under the default bound (default is not 3600s)"
   pass "the production default busy-turn-age bound is 3600s (5min under does not wedge, 66min over does)"
 }
 
@@ -1657,8 +1657,8 @@ test_nonterminal_stale_repairs_missing_or_corrupt_timer() {
     wait "$pid" 2>/dev/null || true
     fail "watcher exited while repairing a missing stale-since timer: $(cat "$out")"
   fi
-  [ ! -s "$state/.wake-queue" ] || { reap "$pid"; fail "missing stale-since repair enqueued a wake"; }
   reap "$pid"
+  [ ! -s "$state/.wake-queue" ] || fail "missing stale-since repair enqueued a wake"
   ack_stopped_cycle "$state" || fail "could not acknowledge the intentional missing-timer repair stop"
 
   printf 'corrupt\n' > "$state/.stale-since-$key"
@@ -2016,11 +2016,11 @@ test_heartbeat_no_change_absorbed() {
     sleep 0.1
     i=$((i + 1))
   done
-  [ ! -s "$out" ] || { reap "$pid"; fail "no-change heartbeat printed a wake reason: $(cat "$out")"; }
-  [ ! -s "$state/.wake-queue" ] || { reap "$pid"; fail "no-change heartbeat enqueued a durable wake record"; }
-  [ "$(cat "$state/.heartbeat-streak" 2>/dev/null || echo 0)" -ge 1 ] \
-    || { reap "$pid"; fail "heartbeat backoff streak did not advance while absorbing"; }
   reap "$pid"
+  [ ! -s "$out" ] || fail "no-change heartbeat printed a wake reason: $(cat "$out")"
+  [ ! -s "$state/.wake-queue" ] || fail "no-change heartbeat enqueued a durable wake record"
+  [ "$(cat "$state/.heartbeat-streak" 2>/dev/null || echo 0)" -ge 1 ] \
+    || fail "heartbeat backoff streak did not advance while absorbing"
   pass "a heartbeat with no captain-relevant change is absorbed and backs off the cadence"
 }
 
@@ -2068,15 +2068,14 @@ test_beacon_stays_fresh_while_absorbing() {
   wait_for_seen_signature "$pid" "$state/.seen-task_status" "$sig" \
     || { reap "$pid"; fail "watcher did not complete the second benign-signal absorb"; }
   m2=$(file_mtime "$state/.last-watcher-beat")
+  reap "$pid"
   now=$(date +%s)
   if [ -z "$m1" ] || [ -z "$m2" ]; then
-    reap "$pid"
     fail "watcher beacon missing while absorbing"
   fi
-  [ "$m2" -ge "$m1" ] || { reap "$pid"; fail "beacon mtime regressed while absorbing"; }
-  [ "$(( now - m2 ))" -lt 10 ] || { reap "$pid"; fail "beacon went stale while absorbing (age $(( now - m2 ))s)"; }
-  [ ! -s "$state/.wake-queue" ] || { reap "$pid"; fail "absorbing benign signals enqueued a wake"; }
-  reap "$pid"
+  [ "$m2" -ge "$m1" ] || fail "beacon mtime regressed while absorbing"
+  [ "$(( now - m2 ))" -lt 10 ] || fail "beacon went stale while absorbing (age $(( now - m2 ))s)"
+  [ ! -s "$state/.wake-queue" ] || fail "absorbing benign signals enqueued a wake"
   pass "the liveness beacon stays fresh while the watcher absorbs benign wakes (fm-guard never false-alarms)"
 }
 
