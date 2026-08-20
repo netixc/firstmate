@@ -50,8 +50,8 @@ The durable hold ledger did not, so an answer could be captured, believed, and e
 For a single-origin intake the key is the decision key mapped under that bound origin; for the cross-origin intake it is the full hold identity, while keys that do not name a full decision hold feed nothing.
 `--source` is provenance text recorded in the durable decision, never a behavior switch, and the command carries no per-channel branch and no knowledge of chat, review decks, or any transport.
 A channel's only job is to turn whatever it received into those keyed lines and pipe them in; it never maps keys to holds, builds decision records, chooses between the close paths, or closes a hold itself.
-The decision text is a pure function of source, key, answer, and label, which is what makes a replayed delivery an idempotent no-op rather than a rejected different decision.
-A key whose hold is absent, already closed, or still blocking routed work is reported as skipped and left for `resolve`, and the command exits nonzero when any key was skipped.
+The decision text is a pure function of source, key, answer, and label, which is what makes a replayed delivery an idempotent success rather than a rejected different decision.
+An exact replay of an already closed hold is reported as closed without changing it, while an absent hold or one still blocking routed work is reported as skipped and left for `resolve`; the command exits nonzero when any key was skipped.
 
 `bind`, `unbind`, and `binding` record whether a captured-answer source belongs to one origin or uses the cross-origin intake, for a channel whose answers arrive detached from the origin.
 The binding is a private record under `state/decision-bindings/`, and a source with no binding feeds nothing, so the path is opt-in per source.
@@ -98,7 +98,7 @@ A later regression covers tasks-axi's quoted multi-entry `blocked_by` output so 
 Three further regressions cover the close paths that route no work.
 A declined decision closes with a recorded answer, satisfies `verify`, leaves Bearings' Captain's Call, and is refused while the hold still blocks routed work.
 A hold closed by a direct `tasks-axi done` reproduces the shape that fails `verify` and blocks teardown, and `repair` with a captain decision file clears both.
-An unanswered decision still blocks completion and teardown, and neither `decline` nor `repair` can close a hold that is still actively held or supply an answer with a missing or empty decision file.
+An unanswered decision still blocks completion and teardown: `repair` cannot close a hold that is still actively held, and `resolve`, `answer`, `decline`, and `repair` all refuse a missing or empty decision file.
 `repair` also refuses a closed captain-kind task that was never held for the captain.
 
 Three answer-time closure regressions run against the published poll response shape, with synthetic `sample` identities.
@@ -107,7 +107,7 @@ Four holds whose answers route no work close, the one still blocking routed work
 The capture is left unacknowledged throughout, so the wake firstmate needs in order to act on the answers is never retired.
 A replayed delivery closes nothing new and is not rejected as a different decision, a source with no binding closes nothing at all, and the `answer` subcommand itself refuses an empty or missing decision file, an absent hold, and a drifted retry.
 A separate regression drives the real `fm-send` over a stubbed transport to prove the chat channel reaches the same intake for a decision already transferred to its hold, which the status ledger alone can no longer close.
-The cross-origin regression drives a bound source through the real runner and adapter interface, closes full-identity holds from different origins, and proves that over-limit, malformed, non-decision, routed-work, absent-hold, and replayed answers all fail or skip without weakening the existing guards.
+The cross-origin regression drives a bound source through the real runner and adapter interface, closes full-identity holds from different origins, and proves that over-limit, malformed, and non-decision answers feed nothing, routed-work and absent-hold answers skip, and exact replays succeed idempotently without weakening the existing guards.
 
 The final verification commands and their exact summarized outputs follow.
 
@@ -157,7 +157,7 @@ $ bin/fm-lint.sh
 fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
 
 $ bin/fm-doc-audience-check.sh
-fm-doc-audience-check: ok surfaces=68 local_links=253
+fm-doc-audience-check: ok surfaces=53 local_links=180
 
 $ git diff --check
 (no output)

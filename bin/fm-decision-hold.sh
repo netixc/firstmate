@@ -89,11 +89,11 @@
 # here at all.
 #
 # The decision text is a pure function of (source, key, answer, label), which is
-# what makes a replayed delivery an idempotent no-op rather than a rejected
-# "different captain decision". A key whose hold is absent, already closed, or
-# still blocking routed work is reported as `skipped:` and left for `resolve`;
-# skipping is never forced closure, and the command exits nonzero when any key
-# was skipped.
+# what makes a replayed delivery an idempotent success rather than a rejected
+# "different captain decision". An exact replay of an already closed hold is
+# reported as `closed:` without changing it. A key whose hold is absent or still
+# blocking routed work is reported as `skipped:` and left for `resolve`; skipping
+# is never forced closure, and the command exits nonzero when any key was skipped.
 #
 # `bind`, `unbind`, and `binding` record whether a captured-answer SOURCE belongs
 # to one origin or uses the any-origin intake, for any channel whose answers arrive detached from the origin (a
@@ -117,7 +117,8 @@
 # outside this script, so `verify` stops failing on an origin whose decision was
 # genuinely answered. It never reopens a hold, never clears a dependency edge, and
 # refuses a hold that is still actively held, so an unanswered decision keeps
-# blocking teardown until `resolve` or `decline` closes it with the captain's word.
+# blocking teardown until `resolve`, `answer`, or `decline` closes it with the
+# captain's word.
 # It also refuses an identity that does not carry surviving captain-hold
 # provenance, so an ordinary captain-kind task cannot be repaired into a decision.
 set -eu
