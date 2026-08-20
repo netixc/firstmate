@@ -2041,7 +2041,7 @@ SH
       "$ROOT/bin/fm-config-push.sh" > "$first_out" 2>&1
   ) &
   first_pid=$!
-  trap 'wait "$first_pid" 2>/dev/null || true; fm_test_cleanup' EXIT
+  trap 'kill "$first_pid" 2>/dev/null || true; wait "$first_pid" 2>/dev/null || true; fm_test_cleanup' EXIT
   for _ in $(seq 1 500); do
     [ -e "$entered" ] && break
     sleep 0.02
