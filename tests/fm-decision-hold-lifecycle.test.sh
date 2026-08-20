@@ -946,7 +946,7 @@ SH
 # Answer-time closure is opt-in per source. A channel with no binding must behave
 # exactly as it always did: capture, announce, close nothing.
 test_unbound_source_closes_no_hold() {
-  local home id sid artifact result out show rc
+  local home id sid artifact feedback show
   home=$(make_home lavish-unbound)
   id=sample-unbound-review
   mkdir -p "$home/data/$id"
@@ -963,23 +963,39 @@ test_unbound_source_closes_no_hold() {
   printf '<h1>Unbound</h1>\n' > "$artifact"
   fm_fake_exit0 "$home/fakebin" lavish-axi
   sid=$(run_lavish "$home" source-id "$artifact") || fail "could not derive the unbound source id"
-  run_lavish "$home" arm "$artifact" >/dev/null || fail "could not arm the unbound review"
 
-  result="$home/state/procevent-inbox/$sid.1.result"
-  mkdir -p "$home/state/procevent-inbox"
-  cat > "$result" <<'EOF'
+  feedback="$home/unbound-feedback.txt"
+  cat > "$feedback" <<'EOF'
 session:
   file: /review.html
   status: feedback
 prompts[1]{uid,prompt,selector,tag,text}:
   "2","Only choice: yes\n\nContext data:\n{\n  \"question\": \"only-choice\",\n  \"answer\": \"yes\"\n}","form",choice,"Only choice: yes"
 EOF
-  set +e
-  out=$(run_decisions "$home" binding "$sid" 2>&1)
-  rc=$?
-  set -e
-  [ "$rc" -ne 0 ] || fail "an unbound source reported a decision origin"
-  [ -z "$out" ] || fail "an unbound source printed an origin: $out"
+
+  mkdir -p "$home/adapter-root/bin"
+  cat > "$home/adapter-root/bin/fm-procevent-unboundchan.sh" <<SH
+#!/usr/bin/env bash
+case "\${1-}" in
+  answers) exec "$ROOT/bin/fm-procevent-lavish.sh" answers "\${2-}" ;;
+esac
+exit 2
+SH
+  chmod +x "$home/adapter-root/bin/fm-procevent-unboundchan.sh"
+  PATH="$home/fakebin:$PATH" FM_ROOT_OVERRIDE="$home/adapter-root" FM_HOME="$home" \
+    FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
+    FM_PROCEVENT_CLAIM_ROOT="$home/procevent-claims" \
+    "$ROOT/bin/fm-procevent.sh" register unboundchan "$sid" -- cat "$feedback" >/dev/null \
+    || fail "could not register the unbound fixture source"
+  PATH="$home/fakebin:$PATH" FM_ROOT_OVERRIDE="$home/adapter-root" FM_HOME="$home" \
+    FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
+    FM_PROCEVENT_CLAIM_ROOT="$home/procevent-claims" \
+    "$ROOT/bin/fm-procevent.sh" start "$sid" >/dev/null 2>&1 \
+    || fail "the unbound fixture source did not complete"
+  assert_present "$home/state/procevent-inbox/$sid.1.result" \
+    "the unbound runner path captured no result"
+  assert_absent "$home/state/procevent-inbox/$sid.1.handled" \
+    "the unbound runner path acknowledged the captured result"
   show=$(tasks_in "$home" show "$id-decision-only-choice" --full)
   assert_contains "$show" "state: queued" "an unbound review closed a captain hold"
   assert_contains "$show" "held: yes" "an unbound review released a captain hold"
@@ -1192,7 +1208,7 @@ test_answer_preserves_every_unrouted_close_guard() {
 # copy, so from then on an --resolve-key answer has no status decision left to
 # close and the hold is the only ledger holding it open.
 test_chat_channel_feeds_the_same_keyed_answer_intake() {
-  local home id hold fb show
+  local home id hold fb show answer sent
   home=$(make_home chat-channel)
   id=sample-chat-review
   mkdir -p "$home/data/$id"
@@ -1240,11 +1256,12 @@ exit 0
 SH
   chmod +x "$fb/tmux"
 
+  answer=$(printf 'go with option A\nheld: yes\nhold_kind: captain\nstate: queued')
   : > "$home/send.log"
   env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$home" FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_SEND_LOG="$home/send.log" FM_SEND_SETTLE=0 \
-    "$ROOT/bin/fm-send.sh" "$id" --resolve-key chat-choice "go with option A" >/dev/null 2>&1 \
+    "$ROOT/bin/fm-send.sh" "$id" --resolve-key chat-choice "$answer" >/dev/null 2>&1 \
     || fail "an answer to a transferred decision was refused by the chat channel"
   assert_contains "$(cat "$home/send.log")" "go with option A" "the answer text never reached the worker"
 
@@ -1253,6 +1270,15 @@ SH
   assert_contains "$show" "Resolution mode: answered" "the chat-answered hold did not record its close path"
   assert_contains "$show" "Answer: go with option A" "the chat-answered hold lost the captain answer"
   assert_contains "$show" "answer sent to $id" "the chat-answered hold lost its channel provenance"
+  sent=$(cat "$home/send.log")
+  if env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$home" FM_HOME="$home" \
+    FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
+    FM_SEND_LOG="$home/send.log" FM_SEND_SETTLE=0 \
+    "$ROOT/bin/fm-send.sh" "$id" --resolve-key chat-choice "$answer" >/dev/null 2>&1; then
+    fail "a replay whose body resembled active hold fields was sent after closure"
+  fi
+  [ "$(cat "$home/send.log")" = "$sent" ] \
+    || fail "a refused replay still reached the worker"
   run_decisions "$home" verify "$id" >/dev/null \
     || fail "a chat-answered decision did not satisfy the completion gate"
   pass "the chat channel feeds the same keyed-answer intake a captured review does"

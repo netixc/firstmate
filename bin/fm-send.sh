@@ -337,14 +337,18 @@ RESOLVE_STATUS_FILE=
 RESOLVE_STATUS_KEYS=
 RESOLVE_HOLD_KEYS=
 
+fm_send_show_field() {  # <show-output> <field>
+  local output=$1 field=$2
+  printf '%s\n' "$output" | sed -n "s/^  $field: //p" | head -1
+}
+
 fm_send_hold_is_active() {  # <task-id> <decision-key>
   local show
   command -v tasks-axi >/dev/null 2>&1 || return 1
   show=$( (cd "$FM_HOME" && tasks-axi show "$1-decision-$2" --full) 2>/dev/null ) || return 1
-  case "$show" in *"held: yes"*) : ;; *) return 1 ;; esac
-  case "$show" in *"hold_kind: captain"*) : ;; *) return 1 ;; esac
-  case "$show" in *"state: queued"*) return 0 ;; esac
-  return 1
+  [ "$(fm_send_show_field "$show" held)" = yes ] || return 1
+  [ "$(fm_send_show_field "$show" hold_kind)" = captain ] || return 1
+  [ "$(fm_send_show_field "$show" state)" = queued ]
 }
 
 if [ -n "$RESOLVE_KEYS" ]; then
