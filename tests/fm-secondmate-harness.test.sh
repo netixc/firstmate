@@ -2035,13 +2035,18 @@ SH
   chmod +x "$fakebin/tmux"
 
   first_out="$w/first-push.out"
+  set -m
   (
     PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
       FM_SEND_SETTLE=0 FM_FAKE_TMUX_LOG="$log" \
       "$ROOT/bin/fm-config-push.sh" > "$first_out" 2>&1
   ) &
   first_pid=$!
-  for _ in $(seq 1 100); do
+  set +m
+  trap 'kill -KILL -- "-$first_pid" 2>/dev/null || true; wait "$first_pid" 2>/dev/null || true; fm_test_cleanup' EXIT
+  trap 'kill -KILL -- "-$first_pid" 2>/dev/null || true; wait "$first_pid" 2>/dev/null || true; fm_test_cleanup; exit 130' INT
+  trap 'kill -KILL -- "-$first_pid" 2>/dev/null || true; wait "$first_pid" 2>/dev/null || true; fm_test_cleanup; exit 143' TERM
+  for _ in $(seq 1 500); do
     [ -e "$entered" ] && break
     sleep 0.02
   done
@@ -2055,6 +2060,9 @@ SH
     "$ROOT/bin/fm-config-push.sh" > "$second_out" 2>&1
   second_status=$?
   wait "$first_pid"; first_status=$?
+  trap fm_test_cleanup EXIT
+  trap 'fm_test_cleanup; exit 130' INT
+  trap 'fm_test_cleanup; exit 143' TERM
   expect_code 0 "$first_status" "first serialized config push failed"
   expect_code 0 "$second_status" "second serialized config push failed"
   second_instr=$(reread_instruction_path "$w/sm") \

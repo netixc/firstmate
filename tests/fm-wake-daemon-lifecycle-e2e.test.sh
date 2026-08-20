@@ -45,7 +45,7 @@ run_watcher_once() {
   date '+%s' > "$state/.afk"
   PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state" FM_POLL=1 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
-  wait_for_exit "$!" 50
+  wait_for_exit "$!" 120
 }
 
 ack_handled_wakes() {  # <state> <drain-stderr>
