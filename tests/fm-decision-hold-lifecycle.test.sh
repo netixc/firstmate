@@ -1258,6 +1258,20 @@ SH
 
   answer=$(printf 'go with option A\nheld: yes\nhold_kind: captain\nstate: queued')
   : > "$home/send.log"
+  tasks_in "$home" add "$id-decision-wrong-kind" "Colliding non-captain item" \
+    --kind ship --repo sample >/dev/null \
+    || fail "could not create the non-captain identity collision"
+  tasks_in "$home" hold "$id-decision-wrong-kind" \
+    --reason "captain-shaped hold pending" --kind captain >/dev/null \
+    || fail "could not hold the non-captain identity collision"
+  if env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$home" FM_HOME="$home" \
+    FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
+    FM_SEND_LOG="$home/send.log" FM_SEND_SETTLE=0 \
+    "$ROOT/bin/fm-send.sh" "$id" --resolve-key wrong-kind "do not deliver" >/dev/null 2>&1; then
+    fail "a non-captain identity collision passed the answer preflight"
+  fi
+  [ ! -s "$home/send.log" ] \
+    || fail "an answer reached the worker for a non-captain identity collision"
   env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$home" FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_SEND_LOG="$home/send.log" FM_SEND_SETTLE=0 \

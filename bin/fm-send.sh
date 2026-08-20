@@ -347,6 +347,7 @@ fm_send_hold_is_active() {  # <task-id> <decision-key>
   command -v tasks-axi >/dev/null 2>&1 || return 1
   show=$( (cd "$FM_HOME" && tasks-axi show "$1-decision-$2" --full) 2>/dev/null ) || return 1
   [ "$(fm_send_show_field "$show" held)" = yes ] || return 1
+  [ "$(fm_send_show_field "$show" kind)" = captain ] || return 1
   [ "$(fm_send_show_field "$show" hold_kind)" = captain ] || return 1
   [ "$(fm_send_show_field "$show" state)" = queued ]
 }
