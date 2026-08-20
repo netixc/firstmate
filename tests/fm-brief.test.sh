@@ -690,6 +690,39 @@ test_scout_and_secondmate_load_decision_hold_policy() {
   pass "fm-brief.sh: investigation and visual-review completions load the shared decision policy"
 }
 
+test_browser_tool_policy_renders_in_every_brief_kind() {
+  local home id mode brief expected
+  home="$TMP_ROOT/browser-tool-policy-home"
+  mkdir -p "$home/data"
+  expected='Use gh-axi for GitHub operations and Ego Browser for browser operations. Do not use chrome-devtools-axi.'
+
+  for mode in no-mistakes direct-PR local-only; do
+    id="browser-policy-$mode"
+    FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" firstmate --mode "$mode" >/dev/null 2>&1
+    brief="$home/data/$id/brief.md"
+    grep -qxF "3. $expected" "$brief" \
+      || fail "$mode ship brief did not render the required Ego Browser rule"
+    assert_no_grep "and chrome-devtools-axi for browser operations" "$brief" \
+      "$mode ship brief retained contradictory Chrome DevTools guidance"
+  done
+
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" browser-policy-scout firstmate --scout >/dev/null 2>&1
+  brief="$home/data/browser-policy-scout/brief.md"
+  grep -qxF "3. $expected" "$brief" \
+    || fail "scout brief did not render the required Ego Browser rule"
+  assert_no_grep "and chrome-devtools-axi for browser operations" "$brief" \
+    "scout brief retained contradictory Chrome DevTools guidance"
+
+  FM_HOME="$home" FM_SECONDMATE_CHARTER='Supervise browser work.' \
+    "$ROOT/bin/fm-brief.sh" browser-policy-secondmate --secondmate --no-projects >/dev/null 2>&1
+  brief="$home/data/browser-policy-secondmate/brief.md"
+  grep -qxF "$expected" "$brief" \
+    || fail "secondmate charter did not render the required Ego Browser rule"
+  assert_no_grep "and chrome-devtools-axi for browser operations" "$brief" \
+    "secondmate charter retained contradictory Chrome DevTools guidance"
+  pass "fm-brief.sh: every ship, scout, and secondmate scaffold carries the Ego Browser rule"
+}
+
 # Scout and secondmate paths still scaffold well-formed briefs.
 test_scout_and_secondmate_scaffold() {
   local brief
@@ -729,4 +762,5 @@ test_secondmate_marked_request_reporting_contract
 test_secondmate_directory_paths_are_absolute_and_output_is_stable
 test_pause_verb_override_renders_all_brief_scaffolds
 test_scout_and_secondmate_load_decision_hold_policy
+test_browser_tool_policy_renders_in_every_brief_kind
 test_scout_and_secondmate_scaffold

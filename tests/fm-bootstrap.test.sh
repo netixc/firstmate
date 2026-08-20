@@ -5,8 +5,10 @@
 # BOOTSTRAP_INFO fact, or completed bootstrap no-action fact and is silent when
 # all is well. firstmate consumes the exact 'MISSING: treehouse (install: ...)',
 # 'MISSING: tasks-axi (install: ...)', 'MISSING: quota-axi (install: ...)',
-# 'MISSING: gh-axi (install: ...)', 'MISSING: lavish-axi (install: ...)', and
-# 'BOOTSTRAP_INFO: ...' lines, so those contracts are pinned verbatim. The cases
+# 'MISSING: gh-axi (install: ...)', 'MISSING_MANUAL: ego-browser (instructions: ...)',
+# 'MISSING_MANUAL: ego-browser-skill (instructions: ...)',
+# 'MISSING: lavish-axi (install: ...)', and 'BOOTSTRAP_INFO: ...' lines, so those
+# contracts are pinned verbatim. The cases
 # are table-driven over the inputs that vary: whether `treehouse get --help`
 # advertises --lease, which (if any) tasks-axi version is on PATH, whether
 # tasks-axi update advertises --archive-body, whether its mv help advertises
@@ -36,7 +38,7 @@ unset TMUX TMUX_PANE HERDR_ENV HERDR_PANE_ID HERDR_SESSION HERDR_SOCKET_PATH 2>/
 make_fake_toolchain() {
   local dir=$1 fakebin
   fakebin=$(fm_fakebin "$dir")
-  fm_fake_exit0 "$fakebin" tmux node chrome-devtools-axi
+  fm_fake_exit0 "$fakebin" tmux node ego-browser
   fm_fake_version_tool "$fakebin" lavish-axi FM_FAKE_LAVISH_AXI_VERSION 0.1.46
   cat > "$fakebin/gh-axi" <<'SH'
 #!/usr/bin/env bash
@@ -474,6 +476,34 @@ much older quota-axi minor reports an upgrade^0.0.9^missing
 unparseable quota-axi version reports an upgrade^quota-axi development build^missing
 ROWS
   pass "bootstrap enforces quota-axi minimum version"
+}
+
+test_ego_browser_cli_and_upstream_skill_are_required() {
+  local case_dir fakebin out status
+  case_dir="$TMP_ROOT/ego-browser-required"
+  mkdir -p "$case_dir/home/config"
+  printf '%s\n' manual > "$case_dir/home/config/backlog-backend"
+  fakebin=$(make_fake_toolchain "$case_dir")
+
+  rm -f "$fakebin/ego-browser"
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$case_dir/home" FM_ROOT_OVERRIDE="$case_dir/home" \
+    FM_FAKE_TREEHOUSE_LEASE_HELP=1 "$ROOT/bin/fm-bootstrap.sh")
+  [ "$out" = "MISSING_MANUAL: ego-browser (instructions: https://lite.ego.app/)" ] \
+    || fail "missing Ego Browser CLI should report current manual installation guidance, got: $out"
+
+  fm_fake_exit0 "$fakebin" ego-browser
+  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$case_dir/home" FM_ROOT_OVERRIDE="$case_dir/home" \
+    FM_TEST_EGO_BROWSER_SKILL_PATH="$case_dir/missing-skill/SKILL.md" \
+    FM_FAKE_TREEHOUSE_LEASE_HELP=1 "$ROOT/bin/fm-bootstrap.sh")
+  [ "$out" = "MISSING_MANUAL: ego-browser-skill (instructions: https://lite.ego.app/)" ] \
+    || fail "missing upstream Ego Browser skill should report current manual installation guidance, got: $out"
+
+  out=$("$ROOT/bin/fm-bootstrap.sh" install ego-browser 2>&1)
+  status=$?
+  [ "$status" -ne 0 ] || fail "install ego-browser should refuse instead of evaluating manual guidance"
+  [ "$out" = "error: ego-browser requires manual installation (instructions: https://lite.ego.app/)" ] \
+    || fail "install ego-browser should return current manual installation guidance, got: $out"
+  pass "bootstrap requires the Ego Browser CLI and separately installed upstream skill"
 }
 
 test_git_is_required_with_supported_install_instruction() {
@@ -1080,6 +1110,7 @@ test_gh_axi_min_version
 test_lavish_axi_min_version
 test_tasks_axi_min_version
 test_quota_axi_min_version
+test_ego_browser_cli_and_upstream_skill_are_required
 test_git_is_required_with_supported_install_instruction
 test_session_provider_backends_do_not_require_tmux
 test_session_provider_backends_gate_own_cli_not_tmux

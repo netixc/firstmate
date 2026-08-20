@@ -144,6 +144,14 @@ fm_test_reap_orphans() {
 
 fm_test_reap_orphans
 
+# Bootstrap verifies the separately installed user-level Ego Browser skill in
+# addition to the CLI. Tests get a temporary marker rather than depending on or
+# copying the host's upstream skill contract.
+FM_TEST_EGO_BROWSER_SKILL_ROOT=$(fm_test_tmproot fm-test-ego-browser-skill)
+mkdir -p "$FM_TEST_EGO_BROWSER_SKILL_ROOT"
+printf '%s\n' '# Test-only Ego Browser skill marker.' > "$FM_TEST_EGO_BROWSER_SKILL_ROOT/SKILL.md"
+export FM_TEST_EGO_BROWSER_SKILL_PATH="$FM_TEST_EGO_BROWSER_SKILL_ROOT/SKILL.md"
+
 # --- fakebin / PATH shims ---------------------------------------------------
 #
 # fm_fakebin <dir> creates <dir>/fakebin and echoes it; prepend it to PATH to
