@@ -1,0 +1,25 @@
+attempt 1
+bash: line 9: BASH_SOURCE[0]: unbound variable
+bash: line 9: /wake-helpers.sh: No such file or directory
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 30855.1787212755.FWPkQr
+ok - arm propagates an immediate watcher wake before confirmation
+attempt 2
+bash: line 9: BASH_SOURCE[0]: unbound variable
+bash: line 9: /wake-helpers.sh: No such file or directory
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 42146.1787212764.ckUMSL
+ok - arm propagates an immediate watcher wake before confirmation
+attempt 3
+bash: line 9: BASH_SOURCE[0]: unbound variable
+bash: line 9: /wake-helpers.sh: No such file or directory
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 56291.1787212780.09n4g5
+ok - arm propagates an immediate watcher wake before confirmation
+attempt 4
+bash: line 9: BASH_SOURCE[0]: unbound variable
+bash: line 9: /wake-helpers.sh: No such file or directory
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 74630.1787212790.U1CtOx
+ok - arm propagates an immediate watcher wake before confirmation
+attempt 5
+bash: line 9: BASH_SOURCE[0]: unbound variable
+bash: line 9: /wake-helpers.sh: No such file or directory
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 84398.1787212799.VOm5J3
+ok - arm propagates an immediate watcher wake before confirmation
