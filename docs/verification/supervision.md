@@ -73,19 +73,18 @@ Pi compaction is the only supported stale-cache refresh pair.
 
 ## Semantic busy state
 
-The per-adapter semantic sources behind [`bin/fm-busy-lib.sh`](../../bin/fm-busy-lib.sh) were live-verified on 2026-07-28 against firstmate-launched workers wired exactly as `fm-spawn` writes them.
-Each pass polled `state/<id>.busy-state` while a real turn ran.
+The tracked worker extension was live-verified on 2026-08-20 with Pi 0.84.2 and Herdr 0.8.0 in a guarded named session.
+A fresh disposable Git target explicitly loaded the extension outside auto-discovery with `--no-extensions -e <tracked-worker-extension>` and one canonical metadata path; no project-trust prompt appeared.
+Two controlled prompts exposed `state: working · source: pane · harness busy (pi-ext)` through `bin/fm-crew-state.sh`, then settled to `v1 ... state=idle source=pi-ext event=agent-settled`; `turn-ended` was touched without becoming current-state truth.
+Rearming between prompts changed the generation, and the first Pi process's late callbacks left the replacement seed unchanged before the replacement lifecycle took ownership.
 
-| Harness | Version verified | Semantic source | Observed result |
-| --- | --- | --- | --- |
-| Pi | 0.82.0 | Extension `agent_start` / `agent_settled` with `ctx.isIdle()` | The spawn seed `busy source=fm-spawn`, then `busy source=pi-ext event=agent-start`, then `idle source=pi-ext event=agent-settled`; the turn-end marker was still touched. |
-
-Deterministic entry points:
+Portable behavior and strict type entry points:
 
 ```sh
 tests/fm-busy-state.test.sh
 tests/fm-busy-adapter-wiring.test.sh
 tests/fm-crew-state.test.sh
+tests/fm-pi-primary-types.test.sh
 ```
 
 ## Turn-end guard

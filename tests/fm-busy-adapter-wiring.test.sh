@@ -1,37 +1,23 @@
 #!/usr/bin/env bash
-# Behavior tests for the per-adapter semantic busy-state wiring that
-# bin/fm-spawn.sh installs under the contract owned by bin/fm-busy-lib.sh.
-#
-# These tests run the REAL fm-spawn against a fake tmux pane and an isolated
-# git worktree, then drive the generated Pi extension in a plain Node host, so
-# the artifact, the real
-# bin/fm-busy-event.sh writer, and the real classifier are exercised together
-# with no live harness session.
+# Behavior tests for the tracked Pi worker-lifecycle extension installed by
+# bin/fm-spawn.sh under the semantic contract in bin/fm-busy-lib.sh.
 set -u
 
 # shellcheck source=tests/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
-
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-busy-lib.sh"
 
 SPAWN="$ROOT/bin/fm-spawn.sh"
+EXTENSION="$ROOT/.pi/worker-extensions/fm-worker-lifecycle.ts"
 TMP_ROOT=$(fm_test_tmproot fm-busy-adapter-wiring)
 
-make_spawn_fakebin() {
-  local dir=$1 fakebin
-  fakebin=$(fm_fakebin "$dir")
+make_fakebin() {
+  local fakebin
+  fakebin=$(fm_fakebin "$1")
   cat > "$fakebin/tmux" <<'SH'
 #!/usr/bin/env bash
-set -u
-case "$*" in
-  *"#{pane_current_path}"*) printf '%s\n' "${FM_FAKE_PANE_PATH:-}"; exit 0 ;;
-esac
-case "${1:-}" in
-  display-message) printf 'firstmate\n'; exit 0 ;;
-  list-windows) exit 0 ;;
-  has-session|new-session|new-window|kill-window|send-keys) exit 0 ;;
-esac
+case "$*" in *"#{pane_current_path}"*) printf '%s\n' "${FM_FAKE_PANE_PATH:-}";; esac
 exit 0
 SH
   chmod +x "$fakebin/tmux"
@@ -39,146 +25,129 @@ SH
   printf '%s\n' "$fakebin"
 }
 
-make_spawn_case() {  # <name> <harness> <id>
-  local name=$1 harness=$2 id=$3 case_dir home proj wt fakebin
-  case_dir="$TMP_ROOT/$name"
-  home="$case_dir/home"
-  proj="$case_dir/project"
-  wt="$case_dir/wt"
-  fakebin=$(make_spawn_fakebin "$case_dir/fake")
-  mkdir -p "$home/data" "$home/projects" "$home/state" "$home/config"
-  printf '%s\n' "$harness" > "$home/config/crew-harness"
-  fm_git_worktree "$proj" "$wt" "wt-$name"
-  touch "$home/state/.last-watcher-beat"
-  mkdir -p "$home/data/$id"
-  printf 'brief for %s\n' "$id" > "$home/data/$id/brief.md"
-  printf '%s\n' "$case_dir|$home|$proj|$wt|$fakebin"
-}
-
-run_spawn() {  # <home> <wt> <fakebin> <spawn-args...>
-  # Every case here is a ship spawn, which carries an explicit delivery contract
-  # (AGENTS.md section 7); these tests are about busy-state wiring, so they pass a
-  # fixed valid one.
-  local home=$1 wt=$2 fakebin=$3
-  shift 3
-  set -- "$@" --mode no-mistakes --yolo off
-  FM_ROOT_OVERRIDE='' FM_HOME="$home" \
-    FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
-    FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
-    FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$wt" TMUX="fake,1,0" \
-    PATH="$fakebin:$PATH" \
-    "$SPAWN" "$@" 2>&1
-}
-
-read_case_record() {
-  # shellcheck disable=SC2034 # CASE_DIR is part of the shared record shape
-  IFS='|' read -r CASE_DIR HOME_DIR PROJ_DIR WT_DIR FAKEBIN_DIR <<EOF
-$1
-EOF
-}
-
-classify() {  # <harness> <id> <state-dir>
-  fm_busy_classify tmux fake:w "$1" "$2" "$3"
-}
-
-# drive_pi_ext <ext-path> <mode>: load the generated Pi extension in a plain
-# Node host and fire one lifecycle handler. Modes: agent-start, settle-idle,
-# settle-continuing, turn-end.
-drive_pi_ext() {
-  EXT_PATH="$1" MODE="$2" node --input-type=module 2>&1 <<'EOF'
+drive_extension() { # <worktree> <context-or-empty> <mode> <state> <id>
+  local worktree=$1 context=$2 mode=$3 state=$4 id=$5
+  (
+    cd "$worktree" || exit 1
+    EXT_PATH="$EXTENSION" FM_WORKER_LIFECYCLE_CONTEXT="$context" MODE="$mode" \
+      STATE="$state" ID="$id" WRITER="$ROOT/bin/fm-busy-event.sh" \
+      node --input-type=module <<'EOF'
+import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-const mod = await import(pathToFileURL(process.env.EXT_PATH).href);
 const handlers = {};
-mod.default({ on: (name, fn) => { handlers[name] = fn; } });
-const ctx = { isIdle: () => process.env.MODE !== "settle-continuing" };
-switch (process.env.MODE) {
-  case "agent-start": await handlers["agent_start"]({}, ctx); break;
-  case "settle-idle": await handlers["agent_settled"]({}, ctx); break;
-  case "settle-continuing": await handlers["agent_settled"]({}, ctx); break;
-  case "settle-then-start":
-    await handlers["agent_settled"]({}, ctx);
-    await handlers["agent_start"]({}, ctx);
-    break;
-  case "turn-end": await handlers["turn_end"]({}, ctx); break;
-  default: throw new Error("unknown mode " + process.env.MODE);
+const mod = await import(pathToFileURL(process.env.EXT_PATH).href);
+mod.default({ on: (name, handler) => { handlers[name] = handler; } });
+if (process.env.MODE === "handlers") {
+  console.log(Object.keys(handlers).sort().join(" "));
+  process.exit(0);
 }
-if (process.env.MODE === "turn-end") {
-  await new Promise((resolve) => setTimeout(resolve, 200));
+const ctx = { isIdle: () => process.env.MODE !== "settle-continuing" };
+if (process.env.MODE === "stale-settle") {
+  execFileSync(process.env.WRITER, ["arm", process.env.STATE, process.env.ID], { stdio: "ignore" });
+  await handlers.agent_settled({}, ctx);
+} else if (process.env.MODE === "settle-then-start") {
+  await handlers.agent_settled({}, ctx);
+  await handlers.agent_start({}, ctx);
+} else if (process.env.MODE === "turn-end") {
+  await handlers.turn_end({}, ctx);
+  await new Promise((done) => setTimeout(done, 200));
+} else {
+  const event = process.env.MODE === "agent-start" ? "agent_start" : "agent_settled";
+  await handlers[event]({}, ctx);
 }
 EOF
+  )
 }
 
-test_pi_extension_semantic_lifecycle() {
-  local rec id=busy-pi-1 out state ext
-  rec=$(make_spawn_case pi-lifecycle pi "$id")
-  read_case_record "$rec"
-  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$id" "$PROJ_DIR")
-  expect_code 0 $? "pi spawn should succeed: $out"
-  state="$HOME_DIR/state"
-  ext="$state/$id.pi-ext.ts"
-  assert_present "$ext" "pi spawn did not write the per-task extension"
+classify() { fm_busy_classify tmux fake:w pi "$1" "$2"; }
 
-  out=$(classify pi "$id" "$state")
-  [ "$out" = "busy fm-spawn" ] || fail "seed after spawn must be 'busy fm-spawn', got '$out'"
-
-  rm -f "$state/$id.turn-ended"
-  out=$(drive_pi_ext "$ext" turn-end) || fail "turn_end drive failed: $out"
-  [ -f "$state/$id.turn-ended" ] || fail "turn_end no longer touches the notification marker"
-  out=$(classify pi "$id" "$state")
-  [ "$out" = "busy fm-spawn" ] || fail "turn_end must stay a notification, not a state edge, got '$out'"
-
-  out=$(drive_pi_ext "$ext" settle-idle) || fail "agent_settled drive failed: $out"
-  out=$(classify pi "$id" "$state")
-  [ "$out" = "idle pi-ext" ] || fail "agent_settled with isIdle must classify 'idle pi-ext', got '$out'"
-
-  out=$(drive_pi_ext "$ext" agent-start) || fail "agent_start drive failed: $out"
-  out=$(classify pi "$id" "$state")
-  [ "$out" = "busy pi-ext" ] || fail "agent_start must classify 'busy pi-ext', got '$out'"
-
-  out=$(drive_pi_ext "$ext" settle-continuing) || fail "continuing settle drive failed: $out"
-  out=$(classify pi "$id" "$state")
-  [ "$out" = "busy pi-ext" ] || fail "a settle while another run continues must stay busy, got '$out'"
-
-  out=$(drive_pi_ext "$ext" settle-idle) || fail "final settle drive failed: $out"
-  out=$(classify pi "$id" "$state")
-  [ "$out" = "idle pi-ext" ] || fail "the final settle must classify idle, got '$out'"
-  pass "pi extension reports agent_start busy, settles idle only via ctx.isIdle(), and keeps turn_end a notification"
+setup_case() { # <name> <id>
+  local name=$1
+  CASE="$TMP_ROOT/$name"
+  HOME_DIR="$CASE/home"
+  PROJ="$CASE/project"
+  WT="$CASE/wt"
+  ID=$2
+  FAKEBIN=$(make_fakebin "$CASE/fake")
+  mkdir -p "$HOME_DIR/data/$ID" "$HOME_DIR/projects" "$HOME_DIR/state" "$HOME_DIR/config"
+  printf 'pi\n' > "$HOME_DIR/config/crew-harness"
+  printf 'brief\n' > "$HOME_DIR/data/$ID/brief.md"
+  fm_git_worktree "$PROJ" "$WT" "busy-$name"
+  touch "$HOME_DIR/state/.last-watcher-beat"
+  out=$(FM_ROOT_OVERRIDE='' FM_HOME="$HOME_DIR" \
+    FM_STATE_OVERRIDE="$HOME_DIR/state" FM_DATA_OVERRIDE="$HOME_DIR/data" \
+    FM_PROJECTS_OVERRIDE="$HOME_DIR/projects" FM_CONFIG_OVERRIDE="$HOME_DIR/config" \
+    FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$WT" TMUX='fake,1,0' \
+    PATH="$FAKEBIN:$PATH" "$SPAWN" "$ID" "$PROJ" \
+    --mode no-mistakes --yolo off 2>&1)
+  expect_code 0 $? "Pi spawn should succeed: $out"
+  CONTEXT=$(cd "$HOME_DIR/state" && pwd -P)/$ID.meta
+  assert_absent "$HOME_DIR/state/$ID.pi-ext.ts" "fresh Pi spawn generated a per-task TypeScript artifact"
 }
 
-test_pi_extension_serializes_settle_before_next_start() {
-  local rec id=busy-pi-order out state ext
-  rec=$(make_spawn_case pi-order pi "$id")
-  read_case_record "$rec"
-  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$id" "$PROJ_DIR")
-  expect_code 0 $? "pi spawn should succeed: $out"
-  state="$HOME_DIR/state"
-  ext="$state/$id.pi-ext.ts"
+test_lifecycle_and_generation() {
+  local out
+  setup_case lifecycle busy-pi-1
+  [ "$(classify "$ID" "$HOME_DIR/state")" = "busy fm-spawn" ] \
+    || fail "spawn did not seed busy state"
+  out=$(drive_extension "$WT" "$CONTEXT" handlers "$HOME_DIR/state" "$ID")
+  [ "$out" = "agent_settled agent_start turn_end" ] || fail "tracked lifecycle handlers did not load: $out"
 
-  out=$(drive_pi_ext "$ext" settle-then-start) || fail "settle/start drive failed: $out"
-  out=$(classify pi "$id" "$state")
-  [ "$out" = "busy pi-ext" ] || fail "a fresh agent_start after agent_settled must win, got '$out'"
-  pass "pi extension awaits agent_settled before the next agent_start without a test delay"
+  rm -f "$HOME_DIR/state/$ID.turn-ended"
+  drive_extension "$WT" "$CONTEXT" turn-end "$HOME_DIR/state" "$ID" >/dev/null
+  assert_present "$HOME_DIR/state/$ID.turn-ended" "turn_end did not touch its notification"
+  [ "$(classify "$ID" "$HOME_DIR/state")" = "busy fm-spawn" ] \
+    || fail "turn_end became current-state truth"
+
+  drive_extension "$WT" "$CONTEXT" settle-idle "$HOME_DIR/state" "$ID" >/dev/null
+  [ "$(classify "$ID" "$HOME_DIR/state")" = "idle pi-ext" ] || fail "idle settle was not recorded"
+  drive_extension "$WT" "$CONTEXT" agent-start "$HOME_DIR/state" "$ID" >/dev/null
+  drive_extension "$WT" "$CONTEXT" settle-continuing "$HOME_DIR/state" "$ID" >/dev/null
+  [ "$(classify "$ID" "$HOME_DIR/state")" = "busy pi-ext" ] || fail "continuing settle overwrote busy"
+  drive_extension "$WT" "$CONTEXT" settle-then-start "$HOME_DIR/state" "$ID" >/dev/null
+  [ "$(classify "$ID" "$HOME_DIR/state")" = "busy pi-ext" ] || fail "immediate new work did not win"
+
+  drive_extension "$WT" "$CONTEXT" stale-settle "$HOME_DIR/state" "$ID" >/dev/null
+  [ "$(classify "$ID" "$HOME_DIR/state")" = "busy fm-spawn" ] \
+    || fail "late callback from the captured old generation changed replacement state"
+  pass "tracked Pi lifecycle preserves busy, idle, turn-end, ordering, and stale-generation behavior"
 }
 
-test_pi_extension_stale_incarnation_rejected() {
-  local rec id=busy-pi-2 out state ext
-  rec=$(make_spawn_case pi-stale pi "$id")
-  read_case_record "$rec"
-  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$id" "$PROJ_DIR")
-  expect_code 0 $? "pi spawn should succeed: $out"
-  state="$HOME_DIR/state"
-  ext="$state/$id.pi-ext.ts"
-  # A re-arm (a rewired incarnation) supersedes the gen embedded in the old
-  # extension file: its late events must be rejected and never change state.
-  "$ROOT/bin/fm-busy-event.sh" arm "$state" "$id" >/dev/null
-  out=$(drive_pi_ext "$ext" settle-idle) || fail "stale settle drive failed: $out"
-  out=$(classify pi "$id" "$state")
-  [ "$out" = "busy fm-spawn" ] || fail "a stale extension event must not change state, got '$out'"
-  pass "pi extension events from a superseded incarnation are rejected as stale"
+assert_inert() { # <path> <label>
+  local out
+  out=$(drive_extension "$WT" "$1" handlers "$HOME_DIR/state" "$ID")
+  [ -z "$out" ] || fail "$2 context registered lifecycle handlers: $out"
 }
 
-test_pi_extension_semantic_lifecycle
-test_pi_extension_serializes_settle_before_next_start
-test_pi_extension_stale_incarnation_rejected
+test_context_validation() {
+  local dir meta gen
+  setup_case invalid-context busy-pi-2
+  assert_inert "" absent
+
+  dir="$CASE/invalid"
+  mkdir -p "$dir/malformed" "$dir/symlink" "$dir/nonregular" "$dir/inconsistent"
+  meta="$dir/malformed/$ID.meta"
+  printf 'not metadata\n' > "$meta"
+  assert_inert "$meta" malformed
+
+  meta="$dir/symlink/$ID.meta"
+  ln -s "$CONTEXT" "$meta"
+  assert_inert "$meta" symlinked
+
+  meta="$dir/nonregular/$ID.meta"
+  mkdir "$meta"
+  assert_inert "$meta" non-regular
+
+  meta="$dir/inconsistent/$ID.meta"
+  cp "$CONTEXT" "$meta"
+  gen=$(cat "$HOME_DIR/state/$ID.busy-gen")
+  printf '%s\n' "$gen" > "$dir/inconsistent/$ID.busy-gen"
+  perl -pi -e 's/^busy_gen=.*/busy_gen=wrong-generation/' "$meta"
+  assert_inert "$meta" inconsistent
+  pass "worker lifecycle context is absent by default and rejects unsafe or inconsistent inputs"
+}
+
+test_lifecycle_and_generation
+test_context_validation
 
 echo "all fm-busy-adapter-wiring tests passed"

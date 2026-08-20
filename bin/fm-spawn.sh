@@ -28,9 +28,8 @@
 #   positional, and batch pairs are all refused alongside it; only an explicit
 #   Pi harness, model, and effort may change. It refuses unless the recorded endpoint is positively
 #   agent-free on a backend with a recovery-grade agent-state classifier (tmux
-#   or herdr), refuses unless the endpoint's shell is sitting in the recorded
-#   worktree, and clears the previous harness's per-task wiring before arming
-#   the new incarnation.
+#   or herdr), and refuses unless the endpoint's shell is sitting in the
+#   recorded worktree before arming the new incarnation.
 #   --harness <name> is the explicit per-spawn harness/profile adapter. The old
 #   positional harness arg still works for back-compat.
 #   --model <name> and --effort <low|medium|high|xhigh|max> are concrete profile
@@ -140,9 +139,8 @@
 #     __BRIEF__    absolute path to data/<task-id>/brief.md
 #     __PIBIN__    quoted concrete Pi executable path resolved from PATH
 #     __PITUIMODE__ optional --tui-mode regular when that executable advertises it
-#     __TURNEND__  absolute path to state/<task-id>.turn-ended
-#     __PIEXT__    absolute path to state/<task-id>.pi-ext.ts (pi turn-end extension,
-#                  written by this script; outside the worktree to avoid pi's trust gate)
+#     __PIWORKERCTX__ absolute path to the ordinary worker's state/<task-id>.meta
+#     __PIWORKEREXT__ absolute path to the tracked Pi worker-lifecycle extension
 #     __PITURNEND__ absolute path to .pi/extensions/fm-primary-turnend-guard.ts in a pi secondmate home
 #     __PIWATCH__   absolute path to .pi/extensions/fm-primary-pi-watch.ts in a pi secondmate home
 #     __OPINPUT__   absolute path to the canonical operational-input encoder
@@ -634,9 +632,7 @@ SPAWN_TASK_SET_LOCK=
 SPAWN_TASK_SET_LOCK_HELD=0
 RELAUNCH_REPLACEMENT_PENDING=0
 RELAUNCH_REPLACEMENT_BUSY_GEN=
-RELAUNCH_REPLACEMENT_HARNESS=
 RELAUNCH_REPLACEMENT_STATE=
-RELAUNCH_REPLACEMENT_WT=
 CONFIG_INHERIT_LOCK=
 CONFIG_INHERIT_LOCK_HELD=0
 
@@ -651,13 +647,6 @@ spawn_abort_cleanup() {
   fi
   if [ "$RELAUNCH_REPLACEMENT_PENDING" = 1 ]; then
     RELAUNCH_REPLACEMENT_PENDING=0
-    if ! clear_relaunch_harness_wiring \
-        "$RELAUNCH_REPLACEMENT_HARNESS" \
-        "$RELAUNCH_REPLACEMENT_WT" \
-        "$RELAUNCH_REPLACEMENT_STATE" \
-        "$ID"; then
-      echo "warning: could not remove replacement wiring after aborted relaunch of $ID" >&2
-    fi
     if [ -n "$RELAUNCH_REPLACEMENT_BUSY_GEN" ]; then
       if ! "$FM_ROOT/bin/fm-busy-event.sh" retire \
           "$RELAUNCH_REPLACEMENT_STATE" "$ID" \
@@ -727,20 +716,6 @@ spawn_herdr_presentation_order_lock_acquire() {
     attempt=$((attempt + 1))
   done
   return 1
-}
-
-clear_relaunch_harness_wiring() {
-  local harness=$1 wt=$2 state=$3 id=$4 path
-  # Resolve the recorded value through the exact verified-adapter table before
-  # retiring that adapter's per-task wiring.
-  # An unrecognized value resolves to no adapter and has no trusted wiring.
-  harness=$(fm_control_harness_family "$harness") || harness=
-  while IFS= read -r path; do
-    [ -n "$path" ] || continue
-    rm -f -- "$path" || return 1
-  done <<EOF
-$(fm_control_harness_wiring_paths "$harness" "$wt" "$state" "$id")
-EOF
 }
 
 spawn_herdr_presentation_order_lock_release() {
@@ -1001,11 +976,10 @@ launch_template() {
   # shellcheck disable=SC2016  # single quotes are deliberate: $(cat ...) expands in the crewmate pane, not here
   case "$harness" in
     pi)
-      printf '%s' '__PIBIN____PITUIMODE__'
       if [ "$kind" = secondmate ]; then
-        printf '%s' ' __MODELFLAG____EFFORTFLAG__-e __PITURNEND__ -e __PIWATCH__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
+        printf '%s' '__PIBIN____PITUIMODE__ __MODELFLAG____EFFORTFLAG__-e __PITURNEND__ -e __PIWATCH__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
       else
-        printf '%s' ' __MODELFLAG____EFFORTFLAG__-e __PIEXT__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
+        printf '%s' 'FM_WORKER_LIFECYCLE_CONTEXT=__PIWORKERCTX__ __PIBIN____PITUIMODE__ __MODELFLAG____EFFORTFLAG__-e __PIWORKEREXT__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
       fi
       ;;
     *) return 1 ;;
@@ -1064,6 +1038,13 @@ case "$HARNESS" in
       PI_TUI_MODE=' --tui-mode regular'
     fi
     LAUNCH=${LAUNCH//__PITUIMODE__/$PI_TUI_MODE}
+    if [ "$KIND" != secondmate ]; then
+      PI_WORKER_EXTENSION="$FM_ROOT/.pi/worker-extensions/fm-worker-lifecycle.ts"
+      [ -f "$PI_WORKER_EXTENSION" ] && [ ! -L "$PI_WORKER_EXTENSION" ] || {
+        echo "error: tracked Pi worker-lifecycle extension is missing or unsafe: $PI_WORKER_EXTENSION" >&2
+        exit 1
+      }
+    fi
     ;;
 esac
 
@@ -1811,41 +1792,20 @@ fi
 TASK_TMP="/tmp/fm-$ID"
 mkdir -p "$TASK_TMP/gotmp"
 
-# Per-harness turn-end hook where enabled: a file that touches
-# state/<id>.turn-ended when the agent finishes a turn. Worktree-resident hooks
-# and token pointers stay out of git's view so they never block teardown's dirty
-# check or leak into a commit.
+# Worker lifecycle state stays outside the task worktree so it cannot enter the
+# task commit or depend on project trust.
 mkdir -p "$STATE"
 STATE_REAL=$(cd "$STATE" && pwd -P)
-TURNEND="$STATE_REAL/$ID.turn-ended"
-exclude_path() {
-  local rel=$1 EXCL
-  EXCL=$(git -C "$WT" rev-parse --git-path info/exclude 2>/dev/null || true)
-  [ -n "$EXCL" ] || return 0
-  mkdir -p "$(dirname "$EXCL")"
-  grep -qxF "$rel" "$EXCL" 2>/dev/null || echo "$rel" >> "$EXCL"
-}
 if [ "$RELAUNCH" -eq 1 ]; then
-  # Retire the previous incarnation's per-task Pi wiring before arming the new
-  # one. Without this, a relaunch would leave the old hook files and turn-end
-  # token registry entries behind, and even a same-harness
-  # relaunch would orphan the retired busy generation's token
-  # (bin/fm-control-lib.sh owns where those artifacts live).
-  clear_relaunch_harness_wiring "$RELAUNCH_PRIOR_HARNESS" "$WT" "$STATE_REAL" "$ID" || {
-    echo "error: could not retire $RELAUNCH_PRIOR_HARNESS wiring for task $ID; refusing to arm the replacement" >&2
-    exit 1
-  }
   RELAUNCH_REPLACEMENT_PENDING=1
-  RELAUNCH_REPLACEMENT_HARNESS=$HARNESS
   RELAUNCH_REPLACEMENT_STATE=$STATE_REAL
-  RELAUNCH_REPLACEMENT_WT=$WT
 fi
 if [ "$KIND" != secondmate ]; then
   # Arm the semantic busy-state contract (bin/fm-busy-lib.sh) for every
   # adapter with a verified semantic source. The launch brief sent below IS a
-  # submitted turn, so the seed record is busy/fm-spawn. The minted gen is
-  # embedded into each adapter's wiring so an event from a superseded
-  # incarnation is rejected as stale.
+  # submitted turn, so the seed record is busy/fm-spawn. The tracked Pi
+  # extension captures this exact generation from validated task metadata, and
+  # the writer rejects callbacks from a superseded incarnation as stale.
   BUSY_GEN=
   case "$HARNESS" in
     pi)
@@ -1854,41 +1814,6 @@ if [ "$KIND" != secondmate ]; then
         exit 1
       }
       [ "$RELAUNCH" -ne 1 ] || RELAUNCH_REPLACEMENT_BUSY_GEN=$BUSY_GEN
-      ;;
-  esac
-  case "$HARNESS" in
-    pi)
-      # Written OUTSIDE the worktree: pi's project-trust gate fires on any extension
-      # loaded from inside the project (verified live), but an explicit -e path
-      # elsewhere loads without a dialog. Lives in state/, cleaned by teardown.
-      cat > "$STATE/$ID.pi-ext.ts" <<EOF
-// Firstmate semantic busy-state events + turn-end notification; written by
-// fm-spawn under the contract owned by bin/fm-busy-lib.sh.
-// Semantic state: "agent_start" -> busy when a low-level agent run begins;
-// "agent_settled" -> idle only when ctx.isIdle() confirms Pi will not
-// continue automatically - auto-retries, auto-compaction retries, tool
-// loops, and queued continuations all keep the run un-settled, and a settle
-// that raced another extension's fresh run keeps state busy via isIdle().
-// "turn_end" fires at every inner turn boundary (one LLM response plus its
-// tool calls) and stays a wake NOTIFICATION touch for the watcher, never
-// current-state truth.
-import { execFile } from "node:child_process";
-const busyEvent = (state: string, event: string) =>
-  new Promise<void>((resolve) => {
-    execFile("$FM_ROOT/bin/fm-busy-event.sh", [
-      "apply", "$STATE_REAL", "$ID", state,
-      "--gen", "$BUSY_GEN", "--source", "pi-ext", "--event", event,
-    ], () => resolve());
-  });
-export default function (pi: any) {
-  pi.on("agent_start", () => busyEvent("busy", "agent-start"));
-  pi.on("agent_settled", (_event: any, ctx: any) => {
-    if (ctx && typeof ctx.isIdle === "function" && !ctx.isIdle()) return;
-    return busyEvent("idle", "agent-settled");
-  });
-  pi.on("turn_end", () => execFile("touch", ["$TURNEND"]));
-}
-EOF
       ;;
   esac
 fi
@@ -2010,8 +1935,8 @@ if [ "$SPAWN_TASK_SET_LOCK_HELD" = 1 ]; then
 fi
 
 sq_brief=$(shell_quote "$BRIEF")
-sq_turnend=$(shell_quote "$TURNEND")
-sq_piext=$(shell_quote "$STATE/$ID.pi-ext.ts")
+sq_piworkerctx=$(shell_quote "$STATE_REAL/$ID.meta")
+sq_piworkerext=$(shell_quote "${PI_WORKER_EXTENSION:-}")
 sq_piturnend=$(shell_quote "$PROJ_ABS/.pi/extensions/fm-primary-turnend-guard.ts")
 sq_piwatch=$(shell_quote "$PROJ_ABS/.pi/extensions/fm-primary-pi-watch.ts")
 sq_opinput=$(shell_quote "$FM_ROOT/bin/fm-operational-input.sh")
@@ -2021,8 +1946,8 @@ EFFORTFLAG=$(effort_flag_for_harness "$HARNESS" "$EFFORT")
 LAUNCH=${LAUNCH//__MODELFLAG__/$MODELFLAG}
 LAUNCH=${LAUNCH//__EFFORTFLAG__/$EFFORTFLAG}
 LAUNCH=${LAUNCH//__BRIEF__/$sq_brief}
-LAUNCH=${LAUNCH//__TURNEND__/$sq_turnend}
-LAUNCH=${LAUNCH//__PIEXT__/$sq_piext}
+LAUNCH=${LAUNCH//__PIWORKERCTX__/$sq_piworkerctx}
+LAUNCH=${LAUNCH//__PIWORKEREXT__/$sq_piworkerext}
 LAUNCH=${LAUNCH//__PITURNEND__/$sq_piturnend}
 LAUNCH=${LAUNCH//__PIWATCH__/$sq_piwatch}
 LAUNCH=${LAUNCH//__OPINPUT__/$sq_opinput}

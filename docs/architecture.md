@@ -109,7 +109,8 @@ Text for a worker to read and commands that drive a worker's process are separat
 `bin/fm-busy-lib.sh` is the single owner of what "this worker is busy" means, and `bin/fm-busy-event.sh` is the only writer of the per-task records it reads.
 Every classification returns a verdict of busy, idle, unknown, or dead together with the source that produced it, so a consumer or a diagnostic can never confuse semantic state with a fallback.
 
-Pi reports its turn lifecycle through the Firstmate-owned extension's machine-readable `agent_start` and `agent_settled` callbacks, with idle confirmed by `ctx.isIdle()` rather than rendered footer text.
+Ordinary Pi workers explicitly load the tracked `.pi/worker-extensions/fm-worker-lifecycle.ts` outside primary auto-discovery and give it one canonical task-metadata path.
+The extension validates that regular non-symlink input once, captures its exact busy generation, and reports `agent_start` plus `agent_settled` confirmed by `ctx.isIdle()` through the existing writer rather than rendered footer text.
 
 Missing, malformed, stale, untrusted, or unverified semantic state is unknown, never idle, and unknown is never promoted to busy either.
 Ordinary task-state consumers act only on an exact busy verdict, so an unreadable worker surfaces for a closer look instead of being absorbed as still-working or written off as finished.
