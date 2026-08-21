@@ -94,7 +94,7 @@ test_metadata_classification_and_identity() {
     "backend=herdr" "window=lab:w1:p1" "endpoint_task_id=current" \
     "herdr_session=lab" "herdr_workspace_id=w1" "herdr_tab_id=w1:t1" \
     "herdr_pane_id=w1:p1" "worktree=/tmp/current" "project=/tmp/project"
-  fm_herdr_validate_task_endpoint "$state/current.meta" current \
+  fm_herdr_validate_task_endpoint "$state/current.meta" current record-only \
     || fail "exact current Herdr metadata should validate"
   [ "$FM_HERDR_VALIDATED_TARGET" = lab:w1:p1 ] \
     || fail "validation must preserve exact endpoint identity"

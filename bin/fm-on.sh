@@ -100,6 +100,7 @@ for configured_path in "$ROOT" "$HOME_PATH"; do
 done
 
 META="$STATE/$MATCH_ID.meta"
+EXPECTED_REMOTE_TARGET=
 if [ -e "$META" ] || [ -L "$META" ]; then
   fm_herdr_validate_remote_route "$META" "$MATCH_ID" >/dev/null 2>&1 \
     || die "remote secondmate $MATCH_ID has invalid or ambiguous Herdr route metadata; preserving its records for manual reconciliation"
@@ -107,6 +108,14 @@ if [ -e "$META" ] || [ -L "$META" ]; then
     && [ "$(fm_meta_exact_value "$META" remote_root 2>/dev/null || true)" = "$ROOT" ] \
     && [ "$(fm_meta_exact_value "$META" home 2>/dev/null || true)" = "$HOME_PATH" ] \
     || die "remote secondmate $MATCH_ID metadata does not match its configured registry route; preserving both records for manual reconciliation"
+  EXPECTED_REMOTE_TARGET=$FM_HERDR_VALIDATED_REMOTE_TARGET
+fi
+if [ "$COMMAND" = fm-remote-secondmate-control.sh ] && [ -n "$EXPECTED_REMOTE_TARGET" ]; then
+  case "${1:-}" in
+    launch|state|route|send|key|capture|observe|retire)
+      set -- "$@" "--expected-target=$EXPECTED_REMOTE_TARGET"
+      ;;
+  esac
 fi
 
 ROOT_B64=$(printf '%s' "$ROOT" | encode_base64)

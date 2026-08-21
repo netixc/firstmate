@@ -141,7 +141,7 @@ fm_endpoint_target_of_meta() {  # <meta-file>
 }
 
 fm_herdr_validate_task_endpoint() {  # <meta-file> <task-id> [record-only]
-  local meta=$1 id=$2 mode=${3:-unique-owner} window worktree project binding session workspace tab pane state owner owner_rc
+  local meta=$1 id=$2 mode=${3:-unique-owner} window worktree project binding session workspace tab pane state owner owner_rc info
   FM_HERDR_VALIDATED_TARGET=
   [ -f "$meta" ] && [ ! -L "$meta" ] || {
     echo "REFUSED: task $id has no regular endpoint metadata at $meta; preserving task state." >&2
@@ -201,6 +201,16 @@ fm_herdr_validate_task_endpoint() {  # <meta-file> <task-id> [record-only]
     owner=$(fm_endpoint_meta_for_target "$window" "$state" 2>/dev/null) || owner_rc=$?
     if [ "$owner_rc" -ne 0 ] || [ "$owner" != "$meta" ]; then
       echo "REFUSED: Herdr endpoint for task $id has ambiguous or duplicate task ownership; preserving task state." >&2
+      FM_HERDR_VALIDATED_TARGET=
+      return 1
+    fi
+    info=$(fm_herdr_cli "$session" pane get "$pane" 2>/dev/null) || info=
+    if ! printf '%s' "$info" | jq -e --arg pane "$pane" --arg tab "$tab" --arg workspace "$workspace" '
+      .result.pane.pane_id == $pane
+      and .result.pane.tab_id == $tab
+      and .result.pane.workspace_id == $workspace
+    ' >/dev/null 2>&1; then
+      echo "REFUSED: Herdr endpoint for task $id does not match its recorded live pane, tab, and workspace identity; preserving task state and nothing was changed." >&2
       FM_HERDR_VALIDATED_TARGET=
       return 1
     fi

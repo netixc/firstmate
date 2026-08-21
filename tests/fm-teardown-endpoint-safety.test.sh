@@ -21,7 +21,7 @@ write_current() { # <meta> <id>
 test_exact_current_metadata_validates() {
   local state=$TMP_ROOT/current id=Task_A.1
   mkdir -p "$state"; write_current "$state/$id.meta" "$id"
-  fm_herdr_validate_task_endpoint "$state/$id.meta" "$id" || fail "exact Herdr metadata should validate"
+  fm_herdr_validate_task_endpoint "$state/$id.meta" "$id" record-only || fail "exact Herdr metadata should validate"
   [ "$FM_HERDR_VALIDATED_TARGET" = "lab:w-$id:p1" ] || fail "exact endpoint identity changed"
   pass "cleanup identity accepts exact current Herdr metadata"
 }

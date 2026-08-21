@@ -47,6 +47,19 @@ REMOTE_HERDR_SESSION=fm-remote
 
 fm_herdr_require_runtime || exit 1
 
+EXPECTED_REMOTE_TARGET=
+REMOTE_CONTROL_ARGS=("$@")
+if [ "${#REMOTE_CONTROL_ARGS[@]}" -gt 0 ]; then
+  REMOTE_CONTROL_LAST=$((${#REMOTE_CONTROL_ARGS[@]} - 1))
+  case "${REMOTE_CONTROL_ARGS[$REMOTE_CONTROL_LAST]}" in
+    --expected-target=*)
+      EXPECTED_REMOTE_TARGET=${REMOTE_CONTROL_ARGS[$REMOTE_CONTROL_LAST]#*=}
+      unset 'REMOTE_CONTROL_ARGS[REMOTE_CONTROL_LAST]'
+      set -- "${REMOTE_CONTROL_ARGS[@]}"
+      ;;
+  esac
+fi
+
 die() { printf 'error: %s\n' "$1" >&2; exit 1; }
 usage() { sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 validate_id() { case "$1" in ''|*[!A-Za-z0-9._-]*) die "invalid secondmate id: $1" ;; esac; }
@@ -65,7 +78,7 @@ validate_home() { # <id> [allow-absent]
 meta_path() { printf '%s/%s.meta\n' "$CONTROL_STATE" "$1"; }
 
 remote_endpoint_load() {
-  local id=$1 herdr_session endpoint_class
+  local id=$1 herdr_session endpoint_class recorded_target
   REMOTE_ENDPOINT_ERROR=
   REMOTE_ENDPOINT_META=$(meta_path "$id")
   endpoint_class=$(fm_herdr_meta_kind "$REMOTE_ENDPOINT_META")
@@ -75,6 +88,15 @@ remote_endpoint_load() {
     else
       REMOTE_ENDPOINT_ERROR="remote secondmate $id endpoint metadata is unsupported or ambiguous; preserving its exact record for manual reconciliation"
     fi
+    return 1
+  fi
+  if [ -z "$EXPECTED_REMOTE_TARGET" ]; then
+    REMOTE_ENDPOINT_ERROR="remote secondmate $id endpoint access lacks the parent's exact expected Herdr target; preserving its record"
+    return 1
+  fi
+  recorded_target=$(fm_meta_exact_value "$REMOTE_ENDPOINT_META" window 2>/dev/null || true)
+  if [ "$recorded_target" != "$EXPECTED_REMOTE_TARGET" ]; then
+    REMOTE_ENDPOINT_ERROR="remote secondmate $id endpoint '$recorded_target' does not match the parent's expected target '$EXPECTED_REMOTE_TARGET'; preserving both records"
     return 1
   fi
   if ! fm_herdr_validate_task_endpoint "$REMOTE_ENDPOINT_META" "$id" 2>/dev/null; then
@@ -182,6 +204,8 @@ cmd_launch() {
   herdr_session=$(fm_meta_get "$meta" herdr_session)
   [ "$herdr_session" = "$REMOTE_HERDR_SESSION" ] \
     || die "remote launch recorded Herdr session '${herdr_session:-missing}', expected '$REMOTE_HERDR_SESSION'"
+  EXPECTED_REMOTE_TARGET=$(fm_meta_exact_value "$meta" window 2>/dev/null) \
+    || die "remote launch recorded no exact Herdr endpoint target"
   print_route "$id"
 }
 

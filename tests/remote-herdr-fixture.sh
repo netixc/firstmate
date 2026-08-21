@@ -92,7 +92,10 @@ case "${1:-} ${2:-}" in
         fi
       fi
       [ -n "$pane_cwd" ] || pane_cwd=$(jq_state -r --arg p "$pane" '.tabs[]|select(.pane_id==$p)|.cwd // empty')
-      printf '{"result":{"pane":{"pane_id":"%s","foreground_cwd":"%s"}}}\n' "$pane" "$pane_cwd"
+      pane_tab=$(jq_state -r --arg p "$pane" '.tabs[]|select(.pane_id==$p)|.tab_id')
+      pane_workspace=$(jq_state -r --arg p "$pane" '.tabs[]|select(.pane_id==$p)|.workspace_id')
+      printf '{"result":{"pane":{"pane_id":"%s","tab_id":"%s","workspace_id":"%s","foreground_cwd":"%s"}}}\n' \
+        "$pane" "$pane_tab" "$pane_workspace" "$pane_cwd"
     fi
     ;;
   "pane close")

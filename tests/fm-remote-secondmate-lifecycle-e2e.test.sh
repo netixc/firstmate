@@ -705,6 +705,21 @@ cmp -s "$TMP_ROOT/herdr-before-default-session.log" "$HERDR_LOG" \
 mv -f "$TMP_ROOT/remote-ios-before-default-session.meta" "$remote_route_meta"
 pass "legacy and mismatched remote endpoints fail closed before Herdr access"
 
+cp "$remote_route_meta" "$TMP_ROOT/remote-ios-before-parent-mismatch.meta"
+remote_alt_pane="${legacy_pane%%:*}:p999"
+awk -v pane="$remote_alt_pane" '
+  /^window=/ { print "window=fm-remote:" pane; next }
+  /^herdr_pane_id=/ { print "herdr_pane_id=" pane; next }
+  { print }
+' "$TMP_ROOT/remote-ios-before-parent-mismatch.meta" > "$remote_route_meta"
+cp "$HERDR_LOG" "$TMP_ROOT/herdr-before-parent-mismatch.log"
+[ "$(remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh state ios 2>/dev/null)" = unverified ] \
+  || fail "a remote endpoint differing from the parent's exact target was not classified unverified"
+cmp -s "$TMP_ROOT/herdr-before-parent-mismatch.log" "$HERDR_LOG" \
+  || fail "a parent/remote endpoint identity mismatch reached Herdr"
+mv -f "$TMP_ROOT/remote-ios-before-parent-mismatch.meta" "$remote_route_meta"
+pass "remote endpoint access requires the parent's exact target identity"
+
 cp "$PARENT/state/ios.meta" "$TMP_ROOT/parent-ios-before-nonherdr.meta"
 cp "$PARENT/data/secondmates.md" "$TMP_ROOT/registry-before-nonherdr.md"
 set +e

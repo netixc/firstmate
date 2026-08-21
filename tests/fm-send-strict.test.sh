@@ -18,7 +18,10 @@ case "${1:-} ${2:-}" in
   "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
   "pane get")
     if [ "${FM_HERDR_MISSING:-0}" = 1 ]; then printf '{"error":{"code":"pane_not_found"}}\n'
-    else printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "${3:-}"; fi ;;
+    else
+      workspace=${3%%:*}
+      printf '{"result":{"pane":{"pane_id":"%s","tab_id":"%s:t1","workspace_id":"%s"}}}\n' "${3:-}" "$workspace" "$workspace"
+    fi ;;
   "pane send-text") : ;;
   "pane send-keys") : > "$FM_HERDR_STATE" ;;
   "agent get")
@@ -106,6 +109,19 @@ test_cross_component_identity_refuses() {
   pass "fm-send strict: cross-component endpoint identities fail closed"
 }
 
+test_live_tab_identity_refuses() {
+  local home=$TMP_ROOT/live-tab fb log out
+  mkdir -p "$home/state"; fb=$(make_stubs "$home"); log=$home/herdr.log; : > "$log"
+  write_meta "$home" crossed-tab lab:w1:p1
+  perl -pi -e 's/^herdr_tab_id=.*/herdr_tab_id=w1:t2/' "$home/state/crossed-tab.meta"
+  out=$(run_send "$home" "$fb" "$log" crossed-tab hello 2>&1) \
+    && fail "a pane bound to another live tab should refuse"
+  assert_contains "$out" "does not match its recorded live pane, tab, and workspace identity" \
+    "live tab mismatch refusal should name the exact identity defect"
+  assert_not_contains "$(cat "$log")" "pane send-" "live tab mismatch reached Herdr delivery"
+  pass "fm-send strict: live pane and tab identities must agree"
+}
+
 test_unset_home_and_unresolved_refuse() {
   local home=$TMP_ROOT/refuse fb log out
   mkdir -p "$home/state"; fb=$(make_stubs "$home"); log=$home/herdr.log; : > "$log"
@@ -151,6 +167,7 @@ test_exact_id_send
 test_ambiguous_or_foreign_metadata_refuses
 test_duplicate_endpoint_owners_refuse
 test_cross_component_identity_refuses
+test_live_tab_identity_refuses
 test_unset_home_and_unresolved_refuse
 test_legacy_shapes_and_prefixless_panes_refuse
 test_explicit_exact_target_and_key
