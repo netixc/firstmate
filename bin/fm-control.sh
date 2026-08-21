@@ -128,7 +128,7 @@ DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
 
-fm_herdr_require_runtime
+fm_herdr_require_runtime || exit 1
 
 POLL=${FM_CONTROL_POLL:-0.5}
 EXIT_WAIT=${FM_CONTROL_EXIT_WAIT:-30}

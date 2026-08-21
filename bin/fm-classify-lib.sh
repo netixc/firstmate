@@ -1048,22 +1048,16 @@ status_open_activities() {  # <status-file-or-dash>
   _fm_status_open_activities_stream < "$f"
 }
 
-# task id from a recorded window target, falling back to the tmux-shaped
-# "<session>:fm-<id>" form when no metadata state is available.
+# Task id from an exactly validated recorded endpoint.
 window_to_task() {
-  local w=$1 state=${2:-${STATE:-${FM_STATE_OVERRIDE:-}}} meta mw t
-  if [ -n "$state" ]; then
-    for meta in "$state"/*.meta; do
-      [ -e "$meta" ] || continue
-      mw=$(grep '^window=' "$meta" 2>/dev/null | tail -1 | cut -d= -f2- || true)
-      [ "$mw" = "$w" ] || continue
-      t=$(basename "$meta")
-      t=${t%.meta}
-      printf '%s' "$t"
-      return 0
-    done
-  fi
-  t="${w##*:}"; t="${t#fm-}"; printf '%s' "$t"
+  local w=$1 state=${2:-${STATE:-${FM_STATE_OVERRIDE:-}}} meta t
+  [ -n "$state" ] || return 1
+  command -v fm_endpoint_meta_for_target >/dev/null 2>&1 || return 1
+  meta=$(fm_endpoint_meta_for_target "$w" "$state" 2>/dev/null) || return 1
+  [ -n "$meta" ] || return 1
+  t=$(basename "$meta")
+  t=${t%.meta}
+  printf '%s' "$t"
 }
 
 # 0 (actionable) if ANY status file listed in a "signal:" wake carries a

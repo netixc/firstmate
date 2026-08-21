@@ -21,6 +21,8 @@ set -u
 . "$(dirname "${BASH_SOURCE[0]}")/wake-helpers.sh"
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-classify-lib.sh"
+# shellcheck source=/dev/null
+. "$ROOT/bin/fm-herdr.sh"
 
 WATCH="$ROOT/bin/fm-watch.sh"
 DRAIN="$ROOT/bin/fm-wake-drain.sh"
@@ -180,8 +182,16 @@ test_stale_is_terminal_classifier() {
   local dir state
   dir=$(make_case classify-stale); state="$dir/state"
   printf 'done: ready in branch fm/x\n' > "$state/term.status"
-  stale_is_terminal "sess:fm-term" "$state" || fail "terminal stale status not classified terminal"
-  fm_write_meta "$state/herdr-term.meta" "window=default:w1:p2" "backend=herdr"
+  stale_is_terminal "sess:fm-term" "$state" && fail "unrecorded tmux-shaped stale target was classified terminal"
+  fm_write_meta "$state/term.meta" \
+    "backend=herdr" "window=sess:fm-term" "endpoint_task_id=term" \
+    "herdr_session=sess" "herdr_workspace_id=w-term" "herdr_tab_id=t-term" \
+    "herdr_pane_id=fm-term" "worktree=/tmp/term" "project=/tmp/project"
+  stale_is_terminal "sess:fm-term" "$state" || fail "validated terminal stale status not classified terminal"
+  fm_write_meta "$state/herdr-term.meta" \
+    "window=default:w1:p2" "backend=herdr" "endpoint_task_id=herdr-term" \
+    "herdr_session=default" "herdr_workspace_id=w1" "herdr_tab_id=t1" \
+    "herdr_pane_id=w1:p2" "worktree=/tmp/herdr-term" "project=/tmp/project"
   printf 'done: ready in branch fm/herdr\n' > "$state/herdr-term.status"
   stale_is_terminal "default:w1:p2" "$state" || fail "terminal herdr stale status not resolved through metadata"
   printf 'working: compiling\n' > "$state/nonterm.status"
@@ -229,8 +239,11 @@ test_classifier_primitives() {
   status_is_captain_relevant "merged" || fail "legacy bare merged free-text not captain-relevant"
   status_is_captain_relevant "PR ready https://x/pull/2" \
     || fail "legacy bare PR ready free-text not captain-relevant"
-  [ "$(window_to_task "sess:fm-fix-login-k3")" = "fix-login-k3" ] || fail "window_to_task did not strip session+fm- prefix"
-  fm_write_meta "$state/herdr-task.meta" "window=default:w1:p2" "backend=herdr"
+  [ -z "$(window_to_task "sess:fm-fix-login-k3" "$state")" ] || fail "window_to_task accepted an unrecorded tmux-shaped target"
+  fm_write_meta "$state/herdr-task.meta" \
+    "window=default:w1:p2" "backend=herdr" "endpoint_task_id=herdr-task" \
+    "herdr_session=default" "herdr_workspace_id=w1" "herdr_tab_id=t1" \
+    "herdr_pane_id=w1:p2" "worktree=/tmp/herdr-task" "project=/tmp/project"
   [ "$(window_to_task "default:w1:p2" "$state")" = "herdr-task" ] || fail "window_to_task did not resolve opaque backend target through metadata"
   FM_CAPTAIN_RE='custom-verb:' status_is_captain_relevant "custom-verb: x" || fail "FM_CAPTAIN_RE override not honored"
   FM_CAPTAIN_RE='custom-verb:' status_is_captain_relevant "done: x" && fail "FM_CAPTAIN_RE override did not replace the default verb set"

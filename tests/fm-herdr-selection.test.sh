@@ -162,6 +162,7 @@ test_direct_herdr_entrypoints_refuse_tmux_environment() {
     'fm-remote-secondmate-control.sh state task-a' \
     'fm-crew-state.sh task-a' \
     'fm-fleet-snapshot.sh --json' \
+    'fm-config-push.sh' \
     'fm-remote-doctor.sh --fix' \
     'fm-stow-cascade.sh' \
     'fm-watch.sh'; do
