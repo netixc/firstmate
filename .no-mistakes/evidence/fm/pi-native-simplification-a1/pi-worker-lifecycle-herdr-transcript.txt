@@ -1,0 +1,16 @@
+VERSIONS pi=0.84.2 herdr=0.8.0
+CANONICAL_CONTEXT_ROOT /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-pi-lifecycle-proof.lgHm9w
+HERDR_TARGET session=fm-lab-pi-lifecycle-70171-10352 workspace=w1 tab=w1:t2 pane=w1:p2
+HERDR_READINESS stable_shell_samples=10
+LAUNCH_1 auto_discovery=disabled explicit_extension=/Users/control/.no-mistakes/worktrees/874f0de57f61/01M0GPRWX1DSPTXJF36WJ4DK25/.pi/worker-extensions/fm-worker-lifecycle.ts context=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-pi-lifecycle-proof.lgHm9w/home/state/pi-proof-worker.meta approval_flag=absent
+PUBLIC_CREW_STATE_OLD state: working · source: pane · harness busy (pi-ext)
+GENERATION_REPLACED old=g1787268287.11101.14218 new=g1787268288.11589.23381
+STALE_CALLBACK_REJECTED v1 gen=g1787268288.11589.23381 seq=1 state=busy source=fm-spawn event=launch-brief ts=1787268288
+TURN_END_NOTIFICATION present=yes authoritative_state_unchanged=yes
+RELAUNCH_READINESS stable_shell_samples=10
+LAUNCH_2 relaunch_same_pane=yes generation=g1787268288.11589.23381 explicit_extension=yes
+PUBLIC_CREW_STATE_NEW state: working · source: pane · harness busy (pi-ext)
+IDLE_SETTLEMENT v1 gen=g1787268288.11589.23381 seq=3 state=idle source=pi-ext event=agent-settled ts=1787268314
+PROJECT_TRUST fresh_disposable_target=yes prompt_observed=no approval_bypass_used=no
+PANE_TRANSCRIPT /Users/control/.no-mistakes/evidence/01M0GPRWX1DSPTXJF36WJ4DK25/pi-worker-lifecycle-herdr-pane.txt
+PROOF_PASS real Pi lifecycle through Herdr preserved newest generation authority

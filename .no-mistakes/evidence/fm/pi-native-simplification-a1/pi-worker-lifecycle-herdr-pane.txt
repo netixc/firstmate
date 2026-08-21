@@ -1,0 +1,67 @@
+control@controls-MacBook-Air fresh-target % cd /privat
+e/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-p
+i-lifecycle-proof.lgHm9w/fresh-target && FM_WORKER_LIF
+ECYCLE_CONTEXT=/private/var/folders/w7/jl8fwyn12ngg2h2
+sg073hrn80000gn/T/fm-pi-lifecycle-proof.lgHm9w/home/st
+ate/pi-proof-worker.meta pi --no-extensions -e /Users/
+control/.no-mistakes/worktrees/874f0de57f61/01M0GPRWX1
+DSPTXJF36WJ4DK25/.pi/worker-extensions/fm-worker-lifec
+ycle.ts --no-session --model openai-codex/gpt-5.6-terr
+a --thinking low Use\ the\ bash\ tool\ to\ run\ sleep\
+ 6.\ After\ it\ finishes\,\ reply\ exactly\ OLD_GENERA
+TION_DONE_17098.
+
+ Use the bash tool to run sleep 6. After it finishes,
+ reply exactly OLD_GENERATION_DONE_17098.
+
+
+ Thinking...
+
+
+ $ sleep 6 (timeout 10s)
+
+ (no output)
+
+ Took 6.2s
+
+
+ OLD_GENERATION_DONE_17098
+
+──────────────────────────────────────────────────────
+
+──────────────────────────────────────────────────────
+/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn8000...
+↑554 ↓49 R3.1k CH83.5% $0.002 (sub) 0.7%/272k (auto)
+
+control@controls-MacBook-Air fresh-target % cd /privat
+e/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-p
+i-lifecycle-proof.lgHm9w/fresh-target && FM_WORKER_LIF
+ECYCLE_CONTEXT=/private/var/folders/w7/jl8fwyn12ngg2h2
+sg073hrn80000gn/T/fm-pi-lifecycle-proof.lgHm9w/home/st
+ate/pi-proof-worker.meta pi --no-extensions -e /Users/
+control/.no-mistakes/worktrees/874f0de57f61/01M0GPRWX1
+DSPTXJF36WJ4DK25/.pi/worker-extensions/fm-worker-lifec
+ycle.ts --no-session --model openai-codex/gpt-5.6-terr
+a --thinking low Use\ the\ bash\ tool\ to\ run\ sleep\
+ 4.\ After\ it\ finishes\,\ reply\ exactly\ NEW_GENERA
+TION_DONE_26876.
+
+ Use the bash tool to run sleep 4. After it finishes,
+ reply exactly NEW_GENERATION_DONE_26876.
+
+
+
+ $ sleep 4 (timeout 10s)
+
+ (no output)
+
+ Took 4.2s
+
+
+ NEW_GENERATION_DONE_26876
+
+──────────────────────────────────────────────────────
+
+──────────────────────────────────────────────────────
+/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn8000...
+↑2.1k ↓48 R1.5k CH83.6% $0.005 (sub) 0.7%/272k (auto)
