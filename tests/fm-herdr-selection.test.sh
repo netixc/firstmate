@@ -78,6 +78,28 @@ test_metadata_classification_and_identity() {
   pass "metadata: current Herdr validates; legacy evidence is preserved"
 }
 
+test_remote_route_identity() {
+  local state=$TMP_ROOT/remote-route-state meta
+  mkdir -p "$state"
+  meta=$state/ios.meta
+  fm_write_meta "$meta" \
+    "backend=herdr" "window=remote:ios" "endpoint_task_id=ios" \
+    "worktree=/remote/home" "project=/remote/root" "home=/remote/home" \
+    "remote_host=remote-mac" "remote_root=/remote/root" \
+    "remote_herdr_session=fm-remote" "remote_target=fm-remote:w1:p1"
+  # shellcheck source=/dev/null
+  . "$ROOT/bin/fm-herdr.sh"
+  fm_herdr_validate_remote_route "$meta" ios \
+    || fail "complete remote Herdr route metadata should validate"
+  [ "$FM_HERDR_VALIDATED_REMOTE_HOST" = remote-mac ] \
+    && [ "$FM_HERDR_VALIDATED_REMOTE_TARGET" = fm-remote:w1:p1 ] \
+    || fail "remote route validation changed exact host or endpoint identity"
+  sed '/^backend=/d' "$meta" > "$meta.next" && mv "$meta.next" "$meta"
+  fm_herdr_validate_remote_route "$meta" ios >/dev/null 2>&1 \
+    && fail "providerless remote metadata must remain retired legacy evidence"
+  pass "metadata: remote Herdr routes require explicit exact identity"
+}
+
 test_selector_refuses_foreign_identity() {
   local state=$TMP_ROOT/selector-state meta out
   mkdir -p "$state"
@@ -122,11 +144,40 @@ test_public_control_paths_refuse_tmux_environment() {
   pass "public Herdr control paths reject tmux execution environments"
 }
 
+test_direct_herdr_entrypoints_refuse_tmux_environment() {
+  local home=$TMP_ROOT/direct-controls spec path out
+  local -a command
+  mkdir -p "$home/state" "$home/data" "$home/config"
+  for spec in \
+    'fm-afk-launch.sh reconcile' \
+    'fm-herdr-session-cleanup.sh' \
+    'fm-remote-secondmate-control.sh state task-a' \
+    'fm-crew-state.sh task-a' \
+    'fm-fleet-snapshot.sh --json' \
+    'fm-stow-cascade.sh' \
+    'fm-watch.sh'; do
+    read -r -a command <<< "$spec"
+    path=${command[0]}
+    out=$(TMUX=fake FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+      "$ROOT/bin/$path" "${command[@]:1}" 2>&1) \
+      && fail "$path accepted a tmux execution environment"
+    assert_contains "$out" "leave the tmux environment" \
+      "$path did not reject the retired environment before Herdr access"
+  done
+  [ ! -e "$home/state/.afk-launch.lock" ] \
+    || fail "retired environment acquired the away launcher lock"
+  [ ! -e "$home/state/.watch.lock" ] \
+    || fail "retired environment acquired the watcher lock"
+  pass "direct Herdr entrypoints reject tmux before reads or mutations"
+}
+
 test_default_and_explicit_herdr
 test_retired_and_unknown_selection_refused
 test_metadata_classification_and_identity
+test_remote_route_identity
 test_selector_refuses_foreign_identity
 test_retired_cli_selection_refused
 test_public_control_paths_refuse_tmux_environment
+test_direct_herdr_entrypoints_refuse_tmux_environment
 
 echo "All Herdr selection tests passed."

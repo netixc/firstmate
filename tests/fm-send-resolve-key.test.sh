@@ -351,8 +351,12 @@ setup_remote_home() {  # <name> -> echoes home dir with remote meta + registry
   home=$(setup_home "$1")
   mkdir -p "$home/data"
   fm_write_meta "$home/state/rsm.meta" \
-    "window=fm-remote:w1:p1" \
+    "backend=herdr" \
+    "window=remote:rsm" \
     "endpoint_task_id=rsm" \
+    "worktree=/remote/home" \
+    "project=/remote/root" \
+    "home=/remote/home" \
     "harness=pi" \
     "kind=secondmate" \
     "mode=secondmate" \
@@ -389,6 +393,24 @@ test_remote_secondmate_answer_closes_locally() {
     fail "the answered remote-secondmate decision still lists as open: $out"
   fi
   pass "fm-send --resolve-key: a remote-secondmate answer closes the same local ledger, transport-only difference"
+}
+
+test_providerless_remote_route_is_preserved() {
+  local dir fb log home ssh_log rc out
+  dir="$TMP_ROOT/remote-providerless"; mkdir -p "$dir"
+  fb=$(make_stubs "$dir"); log="$dir/send.log"; ssh_log="$dir/ssh.log"; : > "$ssh_log"
+  home=$(setup_remote_home remote-providerless)
+  sed '/^backend=/d' "$home/state/rsm.meta" > "$home/state/rsm.meta.next"
+  mv "$home/state/rsm.meta.next" "$home/state/rsm.meta"
+  out=$(env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" \
+    FM_SEND_LOG="$log" FM_SEND_SETTLE=0 FM_SSH_BIN="$fb/fake-ssh" FM_SSH_LOG="$ssh_log" \
+    "$SEND" rsm "do not send" 2>&1); rc=$?
+  [ "$rc" -ne 0 ] || fail "providerless remote metadata authorized a send"
+  assert_contains "$out" "preserving its records" "providerless remote refusal omitted reconciliation guidance"
+  [ ! -s "$ssh_log" ] || fail "providerless remote metadata reached the remote transport"
+  grep -Fqx 'window=remote:rsm' "$home/state/rsm.meta" \
+    || fail "providerless remote refusal rewrote its route record"
+  pass "fm-send: providerless remote evidence is preserved and never controlled"
 }
 
 # The reported failure: a remote secondmate reply line prepends a
@@ -504,6 +526,7 @@ test_failed_send_does_not_close
 test_multiple_keys_close_together
 test_local_secondmate_answer_marked_and_closed
 test_remote_secondmate_answer_closes_locally
+test_providerless_remote_route_is_preserved
 test_remote_reply_corr_tag_does_not_block_resolve_key
 test_remote_transport_failure_does_not_close
 test_flag_misuse_refuses

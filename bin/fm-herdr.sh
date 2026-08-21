@@ -203,6 +203,53 @@ fm_herdr_validate_task_endpoint() {  # <meta-file> <task-id> [record-only]
   fi
 }
 
+fm_herdr_validate_remote_route() {  # <meta-file> <task-id> [record-only]
+  local meta=$1 id=$2 mode=${3:-unique-owner} window binding worktree project home
+  local host root session target pane state other other_id count=0 invalid=0
+  FM_HERDR_VALIDATED_REMOTE_HOST=
+  FM_HERDR_VALIDATED_REMOTE_TARGET=
+  [ -f "$meta" ] && [ ! -L "$meta" ] || return 1
+  case "$id" in ''|*[!A-Za-z0-9._-]*) return 1 ;; esac
+  fm_herdr_require_meta "$meta" "$id" || return 1
+  window=$(fm_meta_exact_value "$meta" window) || return 1
+  binding=$(fm_meta_exact_value "$meta" endpoint_task_id) || return 1
+  worktree=$(fm_meta_exact_value "$meta" worktree) || return 1
+  project=$(fm_meta_exact_value "$meta" project) || return 1
+  home=$(fm_meta_exact_value "$meta" home) || return 1
+  host=$(fm_meta_exact_value "$meta" remote_host) || return 1
+  root=$(fm_meta_exact_value "$meta" remote_root) || return 1
+  session=$(fm_meta_exact_value "$meta" remote_herdr_session) || return 1
+  target=$(fm_meta_exact_value "$meta" remote_target) || return 1
+  [ "$window" = "remote:$id" ] && [ "$binding" = "$id" ] \
+    && [ "$worktree" = "$home" ] && [ "$project" = "$root" ] \
+    && [ "$session" = fm-remote ] && [ "${target%%:*}" = "$session" ] || return 1
+  pane=${target#*:}
+  [ "$pane" != "$target" ] && fm_herdr_endpoint_atom_valid "$session" \
+    && fm_herdr_endpoint_atom_valid "${pane//:/_}" || return 1
+  case "$window$worktree$project$home$host$root$session$target" in *$'\n'*|*$'\r'*|*$'\t'*) return 1 ;; esac
+  FM_HERDR_VALIDATED_REMOTE_HOST=$host
+  FM_HERDR_VALIDATED_REMOTE_TARGET=$target
+  [ "$mode" = record-only ] && return 0
+  case "$meta" in */*) state=${meta%/*} ;; *) state=. ;; esac
+  for other in "$state"/*.meta; do
+    [ -e "$other" ] || continue
+    grep -Fqx "remote_host=$host" "$other" 2>/dev/null || continue
+    grep -Fqx "remote_target=$target" "$other" 2>/dev/null || continue
+    other_id=${other##*/}
+    other_id=${other_id%.meta}
+    if fm_herdr_validate_remote_route "$other" "$other_id" record-only >/dev/null 2>&1; then
+      count=$((count + 1))
+    else
+      invalid=1
+    fi
+  done
+  if [ "$invalid" -ne 0 ] || [ "$count" -ne 1 ]; then
+    FM_HERDR_VALIDATED_REMOTE_HOST=
+    FM_HERDR_VALIDATED_REMOTE_TARGET=
+    return 1
+  fi
+}
+
 fm_endpoint_meta_for_target() {  # <target> <state-dir>
   local target=$1 state=$2 meta id match= count=0 invalid=0
   for meta in "$state"/*.meta; do

@@ -173,6 +173,10 @@ fm_send_resolve_target() {  # <raw-target>
   if [ -n "$meta" ]; then
     if [ -n "$(fm_meta_get "$meta" remote_host)" ]; then
       id=$(fm_send_id_from_meta "$meta")
+      if ! fm_herdr_validate_remote_route "$meta" "$id"; then
+        echo "REFUSED: remote secondmate $id has ambiguous or unsupported Herdr route metadata; preserving its records for manual reconciliation." >&2
+        return 1
+      fi
       RESOLVED_TARGET="remote:$id"
       TARGET_ROUTE=remote
       TARGET_META=$meta

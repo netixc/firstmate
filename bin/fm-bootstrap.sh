@@ -554,6 +554,11 @@ secondmate_sync() {
   while IFS='|' read -r id _home _window meta; do
     remote_host=$(fm_meta_get "$meta" remote_host)
     [ -n "$remote_host" ] || continue
+    if ! fm_herdr_validate_remote_route "$meta" "$id" >/dev/null 2>&1; then
+      echo "SECONDMATE_SYNC: secondmate $id: skipped: invalid or ambiguous remote Herdr route preserved for manual reconciliation"
+      continue
+    fi
+    remote_host=$FM_HERDR_VALIDATED_REMOTE_HOST
     __fm_timing_stamp=$(fm_timing_now_ms)
     secondmate_sync_remote_one "$id" "$_home" "$remote_host"
     fm_timing_record secondmate convergence "$__fm_timing_stamp" "$id@$remote_host"
@@ -612,6 +617,11 @@ secondmate_liveness_one() {  # <meta> <id>
   harness=$(fm_meta_get "$meta" harness)
   remote_host=$(fm_meta_get "$meta" remote_host)
   if [ -n "$remote_host" ]; then
+    if ! fm_herdr_validate_remote_route "$meta" "$id" >/dev/null 2>&1; then
+      echo "SECONDMATE_LIVENESS: secondmate $id: skipped: invalid or ambiguous remote Herdr route preserved for manual reconciliation"
+      return 0
+    fi
+    remote_host=$FM_HERDR_VALIDATED_REMOTE_HOST
     remote_rc=0
     fm_remote_readiness_ensure "$SCRIPT_DIR" "$id" || remote_rc=$?
     if [ "$remote_rc" -eq 255 ]; then

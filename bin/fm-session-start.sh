@@ -796,11 +796,20 @@ for meta in "$STATE"/*.meta; do
   cat "$meta"
 
   window=$(fm_meta_get "$meta" window)
-  target=$(fm_endpoint_target_of_meta "$meta")
+  remote_host=$(fm_meta_get "$meta" remote_host)
+  if [ -n "$remote_host" ] && fm_herdr_validate_remote_route "$meta" "$id" >/dev/null 2>&1; then
+    target=$FM_HERDR_VALIDATED_REMOTE_TARGET
+  else
+    target=$(fm_endpoint_target_of_meta "$meta")
+  fi
   if [ -n "$window" ]; then
     backend=$(fm_herdr_meta_kind "$meta")
     if [ "$backend" != herdr ]; then
       printf 'endpoint: unknown (%s record preserved for manual reconciliation; window=%s)\n' "$backend" "$window"
+    elif [ -n "$remote_host" ] && ! fm_herdr_validate_remote_route "$meta" "$id" >/dev/null 2>&1; then
+      printf 'endpoint: unknown (invalid remote Herdr route preserved for manual reconciliation; window=%s)\n' "$window"
+    elif [ -n "$remote_host" ]; then
+      printf 'endpoint: remote (Herdr route=%s host=%s)\n' "$target" "$remote_host"
     elif [ -z "$target" ]; then
       printf 'endpoint: unknown (invalid Herdr record preserved for manual reconciliation; window=%s)\n' "$window"
     elif fm_herdr_target_exists "$target"; then

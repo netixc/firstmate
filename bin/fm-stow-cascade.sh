@@ -74,6 +74,8 @@ SUB_HOME_MARKER="${SUB_HOME_MARKER:-.fm-secondmate-home}"
 # shellcheck source=bin/fm-timeout-lib.sh
 . "$SCRIPT_DIR/fm-timeout-lib.sh"
 
+fm_herdr_require_runtime || exit 1
+
 BOUND=${FM_STOW_CASCADE_TIMEOUT:-60}
 case "$BOUND" in
   ''|*[!0-9]*) printf 'error: FM_STOW_CASCADE_TIMEOUT must be a positive integer: %s\n' "$BOUND" >&2; exit 2 ;;

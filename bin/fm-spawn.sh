@@ -556,6 +556,7 @@ spawn_remote_secondmate() {
   fm_trace_context_valid "$remote_recorded_traceparent" || remote_recorded_traceparent=
   tmp="$meta.tmp.$$"
   {
+    echo "backend=herdr"
     echo "window=remote:$id"
     echo "endpoint_task_id=$id"
     echo "worktree=$home"

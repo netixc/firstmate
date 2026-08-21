@@ -331,6 +331,7 @@ fm_herdr_session_cleanup() {
 }
 
 if [ "${FM_HERDR_SESSION_CLEANUP_SOURCE_ONLY:-0}" != 1 ]; then
+  fm_herdr_require_runtime || exit 1
   fm_herdr_session_cleanup
   exit 0
 fi

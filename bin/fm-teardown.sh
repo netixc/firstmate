@@ -327,6 +327,9 @@ remote_secondmate_teardown() {
   local remote_host remote_root remote_home kind route_host route_root route_home out rc tmp rec phase task_id
   remote_host=$(fm_meta_get "$META" remote_host)
   [ -n "$remote_host" ] || return 3
+  fm_herdr_validate_remote_route "$META" "$ID" >/dev/null 2>&1 \
+    || { echo "REFUSED: remote secondmate route is invalid or ambiguous; preserving its records for manual reconciliation" >&2; return 1; }
+  remote_host=$FM_HERDR_VALIDATED_REMOTE_HOST
   kind=$(fm_meta_get "$META" kind)
   [ "$kind" = secondmate ] || { echo "REFUSED: remote placement metadata is valid only for a secondmate" >&2; return 1; }
   remote_root=$(fm_meta_get "$META" remote_root)

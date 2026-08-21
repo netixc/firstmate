@@ -1203,7 +1203,12 @@ fm_pending_reply_tick() {  # <state-dir>
       sm_home=$(fm_meta_get "$meta" home)
       harness=$(fm_meta_get "$meta" harness)
       if [ -n "$remote_host" ]; then
-        target="remote:$task_id"
+        if fm_herdr_validate_remote_route "$meta" "$task_id" >/dev/null 2>&1; then
+          target="remote:$task_id"
+          remote_host=$FM_HERDR_VALIDATED_REMOTE_HOST
+        else
+          target=
+        fi
         sm_home=
       fi
       if [ -n "$target" ]; then

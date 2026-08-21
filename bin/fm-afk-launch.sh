@@ -549,6 +549,7 @@ fm_afk_launch_stop() {
 
 fm_afk_launch_main() {
   local result
+  fm_herdr_require_runtime || return 1
   # Traps first, lock second. Acquiring before the handlers exist leaves a
   # window where a signal terminates this process by default action and leaks
   # the lock directory, which then blocks the next away-mode launch until the

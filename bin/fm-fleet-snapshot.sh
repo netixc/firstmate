@@ -175,6 +175,8 @@ case "${1:---json}" in
   *) usage >&2; exit 2 ;;
 esac
 
+fm_herdr_require_runtime || exit 1
+
 command -v jq >/dev/null 2>&1 || { echo "fm-fleet-snapshot: jq not found" >&2; exit 1; }
 
 bool_json() {
@@ -423,8 +425,14 @@ task_json_lines() {
     remote_root=$(meta_value "$meta" remote_root)
     remote_home_present=null
     if [ -n "$remote_host" ]; then
-      session_path=herdr
-      target=$(meta_value "$meta" remote_target)
+      if fm_herdr_validate_remote_route "$meta" "$id" >/dev/null 2>&1; then
+        session_path=herdr
+        target=$FM_HERDR_VALIDATED_REMOTE_TARGET
+        remote_host=$FM_HERDR_VALIDATED_REMOTE_HOST
+      else
+        session_path=unsupported
+        target=
+      fi
     else
       session_path=$(fm_herdr_meta_kind "$meta")
       target=$(fm_endpoint_target_of_meta "$meta")
@@ -481,7 +489,7 @@ task_json_lines() {
 
     endpoint_exists=null
     agent_alive=not_checked
-    if [ -n "$remote_host" ]; then
+    if [ -n "$remote_host" ] && [ "$session_path" = herdr ]; then
       if remote_state=$(fm_run_timed "$FM_SNAPSHOT_SECONDMATE_TIMEOUT" \
         "$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh state "$id" < /dev/null 2>/dev/null); then
         remote_rc=0
