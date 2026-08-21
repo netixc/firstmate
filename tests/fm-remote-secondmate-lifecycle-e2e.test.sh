@@ -720,6 +720,38 @@ cmp -s "$TMP_ROOT/herdr-before-parent-mismatch.log" "$HERDR_LOG" \
 mv -f "$TMP_ROOT/remote-ios-before-parent-mismatch.meta" "$remote_route_meta"
 pass "remote endpoint access requires the parent's exact target identity"
 
+cp "$HERDR_STATE" "$TMP_ROOT/herdr-before-live-component-mismatch.state"
+remote_live_pane=$(sed -n 's/^herdr_pane_id=//p' "$remote_route_meta")
+remote_live_tab=$(sed -n 's/^herdr_tab_id=//p' "$remote_route_meta")
+remote_live_workspace=$(sed -n 's/^herdr_workspace_id=//p' "$remote_route_meta")
+remote_mismatched_tab="$remote_live_workspace:t999"
+jq --arg pane "$remote_live_pane" --arg tab "$remote_mismatched_tab" \
+  '.tabs |= map(if .pane_id == $pane then .tab_id = $tab else . end)' \
+  "$HERDR_STATE" > "$HERDR_STATE.tmp"
+mv "$HERDR_STATE.tmp" "$HERDR_STATE"
+send_text_before=$(grep -c '^pane send-text ' "$HERDR_LOG" || true)
+send_keys_before=$(grep -c '^pane send-keys ' "$HERDR_LOG" || true)
+if remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh send ios probe \
+  > "$TMP_ROOT/live-component-send.out" 2>&1; then
+  fail "remote send controlled a pane whose live tab identity contradicted its record"
+fi
+if remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh key ios Enter \
+  > "$TMP_ROOT/live-component-key.out" 2>&1; then
+  fail "remote key controlled a pane whose live tab identity contradicted its record"
+fi
+[ "$(grep -c '^pane send-text ' "$HERDR_LOG" || true)" -eq "$send_text_before" ] \
+  || fail "remote send reached the mismatched live pane"
+[ "$(grep -c '^pane send-keys ' "$HERDR_LOG" || true)" -eq "$send_keys_before" ] \
+  || fail "remote key reached the mismatched live pane"
+assert_grep 'live Herdr component identity does not match' "$TMP_ROOT/live-component-send.out" \
+  "remote send did not explain the live component mismatch"
+assert_grep 'live Herdr component identity does not match' "$TMP_ROOT/live-component-key.out" \
+  "remote key did not explain the live component mismatch"
+mv -f "$TMP_ROOT/herdr-before-live-component-mismatch.state" "$HERDR_STATE"
+[ "$(sed -n 's/^herdr_tab_id=//p' "$remote_route_meta")" = "$remote_live_tab" ] \
+  || fail "live component refusal rewrote the durable remote tab identity"
+pass "remote send and key require the exact live Herdr component identity"
+
 cp "$PARENT/state/ios.meta" "$TMP_ROOT/parent-ios-before-nonherdr.meta"
 cp "$PARENT/data/secondmates.md" "$TMP_ROOT/registry-before-nonherdr.md"
 set +e

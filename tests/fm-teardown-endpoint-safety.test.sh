@@ -94,6 +94,81 @@ EOF
   pass "unreachable and ambiguous Herdr stop cleanup with durable records intact"
 }
 
+test_locked_teardown_revalidates_live_identity() {
+  local id=cleanup-race rec world home fb log changed lock ready release holder_pid teardown_pid rc waited
+  rec=$(make_teardown_world locked-race "$id" present)
+  IFS='|' read -r world home fb <<EOF
+$rec
+EOF
+  log=$world/herdr.log
+  changed=$world/component-changed
+  ready=$world/lock-ready
+  release=$world/lock-release
+  : > "$log"
+  cat > "$fb/herdr" <<'SH'
+#!/usr/bin/env bash
+set -u
+printf '%s\n' "$*" >> "$FM_HERDR_LOG"
+case "${1:-} ${2:-}" in
+  "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
+  "session list") printf '{"sessions":[{"name":"lab","running":true,"socket_path":"%s/herdr.sock"}]}\n' "$FM_HOME" ;;
+  "pane get")
+    if [ -e "$FM_HERDR_COMPONENT_CHANGED" ]; then tab=w-cleanup-race:t-other
+    else tab=w-cleanup-race:t-cleanup-race
+    fi
+    printf '{"result":{"pane":{"pane_id":"w-cleanup-race:p1","tab_id":"%s","workspace_id":"w-cleanup-race"}}}\n' "$tab"
+    ;;
+  "tab get") printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"w-cleanup-race"}}}\n' "${3:-}" ;;
+  "pane close") printf 'closed\n' >> "$FM_HERDR_LOG" ;;
+  *) printf '{"result":{}}\n' ;;
+esac
+SH
+  chmod +x "$fb/herdr"
+  lock=$(PATH="$fb:$PATH" FM_HOME="$home" FM_HERDR_LOG="$log" \
+    FM_HERDR_COMPONENT_CHANGED="$changed" bash -c \
+    '. "$1/bin/fm-herdr.sh"; fm_herdr_presentation_session_lock_path lab' _ "$ROOT") \
+    || fail "locked-race: could not resolve the presentation lock"
+  ROOT="$ROOT" LOCK="$lock" READY="$ready" RELEASE="$release" bash -c '
+    . "$ROOT/bin/fm-wake-lib.sh"
+    fm_lock_try_acquire "$LOCK" || exit 1
+    : > "$READY"
+    while [ ! -e "$RELEASE" ]; do sleep 0.05; done
+    fm_lock_release "$LOCK"
+  ' &
+  holder_pid=$!
+  waited=0
+  while [ ! -e "$ready" ] && [ "$waited" -lt 100 ]; do sleep 0.05; waited=$((waited + 1)); done
+  [ -e "$ready" ] || fail "locked-race: lock holder did not start"
+  PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" FM_HERDR_LOG="$log" \
+    FM_HERDR_COMPONENT_CHANGED="$changed" "$TEARDOWN" "$id" --force \
+    > "$world/stdout" 2> "$world/stderr" &
+  teardown_pid=$!
+  waited=0
+  while ! grep -q '^pane get ' "$log" 2>/dev/null && [ "$waited" -lt 100 ]; do
+    sleep 0.05
+    waited=$((waited + 1))
+  done
+  grep -q '^pane get ' "$log" 2>/dev/null || {
+    : > "$release"
+    wait "$holder_pid" 2>/dev/null || true
+    wait "$teardown_pid" 2>/dev/null || true
+    fail "locked-race: teardown never inspected the pane before waiting"
+  }
+  sleep 0.3
+  : > "$changed"
+  : > "$release"
+  wait "$holder_pid" || fail "locked-race: lock holder failed"
+  rc=0
+  wait "$teardown_pid" || rc=$?
+  [ "$rc" -ne 0 ] || fail "locked-race: teardown accepted a component identity replaced during its lock wait"
+  assert_present "$home/state/$id.meta" "locked-race: refusal removed the endpoint record"
+  assert_no_grep 'pane close ' "$log" "locked-race: refusal closed the replaced pane"
+  assert_grep 'does not match its recorded live pane' "$world/stderr" \
+    "locked-race: refusal did not explain the changed live component identity"
+  pass "teardown revalidates live Herdr identity after acquiring its presentation lock"
+}
+
 test_exact_current_metadata_validates
 test_invalid_and_legacy_metadata_refuse_without_calls
 test_unreachable_or_ambiguous_herdr_preserves_records
+test_locked_teardown_revalidates_live_identity

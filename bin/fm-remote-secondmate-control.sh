@@ -231,7 +231,7 @@ cmd_send() {
   local id=$1 message=$2
   validate_id "$id"
   validate_home "$id"
-  remote_endpoint_require "$id"
+  remote_endpoint_require_live "$id"
   FM_HOME="$TARGET_HOME" FM_ROOT_OVERRIDE="$FM_ROOT" FM_STATE_OVERRIDE="$TARGET_HOME/state" \
     "$SCRIPT_DIR/fm-send.sh" "$REMOTE_ENDPOINT_TARGET" "$message"
 }
@@ -240,7 +240,7 @@ cmd_key() {
   local id=$1 key=$2
   validate_id "$id"
   validate_home "$id"
-  remote_endpoint_require "$id"
+  remote_endpoint_require_live "$id"
   FM_HOME="$TARGET_HOME" FM_ROOT_OVERRIDE="$FM_ROOT" FM_STATE_OVERRIDE="$TARGET_HOME/state" \
     "$SCRIPT_DIR/fm-send.sh" "$REMOTE_ENDPOINT_TARGET" --key "$key"
 }

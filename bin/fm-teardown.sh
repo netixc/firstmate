@@ -1953,6 +1953,19 @@ teardown_herdr_require_prerequisites() {  # <task-id>
   fi
 }
 
+teardown_herdr_authorize_locked_target() {  # <session> <pane> <task-id> <meta-file>
+  local session=$1 pane=$2 task_id=$3 meta=$4 presence
+  presence=$(fm_herdr_pane_presence_state "$session" "$pane")
+  case "$presence" in
+    dead) return 0 ;;
+    present) fm_herdr_validate_live_task_endpoint "$meta" "$task_id" ;;
+    *)
+      echo "error: herdr endpoint $session:$pane for $task_id has ambiguous structured presence under its presentation lock; nothing was changed - restore reliable endpoint inspection and rerun teardown" >&2
+      return 1
+      ;;
+  esac
+}
+
 teardown_herdr_preflight_target() {  # <target> <task-id> <meta-file>
   local target=$1 task_id=$2 meta=$3 session pane presence lock_path verified_lock_path lock_session held_path attempt
   teardown_herdr_require_prerequisites "$task_id" || return 1
@@ -1964,10 +1977,7 @@ teardown_herdr_preflight_target() {  # <target> <task-id> <meta-file>
   pane=$FM_HERDR_PANE
   presence=$(fm_herdr_pane_presence_state "$session" "$pane")
   case "$presence" in
-    dead) ;;
-    present)
-      fm_herdr_validate_live_task_endpoint "$meta" "$task_id" || return 1
-      ;;
+    dead|present) ;;
     *)
       echo "error: herdr endpoint $target for $task_id has ambiguous structured presence; nothing was changed - restore reliable endpoint inspection and rerun teardown" >&2
       return 1
@@ -1984,6 +1994,7 @@ teardown_herdr_preflight_target() {  # <target> <task-id> <meta-file>
           echo "error: herdr session presentation lock changed during preflight for $task_id; nothing was changed - rerun teardown once session identity is stable" >&2
           return 1
         fi
+        teardown_herdr_authorize_locked_target "$session" "$pane" "$task_id" "$meta" || return 1
         return 0
       fi
     done <<FMEOF
@@ -1997,6 +2008,10 @@ FMEOF
         || [ "$verified_lock_path" != "$lock_path" ]; then
         fm_lock_release "$lock_path" || true
         echo "error: herdr session presentation lock changed during preflight for $task_id; nothing was changed - rerun teardown once session identity is stable" >&2
+        return 1
+      fi
+      if ! teardown_herdr_authorize_locked_target "$session" "$pane" "$task_id" "$meta"; then
+        fm_lock_release "$lock_path" || true
         return 1
       fi
       if [ -n "$TEARDOWN_HERDR_LOCK_RECORDS" ]; then
