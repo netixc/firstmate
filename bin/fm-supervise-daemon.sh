@@ -590,14 +590,21 @@ task_window_harness() {  # <window> <state>
 # working: unknown semantic state never becomes busy and never becomes a
 # silent idle, so a stale pane whose state cannot be proven surfaces.
 stale_window_is_busy() {  # <window> <state>
-  local win=$1 state=$2 endpoint_class harness task verdict
+  local win=$1 state=$2 endpoint_class harness task meta verdict
   endpoint_class=$(task_window_endpoint_class "$win" "$state")
   [ "$endpoint_class" = herdr ] || return 2
   harness=$(task_window_harness "$win" "$state")
   task=$(window_to_task "$win" "$state")
-  fm_herdr_capture "$win" 40 >/dev/null 2>&1 || return 2
-  verdict=$(fm_busy_classify "$win" "$harness" "$task" "$state")
+  meta="$state/$task.meta"
+  verdict=$(fm_herdr_with_live_task_endpoint "$meta" "$task" \
+    _fm_daemon_stale_busy_observation "$harness" "$task" "$state") || return 2
   [ "${verdict%% *}" = busy ]
+}
+
+_fm_daemon_stale_busy_observation() {
+  local win=$1 harness=$2 task=$3 state=$4
+  fm_herdr_capture "$win" 40 >/dev/null 2>&1 || return 1
+  fm_busy_classify "$win" "$harness" "$task" "$state"
 }
 
 escalate_add() {  # <state> <distilled-item>

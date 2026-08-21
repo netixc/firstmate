@@ -718,7 +718,7 @@ secondmate_liveness_one() {  # <meta> <id>
           return 0
         fi
         cause="confirmed agent absence on existing endpoint"
-        fm_herdr_kill "$target" 2>/dev/null || true
+        fm_herdr_kill_task_endpoint "$meta" "$id" 2>/dev/null || true
       else
         cause="recorded endpoint confidently missing"
       fi

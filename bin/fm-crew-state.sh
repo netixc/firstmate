@@ -142,15 +142,15 @@ LOG_VERB=$(status_line_verb "$LOG_LINE")
 # A matching no-mistakes run remains authoritative even when the endpoint is
 # unavailable or carries retired legacy metadata.
 ENDPOINT_CLASS=$(fm_herdr_meta_kind "$META")
-HERDR_TARGET=$(fm_endpoint_live_target_of_meta "$META")
+HERDR_TARGET=$(fm_endpoint_target_of_meta "$META")
 pane_readable() {  # <target>
   [ "$ENDPOINT_CLASS" = herdr ] || return 1
-  fm_herdr_capture "$1" 1 >/dev/null 2>&1
+  fm_herdr_live_capture_task_endpoint "$META" "$ID" 1 >/dev/null 2>&1
 }
 # Native Herdr busy is accepted only as positive activity evidence when no
 # extension record exists; native idle never closes a turn.
 crew_busy_verdict() {  # <target>
-  fm_busy_classify "$1" "$HARNESS" "$ID" "$STATE"
+  fm_herdr_live_busy_task_endpoint "$META" "$ID" "$HARNESS" "$STATE"
 }
 
 # --- no-mistakes run lookup (authoritative when a run matches this branch) --

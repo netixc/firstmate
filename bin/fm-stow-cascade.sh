@@ -130,12 +130,12 @@ resolve_local_transport() { # <id> <resolved-home>
     set_transport direct "$endpoint_class endpoint record preserved for manual reconciliation"
     return 0
   fi
-  target=$(fm_endpoint_live_target_of_meta "$meta" 2>/dev/null || true)
+  target=$(fm_endpoint_target_of_meta "$meta" 2>/dev/null || true)
   if [ -z "$target" ]; then
     set_transport deferred 'invalid Herdr endpoint record preserved for manual reconciliation'
     return 0
   fi
-  case "$(fm_herdr_agent_state "$target" 2>/dev/null || printf 'unreadable')" in
+  case "$(fm_herdr_live_agent_state_task_endpoint "$meta" "$id" 2>/dev/null || printf 'unreadable')" in
     alive) set_transport agent ;;
     *) set_transport direct 'no live agent on the recorded endpoint' ;;
   esac

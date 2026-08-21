@@ -588,6 +588,7 @@ test_terminal_stale_surfaced() {
 set -u
 case "${1:-} ${2:-}" in
   "status --json") printf '{"client":{"version":"0.7.1","protocol":14},"server":{"running":true,"protocol":14}}\n' ;;
+  "session list") printf '{"sessions":[{"name":"%s","running":true,"socket_path":"%s/herdr.sock"}]}\n' "${HERDR_SESSION:-test}" "${FM_HOME:-/tmp}" ;;
   "pane read") cat "$FM_FAKE_HERDR_CAPTURE" ;;
   "pane get") printf '{"result":{"pane":{"pane_id":"%s","tab_id":"w-done:t-done","workspace_id":"w-done"}}}\n' "${3:-}" ;;
   "tab get") printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"w-done"}}}\n' "${3:-}" ;;

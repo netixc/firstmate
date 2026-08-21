@@ -420,57 +420,72 @@ FM_AFK_PI_HERDR_E2E=1 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
 Observed guarantees: pending composer input refused injection and raised one alert; idle Pi accepted one marked escalation; the return gate refused ordinary work while a live blocker remained; resolving the blocker allowed the return flow.
 The dedicated Herdr daemon workspace topology is covered by `tests/fm-afk-launch.test.sh` and preserves the captain tab's pane count.
 
-## 2026-08-21 Herdr-only completion evidence
+## 2026-08-22 Herdr-only review evidence
 
 The final portable session-path run used:
 
 ```sh
-bin/fm-test-run.sh --family herdr-session --json /tmp/remove-tmux-portable.json
+bin/fm-test-run.sh --family herdr-session
 ```
 
 ```text
-FM_TEST_SUMMARY total=12 failed=0 skipped_gate=0 duration_ms=528519
-FM_TEST_SUMMARY_FAMILY family=herdr-session count=12 duration_ms=527773 failed=0
+FM_TEST_SUMMARY total=12 failed=0 skipped_gate=0 duration_ms=493007
+FM_TEST_SUMMARY_FAMILY family=herdr-session count=12 duration_ms=492517 failed=0
 ```
 
 Remote and local Secondmate routing used:
 
 ```sh
-bin/fm-test-run.sh tests/fm-secondmate-safety.test.sh tests/fm-remote-secondmate-lifecycle-e2e.test.sh tests/fm-remote-secondmate-parent-binding.test.sh tests/fm-remote-secondmate-trace-context.test.sh tests/fm-secondmate-harness.test.sh --json /tmp/remove-tmux-secondmate.json
+bin/fm-test-run.sh tests/fm-secondmate-safety.test.sh tests/fm-remote-secondmate-lifecycle-e2e.test.sh tests/fm-remote-secondmate-parent-binding.test.sh tests/fm-remote-secondmate-trace-context.test.sh tests/fm-secondmate-harness.test.sh
 ```
 
 ```text
-FM_TEST_SUMMARY total=5 failed=0 skipped_gate=0 duration_ms=185371
-FM_TEST_SUMMARY_FAMILY family=secondmate count=4 duration_ms=152930 failed=0
-FM_TEST_SUMMARY_FAMILY family=unclassified count=1 duration_ms=32145 failed=0
+FM_TEST_SUMMARY total=5 failed=0 skipped_gate=0 duration_ms=186633
+FM_TEST_SUMMARY_FAMILY family=secondmate count=4 duration_ms=156762 failed=0
+FM_TEST_SUMMARY_FAMILY family=unclassified count=1 duration_ms=29633 failed=0
 ```
 
 Watcher durability, native transition fallback, and away-mode guards used:
 
 ```sh
-bin/fm-test-run.sh tests/fm-watch-triage.test.sh tests/fm-wake-queue.test.sh tests/fm-supervision-events.test.sh tests/fm-daemon.test.sh --json /tmp/remove-tmux-supervision.json
+bin/fm-test-run.sh tests/fm-watch-triage.test.sh tests/fm-wake-queue.test.sh tests/fm-supervision-events.test.sh tests/fm-daemon.test.sh
 ```
 
 ```text
-FM_TEST_SUMMARY total=4 failed=0 skipped_gate=0 duration_ms=125766
-FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=4 duration_ms=125550 failed=0
+FM_TEST_SUMMARY total=4 failed=0 skipped_gate=0 duration_ms=152830
+FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=4 duration_ms=152632 failed=0
+```
+
+The final locked live-identity regression rerun used:
+
+```sh
+bin/fm-test-run.sh tests/fm-crew-state.test.sh tests/fm-send-strict.test.sh tests/fm-daemon.test.sh
+```
+
+```text
+FM_TEST_SUMMARY total=3 failed=0 skipped_gate=0 duration_ms=52666
+FM_TEST_SUMMARY_FAMILY family=herdr-session count=1 duration_ms=7554 failed=0
+FM_TEST_SUMMARY_FAMILY family=pure-contract-unit count=1 duration_ms=43817 failed=0
+FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=1136 failed=0
 ```
 
 Strict tracked-extension checking used TypeScript 5.9.3:
 
 ```sh
-npm install --silent --no-audit --no-fund --prefix /tmp/fm-typescript-check typescript@5.9.3
-PATH="/tmp/fm-typescript-check/node_modules/.bin:$PATH" bash tests/fm-pi-primary-types.test.sh
+npm install --silent --no-audit --no-fund --prefix .review-typescript typescript@5.9.3
+PATH="$PWD/.review-typescript/node_modules/.bin:$PATH" bash tests/fm-pi-primary-types.test.sh
+find .review-typescript -depth -delete
 ```
 
 ```text
 ok - tracked Pi extensions pass strict no-emit typecheck against Pi 0.84.2
 ```
 
-Repository lint and documentation checks used:
+Review-phase changed-source lint and the documentation check used:
 
 ```sh
-bin/fm-lint.sh
+bin/fm-lint.sh bin/fm-bootstrap.sh bin/fm-control.sh bin/fm-crew-state.sh bin/fm-fleet-snapshot.sh bin/fm-herdr.sh bin/fm-peek.sh bin/fm-pending-reply-lib.sh bin/fm-remote-secondmate-control.sh bin/fm-send.sh bin/fm-stow-cascade.sh bin/fm-supervise-daemon.sh bin/fm-watch.sh tests/fm-daemon.test.sh tests/fm-secondmate-safety.test.sh tests/fm-send-strict.test.sh tests/fm-supervision-events.test.sh
+bin/fm-lint.sh bin/fm-herdr.sh bin/fm-crew-state.sh tests/fm-crew-state.test.sh
 bin/fm-doc-audience-check.sh
 ```
 
@@ -492,12 +507,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 131578 316
-bin 54385 127
-tests 56835 118
+all 131832 316
+bin 54545 127
+tests 56914 118
 pi 2045 9
 agents 562
-added=6268 deleted=31894 net=-25626
+added=6533 deleted=31905 net=-25372
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,626 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,372 lines smaller.

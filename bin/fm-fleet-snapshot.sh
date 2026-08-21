@@ -435,7 +435,7 @@ task_json_lines() {
       fi
     else
       session_path=$(fm_herdr_meta_kind "$meta")
-      target=$(fm_endpoint_live_target_of_meta "$meta")
+      target=$(fm_endpoint_target_of_meta "$meta")
     fi
     status_log="$STATE/$id.status"
     report_path="$DATA/$id/report.md"
@@ -1004,11 +1004,13 @@ BASH
 }
 
 terminal_evidence_json() {  # <parent-task-json> <event-note> <evidence-contradicts>
-  local task=$1 note=$2 evidence_contradicts=$3 session_path target exists out rc clean bytes lines seen=false contradiction=false reason='' remote_host
+  local task=$1 note=$2 evidence_contradicts=$3 session_path target exists out rc clean bytes lines seen=false contradiction=false reason='' remote_host id meta
   session_path=$(printf '%s' "$task" | jq -r '.session_path // ""')
   target=$(printf '%s' "$task" | jq -r '.endpoint.target // ""')
   exists=$(printf '%s' "$task" | jq -r '.endpoint.exists // "unknown"')
   remote_host=$(printf '%s' "$task" | jq -r '.remote.host // ""')
+  id=$(printf '%s' "$task" | jq -r '.id // ""')
+  meta="$STATE/$id.meta"
   if [ -n "$remote_host" ]; then
     jq -n --arg observed "$SNAPSHOT_NOW" --arg reason "remote terminal evidence is not collected by the primary" \
       '{provenance:"remote-direct-report-terminal",trust:"untrusted-supplement",captured:false,observed_at:$observed,freshness:"not-collected",reason:$reason,lines:0,bytes:0,event_note_seen:false,contradiction:false}'
@@ -1027,8 +1029,8 @@ terminal_evidence_json() {  # <parent-task-json> <event-note> <evidence-contradi
   fi
   # shellcheck disable=SC2016 # Positional parameters expand inside the child bash, not here.
   out=$(fm_run_timed "$FM_SNAPSHOT_TERMINAL_TIMEOUT" bash -c \
-    '. "$1"; fm_herdr_capture "$2" "$3" | LC_ALL=C head -c "$4"; rc=${PIPESTATUS[0]}; [ "$rc" -eq 141 ] && rc=0; exit "$rc"' \
-    fm-terminal-capture "$SCRIPT_DIR/fm-herdr.sh" "$target" "$FM_SNAPSHOT_TERMINAL_LINES" "$FM_SNAPSHOT_TERMINAL_BYTES" 2>/dev/null)
+    '. "$1"; fm_herdr_live_capture_task_endpoint "$2" "$3" "$4" | LC_ALL=C head -c "$5"; rc=${PIPESTATUS[0]}; [ "$rc" -eq 141 ] && rc=0; exit "$rc"' \
+    fm-terminal-capture "$SCRIPT_DIR/fm-herdr.sh" "$meta" "$id" "$FM_SNAPSHOT_TERMINAL_LINES" "$FM_SNAPSHOT_TERMINAL_BYTES" 2>/dev/null)
   rc=$?
   if [ "$rc" -ne 0 ]; then
     [ "$rc" -eq 124 ] && reason="terminal capture timed out" || reason="terminal capture unavailable"

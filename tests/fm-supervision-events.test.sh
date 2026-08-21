@@ -23,6 +23,7 @@ cat > "$FAKEBIN/herdr" <<'SH'
 set -u
 case "${1:-} ${2:-}" in
   "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
+  "session list") printf '{"sessions":[{"name":"%s","running":true,"socket_path":"%s/herdr.sock"}]}\n' "${HERDR_SESSION:-lab}" "${FM_HOME:-/tmp}" ;;
   "pane get")
     row=$(awk -F '\t' -v pane="${3:-}" '$1 == pane { print; exit }' "$FM_TEST_ENDPOINT_MAP")
     [ -n "$row" ] || exit 1

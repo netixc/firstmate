@@ -198,11 +198,17 @@ window_is_busy() {  # <window>
   task=$(window_to_task "$w" "$STATE")
   meta="$STATE/$task.meta"
   if [ -n "$task" ] && [ -f "$meta" ]; then
-    verdict=$(fm_busy_classify_meta "$meta" "$task" "$STATE")
+    verdict=$(fm_herdr_with_live_task_endpoint "$meta" "$task" \
+      _fm_watch_busy_observation "$task" "$STATE") || verdict='unknown unreadable'
   else
     verdict='unknown missing'
   fi
   [ "${verdict%% *}" = busy ]
+}
+
+_fm_watch_busy_observation() {
+  local target=$1 task=$2 state=$3
+  fm_busy_classify "$target" "$(window_harness "$target")" "$task" "$state"
 }
 
 window_kind() {
@@ -241,7 +247,7 @@ recorded_windows() {
   local meta w seen=
   for meta in "$STATE"/*.meta; do
     [ -e "$meta" ] || continue
-    w=$(fm_endpoint_live_target_of_meta "$meta")
+    w=$(fm_endpoint_target_of_meta "$meta")
     [ -n "$w" ] || continue
     case "$seen" in
       *"|$w|"*) continue ;;
@@ -639,7 +645,7 @@ heartbeat_scan_finds_actionable() {
 # supervision cycle: the reader is a short-lived subprocess of THIS watcher, not
 # a second watcher, so every guard/beacon/arm/turn-end mechanism is unchanged.
 event_wait_or_sleep() {
-  local w session first_session="" rec rc
+  local w session first_session="" first_task first_meta rec rc
   local windows=()
   while IFS= read -r w; do
     [ "$(window_endpoint_class "$w")" = herdr ] || continue
@@ -671,7 +677,11 @@ event_wait_or_sleep() {
     return
   fi
 
-  rec=$(FM_HERDR_EVENTS_CAPABILITY_CONFIRMED=1 fm_herdr_wait_transition "$first_session" "$POLL" "$STATE" "${windows[@]}")
+  first_task=$(window_to_task "${windows[0]}" "$STATE")
+  first_meta="$STATE/$first_task.meta"
+  rec=$(FM_HERDR_EVENTS_CAPABILITY_CONFIRMED=1 \
+    fm_herdr_with_live_task_endpoint "$first_meta" "$first_task" \
+      _fm_watch_wait_transition "$first_session" "$POLL" "$STATE" "${windows[@]}")
   rc=$?
   case "$rc" in
     0)
@@ -687,6 +697,18 @@ event_wait_or_sleep() {
       _event_cap_fails=0
       ;;
   esac
+}
+
+_fm_watch_wait_transition() {
+  local session=$2 poll=$3 state=$4 w task meta
+  shift 4
+  for w in "$@"; do
+    task=$(window_to_task "$w" "$state") || return 2
+    meta="$state/$task.meta"
+    fm_herdr_validate_live_task_endpoint "$meta" "$task" >/dev/null 2>&1 || return 2
+    [ "$FM_HERDR_VALIDATED_TARGET" = "$w" ] || return 2
+  done
+  fm_herdr_wait_transition "$session" "$poll" "$state" "$@"
 }
 
 # --- Main entry: the runtime below runs only when this file is executed as a
@@ -1001,7 +1023,8 @@ EOF
       continue
     fi
     [ "$(window_endpoint_class "$w")" = herdr ] || continue
-    tail40=$(fm_herdr_capture "$w" 40 2>/dev/null) || continue
+    meta="$STATE/$task.meta"
+    tail40=$(fm_herdr_live_capture_task_endpoint "$meta" "$task" 40 2>/dev/null) || continue
     h=$(printf '%s' "$tail40" | hash_pane)
     key=$(printf '%s' "$w" | tr ':/.' '___')
     hf="$STATE/.hash-$key"

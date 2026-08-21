@@ -147,6 +147,30 @@ test_supervisor_target_is_herdr_only() {
   pass "supervisor discovery accepts only exact Herdr identity"
 }
 
+test_stale_observation_refuses_moved_live_endpoint() {
+  local state capture_log rc=0
+  state=$(new_state stale-live-identity)
+  capture_log=$state/capture.log
+  fm_write_meta "$state/task.meta" \
+    "backend=herdr" "window=lab:w-task:p1" "endpoint_task_id=task" \
+    "herdr_session=lab" "herdr_workspace_id=w-task" "herdr_tab_id=w-task:t1" \
+    "herdr_pane_id=w-task:p1" "worktree=/tmp/task" "project=/tmp/project" "harness=pi"
+  fm_herdr_presentation_session_lock_path() { printf '%s' "$state/live.lock"; }
+  fm_lock_try_acquire() { mkdir "$1" 2>/dev/null; }
+  fm_lock_release() { rmdir "$1" 2>/dev/null || true; }
+  fm_herdr_cli() {
+    case "${2:-} ${3:-}" in
+      "pane get") printf '{"result":{"pane":{"pane_id":"w-task:p1","tab_id":"w-task:t2","workspace_id":"w-task"}}}\n' ;;
+      "tab get") printf '{"result":{"tab":{"tab_id":"w-task:t1","workspace_id":"w-task"}}}\n' ;;
+    esac
+  }
+  fm_herdr_capture() { : > "$capture_log"; }
+  stale_window_is_busy 'lab:w-task:p1' "$state" >/dev/null 2>&1 || rc=$?
+  [ "$rc" -eq 2 ] || fail "moved stale endpoint should be unreadable, got $rc"
+  [ ! -e "$capture_log" ] || fail "daemon captured a stale pane after its live identity moved"
+  pass "daemon stale observation refuses a moved live endpoint"
+}
+
 test_signal_classification
 test_pause_classification_and_tracking
 test_unmatched_stale_escalates_without_shared_markers
@@ -156,3 +180,4 @@ test_injection_busy_and_composer_guards
 test_injection_types_once_through_herdr
 test_wedge_alarm_preserves_buffer
 test_supervisor_target_is_herdr_only
+test_stale_observation_refuses_moved_live_endpoint

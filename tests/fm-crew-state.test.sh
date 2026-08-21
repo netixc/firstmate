@@ -128,6 +128,11 @@ case "${1:-}" in
     } ;;
   server)
     exit 0 ;;
+  session)
+    [ "${2:-}" = list ] && {
+      printf '{"sessions":[{"name":"%s","running":true,"socket_path":"/tmp/%s.sock"}]}\n' "${HERDR_SESSION:-lab}" "${HERDR_SESSION:-lab}"
+      exit 0
+    } ;;
   pane)
     case "${2:-}" in
       get)
@@ -166,7 +171,7 @@ SH
 make_no_timeout_toolbin() {  # <dir> -> echoes toolbin path
   local dir=$1 tb="$1/notimeoutbin" tool real
   mkdir -p "$tb"
-  for tool in bash git grep sed head cut tail dirname perl jq; do
+  for tool in bash git grep sed head cut tail dirname basename perl jq uname stat id mkdir shasum awk sleep mktemp readlink ln rm rmdir cat; do
     real=$(command -v "$tool" || true)
     [ -n "$real" ] || fail "missing tool for no-timeout path: $tool"
     ln -s "$real" "$tb/$tool"

@@ -16,17 +16,22 @@ set -u
 printf '%s\n' "$*" >> "$FM_HERDR_LOG"
 case "${1:-} ${2:-}" in
   "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
+  "session list") printf '{"sessions":[{"name":"%s","running":true,"socket_path":"%s/herdr.sock"}]}\n' "${HERDR_SESSION:-lab}" "${FM_HOME:-/tmp}" ;;
   "pane get")
     if [ "${FM_HERDR_MISSING:-0}" = 1 ]; then printf '{"error":{"code":"pane_not_found"}}\n'
     else
       workspace=${3%%:*}
-      printf '{"result":{"pane":{"pane_id":"%s","tab_id":"%s:t1","workspace_id":"%s"}}}\n' "${3:-}" "$workspace" "$workspace"
+      count=$(cat "${FM_HERDR_PANE_GET_COUNT:-/dev/null}" 2>/dev/null || printf 0)
+      count=$((count + 1))
+      [ -z "${FM_HERDR_PANE_GET_COUNT:-}" ] || printf '%s' "$count" > "$FM_HERDR_PANE_GET_COUNT"
+      if [ "${FM_HERDR_MOVE_AFTER_FIRST:-0}" = 1 ] && [ "$count" -gt 1 ]; then tab="$workspace:t2"; else tab="$workspace:t1"; fi
+      printf '{"result":{"pane":{"pane_id":"%s","tab_id":"%s","workspace_id":"%s"}}}\n' "${3:-}" "$tab" "$workspace"
     fi ;;
   "tab get")
     workspace=${3%%:*}
     printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"%s"}}}\n' "${3:-}" "${FM_HERDR_TAB_WORKSPACE:-$workspace}"
     ;;
-  "pane send-text") : ;;
+  "pane send-text") [ -z "${FM_EXPECTED_LOCK:-}" ] || [ -e "$FM_EXPECTED_LOCK" ] ;;
   "pane send-keys") : > "$FM_HERDR_STATE" ;;
   "agent get")
     if [ -e "$FM_HERDR_STATE" ]; then status=working; else status=idle; fi
@@ -59,12 +64,33 @@ test_exact_id_send() {
   local home=$TMP_ROOT/exact fb log out
   mkdir -p "$home/state"; fb=$(make_stubs "$home"); log=$home/herdr.log; : > "$log"
   write_meta "$home" lane-a
+  FM_EXPECTED_LOCK=$(PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" HERDR_SESSION=lab \
+    FM_HERDR_LOG="$log" FM_HERDR_STATE="$home/herdr.state" \
+    bash -c '. "$1/bin/fm-herdr.sh"; fm_herdr_presentation_session_lock_path lab' _ "$ROOT") \
+    || fail "could not resolve the expected presentation lock"
+  export FM_EXPECTED_LOCK
   run_send "$home" "$fb" "$log" lane-a 'lost dispatch' >/dev/null 2>&1 \
     || fail "exact task id send should succeed"
   out=$(cat "$log")
   assert_contains "$out" 'pane send-text w1:p1 lost dispatch' "exact id did not reach its recorded pane"
   assert_contains "$out" 'pane send-keys w1:p1 enter' "exact id did not submit with Enter"
+  unset FM_EXPECTED_LOCK
   pass "fm-send strict: exact task ids use exact Herdr metadata"
+}
+
+test_live_identity_is_rechecked_under_send_lock() {
+  local home=$TMP_ROOT/live-lock fb log out
+  mkdir -p "$home/state"; fb=$(make_stubs "$home"); log=$home/herdr.log; : > "$log"
+  write_meta "$home" lane-lock
+  : > "$home/pane-get-count"
+  out=$(FM_HERDR_MOVE_AFTER_FIRST=1 FM_HERDR_PANE_GET_COUNT="$home/pane-get-count" \
+    run_send "$home" "$fb" "$log" lane-lock 'do not deliver' 2>&1) \
+    && fail "send controlled an endpoint that moved after identity preflight"
+  assert_contains "$out" "does not match its recorded live pane, tab, and workspace identity" \
+    "send did not explain its locked live-identity refusal"
+  assert_not_contains "$(cat "$log")" 'pane send-text' \
+    "send reached the pane after its live component identity changed"
+  pass "fm-send strict: live identity stays authorized through the locked send"
 }
 
 test_ambiguous_or_foreign_metadata_refuses() {
@@ -180,6 +206,7 @@ test_explicit_exact_target_and_key() {
 }
 
 test_exact_id_send
+test_live_identity_is_rechecked_under_send_lock
 test_ambiguous_or_foreign_metadata_refuses
 test_duplicate_endpoint_owners_refuse
 test_cross_component_identity_refuses

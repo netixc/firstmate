@@ -140,14 +140,6 @@ fm_endpoint_target_of_meta() {  # <meta-file>
   printf '%s' "$FM_HERDR_VALIDATED_TARGET"
 }
 
-fm_endpoint_live_target_of_meta() {  # <meta-file>
-  local meta=$1 id
-  id=${meta##*/}
-  id=${id%.meta}
-  fm_herdr_validate_live_task_endpoint "$meta" "$id" >/dev/null 2>&1 || return 1
-  printf '%s' "$FM_HERDR_VALIDATED_TARGET"
-}
-
 fm_herdr_validate_task_endpoint() {  # <meta-file> <task-id> [record-only|live-control]
   local meta=$1 id=$2 mode=${3:-unique-owner} window worktree project binding session workspace tab pane state owner owner_rc pane_info tab_info
   FM_HERDR_VALIDATED_TARGET=
@@ -1081,6 +1073,91 @@ fm_herdr_presentation_session_lock_path() {  # <session>
   fi
   fm_herdr_presentation_lock_namespace_valid "$dir" || return 1
   printf '%s/order-%s.lock' "$dir" "$key"
+}
+
+fm_herdr_with_live_task_endpoint() {  # <meta-file> <task-id> <callback> [args...]
+  local meta=$1 id=$2 callback=$3 target session lock_path
+  shift 3
+  fm_herdr_validate_task_endpoint "$meta" "$id" || return 2
+  target=$FM_HERDR_VALIDATED_TARGET
+  fm_herdr_parse_target "$target" || return 2
+  session=$FM_HERDR_SESSION
+  lock_path=$(fm_herdr_presentation_session_lock_path "$session") || {
+    echo "REFUSED: Herdr presentation lock is unavailable for task $id; preserving task state and nothing was changed." >&2
+    return 2
+  }
+  (
+    local attempt=0
+    if ! declare -F fm_lock_try_acquire >/dev/null 2>&1; then
+      # shellcheck source=bin/fm-wake-lib.sh
+      . "$FM_HERDR_ROOT/bin/fm-wake-lib.sh"
+    fi
+    while [ "$attempt" -lt "${FM_HERDR_LIVE_LOCK_ATTEMPTS:-50}" ]; do
+      if fm_lock_try_acquire "$lock_path"; then
+        trap 'fm_lock_release "$lock_path" || true' EXIT
+        fm_herdr_validate_live_task_endpoint "$meta" "$id" || return 2
+        [ "$FM_HERDR_VALIDATED_TARGET" = "$target" ] || {
+          echo "REFUSED: Herdr endpoint metadata changed while authorizing task $id; preserving task state and nothing was changed." >&2
+          return 2
+        }
+        "$callback" "$target" "$@"
+        return $?
+      fi
+      sleep 0.1
+      attempt=$((attempt + 1))
+    done
+    echo "REFUSED: Herdr presentation lock is contended for task $id; preserving task state and nothing was changed." >&2
+    return 2
+  )
+}
+
+_fm_herdr_live_capture() {
+  fm_herdr_capture "$1" "$2"
+}
+
+fm_herdr_live_capture_task_endpoint() {  # <meta-file> <task-id> <lines>
+  fm_herdr_with_live_task_endpoint "$1" "$2" _fm_herdr_live_capture "$3"
+}
+
+_fm_herdr_live_agent_state() {
+  fm_herdr_agent_state "$1"
+}
+
+fm_herdr_live_agent_state_task_endpoint() {  # <meta-file> <task-id>
+  fm_herdr_with_live_task_endpoint "$1" "$2" _fm_herdr_live_agent_state
+}
+
+_fm_herdr_live_busy_classify() {
+  fm_busy_classify "$1" "$2" "$3" "$4"
+}
+
+fm_herdr_live_busy_task_endpoint() {  # <meta-file> <task-id> <harness> <state-dir>
+  fm_herdr_with_live_task_endpoint "$1" "$2" _fm_herdr_live_busy_classify "$3" "$2" "$4"
+}
+
+_fm_herdr_live_send_key() {
+  fm_herdr_send_key "$1" "$2"
+}
+
+fm_herdr_live_send_key_task_endpoint() {  # <meta-file> <task-id> <key>
+  fm_herdr_with_live_task_endpoint "$1" "$2" _fm_herdr_live_send_key "$3"
+}
+
+_fm_herdr_live_send_text_submit() {
+  fm_herdr_send_text_submit "$1" "$2" "$3" "$4" "$5"
+}
+
+fm_herdr_live_send_text_task_endpoint() {  # <meta-file> <task-id> <text> <retries> <sleep> <settle>
+  fm_herdr_with_live_task_endpoint "$1" "$2" _fm_herdr_live_send_text_submit "$3" "$4" "$5" "$6"
+}
+
+_fm_herdr_live_kill() {
+  fm_herdr_parse_target "$1" || return 1
+  fm_herdr_kill_serialized "$FM_HERDR_SESSION" "$FM_HERDR_PANE"
+}
+
+fm_herdr_kill_task_endpoint() {  # <meta-file> <task-id>
+  fm_herdr_with_live_task_endpoint "$1" "$2" _fm_herdr_live_kill
 }
 
 # fm_herdr_projection_focus_snapshot: print the exact active

@@ -299,11 +299,6 @@ busy_verdict() {
   fm_busy_classify_meta "$META" "$ID" "$STATE"
 }
 
-require_live_control_identity() {
-  fm_herdr_validate_live_task_endpoint "$META" "$ID" \
-    || die "task $ID's live Herdr component identity no longer matches its durable endpoint record"
-}
-
 # wait_agent_state <wanted...> <timeout>: poll until agent_state prints one of
 # the wanted values. Prints the final observed state; returns 0 on a match.
 wait_agent_state() {  # <timeout> <wanted>...
@@ -328,7 +323,6 @@ wait_agent_state() {  # <timeout> <wanted>...
 # send_interrupt_keys: deliver Pi's interrupt key the verified number of times.
 send_interrupt_keys() {
   local key repeat i=0
-  require_live_control_identity
   key=$(fm_control_interrupt_key "$HARNESS")
   repeat=$(fm_control_interrupt_repeat "$HARNESS")
   while [ "$i" -lt "$repeat" ]; do
@@ -404,7 +398,6 @@ do_exit() {
       ;;
   esac
   cmd=$(fm_control_exit_command "$HARNESS")
-  require_live_control_identity
   # The submit verdict is NOT the postcondition here: a successful exit command
   # destroys the composer the verdict is read from, so a post-exit read can
   # legitimately report anything. Only a hard transport failure aborts; the
@@ -734,7 +727,7 @@ do_relaunch() {
   journal_write noted "${CHECKPOINT_LINES[@]}" "$note_line"
 
   journal_write stopping "${CHECKPOINT_LINES[@]}" "$note_line"
-  exit_result=$(do_exit)
+  exit_result=$(fm_herdr_with_live_task_endpoint "$META" "$ID" control_do_exit)
   journal_write exited "${CHECKPOINT_LINES[@]}" "$note_line" "exit_result=$exit_result"
 
   # The launch owner (fm-spawn --relaunch) clears the previous incarnation's
@@ -765,19 +758,30 @@ do_relaunch() {
 
 # --- verbs ------------------------------------------------------------------
 
+control_do_interrupt() {
+  local target=$1 state
+  T=$target
+  state=$(agent_state)
+  case "$state" in
+    alive) ;;
+    dead|missing) die "no agent is running at task $ID's recorded endpoint (state: $state); there is nothing to interrupt" ;;
+    *) die "task $ID's endpoint reads '$state' rather than a positively classified state; refusing to send a lifecycle key into an unattributed endpoint" ;;
+  esac
+  do_interrupt
+}
+
+control_do_exit() {
+  T=$1
+  do_exit
+}
+
 case "$VERB" in
   interrupt)
-    state=$(agent_state)
-    case "$state" in
-      alive) ;;
-      dead|missing) die "no agent is running at task $ID's recorded endpoint (state: $state); there is nothing to interrupt" ;;
-      *) die "task $ID's endpoint reads '$state' rather than a positively classified state; refusing to send a lifecycle key into an unattributed endpoint" ;;
-    esac
-    proof=$(do_interrupt)
+    proof=$(fm_herdr_with_live_task_endpoint "$META" "$ID" control_do_interrupt)
     echo "interrupt-delivered $ID harness=$HARNESS endpoint=$T verified=$proof"
     ;;
   exit)
-    result=$(do_exit)
+    result=$(fm_herdr_with_live_task_endpoint "$META" "$ID" control_do_exit)
     echo "$result $ID harness=$HARNESS endpoint=$T worktree=$WT"
     ;;
   relaunch)

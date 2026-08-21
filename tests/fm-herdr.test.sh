@@ -3380,7 +3380,10 @@ test_scripts_route_explicit_target_through_herdr_meta() {
     "herdr_session=default" "herdr_workspace_id=w1" "herdr_tab_id=w1:t1" \
     "herdr_pane_id=w1:p2" "worktree=/tmp/herdr-stale" "project=/tmp/project"
   touch "$state/.last-watcher-beat"
-  printf 'captured herdr pane\n' > "$resp/1.out"
+  printf '{"sessions":[{"name":"default","running":true,"socket_path":"%s/herdr.sock"}]}\n' "$dir" > "$resp/1.out"
+  printf '%s\n' '{"result":{"pane":{"pane_id":"w1:p2","tab_id":"w1:t1","workspace_id":"w1"}}}' > "$resp/2.out"
+  printf '%s\n' '{"result":{"tab":{"tab_id":"w1:t1","workspace_id":"w1"}}}' > "$resp/3.out"
+  printf 'captured herdr pane\n' > "$resp/4.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$neutral" FM_STATE_OVERRIDE="$state" \
     FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
@@ -3390,6 +3393,12 @@ test_scripts_route_explicit_target_through_herdr_meta() {
     "fm-peek did not route the explicit stale target through herdr capture"
 
   : > "$log"
+  rm -f "$resp/.count" "$resp/1.out" "$resp/2.out" "$resp/3.out" "$resp/4.out"
+  printf '%s\n' '{"result":{"pane":{"pane_id":"w1:p2","tab_id":"w1:t1","workspace_id":"w1"}}}' > "$resp/1.out"
+  printf '%s\n' '{"result":{"tab":{"tab_id":"w1:t1","workspace_id":"w1"}}}' > "$resp/2.out"
+  printf '{"sessions":[{"name":"default","running":true,"socket_path":"%s/herdr.sock"}]}\n' "$dir" > "$resp/3.out"
+  printf '%s\n' '{"result":{"pane":{"pane_id":"w1:p2","tab_id":"w1:t1","workspace_id":"w1"}}}' > "$resp/4.out"
+  printf '%s\n' '{"result":{"tab":{"tab_id":"w1:t1","workspace_id":"w1"}}}' > "$resp/5.out"
   PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$neutral" FM_HOME="$neutral" FM_STATE_OVERRIDE="$state" \
     FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     "$ROOT/bin/fm-send.sh" default:w1:p2 --key Escape >/dev/null 2>&1

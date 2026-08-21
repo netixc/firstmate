@@ -129,6 +129,15 @@ remote_endpoint_require_live() {
     || die "remote secondmate $id live Herdr component identity does not match its durable endpoint record"
 }
 
+remote_endpoint_live_operation() {
+  local id=$1 callback=$2 rc=0
+  shift 2
+  fm_herdr_with_live_task_endpoint "$REMOTE_ENDPOINT_META" "$id" "$callback" "$@" || rc=$?
+  [ "$rc" -ne 2 ] \
+    || die "remote secondmate $id live Herdr component identity does not match its durable endpoint record"
+  return "$rc"
+}
+
 state_value() { # <id>; prints recovery-grade state
   local id=$1 meta state
   meta=$(meta_path "$id")
@@ -201,7 +210,7 @@ cmd_launch() {
           fm_herdr_validate_live_task_endpoint "$REMOTE_ENDPOINT_META" "$id" \
             || die "remote secondmate $id live Herdr component identity does not match its durable endpoint record"
         fi
-        fm_herdr_kill "$REMOTE_ENDPOINT_TARGET" 2>/dev/null \
+        fm_herdr_kill_task_endpoint "$REMOTE_ENDPOINT_META" "$id" 2>/dev/null \
           || die "could not remove the confirmed agent-less endpoint"
         ;;
       missing) ;;
@@ -232,18 +241,28 @@ cmd_send() {
   local id=$1 message=$2
   validate_id "$id"
   validate_home "$id"
-  remote_endpoint_require_live "$id"
+  remote_endpoint_require "$id"
+  remote_endpoint_live_operation "$id" remote_endpoint_send "$message"
+}
+
+remote_endpoint_send() {
+  local target=$1 message=$2
   FM_HOME="$TARGET_HOME" FM_ROOT_OVERRIDE="$FM_ROOT" FM_STATE_OVERRIDE="$TARGET_HOME/state" \
-    "$SCRIPT_DIR/fm-send.sh" "$REMOTE_ENDPOINT_TARGET" "$message"
+    "$SCRIPT_DIR/fm-send.sh" "$target" "$message"
 }
 
 cmd_key() {
   local id=$1 key=$2
   validate_id "$id"
   validate_home "$id"
-  remote_endpoint_require_live "$id"
+  remote_endpoint_require "$id"
+  remote_endpoint_live_operation "$id" remote_endpoint_key "$key"
+}
+
+remote_endpoint_key() {
+  local target=$1 key=$2
   FM_HOME="$TARGET_HOME" FM_ROOT_OVERRIDE="$FM_ROOT" FM_STATE_OVERRIDE="$TARGET_HOME/state" \
-    "$SCRIPT_DIR/fm-send.sh" "$REMOTE_ENDPOINT_TARGET" --key "$key"
+    "$SCRIPT_DIR/fm-send.sh" "$target" --key "$key"
 }
 
 cmd_capture() {
@@ -252,17 +271,18 @@ cmd_capture() {
   validate_home "$id"
   case "$lines" in ''|*[!0-9]*|0) die "capture line count must be positive" ;; esac
   [ "$lines" -le 100 ] || die "capture line count exceeds 100"
-  remote_endpoint_require_live "$id"
-  fm_herdr_capture "$REMOTE_ENDPOINT_TARGET" "$lines" | head -c 65536
+  remote_endpoint_require "$id"
+  remote_endpoint_live_operation "$id" _fm_herdr_live_capture "$lines" | head -c 65536
 }
 
 cmd_observe() {
   local id=$1 harness
   validate_id "$id"
   validate_home "$id"
-  remote_endpoint_require_live "$id"
+  remote_endpoint_require "$id"
   harness=$(fm_meta_get "$REMOTE_ENDPOINT_META" harness)
-  fm_pending_reply_herdr_observation "$REMOTE_ENDPOINT_TARGET" "$harness"
+  remote_endpoint_live_operation "$id" \
+    fm_pending_reply_herdr_observation "$harness"
   printf '\n'
 }
 

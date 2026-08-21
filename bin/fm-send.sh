@@ -428,6 +428,10 @@ if [ "${1:-}" = "--key" ]; then
       echo "error: key '$key' not sent to remote secondmate $TARGET_REMOTE_ID; completion may be unknown" >&2
       exit 1
     fi
+  elif [ -n "$TARGET_META" ]; then
+    TARGET_TASK_ID=$(fm_send_id_from_meta "$TARGET_META")
+    fm_herdr_live_send_key_task_endpoint "$TARGET_META" "$TARGET_TASK_ID" "$key" \
+      || { echo "error: key '$key' not sent to $T (Herdr send failed; tried $RESOLUTION_TRIED)" >&2; exit 1; }
   elif ! fm_herdr_send_key "$T" "$key"; then
     echo "error: key '$key' not sent to $T (Herdr send failed; tried $RESOLUTION_TRIED)" >&2
     exit 1
@@ -495,6 +499,13 @@ else
     else
       verdict=send-failed
       [ -z "$remote_err" ] || printf '%s\n' "$remote_err" >&2
+    fi
+  elif [ -n "$TARGET_META" ]; then
+    TARGET_TASK_ID=$(fm_send_id_from_meta "$TARGET_META")
+    if verdict=$(fm_herdr_live_send_text_task_endpoint "$TARGET_META" "$TARGET_TASK_ID" "$MESSAGE" "$retries" "$sleep_s" "$settle"); then
+      :
+    else
+      send_rc=$?
     fi
   elif verdict=$(fm_herdr_send_text_submit "$T" "$MESSAGE" "$retries" "$sleep_s" "$settle"); then
     :

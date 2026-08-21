@@ -20,6 +20,7 @@ set -u
 printf '%s\n' "$*" >> "$FM_CONTROL_LOG"
 case "${1:-} ${2:-}" in
   "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
+  "session list") printf '{"sessions":[{"name":"%s","running":true,"socket_path":"%s/herdr.sock"}]}\n' "${HERDR_SESSION:-lab}" "${FM_HOME:-/tmp}" ;;
   "pane get")
     if [ "${FM_CONTROL_MISSING:-0}" = 1 ]; then printf '{"error":{"code":"pane_not_found"}}\n'
     else
