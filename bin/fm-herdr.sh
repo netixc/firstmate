@@ -140,8 +140,8 @@ fm_endpoint_target_of_meta() {  # <meta-file>
   printf '%s' "$FM_HERDR_VALIDATED_TARGET"
 }
 
-fm_herdr_validate_task_endpoint() {  # <meta-file> <task-id>
-  local meta=$1 id=$2 window worktree project binding session workspace tab pane
+fm_herdr_validate_task_endpoint() {  # <meta-file> <task-id> [record-only]
+  local meta=$1 id=$2 mode=${3:-unique-owner} window worktree project binding session workspace tab pane state owner owner_rc
   FM_HERDR_VALIDATED_TARGET=
   [ -f "$meta" ] && [ ! -L "$meta" ] || {
     echo "REFUSED: task $id has no regular endpoint metadata at $meta; preserving task state." >&2
@@ -191,6 +191,16 @@ fm_herdr_validate_task_endpoint() {  # <meta-file> <task-id>
   fi
   # shellcheck disable=SC2034 # out-parameter consumed by callers after sourcing
   FM_HERDR_VALIDATED_TARGET=$window
+  if [ "$mode" != record-only ]; then
+    case "$meta" in */*) state=${meta%/*} ;; *) state=. ;; esac
+    owner_rc=0
+    owner=$(fm_endpoint_meta_for_target "$window" "$state" 2>/dev/null) || owner_rc=$?
+    if [ "$owner_rc" -ne 0 ] || [ "$owner" != "$meta" ]; then
+      echo "REFUSED: Herdr endpoint for task $id has ambiguous or duplicate task ownership; preserving task state." >&2
+      FM_HERDR_VALIDATED_TARGET=
+      return 1
+    fi
+  fi
 }
 
 fm_endpoint_meta_for_target() {  # <target> <state-dir>
@@ -200,7 +210,7 @@ fm_endpoint_meta_for_target() {  # <target> <state-dir>
     grep -Fqx "window=$target" "$meta" 2>/dev/null || continue
     id=${meta##*/}
     id=${id%.meta}
-    if ! fm_herdr_validate_task_endpoint "$meta" "$id" >/dev/null 2>&1 \
+    if ! fm_herdr_validate_task_endpoint "$meta" "$id" record-only >/dev/null 2>&1 \
       || [ "$FM_HERDR_VALIDATED_TARGET" != "$target" ]; then
       invalid=1
       continue

@@ -83,6 +83,9 @@ test_duplicate_endpoint_owners_refuse() {
   mkdir -p "$home/state"; fb=$(make_stubs "$home"); log=$home/herdr.log; : > "$log"
   write_meta "$home" owner-a lab:w3:p1
   write_meta "$home" owner-b lab:w3:p1
+  out=$(run_send "$home" "$fb" "$log" owner-a hello 2>&1) \
+    && fail "a task selector sharing an endpoint should refuse"
+  assert_contains "$out" "ambiguous or duplicate task ownership" "task selector refusal should name the ownership ambiguity"
   out=$(run_send "$home" "$fb" "$log" lab:w3:p1 hello 2>&1) \
     && fail "an endpoint recorded for two tasks should refuse"
   assert_contains "$out" "ambiguous or invalid task ownership" "duplicate owner refusal should name the ownership ambiguity"

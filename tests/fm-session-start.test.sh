@@ -797,6 +797,23 @@ EOF
   pass "session start: configured and absent runtime settings both use Herdr directly"
 }
 
+test_tmux_environment_refuses_before_fleet_mutation() {
+  local rec root home fakebin out
+  rec=$(new_world tmux-environment-refusal)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_default "$fakebin"
+
+  out=$(TMUX=fake run_session_start "$home" "$root" "$fakebin:$BASE_PATH" 2>&1)
+  assert_contains "$out" "leave the tmux environment" \
+    "session start did not reject the retired execution environment"
+  [ -z "$(find "$home/state" -mindepth 1 -print -quit)" ] \
+    || fail "session start mutated fleet state before rejecting tmux"
+  pass "session start rejects tmux before fleet mutation"
+}
+
 # --- status tail bounding -----------------------------------------------------
 
 test_status_tail_bounding() {
@@ -2005,6 +2022,7 @@ test_session_lock_concurrent_single_winner
 test_output_ordering_diagnostics_lead
 test_read_once_contract_is_stated_once_before_its_subject
 test_herdr_backend_diagnostics_follow_real_session_start
+test_tmux_environment_refuses_before_fleet_mutation
 test_unreachable_network_never_blocks_the_digest
 test_deferred_result_reaches_the_agent_when_the_digest_cannot_print_it
 test_read_only_session_declares_skipped_network_checks

@@ -46,10 +46,20 @@ mkrec() {  # <pane_id> <status>
   fm_herdr_transition_record "$1" "wG" "" "$2" pi
 }
 
+write_endpoint_meta() {  # <id> <target> <kind>
+  local id=$1 target=$2 kind=$3 rest
+  rest=${target#*:}
+  fm_write_meta "$STATE_DIR/$id.meta" \
+    "backend=herdr" "window=$target" "endpoint_task_id=$id" \
+    "herdr_session=${target%%:*}" "herdr_workspace_id=${rest%%:*}" \
+    "herdr_tab_id=t-$id" "herdr_pane_id=$rest" \
+    "worktree=/tmp/$id" "project=/tmp/project" "kind=$kind" "harness=pi"
+}
+
 # --- handle_push_transition: enqueue + wake for a non-paused blocked crew -----
 
 reset_state
-fm_write_meta "$STATE_DIR/tk1.meta" "window=default:wG:pQ" "backend=herdr" "kind=ship"
+write_endpoint_meta tk1 default:wG:pQ ship
 handle_push_transition default "$(mkrec wG:pQ blocked)"
 [ -e "$STATE_DIR/.wake-queue" ] || fail "handle_push_transition should enqueue a wake for a blocked crew"
 grep -q 'stale' "$STATE_DIR/.wake-queue" || fail "the enqueued wake must be a stale record: $(cat "$STATE_DIR/.wake-queue")"
@@ -60,7 +70,7 @@ grep -q 'herdr: agent blocked' "$STATE_DIR/.wake-queue" || fail "the stale paylo
 pass "handle_push_transition: a blocked crew enqueues a stale wake naming its window and wakes the supervisor"
 
 reset_state
-fm_write_meta "$STATE_DIR/tk1.meta" "window=default:wG:pQ" "backend=herdr" "kind=ship"
+write_endpoint_meta tk1 default:wG:pQ ship
 (
   # shellcheck disable=SC2329 # Runtime override called by the isolated production owner.
   fm_wake_append() { return 1; }
@@ -72,7 +82,7 @@ pass "handle_push_transition: enqueue failure cannot commit the Herdr dedupe mar
 # --- handle_push_transition: absorb (no wake, no enqueue) for a declared pause -
 
 reset_state
-fm_write_meta "$STATE_DIR/tk2.meta" "window=default:wG:pQ" "backend=herdr" "kind=ship"
+write_endpoint_meta tk2 default:wG:pQ ship
 printf 'paused: waiting on the upstream release\n' > "$STATE_DIR/tk2.status"
 handle_push_transition default "$(mkrec wG:pQ blocked)"
 if [ -e "$STATE_DIR/.wake-queue" ] && grep -q 'stale' "$STATE_DIR/.wake-queue"; then
@@ -85,8 +95,8 @@ pass "handle_push_transition: a declared-pause crew is absorbed (no fast wake), 
 # --- event_wait_or_sleep: secondmate windows are excluded from the pane list --
 
 reset_state
-fm_write_meta "$STATE_DIR/tk3.meta" "window=default:wG:pQ" "backend=herdr" "kind=ship"
-fm_write_meta "$STATE_DIR/sm1.meta" "window=default:wA:pS" "backend=herdr" "kind=secondmate"
+write_endpoint_meta tk3 default:wG:pQ ship
+write_endpoint_meta sm1 default:wA:pS secondmate
 # shellcheck disable=SC2329 # Runtime overrides called by the isolated watcher.
 fm_herdr_events_capable() { return 0; }
 # shellcheck disable=SC2329 # Runtime overrides called by the isolated watcher.
@@ -98,7 +108,7 @@ case "$PANES" in *"default:wA:pS"*) fail "a kind=secondmate window must be EXCLU
 pass "event_wait_or_sleep: herdr windows go on the event pane list, but kind=secondmate endpoints are excluded"
 
 reset_state
-fm_write_meta "$STATE_DIR/tk3.meta" "window=default:wG:pQ" "backend=herdr" "kind=ship"
+write_endpoint_meta tk3 default:wG:pQ ship
 CAP_CALLS=0
 # shellcheck disable=SC2329 # Runtime overrides called by the isolated watcher.
 fm_herdr_events_capable() { CAP_CALLS=$((CAP_CALLS + 1)); return 0; }
@@ -126,7 +136,7 @@ pass "event_wait_or_sleep: a home with no current Herdr window is inert (sleeps 
 # --- event_wait_or_sleep: runtime failures disable the event path (fail-closed)
 
 reset_state
-fm_write_meta "$STATE_DIR/tk5.meta" "window=default:wG:pQ" "backend=herdr" "kind=ship"
+write_endpoint_meta tk5 default:wG:pQ ship
 export EVENT_CAP_FAIL_MAX=2
 # shellcheck disable=SC2329 # Runtime overrides called by the isolated watcher.
 fm_herdr_events_capable() { return 0; }

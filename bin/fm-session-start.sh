@@ -325,6 +325,7 @@ PRIMARY_HARNESS=$("$SCRIPT_DIR/fm-harness.sh" 2>/dev/null || printf unknown)
 
 # shellcheck source=bin/fm-herdr.sh
 . "$SCRIPT_DIR/fm-herdr.sh"
+fm_herdr_require_runtime || exit 1
 # shellcheck source=bin/fm-tasks-axi-lib.sh
 . "$SCRIPT_DIR/fm-tasks-axi-lib.sh"
 # shellcheck source=bin/fm-public-followup-lib.sh
