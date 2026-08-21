@@ -57,7 +57,11 @@ set -u
 [ -z "${FM_HERDR_LOG:-}" ] || printf '%s\n' "$*" >> "$FM_HERDR_LOG"
 case "${1:-} ${2:-}" in
   "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
-  "pane get") printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "${3:-}" ;;
+  "pane get")
+    workspace=${3%%:*}; task=${workspace#w-}
+    printf '{"result":{"pane":{"pane_id":"%s","tab_id":"%s:t-%s","workspace_id":"%s"}}}\n' "${3:-}" "$workspace" "$task" "$workspace"
+    ;;
+  "tab get") printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"%s"}}}\n' "${3:-}" "${3%%:*}" ;;
   "agent get") printf '{"result":{"agent":{"agent_status":"idle","provider":"pi"}}}\n' ;;
 esac
 SH
@@ -72,6 +76,15 @@ write_secondmate_meta() { # <meta> <home> [target] [parent] [harness]
     "herdr_session=${target%%:*}" "herdr_workspace_id=${rest%%:*}" \
     "herdr_tab_id=${rest%%:*}:t-$id" "herdr_pane_id=$rest" "worktree=$home" \
     "project=$home" "home=$home" "kind=secondmate" "harness=$harness" "parent=$parent"
+}
+
+write_remote_secondmate_meta() { # <meta> <host> <root> <home>
+  local meta=$1 host=$2 root=$3 home=$4 id
+  id=$(basename "$meta" .meta)
+  fm_write_meta "$meta" "backend=herdr" "window=remote:$id" "endpoint_task_id=$id" \
+    "worktree=$home" "project=$root" "home=$home" "kind=secondmate" "harness=pi" \
+    "remote_backend=herdr" "remote_host=$host" "remote_root=$root" \
+    "remote_herdr_session=fm-remote" "remote_target=fm-remote:w-$id:p1"
 }
 
 # new_home <name> [budget] -> path to a seeded local secondmate home.
@@ -219,7 +232,7 @@ test_transport_routes_by_placement_and_liveness() {
     remote_record remote-live remote-mac "$TMP_ROOT/remote-root" "$remote"
   } > "$primary/data/secondmates.md"
   write_secondmate_meta "$primary/state/live-local.meta" "$live" 'firstmate:fm-live-local' alpha pi
-  write_secondmate_meta "$primary/state/remote-live.meta" "$remote" 'fm-remote:fm-remote-live' alpha pi
+  write_remote_secondmate_meta "$primary/state/remote-live.meta" remote-mac "$TMP_ROOT/remote-root" "$remote"
   printf 'role=secondmate\neffective_budget_tokens=7500\ntotal_estimated_tokens=100\nbudget_status=within-budget\n' \
     > "$TMP_ROOT/remote-budget.txt"
 
@@ -326,7 +339,7 @@ test_a_slow_remote_is_bounded_and_the_rest_still_report() {
     remote_record bounded-remote remote-mac "$TMP_ROOT/remote-root" "$remote"
     local_record bounded-local "$home"
   } > "$primary/data/secondmates.md"
-  write_secondmate_meta "$primary/state/bounded-remote.meta" "$remote" 'fm-remote:fm-bounded-remote'
+  write_remote_secondmate_meta "$primary/state/bounded-remote.meta" remote-mac "$TMP_ROOT/remote-root" "$remote"
   printf 'role=secondmate\n' > "$TMP_ROOT/remote-budget.txt"
 
   started=$(date +%s)

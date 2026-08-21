@@ -836,6 +836,10 @@ if [ "$RELAUNCH" -eq 1 ]; then
     echo "error: task $ID's endpoint reads '$RELAUNCH_STATE'; a relaunch requires a positively agent-free endpoint (stop the agent first with bin/fm-control.sh $ID exit)" >&2
     exit 1
   }
+  if fm_herdr_parse_target "$RELAUNCH_TARGET" \
+    && [ "$(fm_herdr_pane_presence_state "$FM_HERDR_SESSION" "$FM_HERDR_PANE")" = present ]; then
+    fm_herdr_validate_live_task_endpoint "$RELAUNCH_META" "$ID" || exit 1
+  fi
   RELAUNCH_PRIOR_HARNESS=$(fm_meta_get "$RELAUNCH_META" harness)
   KIND=$(fm_meta_get "$RELAUNCH_META" kind)
   [ -n "$KIND" ] || KIND=ship
@@ -1458,7 +1462,7 @@ else
     HERDR_LAUNCHER_RELATIONSHIP=launcher-home
     if [ "$KIND" = secondmate ]; then
       HERDR_LABEL_HOME=$PROJ_ABS
-      HERDR_LAUNCHER_RELATIONSHIP=other-home
+      HERDR_LAUNCHER_RELATIONSHIP='other-home'
     fi
     HERDR_PRESENTATION_JOURNAL=$(fm_herdr_projection_journal_path "$STATE" "$ID")
     HERDR_PROJECTED=0

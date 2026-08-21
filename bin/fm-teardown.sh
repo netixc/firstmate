@@ -1953,8 +1953,8 @@ teardown_herdr_require_prerequisites() {  # <task-id>
   fi
 }
 
-teardown_herdr_preflight_target() {  # <target> <task-id>
-  local target=$1 task_id=$2 session pane presence lock_path verified_lock_path lock_session held_path attempt
+teardown_herdr_preflight_target() {  # <target> <task-id> <meta-file>
+  local target=$1 task_id=$2 meta=$3 session pane presence lock_path verified_lock_path lock_session held_path attempt
   teardown_herdr_require_prerequisites "$task_id" || return 1
   if ! fm_herdr_parse_target "$target"; then
     echo "error: herdr endpoint $target for $task_id could not be parsed exactly; nothing was changed - repair the endpoint metadata and rerun teardown" >&2
@@ -1964,7 +1964,10 @@ teardown_herdr_preflight_target() {  # <target> <task-id>
   pane=$FM_HERDR_PANE
   presence=$(fm_herdr_pane_presence_state "$session" "$pane")
   case "$presence" in
-    dead|present) ;;
+    dead) ;;
+    present)
+      fm_herdr_validate_live_task_endpoint "$meta" "$task_id" || return 1
+      ;;
     *)
       echo "error: herdr endpoint $target for $task_id has ambiguous structured presence; nothing was changed - restore reliable endpoint inspection and rerun teardown" >&2
       return 1
@@ -2020,7 +2023,7 @@ preflight_firstmate_home_herdr_children() {  # <home>
     child_id=$(basename "$child_meta" .meta)
     fm_herdr_validate_task_endpoint "$child_meta" "$child_id" || return 1
     child_target=$FM_HERDR_VALIDATED_TARGET
-    teardown_herdr_preflight_target "$child_target" "$child_id" || return 1
+    teardown_herdr_preflight_target "$child_target" "$child_id" "$child_meta" || return 1
     child_kind=$(meta_value "$child_meta" kind)
     [ -n "$child_kind" ] || child_kind=ship
     if [ "$child_kind" = secondmate ]; then
@@ -2113,7 +2116,7 @@ if [ "$KIND" = secondmate ]; then
     validate_firstmate_home_children_removal "$HOME_PATH" || exit 1
     preflight_descendant_task_locks "$HOME_PATH" || exit 1
     validate_firstmate_home_children_removal "$HOME_PATH" || exit 1
-    teardown_herdr_preflight_target "$T" "$ID" || exit 1
+    teardown_herdr_preflight_target "$T" "$ID" "$META" || exit 1
     preflight_firstmate_home_herdr_children "$HOME_PATH" || exit 1
   fi
 fi
@@ -2214,7 +2217,7 @@ fi
 # refuses before any destructive step.
 TEARDOWN_HERDR_SESSION=
 TEARDOWN_HERDR_PANE=
-teardown_herdr_preflight_target "$T" "$ID" || exit 1
+teardown_herdr_preflight_target "$T" "$ID" "$META" || exit 1
 fm_herdr_parse_target "$T" || exit 1
 TEARDOWN_HERDR_SESSION=$FM_HERDR_SESSION
 TEARDOWN_HERDR_PANE=$FM_HERDR_PANE

@@ -701,12 +701,22 @@ secondmate_liveness_one() {  # <meta> <id>
   esac
   case "$agent_state" in
     alive)
+      if ! fm_herdr_validate_live_task_endpoint "$meta" "$id" >/dev/null 2>&1; then
+        echo "SECONDMATE_LIVENESS: secondmate $id: skipped: live Herdr component identity does not match its durable endpoint record"
+        return 0
+      fi
       if [ "${FM_BOOTSTRAP_VERBOSE_FACTS:-0}" = 1 ]; then
         echo "BOOTSTRAP_INFO: secondmate $id already live (Herdr endpoint=$target)"
       fi
       ;;
     dead|missing)
       if [ "$agent_state" = dead ]; then
+        if fm_herdr_parse_target "$target" \
+          && [ "$(fm_herdr_pane_presence_state "$FM_HERDR_SESSION" "$FM_HERDR_PANE")" = present ] \
+          && ! fm_herdr_validate_live_task_endpoint "$meta" "$id" >/dev/null 2>&1; then
+          echo "SECONDMATE_LIVENESS: secondmate $id: skipped: agent-less Herdr component identity does not match its durable endpoint record"
+          return 0
+        fi
         cause="confirmed agent absence on existing endpoint"
         fm_herdr_kill "$target" 2>/dev/null || true
       else

@@ -75,6 +75,9 @@ case "${1:-} ${2:-}" in
     ;;
   "tab close")
     jq_state --arg t "${3:-}" '.tabs |= [.[]|select(.tab_id != $t)]' | save ;;
+  "tab get")
+    tab=${3:-}
+    jq_state --arg t "$tab" '{result:{tab:(.tabs[]|select(.tab_id==$t)|{tab_id:.tab_id, workspace_id:.workspace_id})}}' ;;
   "pane list")
     jq_state --arg w "$ws" '{result:{panes:[.tabs[]|select(.workspace_id==$w)|{pane_id:.pane_id, tab_id:.tab_id}]}}' ;;
   "pane get")

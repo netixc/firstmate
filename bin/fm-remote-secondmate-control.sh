@@ -122,8 +122,15 @@ remote_endpoint_require() {
   remote_endpoint_load "$1" || die "$REMOTE_ENDPOINT_ERROR"
 }
 
+remote_endpoint_require_live() {
+  local id=$1
+  remote_endpoint_require "$id"
+  fm_herdr_validate_live_task_endpoint "$REMOTE_ENDPOINT_META" "$id" \
+    || die "remote secondmate $id live Herdr component identity does not match its durable endpoint record"
+}
+
 state_value() { # <id>; prints recovery-grade state
-  local id=$1 meta
+  local id=$1 meta state
   meta=$(meta_path "$id")
   [ -f "$meta" ] && [ ! -L "$meta" ] || { printf 'missing\n'; return 0; }
   if ! remote_endpoint_load "$id"; then
@@ -131,7 +138,13 @@ state_value() { # <id>; prints recovery-grade state
     printf 'unverified\n'
     return 0
   fi
-  fm_herdr_agent_state "$REMOTE_ENDPOINT_TARGET" 2>/dev/null || printf 'unreadable\n'
+  state=$(fm_herdr_agent_state "$REMOTE_ENDPOINT_TARGET" 2>/dev/null || printf 'unreadable')
+  if [ "$state" = alive ] \
+    && ! fm_herdr_validate_live_task_endpoint "$REMOTE_ENDPOINT_META" "$id" >/dev/null 2>&1; then
+    printf 'unverified\n'
+    return 0
+  fi
+  printf '%s\n' "$state"
 }
 
 print_route() { # <id>
@@ -182,6 +195,11 @@ cmd_launch() {
         return 0
         ;;
       dead)
+        if fm_herdr_parse_target "$REMOTE_ENDPOINT_TARGET" \
+          && [ "$(fm_herdr_pane_presence_state "$FM_HERDR_SESSION" "$FM_HERDR_PANE")" = present ]; then
+          fm_herdr_validate_live_task_endpoint "$REMOTE_ENDPOINT_META" "$id" \
+            || die "remote secondmate $id live Herdr component identity does not match its durable endpoint record"
+        fi
         fm_herdr_kill "$REMOTE_ENDPOINT_TARGET" 2>/dev/null \
           || die "could not remove the confirmed agent-less endpoint"
         ;;
@@ -233,7 +251,7 @@ cmd_capture() {
   validate_home "$id"
   case "$lines" in ''|*[!0-9]*|0) die "capture line count must be positive" ;; esac
   [ "$lines" -le 100 ] || die "capture line count exceeds 100"
-  remote_endpoint_require "$id"
+  remote_endpoint_require_live "$id"
   fm_herdr_capture "$REMOTE_ENDPOINT_TARGET" "$lines" | head -c 65536
 }
 
@@ -241,7 +259,7 @@ cmd_observe() {
   local id=$1 harness
   validate_id "$id"
   validate_home "$id"
-  remote_endpoint_require "$id"
+  remote_endpoint_require_live "$id"
   harness=$(fm_meta_get "$REMOTE_ENDPOINT_META" harness)
   fm_pending_reply_herdr_observation "$REMOTE_ENDPOINT_TARGET" "$harness"
   printf '\n'

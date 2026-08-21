@@ -94,7 +94,11 @@ case "${1:-} ${2:-}" in
   "session list") printf '{"sessions":[{"name":"lab","running":true,"socket_path":"%s/herdr.sock"}]}\n' "${FM_STATE_OVERRIDE:-/tmp}" ;;
   "pane get")
     if [ -e "$closed" ]; then printf '{"error":{"code":"pane_not_found"}}\n'
-    else printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "${3:-}"; fi ;;
+    else
+      workspace=${3%%:*}; task=${workspace#w-}
+      printf '{"result":{"pane":{"pane_id":"%s","tab_id":"%s:t-%s","workspace_id":"%s"}}}\n' "${3:-}" "$workspace" "$task" "$workspace"
+    fi ;;
+  "tab get") printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"%s"}}}\n' "${3:-}" "${3%%:*}" ;;
   "pane close") : > "$closed" ;;
   *) printf '{"result":{}}\n' ;;
 esac
@@ -1377,6 +1381,9 @@ case "\${1:-} \${2:-}" in
     fi
     printf '%s\n' '{"result":{"pane":{"pane_id":"wG:pQ","tab_id":"wG:tQ","workspace_id":"wG"}}}'
     ;;
+  "tab get")
+    printf '%s\n' '{"result":{"tab":{"tab_id":"wG:tQ","workspace_id":"wG"}}}'
+    ;;
   "agent get")
     printf '%s\n' '{"error":{"code":"agent_not_found"}}' >&2
     exit 1
@@ -1570,9 +1577,12 @@ case "\${1:-} \${2:-}" in
         exit 1
       fi
     else
-      printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "\$pane"
+      workspace=\${pane%%:*}
+      if [ "\$pane" = wC:p1 ]; then tab=wC:t1; else tab=w-task-x1:t-task-x1; fi
+      printf '{"result":{"pane":{"pane_id":"%s","tab_id":"%s","workspace_id":"%s"}}}\n' "\$pane" "\$tab" "\$workspace"
     fi
     ;;
+  "tab get") printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"%s"}}}\n' "\${3:-}" "\${3%%:*}" ;;
   "pane close") : > "\${FM_FAKE_HERDR_CLOSED:?}" ;;
 esac
 SH
@@ -1753,9 +1763,16 @@ case "\${1:-} \${2:-}" in
     if [ -e "\${FM_FAKE_HERDR_CLOSED:?}" ]; then
       printf '%s\n' 'not-json'
     else
-      printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "\$pane"
+      workspace=\${pane%%:*}
+      case "\$pane" in
+        wN:p1) tab=wN:t1 ;;
+        wG:p1) tab=wG:t1 ;;
+        *) tab=w-task-x1:t-task-x1 ;;
+      esac
+      printf '{"result":{"pane":{"pane_id":"%s","tab_id":"%s","workspace_id":"%s"}}}\n' "\$pane" "\$tab" "\$workspace"
     fi
     ;;
+  "tab get") printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"%s"}}}\n' "\${3:-}" "\${3%%:*}" ;;
   "pane close") : > "\${FM_FAKE_HERDR_CLOSED:?}" ;;
 esac
 SH
@@ -1842,7 +1859,10 @@ case "${1:-} ${2:-}" in
     printf '%s\n' '{"result":{"pane":{"pane_id":"w1:p2","tab_id":"w1:t2","workspace_id":"w1"}}}'
     ;;
   "tab get")
-    printf '%s\n' '{"result":{"tab":{"tab_id":"w2:t2","workspace_id":"w2"}}}'
+    case "${3:-}" in
+      w1:t2) printf '%s\n' '{"result":{"tab":{"tab_id":"w1:t2","workspace_id":"w1"}}}' ;;
+      *) printf '%s\n' '{"result":{"tab":{"tab_id":"w2:t2","workspace_id":"w2"}}}' ;;
+    esac
     ;;
   "tab focus")
     if [ "${FM_FAKE_HERDR_RESTORE_FAIL:-0}" = 1 ]; then

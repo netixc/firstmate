@@ -22,6 +22,10 @@ case "${1:-} ${2:-}" in
       workspace=${3%%:*}
       printf '{"result":{"pane":{"pane_id":"%s","tab_id":"%s:t1","workspace_id":"%s"}}}\n' "${3:-}" "$workspace" "$workspace"
     fi ;;
+  "tab get")
+    workspace=${3%%:*}
+    printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"%s"}}}\n' "${3:-}" "${FM_HERDR_TAB_WORKSPACE:-$workspace}"
+    ;;
   "pane send-text") : ;;
   "pane send-keys") : > "$FM_HERDR_STATE" ;;
   "agent get")
@@ -122,6 +126,18 @@ test_live_tab_identity_refuses() {
   pass "fm-send strict: live pane and tab identities must agree"
 }
 
+test_live_tab_workspace_owner_refuses() {
+  local home=$TMP_ROOT/live-tab-owner fb log out
+  mkdir -p "$home/state"; fb=$(make_stubs "$home"); log=$home/herdr.log; : > "$log"
+  write_meta "$home" crossed-owner lab:w1:p1
+  out=$(FM_HERDR_TAB_WORKSPACE=w2 run_send "$home" "$fb" "$log" crossed-owner hello 2>&1) \
+    && fail "a tab independently bound to another workspace should refuse"
+  assert_contains "$out" "does not match its independently recorded workspace identity" \
+    "independent tab owner mismatch should name the identity defect"
+  assert_not_contains "$(cat "$log")" "pane send-" "independent tab owner mismatch reached Herdr delivery"
+  pass "fm-send strict: live tab ownership is independently verified"
+}
+
 test_unset_home_and_unresolved_refuse() {
   local home=$TMP_ROOT/refuse fb log out
   mkdir -p "$home/state"; fb=$(make_stubs "$home"); log=$home/herdr.log; : > "$log"
@@ -168,6 +184,7 @@ test_ambiguous_or_foreign_metadata_refuses
 test_duplicate_endpoint_owners_refuse
 test_cross_component_identity_refuses
 test_live_tab_identity_refuses
+test_live_tab_workspace_owner_refuses
 test_unset_home_and_unresolved_refuse
 test_legacy_shapes_and_prefixless_panes_refuse
 test_explicit_exact_target_and_key

@@ -140,8 +140,8 @@ fm_endpoint_target_of_meta() {  # <meta-file>
   printf '%s' "$FM_HERDR_VALIDATED_TARGET"
 }
 
-fm_herdr_validate_task_endpoint() {  # <meta-file> <task-id> [record-only]
-  local meta=$1 id=$2 mode=${3:-unique-owner} window worktree project binding session workspace tab pane state owner owner_rc info
+fm_herdr_validate_task_endpoint() {  # <meta-file> <task-id> [record-only|live-control]
+  local meta=$1 id=$2 mode=${3:-unique-owner} window worktree project binding session workspace tab pane state owner owner_rc pane_info tab_info
   FM_HERDR_VALIDATED_TARGET=
   [ -f "$meta" ] && [ ! -L "$meta" ] || {
     echo "REFUSED: task $id has no regular endpoint metadata at $meta; preserving task state." >&2
@@ -204,8 +204,10 @@ fm_herdr_validate_task_endpoint() {  # <meta-file> <task-id> [record-only]
       FM_HERDR_VALIDATED_TARGET=
       return 1
     fi
-    info=$(fm_herdr_cli "$session" pane get "$pane" 2>/dev/null) || info=
-    if ! printf '%s' "$info" | jq -e --arg pane "$pane" --arg tab "$tab" --arg workspace "$workspace" '
+  fi
+  if [ "$mode" = live-control ]; then
+    pane_info=$(fm_herdr_cli "$session" pane get "$pane" 2>/dev/null) || pane_info=
+    if ! printf '%s' "$pane_info" | jq -e --arg pane "$pane" --arg tab "$tab" --arg workspace "$workspace" '
       .result.pane.pane_id == $pane
       and .result.pane.tab_id == $tab
       and .result.pane.workspace_id == $workspace
@@ -214,7 +216,19 @@ fm_herdr_validate_task_endpoint() {  # <meta-file> <task-id> [record-only]
       FM_HERDR_VALIDATED_TARGET=
       return 1
     fi
+    tab_info=$(fm_herdr_cli "$session" tab get "$tab" 2>/dev/null) || tab_info=
+    if ! printf '%s' "$tab_info" | jq -e --arg tab "$tab" --arg workspace "$workspace" '
+      .result.tab.tab_id == $tab and .result.tab.workspace_id == $workspace
+    ' >/dev/null 2>&1; then
+      echo "REFUSED: Herdr tab for task $id does not match its independently recorded workspace identity; preserving task state and nothing was changed." >&2
+      FM_HERDR_VALIDATED_TARGET=
+      return 1
+    fi
   fi
+}
+
+fm_herdr_validate_live_task_endpoint() {  # <meta-file> <task-id>
+  fm_herdr_validate_task_endpoint "$1" "$2" live-control
 }
 
 fm_herdr_validate_remote_route() {  # <meta-file> <task-id> [record-only]
@@ -338,7 +352,7 @@ fm_herdr_resolve_selector() {  # <raw-target> <state-dir>
   if [ -n "$meta" ]; then
     id=${meta##*/}
     id=${id%.meta}
-    fm_herdr_validate_task_endpoint "$meta" "$id" || return 1
+    fm_herdr_validate_live_task_endpoint "$meta" "$id" || return 1
     target=$FM_HERDR_VALIDATED_TARGET
     printf '%s' "$target"
     return 0

@@ -186,7 +186,7 @@ fm_send_resolve_target() {  # <raw-target>
       return 0
     fi
     id=$(fm_send_id_from_meta "$meta")
-    fm_herdr_validate_task_endpoint "$meta" "$id" || return 1
+    fm_herdr_validate_live_task_endpoint "$meta" "$id" || return 1
     target=$FM_HERDR_VALIDATED_TARGET
     RESOLVED_TARGET=$target
     TARGET_ROUTE=herdr
@@ -221,7 +221,7 @@ fm_send_resolve_target() {  # <raw-target>
   fi
   if [ -n "$meta" ]; then
     id=$(fm_send_id_from_meta "$meta")
-    fm_herdr_validate_task_endpoint "$meta" "$id" || return 1
+    fm_herdr_validate_live_task_endpoint "$meta" "$id" || return 1
     target=$FM_HERDR_VALIDATED_TARGET
     RESOLVED_TARGET=$target
     TARGET_ROUTE=herdr
