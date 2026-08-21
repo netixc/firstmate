@@ -27,7 +27,7 @@ SH
   fm_fake_exit0 "$fb" no-mistakes gh gh-axi curl
   fm_write_meta "$home/state/current.meta" \
     "backend=herdr" "window=lab:w-current:p1" "endpoint_task_id=current" \
-    "herdr_session=lab" "herdr_workspace_id=w-current" "herdr_tab_id=t-current" \
+    "herdr_session=lab" "herdr_workspace_id=w-current" "herdr_tab_id=w-current:t-current" \
     "herdr_pane_id=w-current:p1" "worktree=/tmp/current" "project=alpha" \
     "harness=pi" "kind=ship" "mode=direct-PR" "yolo=off"
   printf 'working: implementation\n' > "$home/state/current.status"
@@ -38,7 +38,7 @@ SH
   fm_write_meta "$home/state/ambiguous.meta" \
     "backend=herdr" "window=lab:w-ambiguous:p1" "window=lab:w-foreign:p1" \
     "endpoint_task_id=ambiguous" "herdr_session=lab" \
-    "herdr_workspace_id=w-ambiguous" "herdr_tab_id=t-ambiguous" \
+    "herdr_workspace_id=w-ambiguous" "herdr_tab_id=w-ambiguous:t-ambiguous" \
     "herdr_pane_id=w-ambiguous:p1" "worktree=/tmp/ambiguous" "project=alpha" \
     "harness=pi" "kind=secondmate" "mode=direct-PR"
   printf '%s|%s\n' "$home" "$fb"

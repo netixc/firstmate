@@ -928,11 +928,11 @@ EOF
 
   fm_write_meta "$home/state/task-live.meta" \
     "backend=herdr" "window=sess:w1:p-live" "endpoint_task_id=task-live" \
-    "herdr_session=sess" "herdr_workspace_id=w1" "herdr_tab_id=t-live" \
+    "herdr_session=sess" "herdr_workspace_id=w1" "herdr_tab_id=w1:t-live" \
     "herdr_pane_id=w1:p-live" "worktree=/tmp/live" "project=/tmp/project" "kind=ship"
   fm_write_meta "$home/state/task-dead.meta" \
     "backend=herdr" "window=sess:w1:p-dead" "endpoint_task_id=task-dead" \
-    "herdr_session=sess" "herdr_workspace_id=w1" "herdr_tab_id=t-dead" \
+    "herdr_session=sess" "herdr_workspace_id=w1" "herdr_tab_id=w1:t-dead" \
     "herdr_pane_id=w1:p-dead" "worktree=/tmp/dead" "project=/tmp/project" "kind=ship"
   fm_write_meta "$home/state/remote-old.meta" \
     "remote_backend=herdr" "window=remote:remote-old" "endpoint_task_id=remote-old" \

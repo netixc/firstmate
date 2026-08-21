@@ -118,7 +118,7 @@ SH
   fm_write_meta "$home/state/mate.meta" \
     "kind=secondmate" "harness=pi" "backend=herdr" \
     "window=lab:w1:p1" "endpoint_task_id=mate" \
-    "herdr_session=lab" "herdr_workspace_id=w1" "herdr_tab_id=t1" \
+    "herdr_session=lab" "herdr_workspace_id=w1" "herdr_tab_id=w1:t1" \
     "herdr_pane_id=w1:p1" "worktree=/tmp/mate" "project=/tmp/project"
   before=$(shasum -a 256 "$home/state/mate.meta" | awk '{print $1}')
   out=$(TMUX=fake PATH="$fb:$BASE_PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
@@ -146,7 +146,7 @@ SH
   fm_write_meta "$home/state/mate.meta" \
     "kind=secondmate" "harness=pi" "backend=herdr" \
     "window=lab:w1:p1" "window=lab:w2:p1" "endpoint_task_id=mate" \
-    "herdr_session=lab" "herdr_workspace_id=w1" "herdr_tab_id=t1" \
+    "herdr_session=lab" "herdr_workspace_id=w1" "herdr_tab_id=w1:t1" \
     "herdr_pane_id=w1:p1" "worktree=/tmp/mate" "project=/tmp/project"
   out=$(PATH="$fb:$BASE_PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
     FM_HERDR_LOG="$log" FM_BOOTSTRAP_NETWORK=only "$BOOTSTRAP" 2>&1)

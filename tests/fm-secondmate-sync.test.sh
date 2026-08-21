@@ -74,7 +74,7 @@ add_sm_worktree() {
     printf 'endpoint_task_id=%s\n' "$id"
     printf 'herdr_session=lab\n'
     printf 'herdr_workspace_id=w-%s\n' "$id"
-    printf 'herdr_tab_id=t-%s\n' "$id"
+    printf 'herdr_tab_id=w-%s:t-%s\n' "$id" "$id"
     printf 'herdr_pane_id=w-%s:p1\n' "$id"
     printf 'worktree=%s/%s\n' "$w" "$id"
     printf 'project=%s/main\n' "$w"

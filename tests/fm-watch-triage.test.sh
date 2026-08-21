@@ -185,12 +185,12 @@ test_stale_is_terminal_classifier() {
   stale_is_terminal "sess:fm-term" "$state" && fail "unrecorded tmux-shaped stale target was classified terminal"
   fm_write_meta "$state/term.meta" \
     "backend=herdr" "window=sess:fm-term" "endpoint_task_id=term" \
-    "herdr_session=sess" "herdr_workspace_id=w-term" "herdr_tab_id=t-term" \
+    "herdr_session=sess" "herdr_workspace_id=w-term" "herdr_tab_id=w-term:t-term" \
     "herdr_pane_id=fm-term" "worktree=/tmp/term" "project=/tmp/project"
   stale_is_terminal "sess:fm-term" "$state" || fail "validated terminal stale status not classified terminal"
   fm_write_meta "$state/herdr-term.meta" \
     "window=default:w1:p2" "backend=herdr" "endpoint_task_id=herdr-term" \
-    "herdr_session=default" "herdr_workspace_id=w1" "herdr_tab_id=t1" \
+    "herdr_session=default" "herdr_workspace_id=w1" "herdr_tab_id=w1:t1" \
     "herdr_pane_id=w1:p2" "worktree=/tmp/herdr-term" "project=/tmp/project"
   printf 'done: ready in branch fm/herdr\n' > "$state/herdr-term.status"
   stale_is_terminal "default:w1:p2" "$state" || fail "terminal herdr stale status not resolved through metadata"
@@ -242,7 +242,7 @@ test_classifier_primitives() {
   [ -z "$(window_to_task "sess:fm-fix-login-k3" "$state")" ] || fail "window_to_task accepted an unrecorded tmux-shaped target"
   fm_write_meta "$state/herdr-task.meta" \
     "window=default:w1:p2" "backend=herdr" "endpoint_task_id=herdr-task" \
-    "herdr_session=default" "herdr_workspace_id=w1" "herdr_tab_id=t1" \
+    "herdr_session=default" "herdr_workspace_id=w1" "herdr_tab_id=w1:t1" \
     "herdr_pane_id=w1:p2" "worktree=/tmp/herdr-task" "project=/tmp/project"
   [ "$(window_to_task "default:w1:p2" "$state")" = "herdr-task" ] || fail "window_to_task did not resolve opaque backend target through metadata"
   FM_CAPTAIN_RE='custom-verb:' status_is_captain_relevant "custom-verb: x" || fail "FM_CAPTAIN_RE override not honored"
@@ -580,7 +580,7 @@ test_terminal_stale_surfaced() {
   printf 'finished, awaiting review' > "$capture_file"
   fm_write_meta "$state/done.meta" \
     "backend=herdr" "window=$window" "endpoint_task_id=done" \
-    "herdr_session=test" "herdr_workspace_id=w-done" "herdr_tab_id=t-done" \
+    "herdr_session=test" "herdr_workspace_id=w-done" "herdr_tab_id=w-done:t-done" \
     "herdr_pane_id=w-done:p1" "worktree=/tmp/done" "project=/tmp/project" \
     "kind=ship" "harness=pi"
   cat > "$fakebin/herdr" <<'SH'

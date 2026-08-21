@@ -184,8 +184,12 @@ fm_herdr_validate_task_endpoint() {  # <meta-file> <task-id> [record-only]
     || [ "$window" != "$session:$pane" ] \
     || ! fm_herdr_endpoint_atom_valid "$session" \
     || ! fm_herdr_endpoint_atom_valid "$workspace" \
-    || ! fm_herdr_endpoint_atom_valid "${tab//:/_}" \
-    || ! fm_herdr_endpoint_atom_valid "${pane//:/_}"; then
+    || [ "${tab%%:*}" != "$workspace" ] \
+    || [ "${pane%%:*}" != "$workspace" ] \
+    || [ "${tab#*:}" = "$tab" ] \
+    || [ "${pane#*:}" = "$pane" ] \
+    || ! fm_herdr_endpoint_atom_valid "${tab#*:}" \
+    || ! fm_herdr_endpoint_atom_valid "${pane#*:}"; then
     echo "REFUSED: Herdr endpoint metadata for task $id is malformed or inconsistent; preserving task state." >&2
     return 1
   fi
@@ -260,14 +264,16 @@ fm_herdr_validate_remote_route() {  # <meta-file> <task-id> [record-only]
     fi
   done
   if [ "$invalid" -ne 0 ] || [ "$count" -ne 1 ]; then
+    # shellcheck disable=SC2034
     FM_HERDR_VALIDATED_REMOTE_HOST=
+    # shellcheck disable=SC2034
     FM_HERDR_VALIDATED_REMOTE_TARGET=
     return 1
   fi
 }
 
 fm_endpoint_meta_for_target() {  # <target> <state-dir>
-  local target=$1 state=$2 meta id match= count=0 invalid=0
+  local target=$1 state=$2 meta id match='' count=0 invalid=0
   for meta in "$state"/*.meta; do
     [ -e "$meta" ] || continue
     grep -Fqx "window=$target" "$meta" 2>/dev/null || continue

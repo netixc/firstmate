@@ -25,7 +25,7 @@ SH
   fm_fake_exit0 "$fb" treehouse no-mistakes gh gh-axi
   fm_write_meta "$home/state/$id.meta" \
     "backend=herdr" "window=lab:w-$id:p1" "endpoint_task_id=$id" \
-    "herdr_session=lab" "herdr_workspace_id=w-$id" "herdr_tab_id=t-$id" \
+    "herdr_session=lab" "herdr_workspace_id=w-$id" "herdr_tab_id=w-$id:t-$id" \
     "herdr_pane_id=w-$id:p1" "worktree=$world/missing-wt" "project=$world/missing-project" \
     "harness=pi" "kind=ship" "mode=local-only" "yolo=off"
   [ -z "$tasktmp" ] || printf 'tasktmp=%s\n' "$tasktmp" >> "$home/state/$id.meta"

@@ -224,7 +224,7 @@ mkdir -p "$REMOTE_HOME/state"
 write_child_meta() {
   fm_write_meta "$REMOTE_HOME/state/work-child.meta" \
     "backend=herdr" "window=lab:w-work-child:p1" "endpoint_task_id=work-child" \
-    "herdr_session=lab" "herdr_workspace_id=w-work-child" "herdr_tab_id=t-work-child" \
+    "herdr_session=lab" "herdr_workspace_id=w-work-child" "herdr_tab_id=w-work-child:t-work-child" \
     "herdr_pane_id=w-work-child:p1" "worktree=$CHILD_WT" "project=$CHILD_WT" \
     "harness=pi" "kind=ship" "mode=local-only" "yolo=off"
 }

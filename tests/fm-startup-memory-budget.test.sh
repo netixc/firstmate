@@ -228,7 +228,7 @@ new_propagation_world() {
     printf 'endpoint_task_id=sm\n'
     printf 'herdr_session=lab\n'
     printf 'herdr_workspace_id=w-sm\n'
-    printf 'herdr_tab_id=t-sm\n'
+    printf 'herdr_tab_id=w-sm:t-sm\n'
     printf 'herdr_pane_id=w-sm:p1\n'
     printf 'worktree=%s\n' "$sm"
     printf 'project=%s\n' "$root"

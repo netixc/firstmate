@@ -92,7 +92,7 @@ test_metadata_classification_and_identity() {
 
   fm_write_meta "$state/current.meta" \
     "backend=herdr" "window=lab:w1:p1" "endpoint_task_id=current" \
-    "herdr_session=lab" "herdr_workspace_id=w1" "herdr_tab_id=t1" \
+    "herdr_session=lab" "herdr_workspace_id=w1" "herdr_tab_id=w1:t1" \
     "herdr_pane_id=w1:p1" "worktree=/tmp/current" "project=/tmp/project"
   fm_herdr_validate_task_endpoint "$state/current.meta" current \
     || fail "exact current Herdr metadata should validate"
@@ -137,7 +137,7 @@ test_selector_refuses_foreign_identity() {
   meta=$state/current.meta
   fm_write_meta "$meta" \
     "backend=herdr" "window=lab:w1:p1" "endpoint_task_id=other" \
-    "herdr_session=lab" "herdr_workspace_id=w1" "herdr_tab_id=t1" \
+    "herdr_session=lab" "herdr_workspace_id=w1" "herdr_tab_id=w1:t1" \
     "herdr_pane_id=w1:p1" "worktree=/tmp/current" "project=/tmp/project"
   # shellcheck source=/dev/null
   . "$ROOT/bin/fm-herdr.sh"

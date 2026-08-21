@@ -37,7 +37,7 @@ write_meta() { # <home> <id> [target]
   fm_write_meta "$home/state/$id.meta" \
     "backend=herdr" "window=$target" "endpoint_task_id=$id" \
     "herdr_session=${target%%:*}" "herdr_workspace_id=${rest%%:*}" \
-    "herdr_tab_id=t1" "herdr_pane_id=$rest" \
+    "herdr_tab_id=${rest%%:*}:t1" "herdr_pane_id=$rest" \
     "worktree=/tmp/$id" "project=/tmp/project" "harness=pi" "kind=ship"
 }
 
@@ -93,6 +93,19 @@ test_duplicate_endpoint_owners_refuse() {
   pass "fm-send strict: duplicate endpoint owners fail closed"
 }
 
+test_cross_component_identity_refuses() {
+  local home=$TMP_ROOT/cross-component fb log out
+  mkdir -p "$home/state"; fb=$(make_stubs "$home"); log=$home/herdr.log; : > "$log"
+  write_meta "$home" crossed lab:w1:p1
+  perl -pi -e 's/^herdr_workspace_id=.*/herdr_workspace_id=w2/; s/^herdr_tab_id=.*/herdr_tab_id=w2:t1/' \
+    "$home/state/crossed.meta"
+  out=$(run_send "$home" "$fb" "$log" crossed hello 2>&1) \
+    && fail "cross-workspace component identity should refuse"
+  assert_contains "$out" "malformed or inconsistent" "component mismatch refusal should name inconsistent metadata"
+  [ ! -s "$log" ] || fail "cross-workspace component metadata reached Herdr"
+  pass "fm-send strict: cross-component endpoint identities fail closed"
+}
+
 test_unset_home_and_unresolved_refuse() {
   local home=$TMP_ROOT/refuse fb log out
   mkdir -p "$home/state"; fb=$(make_stubs "$home"); log=$home/herdr.log; : > "$log"
@@ -137,6 +150,7 @@ test_explicit_exact_target_and_key() {
 test_exact_id_send
 test_ambiguous_or_foreign_metadata_refuses
 test_duplicate_endpoint_owners_refuse
+test_cross_component_identity_refuses
 test_unset_home_and_unresolved_refuse
 test_legacy_shapes_and_prefixless_panes_refuse
 test_explicit_exact_target_and_key

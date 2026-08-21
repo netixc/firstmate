@@ -52,7 +52,7 @@ write_endpoint_meta() {  # <id> <target> <kind>
   fm_write_meta "$STATE_DIR/$id.meta" \
     "backend=herdr" "window=$target" "endpoint_task_id=$id" \
     "herdr_session=${target%%:*}" "herdr_workspace_id=${rest%%:*}" \
-    "herdr_tab_id=t-$id" "herdr_pane_id=$rest" \
+    "herdr_tab_id=${rest%%:*}:t-$id" "herdr_pane_id=$rest" \
     "worktree=/tmp/$id" "project=/tmp/project" "kind=$kind" "harness=pi"
 }
 

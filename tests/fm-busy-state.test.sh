@@ -295,7 +295,7 @@ test_meta_classification_requires_exact_endpoint_identity() {
   fm_write_meta "$meta" \
     "backend=herdr" "window=lab:w1:p1" "window=lab:w2:p1" \
     "endpoint_task_id=t1" "herdr_session=lab" "herdr_workspace_id=w1" \
-    "herdr_tab_id=t1" "herdr_pane_id=w1:p1" \
+    "herdr_tab_id=w1:t1" "herdr_pane_id=w1:p1" \
     "worktree=/tmp/t1" "project=/tmp/project" "harness=pi"
   "$EV" arm "$state" t1 >/dev/null
   out=$(fm_busy_classify_meta "$meta" t1 "$state")

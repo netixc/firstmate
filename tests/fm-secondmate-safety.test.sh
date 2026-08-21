@@ -84,7 +84,7 @@ test_legacy_child_record_blocks_forced_retirement() {
   fb=$(make_fakebin "$world/fake")
   fm_write_meta "$parent/state/$id.meta" \
     "backend=herdr" "window=lab:w-$id:p1" "endpoint_task_id=$id" \
-    "herdr_session=lab" "herdr_workspace_id=w-$id" "herdr_tab_id=t-$id" \
+    "herdr_session=lab" "herdr_workspace_id=w-$id" "herdr_tab_id=w-$id:t-$id" \
     "herdr_pane_id=w-$id:p1" "worktree=$home" "project=$home" \
     "home=$home" "harness=pi" "kind=secondmate" "mode=secondmate"
   fm_write_meta "$home/state/legacy-child.meta" \

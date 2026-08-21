@@ -212,7 +212,7 @@ write_meta() {
   local case_dir=$1 mode=$2 kind=$3
   fm_write_meta "$case_dir/state/task-x1.meta" \
     "backend=herdr" "window=lab:w-task-x1:p1" "endpoint_task_id=task-x1" \
-    "herdr_session=lab" "herdr_workspace_id=w-task-x1" "herdr_tab_id=t-task-x1" \
+    "herdr_session=lab" "herdr_workspace_id=w-task-x1" "herdr_tab_id=w-task-x1:t-task-x1" \
     "herdr_pane_id=w-task-x1:p1" "worktree=$case_dir/wt" \
     "project=$case_dir/project" "kind=$kind" "mode=$mode"
 }
@@ -1619,7 +1619,7 @@ configure_secondmate_with_herdr_children() {  # <case-dir>
     git -C "$case_dir/project" worktree add -q -b "fm/$child" "$child_wt" main
     fm_write_meta "$home/state/$child.meta" \
       "backend=herdr" "window=lab:w-$child:p1" "endpoint_task_id=$child" \
-      "herdr_session=lab" "herdr_workspace_id=w-$child" "herdr_tab_id=t-$child" \
+      "herdr_session=lab" "herdr_workspace_id=w-$child" "herdr_tab_id=w-$child:t-$child" \
       "herdr_pane_id=w-$child:p1" "worktree=$child_wt" \
       "project=$case_dir/project" "kind=ship" "mode=local-only"
     : > "$home/state/$child.status"

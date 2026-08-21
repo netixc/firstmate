@@ -70,7 +70,7 @@ write_secondmate_meta() { # <meta> <home> [target] [parent] [harness]
   rest=${target#*:}
   fm_write_meta "$meta" "backend=herdr" "window=$target" "endpoint_task_id=$id" \
     "herdr_session=${target%%:*}" "herdr_workspace_id=${rest%%:*}" \
-    "herdr_tab_id=t-$id" "herdr_pane_id=$rest" "worktree=$home" \
+    "herdr_tab_id=${rest%%:*}:t-$id" "herdr_pane_id=$rest" "worktree=$home" \
     "project=$home" "home=$home" "kind=secondmate" "harness=$harness" "parent=$parent"
 }
 

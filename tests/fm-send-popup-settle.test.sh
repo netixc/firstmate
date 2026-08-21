@@ -88,7 +88,7 @@ first_settle() {  # <expected> <label> <harness|--explicit> <message> [selector-
         fail "$label: unknown selector form '$selector_form'"
         ;;
     esac
-    fm_write_meta "$home/state/$meta_id.meta" "backend=herdr" "window=sess:w1:p1" "endpoint_task_id=$meta_id" "herdr_session=sess" "herdr_workspace_id=w1" "herdr_tab_id=t1" "herdr_pane_id=w1:p1" "worktree=/tmp/$meta_id" "project=/tmp/project" "harness=$harness"
+    fm_write_meta "$home/state/$meta_id.meta" "backend=herdr" "window=sess:w1:p1" "endpoint_task_id=$meta_id" "herdr_session=sess" "herdr_workspace_id=w1" "herdr_tab_id=w1:t1" "herdr_pane_id=w1:p1" "worktree=/tmp/$meta_id" "project=/tmp/project" "harness=$harness"
   fi
   : > "$log"
   env FM_SEND_SETTLE=0 PATH="$fb:$PATH" \

@@ -68,7 +68,7 @@ fm_write_meta() {  # <file> <key=value>...
   [ "$have_session" -eq 1 ] || printf 'herdr_session=%s\n' "${window%%:*}" >> "$file"
   value=${window#*:}
   [ "$have_workspace" -eq 1 ] || printf 'herdr_workspace_id=%s\n' "${value%%:*}" >> "$file"
-  [ "$have_tab" -eq 1 ] || printf 'herdr_tab_id=t-%s\n' "$id" >> "$file"
+  [ "$have_tab" -eq 1 ] || printf 'herdr_tab_id=%s:t-%s\n' "${value%%:*}" "$id" >> "$file"
   [ "$have_pane" -eq 1 ] || printf 'herdr_pane_id=%s\n' "$value" >> "$file"
   [ "$have_project" -eq 1 ] || printf 'project=%s\n' "${worktree:-/tmp/project}" >> "$file"
 }

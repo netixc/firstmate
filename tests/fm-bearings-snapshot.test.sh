@@ -25,7 +25,7 @@ SH
   fm_fake_exit0 "$fb" no-mistakes gh gh-axi curl
   fm_write_meta "$home/state/current.meta" \
     "backend=herdr" "window=lab:w-current:p1" "endpoint_task_id=current" \
-    "herdr_session=lab" "herdr_workspace_id=w-current" "herdr_tab_id=t-current" \
+    "herdr_session=lab" "herdr_workspace_id=w-current" "herdr_tab_id=w-current:t-current" \
     "herdr_pane_id=w-current:p1" "worktree=/tmp/current" "project=alpha" \
     "harness=pi" "kind=ship" "mode=direct-PR" "yolo=off"
   printf 'blocked [key=choice]: choose the release window\n' > "$home/state/current.status"

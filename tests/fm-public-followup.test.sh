@@ -45,7 +45,7 @@ fm_write_meta() {  # <file> <key=value>...
   if [ "$transform" -eq 1 ]; then
     printf '%s\n' \
       'backend=herdr' "herdr_session=lab" "herdr_workspace_id=w-$id" \
-      "herdr_tab_id=t-$id" "herdr_pane_id=w-$id:p1" >> "$file"
+      "herdr_tab_id=w-$id:t-$id" "herdr_pane_id=w-$id:p1" >> "$file"
     [ "$have_binding" -eq 1 ] || printf 'endpoint_task_id=%s\n' "$id" >> "$file"
   fi
 }
@@ -631,7 +631,7 @@ test_secondmate_teardown_requires_parent_binding() {
   fm_write_meta "$parent/state/mate.meta" "kind=secondmate" "home=$child"
   fm_write_meta "$child/state/work-child.meta" \
     "backend=herdr" "window=lab:w-work-child:p1" "endpoint_task_id=work-child" \
-    "herdr_session=lab" "herdr_workspace_id=w-work-child" "herdr_tab_id=t-work-child" \
+    "herdr_session=lab" "herdr_workspace_id=w-work-child" "herdr_tab_id=w-work-child:t-work-child" \
     "herdr_pane_id=w-work-child:p1" "worktree=$child" "project=$child" \
     "kind=ship" "mode=local-only"
 
@@ -657,7 +657,7 @@ test_secondmate_teardown_requires_parent_binding() {
   fm_write_meta "$parent/state/mate.meta" "kind=secondmate" "home=$child"
   fm_write_meta "$child/state/work-child.meta" \
     "backend=herdr" "window=lab:w-work-child:p1" "endpoint_task_id=work-child" \
-    "herdr_session=lab" "herdr_workspace_id=w-work-child" "herdr_tab_id=t-work-child" \
+    "herdr_session=lab" "herdr_workspace_id=w-work-child" "herdr_tab_id=w-work-child:t-work-child" \
     "herdr_pane_id=w-work-child:p1" "worktree=$child" "project=$child" \
     "kind=ship" "mode=local-only"
   assert_absent "$child/.fm-secondmate-parent" \
@@ -768,7 +768,7 @@ test_secondmate_teardown_resolves_parent_from_durable_record_when_env_lost() {
   fm_write_meta "$parent/state/mate.meta" "kind=secondmate" "home=$child"
   fm_write_meta "$child/state/work-child.meta" \
     "backend=herdr" "window=lab:w-work-child:p1" "endpoint_task_id=work-child" \
-    "herdr_session=lab" "herdr_workspace_id=w-work-child" "herdr_tab_id=t-work-child" \
+    "herdr_session=lab" "herdr_workspace_id=w-work-child" "herdr_tab_id=w-work-child:t-work-child" \
     "herdr_pane_id=w-work-child:p1" "worktree=$child" "project=$child" \
     "kind=ship" "mode=local-only"
 
@@ -803,7 +803,7 @@ test_secondmate_teardown_durable_record_missing_parent_registration_still_refuse
   assert_local_secondmate_parent_record "$child" "$parent_resolved"
   fm_write_meta "$child/state/work-child.meta" \
     "backend=herdr" "window=lab:w-work-child:p1" "endpoint_task_id=work-child" \
-    "herdr_session=lab" "herdr_workspace_id=w-work-child" "herdr_tab_id=t-work-child" \
+    "herdr_session=lab" "herdr_workspace_id=w-work-child" "herdr_tab_id=w-work-child:t-work-child" \
     "herdr_pane_id=w-work-child:p1" "worktree=$child" "project=$child" \
     "kind=ship" "mode=local-only"
   # No parent/state/mate.meta at all: the parent never recorded this secondmate's

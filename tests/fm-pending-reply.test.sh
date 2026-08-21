@@ -77,7 +77,7 @@ write_secondmate_meta() {  # <meta> <home> [target] [parent] [harness]
   rest=${target#*:}
   fm_write_meta "$meta" "backend=herdr" "window=$target" "endpoint_task_id=$id" \
     "herdr_session=${target%%:*}" "herdr_workspace_id=${rest%%:*}" \
-    "herdr_tab_id=t-$id" "herdr_pane_id=$rest" \
+    "herdr_tab_id=${rest%%:*}:t-$id" "herdr_pane_id=$rest" \
     "worktree=$home" "project=$home" "home=$home" "kind=secondmate" \
     "harness=$harness" "parent=$parent"
 }
@@ -761,7 +761,7 @@ test_unmarked_captain_input_creates_no_expectation() {
   # Crewmate target stays unmarked and creates no pending-reply record.
   fm_write_meta "$home/state/build.meta" \
     "backend=herdr" "window=sess:w-build:p1" "endpoint_task_id=build" \
-    "herdr_session=sess" "herdr_workspace_id=w-build" "herdr_tab_id=t-build" \
+    "herdr_session=sess" "herdr_workspace_id=w-build" "herdr_tab_id=w-build:t-build" \
     "herdr_pane_id=w-build:p1" "worktree=$home/wt" "project=$home/p" \
     "harness=pi" "kind=ship" "mode=no-mistakes" "yolo=off"
   run_send "$fb" "$home" "$log" "build" "captain says hello"; rc=$?

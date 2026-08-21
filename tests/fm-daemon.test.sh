@@ -35,7 +35,7 @@ test_pause_classification_and_tracking() {
   state=$(new_state pause)
   fm_write_meta "$state/held.meta" \
     "backend=herdr" "window=lab:w-held:p1" "endpoint_task_id=held" \
-    "herdr_session=lab" "herdr_workspace_id=w-held" "herdr_tab_id=t-held" \
+    "herdr_session=lab" "herdr_workspace_id=w-held" "herdr_tab_id=w-held:t-held" \
     "herdr_pane_id=w-held:p1" "worktree=/tmp/held" "project=/tmp/project" "harness=pi"
   printf 'paused: waiting for an external release\n' > "$state/held.status"
   out=$(classify_stale 'lab:w-held:p1' "$state")

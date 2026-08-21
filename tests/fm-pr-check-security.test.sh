@@ -116,7 +116,7 @@ write_task_meta() {
   local dir=$1 id=${2:-task-a}
   fm_write_meta "$dir/home/state/$id.meta" \
     "backend=herdr" "window=lab:w-$id:p1" "endpoint_task_id=$id" \
-    "herdr_session=lab" "herdr_workspace_id=w-$id" "herdr_tab_id=t-$id" \
+    "herdr_session=lab" "herdr_workspace_id=w-$id" "herdr_tab_id=w-$id:t-$id" \
     "herdr_pane_id=w-$id:p1" "worktree=$dir/wt" "project=$dir/project" \
     "kind=ship" "mode=no-mistakes"
 }
