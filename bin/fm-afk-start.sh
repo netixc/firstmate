@@ -17,14 +17,13 @@
 # enables nounset and errexit; callers that need different shell options must
 # restore them explicitly.
 #
-# This is the COMMON daemon entry for every backend. HOW it becomes a tracked
-# background process differs by harness/backend and is owned elsewhere:
+# This is the common Herdr daemon entry. How it becomes a tracked background
+# process differs by Pi capability and is owned elsewhere:
 #   - Harnesses with a native in-pane tracked-background tool run this directly
 #     via that tool, so the daemon inherits the captain pane's env and auto-discovers it.
 #   - Harnesses with NO native background mechanism (e.g. pi) run this THROUGH
-#     bin/fm-afk-launch.sh, which creates a non-visible tracked terminal per
-#     backend (herdr tab/workspace, tmux detached session) and passes the
-#     captain pane in as FM_SUPERVISOR_TARGET so injection targets it, not the
+#     bin/fm-afk-launch.sh, which creates a non-visible tracked Herdr workspace
+#     and passes the captain pane in as FM_SUPERVISOR_TARGET so injection targets it, not the
 #     daemon's own new pane.
 # Do not wrap this in `nohup ... &`: Herdr can reap fire-and-forget shell children
 # after the tool call returns, while a tracked background terminal stays

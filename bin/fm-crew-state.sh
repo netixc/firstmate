@@ -56,10 +56,8 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 
-# shellcheck source=bin/fm-tmux-lib.sh
-. "$SCRIPT_DIR/fm-tmux-lib.sh"
-# shellcheck source=bin/fm-backend.sh
-. "$SCRIPT_DIR/fm-backend.sh"
+# shellcheck source=bin/fm-herdr.sh
+. "$SCRIPT_DIR/fm-herdr.sh"
 # shellcheck source=bin/fm-classify-lib.sh
 . "$SCRIPT_DIR/fm-classify-lib.sh"
 # shellcheck source=bin/fm-busy-lib.sh
@@ -138,30 +136,19 @@ map_log_state() {  # <line>
 LOG_LINE=$(log_last_line || true)
 LOG_VERB=$(status_line_verb "$LOG_LINE")
 
-# pane_readable is consulted ONLY in the no-run fallback below. The run-step path
-# stays authoritative regardless of pane liveness - judge by the run-step, not the
-# shell - so a finished crew whose endpoint has closed still reports its run-step
-# state (e.g. done) instead of being masked as unknown. Backend-aware
-# (fm_backend_of_meta defaults absent backend= to tmux, the P1 contract): a
-# herdr task is read through fm_backend_capture instead of a bare tmux probe.
-TASK_BACKEND=$(fm_backend_of_meta "$META")
-BACKEND_TARGET=$(fm_backend_target_of_meta "$META")
-EXPECTED_LABEL="fm-$ID"
+# Endpoint reads are consulted only in the no-run fallback below.
+# A matching no-mistakes run remains authoritative even when the endpoint is
+# unavailable or carries retired legacy metadata.
+ENDPOINT_CLASS=$(fm_herdr_meta_kind "$META")
+HERDR_TARGET=$(fm_endpoint_target_of_meta "$META")
 pane_readable() {  # <target>
-  case "$TASK_BACKEND" in
-    tmux) tmux display-message -p -t "$1" '#{pane_id}' >/dev/null 2>&1 ;;
-    *) fm_backend_capture "$TASK_BACKEND" "$1" 1 "$EXPECTED_LABEL" >/dev/null 2>&1 ;;
-  esac
+  [ "$ENDPOINT_CLASS" = herdr ] || return 1
+  fm_herdr_capture "$1" 1 >/dev/null 2>&1
 }
-# crew_busy_verdict: the crew's semantic busy state from the one contract
-# owner (bin/fm-busy-lib.sh), as "<busy|idle|unknown> <source>". A converted
-# adapter answers from its own lifecycle record; a herdr crew's native `busy`
-# is accepted
-# when no record exists, but its native `idle` is NOT, because agent.get
-# reports generation state (idle while a crew blocks on its own long-running
-# foreground tool call) rather than turn state.
+# Native Herdr busy is accepted only as positive activity evidence when no
+# extension record exists; native idle never closes a turn.
 crew_busy_verdict() {  # <target>
-  fm_busy_classify "$TASK_BACKEND" "$1" "$HARNESS" "$ID" "$STATE"
+  fm_busy_classify "$1" "$HARNESS" "$ID" "$STATE"
 }
 
 # --- no-mistakes run lookup (authoritative when a run matches this branch) --
@@ -532,8 +519,9 @@ fi
 # liveness, so a finished-but-pane-closed crew never reaches here. Down here there
 # is no run to consult, so a dead/unreadable target means the crew is gone: report
 # unknown rather than trusting a possibly-stale status log as the current state.
-[ -n "$BACKEND_TARGET" ] || emit unknown none "no backend target recorded"
-pane_readable "$BACKEND_TARGET" || emit unknown none "backend target gone: $BACKEND_TARGET"
+[ "$ENDPOINT_CLASS" = herdr ] || emit unknown none "endpoint record requires manual reconciliation ($ENDPOINT_CLASS)"
+[ -n "$HERDR_TARGET" ] || emit unknown none "no Herdr target recorded"
+pane_readable "$HERDR_TARGET" || emit unknown none "Herdr target gone: $HERDR_TARGET"
 
 # Secondmates idle on their own watcher (idle pane = healthy), so the busy
 # state is not meaningful for them; read their state from the status log only.
@@ -541,7 +529,7 @@ pane_readable "$BACKEND_TARGET" || emit unknown none "backend target gone: $BACK
 # verdict permits the status-log fallback below. Missing, malformed, stale, or
 # unverified semantic state remains unknown.
 if [ "$KIND" != secondmate ]; then
-  BUSY_VERDICT=$(crew_busy_verdict "$BACKEND_TARGET")
+  BUSY_VERDICT=$(crew_busy_verdict "$HERDR_TARGET")
   case "${BUSY_VERDICT%% *}" in
     busy) emit working pane "harness busy (${BUSY_VERDICT#* })" ;;
     idle) ;;

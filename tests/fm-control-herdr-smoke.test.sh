@@ -2,10 +2,8 @@
 # tests/fm-control-herdr-smoke.test.sh - real-herdr smoke test for the agent
 # lifecycle control plane (bin/fm-control.sh).
 #
-# tmux is the control plane's reference backend and is covered hermetically in
-# tests/fm-control.test.sh. herdr is the OTHER backend whose recovery-grade
-# agent-state classifier the control plane is allowed to trust, so its
-# behavior is pinned here against the REAL binary rather than a stub: whether
+# Herdr's recovery-grade agent-state classifier is the control authority, so
+# its behavior is pinned here against the real binary: whether
 # an agent is running, and therefore whether a lifecycle verb may act at all,
 # comes from herdr's own agent registry.
 #
@@ -24,7 +22,7 @@ fail() { printf 'not ok - %s\n' "$1" >&2; cleanup_all; exit 1; }
 pass() { printf 'ok - %s\n' "$1"; }
 
 command -v herdr >/dev/null 2>&1 || { echo "skip: herdr not found"; exit 0; }
-command -v jq >/dev/null 2>&1 || { echo "skip: jq not found (required by the herdr adapter)"; exit 0; }
+command -v jq >/dev/null 2>&1 || { echo "skip: jq not found (required by Herdr integration)"; exit 0; }
 
 # shellcheck source=tests/herdr-test-safety.sh
 . "$ROOT/tests/herdr-test-safety.sh"
@@ -57,14 +55,13 @@ git -C "$PROJ" -c user.name='Firstmate Tests' -c user.email='tests@example.inval
 git -C "$PROJ" worktree add --quiet -b hsmoke "$WT"
 
 # shellcheck source=/dev/null
-. "$ROOT/bin/fm-backend.sh"
-fm_backend_source herdr || fail "fm_backend_source herdr failed"
+. "$ROOT/bin/fm-herdr.sh"
 
-CONTAINER_RAW=$(fm_backend_herdr_container_ensure "$WT") || fail "container_ensure failed"
+CONTAINER_RAW=$(fm_herdr_container_ensure "$WT") || fail "container_ensure failed"
 CONTAINER=${CONTAINER_RAW%%$'\t'*}
 SEEDED_TAB_ID=${CONTAINER_RAW#*$'\t'}
 WORKSPACE_ID=${CONTAINER#*:}
-TASK_IDS=$(fm_backend_herdr_create_task "$CONTAINER" "fm-hsmoke" "$WT" "$SEEDED_TAB_ID") \
+TASK_IDS=$(fm_herdr_create_task "$CONTAINER" "fm-hsmoke" "$WT" "$SEEDED_TAB_ID") \
   || fail "create_task failed"
 read -r TAB_ID PANE_ID <<EOF
 $TASK_IDS
@@ -115,21 +112,21 @@ pass "real herdr: interrupt refuses when herdr's own agent registry reports no a
 
 # --- a registered agent: classification flips, and the verbs follow ---------
 
-herdr pane report-agent "$PANE_ID" --source fm-control-smoke --agent fm-control-smoke-agent \
-  --state idle --session "$SESSION" >/dev/null 2>&1 \
+"$ROOT/bin/fm-herdr-lab.sh" run "$SESSION" pane report-agent "$PANE_ID" \
+  --source fm-control-smoke --agent fm-control-smoke-agent --state idle >/dev/null 2>&1 \
   || fail "could not register a live agent on the task pane"
 
-STATE=$(fm_backend_agent_state herdr "$SESSION:$PANE_ID")
+STATE=$(fm_herdr_agent_state "$SESSION:$PANE_ID")
 [ "$STATE" = alive ] || fail "herdr should classify a registered agent as alive, got '$STATE'"
 
 OUT=$(run_control hsmoke interrupt) || fail "interrupt against a registered agent should succeed: $OUT"
 case "$OUT" in
-  *"interrupt-delivered hsmoke harness=pi backend=herdr verified=agent-alive cancel=unconfirmed"*) : ;;
+  *"interrupt-delivered hsmoke harness=pi endpoint=$SESSION:$PANE_ID verified=agent-alive cancel=unconfirmed"*) : ;;
   *) fail "interrupt should report the agent-alive proof on herdr, got: $OUT" ;;
 esac
 pass "real herdr: interrupt delivers the harness's key and proves the agent survived it"
 
-herdr pane get "$PANE_ID" --session "$SESSION" >/dev/null 2>&1 \
+"$ROOT/bin/fm-herdr-lab.sh" run "$SESSION" pane get "$PANE_ID" >/dev/null 2>&1 \
   || fail "the control plane must never remove the endpoint it was operating on"
 [ -d "$WT" ] || fail "the control plane must never remove the task's local copy"
 pass "real herdr: no control verb removed the endpoint or the task's local copy"
@@ -146,4 +143,4 @@ case "$OUT" in
 esac
 pass "real herdr: an agent that does not stop fails closed instead of being reported as stopped"
 
-fm_backend_herdr_kill "$SESSION:$PANE_ID" 2>/dev/null || true
+fm_herdr_kill "$SESSION:$PANE_ID" 2>/dev/null || true

@@ -69,8 +69,8 @@ SUB_HOME_MARKER="${SUB_HOME_MARKER:-.fm-secondmate-home}"
 
 # shellcheck source=bin/fm-ff-lib.sh
 . "$SCRIPT_DIR/fm-ff-lib.sh"
-# shellcheck source=bin/fm-backend.sh
-. "$SCRIPT_DIR/fm-backend.sh"
+# shellcheck source=bin/fm-herdr.sh
+. "$SCRIPT_DIR/fm-herdr.sh"
 # shellcheck source=bin/fm-timeout-lib.sh
 . "$SCRIPT_DIR/fm-timeout-lib.sh"
 
@@ -112,7 +112,7 @@ set_transport() { TRANSPORT=$1; TRANSPORT_REASON=${2:-}; }
 
 # A local home is curated in place when no live agent owns it.
 resolve_local_transport() { # <id> <resolved-home>
-  local id=$1 home=$2 meta backend target meta_home
+  local id=$1 home=$2 meta endpoint_class target meta_home
   if ! meta=$(meta_for "$id"); then
     set_transport direct 'no recorded endpoint for this home'
     return 0
@@ -123,14 +123,18 @@ resolve_local_transport() { # <id> <resolved-home>
     set_transport direct 'recorded endpoint belongs to another home'
     return 0
   fi
-  backend=$(fm_backend_of_meta "$meta")
-  target=$(fm_backend_target_of_meta "$meta")
+  endpoint_class=$(fm_herdr_meta_kind "$meta")
+  target=$(fm_endpoint_target_of_meta "$meta")
   [ -n "$target" ] || target=$(fm_meta_get "$meta" window)
   if [ -z "$target" ]; then
     set_transport direct 'recorded endpoint has no target'
     return 0
   fi
-  case "$(fm_backend_agent_state "$backend" "$target" 2>/dev/null || printf 'unreadable')" in
+  if [ "$endpoint_class" != herdr ]; then
+    set_transport direct "$endpoint_class endpoint record preserved for manual reconciliation"
+    return 0
+  fi
+  case "$(fm_herdr_agent_state "$target" 2>/dev/null || printf 'unreadable')" in
     alive) set_transport agent ;;
     *) set_transport direct 'no live agent on the recorded endpoint' ;;
   esac

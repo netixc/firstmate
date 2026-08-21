@@ -55,16 +55,19 @@ case "${1:-}:${2:-}" in
   mv:--help) printf '%s\n' 'usage: tasks-axi mv <id> [<id>...]' ;;
 esac
 SH
-  cat > "$fakebin/tmux" <<'SH'
+  cat > "$fakebin/herdr" <<'SH'
 #!/usr/bin/env bash
-[ -z "${FM_FAKE_TMUX_LOG:-}" ] || printf '%s\n' "$*" >> "$FM_FAKE_TMUX_LOG"
-case "$*" in
-  *display-message*'#{pane_current_command}'*) printf '%s\n' pi ;;
-  *display-message*'#{pane_id}'*) printf '%s\n' '%1' ;;
-  *display-message*'#{cursor_y}'*) printf '%s\n' 1 ;;
-  *capture-pane*) printf '╭────╮\n│ >  │\n╰────╯\n' ;;
+set -u
+case "${1:-} ${2:-}" in
+  "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
+  "pane get") printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "${3:-}" ;;
+  "pane send-text") [ -z "${FM_FAKE_HERDR_LOG:-}" ] || printf '%s\n' "${4:-}" >> "$FM_FAKE_HERDR_LOG" ;;
+  "pane send-keys") : > "${FM_FAKE_HERDR_STATE:?}" ;;
+  "agent get")
+    if [ -e "${FM_FAKE_HERDR_STATE:?}" ]; then status=working; else status=idle; fi
+    printf '{"result":{"agent":{"agent_status":"%s","provider":"pi"}}}\n' "$status"
+    ;;
 esac
-exit 0
 SH
   chmod +x "$fakebin"/*
   printf '%s\n' "$fakebin"
@@ -88,7 +91,7 @@ new_bootstrap_world() {
 
 run_bootstrap() {
   local root=$1 home=$2 fakebin=$3
-  PATH="$fakebin:$BASE_PATH" FM_BACKEND=tmux FM_HOME="$home" FM_ROOT_OVERRIDE="$root" \
+  PATH="$fakebin:$BASE_PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$root" \
     "$BOOTSTRAP"
 }
 
@@ -220,7 +223,15 @@ new_propagation_world() {
   printf '%s\n' sm > "$sm/.fm-secondmate-home"
   mkdir -p "$sm/config" "$sm/data" "$sm/state" "$sm/projects"
   {
-    printf 'window=firstmate:fm-sm\n'
+    printf 'backend=herdr\n'
+    printf 'window=lab:w-sm:p1\n'
+    printf 'endpoint_task_id=sm\n'
+    printf 'herdr_session=lab\n'
+    printf 'herdr_workspace_id=w-sm\n'
+    printf 'herdr_tab_id=t-sm\n'
+    printf 'herdr_pane_id=w-sm:p1\n'
+    printf 'worktree=%s\n' "$sm"
+    printf 'project=%s\n' "$root"
     printf 'kind=secondmate\n'
     printf 'harness=pi\n'
     printf 'home=%s\n' "$sm"
@@ -242,8 +253,9 @@ latest_reread_instruction() {
 
 run_config_push() {
   local root=$1 home=$2 fakebin=$3 log=$4
+  rm -f "$home/herdr.state"
   PATH="$fakebin:$BASE_PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$root" FM_SEND_SETTLE=0 \
-    FM_FAKE_TMUX_LOG="$log" "$CONFIG_PUSH"
+    FM_FAKE_HERDR_LOG="$log" FM_FAKE_HERDR_STATE="$home/herdr.state" "$CONFIG_PUSH"
 }
 
 test_primary_budget_converges_with_exact_reread_and_safe_failures() {
@@ -255,7 +267,7 @@ test_primary_budget_converges_with_exact_reread_and_safe_failures() {
   home=${rec%%|*}
   sm=${rec#*|}
   fakebin=$(make_fake_toolchain "$world")
-  log="$world/tmux.log"
+  log="$world/herdr.log"
 
   printf '321\n' > "$home/config/startup-memory-budget"
   out=$(run_config_push "$root" "$home" "$fakebin" "$log")

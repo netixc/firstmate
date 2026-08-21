@@ -98,11 +98,11 @@ init_changed_fixture_repo() {
     fm-ask-user-authority.test.sh \
     fm-cd-pretool-check.test.sh \
     fm-daemon.test.sh \
-    fm-backend-herdr-smoke.test.sh \
+    fm-herdr-smoke.test.sh \
     fm-secondmate-safety.test.sh \
     fm-session-start.test.sh \
     fm-afk-pi-herdr-return-e2e.test.sh \
-    fm-backend.test.sh \
+    fm-herdr-selection.test.sh \
     fm-pr-merge.test.sh \
     fm-pi-watch-extension.test.sh \
     fm-afk-return.test.sh \
@@ -111,7 +111,7 @@ init_changed_fixture_repo() {
     chmod +x "$repo/tests/$script"
   done
   : >"$repo/tests/lib.sh"
-  : >"$repo/tests/fm-backend-herdr-eventwait.test.py"
+  : >"$repo/tests/fm-herdr-eventwait.test.py"
   : >"$repo/bin/fm-supervisor-target-lib.sh"
   : >"$repo/bin/unmapped-source.sh"
   printf '# .pi/extensions/fm-primary-turnend-guard.ts\n' \
@@ -141,11 +141,11 @@ test_changed_dependency_selection_and_unmapped_failure() {
   git -C "$repo" add tests/lib.sh
   git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm helper-change
 
-  printf '\n' >>"$repo/tests/fm-backend-herdr-eventwait.test.py"
+  printf '\n' >>"$repo/tests/fm-herdr-eventwait.test.py"
   listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD)
-  assert_contains "$listed" "tests/fm-backend-herdr-smoke.test.sh" "eventwait test selects Herdr coverage"
-  assert_contains "$listed" "tests/fm-backend.test.sh" "eventwait test selects backend coverage"
-  git -C "$repo" add tests/fm-backend-herdr-eventwait.test.py
+  assert_contains "$listed" "tests/fm-herdr-smoke.test.sh" "eventwait test selects Herdr coverage"
+  assert_contains "$listed" "tests/fm-herdr-selection.test.sh" "eventwait test selects backend coverage"
+  git -C "$repo" add tests/fm-herdr-eventwait.test.py
   git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm eventwait-change
 
   printf '\n' >>"$repo/bin/fm-supervisor-target-lib.sh"
@@ -335,13 +335,13 @@ SH
 test_exclude_family() {
   local listed
   listed=$("$RUNNER" --list --all --exclude-family real-herdr-gated)
-  printf '%s\n' "$listed" | grep -Fq 'tests/fm-backend-herdr-smoke.test.sh' \
+  printf '%s\n' "$listed" | grep -Fq 'tests/fm-herdr-smoke.test.sh' \
     && fail "exclude-family real-herdr-gated left a real-herdr script"
   printf '%s\n' "$listed" | grep -Fq 'tests/fm-lint.test.sh' \
     || fail "exclude-family must retain pure-contract-unit scripts"
   # Explicit family mode still works; exclude of a different family is a no-op.
   listed=$("$RUNNER" --list --family real-herdr-gated)
-  printf '%s\n' "$listed" | grep -Fq 'tests/fm-backend-herdr-smoke.test.sh' \
+  printf '%s\n' "$listed" | grep -Fq 'tests/fm-herdr-smoke.test.sh' \
     || fail "family real-herdr-gated must list smoke test"
   pass "exclude-family drops the named primary family after selection"
 }
@@ -362,9 +362,9 @@ test_portable_shard_union_and_coverage_guard() {
     "$(printf '%s\n' "$proven" | LC_ALL=C sort -u)" ] \
     || fail "shard union must equal proven-isolated set"
   # No herdr in portable lanes.
-  printf '%s\n' "$s1" "$s2" "$serial" | grep -Fq 'tests/fm-backend-herdr-smoke.test.sh' \
+  printf '%s\n' "$s1" "$s2" "$serial" | grep -Fq 'tests/fm-herdr-smoke.test.sh' \
     && fail "portable lanes must not include real-herdr-gated smoke"
-  printf '%s\n' "$herdr" | grep -Fq 'tests/fm-backend-herdr-smoke.test.sh' \
+  printf '%s\n' "$herdr" | grep -Fq 'tests/fm-herdr-smoke.test.sh' \
     || fail "herdr family must include smoke"
   out=$("$RUNNER" --check-coverage)
   assert_contains "$out" "FM_TEST_COVERAGE ok" "coverage guard success marker"
@@ -377,7 +377,7 @@ test_portable_shard_union_and_coverage_guard() {
     || fail "lanes must not duplicate scripts"
   # LPT order: first script of shard 1 is the longest proven script.
   first=$(printf '%s\n' "$s1" | head -n 1)
-  [ "$first" = "tests/fm-backend-herdr.test.sh" ] \
+  [ "$first" = "tests/fm-herdr.test.sh" ] \
     || fail "shard 1 must start with the longest proven script, got $first"
   pass "portable shard union, disjointness, and coverage guard hold"
 }

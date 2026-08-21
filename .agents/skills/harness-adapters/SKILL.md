@@ -140,7 +140,7 @@ Natural language is acceptable if uncertain.
 Pi has no permission system, so crewmates are always autonomous.
 Pi's `packages/coding-agent/docs/settings.md` UI and display section documents `regular` as the `tuiMode` default and `fullscreen` as experimental; fullscreen can bury steers by rewriting scrollback, so Firstmate avoids it when the installed CLI supports the override.
 `fm-spawn.sh --help` owns the executable-pinning and version-safe launch mechanics.
-Tmux liveness accepts exact `pi` and `Pi` process evidence for vanilla Pi and rejects other or prefixed helpers.
+Herdr native agent registration is the recovery-grade Pi liveness source; ambiguous or unreadable identity never authorizes recovery.
 Keep the brief as one positional argument.
 Multiple positional args become separate queued messages; `fm-spawn`'s template already does this correctly.
 

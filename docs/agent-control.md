@@ -13,14 +13,13 @@ The failure repeated across harnesses and homes, and the workaround (remember to
 
 ## What the control plane owns
 
-`bin/fm-control-lib.sh` is the single executable owner of three capability tables, with no side effects, so it can be read as a contract:
+`bin/fm-control-lib.sh` is the side-effect-free executable owner of the closed verb list and Pi lifecycle mechanics:
 
 - The **verb allowlist**: `interrupt`, `exit`, `relaunch`.
   There is no arbitrary-text and no generic raw-key entry point.
   A caller either names an allowlisted verb or is refused.
 - **Per-harness mechanics**: the key that cancels a running turn, how many times it must be delivered, and the command that exits the agent.
   These were previously carried only in the [`harness-adapters`](../.agents/skills/harness-adapters/SKILL.md) skill's per-adapter tables, which now point here.
-- **Per-backend capability**: which named keys a runtime backend can deliver, and whether it has a recovery-grade agent-state classifier able to prove an agent stopped.
 
 A recorded `harness=` must resolve to the exact verified Pi adapter.
 An unrecognized value resolves to no adapter rather than being guessed into one.
@@ -29,8 +28,8 @@ An unrecognized value resolves to no adapter rather than being guessed into one.
 
 | Verb | Effect | Postcondition |
 | --- | --- | --- |
-| `interrupt` | Deliver the harness's verified interrupt sequence while leaving the agent running. | Delivery succeeds while the endpoint still exists and the agent is still alive where the backend can classify that; cancellation is confirmed only from an adapter-owned acknowledgement and otherwise reports `cancel=unconfirmed`. |
-| `exit` | Stop the agent, preserving the endpoint, the worktree, and every uncommitted change. | The backend's recovery-grade classifier reports the agent gone. Already-stopped is idempotent success. |
+| `interrupt` | Deliver Pi's verified interrupt sequence while leaving the agent running. | Delivery succeeds, the exact Herdr endpoint still exists, and native state still reports Pi alive; cancellation is confirmed only from Pi's acknowledgement and otherwise reports `cancel=unconfirmed`. |
+| `exit` | Stop the agent, preserving the endpoint, the worktree, and every uncommitted change. | Herdr's recovery-grade classifier reports the agent gone. Already-stopped is idempotent success. |
 | `relaunch` | Replace the running Pi agent with a new one in the same endpoint and worktree, optionally changing model and effort. | The new agent is alive on the recorded endpoint, and the durable record names the Pi harness that is actually running. |
 
 An exit that delivers lifecycle input but cannot prove the agent stopped fails with `exit=unconfirmed`, reports the observed agent state and any interrupt cancellation claim, and never claims that nothing changed.
@@ -76,30 +75,23 @@ Pi has no verified pane-resume contract.
   Only a bare task id with a `state/<id>.meta` record in this home is accepted, and that record must pass the shared endpoint-identity validation.
   A legacy `fm-<id>` window label, an explicit `session:window` endpoint, and a record whose `endpoint_task_id` names another task are all refused.
 - A remotely placed secondmate is refused by name.
-  Its agent runs on another host, so none of the postconditions this plane verifies could be read for it here; local endpoint validation would refuse the record regardless, because `window=remote:<id>` can never match a local backend's required shape.
+  Its agent runs on another host, so none of the postconditions this plane verifies could be read for it here; local exact-Herdr endpoint validation refuses the remote route record.
   Drive that lifecycle on its own host and reconcile it through the secondmate recovery path.
 - An unverified harness is refused rather than guessed at.
 - An unsupported recorded harness is refused before the agent or durable state is touched.
-- A backend that cannot deliver the harness's interrupt key is refused rather than sent a different key.
-- `exit` and `relaunch` require a backend with a recovery-grade agent-state classifier - tmux and herdr - because without one the "the agent stopped" postcondition cannot be proven.
+- `exit` and `relaunch` require Herdr's recovery-grade agent-state classifier because without it the "the agent stopped" postcondition cannot be proven.
 - An ambiguous or unreadable endpoint state refuses.
   Only a positively classified state acts.
 - `fm-spawn --relaunch` independently refuses unless the recorded endpoint is positively agent-free and its shell is sitting in the recorded worktree, so a replacement can never join a live agent or start outside the copy holding the work.
 
-## Capability matrix
+## Verified mechanics
 
-Backend capability comes from each adapter's real surface, not from a policy choice.
-
-| Backend | Escape | Enter | Ctrl+C | Recovery-grade agent state |
-| --- | --- | --- | --- | --- |
-| tmux | yes | yes | yes | yes |
-| herdr | yes | yes | yes | yes |
-
-Per-harness interrupt keys, repeat counts, and exit commands live in `bin/fm-control-lib.sh` and are exercised for every verified harness by `tests/fm-control.test.sh`.
-The empirical basis for each adapter's value is the `harness-adapters` skill's verification record for that adapter.
+Pi interrupts with `Escape` and exits with `/quit`.
+Herdr delivers Pi's named keys and provides the recovery-grade native process state used for every postcondition.
+The executable facts live in `bin/fm-control-lib.sh`; empirical evidence lives in the `harness-adapters` skill and [`verification/herdr-runtime.md`](verification/herdr-runtime.md).
 
 ## Verification
 
-- `tests/fm-control.test.sh` - the adapter contract for every verified harness, the backend capability matrix, exact-id scoping, the closed verb list, the busy, idle, dead, and idempotent lifecycle cases, and marker non-regression, all against a stubbed session provider.
+- `tests/fm-control.test.sh` - exact-id scoping, the closed verb list, busy, idle, dead, and idempotent lifecycle cases through the Herdr seam.
 - `tests/fm-control-relaunch.test.sh` - the Pi relaunch transaction: identity preservation, profile threading, the progress note, checkpoint refusals, and rollback after a failed launch.
-- `tests/fm-control-herdr-smoke.test.sh` - the second state-verified backend against the real herdr binary, on an isolated throwaway lab session.
+- `tests/fm-control-herdr-smoke.test.sh` - process control against the real Herdr binary in an isolated lab session.

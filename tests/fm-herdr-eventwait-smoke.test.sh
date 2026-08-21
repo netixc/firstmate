@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# tests/fm-backend-herdr-eventwait-smoke.test.sh - REAL-herdr smoke test for the
-# native pane.agent_status_changed push escalation (fm_backend_herdr_wait_transition,
-# bin/backends/herdr.sh, and its raw-socket reader bin/backends/herdr-eventwait.py).
+# tests/fm-herdr-eventwait-smoke.test.sh - REAL-herdr smoke test for the
+# native pane.agent_status_changed push escalation (fm_herdr_wait_transition,
+# bin/fm-herdr.sh, and its raw-socket reader bin/fm-herdr-eventwait.py).
 # It drives a real idle->blocked transition in an ISOLATED, never-default herdr
 # lab session and asserts the subscriber returns that transition sub-second and
 # that the watcher's handle_push_transition lands a stale record in a scratch
@@ -43,14 +43,13 @@ fm_herdr_lab_prepare "$SESSION" || fail "could not prepare the isolated Herdr la
 # The dispatcher is a separately linted production boundary. Its dynamic
 # adapter source edges stop at each independently linted canonical adapter.
 # shellcheck source=/dev/null
-. "$ROOT/bin/fm-backend.sh"
-fm_backend_source herdr || fail "fm_backend_source herdr failed"
+. "$ROOT/bin/fm-herdr.sh"
 
 HERDR_VERSION=$(herdr --version 2>/dev/null | head -1)
 
 # --- real capability gate ----------------------------------------------------
 
-if ! fm_backend_herdr_events_capable "$SESSION"; then
+if ! fm_herdr_events_capable "$SESSION"; then
   echo "skip: this herdr build is below the events.subscribe capability (protocol < 16 or events surface absent)"
   cleanup_all
   trap - EXIT
@@ -60,10 +59,10 @@ pass "real herdr ($HERDR_VERSION): events.subscribe capability gate passes (prot
 
 # --- container + a real task pane in the isolated session --------------------
 
-CONTAINER_RAW=$(fm_backend_herdr_container_ensure /tmp) || fail "container_ensure failed"
+CONTAINER_RAW=$(fm_herdr_container_ensure /tmp) || fail "container_ensure failed"
 CONTAINER=${CONTAINER_RAW%%$'\t'*}
 SEEDED_TAB_ID=${CONTAINER_RAW#*$'\t'}
-IDS=$(fm_backend_herdr_create_task "$CONTAINER" "fm-evwait1" /tmp "$SEEDED_TAB_ID") || fail "create_task failed"
+IDS=$(fm_herdr_create_task "$CONTAINER" "fm-evwait1" /tmp "$SEEDED_TAB_ID") || fail "create_task failed"
 read -r _TAB_ID PANE_ID <<EOF
 $IDS
 EOF
@@ -79,7 +78,7 @@ backend=herdr
 kind=ship
 EOF
 
-SOCK=$(fm_backend_herdr_socket_path "$SESSION")
+SOCK=$(fm_herdr_socket_path "$SESSION")
 [ -n "$SOCK" ] || fail "could not resolve the isolated session's socket path"
 
 # --- register the pane's agent idle, then drive idle->blocked ----------------
@@ -93,7 +92,7 @@ OUT="$SCRATCH/out"; RCF="$SCRATCH/rc"
 : > "$OUT"; : > "$RCF"
 # Bounded subscriber wait in the background; it must sit past the idle reconcile
 # and return only when the pane transitions to blocked.
-( fm_backend_herdr_wait_transition "$SESSION" 8 "$STATE" "$TARGET" > "$OUT"; echo $? > "$RCF" ) &
+( fm_herdr_wait_transition "$SESSION" 8 "$STATE" "$TARGET" > "$OUT"; echo $? > "$RCF" ) &
 WPID=$!
 sleep 0.5   # let it connect, subscribe, and reconcile the idle baseline
 
@@ -108,8 +107,8 @@ REC=$(cat "$OUT" 2>/dev/null || echo "")
 ELAPSED=$(python3 -c "print(f'{($END)-($START):.3f}')" 2>/dev/null || echo "?")
 
 [ "$RC" = 0 ] || fail "wait_transition should return 0 on a real idle->blocked transition, got rc='$RC' rec='$REC'"
-REC_PANE=$(fm_transition_pane_id "$REC")
-REC_TO=$(fm_transition_to_status "$REC")
+REC_PANE=$(fm_herdr_transition_pane_id "$REC")
+REC_TO=$(fm_herdr_transition_to_status "$REC")
 [ "$REC_PANE" = "$PANE_ID" ] || fail "the returned record's pane_id ('$REC_PANE') must match the driven pane ('$PANE_ID')"
 [ "$REC_TO" = "blocked" ] || fail "the returned record's to_status must be 'blocked', got '$REC_TO'"
 # Sub-second: comfortably under the ~240s stale-pane wedge timer this replaces.
@@ -125,7 +124,7 @@ export FM_ROOT_OVERRIDE="$ROOT"
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-push-transition-lib.sh"
 wake() { return 0; }
-handle_push_transition herdr "$SESSION" "$REC"
+handle_push_transition "$SESSION" "$REC"
 [ -e "$STATE/.wake-queue" ] || fail "handle_push_transition did not create the wake queue"
 grep -q 'stale' "$STATE/.wake-queue" || fail "the wake queue must carry a stale record: $(cat "$STATE/.wake-queue")"
 grep -q "$TARGET" "$STATE/.wake-queue" || fail "the stale record must name the task window $TARGET"

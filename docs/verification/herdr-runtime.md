@@ -1,115 +1,11 @@
-# Runtime backend verification
+# Herdr runtime verification
 
-Audience: maintainer verification.
+This is active empirical maintainer evidence for Firstmate's sole Pi-and-Herdr
+session path.
+[`docs/herdr-backend.md`](../herdr-backend.md) owns current setup, safety
+boundaries, and limitations; this file records exact measurements that justify
+those contracts.
 
-This record contains reusable version-scoped evidence for active runtime guarantees.
-The backend guides own current setup, safety boundaries, and limitations.
-Exact task chronology, branch names, temporary homes, local paths, process ids, thread ids, and delivery transcripts remain in private reports or PR evidence.
-
-## tmux
-
-Foreground-process behavior was verified on 2026-07-07 with tmux 3.6a on macOS.
-
-```sh
-tmux new-session -d -s fmtest -n testwin
-tmux display-message -p -t fmtest:testwin '#{pane_current_command}'
-tmux send-keys -t fmtest:testwin 'sleep 30' Enter
-tmux display-message -p -t fmtest:testwin '#{pane_current_command}'
-tmux send-keys -t fmtest:testwin C-c
-tmux display-message -p -t fmtest:testwin '#{pane_current_command}'
-```
-
-Observed output:
-
-```text
-zsh
-sleep
-zsh
-```
-
-A persistent parent shell waiting for a child remained reported as the parent process, while a shell that directly execed a simple command changed identity with the process itself.
-
-### Agent liveness name sources
-
-The earlier assumption that `#{pane_current_command}` always preserves executable identity no longer holds.
-That reading can reflect a rewritable process title, so it is one of two independent name sources rather than the sole basis of a verdict.
-
-Vanilla Pi 0.84.1 was verified on 2026-08-16 with tmux 3.6a on macOS arm64 through the live drift guard.
-
-```sh
-FM_HARNESS_LIVENESS_DRIFT=1 bin/fm-test-run.sh tests/fm-harness-liveness-drift-live-e2e.test.sh
-```
-
-Observed bounded output:
-
-```text
-# pi 0.84.1: title='node' foreground=[pi ]
-ok - harness liveness: pi 0.84.1 classifies alive
-# checked 1 installed harness(es)
-```
-
-`#{pane_current_command}` and foreground `ps -o comm=` read different name fields, but which one preserves executable identity is platform-dependent.
-The portable Linux regression observes the reverse role assignment for a version-named native executable, with the identifying path retained in argv[0].
-The classifier therefore accepts the exact Pi basename first, then an exact Pi path component in the full executable path, then the same component in argv[0], without depending on which field carries it on a given platform.
-Exact `pi` and `Pi` process evidence remains accepted for vanilla Pi, while similar or prefixed helpers are rejected.
-
-The portable regression is CI-enforced, while the real-harness drift guard is opt-in under the policy in `.agents/skills/firstmate-coding-guidelines/SKILL.md`.
-Run the live guard after any Pi upgrade and update the version and bounded output above.
-
-Backend applicability was reviewed across every spawn adapter.
-Tmux uses exact Pi process evidence for recovery-grade liveness.
-Herdr uses native registered-agent state and needs no process-name branch.
-
-The current classifier matrix and its refresh guard are recorded in [Composer classification matrix](#composer-classification-matrix), with portable shape coverage in `tests/fm-composer-lib.test.sh` and `tests/fm-composer-ghost.test.sh`.
-
-### Cleanup endpoint identity
-
-The cleanup identity boundary was validated on 2026-07-28 with tmux 3.6a and metadata fixtures for every supported backend.
-
-```sh
-tests/fm-teardown-endpoint-safety.test.sh
-tests/fm-teardown.test.sh
-tests/fm-backend-herdr.test.sh
-```
-
-Bounded output from the incident regression:
-
-```text
-ok - fm-teardown: missing, empty, malformed, ambiguous, and task-mismatched endpoints refuse before every mutation or runtime call
-ok - cleanup identity: valid tmux and Herdr records validate while every empty backend target refuses
-ok - tmux backend: direct empty target returns nonzero without invoking tmux
-ok - process cleanup: creation-time PID identity removes only the exact child and preserves the control child
-ok - fm-teardown: dedicated-socket invalid cleanup preserves target/control and valid cleanup removes only the exact target
-```
-
-The dedicated tmux cell removed ambient tmux variables, required a socket-bound wrapper, kept one target and one independent control window, and proved the wrapper was not called for invalid metadata or a direct empty target.
-Valid cleanup removed only the exact task-bound target and left the control window live.
-The metadata-only validation covers tmux and Herdr before backend dispatch.
-Pi shares that backend cleanup boundary; its harness-specific hook files are cleaned only after it, so the harness needs no separate endpoint parser.
-
-## Composer classification matrix
-
-The shared composer classifier (`bin/fm-composer-lib.sh`, `fm_composer_classify_screen`) owns every composer shape fleet-wide; each backend contributes only a capture and a capability descriptor.
-The live half of that guarantee was verified on 2026-08-10 from an already-trusted checkout at the branch's final validated head, against every installed harness then covered by the empty-composer matrix on tmux 3.6a, macOS arm64, on an isolated private socket, with no prompt submitted to any harness.
-
-```sh
-FM_COMPOSER_MATRIX_LIVE=1 tests/fm-composer-matrix-live-e2e.test.sh
-```
-
-Observed output:
-
-```text
-ok - pi (0.84.1): real idle composer classifies empty
-ok - strict posture live: a blank shell row classifies unknown and injection defers
-ok - live composer-matrix guard verified 2 live surface(s)
-```
-
-The installed Pi harness's real idle composer reached a proven `empty` through the tmux foreground-process identity probe.
-The strict blank-row posture held live: a blank shell row deferred injection.
-Portable capture regressions in `tests/fm-composer-lib.test.sh` exercise each retained shape and capability profile under both a UTF-8 locale and `LC_ALL=C`.
-This guard is the refresh command after an upgrade to any matrix-covered harness; rerun it and update the versions above rather than trusting this table across releases.
-
-## Herdr
 
 The compatibility floor is protocol 14.
 The whole real-Herdr lane's latest active verification uses both Herdr 0.7.4 protocol 16 and Herdr 0.8.0 protocol 19 on macOS aarch64, while focused Herdr 0.7.5 protocol 17, earlier protocol-16, protocol-14, and 0.7.3 evidence is retained where it defines current behavior or fallbacks.
@@ -140,7 +36,7 @@ The CLI matrix was checked directly:
 | Literal send | `herdr pane send-text <pane> <text> --session <name>` | Left text unsubmitted until Enter. |
 | Keys | `herdr pane send-keys <pane> enter|escape|ctrl+c --session <name>` | Enter and Escape worked; Ctrl-C interrupted foreground work. |
 | Capture | `herdr pane read <pane> --source recent --lines N` | Small N could return empty below viewport height; a 200-line request plus local trim was stable. |
-| Native state | `herdr agent get <pane>` | Working and done transitions were visible; native `busy` remains positive activity evidence, while native `idle` cannot close a turn and the adapter's semantic lifecycle decides worker state. |
+| Native state | `herdr agent get <pane>` | Working and done transitions were visible; native `busy` remains positive activity evidence, while native `idle` cannot close a turn and the integration's semantic lifecycle decides worker state. |
 | Restart | guarded named-session stop then start | Workspace, tab, pane, and labels persisted; the agent process and registration did not. |
 | Close | `herdr pane close <pane> --session <name>` | The exact one-pane task tab closed; closing a final tab could remove the workspace. |
 
@@ -153,7 +49,7 @@ The real label-collision reproduction is owned by:
 
 ```sh
 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
-  tests/fm-backend-herdr-prune-safety-e2e.test.sh
+  tests/fm-herdr-prune-safety-e2e.test.sh
 ```
 
 Observed guarantee: a pre-existing captain-owned workspace with a seed-shaped tab was adopted for routing but its tab was never eligible for prune because the current create call did not return that seed id.
@@ -162,7 +58,7 @@ Restart-husk replacement is owned by:
 
 ```sh
 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
-  tests/fm-backend-herdr-respawn-idem-e2e.test.sh
+  tests/fm-herdr-respawn-idem-e2e.test.sh
 ```
 
 Observed guarantee: a restored no-agent tab was replaced create-before-close, while a registered live agent caused refusal.
@@ -202,7 +98,7 @@ Placement is owned by:
 
 ```sh
 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
-  tests/fm-backend-herdr-launcher-workspace-e2e.test.sh
+  tests/fm-herdr-launcher-workspace-e2e.test.sh
 ```
 
 Observed guarantees on 2026-07-30 against Herdr 0.7.5 protocol 17:
@@ -222,7 +118,7 @@ ok - real herdr E2E: teardown closes only the worker's own pane and leaves the l
 ```
 
 That suite's headline case runs `bin/fm-spawn.sh` inside a real Herdr pane, so the parent identity comes from Herdr's own injection rather than a composed environment.
-Cross-session and contradictory bindings are covered deterministically in `tests/fm-backend-herdr.test.sh`, which can script a second server's socket without provisioning one.
+Cross-session and contradictory bindings are covered deterministically in `tests/fm-herdr.test.sh`, which can script a second server's socket without provisioning one.
 
 ### Per-home and presentation topology
 
@@ -230,7 +126,7 @@ Per-home behavior is owned by:
 
 ```sh
 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
-  tests/fm-backend-herdr-workspace-per-home-e2e.test.sh
+  tests/fm-herdr-workspace-per-home-e2e.test.sh
 ```
 
 Observed guarantee: the primary and secondmate used distinct home workspaces, a child launched by the secondmate stayed in that secondmate workspace, list-live remained home-scoped, and exact cleanup did not affect sibling homes.
@@ -239,7 +135,7 @@ The complete projection suite ran on 2026-07-21 against Herdr 0.7.4 protocol 16:
 
 ```sh
 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
-  tests/fm-backend-herdr-presentation-e2e.test.sh
+  tests/fm-herdr-presentation-e2e.test.sh
 ```
 
 Observed guarantees included:
@@ -259,7 +155,7 @@ The mandatory projection suite ran again on 2026-07-24 against Herdr 0.7.5 proto
 
 ```sh
 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
-  tests/fm-backend-herdr-presentation-e2e.test.sh
+  tests/fm-herdr-presentation-e2e.test.sh
 ```
 
 Observed restart-reclaim guarantees:
@@ -276,7 +172,7 @@ The projection suite ran again on 2026-08-04 against Herdr 0.8.0 protocol 19 for
 
 ```sh
 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
-  tests/fm-backend-herdr-presentation-e2e.test.sh
+  tests/fm-herdr-presentation-e2e.test.sh
 ```
 
 Observed default and opt-out guarantees:
@@ -307,7 +203,7 @@ The focus-flash regression ran on 2026-08-05 against both Herdr 0.7.5 protocol 1
 
 ```sh
 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
-  tests/fm-backend-herdr-focus-flash-e2e.test.sh
+  tests/fm-herdr-focus-flash-e2e.test.sh
 ```
 
 Observed output on Herdr 0.7.5:
@@ -368,7 +264,7 @@ FM_HERDR_VERSION_FLOOR_LIVE_E2E=1 tests/fm-herdr-version-floor-live-e2e.test.sh
 The classifier itself, the config preference it composes with, and the one-warning-per-release behavior are pinned portably with no Herdr installed:
 
 ```sh
-tests/fm-backend-herdr.test.sh
+tests/fm-herdr.test.sh
 ```
 
 Observed guarantees: every measured release classifies as the table records; either the protocol or the version signal alone carries an at-or-above verdict, and each divergent pair flips once the carrying signal is removed; client and running selected-session server verdicts compose conservatively, an unreadable server-running state and losing both release signals report indeterminate and fall back flat, the default is rechecked after server ensure before projection publication, an unconfigured home is projected only at or above the floor, an explicit `on`, including the historical empty opt-in file, is honored below it, and the below-floor warning is emitted once per home per detected release rather than once per spawn.
@@ -395,7 +291,7 @@ Direct lab probes on 2026-07-28 established the removal rules the emptying-close
 - Ending a workspace's lone shell preserved the focused workspace exactly when the dying workspace sat behind it or the focused workspace was last, and moved focus to the focused workspace's right neighbor otherwise.
 - The production focus-preserving close in the dangerous geometry repositioned the doomed workspace, ended its proved shell, and left every concurrent focus sample on the exact anchor with no corrective `tab focus` issued.
 
-Two real-hardware conditions were required for the pane-death path to engage and are now encoded in the adapter and its unit fixtures: BSD `ps` reports a login shell's `comm` as `-zsh`, and an idle shell transiently hosts a prompt helper (starship) as a second foreground process immediately after a `workspace.move` relayout, which the bounded settle window absorbs.
+Two real-hardware conditions were required for the pane-death path to engage and are now encoded in the integration and its unit fixtures: BSD `ps` reports a login shell's `comm` as `-zsh`, and an idle shell transiently hosts a prompt helper (starship) as a second foreground process immediately after a `workspace.move` relayout, which the bounded settle window absorbs.
 
 The rules match the v0.7.5 tag source (`close_selected_workspace` reassigns focus from the closing workspace's index; `handle_pane_died` only clamps the stale focused index), and the upstream default branch resolves both paths by workspace id (PR #1877, commit `165dca45`, for the explicit close; PR #1912, commit `a979916`, for pane death), so the plan degrades to a harmless reorder-then-remove once a release carries them.
 
@@ -405,7 +301,7 @@ The teardown-level record-retention gate was verified on 2026-07-28 with metadat
 
 ```sh
 tests/fm-teardown.test.sh
-tests/fm-backend-herdr.test.sh
+tests/fm-herdr.test.sh
 ```
 
 Observed guarantees: a contended presentation lock refused the teardown before the isolated copy was returned, with the task branch, every durable record, and the endpoint intact and no pane close attempted; the retry after the contention cleared returned the copy, closed the pane under the lock, and removed the records; an unknown structured-presence result after an attempted projected close retained the journal and every record with a nonzero exit; and every presence-gate mode accepted only a structured not-found as gone.
@@ -444,7 +340,7 @@ The protocol-16 event path was measured on 2026-07-11 with Herdr 0.7.3 and Pytho
 
 ```sh
 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
-  tests/fm-backend-herdr-eventwait-smoke.test.sh
+  tests/fm-herdr-eventwait-smoke.test.sh
 ```
 
 Observed output:
@@ -457,12 +353,37 @@ ok - real herdr: the watcher fast-path enqueues a stale wake naming the task win
 
 Polling remained active and is covered as the fallback for capability, connect, subscribe, and repeated reader failure.
 
-### Agent lifecycle control
+### Sole-path spawn and cleanup revalidation
 
-Herdr is one of the two backends whose recovery-grade agent-state classifier the control plane may trust ([agent-control.md](../agent-control.md)), so its lifecycle gating is measured against the real binary; reverified 2026-08-08 on Herdr 0.8.0, and first measured 2026-08-02 on Herdr 0.7.5 with identical results:
+Reverified on 2026-08-21 with absent runtime selection, Pi 0.84.2, and Herdr 0.8.0 protocol 19.
+The task-specific lab was provisioned and removed only through `/Users/control/firstmate/bin/fm-herdr-lab.sh`; its captured status was:
+
+```text
+{"client":{"version":"0.8.0","channel":"stable","protocol":19,"binary":"/Users/control/.local/bin/herdr","session":"fm-lab-remove-tmux-herd-10551-25664"},"server":{"status":"running","running":true,"version":"0.8.0","protocol":19,"capabilities":{"live_handoff":true,"detached_server_daemon":false},"compatible":true,"socket":"/Users/control/.config/herdr/sessions/fm-lab-remove-tmux-herd-10551-25664/herdr.sock","session":"fm-lab-remove-tmux-herd-10551-25664","restart_needed":false}}
+```
+
+Exact cleanup command and output:
 
 ```sh
-tests/fm-control-herdr-smoke.test.sh
+HERDR_LAB_HELPER='/Users/control/firstmate/bin/fm-herdr-lab.sh' \
+  bash tests/fm-herdr-default-smoke.test.sh
+```
+
+```text
+ok - real Herdr: fm-spawn.sh uses Herdr with no runtime selection
+ok - real herdr: default Herdr spawn records explicit backend=herdr and herdr_session/workspace/tab/pane fields in meta
+ok - real herdr: the default Herdr spawn's launch command actually ran in the herdr pane
+ok - real herdr: teardown completes the default Herdr spawn/teardown cycle (meta cleared, pane closed)
+ok - real herdr: isolated lab session removed and default fleet session unchanged
+```
+
+### Agent lifecycle control
+
+Herdr's recovery-grade agent-state classifier is the process-control authority ([agent-control.md](../agent-control.md)), so its lifecycle gating is measured against the real binary; reverified 2026-08-21 on Herdr 0.8.0, and first measured 2026-08-02 on Herdr 0.7.5 with identical results:
+
+```sh
+HERDR_LAB_HELPER='/Users/control/firstmate/bin/fm-herdr-lab.sh' \
+  bash tests/fm-control-herdr-smoke.test.sh
 ```
 
 Observed output:
@@ -475,7 +396,7 @@ ok - real herdr: no control verb removed the endpoint or the task's local copy
 ok - real herdr: an agent that does not stop fails closed instead of being reported as stopped
 ```
 
-The registry read through `herdr pane report-agent` is the same source `fm_backend_herdr_agent_state` classifies, so registering and not registering an agent on a plain shell pane exercises exactly the gate every lifecycle verb depends on, with no real agent launched.
+The registry read through `herdr pane report-agent` is the same source `fm_herdr_agent_state` classifies, so registering and not registering an agent on a plain shell pane exercises exactly the gate every lifecycle verb depends on, with no real agent launched.
 That command is the guard that refreshes this record; run it after every Herdr upgrade rather than trusting the version above.
 
 ### Away-mode transport
@@ -489,3 +410,85 @@ FM_AFK_PI_HERDR_E2E=1 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
 
 Observed guarantees: pending composer input refused injection and raised one alert; idle Pi accepted one marked escalation; the return gate refused ordinary work while a live blocker remained; resolving the blocker allowed the return flow.
 The dedicated Herdr daemon workspace topology is covered by `tests/fm-afk-launch.test.sh` and preserves the captain tab's pane count.
+
+## 2026-08-21 Herdr-only completion evidence
+
+The final portable session-path run used:
+
+```sh
+bin/fm-test-run.sh --family herdr-session --json /tmp/remove-tmux-portable.json
+```
+
+```text
+FM_TEST_SUMMARY total=12 failed=0 skipped_gate=0 duration_ms=528519
+FM_TEST_SUMMARY_FAMILY family=herdr-session count=12 duration_ms=527773 failed=0
+```
+
+Remote and local Secondmate routing used:
+
+```sh
+bin/fm-test-run.sh tests/fm-secondmate-safety.test.sh tests/fm-remote-secondmate-lifecycle-e2e.test.sh tests/fm-remote-secondmate-parent-binding.test.sh tests/fm-remote-secondmate-trace-context.test.sh tests/fm-secondmate-harness.test.sh --json /tmp/remove-tmux-secondmate.json
+```
+
+```text
+FM_TEST_SUMMARY total=5 failed=0 skipped_gate=0 duration_ms=185371
+FM_TEST_SUMMARY_FAMILY family=secondmate count=4 duration_ms=152930 failed=0
+FM_TEST_SUMMARY_FAMILY family=unclassified count=1 duration_ms=32145 failed=0
+```
+
+Watcher durability, native transition fallback, and away-mode guards used:
+
+```sh
+bin/fm-test-run.sh tests/fm-watch-triage.test.sh tests/fm-wake-queue.test.sh tests/fm-supervision-events.test.sh tests/fm-daemon.test.sh --json /tmp/remove-tmux-supervision.json
+```
+
+```text
+FM_TEST_SUMMARY total=4 failed=0 skipped_gate=0 duration_ms=125766
+FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=4 duration_ms=125550 failed=0
+```
+
+Strict tracked-extension checking used TypeScript 5.9.3:
+
+```sh
+npm install --silent --no-audit --no-fund --prefix /tmp/fm-typescript-check typescript@5.9.3
+PATH="/tmp/fm-typescript-check/node_modules/.bin:$PATH" bash tests/fm-pi-primary-types.test.sh
+```
+
+```text
+ok - tracked Pi extensions pass strict no-emit typecheck against Pi 0.84.2
+```
+
+Repository lint and documentation checks used:
+
+```sh
+bin/fm-lint.sh
+bin/fm-doc-audience-check.sh
+```
+
+```text
+fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
+fm-doc-audience-check: ok surfaces=52 local_links=168
+```
+
+Tracked physical line counts were measured with deleted paths excluded:
+
+```sh
+count_paths() { local n=0 files=0 f lines; while IFS= read -r f; do [ -f "$f" ] || continue; lines=$(wc -l < "$f"); n=$((n+lines)); files=$((files+1)); done; printf '%s %s\n' "$n" "$files"; }
+printf 'all '; git ls-files | count_paths
+printf 'bin '; git ls-files 'bin/**' | count_paths
+printf 'tests '; git ls-files 'tests/**' | count_paths
+printf 'pi '; { git ls-files '.pi/extensions/**'; git ls-files '.pi/worker-extensions/**'; } | sort -u | count_paths
+printf 'agents '; wc -l < AGENTS.md
+git diff HEAD --numstat | awk '{a+=$1;d+=$2} END{print "added="a,"deleted="d,"net="a-d}'
+```
+
+```text
+all 130424 316
+bin 54045 127
+tests 56030 118
+pi 2045 9
+agents 562
+added=5050 deleted=31830 net=-26780
+```
+
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 26,780 lines smaller.

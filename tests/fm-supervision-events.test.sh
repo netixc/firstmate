@@ -4,7 +4,7 @@
 # handle_push_transition in bin/fm-push-transition-lib.sh). The watcher's source
 # guard lets this file source it to load
 # the functions WITHOUT acquiring the singleton lock or entering the blocking
-# loop; wake/sleep and the backend dispatchers are overridden so the exemptions,
+# loop; wake/sleep and the Herdr primitives are overridden so the exemptions,
 # capability memo, and fail-closed disable are asserted deterministically with no
 # real herdr, watcher process, or blocking sleeps.
 set -u
@@ -43,14 +43,14 @@ reset_state() {
 }
 
 mkrec() {  # <pane_id> <status>
-  fm_transition_record "$1" "wG" "" "$2" pi
+  fm_herdr_transition_record "$1" "wG" "" "$2" pi
 }
 
 # --- handle_push_transition: enqueue + wake for a non-paused blocked crew -----
 
 reset_state
 fm_write_meta "$STATE_DIR/tk1.meta" "window=default:wG:pQ" "backend=herdr" "kind=ship"
-handle_push_transition herdr default "$(mkrec wG:pQ blocked)"
+handle_push_transition default "$(mkrec wG:pQ blocked)"
 [ -e "$STATE_DIR/.wake-queue" ] || fail "handle_push_transition should enqueue a wake for a blocked crew"
 grep -q 'stale' "$STATE_DIR/.wake-queue" || fail "the enqueued wake must be a stale record: $(cat "$STATE_DIR/.wake-queue")"
 grep -q 'default:wG:pQ' "$STATE_DIR/.wake-queue" || fail "the stale record must name the crew's window"
@@ -64,7 +64,7 @@ fm_write_meta "$STATE_DIR/tk1.meta" "window=default:wG:pQ" "backend=herdr" "kind
 (
   # shellcheck disable=SC2329 # Runtime override called by the isolated production owner.
   fm_wake_append() { return 1; }
-  handle_push_transition herdr default "$(mkrec wG:pQ blocked)"
+  handle_push_transition default "$(mkrec wG:pQ blocked)"
 ) >/dev/null 2>&1 || true
 [ ! -e "$STATE_DIR/.herdr-escalated-default_wG_pQ" ] || fail "a failed durable enqueue must leave the blocked edge eligible for reconnect reconciliation"
 pass "handle_push_transition: enqueue failure cannot commit the Herdr dedupe marker"
@@ -74,7 +74,7 @@ pass "handle_push_transition: enqueue failure cannot commit the Herdr dedupe mar
 reset_state
 fm_write_meta "$STATE_DIR/tk2.meta" "window=default:wG:pQ" "backend=herdr" "kind=ship"
 printf 'paused: waiting on the upstream release\n' > "$STATE_DIR/tk2.status"
-handle_push_transition herdr default "$(mkrec wG:pQ blocked)"
+handle_push_transition default "$(mkrec wG:pQ blocked)"
 if [ -e "$STATE_DIR/.wake-queue" ] && grep -q 'stale' "$STATE_DIR/.wake-queue"; then
   fail "a declared-pause crew must NOT be fast-escalated: $(cat "$STATE_DIR/.wake-queue")"
 fi
@@ -88,9 +88,9 @@ reset_state
 fm_write_meta "$STATE_DIR/tk3.meta" "window=default:wG:pQ" "backend=herdr" "kind=ship"
 fm_write_meta "$STATE_DIR/sm1.meta" "window=default:wA:pS" "backend=herdr" "kind=secondmate"
 # shellcheck disable=SC2329 # Runtime overrides called by the isolated watcher.
-fm_backend_events_capable() { return 0; }
+fm_herdr_events_capable() { return 0; }
 # shellcheck disable=SC2329 # Runtime overrides called by the isolated watcher.
-fm_backend_wait_transition() { shift 4; printf '%s\n' "$*" > "$TMP/panes"; return 1; }
+fm_herdr_wait_transition() { shift 3; printf '%s\n' "$*" > "$TMP/panes"; return 1; }
 event_wait_or_sleep
 PANES=$(cat "$TMP/panes" 2>/dev/null || true)
 case "$PANES" in *"default:wG:pQ"*) : ;; *) fail "the ship window must be in the event pane list, got '$PANES'" ;; esac
@@ -101,10 +101,10 @@ reset_state
 fm_write_meta "$STATE_DIR/tk3.meta" "window=default:wG:pQ" "backend=herdr" "kind=ship"
 CAP_CALLS=0
 # shellcheck disable=SC2329 # Runtime overrides called by the isolated watcher.
-fm_backend_events_capable() { CAP_CALLS=$((CAP_CALLS + 1)); return 0; }
+fm_herdr_events_capable() { CAP_CALLS=$((CAP_CALLS + 1)); return 0; }
 # shellcheck disable=SC2329 # Runtime overrides called by the isolated watcher.
-fm_backend_wait_transition() {
-  [ "${FM_BACKEND_EVENTS_CAPABILITY_CONFIRMED:-0}" = 1 ] || fail "cached capability verdict was not passed to the wait"
+fm_herdr_wait_transition() {
+  [ "${FM_HERDR_EVENTS_CAPABILITY_CONFIRMED:-0}" = 1 ] || fail "cached capability verdict was not passed to the wait"
   return 1
 }
 event_wait_or_sleep
@@ -112,16 +112,16 @@ event_wait_or_sleep
 [ "$CAP_CALLS" = 1 ] || fail "capability probe must be memoized across waits, got $CAP_CALLS calls"
 pass "event_wait_or_sleep: one cached capability probe owns validation across bounded waits"
 
-# --- event_wait_or_sleep: a tmux-only home never runs the event path ----------
+# --- event_wait_or_sleep: a retired fieldless home never runs the event path ----------
 
 reset_state
-fm_write_meta "$STATE_DIR/tk4.meta" "window=fmses:fm-tk4" "kind=ship"   # no backend= -> tmux
+fm_write_meta "$STATE_DIR/tk4.meta" "window=fmses:fm-tk4" "kind=ship"   # no backend= -> retired legacy metadata
 # shellcheck disable=SC2329 # Runtime override called by the isolated watcher.
-fm_backend_wait_transition() { printf 'CALLED\n' > "$TMP/wtcalled"; return 1; }
+fm_herdr_wait_transition() { printf 'CALLED\n' > "$TMP/wtcalled"; return 1; }
 event_wait_or_sleep
-[ ! -e "$TMP/wtcalled" ] || fail "a tmux-only home must never invoke the event wait path"
-grep -q 'SLEEP' "$SLEEP_LOG" || fail "a tmux-only home must sleep POLL exactly as before"
-pass "event_wait_or_sleep: a home with no push-capable window is inert (sleeps POLL, never touches the event path)"
+[ ! -e "$TMP/wtcalled" ] || fail "a retired fieldless home must never invoke the event wait path"
+grep -q 'SLEEP' "$SLEEP_LOG" || fail "a retired fieldless home must sleep POLL exactly as before"
+pass "event_wait_or_sleep: a home with no current Herdr window is inert (sleeps POLL, never touches the event path)"
 
 # --- event_wait_or_sleep: runtime failures disable the event path (fail-closed)
 
@@ -129,9 +129,9 @@ reset_state
 fm_write_meta "$STATE_DIR/tk5.meta" "window=default:wG:pQ" "backend=herdr" "kind=ship"
 export EVENT_CAP_FAIL_MAX=2
 # shellcheck disable=SC2329 # Runtime overrides called by the isolated watcher.
-fm_backend_events_capable() { return 0; }
+fm_herdr_events_capable() { return 0; }
 # shellcheck disable=SC2329 # Runtime overrides called by the isolated watcher.
-fm_backend_wait_transition() { printf 'WT\n' >> "$TMP/wtcalls"; return 2; }
+fm_herdr_wait_transition() { printf 'WT\n' >> "$TMP/wtcalls"; return 2; }
 : > "$TMP/wtcalls"
 event_wait_or_sleep   # fails=1
 event_wait_or_sleep   # fails=2 -> disable

@@ -323,8 +323,8 @@ fi
 
 PRIMARY_HARNESS=$("$SCRIPT_DIR/fm-harness.sh" 2>/dev/null || printf unknown)
 
-# shellcheck source=bin/fm-backend.sh
-. "$SCRIPT_DIR/fm-backend.sh"
+# shellcheck source=bin/fm-herdr.sh
+. "$SCRIPT_DIR/fm-herdr.sh"
 # shellcheck source=bin/fm-tasks-axi-lib.sh
 . "$SCRIPT_DIR/fm-tasks-axi-lib.sh"
 # shellcheck source=bin/fm-public-followup-lib.sh
@@ -795,13 +795,15 @@ for meta in "$STATE"/*.meta; do
   cat "$meta"
 
   window=$(fm_meta_get "$meta" window)
-  target=$(fm_backend_target_of_meta "$meta")
+  target=$(fm_endpoint_target_of_meta "$meta")
   if [ -n "$window" ]; then
-    backend=$(fm_backend_of_meta "$meta")
-    if fm_backend_target_exists "$backend" "${target:-$window}" "fm-$id"; then
-      printf 'endpoint: alive (backend=%s window=%s)\n' "$backend" "$window"
+    backend=$(fm_herdr_meta_kind "$meta")
+    if [ "$backend" != herdr ]; then
+      printf 'endpoint: unknown (%s record preserved for manual reconciliation; window=%s)\n' "$backend" "$window"
+    elif fm_herdr_target_exists "$target"; then
+      printf 'endpoint: alive (Herdr window=%s)\n' "$window"
     else
-      printf 'endpoint: dead (backend=%s window=%s)\n' "$backend" "$window"
+      printf 'endpoint: dead (Herdr window=%s)\n' "$window"
     fi
   else
     printf 'endpoint: unknown (no window recorded)\n'

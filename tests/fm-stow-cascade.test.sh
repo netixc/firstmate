@@ -50,23 +50,28 @@ esac
 SH
 chmod +x "$FAKEBIN/fake-ssh"
 
-# A tmux whose pane reports a running agent, so the local endpoint probe has a
-# real backend read to classify rather than a stubbed verdict.
-cat > "$FAKEBIN/tmux" <<'SH'
+# Structured Herdr responses provide recovery-grade local Pi liveness.
+cat > "$FAKEBIN/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
-case "$*" in
-  *list-windows*) printf '%s\n' "${FM_FAKE_TMUX_WINDOW:-}" ;;
-  *list-panes*) printf '%s\n' "${FM_FAKE_TMUX_PANE:-}" ;;
-  *display-message*'#{pane_current_command}'*) printf '%s\n' "${FM_FAKE_TMUX_COMMAND:-pi}" ;;
-  *display-message*'#{pane_pid}'*) printf '%s\n' "$$" ;;
-  *display-message*'#{pane_id}'*) printf '%s\n' '%1' ;;
-  *display-message*'#{cursor_y}'*) printf '%s\n' 1 ;;
-  *capture-pane*) printf '╭────╮\n│ >  │\n╰────╯\n' ;;
+case "${1:-} ${2:-}" in
+  "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
+  "pane get") printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "${3:-}" ;;
+  "agent get") printf '{"result":{"agent":{"agent_status":"idle","provider":"pi"}}}\n' ;;
 esac
-exit 0
 SH
-chmod +x "$FAKEBIN/tmux"
+chmod +x "$FAKEBIN/herdr"
+
+write_secondmate_meta() { # <meta> <home> [target] [parent] [harness]
+  local meta=$1 home=$2 target=${3:-lab:w1:p1} parent=${4:-main} harness=${5:-pi} id rest
+  id=$(basename "$meta" .meta)
+  case "$target" in *:*:*) ;; *) target="lab:w-$id:p1" ;; esac
+  rest=${target#*:}
+  fm_write_meta "$meta" "backend=herdr" "window=$target" "endpoint_task_id=$id" \
+    "herdr_session=${target%%:*}" "herdr_workspace_id=${rest%%:*}" \
+    "herdr_tab_id=t-$id" "herdr_pane_id=$rest" "worktree=$home" \
+    "project=$home" "home=$home" "kind=secondmate" "harness=$harness" "parent=$parent"
+}
 
 # new_home <name> [budget] -> path to a seeded local secondmate home.
 new_home() {
@@ -173,8 +178,8 @@ test_every_registered_home_is_enumerated_exactly_once() {
   } > "$primary/data/secondmates.md"
   # Two live endpoint records naming the same home must not multiply its stanza:
   # the registry, not the endpoint inventory, is the enumeration source.
-  fm_write_secondmate_meta "$primary/state/enum-a.meta" "$a"
-  fm_write_secondmate_meta "$primary/state/enum-a-stale.meta" "$a"
+  write_secondmate_meta "$primary/state/enum-a.meta" "$a"
+  write_secondmate_meta "$primary/state/enum-a-stale.meta" "$a"
 
   set +e
   out=$(run_cascade "$primary")
@@ -212,14 +217,13 @@ test_transport_routes_by_placement_and_liveness() {
     local_record idle-local "$idle"
     remote_record remote-live remote-mac "$TMP_ROOT/remote-root" "$remote"
   } > "$primary/data/secondmates.md"
-  fm_write_secondmate_meta "$primary/state/live-local.meta" "$live" 'firstmate:fm-live-local' alpha pi
-  fm_write_secondmate_meta "$primary/state/remote-live.meta" "$remote" 'fm-remote:fm-remote-live' alpha pi
+  write_secondmate_meta "$primary/state/live-local.meta" "$live" 'firstmate:fm-live-local' alpha pi
+  write_secondmate_meta "$primary/state/remote-live.meta" "$remote" 'fm-remote:fm-remote-live' alpha pi
   printf 'role=secondmate\neffective_budget_tokens=7500\ntotal_estimated_tokens=100\nbudget_status=within-budget\n' \
     > "$TMP_ROOT/remote-budget.txt"
 
   set +e
   out=$(run_cascade "$primary" \
-    FM_FAKE_TMUX_WINDOW='fm-live-local' \
     FM_FAKE_REMOTE_BUDGET="$TMP_ROOT/remote-budget.txt" \
     FM_FAKE_REMOTE_AGENT_STATE=alive)
   set -e
@@ -239,7 +243,6 @@ test_transport_routes_by_placement_and_liveness() {
 
   set +e
   out=$(run_cascade "$primary" \
-    FM_FAKE_TMUX_WINDOW='fm-live-local' \
     FM_FAKE_REMOTE_BUDGET="$TMP_ROOT/remote-budget.txt" \
     FM_FAKE_REMOTE_AGENT_STATE=dead)
   set -e
@@ -299,7 +302,7 @@ test_a_slow_remote_is_bounded_and_the_rest_still_report() {
     remote_record bounded-remote remote-mac "$TMP_ROOT/remote-root" "$remote"
     local_record bounded-local "$home"
   } > "$primary/data/secondmates.md"
-  fm_write_secondmate_meta "$primary/state/bounded-remote.meta" "$remote" 'fm-remote:fm-bounded-remote'
+  write_secondmate_meta "$primary/state/bounded-remote.meta" "$remote" 'fm-remote:fm-bounded-remote'
   printf 'role=secondmate\n' > "$TMP_ROOT/remote-budget.txt"
 
   started=$(date +%s)

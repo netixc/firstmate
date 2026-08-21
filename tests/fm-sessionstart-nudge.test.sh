@@ -137,7 +137,7 @@ test_owned_lock_is_silent() {
 # fm-session-start.sh can execute: a git repo on main so the tangle check
 # behaves, plus the home directories the digest reads. The deliberately bare
 # PATH keeps every bootstrap probe fast and hermetic - it reports missing tools
-# instead of reaching the host's real gh/tmux/tasks-axi.
+# instead of reaching the host's real gh/Herdr/tasks-axi.
 RUN_PATH=${FM_TEST_BASE_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
 
 make_run_primary() {

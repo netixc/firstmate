@@ -12,8 +12,8 @@
 # verbs addressed to an exact task id, with the per-harness mechanics owned
 # here rather than improvised per harness in agent prose.
 #
-# This file owns three capability tables and nothing else.
-# It has no side effects, runs no backend command, and reads no state, so it can
+# This file owns two capability tables and nothing else.
+# It has no side effects, runs no session command, and reads no state, so it can
 # be sourced by a test as a pure contract:
 #
 #   1. Verb allowlist. There is no arbitrary-text and no generic raw-key entry
@@ -24,11 +24,9 @@
 #      These are the empirically verified facts previously carried only in the
 #      harness-adapters skill's per-adapter tables; that skill now points here
 #      so one executable owner holds them.
-#   3. Per-backend capability: which named keys a runtime backend can deliver,
-#      and whether the backend has a recovery-grade agent-state classifier
-#      (bin/fm-backend.sh's fm_backend_agent_state) able to PROVE that an agent
-#      stopped. A verb whose postcondition cannot be proven on the recorded
-#      backend is refused rather than performed blind.
+# Herdr owns key delivery and recovery-grade process state. A verb whose
+# postcondition cannot be proven by those direct primitives is refused rather
+# than performed blind.
 #
 # `resume` is deliberately NOT a verb. Pi has no verified pane-resume
 # contract. `relaunch` covers the same need deterministically,
@@ -92,24 +90,4 @@ fm_control_exit_command() {  # <harness>
     pi) printf '/quit' ;;
     *) return 1 ;;
   esac
-}
-
-# Which named keys a backend adapter can deliver.
-fm_control_backend_supports_key() {  # <backend> <key>
-  local backend=${1-} key=${2-}
-  case "$backend" in
-    tmux|herdr)
-      case "$key" in Escape|Enter|C-c) return 0 ;; esac
-      ;;
-  esac
-  return 1
-}
-
-# Whether <backend> has a recovery-grade agent-state classifier.
-# Both supported backends implement fm_backend_agent_state.
-fm_control_backend_state_verified() {  # <backend>
-  case "${1-}" in
-    tmux|herdr) return 0 ;;
-  esac
-  return 1
 }

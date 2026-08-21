@@ -26,7 +26,7 @@ export FM_HERDR_SESSION_CLEANUP_SOURCE_ONLY=1
 unset FM_HERDR_SESSION_CLEANUP_SOURCE_ONLY
 
 # The idle-shell proof now lives in the backend as
-# fm_backend_herdr_pane_idle_shell_pid; prove it still reads Linux argv
+# fm_herdr_pane_idle_shell_pid; prove it still reads Linux argv
 # arrays (no argv0 field) and rejects malformed executable identities.
 FAKE_PS="$TMP_ROOT/fake-ps"
 cat > "$FAKE_PS" <<'SH'
@@ -41,15 +41,15 @@ chmod +x "$FAKE_PS"
 LINUX_PROCESS_INFO='{"result":{"type":"pane_process_info","process_info":{"pane_id":"w2:p1","shell_pid":67,"foreground_process_group_id":67,"foreground_processes":[{"argv":["/bin/sh"],"name":"sh","pid":67}]}}}'
 argv_pid=$(
   # shellcheck disable=SC2329 # invoked indirectly by the idle-shell proof.
-  fm_backend_herdr_cli() { printf '%s\n' "$LINUX_PROCESS_INFO"; }
-  FM_HERDR_PS_BIN="$FAKE_PS" fm_backend_herdr_pane_idle_shell_pid test w2:p1
+  fm_herdr_cli() { printf '%s\n' "$LINUX_PROCESS_INFO"; }
+  FM_HERDR_PS_BIN="$FAKE_PS" fm_herdr_pane_idle_shell_pid test w2:p1
 ) || fail "Linux Herdr process argv array was not accepted"
 [ "$argv_pid" = 67 ] || fail "idle-shell proof printed the wrong shell pid: $argv_pid"
 if (
   # shellcheck disable=SC2329 # invoked indirectly by the idle-shell proof.
-  fm_backend_herdr_cli() { printf '%s\n' '{"result":{"type":"pane_process_info","process_info":{"pane_id":"w2:p1","shell_pid":67,"foreground_process_group_id":67,"foreground_processes":[{"argv":[67],"name":"sh","pid":67}]}}}'; }
-  FM_HERDR_PS_BIN="$FAKE_PS" FM_BACKEND_HERDR_IDLE_SHELL_PROOF_POLLS=1 \
-    fm_backend_herdr_pane_idle_shell_pid test w2:p1
+  fm_herdr_cli() { printf '%s\n' '{"result":{"type":"pane_process_info","process_info":{"pane_id":"w2:p1","shell_pid":67,"foreground_process_group_id":67,"foreground_processes":[{"argv":[67],"name":"sh","pid":67}]}}}'; }
+  FM_HERDR_PS_BIN="$FAKE_PS" FM_HERDR_IDLE_SHELL_PROOF_POLLS=1 \
+    fm_herdr_pane_idle_shell_pid test w2:p1
 ) >/dev/null 2>&1; then
   fail "non-string Herdr process argv was accepted"
 fi
@@ -66,16 +66,15 @@ LOCK_LOG="$TMP_ROOT/locks.log"
 CLOSE_LOG="$TMP_ROOT/closes.log"
 mkdir -p "$FIXTURE_DIR"
 
-fm_backend_name() { printf herdr; }
-fm_backend_herdr_session() { printf test; }
-fm_backend_herdr_presentation_session_lock_path() { printf '%s/presentation.lock' "$TMP_ROOT"; }
+fm_herdr_session() { printf test; }
+fm_herdr_presentation_session_lock_path() { printf '%s/presentation.lock' "$TMP_ROOT"; }
 fm_lock_try_acquire() {
   printf '%s\n' "$1" >> "$LOCK_LOG"
   mkdir "$1" 2>/dev/null
 }
 fm_lock_release() { rm -rf -- "$1"; }
-fm_backend_herdr_pane_idle_shell_pid() { [ ! -e "$FIXTURE_DIR/process-unsafe" ] && printf '67\n'; }
-fm_backend_herdr_projection_focus_snapshot() {
+fm_herdr_pane_idle_shell_pid() { [ ! -e "$FIXTURE_DIR/process-unsafe" ] && printf '67\n'; }
+fm_herdr_projection_focus_snapshot() {
   [ ! -e "$FIXTURE_DIR/focus-unreadable" ] || return 1
   printf 'w1\t%s' "$(cat "$FIXTURE_DIR/active-tab")"
 }
@@ -128,7 +127,7 @@ fixture_panes() {
   printf ']'
 }
 
-fm_backend_herdr_cli() {
+fm_herdr_cli() {
   local _session=$1 first=${2:-} second=${3:-} title tabs panes
   shift
   [ ! -e "$FIXTURE_DIR/error-${first}-${second}" ] || return 1
@@ -186,7 +185,7 @@ fm_backend_herdr_cli() {
   esac
 }
 
-fm_backend_herdr_projection_close_pane_focus_preserving() {
+fm_herdr_projection_close_pane_focus_preserving() {
   [ ! -e "$FIXTURE_DIR/focus-refuse" ] || return 1
   [ "${3:-}" = no-agent ] || return 1
   printf '%s\n' "$*" >> "$CLOSE_LOG"

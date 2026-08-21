@@ -18,7 +18,7 @@ set -u
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-supervise-daemon.sh"
 # shellcheck source=/dev/null
-. "$ROOT/bin/fm-backend.sh"
+. "$ROOT/bin/fm-herdr.sh"
 
 if [ "${FM_AFK_PI_HERDR_E2E:-0}" != 1 ]; then
   echo "skip: set FM_AFK_PI_HERDR_E2E=1 to run the real Pi/Herdr away-return regression"
@@ -201,7 +201,7 @@ for _ in $(seq 1 100); do [ -s "$STATE/.supervise-daemon.pid" ] && break; sleep 
 # the live child emits blocked:, then wait through max-defer.
 "$LAB_HELPER" run "$SESSION" pane send-text "$PRIMARY_PANE" 'privacy safe human draft' >/dev/null
 sleep 0.5
-composer=$(PATH="$FAKEBIN:$ORIGINAL_PATH" HERDR_SESSION="$SESSION" fm_backend_composer_state herdr "$PRIMARY_TARGET")
+composer=$(PATH="$FAKEBIN:$ORIGINAL_PATH" HERDR_SESSION="$SESSION" fm_herdr_composer_state "$PRIMARY_TARGET")
 [ "$composer" = pending ] || fail "real Pi draft did not classify pending (got $composer)"
 CHILD_CMD=$(printf "printf 'blocked [key=synthetic-dependency]: firstmate can refresh the synthetic token\\n' >> %q; exec sleep 120" "$STATE/repair-task.status")
 "$LAB_HELPER" run "$SESSION" pane run "$CHILD_PANE" "$CHILD_CMD" >/dev/null
@@ -222,7 +222,7 @@ pass "real Pi/Herdr pending composer refuses injection without forced submit and
 "$LAB_HELPER" run "$SESSION" pane send-keys "$PRIMARY_PANE" ctrl+c >/dev/null
 wait_for_idle || fail "real Pi did not return idle after clearing the draft"
 for _ in $(seq 1 80); do
-  composer=$(PATH="$FAKEBIN:$ORIGINAL_PATH" HERDR_SESSION="$SESSION" fm_backend_composer_state herdr "$PRIMARY_TARGET")
+  composer=$(PATH="$FAKEBIN:$ORIGINAL_PATH" HERDR_SESSION="$SESSION" fm_herdr_composer_state "$PRIMARY_TARGET")
   [ "$composer" = empty ] && break
   sleep 0.1
 done
@@ -245,7 +245,7 @@ pass "real idle Pi/Herdr accepts one marked escalation promptly, verifies submit
 # captured byte-exact, then the public return owner must gate it on the blocker.
 wait_for_idle || fail "real Pi did not settle after the injected catch-up"
 for _ in $(seq 1 80); do
-  composer=$(PATH="$FAKEBIN:$ORIGINAL_PATH" HERDR_SESSION="$SESSION" fm_backend_composer_state herdr "$PRIMARY_TARGET")
+  composer=$(PATH="$FAKEBIN:$ORIGINAL_PATH" HERDR_SESSION="$SESSION" fm_herdr_composer_state "$PRIMARY_TARGET")
   [ "$composer" = empty ] && break
   sleep 0.1
 done

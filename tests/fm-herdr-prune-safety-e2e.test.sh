@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# tests/fm-backend-herdr-prune-safety-e2e.test.sh - isolated real-herdr
+# tests/fm-herdr-prune-safety-e2e.test.sh - isolated real-herdr
 # regression test for the 2026-07-02 self-kill incident and its fix
-# (bin/backends/herdr.sh's created-vs-adopted default-tab-prune gate; see
+# (bin/fm-herdr.sh's created-vs-adopted default-tab-prune gate; see
 # docs/herdr-backend.md "Default-tab prune" / the incident writeup there).
 #
 # Reproduces the exact collision shape against a private, throwaway
@@ -13,7 +13,7 @@
 # create_task path and asserts the live pane (and its live process) survive
 # untouched. Also exercises the normal happy path (a genuinely fresh
 # workspace's seeded default tab gets pruned, leaving exactly one clean
-# fm-<id> task tab), mirroring tests/fm-backend-herdr-smoke.test.sh's broader
+# fm-<id> task tab), mirroring tests/fm-herdr-smoke.test.sh's broader
 # coverage but scoped tightly to this one safety property.
 #
 # Safety (tests/herdr-test-safety.sh): cleanup uses ONLY
@@ -49,10 +49,9 @@ trap cleanup_all EXIT
 fm_herdr_lab_prepare "$SESSION" || fail "could not prepare isolated Herdr lab session"
 
 # shellcheck source=/dev/null
-. "$ROOT/bin/fm-backend.sh"
-fm_backend_source herdr || fail "fm_backend_source herdr failed"
+. "$ROOT/bin/fm-herdr.sh"
 
-fm_backend_herdr_version_check || fail "version_check failed against the real installed herdr"
+fm_herdr_version_check || fail "version_check failed against the real installed herdr"
 
 # --- 1. reproduce the label-collision startup-workspace shape ---------------
 # Explicitly label the startup workspace "firstmate" to create the collision
@@ -63,9 +62,9 @@ fm_backend_herdr_version_check || fail "version_check failed against the real in
 LIVE_CWD="$SCRATCH/firstmate"
 mkdir -p "$LIVE_CWD"
 
-fm_backend_herdr_server_ensure "$SESSION" || fail "could not start the isolated session's server"
+fm_herdr_server_ensure "$SESSION" || fail "could not start the isolated session's server"
 
-CREATE_OUT=$(fm_backend_herdr_cli "$SESSION" workspace create --cwd "$LIVE_CWD" --label firstmate --no-focus) \
+CREATE_OUT=$(fm_herdr_cli "$SESSION" workspace create --cwd "$LIVE_CWD" --label firstmate --no-focus) \
   || fail "could not create the label-collision startup workspace"
 LIVE_WSID=$(printf '%s' "$CREATE_OUT" | jq -r '.result.workspace.workspace_id // empty')
 LIVE_TAB_ID=$(printf '%s' "$CREATE_OUT" | jq -r '.result.tab.tab_id // empty')
@@ -84,7 +83,7 @@ pass "repro setup: a pre-existing workspace labeled 'firstmate' collides with th
 PANE_READY=false
 READY_SAMPLES=0
 for _ in $(seq 1 100); do
-  PROCESS_INFO=$(fm_backend_herdr_cli "$SESSION" pane process-info --pane "$LIVE_PANE_ID" 2>/dev/null || true)
+  PROCESS_INFO=$(fm_herdr_cli "$SESSION" pane process-info --pane "$LIVE_PANE_ID" 2>/dev/null || true)
   if printf '%s' "$PROCESS_INFO" | jq -e '
     .result.process_info as $process
     | ($process.foreground_processes | length == 1)
@@ -103,7 +102,7 @@ done
 [ "$PANE_READY" = true ] || fail "the startup workspace's shell did not become ready"
 
 MARKER="$SCRATCH/heartbeat.log"
-fm_backend_herdr_cli "$SESSION" pane run "$LIVE_PANE_ID" \
+fm_herdr_cli "$SESSION" pane run "$LIVE_PANE_ID" \
   "sh -c 'while true; do date +%s >> $MARKER; sleep 1; done'" >/dev/null 2>&1 \
   || fail "could not start the live heartbeat process in the startup workspace's pane"
 sleep 2
@@ -114,14 +113,14 @@ pass "repro setup: a live long-running process is running in the startup workspa
 # --- 2. run the real spawn-time path: container_ensure adopts the startup --
 # workspace by label match; create_task must NOT prune its tab.
 
-RAW=$(fm_backend_herdr_container_ensure "$LIVE_CWD") || fail "container_ensure failed"
+RAW=$(fm_herdr_container_ensure "$LIVE_CWD") || fail "container_ensure failed"
 CONTAINER=${RAW%%$'\t'*}
 SEEDED_TAB_ID=${RAW#*$'\t'}
 [ "$CONTAINER" = "$SESSION:$LIVE_WSID" ] || fail "container_ensure should have ADOPTED the pre-existing label-colliding workspace ($LIVE_WSID), got '$CONTAINER'"
 [ -z "$SEEDED_TAB_ID" ] || fail "an ADOPTED workspace must report an EMPTY seeded default tab id (the created-vs-adopted gate), got '$SEEDED_TAB_ID' - this is exactly what would reproduce the 2026-07-02 self-kill"
 pass "fixed: container_ensure adopts the label-colliding startup workspace and reports NO seeded default tab (never a prune candidate)"
 
-TASK_IDS=$(fm_backend_herdr_create_task "$CONTAINER" fm-prunesafety-e2e "$LIVE_CWD" "$SEEDED_TAB_ID") \
+TASK_IDS=$(fm_herdr_create_task "$CONTAINER" fm-prunesafety-e2e "$LIVE_CWD" "$SEEDED_TAB_ID") \
   || fail "create_task failed"
 read -r NEW_TAB_ID NEW_PANE_ID <<EOF
 $TASK_IDS
@@ -146,20 +145,20 @@ printf '%s' "$LIVE_TABS_AFTER" | jq -e --arg t "$LIVE_TAB_ID" '.result.tabs[] | 
   || fail "REGRESSION: the startup workspace's original live tab is gone from tab list"
 pass "fixed: the startup workspace's original live tab is still present in tab list after the spawn"
 
-fm_backend_herdr_kill "$SESSION:$NEW_PANE_ID"
-fm_backend_herdr_kill "$SESSION:$LIVE_PANE_ID"
+fm_herdr_kill "$SESSION:$NEW_PANE_ID"
+fm_herdr_kill "$SESSION:$LIVE_PANE_ID"
 
 # --- 4. happy path still works: a genuinely fresh workspace gets its seeded -
 # default tab pruned, leaving exactly one clean fm-<id> task tab -------------
 
 HAPPY_CWD="$SCRATCH/happy-project"
 mkdir -p "$HAPPY_CWD"
-HAPPY_RAW=$(fm_backend_herdr_container_ensure "$HAPPY_CWD") || fail "happy-path container_ensure failed"
+HAPPY_RAW=$(fm_herdr_container_ensure "$HAPPY_CWD") || fail "happy-path container_ensure failed"
 HAPPY_CONTAINER=${HAPPY_RAW%%$'\t'*}
 HAPPY_SEEDED=${HAPPY_RAW#*$'\t'}
 [ -n "$HAPPY_SEEDED" ] || fail "happy path: expected a genuinely fresh workspace with a non-empty seeded default tab id"
 
-HAPPY_TASK_IDS=$(fm_backend_herdr_create_task "$HAPPY_CONTAINER" fm-prunesafety-happy "$HAPPY_CWD" "$HAPPY_SEEDED") \
+HAPPY_TASK_IDS=$(fm_herdr_create_task "$HAPPY_CONTAINER" fm-prunesafety-happy "$HAPPY_CWD" "$HAPPY_SEEDED") \
   || fail "happy-path create_task failed"
 read -r _HAPPY_TAB HAPPY_PANE <<EOF
 $HAPPY_TASK_IDS
@@ -174,7 +173,7 @@ printf '%s' "$HAPPY_TABS" | jq -e --arg t "$HAPPY_SEEDED" '.result.tabs[] | sele
   && fail "happy path: the seeded default tab should have been pruned but is still present: $HAPPY_TABS"
 pass "happy path: a genuinely fresh workspace's seeded default tab is still pruned, leaving exactly one clean fm-<id> task tab"
 
-fm_backend_herdr_kill "$SESSION:$HAPPY_PANE"
+fm_herdr_kill "$SESSION:$HAPPY_PANE"
 
 cleanup_all
 trap - EXIT

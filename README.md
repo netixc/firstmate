@@ -25,7 +25,7 @@ You can run one coding agent easily.
 But the moment you want three project tasks done in parallel - fixes, investigations, plans, audits - you become a tab-juggler: babysitting sessions, copy-pasting context between repos, forgetting which terminal had the failing test.
 
 firstmate flips the model.
-You talk to a single agent - the first mate - and it runs the crew for you: spawning autonomous agents in a visible session backend, giving each a clean git worktree, supervising them to completion, and handing you finished PRs, approved local merges, or standalone investigation reports.
+You talk to a single agent - the first mate - and it runs the crew for you: spawning autonomous Pi agents in Herdr, giving each a clean git worktree, supervising them to completion, and handing you finished PRs, approved local merges, or standalone investigation reports.
 For larger fleets, you can opt in to persistent secondmates: second mates that are still ordinary direct reports, but run from their own isolated firstmate homes on this machine or another SSH-reachable host.
 
 firstmate is not a model, not a harness, not a skill, not an MCP server, and not a CLI.
@@ -37,7 +37,7 @@ Launching Pi inside it instantiates your first mate - and makes you the captain.
 ## Features
 
 - **One liaison** - you talk only to the first mate; it dispatches, supervises, escalates only real decisions, and reports plain outcomes.
-- **A visible crew** - every crewmate works in its own tmux window or experimental Herdr tab you can watch or type into; the first mate reconciles.
+- **A visible crew** - every Pi crewmate works in its own Herdr tab you can watch or type into; the first mate reconciles.
 - **Disposable worktrees** - each task runs in a clean [treehouse](https://github.com/kunchenguid/treehouse) git worktree, so parallel work on one repo never collides.
 - **Two task shapes** - ship tasks deliver authorized changes; scout tasks leave standalone investigation reports when the intake contract warrants separate research.
 - **Explicit project modes** - each project ships via `no-mistakes`, `direct-PR`, or `local-only`, with an optional `+yolo` autonomy flag.
@@ -45,7 +45,7 @@ Launching Pi inside it instantiates your first mate - and makes you the captain.
 - **Event-driven, zero-token supervision** - a bash watcher sleeps on the fleet and wakes the first mate only when something needs you; Pi also gets a turn-end backstop that blocks or follows up on a blind stop when work is under way and supervision is not live.
 - **Optional Relay** - pair a Discord account and install the bot through myfirstmate.io, then add one local `.env` token so firstmate can answer owner mentions, act on normal reversible requests, attach images, preserve Discord threads, and deliver bounded completion follow-ups without changing non-Relay behavior.
 - **Strict project boundary** - the first mate is read-only over your projects except for the narrow guarded and captain-approved operations authorized by [hard rule 1](AGENTS.md#1-identity-and-prime-directives), including fleet sync's guarded safe branch pruning; crewmates make every other project change behind the configured merge authority.
-- **Restart-proof** - all state lives on disk and in the active session backend (tmux by hard default, or Herdr when selected or auto-detected); kill the session anytime and the next one reconciles, including confirmed-dead secondmate agents, and carries on.
+- **Restart-proof** - all durable state lives on disk and exact endpoint identity lives in Herdr; restart anytime and the next session reconciles, including confirmed-dead secondmate agents, and carries on.
 
 Full detail on every feature lives in [docs/architecture.md](docs/architecture.md).
 
@@ -55,10 +55,10 @@ Full detail on every feature lives in [docs/architecture.md](docs/architecture.m
 
 - Pi, the verified primary agent harness.
 - Git and the GitHub CLI, authenticated through `gh auth login`.
-- The CLI and dependencies for your selected runtime backend; tmux is the reference default.
+- Herdr and `jq`, with a supported Herdr server available.
 
 The first mate detects and offers to install supported missing tools after you approve.
-Backend-specific setup is linked in [Documentation](#documentation).
+Herdr setup is linked in [Documentation](#documentation).
 
 ### Supported harness
 
@@ -94,7 +94,7 @@ The preference persists for the effective Firstmate home, and toggling it off re
 > ahoy! look at my github project xyz, then fix the flaky login test and add dark mode
 
 # firstmate checks its toolchain (asking your consent before installing anything),
-# clones the project under projects/ and spawns two isolated workers in the active backend.
+# clones the project under projects/ and spawns two isolated Pi workers in Herdr.
 # Minutes later:
 
   PR ready for review, captain: https://github.com/you/xyz/pull/42
@@ -102,10 +102,6 @@ The preference persists for the effective Firstmate home, and toggling it off re
 
 > alright merge it
 ```
-
-### More backends
-
-Setup guides for tmux (the default) and Herdr are linked in [Documentation](#documentation) below.
 
 ## How It Works
 
@@ -118,10 +114,10 @@ Setup guides for tmux (the default) and Herdr are linked in [Documentation](#doc
  │ reads projects/ + firstmate routes  │
  │ writes guarded backlog/briefs/state │
  └──┬──────────────┬───────────────┬───┘
-    │ backend sends / status files │
+    │ Herdr sends / status files   │
     ▼              ▼               ▼
  ┌────────┐   ┌────────┐      ┌────────┐
- │fm-task1│   │fm-task2│  ... │fm-taskN│   tmux windows or Herdr tabs
+ │fm-task1│   │fm-task2│  ... │fm-taskN│   Herdr tabs
  │crewmate│   │crewmate│      │crewmate│   one autonomous agent each
  └───┬────┘   └───┬────┘      └───┬────┘
      ▼            ▼               ▼
@@ -172,13 +168,12 @@ Firstmate's skills live in two separate places with different audiences:
 ## Documentation
 
 - [docs/architecture.md](docs/architecture.md) - maintainer architecture for the crew, supervision, worktrees, secondmates, and project modes.
-- [docs/configuration.md](docs/configuration.md) - environment variables, `FM_HOME`, runtime backend selection, hosted Discord Relay setup, the files you set, and harness support.
+- [docs/configuration.md](docs/configuration.md) - environment variables, `FM_HOME`, Herdr requirements, hosted Discord Relay setup, local settings, and Pi support.
 - [docs/remote-secondmates.md](docs/remote-secondmates.md) - current setup, routing, transfer, recovery, and safety behavior for whole-home remote second mates.
 - [docs/calm.md](docs/calm.md) - current Pi `/calm` behavior and supported presentation limits.
 - [docs/wedge-alarm.md](docs/wedge-alarm.md) - configure the active alert for an away-mode escalation delivery that gets stuck.
-- [docs/tmux-backend.md](docs/tmux-backend.md) - current setup and limits for the tmux reference backend.
-- [docs/herdr-backend.md](docs/herdr-backend.md) - current setup, safety boundaries, and limits for the experimental Herdr backend.
-- [docs/verification/runtime-backends.md](docs/verification/runtime-backends.md) - active maintainer verification for runtime backend guarantees.
+- [docs/herdr-backend.md](docs/herdr-backend.md) - current setup, safety boundaries, and limits for the sole session path.
+- [docs/verification/herdr-runtime.md](docs/verification/herdr-runtime.md) - active maintainer verification for Herdr runtime guarantees.
 - [docs/turnend-guard.md](docs/turnend-guard.md) - the primary session's current "no turn ends blind" backstop, scope, loop safety, and compatibility limits.
 - [docs/verification/supervision.md](docs/verification/supervision.md) - active maintainer verification for session-start, guard, continuity, and wedge integrations.
 - [docs/supervision-protocols/](docs/supervision-protocols/) - rendered primary-harness watcher protocols for Pi and the unknown-harness fallback.

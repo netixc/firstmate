@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
-# tests/fm-backend-herdr-smoke.test.sh - real herdr smoke test for the herdr
-# session-provider adapter (bin/backends/herdr.sh), P2 of
-# data/fm-backend-design-d7 (herdr-addendum.md), extended for the P3
-# workspace-per-home pass (AGENTS.md task herdr-sm-spaces-k4). Mirrors
-# tests/fm-backend-tmux-smoke.test.sh's structure: every other suite fakes the
-# CLI, this one talks to a REAL herdr server - but ALWAYS on a private, named,
+# Real Herdr smoke test for the sole session integration in bin/fm-herdr.sh,
+# including workspace-per-home behavior. Portable suites use structured CLI
+# seams; this one talks to a real Herdr server - but ALWAYS on a private, named,
 # throwaway HERDR_SESSION (never the default session), so it never touches a
 # captain's real herdr usage. Skips cleanly when herdr (or jq) is not
 # installed, so CI/dev machines without herdr are unaffected.
@@ -43,21 +40,20 @@ trap cleanup_all EXIT
 fm_herdr_lab_prepare "$SESSION" || fail "could not prepare isolated Herdr lab session"
 
 # shellcheck source=/dev/null
-. "$ROOT/bin/fm-backend.sh"
-fm_backend_source herdr || fail "fm_backend_source herdr failed"
+. "$ROOT/bin/fm-herdr.sh"
 
 # --- version gate + container ensure -----------------------------------------
 
-fm_backend_herdr_version_check || fail "version_check failed against the real installed herdr"
+fm_herdr_version_check || fail "version_check failed against the real installed herdr"
 pass "real herdr: version_check accepts the installed binary's protocol"
 
-# fm_backend_herdr_container_ensure now echoes
+# fm_herdr_container_ensure now echoes
 # "<session>:<workspace_id>\t<seeded_default_tab_id>" (the second field empty
 # when the call ADOPTED a pre-existing workspace rather than creating a fresh
 # one - docs/herdr-backend.md "Default-tab prune"). Split on the guaranteed
-# single tab character; only fm_backend_herdr_create_task is ever allowed to
+# single tab character; only fm_herdr_create_task is ever allowed to
 # act on the seeded tab id, and only for the container that just created it.
-CONTAINER_RAW=$(fm_backend_herdr_container_ensure /tmp) || fail "container_ensure failed"
+CONTAINER_RAW=$(fm_herdr_container_ensure /tmp) || fail "container_ensure failed"
 CONTAINER=${CONTAINER_RAW%%$'\t'*}
 SEEDED_TAB_ID=${CONTAINER_RAW#*$'\t'}
 case "$CONTAINER" in
@@ -72,7 +68,7 @@ pass "real herdr: container_ensure starts the isolated session's server, creates
 # the 2026-07-02 self-kill incident (docs/herdr-backend.md "Default-tab
 # prune"): only the call that actually just created a workspace may identify
 # a tab as prunable.
-CONTAINER2_RAW=$(fm_backend_herdr_container_ensure /tmp) || fail "second container_ensure failed"
+CONTAINER2_RAW=$(fm_herdr_container_ensure /tmp) || fail "second container_ensure failed"
 CONTAINER2=${CONTAINER2_RAW%%$'\t'*}
 SEEDED_TAB_ID2=${CONTAINER2_RAW#*$'\t'}
 [ "$CONTAINER2" = "$CONTAINER" ] || fail "container_ensure is not idempotent: '$CONTAINER' vs '$CONTAINER2'"
@@ -82,7 +78,7 @@ pass "real herdr: container_ensure is idempotent (reuses/adopts the existing fir
 # --- create_task + duplicate refusal + default-tab prune ---------------------
 
 LABEL="fm-smoke1"
-TASK_IDS=$(fm_backend_herdr_create_task "$CONTAINER" "$LABEL" /tmp "$SEEDED_TAB_ID") || fail "create_task failed"
+TASK_IDS=$(fm_herdr_create_task "$CONTAINER" "$LABEL" /tmp "$SEEDED_TAB_ID") || fail "create_task failed"
 read -r TAB_ID PANE_ID <<EOF
 $TASK_IDS
 EOF
@@ -122,7 +118,7 @@ pass "real herdr: create_task prunes the freshly-created workspace's seeded defa
 # 1. A genuinely LIVE duplicate (a real registered agent, via herdr's own
 #    `pane report-agent`) must still refuse exactly as before.
 LIVE_DUP_LABEL="fm-smoke-livedup"
-LIVE_DUP_IDS=$(fm_backend_herdr_create_task "$CONTAINER" "$LIVE_DUP_LABEL" /tmp) || fail "could not create the live-duplicate scenario's tab"
+LIVE_DUP_IDS=$(fm_herdr_create_task "$CONTAINER" "$LIVE_DUP_LABEL" /tmp) || fail "could not create the live-duplicate scenario's tab"
 read -r LIVE_DUP_TAB_ID LIVE_DUP_PANE_ID <<EOF
 $LIVE_DUP_IDS
 EOF
@@ -131,18 +127,18 @@ if [ -z "$LIVE_DUP_TAB_ID" ] || [ -z "$LIVE_DUP_PANE_ID" ]; then
 fi
 herdr pane report-agent "$LIVE_DUP_PANE_ID" --source fm-smoke-test --agent fm-smoke-live-agent --state idle --session "$SESSION" >/dev/null 2>&1 \
   || fail "could not register a live agent on the live-duplicate scenario's pane"
-if fm_backend_herdr_create_task "$CONTAINER" "$LIVE_DUP_LABEL" /tmp >/dev/null 2>&1; then
+if fm_herdr_create_task "$CONTAINER" "$LIVE_DUP_LABEL" /tmp >/dev/null 2>&1; then
   fail "REGRESSION: create_task should refuse a duplicate label whose pane hosts a genuinely live registered agent (idle counts as live)"
 fi
 herdr pane get "$LIVE_DUP_PANE_ID" --session "$SESSION" >/dev/null 2>&1 \
   || fail "REGRESSION: the live-duplicate scenario's pane should have survived the refused create_task call untouched"
 pass "real herdr: create_task refuses a same-labeled tab whose pane hosts a genuinely live registered agent (unchanged behavior)"
-fm_backend_herdr_kill "$SESSION:$LIVE_DUP_PANE_ID"
+fm_herdr_kill "$SESSION:$LIVE_DUP_PANE_ID"
 
 # 2. A husk (no registered agent at all - the restored-plain-shell shape)
 #    must be CLOSED AND REPLACED instead of refused.
 HUSK_LABEL="fm-smoke-husk1"
-HUSK_IDS=$(fm_backend_herdr_create_task "$CONTAINER" "$HUSK_LABEL" /tmp) || fail "could not create the husk-simulation tab"
+HUSK_IDS=$(fm_herdr_create_task "$CONTAINER" "$HUSK_LABEL" /tmp) || fail "could not create the husk-simulation tab"
 read -r HUSK_TAB_ID HUSK_PANE_ID <<EOF
 $HUSK_IDS
 EOF
@@ -151,7 +147,7 @@ if [ -z "$HUSK_TAB_ID" ] || [ -z "$HUSK_PANE_ID" ]; then
 fi
 herdr agent get "$HUSK_PANE_ID" --session "$SESSION" >/dev/null 2>&1 \
   && fail "husk-simulation setup is wrong: this pane should have NO registered agent yet"
-REPLACED_IDS=$(fm_backend_herdr_create_task "$CONTAINER" "$HUSK_LABEL" /tmp) \
+REPLACED_IDS=$(fm_herdr_create_task "$CONTAINER" "$HUSK_LABEL" /tmp) \
   || fail "REGRESSION: create_task should close-and-replace a same-labeled tab whose pane hosts no registered agent, not refuse it"
 read -r NEW_HUSK_TAB_ID NEW_HUSK_PANE_ID <<EOF
 $REPLACED_IDS
@@ -167,7 +163,7 @@ HUSK_WS_TABS=$(herdr tab list --workspace "${CONTAINER#*:}" --session "$SESSION"
 printf '%s' "$HUSK_WS_TABS" | jq -e --arg t "$NEW_HUSK_TAB_ID" '.result.tabs[] | select(.tab_id == $t)' >/dev/null 2>&1 \
   || fail "REGRESSION: the replacement tab is missing from the workspace's own tab list"
 pass "real herdr: create_task closes and replaces a same-labeled tab whose pane hosts no registered agent (the restored-husk shape), leaving the workspace intact"
-fm_backend_herdr_kill "$SESSION:$NEW_HUSK_PANE_ID"
+fm_herdr_kill "$SESSION:$NEW_HUSK_PANE_ID"
 
 # --- workspace-per-home: a secondmate-shaped home gets its OWN space --------
 # (docs/herdr-backend.md "Task container shape", AGENTS.md task
@@ -182,7 +178,7 @@ SM_HOME="$SM_SCRATCH/secondmate-home"
 mkdir -p "$SM_HOME"
 printf 'smoketest-sm1\n' > "$SM_HOME/.fm-secondmate-home"
 
-SM_CONTAINER_RAW=$(FM_HOME="$SM_HOME" fm_backend_herdr_container_ensure /tmp) || fail "secondmate-shaped container_ensure failed"
+SM_CONTAINER_RAW=$(FM_HOME="$SM_HOME" fm_herdr_container_ensure /tmp) || fail "secondmate-shaped container_ensure failed"
 SM_CONTAINER=${SM_CONTAINER_RAW%%$'\t'*}
 SM_SEEDED_TAB_ID=${SM_CONTAINER_RAW#*$'\t'}
 case "$SM_CONTAINER" in
@@ -199,7 +195,7 @@ SM_LABEL_REAL=$(herdr workspace list --session "$SESSION" 2>&1 | jq -r --arg id 
 pass "real herdr: the secondmate-shaped home's workspace is labeled 2ndmate-<secondmate-id> in herdr itself"
 
 SM_TASK_LABEL="fm-smtask1"
-SM_TASK_IDS=$(FM_HOME="$SM_HOME" fm_backend_herdr_create_task "$SM_CONTAINER" "$SM_TASK_LABEL" /tmp "$SM_SEEDED_TAB_ID") || fail "secondmate create_task failed"
+SM_TASK_IDS=$(FM_HOME="$SM_HOME" fm_herdr_create_task "$SM_CONTAINER" "$SM_TASK_LABEL" /tmp "$SM_SEEDED_TAB_ID") || fail "secondmate create_task failed"
 read -r SM_TAB_ID SM_PANE_ID <<EOF
 $SM_TASK_IDS
 EOF
@@ -209,11 +205,11 @@ fi
 pass "real herdr: a task spawned into the secondmate-shaped home lands as a tab inside the secondmate's OWN workspace"
 
 # list_live for each home must never see the OTHER home's task.
-PRIMARY_LIVE=$(fm_backend_herdr_list_live "$SESSION")
+PRIMARY_LIVE=$(fm_herdr_list_live "$SESSION")
 case "$PRIMARY_LIVE" in
   *"$SM_TASK_LABEL"*) fail "the primary home's list_live must not see a secondmate-shaped home's task"$'\n'"$PRIMARY_LIVE" ;;
 esac
-SM_LIVE=$(FM_HOME="$SM_HOME" fm_backend_herdr_list_live "$SESSION")
+SM_LIVE=$(FM_HOME="$SM_HOME" fm_herdr_list_live "$SESSION")
 case "$SM_LIVE" in
   *"$SM_TASK_LABEL"*) : ;;
   *) fail "the secondmate-shaped home's list_live did not see its own task"$'\n'"$SM_LIVE" ;;
@@ -232,7 +228,7 @@ pass "real herdr: list_live stays scoped to each home's own workspace - neither 
 fm_herdr_lab_stop "$SESSION" >/dev/null 2>&1 \
   || fail "could not stop the isolated session for the restart-stability check"
 sleep 0.5
-fm_backend_herdr_server_ensure "$SESSION" || fail "the isolated session's server did not come back up after the stop"
+fm_herdr_server_ensure "$SESSION" || fail "the isolated session's server did not come back up after the stop"
 
 POST_LIST=$(herdr workspace list --session "$SESSION" 2>&1)
 POST_PRIMARY_ID=$(printf '%s' "$POST_LIST" | jq -r '.result.workspaces[]? | select(.label == "firstmate") | .workspace_id')
@@ -246,14 +242,14 @@ POST_SM_PANE=$(herdr pane get "$SM_PANE_ID" --session "$SESSION" 2>/dev/null | j
 [ "$POST_SM_PANE" = "$SM_PANE_ID" ] || fail "the secondmate task's pane id did not survive the restart: before=$SM_PANE_ID after=$POST_SM_PANE"
 pass "real herdr: BOTH workspace ids/labels AND both tasks' pane ids survive a session stop + fresh server restart (multi-workspace shape)"
 
-fm_backend_herdr_kill "$SESSION:$SM_PANE_ID"
+fm_herdr_kill "$SESSION:$SM_PANE_ID"
 
 # --- send_text_line (atomic run) ---------------------------------------------
 
-fm_backend_herdr_send_text_line "$TARGET" "echo captain-on-deck-line" \
+fm_herdr_send_text_line "$TARGET" "echo captain-on-deck-line" \
   || fail "send_text_line failed"
 sleep 0.5
-out=$(fm_backend_herdr_capture "$TARGET" 20) || fail "capture failed after send_text_line"
+out=$(fm_herdr_capture "$TARGET" 20) || fail "capture failed after send_text_line"
 case "$out" in
   *captain-on-deck-line*) : ;;
   *) fail "real herdr: send_text_line did not run and echo the line"$'\n'"$out" ;;
@@ -262,12 +258,12 @@ pass "real herdr: send_text_line runs a command atomically (pane run) and its ou
 
 # --- send_literal + send_key(Enter), the two-step launch-command form -------
 
-fm_backend_herdr_send_literal "$TARGET" 'echo literal-then-key-captain' \
+fm_herdr_send_literal "$TARGET" 'echo literal-then-key-captain' \
   || fail "send_literal failed"
 sleep 0.2
-fm_backend_herdr_send_key "$TARGET" Enter || fail "send_key Enter failed"
+fm_herdr_send_key "$TARGET" Enter || fail "send_key Enter failed"
 sleep 0.5
-out=$(fm_backend_herdr_capture "$TARGET" 20) || fail "capture failed after send_literal+send_key"
+out=$(fm_herdr_capture "$TARGET" 20) || fail "capture failed after send_literal+send_key"
 case "$out" in
   *literal-then-key-captain*) : ;;
   *) fail "real herdr: send_literal + send_key(Enter) did not submit and echo the line"$'\n'"$out" ;;
@@ -276,9 +272,9 @@ pass "real herdr: send_literal + send_key Enter submit as two separate steps (ve
 
 # --- current_path -------------------------------------------------------------
 
-fm_backend_herdr_send_text_line "$TARGET" "cd /tmp"
+fm_herdr_send_text_line "$TARGET" "cd /tmp"
 sleep 0.3
-p=$(fm_backend_herdr_current_path "$TARGET") || fail "current_path failed"
+p=$(fm_herdr_current_path "$TARGET") || fail "current_path failed"
 case "$p" in
   */tmp) : ;;
   *) fail "real herdr: current_path did not report the pane's cwd after cd /tmp, got '$p'" ;;
@@ -287,12 +283,12 @@ pass "real herdr: current_path reads the pane's live cwd"
 
 # --- kill -----------------------------------------------------------------
 
-fm_backend_herdr_kill "$TARGET"
+fm_herdr_kill "$TARGET"
 if herdr pane get "$PANE_ID" --session "$SESSION" >/dev/null 2>&1; then
   fail "kill did not remove the pane"
 fi
 # Best-effort contract: killing an already-gone pane must not error.
-fm_backend_herdr_kill "$TARGET" || fail "kill on an already-dead target must stay best-effort (never fail)"
+fm_herdr_kill "$TARGET" || fail "kill on an already-dead target must stay best-effort (never fail)"
 pass "real herdr: kill removes the pane and is idempotent/best-effort"
 
 # --- list_live (label-based recovery discovery) ------------------------------
@@ -304,21 +300,21 @@ pass "real herdr: kill removes the pane and is idempotent/best-effort"
 # deletes the workspace itself (verified real-herdr behavior), so the stale
 # $CONTAINER from container_ensure at test start no longer names a live
 # workspace.
-CONTAINER_RAW=$(fm_backend_herdr_container_ensure /tmp) || fail "container_ensure for the second task failed"
+CONTAINER_RAW=$(fm_herdr_container_ensure /tmp) || fail "container_ensure for the second task failed"
 CONTAINER=${CONTAINER_RAW%%$'\t'*}
 SEEDED_TAB_ID=${CONTAINER_RAW#*$'\t'}
 [ -n "$SEEDED_TAB_ID" ] || fail "the workspace was deleted when its last tab was killed, so this container_ensure must CREATE a fresh one and report its seeded default tab id"
 LABEL2="fm-smoke2"
-TASK_IDS2=$(fm_backend_herdr_create_task "$CONTAINER" "$LABEL2" /tmp "$SEEDED_TAB_ID") || fail "second create_task failed"
+TASK_IDS2=$(fm_herdr_create_task "$CONTAINER" "$LABEL2" /tmp "$SEEDED_TAB_ID") || fail "second create_task failed"
 read -r _TAB_ID2 PANE_ID2 <<EOF
 $TASK_IDS2
 EOF
-live=$(fm_backend_herdr_list_live "$SESSION")
+live=$(fm_herdr_list_live "$SESSION")
 assert_contains_local() { case "$1" in *"$2"*) : ;; *) fail "$3"$'\n'"--- got ---"$'\n'"$1" ;; esac; }
 assert_contains_local "$live" "$LABEL2" "list_live did not report the freshly created task tab by label"
 pass "real herdr: list_live discovers a live task tab by fm-<id> label"
 
-fm_backend_herdr_kill "$SESSION:$PANE_ID2"
+fm_herdr_kill "$SESSION:$PANE_ID2"
 
 cleanup_all
 trap - EXIT

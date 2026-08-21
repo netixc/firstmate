@@ -12,7 +12,7 @@
 #
 # It is opt-in because it downloads upstream release binaries over the network.
 # Run it after every Herdr upgrade and before trusting a refreshed
-# docs/verification/runtime-backends.md "Presentation version floor" entry.
+# docs/verification/herdr-runtime.md "Presentation version floor" entry.
 #
 # Every Herdr invocation, including the downloaded binaries', is routed through
 # bin/fm-herdr-lab.sh against a named non-default lab session. Only the
@@ -74,9 +74,9 @@ probe_client() {  # <binary-dir> -> "<version>\t<protocol>"
 
 floor_verdict() {  # <protocol> <version> -> above|below|indeterminate
   bash -c '
-    . "$0/bin/backends/herdr.sh"
+    . "$0/bin/fm-herdr.sh"
     status=0
-    fm_backend_herdr_release_floor_verdict "$1" "$2" || status=$?
+    fm_herdr_release_floor_verdict "$1" "$2" || status=$?
     case "$status" in
       0) printf "above\n" ;;
       1) printf "below\n" ;;

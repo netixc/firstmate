@@ -29,7 +29,7 @@
 #     fm-classify-lib.sh's authoritative status_open_decisions fold and reconciled
 #     against current_state; hints.pending_decision and hints.blocked_event are
 #     booleans derived from that set.
-#     endpoint.exists is the cheap backend endpoint-presence read.
+#     endpoint.exists is the cheap Herdr endpoint-presence read.
 #     endpoint.agent_alive is populated for secondmates only, where it is useful
 #     return-channel supervision data; other tasks use "not_checked".
 #   scout_reports[]: present data/<id>/report.md pointers.
@@ -125,9 +125,9 @@ validate_positive_bound FM_SNAPSHOT_REGISTRY_BYTES "$FM_SNAPSHOT_REGISTRY_BYTES"
 validate_positive_bound FM_SNAPSHOT_REGISTRY_RECORDS "$FM_SNAPSHOT_REGISTRY_RECORDS"
 validate_positive_bound FM_SNAPSHOT_REGISTRY_TIMEOUT "$FM_SNAPSHOT_REGISTRY_TIMEOUT"
 
-# shellcheck source=bin/fm-backend.sh
+# shellcheck source=bin/fm-herdr.sh
 # shellcheck disable=SC1091
-. "$SCRIPT_DIR/fm-backend.sh"
+. "$SCRIPT_DIR/fm-herdr.sh"
 # shellcheck source=bin/fm-classify-lib.sh
 # shellcheck disable=SC1091
 . "$SCRIPT_DIR/fm-classify-lib.sh"
@@ -401,7 +401,7 @@ backlog_json() {  # [<backlog-path>] - defaults to this home's $BACKLOG
 }
 
 task_json_lines() {
-  local meta id kind harness mode yolo project worktree home projects backend target status_log report_path
+  local meta id kind harness mode yolo project worktree home projects session_path target status_log report_path
   local remote_host remote_root remote_state remote_rc remote_home_present
   local pr pr_source event_json current_json endpoint_exists agent_alive meta_json status_json report_json worktree_json home_json
   local last_event_raw current_state current_source pending_decision blocked_event report_present=0 pr_from_status
@@ -423,12 +423,11 @@ task_json_lines() {
     remote_root=$(meta_value "$meta" remote_root)
     remote_home_present=null
     if [ -n "$remote_host" ]; then
-      backend=$(meta_value "$meta" remote_backend)
-      [ -n "$backend" ] || backend=unknown
+      session_path=herdr
       target=$(meta_value "$meta" remote_target)
     else
-      backend=$(fm_backend_of_meta "$meta")
-      target=$(fm_backend_target_of_meta "$meta")
+      session_path=$(fm_herdr_meta_kind "$meta")
+      target=$(fm_endpoint_target_of_meta "$meta")
     fi
     status_log="$STATE/$id.status"
     report_path="$DATA/$id/report.md"
@@ -503,15 +502,15 @@ task_json_lines() {
         agent_alive=unknown
       fi
     else
-      if [ -n "$target" ]; then
-        if fm_backend_target_exists "$backend" "$target" "fm-$id" >/dev/null 2>&1; then
+      if [ "$session_path" = herdr ] && [ -n "$target" ]; then
+        if fm_herdr_target_exists "$target" >/dev/null 2>&1; then
           endpoint_exists=true
         else
           endpoint_exists=false
         fi
       fi
-      if [ "$kind" = secondmate ] && [ -n "$target" ]; then
-        agent_alive=$(fm_backend_agent_alive "$backend" "$target" 2>/dev/null || printf unknown)
+      if [ "$kind" = secondmate ] && [ "$session_path" = herdr ] && [ -n "$target" ]; then
+        agent_alive=$(fm_herdr_agent_alive "$target" 2>/dev/null || printf unknown)
       fi
     fi
 
@@ -538,7 +537,7 @@ task_json_lines() {
       --arg worktree "$worktree" \
       --arg home "$home" \
       --arg projects "$projects" \
-      --arg backend "$backend" \
+      --arg session_path "$session_path" \
       --arg target "$target" \
       --arg remote_host "$remote_host" \
       --arg remote_root "$remote_root" \
@@ -565,7 +564,7 @@ task_json_lines() {
         mode:($mode // ""),
         yolo:($yolo // ""),
         project:($project // ""),
-        backend:$backend,
+        session_path:$session_path,
         remote:(if $remote_host == "" then null else {host:$remote_host,root:$remote_root} end),
         paths:{
           meta:$meta_path,
@@ -997,8 +996,8 @@ BASH
 }
 
 terminal_evidence_json() {  # <parent-task-json> <event-note> <evidence-contradicts>
-  local task=$1 note=$2 evidence_contradicts=$3 backend target exists expected out rc clean bytes lines seen=false contradiction=false reason='' remote_host
-  backend=$(printf '%s' "$task" | jq -r '.backend // ""')
+  local task=$1 note=$2 evidence_contradicts=$3 session_path target exists out rc clean bytes lines seen=false contradiction=false reason='' remote_host
+  session_path=$(printf '%s' "$task" | jq -r '.session_path // ""')
   target=$(printf '%s' "$task" | jq -r '.endpoint.target // ""')
   exists=$(printf '%s' "$task" | jq -r '.endpoint.exists // "unknown"')
   remote_host=$(printf '%s' "$task" | jq -r '.remote.host // ""')
@@ -1007,7 +1006,11 @@ terminal_evidence_json() {  # <parent-task-json> <event-note> <evidence-contradi
       '{provenance:"remote-direct-report-terminal",trust:"untrusted-supplement",captured:false,observed_at:$observed,freshness:"not-collected",reason:$reason,lines:0,bytes:0,event_note_seen:false,contradiction:false}'
     return 0
   fi
-  expected=$(printf '%s' "$task" | jq -r '"fm-" + (.id // "")')
+  if [ "$session_path" != herdr ]; then
+    jq -n --arg observed "$SNAPSHOT_NOW" --arg reason "$session_path endpoint record is preserved for manual reconciliation" \
+      '{provenance:"parent-direct-report-terminal",trust:"untrusted-supplement",captured:false,observed_at:$observed,freshness:"unknown",reason:$reason,lines:0,bytes:0,event_note_seen:false,contradiction:false}'
+    return 0
+  fi
   if [ -z "$target" ] || [ "$exists" = false ]; then
     [ "$exists" = false ] && reason="recorded endpoint is absent" || reason="no recorded endpoint"
     jq -n --arg observed "$SNAPSHOT_NOW" --arg reason "$reason" \
@@ -1016,8 +1019,8 @@ terminal_evidence_json() {  # <parent-task-json> <event-note> <evidence-contradi
   fi
   # shellcheck disable=SC2016 # Positional parameters expand inside the child bash, not here.
   out=$(fm_run_timed "$FM_SNAPSHOT_TERMINAL_TIMEOUT" bash -c \
-    '. "$1"; fm_backend_capture "$2" "$3" "$4" "$5" | LC_ALL=C head -c "$6"; rc=${PIPESTATUS[0]}; [ "$rc" -eq 141 ] && rc=0; exit "$rc"' \
-    fm-terminal-capture "$SCRIPT_DIR/fm-backend.sh" "$backend" "$target" "$FM_SNAPSHOT_TERMINAL_LINES" "$expected" "$FM_SNAPSHOT_TERMINAL_BYTES" 2>/dev/null)
+    '. "$1"; fm_herdr_capture "$2" "$3" | LC_ALL=C head -c "$4"; rc=${PIPESTATUS[0]}; [ "$rc" -eq 141 ] && rc=0; exit "$rc"' \
+    fm-terminal-capture "$SCRIPT_DIR/fm-herdr.sh" "$target" "$FM_SNAPSHOT_TERMINAL_LINES" "$FM_SNAPSHOT_TERMINAL_BYTES" 2>/dev/null)
   rc=$?
   if [ "$rc" -ne 0 ]; then
     [ "$rc" -eq 124 ] && reason="terminal capture timed out" || reason="terminal capture unavailable"

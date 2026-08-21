@@ -14,7 +14,7 @@ The tracked code root contains the shared instruction, skill, documentation, wor
 `state/` holds runtime records such as task metadata, append-only status events, endpoint signals, watcher and wake-queue coordination, inactive terminal-outcome receipts under `state/terminal-outcomes/`, away-mode state, generated Relay artifacts, private secondmate config-reread generations with their retry and quarantine state, and parent-owned secondmate pending-reply records under `state/pending-replies/` (`bin/fm-pending-reply-lib.sh`).
 `config/` holds local gitignored operating choices, and `projects/` holds the local project clones that Firstmate reads but changes only through the narrow guarded and concrete captain-approved exceptions in `AGENTS.md`.
 
-`bin/fm-spawn.sh` owns the base task-metadata fields it emits, while the runtime-backend section below owns backend-specific fields and selector interpretation.
+`bin/fm-spawn.sh` owns task metadata; the Herdr session section below owns exact endpoint fields, retired-record interpretation, and selector behavior.
 The producing PR and Relay helpers own the fields they append, `bin/fm-classify-lib.sh` owns status-event vocabulary, and `bin/fm-crew-state.sh` owns current-state reconciliation.
 Wake, watcher, away-mode, and Relay-specific state mechanics remain with their named scripts and reference sections rather than being duplicated into one exhaustive state tree here.
 
@@ -47,48 +47,38 @@ Set the local, gitignored `config/backlog-backend` file to `manual` to force man
 Absent or `tasks-axi` selects the default tasks-axi backend.
 The file format is unchanged in both modes; tasks-axi and manual edits produce the same `## In flight`, `## Queued`, and `## Done` sections.
 
-## Runtime backend (config/backend / FM_BACKEND)
+## Herdr session execution
 
-The supported runtime session-provider backends are the verified tmux reference backend and experimental Herdr.
-See [`docs/tmux-backend.md`](tmux-backend.md) and [`docs/herdr-backend.md`](herdr-backend.md).
-Treehouse provides task worktrees for both backends.
-New spawns choose the backend in this order: an explicit `--backend` flag authorized for that exact task, then `FM_BACKEND`, then the first non-empty line of local gitignored `config/backend`, then runtime auto-detection from `$TMUX` or `HERDR_ENV=1`, then default `tmux`.
-When both markers are present, `$TMUX` wins because it is the innermost session provider.
-Auto-detected Herdr prints a stderr notice naming `config/backend` and `--backend tmux` as opt-outs; auto-detected tmux stays silent.
-Any value other than `tmux` or `herdr` is rejected.
-A backend spawn refusal from a missing dependency or version gate is terminal for that selection rather than silently retrying another backend.
-Task metadata records `backend=` only for Herdr; an absent `backend=` means tmux.
-Every new task records `endpoint_task_id=` as the cleanup binding between the metadata filename and runtime endpoint.
-A Herdr task additionally records `herdr_session=`, `herdr_workspace_id=`, `herdr_tab_id=`, and `herdr_pane_id=`.
-Task selectors for `fm-peek.sh`, `fm-send.sh`, and `fm-crew-state.sh` resolve centrally through `fm_backend_resolve_selector`.
-A selector containing `:` is passed through as an explicit backend endpoint escape hatch.
-Otherwise an exact task id matching `state/<id>.meta` wins before the legacy `fm-<id>` label fallback, and metadata routing returns the recorded `window=` target.
-Matching explicit targets can recover the recorded backend when metadata contains the same endpoint.
-Only metadata-routed task selectors carry secondmate-marker context.
-`fm-teardown.sh <id>` validates the complete metadata-only endpoint identity before any runtime dispatch or cleanup mutation.
-Missing, empty, duplicate, malformed, backend-inconsistent, or task-mismatched endpoint records are preserved and refused.
-Legacy tmux metadata remains cleanup-compatible when its exact window name is `fm-<id>`; Herdr endpoints require their recorded `endpoint_task_id=` binding.
-The session-start secondmate liveness sweep uses the recovery-grade `fm_backend_agent_state` classifier; the comment above that function in `bin/fm-backend.sh` owns its detailed state contract and recovery authorization.
-A Herdr spawn version-gates the installed binary's protocol and requires `jq`.
-`FM_HOME` determines Herdr's home label, and [`herdr-backend.md`](herdr-backend.md#watching-and-task-containers) owns workspace placement, collision handling, and recovery behavior.
-The local `config/herdr-presentation-spaces` file controls Herdr's presentation projection as described in [Presentation spaces](herdr-backend.md#presentation-spaces).
-`config/backend` and `config/herdr-presentation-spaces` are inherited into secondmate homes under the primary-authoritative contract owned by [`secondmate-provisioning`](../.agents/skills/secondmate-provisioning/SKILL.md).
-For normal Herdr operations, `HERDR_SESSION` selects the named session, but destructive test cleanup must use the guarded path in [`docs/herdr-backend.md`](herdr-backend.md).
+Pi in Herdr is the sole supported primary, worker, scout, and Secondmate execution path.
+Treehouse remains the worktree allocator.
+An absent runtime setting uses Herdr directly; there is no provider selection, auto-detection, registry, or fallback.
 
-## Away-mode supervisor backend (FM_SUPERVISOR_BACKEND / FM_SUPERVISOR_TARGET)
+The retired `--backend`, `FM_BACKEND`, and gitignored `config/backend` surfaces are recognized only so old explicit choices stop safely.
+A value of `tmux` reports that tmux support is retired, any unknown value reports Herdr as the only supported path, and a process carrying `TMUX` or `TMUX_PANE` refuses rather than pretending to be a Herdr process.
+Old explicit `herdr` values are harmless but no longer select anything.
+Remove those settings after reconciling any retained legacy records.
 
-The `/afk` sub-supervisor injects escalation digests into firstmate's own pane independently of where new task endpoints are spawned.
-It currently supports only `tmux` and `herdr` supervisor panes.
-Set `FM_SUPERVISOR_BACKEND=tmux|herdr` and `FM_SUPERVISOR_TARGET=<target>` to override both axes explicitly; for herdr the target is `"<session>:<pane-id>"`.
-Without overrides, backend detection uses `$TMUX_PANE` first, then `HERDR_ENV=1` with `HERDR_PANE_ID`, then falls back to `tmux`.
-That keeps a tmux pane nested inside herdr on the tmux transport, matching the runtime backend's innermost-first rule.
-Target detection uses `FM_SUPERVISOR_TARGET`, then `$TMUX_PANE`, then `"${HERDR_SESSION:-default}:${HERDR_PANE_ID}"` under herdr, then the legacy `firstmate:0` tmux fallback with a warning.
-Selecting any other supervisor backend refuses at daemon startup instead of trying tmux injection primitives against a non-tmux pane.
+Current local task metadata always carries `backend=herdr`, `endpoint_task_id=`, and exact session, workspace, tab, pane, worktree, and project identity.
+Missing, duplicate, empty, malformed, or task-mismatched identity refuses control and cleanup while preserving the record.
+Metadata with no `backend=` field, or with `backend=tmux`, is retired legacy tmux evidence: it is never interpreted as Herdr, never used to control an endpoint, and remains for manual reconciliation.
+A task selector resolves only through this home's exact metadata; an explicit escape hatch must be a full Herdr `<session>:<pane-id>` target.
+No live-label search is an identity source.
+
+[`herdr-backend.md`](herdr-backend.md) owns version floors, named sessions, exact endpoint operations, presentation safety, and destructive lab isolation.
+The local `config/herdr-presentation-spaces` preference is inherited into Secondmate homes.
+
+## Away-mode Herdr target (`FM_SUPERVISOR_TARGET`)
+
+Away-mode injection uses the exact Herdr pane running Firstmate.
+`FM_SUPERVISOR_TARGET=<session>:<pane-id>` is the guarded override; otherwise `HERDR_SESSION` and `HERDR_PANE_ID` from the current Herdr pane are required.
+There is no guessed target.
+The retired `FM_SUPERVISOR_BACKEND` setting and any tmux environment are refused before a terminal is created or a message is sent.
+The daemon's own non-visible Herdr workspace records an exact pane id, preserves it on ambiguous cleanup, and never uses a shell background process.
 
 ## Away-mode wedge alarm channels (config/wedge-alarm)
 
 When away-mode injection wedges past `FM_MAX_DEFER_SECS`, the sub-supervisor raises a loud, rate-limited alarm.
-Beyond the durable `state/.subsuper-inject-wedged` marker and the tmux status-line flash, it attempts a configured backend-independent active alert that can reach the captain even when every pane and its backend status-line is unreadable.
+Beyond the durable `state/.subsuper-inject-wedged` marker, it attempts a configured active alert that can reach the captain even when the Herdr pane is unreadable.
 `config/wedge-alarm` (local, gitignored) lists channel directives, one per non-empty, non-comment line; every listed non-`off` channel fires, best-effort.
 `FM_WEDGE_ALARM_CHANNEL` overrides the file with a single directive.
 Directives are `off` (a position-independent kill switch that disables every active alert), `auto`/`default`, `osascript` (macOS Notification Center banner), `herdr` (herdr UI notification), and `command:<cmd>` (run `<cmd>` via `sh -c`, summary on `$1` and stdin).
@@ -112,7 +102,7 @@ The tracked `.no-mistakes.yaml` publishes test evidence to the repository's orph
 Evidence remains outside the code and default branches: firstmate keeps local `.no-mistakes/` state gitignored, and CI rejects tracked entries under that path.
 It does not set `commands.test` to a complete `tests/*.test.sh` walk.
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for the firstmate-specific local test policy and entry points.
-Portable shard evidence and coverage rules are in [fm-test-portable-shards.md](fm-test-portable-shards.md); [herdr-backend.md](herdr-backend.md#destructive-lab-safety) owns the real-Herdr lane's isolation boundary, and [runtime-backends.md](verification/runtime-backends.md#herdr) owns active evidence.
+Portable shard evidence and coverage rules are in [fm-test-portable-shards.md](fm-test-portable-shards.md); [herdr-backend.md](herdr-backend.md#destructive-lab-safety) owns the real-Herdr lane's isolation boundary, and [Herdr runtime verification](verification/herdr-runtime.md) owns active evidence.
 
 ## Captain Preferences (data/captain.md / data/captain-shared.md)
 
@@ -178,7 +168,7 @@ When `FM_HOME` is unset, it also behaves as the old whole-root override.
 `FM_STATE_OVERRIDE`, `FM_DATA_OVERRIDE`, `FM_PROJECTS_OVERRIDE`, and `FM_CONFIG_OVERRIDE` override individual operational directories for tests and specialized harness setup.
 Before `fm-brief.sh`, `fm-spawn.sh`, or `fm-afk-launch.sh` persists a path or passes it to another process, it resolves each applicable relative `FM_HOME`, `FM_STATE_OVERRIDE`, or `FM_DATA_OVERRIDE` directory against the caller's working directory, preserves absolute spellings unchanged, and rejects an unresolvable relative directory with the offending variable named.
 Bootstrap applies the same relative `FM_HOME` resolution only when embedding that home in the generated Relay poll shim; other transient consumers retain their existing shell-relative behavior.
-For the herdr backend, `FM_HOME` also determines the workspace label used by the adapter.
+`FM_HOME` also determines the Herdr workspace label.
 
 ## Harness support
 
@@ -254,18 +244,17 @@ Secondmate homes inherit this file from the primary, so a secondmate's own crewm
 
 On session start the first mate detects what its required toolchain is missing or too old and lists each problem with either an exact install command or manual instructions.
 It installs automatically supported tools only after you say go; manual-only tools remain for you to install from the printed instructions.
-Required tools come in two parts: a universal toolchain every home needs regardless of backend, and a per-backend delta that follows the runtime backend actually resolved for this home.
+Every home requires one toolchain for Pi in Herdr.
 The universal toolchain is node, git, gh with GitHub auth via `gh auth login`, no-mistakes v1.31.2 or newer, compatible gh-axi, the user-level upstream Ego Browser skill and `ego-browser` CLI, compatible lavish-axi, compatible tasks-axi per "Backlog backend" above, and compatible quota-axi.
 [`bin/fm-bootstrap.sh`](../bin/fm-bootstrap.sh) owns the axi-family floor policy, the gh-axi and lavish-axi floors, and detection of both Ego Browser surfaces, while [`bin/fm-tasks-axi-lib.sh`](../bin/fm-tasks-axi-lib.sh) and [`bin/fm-quota-axi-lib.sh`](../bin/fm-quota-axi-lib.sh) hold their own tools' floor constants.
-This section is the single owner of that universal toolchain list; backend guides' prerequisites point here and add only their backend-specific tools.
+This section is the single owner of the universal toolchain; the Herdr guide points here for prerequisites.
 In that list, no-mistakes runs the validation pipeline, gh-axi covers GitHub operations, the upstream Ego Browser skill and CLI own browser operations, lavish-axi covers rich-review operations, and tasks-axi plus quota-axi back backlog mutations and quota-aware array dispatch.
 Install Ego Browser from [lite.ego.app](https://lite.ego.app/) and complete its onboarding to publish both the `ego-browser` CLI and its user-level skill at `~/.agents/skills/ego-browser/SKILL.md`.
 Firstmate loads that upstream skill as the single Ego Browser operating contract and does not maintain a vendored copy.
 If either the CLI or user-level skill is absent, bootstrap reports manual installation guidance for [lite.ego.app](https://lite.ego.app/) rather than treating the app as an automatically installable package.
-The per-backend delta is required only for the backend resolved from `FM_BACKEND`, then `config/backend`, then runtime auto-detection, then default `tmux`, so a home is never told to install a tool an inactive backend or feature would need.
-That delta is owned in code by `fm_backend_required_tools` in `bin/fm-backend.sh`: tmux plus treehouse for the default backend, or Herdr plus `jq` and treehouse for Herdr.
-An unknown resolved backend emits `BACKEND_INVALID` and blocks dispatch instead of silently dropping its dependency delta or falling back to tmux.
-A Herdr home is never told that tmux is missing, and both supported backends run the treehouse durable-lease upgrade check.
+Herdr, `jq`, and treehouse are mandatory session tools, owned in code by `fm_herdr_required_tools` in `bin/fm-herdr.sh`.
+A retired or unsupported explicit session choice emits `SESSION_INVALID`; missing Herdr or an incompatible release blocks dispatch without a shell or tmux fallback.
+Bootstrap also runs the treehouse durable-lease upgrade check.
 When `config/crew-dispatch.json` exists, bootstrap also requires `jq` for dispatch profile validation.
 When Relay is opted in, bootstrap also requires `curl` and `jq` before arming the relay poll shim.
 `tasks-axi` and `quota-axi` are required bootstrap tools in every profile, the same class as `lavish-axi`.
@@ -289,7 +278,7 @@ When a running home advances and its loaded instruction surface (`AGENTS.md`, `b
 If that send fails, bootstrap keeps an idempotent retry marker and emits `NUDGE_SECONDMATES:` with the failure reason.
 The same bootstrap run emits `SECONDMATE_LIVENESS:` only when a registered secondmate is skipped or its relaunch fails; already-live and successfully relaunched secondmates are handled silently.
 For a mid-session inherited local-material edit where tracked-file sync is not needed, run `bin/fm-config-push.sh`.
-It uses the same live secondmate discovery and propagation helper as bootstrap, prints each live home's `crew-dispatch.json`, `crew-harness`, `backlog-backend`, `backend`, `herdr-presentation-spaces`, `startup-memory-budget`, `trace-context`, and `data/captain-shared.md` result as `pushed`, `unchanged`, `skipped`, or `error`, and exits non-zero for real propagation errors or config-reread send failures.
+It uses the same live Secondmate discovery and propagation helper as bootstrap, prints each live home's `crew-dispatch.json`, `crew-harness`, `backlog-backend`, `herdr-presentation-spaces`, `startup-memory-budget`, `trace-context`, and `data/captain-shared.md` result as `pushed`, `unchanged`, `skipped`, or `error`, and exits non-zero for real propagation errors or config-reread send failures.
 When an allowlisted config item changes for an already-running local home, it sends the literal-content reread pointer described in [`secondmate-provisioning`](../.agents/skills/secondmate-provisioning/SKILL.md); unchanged allowlisted config sends no pointer unless a previous delivery is pending.
 A changed remote home instead receives one durably recorded marked re-read instruction after the allowlisted bytes have transferred because primary-local generation paths are not meaningful on another host.
 The locked bootstrap inheritance pass uses the same placement-specific behavior; see `secondmate-provisioning` for the single contract owner.
@@ -463,11 +452,10 @@ FM_DATA_OVERRIDE=        # alternate data dir, mainly for tests
 FM_PROJECTS_OVERRIDE=    # alternate projects dir, mainly for tests
 FM_CONFIG_OVERRIDE=      # alternate config dir, mainly for tests
 FM_PROC_ROOT_OVERRIDE=   # alternate /proc root for Linux process-identity reads in fm-wake-lib.sh and fm-teardown.sh, mainly for tests
-FM_BACKEND=             # optional runtime backend override for new spawns; supported values are tmux and herdr
 FM_TRACE_CONTEXT=       # optional trace-context override; see "Trace context propagation"
-HERDR_SESSION=default  # herdr-only: named session for normal backend ops; not enough for destructive cleanup (docs/herdr-backend.md)
-FM_BACKEND_HERDR_SUBMIT_POLLS=6  # herdr-only: agent-state samples spread across each Enter attempt's budget when confirming a submit (docs/herdr-backend.md "Current transport behavior")
-FM_BACKEND_HERDR_SUBMIT_MIN_SLEEP=0.6  # herdr-only: minimum per-Enter confirmation budget before polling agent-state after an idle baseline
+HERDR_SESSION=default  # named Herdr session for normal operations; not enough for destructive cleanup (docs/herdr-backend.md)
+FM_HERDR_SUBMIT_POLLS=6  # agent-state samples spread across each Enter attempt's budget when confirming a submit (docs/herdr-backend.md "Current transport behavior")
+FM_HERDR_SUBMIT_MIN_SLEEP=0.6  # herdr-only: minimum per-Enter confirmation budget before polling agent-state after an idle baseline
 FM_SESSION_START_STATUS_TAIL=5   # state/*.status lines printed per task in the session-start digest; each line is capped by bin/fm-line-cap-lib.sh
 FM_SESSION_START_QUEUED_LIMIT=20   # plain queued backlog rows in the session-start digest; in-flight, held, and blocked rows are never bounded and done rows are never listed
 FM_BOOTSTRAP_DETECT_ONLY=0   # internal/read-only session-start mode: skip bootstrap's mutating sweeps and print advisory TANGLE wording
@@ -530,15 +518,14 @@ FM_FLEET_SYNC_PACKED_REFS_LOCK_RETRY_WAIT_SECS=1 # seconds fm-fleet-sync.sh wait
 FM_FLEET_SYNC_PACKED_REFS_LOCK_AGE_SECS=30       # min mtime age before fm-fleet-sync.sh treats a leftover packed-refs.lock as provably stale
 FM_BUSY_REGEX=          # optional override for rendered delivery guards; converted worker state ignores it
 FM_COMPOSER_IDLE_RE=    # optional fleet-wide idle-placeholder regex override (bin/fm-composer-lib.sh); a match alone does not prove emptiness because shape-specific position and ANSI de-emphasis safety gates still apply
-FM_COMPOSER_CAPTURE_LINES=20   # fleet-wide bound for tail-capture composer reads; tmux instead supplies its bounded visible pane, while the Herdr adapter uses this small window so stale scrollback banners stay out of the candidate set
+FM_COMPOSER_CAPTURE_LINES=20   # bounded Herdr composer capture so stale scrollback banners stay out of the candidate set
 FM_COMPOSER_PI_MAX_LINES=8     # fleet-wide: maximum rows admitted between Pi's identity-corroborated separator pair; taller or ambiguous candidates stay unknown
 FM_SEND_RETRIES=3       # fm-send Enter-retry attempts after typing the line once
 FM_SEND_SLEEP=0.4       # seconds between fm-send submit checks
 FM_SEND_SETTLE=1        # seconds fm-send waits after a successful text submit; 0 disables
 FM_PENDING_REPLY_GRACE_SECS=120   # seconds after marked-request delivery before a completed turn without a correlated parent report is eligible for its one recovery repost
 # sub-supervisor (bin/fm-supervise-daemon.sh); presence-gated via /afk
-FM_SUPERVISOR_BACKEND=             # optional supervisor pane backend override; tmux/herdr only, otherwise detects $TMUX_PANE then HERDR_ENV/HERDR_PANE_ID before tmux fallback
-FM_SUPERVISOR_TARGET=              # optional supervisor pane target override; tmux target or herdr <session>:<pane-id>, otherwise auto-detected
+FM_SUPERVISOR_TARGET=              # exact Herdr <session>:<pane-id> override; otherwise requires the current Herdr pane environment
 FM_INJECT_SKIP=heartbeat           # |-prefixes force-self-handled bypassing classification; empty disables
 FM_ESCALATE_BATCH_SECS=90          # buffer window for batched escalation digests; 0 = flush immediately
 FM_MAX_DEFER_SECS=300              # max buffered escalation age before retry plus wedge alarm; 0 disables

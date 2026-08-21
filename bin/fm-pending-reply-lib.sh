@@ -80,10 +80,8 @@
 _FM_PENDING_REPLY_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null)" || _FM_PENDING_REPLY_LIB_DIR="."
 # shellcheck source=bin/fm-marker-lib.sh
 . "$_FM_PENDING_REPLY_LIB_DIR/fm-marker-lib.sh"
-# shellcheck source=bin/fm-backend.sh
-. "$_FM_PENDING_REPLY_LIB_DIR/fm-backend.sh"
-# shellcheck source=bin/fm-tmux-lib.sh
-. "$_FM_PENDING_REPLY_LIB_DIR/fm-tmux-lib.sh"
+# shellcheck source=bin/fm-herdr.sh
+. "$_FM_PENDING_REPLY_LIB_DIR/fm-herdr.sh"
 # shellcheck source=bin/fm-classify-lib.sh
 . "$_FM_PENDING_REPLY_LIB_DIR/fm-classify-lib.sh"
 
@@ -629,7 +627,7 @@ fm_pending_reply_fallback_idle_eligible() {  # <record-path>
   [ "$age" -ge "$grace" ]
 }
 
-# fm_pending_reply_backend_observation: one busy/idle observation of a
+# fm_pending_reply_herdr_observation: one busy/idle observation of a
 # SECONDMATE endpoint, without ever reading its conversation.
 #
 # Deliberately NOT the semantic busy-state contract (bin/fm-busy-lib.sh).
@@ -645,13 +643,13 @@ fm_pending_reply_fallback_idle_eligible() {  # <record-path>
 # global OR of every vendor signature), so one harness's output cannot make
 # another read busy, and a weak rendered idle degrades to `fallback-idle`,
 # which the caller accepts as idle only after its grace window.
-fm_pending_reply_backend_observation() {  # <backend> <target> [expected-label] [harness]
-  local backend=$1 target=$2 expected_label=${3-} harness=${4-} native tail40
-  native=$(fm_backend_busy_state "$backend" "$target" 2>/dev/null || printf 'unknown')
+fm_pending_reply_herdr_observation() {  # <target> [harness]
+  local target=$1 harness=${2-} native tail40
+  native=$(fm_herdr_busy_state "$target" 2>/dev/null || printf 'unknown')
   case "$native" in
     busy|idle) printf '%s' "$native"; return 0 ;;
   esac
-  tail40=$(fm_backend_capture "$backend" "$target" 40 "$expected_label" 2>/dev/null) \
+  tail40=$(fm_herdr_capture "$target" 40 2>/dev/null) \
     || { printf 'unknown'; return 0; }
   if printf '%s' "$tail40" | grep -v '^[[:space:]]*$' | tail -6 \
     | fm_busy_lines_match "$harness"; then
@@ -1129,7 +1127,7 @@ fm_pending_reply_tick_one() {  # <state-dir> <corr_id> <busy_state> [secondmate-
 # Never scrapes secondmate conversation; uses only parent status, backend busy
 # state, and optional secondmate-home wrong-home path checks.
 fm_pending_reply_tick() {  # <state-dir>
-  local state=$1 dir rec corr task_id phase delivered meta backend target label busy sm_home harness remote_host
+  local state=$1 dir rec corr task_id phase delivered meta target busy sm_home harness remote_host
   local observation observation_task found i
   local -a observation_tasks=() observation_values=()
   dir=$(fm_pending_reply_dir "$state")
@@ -1191,15 +1189,17 @@ fm_pending_reply_tick() {  # <state-dir>
       awaiting_report|recovery_sent) ;;
       *) continue ;;
     esac
-    backend=tmux
+    endpoint_class=retired-tmux
     target=
     busy=unknown
     sm_home=
     harness=
     if [ -f "$meta" ]; then
       remote_host=$(fm_meta_get "$meta" remote_host)
-      backend=$(fm_backend_of_meta "$meta")
-      target=$(fm_backend_target_of_meta "$meta")
+      endpoint_class=$(fm_herdr_meta_kind "$meta")
+      if [ "$endpoint_class" = herdr ]; then
+        target=$(fm_endpoint_target_of_meta "$meta")
+      fi
       sm_home=$(fm_meta_get "$meta" home)
       harness=$(fm_meta_get "$meta" harness)
       if [ -n "$remote_host" ]; then
@@ -1207,7 +1207,6 @@ fm_pending_reply_tick() {  # <state-dir>
         sm_home=
       fi
       if [ -n "$target" ]; then
-        label="fm-$task_id"
         observation=
         found=0
         for ((i = 0; i < ${#observation_tasks[@]}; i++)); do
@@ -1223,7 +1222,7 @@ fm_pending_reply_tick() {  # <state-dir>
               fm-remote-secondmate-control.sh observe "$task_id" < /dev/null 2>/dev/null || printf 'unknown')
             case "$observation" in busy|idle|fallback-idle|unknown) ;; *) observation=unknown ;; esac
           else
-            observation=$(fm_pending_reply_backend_observation "$backend" "$target" "$label" "$harness")
+            observation=$(fm_pending_reply_herdr_observation "$target" "$harness")
           fi
           observation_tasks+=("$task_id")
           observation_values+=("$observation")

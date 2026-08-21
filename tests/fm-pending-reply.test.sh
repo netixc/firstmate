@@ -17,9 +17,9 @@
 #   8. Wrong-home reports are detected but do not silently acknowledge
 #   9. Direct unmarked captain input creates no expectation
 #  10. fm-send secondmate path embeds corr and creates durable pending records
-#  11. Backend busy/idle observation works through the shared busy abstraction
-#      used by Pi secondmate backends (no conversation scrape)
+#  11. Herdr busy/idle observation works without conversation scraping
 set -u
+# shellcheck disable=SC2030,SC2329 # subshell fixture vars and indirect hook
 
 # shellcheck source=tests/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -40,33 +40,21 @@ export FM_SEND_SETTLE=0
 make_stubs() {  # <dir> -> fakebin
   local dir=$1 fb="$1/fakebin"
   mkdir -p "$fb"
-  cat > "$fb/tmux" <<'SH'
+  cat > "$fb/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
-case "${1:-}" in
-  send-keys)
-    shift
-    literal=0
-    while [ $# -gt 0 ]; do
-      case "$1" in
-        -t) shift 2 ;;
-        -l) literal=1; shift ;;
-        *) break ;;
-      esac
-    done
-    if [ "$literal" = 1 ]; then
-      printf '%s' "${1:-}" >> "$FM_SEND_LOG"
-    fi
-    exit 0 ;;
-  display-message)
-    for a in "$@"; do case "$a" in *cursor_y*) printf '1\n'; exit 0 ;; esac; done
-    printf 'fakepane\n'; exit 0 ;;
-  capture-pane) printf '╭────╮\n│    │\n╰────╯\n'; exit 0 ;;
-  list-windows) exit 0 ;;
+case "${1:-} ${2:-}" in
+  "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
+  "pane get") printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "${3:-}" ;;
+  "pane send-text") printf '%s' "${4:-}" >> "$FM_SEND_LOG" ;;
+  "pane send-keys") : > "$FM_HERDR_STATE" ;;
+  "agent get")
+    if [ -e "$FM_HERDR_STATE" ]; then status=working; else status=idle; fi
+    printf '{"result":{"agent":{"agent_status":"%s","provider":"pi"}}}\n' "$status"
+    ;;
 esac
-exit 0
 SH
-  chmod +x "$fb/tmux"
+  chmod +x "$fb/herdr"
   cat > "$fb/sleep" <<'SH'
 #!/usr/bin/env bash
 exit 0
@@ -81,11 +69,25 @@ setup_parent() {  # <name> -> home
   printf '%s\n' "$home"
 }
 
+write_secondmate_meta() {  # <meta> <home> [target] [parent] [harness]
+  local meta=$1 home=$2 target=${3:-lab:w1:p1} parent=${4:-main} harness=${5:-pi}
+  local id rest
+  id=$(basename "$meta" .meta)
+  case "$target" in *:*:*) ;; *) target="${target%%:*}:w-$id:p1" ;; esac
+  rest=${target#*:}
+  fm_write_meta "$meta" "backend=herdr" "window=$target" "endpoint_task_id=$id" \
+    "herdr_session=${target%%:*}" "herdr_workspace_id=${rest%%:*}" \
+    "herdr_tab_id=t-$id" "herdr_pane_id=$rest" \
+    "worktree=$home" "project=$home" "home=$home" "kind=secondmate" \
+    "harness=$harness" "parent=$parent"
+}
+
 run_send() {
   local fb=$1 home=$2 log=$3; shift 3
   : > "$log"
+  rm -f "$home/herdr.state"
   env PATH="$fb:$PATH" \
-    FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SEND_LOG="$log" FM_SEND_SETTLE=0 \
+    FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SEND_LOG="$log" FM_HERDR_STATE="$home/herdr.state" FM_SEND_SETTLE=0 \
     FM_PENDING_REPLY_GRACE_SECS=0 \
     "$SEND" "$@" 2>/dev/null
 }
@@ -544,7 +546,7 @@ test_undelivered_records_are_scan_immutable() {
     rec=$(fm_pending_reply_path "$state" "$corr")
     printf 'done [corr=%s]: arrived too early\n' "$corr" > "$state/hibit.status"
     printf 'done [corr=%s]: wrong home too early\n' "$corr" > "$sm_home/state/hibit.status"
-    fm_write_secondmate_meta "$state/hibit.meta" "$sm_home" "sess:fm-hibit"
+    write_secondmate_meta "$state/hibit.meta" "$sm_home" "sess:fm-hibit"
     before=$(cat "$rec")
     if fm_pending_reply_try_resolve "$state" "$corr"; then
       fail "undelivered expectation must not resolve"
@@ -553,8 +555,8 @@ test_undelivered_records_are_scan_immutable() {
       || fail "undelivered wrong-home check should be inert"
     fm_pending_reply_tick_one "$state" "$corr" busy "$sm_home" \
       || fail "undelivered direct tick should be inert"
-    fm_backend_busy_state() { fail "undelivered watcher tick must not probe the backend"; }
-    fm_backend_capture() { fail "undelivered watcher tick must not capture the backend"; }
+    fm_herdr_busy_state() { fail "undelivered watcher tick must not probe the backend"; }
+    fm_herdr_capture() { fail "undelivered watcher tick must not capture the backend"; }
     fm_pending_reply_tick "$state" || fail "undelivered watcher tick should succeed"
     after=$(cat "$rec")
     [ "$after" = "$before" ] || fail "scan paths must not mutate an undelivered record"
@@ -758,8 +760,10 @@ test_unmarked_captain_input_creates_no_expectation() {
   home=$(setup_parent unmarked)
   # Crewmate target stays unmarked and creates no pending-reply record.
   fm_write_meta "$home/state/build.meta" \
-    "window=sess:fm-build" "worktree=$home/wt" "project=$home/p" \
-    "harness=echo" "kind=ship" "mode=no-mistakes" "yolo=off"
+    "backend=herdr" "window=sess:w-build:p1" "endpoint_task_id=build" \
+    "herdr_session=sess" "herdr_workspace_id=w-build" "herdr_tab_id=t-build" \
+    "herdr_pane_id=w-build:p1" "worktree=$home/wt" "project=$home/p" \
+    "harness=pi" "kind=ship" "mode=no-mistakes" "yolo=off"
   run_send "$fb" "$home" "$log" "build" "captain says hello"; rc=$?
   expect_code 0 "$rc" "unmarked crewmate send should succeed"
   [ "$(cat "$log")" = "captain says hello" ] \
@@ -774,7 +778,7 @@ test_fm_send_marked_secondmate_creates_pending_and_embeds_corr() {
   dir="$TMP_ROOT/send-pending"; mkdir -p "$dir"
   fb=$(make_stubs "$dir"); log="$dir/send.log"
   home=$(setup_parent send-pending)
-  fm_write_secondmate_meta "$home/state/hibit.meta" "$home/sm" "sess:fm-hibit"
+  write_secondmate_meta "$home/state/hibit.meta" "$home/sm" "sess:fm-hibit"
   run_send "$fb" "$home" "$log" "hibit" "audit the build"; rc=$?
   expect_code 0 "$rc" "secondmate send should succeed"
   got=$(cat "$log")
@@ -824,15 +828,14 @@ test_helper_report_resolves() {
   pass "optional helper report resolves without being required for correctness"
 }
 
-test_busy_idle_observation_via_backend_abstraction() {
+test_busy_idle_observation_via_herdr() {
   local home state corr
   home=$(setup_parent busy-idle)
   state="$home/state"
   export FM_PENDING_REPLY_NOW=9200
   corr=$(fm_pending_reply_create "$home" "$state" "hibit" "backend turn")
   fm_pending_reply_mark_delivered "$state" "$corr"
-  # Simulates Pi secondmate busy_state from fm_backend_busy_state without
-  # reading conversation text (herdr native idle/busy or tmux unknown fallback).
+  # Simulates Pi Secondmate state from Herdr without reading conversation text.
   fm_pending_reply_observe_busy "$state" "$corr" unknown
   [ -z "$(fm_pending_reply_get "$(fm_pending_reply_path "$state" "$corr")" request_turn_completed_epoch)" ] \
     || fail "unknown busy_state must not prove turn completion"
@@ -840,56 +843,45 @@ test_busy_idle_observation_via_backend_abstraction() {
   fm_pending_reply_observe_busy "$state" "$corr" idle
   [ -n "$(fm_pending_reply_get "$(fm_pending_reply_path "$state" "$corr")" request_turn_completed_epoch)" ] \
     || fail "busy->idle must prove turn completion"
-  pass "backend busy/idle observation covers Pi paths without conversation scrape"
+  pass "Herdr busy/idle observation covers Pi without conversation scrape"
 }
 
-test_unknown_backend_state_uses_capture_fallback() {
-  local backend
-  for backend in tmux herdr; do
-    (
-      local home state corr rec sm_home
-      home=$(setup_parent "fallback-$backend")
-      state="$home/state"
-      sm_home="$home/sm"
-      mkdir -p "$sm_home/state"
-      export FM_PENDING_REPLY_GRACE_SECS=10
-      # These fixture overrides are intentionally scoped to the isolated subshell.
-      # shellcheck disable=SC2030,SC2031
-      export FM_PENDING_REPLY_NOW=10000
-      corr=$(fm_pending_reply_create "$home" "$state" "hibit" "$backend fallback")
-      fm_pending_reply_mark_delivered "$state" "$corr"
-      fm_write_secondmate_meta "$state/hibit.meta" "$sm_home" "session:fm-hibit" alpha pi
-      [ "$backend" = tmux ] || printf 'backend=%s\n' "$backend" >> "$state/hibit.meta"
-      fm_backend_busy_state() { printf 'unknown'; }
-      fm_backend_capture() { printf '%s' "$FM_PENDING_TEST_CAPTURE"; }
-      # Invoked indirectly through FM_PENDING_REPLY_SEND_HOOK.
-      # shellcheck disable=SC2329
-      recovery_hook() { :; }
-      # This hook override is intentionally scoped to the isolated subshell.
-      # shellcheck disable=SC2030,SC2031
-      export FM_PENDING_REPLY_SEND_HOOK=recovery_hook
-      export FM_PENDING_TEST_CAPTURE='idle footer'
-      fm_pending_reply_tick "$state"
-      rec=$(fm_pending_reply_path "$state" "$corr")
-      [ -z "$(fm_pending_reply_get "$rec" request_turn_completed_epoch)" ] \
-        || fail "$backend fallback must not accept stale idle before grace"
-      # Continue advancing the subshell-local fixture clock.
-      # shellcheck disable=SC2030,SC2031
-      export FM_PENDING_REPLY_NOW=10010
-      fm_pending_reply_tick "$state"
-      [ "$(phase_of "$state" "$corr")" = recovery_sent ] \
-        || fail "$backend fallback idle should trigger recovery after grace"
-      export FM_PENDING_REPLY_NOW=10011
-      export FM_PENDING_TEST_CAPTURE='Working...'
-      fm_pending_reply_tick "$state"
-      export FM_PENDING_REPLY_NOW=10012
-      export FM_PENDING_TEST_CAPTURE='idle footer'
-      fm_pending_reply_tick "$state"
-      [ "$(phase_of "$state" "$corr")" = escalated ] \
-        || fail "$backend capture busy-to-idle should complete recovery turn"
-    ) || fail "$backend unknown-state capture fallback failed"
-  done
-  pass "both supported backends use bounded capture fallback for unknown states"
+test_unknown_herdr_state_uses_capture_fallback() {
+  (
+    local home state corr rec sm_home
+    home=$(setup_parent fallback-herdr)
+    state="$home/state"
+    sm_home="$home/sm"
+    mkdir -p "$sm_home/state"
+    export FM_PENDING_REPLY_GRACE_SECS=10
+    # shellcheck disable=SC2030 # fixture clock is intentionally subshell-local
+    export FM_PENDING_REPLY_NOW=10000
+    corr=$(fm_pending_reply_create "$home" "$state" hibit "Herdr fallback")
+    fm_pending_reply_mark_delivered "$state" "$corr"
+    write_secondmate_meta "$state/hibit.meta" "$sm_home" "lab:w-hibit:p1" alpha pi
+    fm_herdr_busy_state() { printf unknown; }
+    fm_herdr_capture() { printf '%s' "$FM_PENDING_TEST_CAPTURE"; }
+    # shellcheck disable=SC2329 # invoked indirectly through the send hook
+    recovery_hook() { :; }
+    # shellcheck disable=SC2030 # hook override is intentionally subshell-local
+    export FM_PENDING_REPLY_SEND_HOOK=recovery_hook
+    export FM_PENDING_TEST_CAPTURE='idle footer'
+    fm_pending_reply_tick "$state"
+    rec=$(fm_pending_reply_path "$state" "$corr")
+    [ -z "$(fm_pending_reply_get "$rec" request_turn_completed_epoch)" ] \
+      || fail "fallback must not accept stale idle before grace"
+    export FM_PENDING_REPLY_NOW=10010
+    fm_pending_reply_tick "$state"
+    [ "$(phase_of "$state" "$corr")" = recovery_sent ] \
+      || fail "fallback idle should trigger recovery after grace"
+    export FM_PENDING_REPLY_NOW=10011 FM_PENDING_TEST_CAPTURE='Working...'
+    fm_pending_reply_tick "$state"
+    export FM_PENDING_REPLY_NOW=10012 FM_PENDING_TEST_CAPTURE='idle footer'
+    fm_pending_reply_tick "$state"
+    [ "$(phase_of "$state" "$corr")" = escalated ] \
+      || fail "capture busy-to-idle should complete recovery turn"
+  ) || fail "Herdr unknown-state capture fallback failed"
+  pass "Herdr uses bounded capture fallback when native state is unknown"
 }
 
 test_tick_skips_terminal_and_reuses_target_observation() {
@@ -918,17 +910,17 @@ test_tick_skips_terminal_and_reuses_target_observation() {
     fm_pending_reply_set "$rec" phase escalated || fail "escalated fixture should transition"
     mkdir -p "$home/escalated/state"
     printf 'done [corr=%s]: wrong home\n' "$escalated" > "$home/escalated/state/escalated.status"
-    fm_write_secondmate_meta "$state/hibit.meta" "$home/hibit" "sess:fm-hibit"
-    fm_write_secondmate_meta "$state/resolved.meta" "$home/resolved" "sess:fm-resolved"
-    fm_write_secondmate_meta "$state/escalated.meta" "$home/escalated" "sess:fm-escalated"
+    write_secondmate_meta "$state/hibit.meta" "$home/hibit" "sess:fm-hibit"
+    write_secondmate_meta "$state/resolved.meta" "$home/resolved" "sess:fm-resolved"
+    write_secondmate_meta "$state/escalated.meta" "$home/escalated" "sess:fm-escalated"
     # Runtime overrides called indirectly by the pending-reply tick.
     # shellcheck disable=SC2329
-    fm_backend_busy_state() {
-      printf '%s\t%s\n' "$1" "$2" >> "$probe_log"
+    fm_herdr_busy_state() {
+      printf '%s\n' "$1" >> "$probe_log"
       printf 'busy'
     }
     # shellcheck disable=SC2329
-    fm_backend_capture() { fail "native busy observations should not capture"; }
+    fm_herdr_capture() { fail "native busy observations should not capture"; }
     # shellcheck disable=SC2329
     fm_pending_reply_find_resolve_line() {
       local status_file=$1 corr=$2 line
@@ -969,8 +961,8 @@ test_correlations_reuse_only_for_matching_open_task() {
   fb=$(make_stubs "$dir"); log="$dir/send.log"
   home=$(setup_parent corr-reuse)
   state="$home/state"
-  fm_write_secondmate_meta "$state/domain.meta" "$home/domain" "sess:fm-domain"
-  fm_write_secondmate_meta "$state/other.meta" "$home/other" "sess:fm-other"
+  write_secondmate_meta "$state/domain.meta" "$home/domain" "sess:fm-domain"
+  write_secondmate_meta "$state/other.meta" "$home/other" "sess:fm-other"
   run_send "$fb" "$home" "$log" domain "first request" || fail "first marked send failed"
   got=$(cat "$log")
   corr1=$(fm_pending_reply_extract_corr "$got")
@@ -1014,7 +1006,7 @@ test_tick_end_to_end_missed_then_escalate() {
 
   corr=$(fm_pending_reply_create "$home" "$state" "hibit" "e2e miss")
   fm_pending_reply_mark_delivered "$state" "$corr"
-  fm_write_secondmate_meta "$state/hibit.meta" "$sm_home" "sess:fm-hibit"
+  write_secondmate_meta "$state/hibit.meta" "$sm_home" "sess:fm-hibit"
   # Override backend busy via direct tick_one (backend may be unknown in hermetic home).
   fm_pending_reply_tick_one "$state" "$corr" busy "$sm_home"
   fm_pending_reply_tick_one "$state" "$corr" idle "$sm_home"
@@ -1079,8 +1071,8 @@ test_unmarked_captain_input_creates_no_expectation
 test_fm_send_marked_secondmate_creates_pending_and_embeds_corr
 test_document_pointer_resolves
 test_helper_report_resolves
-test_busy_idle_observation_via_backend_abstraction
-test_unknown_backend_state_uses_capture_fallback
+test_busy_idle_observation_via_herdr
+test_unknown_herdr_state_uses_capture_fallback
 test_tick_skips_terminal_and_reuses_target_observation
 test_correlations_reuse_only_for_matching_open_task
 test_tick_end_to_end_missed_then_escalate

@@ -122,19 +122,17 @@ test_delivery_busy_signatures_are_limited_to_verified_harnesses() {
 # Fixtures cover Pi with a blank row between solid `─` rules and a generic
 # bordered shell-glyph composer.
 #
-# Capability profiles mirror the real adapters' descriptors: tmux
-# (styled+cursor+identity), styled cursorless, and plain capture. Every
+# Capability profiles cover Herdr styled+identity, styled without identity, and plain capture. Every
 # emptiness verdict is asserted under the ambient UTF-8 locale AND LC_ALL=C,
 # pinning the locale-safe Unicode-space normalization (issue #1988).
 # =============================================================================
 
 ESC=$(printf '\033')
-CAPS_TMUX=$'styled=1\ncursor=1\nidentity=1\nrows=0'
-CAPS_STYLED=$'styled=1\ncursor=0\nidentity=1\nrows=20'      # herdr
-CAPS_STYLED_NOID=$'styled=1\ncursor=0\nidentity=0\nrows=20' # styled-capture
-CAPS_PLAIN=$'styled=0\ncursor=0\nidentity=0\nrows=20'       # plain capture, plain capture
+CAPS_STYLED=$'styled=1\nidentity=1\nrows=20'      # herdr
+CAPS_STYLED_NOID=$'styled=1\nidentity=0\nrows=20' # styled-capture
+CAPS_PLAIN=$'styled=0\nidentity=0\nrows=20'       # plain capture, plain capture
 
-# assert_screen <label> <want> <caps> <screen> [cursor] [identity]: one
+# assert_screen <label> <want> <caps> <screen> [unused] [identity]: one
 # verdict, asserted under the ambient locale AND LC_ALL=C.
 assert_screen() {
   local label=$1 want=$2 out
@@ -149,12 +147,11 @@ test_matrix_pi_separated_needs_identity() {
   # Real idle pi: a blank row between two solid rules. The blank row alone is
   # exactly what the strict rule refuses; only structure PLUS a live
   # idle/done/blocked pi identity proves the composer (herdr's rule, now
-  # fleet-wide; tmux supplies identity from its foreground-process probe).
+  # Herdr supplies identity from native agent state).
   local screen typed pi_idle pi_working none
   screen=$'transcript\n────────────────────────\n\n────────────────────────\n footer'
   pi_idle=$(printf 'pi\tidle'); pi_working=$(printf 'pi\tworking'); none=$(printf 'zsh\t')
-  assert_screen "pi idle with identity" empty "$CAPS_STYLED" "$screen" '' "$pi_idle"
-  assert_screen "pi idle on tmux with identity" empty "$CAPS_TMUX" "$screen" 2 "$pi_idle"
+  assert_screen "pi idle with identity" empty "$CAPS_STYLED" "$screen" "$pi_idle"
   assert_screen "pi idle on styled capture" unknown "$CAPS_STYLED_NOID" "$screen"
   # Identity-capable but unfetched: the adapter is asked to probe lazily.
   [ "$(fm_composer_classify_screen "$CAPS_STYLED" "$screen")" = need-identity ] \
@@ -162,20 +159,16 @@ test_matrix_pi_separated_needs_identity() {
   # With no identity capability, the shape is unprovable.
   assert_screen "pi pair without identity capability" unknown "$CAPS_PLAIN" "$screen"
   # A working pi cannot authorize injection into the blank region.
-  assert_screen "working pi defers" unknown "$CAPS_STYLED" "$screen" '' "$pi_working"
-  # The audit's live counterexample: a plain shell running sleep, cursor
-  # parked on a blank line between two rules, NO pi process. The permissive
+  assert_screen "working pi defers" unknown "$CAPS_STYLED" "$screen" "$pi_working"
+  # The audit's live counterexample: a plain shell running sleep on a blank line between two rules, NO pi process. The permissive
   # rule read this `empty`; identity+structure refuses it.
-  assert_screen "sleep-pane counterexample" unknown "$CAPS_TMUX" "$screen" 2 "$none"
-  assert_screen "absent identity cannot prove blank pi pair" unknown "$CAPS_TMUX" "$screen" 2 probe-absent
   typed=$'────────────────────────\nfix the flaky test\n────────────────────────'
-  assert_screen "pi typed" pending "$CAPS_STYLED" "$typed" '' "$pi_idle"
+  assert_screen "pi typed" pending "$CAPS_STYLED" "$typed" "$pi_idle"
   typed=$'────────────────────────\n❯\n────────────────────────'
-  assert_screen "pi lone-glyph draft with identity" pending "$CAPS_STYLED" "$typed" '' "$pi_idle"
-  assert_screen "pi lone-glyph draft on tmux" pending "$CAPS_TMUX" "$typed" 1 "$pi_idle"
+  assert_screen "pi lone-glyph draft with identity" pending "$CAPS_STYLED" "$typed" "$pi_idle"
   assert_screen "lone glyph without identity capability" unknown "$CAPS_STYLED_NOID" "$typed"
   assert_screen "lone glyph on plain backend" unknown "$CAPS_PLAIN" "$typed"
-  assert_screen "lone glyph with non-pi identity" unknown "$CAPS_STYLED" "$typed" '' "$none"
+  assert_screen "lone glyph with non-pi identity" unknown "$CAPS_STYLED" "$typed" "$none"
   pass "matrix: pi's separated composer needs identity + structure; the blank row alone never proves it"
 }
 
@@ -184,7 +177,6 @@ test_matrix_bordered_shell_glyph_box() {
   # glyph proves an empty composer only when the complete box contains it.
   local screen
   screen=$'╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯'
-  assert_screen "bordered shell glyph on tmux" empty "$CAPS_TMUX" "$screen" 1
   assert_screen "bordered shell glyph on plain capture" empty "$CAPS_PLAIN" "$screen"
   assert_screen "bordered shell glyph on herdr" empty "$CAPS_STYLED" "$screen"
   assert_screen "bordered shell glyph on styled capture" empty "$CAPS_STYLED_NOID" "$screen"
@@ -199,25 +191,25 @@ test_strict_blank_row_divergence() {
   # permissive posture has silently returned and away-mode injection would
   # again type escalations into unproven panes.
   local out
-  # Permissive read this blank cursor row as empty = safe to inject.
-  out=$(fm_composer_classify_screen "$CAPS_TMUX" $'some output\nmore output\n' 2)
-  [ "$out" = unknown ] || fail "a blank unidentified cursor row must be unknown (was permissive empty), got '$out'"
+  # Permissive read this blank unidentified row as empty = safe to inject.
+  out=$(fm_composer_classify_screen "$CAPS_STYLED_NOID" $'some output\nmore output\n')
+  [ "$out" = unknown ] || fail "a blank unidentified row must be unknown (was permissive empty), got '$out'"
   # A dead shell's prompt row.
-  out=$(fm_composer_classify_screen "$CAPS_TMUX" $'output\n$ ' 1)
+  out=$(fm_composer_classify_screen "$CAPS_STYLED_NOID" $'output\n$ ')
   [ "$out" = unknown ] || fail "a dead-shell prompt row must be unknown, got '$out'"
   # A bare busy-footer row is not a composer container.
-  out=$(fm_composer_classify_screen "$CAPS_TMUX" $'Working...' 0)
+  out=$(fm_composer_classify_screen "$CAPS_STYLED_NOID" $'Working...')
   [ "$out" = unknown ] || fail "a bare busy-footer row must be unknown (was permissive empty), got '$out'"
-  # An unidentified free-text cursor row carries no container proof either.
-  out=$(fm_composer_classify_screen "$CAPS_TMUX" $'output\nhuman draft text' 1)
+  # An unidentified free-text row carries no container proof either.
+  out=$(fm_composer_classify_screen "$CAPS_STYLED_NOID" $'output\nhuman draft text')
   [ "$out" = unknown ] || fail "an unidentified text row must be unknown under strict, got '$out'"
-  # A blank screen with no cursor capability.
+  # A blank screen with no container evidence.
   out=$(fm_composer_classify_screen "$CAPS_PLAIN" $'\n\n')
   [ "$out" = unknown ] || fail "a blank screen must be unknown, got '$out'"
   pass "strict posture: blank and unidentified rows are unknown, never injectable empty"
 }
 
-test_cursorless_container_rejects_contiguous_lower_activity() {
+test_bottom-most_container_rejects_contiguous_lower_activity() {
   local box boxed
   box=$'╭────────────────────────╮\n│ ❯                      │\n╰────────────────────────╯\nWorking on request...'
   assert_screen "stale box above activity on herdr" unknown "$CAPS_STYLED" "$box"
@@ -226,7 +218,7 @@ test_cursorless_container_rejects_contiguous_lower_activity() {
 
   boxed=$'╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯\n\nstatus line'
   assert_screen "blank-separated bordered footer" empty "$CAPS_PLAIN" "$boxed"
-  pass "fm_composer_classify_screen: cursorless containers reject only contiguous unclaimed activity"
+  pass "fm_composer_classify_screen: bottom-most containers reject only contiguous unclaimed activity"
 }
 
 test_incomplete_lower_box_invalidates_stale_candidate() {
@@ -241,19 +233,10 @@ test_incomplete_lower_box_invalidates_stale_candidate() {
 test_mismatched_bottom_requires_matching_width() {
   local screen out
   screen=$'╭────────────────────────╮\n│ ❯                      │\n╰────────╯'
-  out=$(fm_composer_classify_screen "$CAPS_TMUX" "$screen" 1)
+  out=$(fm_composer_classify_screen "$CAPS_PLAIN" "$screen")
   [ "$out" = unknown ] \
     || fail "a short mismatched bottom must not prove an empty box, got '$out'"
   pass "fm_composer_classify_screen: bottom borders retain full box geometry"
-}
-
-test_cursor_on_proven_box_bottom_classifies_content() {
-  local screen out
-  screen=$'╭────────────────────────╮\n│ ❯                      │\n╰────────────────────────╯'
-  out=$(fm_composer_classify_screen "$CAPS_TMUX" "$screen" 2)
-  [ "$out" = empty ] \
-    || fail "a cursor on a proven box bottom must classify its content, got '$out'"
-  pass "fm_composer_classify_screen: a proven box tolerates a bottom-border cursor"
 }
 
 test_selected_content_is_composer_scoped_and_wrap_normalized() {
@@ -293,8 +276,7 @@ test_delivery_busy_signatures_are_limited_to_verified_harnesses
 test_matrix_pi_separated_needs_identity
 test_matrix_bordered_shell_glyph_box
 test_strict_blank_row_divergence
-test_cursorless_container_rejects_contiguous_lower_activity
+test_bottom-most_container_rejects_contiguous_lower_activity
 test_incomplete_lower_box_invalidates_stale_candidate
 test_mismatched_bottom_requires_matching_width
-test_cursor_on_proven_box_bottom_classifies_content
 test_selected_content_is_composer_scoped_and_wrap_normalized

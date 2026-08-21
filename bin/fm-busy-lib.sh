@@ -161,8 +161,8 @@ fm_busy_record_read() {  # <state-dir> <id>
 # caller has already established as present. Prints "<verdict> <source>":
 # busy|idle|unknown plus the producing source (see header). Never probes
 # process state.
-fm_busy_classify() {  # <backend> <target> <harness> <id> <state-dir>
-  local backend=$1 target=$2 harness=$3 id=$4 state=$5
+fm_busy_classify() {  # <target> <harness> <id> <state-dir>
+  local target=$1 harness=$2 id=$3 state=$4
   local out rc r_state r_source native
   out=$(fm_busy_record_read "$state" "$id") && rc=0 || rc=$?
   if [ "$rc" = 0 ]; then
@@ -182,12 +182,10 @@ fm_busy_classify() {  # <backend> <target> <harness> <id> <state-dir>
       return 0
       ;;
   esac
-  # No record at all. A native herdr busy verdict is semantic enough to trust
-  # for BUSY (streaming means a turn is running); native idle is narrower
-  # than turn state (a long foreground tool call reads idle) and stays
-  # unknown here.
-  if [ "$backend" = herdr ] && command -v fm_backend_busy_state >/dev/null 2>&1; then
-    native=$(fm_backend_busy_state "$backend" "$target" 2>/dev/null || true)
+  # No record at all. Native Herdr busy is sufficient positive activity
+  # evidence, while native idle is narrower than turn state and stays unknown.
+  if command -v fm_herdr_busy_state >/dev/null 2>&1; then
+    native=$(fm_herdr_busy_state "$target" 2>/dev/null || true)
     if [ "$native" = busy ]; then
       printf 'busy herdr-native'
       return 0
@@ -196,36 +194,37 @@ fm_busy_classify() {  # <backend> <target> <harness> <id> <state-dir>
   printf 'unknown missing'
 }
 
-# fm_busy_classify_live: fm_busy_classify behind the one process-level
-# override - a gone endpoint is dead, never busy. Requires fm-backend.sh to
-# be sourced for fm_backend_target_exists.
-fm_busy_classify_live() {  # <backend> <target> <harness> <id> <state-dir> [expected-label]
-  local backend=$1 target=$2 harness=$3 id=$4 state=$5 label=${6-}
+# fm_busy_classify_live adds the sole process-level override.
+# A gone Herdr endpoint is dead, never busy.
+fm_busy_classify_live() {  # <target> <harness> <id> <state-dir>
+  local target=$1 harness=$2 id=$3 state=$4
   if [ -z "$target" ]; then
     printf 'unknown no-target'
     return 0
   fi
-  if ! fm_backend_target_exists "$backend" "$target" "$label" 2>/dev/null; then
+  if ! fm_herdr_target_exists "$target" 2>/dev/null; then
     printf 'dead endpoint-gone'
     return 0
   fi
-  fm_busy_classify "$backend" "$target" "$harness" "$id" "$state"
+  fm_busy_classify "$target" "$harness" "$id" "$state"
 }
 
-# fm_busy_classify_meta: classify a task from its recorded metadata, so every
-# consumer resolves backend, target, and harness the same way instead of
-# re-deriving them. Requires fm-backend.sh to be sourced.
+# fm_busy_classify_meta refuses to reinterpret retired or ambiguous endpoint
+# records as Herdr.
 fm_busy_classify_meta() {  # <meta-file> <id> <state-dir>
-  local meta=$1 id=$2 state=$3 backend target harness
+  local meta=$1 id=$2 state=$3 target harness classification
   [ -f "$meta" ] || { printf 'unknown missing'; return 0; }
-  backend=$(fm_backend_of_meta "$meta")
-  target=$(fm_backend_target_of_meta "$meta")
+  classification=$(fm_herdr_meta_classify "$meta") || {
+    printf 'unknown %s' "$classification"
+    return 0
+  }
+  target=$(fm_endpoint_target_of_meta "$meta")
   harness=$(fm_meta_get "$meta" harness)
   if [ -z "$target" ]; then
     printf 'unknown no-target'
     return 0
   fi
-  fm_busy_classify "$backend" "$target" "$harness" "$id" "$state"
+  fm_busy_classify "$target" "$harness" "$id" "$state"
 }
 
 # fm_busy_is_busy: boolean view for callers that only gate on provable
@@ -233,7 +232,7 @@ fm_busy_classify_meta() {  # <meta-file> <id> <state-dir>
 # and dead all return 1, so an unknown can never be silently promoted to
 # either boolean pole - callers that must distinguish idle from unknown read
 # the full classification instead.
-fm_busy_is_busy() {  # <backend> <target> <harness> <id> <state-dir>
+fm_busy_is_busy() {  # <target> <harness> <id> <state-dir>
   local verdict
   verdict=$(fm_busy_classify "$@")
   [ "${verdict%% *}" = busy ]

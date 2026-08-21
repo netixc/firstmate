@@ -23,7 +23,7 @@ This record is the concurrent isolation proof for the portable parallel candidat
 ## Candidate set
 
 - `tests/fm-arm-pretool-check.test.sh`
-- `tests/fm-backend-herdr.test.sh`
+- `tests/fm-herdr.test.sh`
 - `tests/fm-brief.test.sh`
 - `tests/fm-cd-pretool-check.test.sh`
 - `tests/fm-composer-ghost.test.sh`
@@ -43,14 +43,13 @@ This record is the concurrent isolation proof for the portable parallel candidat
 - `tests/fm-spawn-batch.test.sh`
 - `tests/fm-supervision-instructions.test.sh`
 - `tests/fm-test-run.test.sh`
-- `tests/fm-tmux-submit-busy.test.sh`
-- `tests/fm-transition-lib.test.sh`
+- `tests/fm-herdr-transition.test.sh`
 
 ## Durations
 
 | duration_ms | exit | worker | script |
 |---:|---:|---:|---|
-| 53498 | 0 | 2 | `tests/fm-backend-herdr.test.sh` |
+| 53498 | 0 | 2 | `tests/fm-herdr.test.sh` |
 | 48401 | 0 | 14 | `tests/fm-relay.test.sh` |
 | 44466 | 0 | 8 | `tests/fm-decision-hold-lifecycle.test.sh` |
 | 28028 | 0 | 21 | `tests/fm-test-run.test.sh` |
@@ -65,13 +64,12 @@ This record is the concurrent isolation proof for the portable parallel candidat
 | 5003 | 0 | 15 | `tests/fm-review-diff.test.sh` |
 | 4536 | 0 | 16 | `tests/fm-send-popup-settle.test.sh` |
 | 3393 | 0 | 18 | `tests/fm-send-strict.test.sh` |
-| 3125 | 0 | 22 | `tests/fm-tmux-submit-busy.test.sh` |
 | 2111 | 0 | 17 | `tests/fm-send-settle.test.sh` |
 | 1598 | 0 | 3 | `tests/fm-brief.test.sh` |
 | 1026 | 0 | 6 | `tests/fm-composer-lib.test.sh` |
 | 314 | 0 | 9 | `tests/fm-ensure-agents-md.test.sh` |
 | 245 | 0 | 20 | `tests/fm-supervision-instructions.test.sh` |
-| 128 | 0 | 23 | `tests/fm-transition-lib.test.sh` |
+| 128 | 0 | 23 | `tests/fm-herdr-transition.test.sh` |
 | 27 | 0 | 12 | `tests/fm-pi-primary-types.test.sh` |
 
 ## Scope

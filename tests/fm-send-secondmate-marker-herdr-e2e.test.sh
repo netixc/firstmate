@@ -20,7 +20,7 @@ set -u
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-marker-lib.sh"
 # shellcheck source=/dev/null
-. "$ROOT/bin/fm-backend.sh"
+. "$ROOT/bin/fm-herdr.sh"
 
 if [ "${FM_SEND_MARKER_HERDR_E2E:-0}" != 1 ]; then
   echo "skip: set FM_SEND_MARKER_HERDR_E2E=1 to run the real Pi/Herdr secondmate-marker regression"
@@ -116,12 +116,12 @@ chmod +x "$FAKEBIN/pi"
 
 "$LAB_HELPER" provision "$SESSION"
 PATH="$FAKEBIN:$ORIGINAL_PATH" FM_GATE_REFUSE_BYPASS=1 FM_HOME="$SENDER_HOME" HERDR_SESSION="$SESSION" \
-  "$ROOT/bin/fm-spawn.sh" "$ID" "$SECOND_HOME" --secondmate --harness pi --backend herdr >/dev/null
+  "$ROOT/bin/fm-spawn.sh" "$ID" "$SECOND_HOME" --secondmate --harness pi >/dev/null
 
 META="$SENDER_HOME/state/$ID.meta"
 [ -f "$META" ] || fail "real secondmate spawn did not write exact-id metadata"
 [ "$(fm_meta_get "$META" kind)" = secondmate ] || fail "real secondmate metadata did not record kind=secondmate"
-TARGET=$(fm_backend_target_of_meta "$META")
+TARGET=$(fm_endpoint_target_of_meta "$META")
 PANE=${TARGET#*:}
 case "$TARGET" in
   "$SESSION":w*:p*) : ;;

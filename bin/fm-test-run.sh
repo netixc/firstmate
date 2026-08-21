@@ -143,25 +143,24 @@ family_for_basename() {
     fm-operational-input.test.sh|fm-pi-primary-types.test.sh|\
     fm-send-popup-settle.test.sh|fm-send-settle.test.sh|\
     fm-supervision-instructions.test.sh|fm-task-delivery.test.sh|\
-    fm-tmux-submit-busy.test.sh|fm-trace-context-lib.test.sh|\
-    fm-transition-lib.test.sh|\
+    fm-trace-context-lib.test.sh|\
+    fm-herdr-transition.test.sh|\
     fm-test-run.test.sh|fm-test-isolation-proof.test.sh)
       printf '%s\n' pure-contract-unit
       ;;
     fm-daemon.test.sh|fm-guard-stale-banner.test.sh|fm-pi-watch-extension.test.sh|\
     fm-session-lock-ancestry.test.sh|\
-    fm-supervision-events.test.sh|fm-turnend-guard.test.sh|fm-wake-daemon-lifecycle-e2e.test.sh|\
-    fm-wake-drain-unread-status.test.sh|\
+    fm-supervision-events.test.sh|fm-turnend-guard.test.sh|fm-wake-drain-unread-status.test.sh|\
     fm-wake-queue.test.sh|fm-watch-arm.test.sh|fm-watch-triage.test.sh|\
     fm-watcher-lock.test.sh|fm-inactive-reconcile.test.sh)
       printf '%s\n' watcher-wake-lock
       ;;
-    fm-afk-inject-herdr-e2e.test.sh|fm-afk-launch.test.sh|fm-backend-autodetect-smoke.test.sh|\
-    fm-backend-herdr-eventwait-smoke.test.sh|fm-backend-herdr-presentation-e2e.test.sh|\
-    fm-backend-herdr-launcher-workspace-e2e.test.sh|\
-    fm-backend-herdr-prune-safety-e2e.test.sh|fm-backend-herdr-respawn-idem-e2e.test.sh|\
+    fm-afk-inject-herdr-e2e.test.sh|fm-afk-launch.test.sh|fm-herdr-default-smoke.test.sh|\
+    fm-herdr-eventwait-smoke.test.sh|fm-herdr-presentation-e2e.test.sh|\
+    fm-herdr-launcher-workspace-e2e.test.sh|\
+    fm-herdr-prune-safety-e2e.test.sh|fm-herdr-respawn-idem-e2e.test.sh|\
     fm-herdr-session-cleanup-e2e.test.sh|\
-    fm-backend-herdr-smoke.test.sh|fm-backend-herdr-workspace-per-home-e2e.test.sh|\
+    fm-herdr-smoke.test.sh|fm-herdr-workspace-per-home-e2e.test.sh|\
     fm-control-herdr-smoke.test.sh)
       printf '%s\n' real-herdr-gated
       ;;
@@ -169,8 +168,7 @@ family_for_basename() {
     fm-remote-doctor.test.sh|fm-remote-job.test.sh|fm-remote-job-orphan-reap.test.sh|\
     fm-remote-reply.test.sh|fm-remote-secondmate-lifecycle-e2e.test.sh|\
     fm-remote-secondmate-trace-context.test.sh|\
-    fm-secondmate-harness.test.sh|fm-secondmate-lifecycle-e2e.test.sh|\
-    fm-secondmate-liveness.test.sh|fm-secondmate-safety.test.sh|fm-secondmate-sync.test.sh|\
+    fm-secondmate-harness.test.sh|fm-secondmate-safety.test.sh|fm-secondmate-sync.test.sh|\
     fm-startup-memory-budget.test.sh|fm-stow-cascade.test.sh|\
     fm-send-secondmate-marker.test.sh|fm-shared-captain-inheritance.test.sh)
       printf '%s\n' secondmate
@@ -181,28 +179,23 @@ family_for_basename() {
       printf '%s\n' session-bootstrap
       ;;
     fm-afk-pi-herdr-return-e2e.test.sh|\
-    fm-composer-matrix-live-e2e.test.sh|\
-    fm-harness-liveness-drift-live-e2e.test.sh|\
     fm-herdr-version-floor-live-e2e.test.sh|\
-    fm-pi-primary-live-e2e.test.sh|\
-    fm-sessionstart-hook-live-e2e.test.sh|fm-sessionstart-instruction-refresh-live-e2e.test.sh|\
     fm-quota-array-dispatch-live-e2e.test.sh|fm-send-secondmate-marker-herdr-e2e.test.sh)
       printf '%s\n' live-harness-optin
       ;;
-    fm-backend-herdr.test.sh|fm-backend-tmux-smoke.test.sh|fm-backend.test.sh|\
-    fm-tmux-agent-liveness.test.sh|\
+    fm-herdr.test.sh|fm-herdr-selection.test.sh|\
     fm-control.test.sh|fm-control-relaunch.test.sh|\
     fm-herdr-session-cleanup.test.sh|fm-send-resolve-key.test.sh|fm-send-strict.test.sh|fm-spawn-batch.test.sh|\
     fm-spawn-dispatch-profile.test.sh|\
     fm-trace-context-spawn.test.sh|fm-spawn-worktree-settle.test.sh|\
     fm-teardown-endpoint-safety.test.sh)
-      printf '%s\n' backend-dispatch
+      printf '%s\n' herdr-session
       ;;
     fm-pr-check-security.test.sh|fm-pr-merge.test.sh|fm-review-diff.test.sh|\
     fm-teardown.test.sh|fm-relay.test.sh)
       printf '%s\n' pr-forge
       ;;
-    fm-afk-inject-e2e.test.sh|fm-afk-return.test.sh)
+    fm-afk-return.test.sh)
       printf '%s\n' afk
       ;;
     fm-bearings-snapshot.test.sh|fm-fleet-snapshot-view.test.sh)
@@ -231,7 +224,7 @@ real-herdr-gated
 secondmate
 session-bootstrap
 live-harness-optin
-backend-dispatch
+herdr-session
 pr-forge
 afk
 snapshot-bearings
@@ -258,7 +251,7 @@ list_known_lanes() {
 list_proven_isolated() {
   cat <<'EOF'
 tests/fm-arm-pretool-check.test.sh
-tests/fm-backend-herdr.test.sh
+tests/fm-herdr.test.sh
 tests/fm-brief.test.sh
 tests/fm-cd-pretool-check.test.sh
 tests/fm-composer-ghost.test.sh
@@ -277,8 +270,7 @@ tests/fm-send-strict.test.sh
 tests/fm-spawn-batch.test.sh
 tests/fm-supervision-instructions.test.sh
 tests/fm-test-run.test.sh
-tests/fm-tmux-submit-busy.test.sh
-tests/fm-transition-lib.test.sh
+tests/fm-herdr-transition.test.sh
 tests/fm-relay.test.sh
 EOF
 }
@@ -288,7 +280,7 @@ EOF
 # Execution order is longest first so wall-clock stays near the balanced sum.
 list_portable_parallel_1() {
   cat <<'EOF'
-tests/fm-backend-herdr.test.sh
+tests/fm-herdr.test.sh
 tests/fm-arm-pretool-check.test.sh
 tests/fm-crew-state.test.sh
 tests/fm-test-run.test.sh
@@ -299,7 +291,7 @@ tests/fm-composer-lib.test.sh
 tests/fm-spawn-batch.test.sh
 tests/fm-ensure-agents-md.test.sh
 tests/fm-supervision-instructions.test.sh
-tests/fm-transition-lib.test.sh
+tests/fm-herdr-transition.test.sh
 tests/fm-pi-primary-types.test.sh
 EOF
 }
@@ -313,7 +305,6 @@ tests/fm-cd-pretool-check.test.sh
 tests/fm-herdr-lab.test.sh
 tests/fm-pr-merge.test.sh
 tests/fm-composer-ghost.test.sh
-tests/fm-tmux-submit-busy.test.sh
 tests/fm-send-strict.test.sh
 tests/fm-send-settle.test.sh
 tests/fm-brief.test.sh
@@ -329,8 +320,8 @@ is_proven_isolated_script() {
 }
 
 # The portable serial remainder: every tests/*.test.sh that is neither
-# proven-isolated nor real-herdr-gated. Watcher, lock, AFK, real tmux, daemon,
-# secondmate lifecycle, bootstrap, live-harness opt-in, GUI-backend, and other
+# proven-isolated nor real-herdr-gated. Watcher, lock, AFK, daemon, Secondmate lifecycle,
+# bootstrap, live-harness opt-in, real Herdr, and other
 # unproven work stays here. Derived rather than enumerated so a newly added test
 # lands here by default instead of falling out of every lane.
 list_portable_serial() {
@@ -356,13 +347,11 @@ list_portable_serial() {
 # procedure.
 portable_serial_weight_hints() {
   cat <<'EOF'
-tests/fm-afk-inject-e2e.test.sh 34019
 tests/fm-afk-pi-herdr-return-e2e.test.sh 42
 tests/fm-afk-return.test.sh 1105
 tests/fm-ask-user-authority.test.sh 68
-tests/fm-backend-herdr-focus-flash-e2e.test.sh 21
-tests/fm-backend-tmux-smoke.test.sh 314
-tests/fm-backend.test.sh 16370
+tests/fm-herdr-focus-flash-e2e.test.sh 21
+tests/fm-herdr-selection.test.sh 16370
 tests/fm-backlog-handoff.test.sh 2786
 tests/fm-bearings-snapshot.test.sh 60103
 tests/fm-bootstrap.test.sh 21912
@@ -380,22 +369,18 @@ tests/fm-guard-stale-banner.test.sh 2917
 tests/fm-herdr-session-cleanup.test.sh 4802
 tests/fm-operational-input.test.sh 184
 tests/fm-pending-reply.test.sh 7328
-tests/fm-pi-primary-live-e2e.test.sh 19
 tests/fm-pi-watch-extension.test.sh 16386
 tests/fm-pr-check-security.test.sh 269158
 tests/fm-procevent.test.sh 42789
 tests/fm-public-followup.test.sh 23365
 tests/fm-quota-array-dispatch-live-e2e.test.sh 19
 tests/fm-secondmate-harness.test.sh 87895
-tests/fm-secondmate-lifecycle-e2e.test.sh 4929
-tests/fm-secondmate-liveness.test.sh 12553
 tests/fm-secondmate-safety.test.sh 24432
 tests/fm-secondmate-sync.test.sh 12289
 tests/fm-send-secondmate-marker-herdr-e2e.test.sh 27
 tests/fm-send-secondmate-marker.test.sh 2136
 tests/fm-session-start.test.sh 37289
 tests/fm-sessionstart-nudge.test.sh 264
-tests/fm-sessionstart-instruction-refresh-live-e2e.test.sh 19
 tests/fm-shared-captain-inheritance.test.sh 3506
 tests/fm-spawn-dispatch-profile.test.sh 41351
 tests/fm-spawn-worktree-settle.test.sh 4598
@@ -407,7 +392,6 @@ tests/fm-teardown.test.sh 23237
 tests/fm-test-isolation-proof.test.sh 326
 tests/fm-turnend-guard.test.sh 5986
 tests/fm-update.test.sh 1894
-tests/fm-wake-daemon-lifecycle-e2e.test.sh 4284
 tests/fm-wake-drain-unread-status.test.sh 4000
 tests/fm-wake-queue.test.sh 22787
 tests/fm-watch-triage.test.sh 113051
@@ -809,9 +793,9 @@ families_for_changed_path() {
     tests/fm-test-run.test.sh)
       printf '%s\n' pure-contract-unit
       ;;
-    tests/fm-backend-herdr-eventwait.test.py)
+    tests/fm-herdr-eventwait.test.py)
       printf '%s\n' real-herdr-gated
-      printf '%s\n' backend-dispatch
+      printf '%s\n' herdr-session
       ;;
     tests/*.test.sh)
       # A single test file change selects only that script via basename family
@@ -821,21 +805,18 @@ families_for_changed_path() {
     bin/fm-test-run.sh|bin/fm-test-isolation-proof.sh)
       printf '%s\n' pure-contract-unit
       ;;
-    bin/backends/herdr*|bin/fm-herdr-lab.sh|tests/herdr-test-safety.sh)
+    bin/fm-herdr-*.py|bin/fm-herdr-lab.sh|tests/herdr-test-safety.sh)
       printf '%s\n' real-herdr-gated
-      printf '%s\n' backend-dispatch
+      printf '%s\n' herdr-session
       printf '%s\n' pure-contract-unit
       ;;
     bin/fm-herdr-session-cleanup.sh)
       printf '%s\n' session-bootstrap
       printf '%s\n' real-herdr-gated
-      printf '%s\n' backend-dispatch
+      printf '%s\n' herdr-session
       ;;
-    bin/backends/tmux.sh)
-      printf '%s\n' backend-dispatch
-      ;;
-    bin/fm-backend.sh)
-      printf '%s\n' backend-dispatch
+    bin/fm-herdr.sh)
+      printf '%s\n' herdr-session
       printf '%s\n' real-herdr-gated
       ;;
     bin/fm-watch*|bin/fm-wake*|bin/fm-inactive-reconcile.sh|\
@@ -895,15 +876,14 @@ families_for_changed_path() {
       ;;
     bin/fm-composer-lib.sh)
       # The shared shape catalogue is vendor-rendered signal; a change to it
-      # re-selects the live guard (fm-composer-matrix-live-e2e) alongside the
-      # portable families.
-      printf '%s\n' backend-dispatch
+      # re-selects real-Herdr coverage alongside the portable families.
+      printf '%s\n' herdr-session
       printf '%s\n' pure-contract-unit
       printf '%s\n' live-harness-optin
       ;;
     bin/fm-spawn.sh|bin/fm-send.sh|bin/fm-harness.sh|\
     bin/fm-peek.sh|bin/fm-composer*)
-      printf '%s\n' backend-dispatch
+      printf '%s\n' herdr-session
       printf '%s\n' pure-contract-unit
       ;;
     bin/fm-bearings-snapshot.sh|bin/fm-fleet-snapshot.sh|bin/fm-fleet-view.sh)
@@ -917,8 +897,8 @@ families_for_changed_path() {
       ;;
     bin/fm-lint.sh|bin/fm-install-shellcheck.sh|\
     bin/fm-brief.sh|bin/fm-ensure-agents-md.sh|bin/fm-crew-state.sh|\
-    bin/fm-decision-hold.sh|bin/fm-supervision*|bin/fm-transition-lib.sh|\
-    bin/fm-tmux-lib.sh|bin/fm-marker-lib.sh|bin/fm-operational-input.sh|bin/fm-tasks-axi-lib.sh|\
+    bin/fm-decision-hold.sh|bin/fm-supervision*|\
+    bin/fm-marker-lib.sh|bin/fm-operational-input.sh|bin/fm-tasks-axi-lib.sh|\
     bin/fm-primary-scope-lib.sh|bin/fm-project-mode.sh|bin/fm-promote.sh|\
     bin/fm-ff-lib.sh|bin/fm-gotmp*|bin/*pretool*)
       printf '%s\n' pure-contract-unit

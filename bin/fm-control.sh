@@ -22,14 +22,14 @@
 #
 #   interrupt  Deliver the harness's verified interrupt sequence. The agent
 #              keeps running. Postcondition: delivery succeeded, the endpoint
-#              still exists, and the agent is still alive where the backend can
-#              classify that. Cancellation is confirmed only from an adapter-
-#              owned acknowledgement and otherwise reported unconfirmed. Busy
-#              state is never rewritten as proof of the action.
+#              still exists, and Herdr still classifies the agent as alive.
+#              Cancellation is confirmed only from Pi's acknowledgement and
+#              otherwise reported unconfirmed. Busy state is never rewritten
+#              as proof of the action.
 #   exit       Stop the agent, preserving its terminal endpoint, worktree, and
 #              every uncommitted change. Interrupts first when the task reads
 #              busy, then submits the harness's exit command. Postcondition:
-#              the backend's recovery-grade classifier reports the agent gone.
+#              Herdr's recovery-grade classifier reports the agent gone.
 #              Already-stopped is success (idempotent).
 #   relaunch   Transactionally replace the running Pi agent with a new one, in
 #              the SAME endpoint and SAME worktree, optionally changing model
@@ -54,14 +54,13 @@
 # endpoint, or discarding work stays with bin/fm-teardown.sh, which owns the
 # landed-work test.
 #
-# `resume` is not a verb: it is not deterministic across the verified adapters
-# (bin/fm-control-lib.sh's header owns that reasoning). `relaunch` covers the
-# same need for every adapter because the brief on disk, not a harness-private
-# session, is the durable instruction.
+# `resume` is not a verb: Pi has no verified pane-resume contract.
+# `relaunch` covers the same need because the brief on disk, not a
+# harness-private session, is the durable instruction.
 #
 # Targeting is EXACT: only a bare task id with a state/<id>.meta record in
 # THIS home is accepted, and the record must pass the shared endpoint-identity
-# validation (bin/fm-backend.sh's fm_backend_validate_task_endpoint). A legacy
+# validation (bin/fm-herdr.sh's fm_herdr_validate_task_endpoint). A legacy
 # fm-<id> label, an explicit session:window endpoint, and a bare window name
 # are all refused - a lifecycle command delivered to the wrong endpoint is far
 # worse than a loud refusal.
@@ -72,10 +71,9 @@
 # Fail-closed boundaries:
 #   - An unverified harness, or a harness whose control mechanics are unknown,
 #     is refused rather than guessed at.
-#   - A backend that cannot deliver the harness's interrupt key is refused
-#   - `exit` and `relaunch` require a backend with a recovery-grade agent-state
-#     classifier (tmux and Herdr), because without one the "the agent stopped"
-#     postcondition cannot be proven.
+#   - `exit` and `relaunch` require Herdr's recovery-grade agent-state
+#     classifier, because without it the "the agent stopped" postcondition
+#     cannot be proven.
 #   - An ambiguous or unreadable endpoint state refuses; only a positively
 #     classified state acts.
 #
@@ -119,8 +117,8 @@ DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
   exit 1
 }
 
-# shellcheck source=bin/fm-backend.sh
-. "$SCRIPT_DIR/fm-backend.sh"
+# shellcheck source=bin/fm-herdr.sh
+. "$SCRIPT_DIR/fm-herdr.sh"
 # shellcheck source=bin/fm-busy-lib.sh
 . "$SCRIPT_DIR/fm-busy-lib.sh"
 # shellcheck source=bin/fm-control-lib.sh
@@ -241,7 +239,7 @@ esac
 # --- exact task-id resolution ----------------------------------------------
 
 case "$RAW_ID" in
-  *:*) die "'$RAW_ID' is an explicit backend endpoint; fm-control accepts an exact task id only, so a lifecycle command can never land on an endpoint this home does not own" ;;
+  *:*) die "'$RAW_ID' is an explicit Herdr endpoint; fm-control accepts an exact task id only, so a lifecycle command can never land on an endpoint this home does not own" ;;
 esac
 if ! fm_task_id_creation_valid "$RAW_ID"; then
   die "'$RAW_ID' is not a valid task id"
@@ -268,7 +266,7 @@ fi
 # postcondition this plane verifies - the agent-state classification, the busy
 # verdict, the endpoint's existence - would be read here for an endpoint that
 # does not live here. Endpoint validation already refuses such a record, since
-# `window=remote:<id>` can never match a local backend's required shape, so
+# `window=remote:<id>` can never match local Herdr identity, so
 # nothing can be delivered to a wrong endpoint either way. What that refusal
 # cannot say is WHY, and "malformed metadata" is the wrong thing to tell an
 # operator about a correctly configured remote route. Name the placement
@@ -277,10 +275,8 @@ if [ -n "$(fm_meta_get "$META" remote_host)" ]; then
   die "task $ID is a remotely placed secondmate on $(fm_meta_get "$META" remote_host); its agent runs outside this home, so no lifecycle action here could verify that it interrupted, stopped, or came back. Drive its lifecycle on that host, and reconcile it through the secondmate recovery path rather than this plane"
 fi
 
-fm_backend_validate_task_endpoint "$META" "$ID" || exit 1
-BACKEND=$FM_BACKEND_VALIDATED_BACKEND
-T=$FM_BACKEND_VALIDATED_TARGET
-LABEL="fm-$ID"
+fm_herdr_validate_task_endpoint "$META" "$ID" || exit 1
+T=$FM_HERDR_VALIDATED_TARGET
 RECORDED_HARNESS=$(fm_meta_get "$META" harness)
 KIND=$(fm_meta_get "$META" kind)
 WT=$(fm_meta_get "$META" worktree)
@@ -291,12 +287,10 @@ HARNESS=$(fm_control_harness_family "$RECORDED_HARNESS") \
 fm_control_harness_supported "$HARNESS" \
   || die "task $ID records harness '${RECORDED_HARNESS:-none}', which has no verified control mechanics; fm-control refuses to guess an interrupt key or exit command"
 
-fm_backend_validate "$BACKEND" || exit 1
-
 # --- shared helpers ---------------------------------------------------------
 
 agent_state() {
-  fm_backend_agent_state "$BACKEND" "$T"
+  fm_herdr_agent_state "$T"
 }
 
 busy_verdict() {
@@ -324,29 +318,21 @@ wait_agent_state() {  # <timeout> <wanted>...
   return 1
 }
 
-require_state_verified_backend() {  # <verb>
-  fm_control_backend_state_verified "$BACKEND" && return 0
-  die "task $ID runs on the $BACKEND backend, which has no recovery-grade agent-state classifier, so '$1' cannot prove the agent actually stopped; refusing rather than reporting an unproven transition as done"
-}
-
-# send_interrupt_keys: deliver the harness's interrupt key the verified number
-# of times.
+# send_interrupt_keys: deliver Pi's interrupt key the verified number of times.
 send_interrupt_keys() {
   local key repeat i=0
   key=$(fm_control_interrupt_key "$HARNESS")
   repeat=$(fm_control_interrupt_repeat "$HARNESS")
-  fm_control_backend_supports_key "$BACKEND" "$key" \
-    || die "harness $HARNESS interrupts with $key, which the $BACKEND backend cannot deliver; refusing to send a different key"
   while [ "$i" -lt "$repeat" ]; do
-    fm_backend_send_key "$BACKEND" "$T" "$key" "$LABEL" \
-      || die "interrupt key $key was not delivered to task $ID on $BACKEND"
+    fm_herdr_send_key "$T" "$key" \
+      || die "interrupt key $key was not delivered to task $ID on Herdr"
     i=$((i + 1))
     [ "$i" -ge "$repeat" ] || sleep 0.2
   done
 }
 
 # deliver_interrupt: deliver the verified key sequence.
-# Surviving adapters expose no prompt cancellation acknowledgement.
+# Pi exposes no prompt cancellation acknowledgement.
 deliver_interrupt() {
   send_interrupt_keys
   printf 'unconfirmed'
@@ -354,17 +340,14 @@ deliver_interrupt() {
 
 verify_interrupt_running() {
   local proof after
-  fm_backend_target_exists "$BACKEND" "$T" "$LABEL" \
+  fm_herdr_target_exists "$T" \
     || die "task $ID's endpoint disappeared while interrupting it; no further control action is safe"
-  proof=endpoint
-  if fm_control_backend_state_verified "$BACKEND"; then
-    # An interrupt cancels a turn; it must never have stopped the agent. This
-    # is the postcondition that separates a landed interrupt from an accident.
-    after=$(agent_state)
-    [ "$after" = alive ] \
-      || die "task $ID's agent is '$after' after its interrupt key; an interrupt must leave the agent running"
-    proof=agent-alive
-  fi
+  # An interrupt cancels a turn; it must never have stopped the agent. This is
+  # the postcondition that separates a landed interrupt from an accident.
+  after=$(agent_state)
+  [ "$after" = alive ] \
+    || die "task $ID's agent is '$after' after its interrupt key; an interrupt must leave the agent running"
+  proof='agent-alive'
   printf '%s' "$proof"
 }
 
@@ -385,7 +368,6 @@ retire_busy_incarnation() {
 # `already-stopped` or `stopped`.
 do_exit() {
   local state cmd verdict cancel interrupt_result=not-needed
-  require_state_verified_backend exit
   state=$(agent_state)
   case "$state" in
     dead)
@@ -420,10 +402,10 @@ do_exit() {
   # authoritative proof is the agent-state wait below. The retried Enter still
   # matters, because a slash command opens a completion popup on some TUIs that
   # swallows the first Enter.
-  verdict=$(fm_backend_send_text_submit "$BACKEND" "$T" "$cmd" "$EXIT_RETRIES" "$POLL" 1.2 "$LABEL") \
-    || die "the exit command could not be sent to task $ID on $BACKEND"
+  verdict=$(fm_herdr_send_text_submit "$T" "$cmd" "$EXIT_RETRIES" "$POLL" 1.2) \
+    || die "the exit command could not be sent to task $ID on Herdr"
   [ "$verdict" != send-failed ] \
-    || die "the exit command could not be sent to task $ID on $BACKEND"
+    || die "the exit command could not be sent to task $ID on Herdr"
   state=$(wait_agent_state "$EXIT_WAIT" dead) || {
     die "exit-delivered $ID interrupt=$interrupt_result exit-command=delivered agent-state=$state exit=unconfirmed; the agent did not stop within ${EXIT_WAIT}s"
   }
@@ -469,7 +451,6 @@ journal_write() {  # <phase> [extra-line]...
     echo "task=$ID"
     echo "phase=$phase"
     echo "ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    echo "backend=$BACKEND"
     echo "endpoint=$T"
     echo "worktree=$WT"
     echo "kind=$KIND"
@@ -710,7 +691,6 @@ do_relaunch() {
   local exit_result state note_line
   local -a spawn_args
 
-  require_state_verified_backend relaunch
   resolve_relaunch_profile
 
   case "$KIND" in
@@ -771,7 +751,7 @@ do_relaunch() {
 
   journal_write complete "${CHECKPOINT_LINES[@]}" "$note_line" "exit_result=$exit_result"
   RELAUNCH_ACTIVE=0
-  echo "relaunched $ID harness=$TARGET_HARNESS from=$PRIOR_RECORDED_HARNESS model=$TARGET_MODEL effort=$TARGET_EFFORT backend=$BACKEND endpoint=$T worktree=$WT"
+  echo "relaunched $ID harness=$TARGET_HARNESS from=$PRIOR_RECORDED_HARNESS model=$TARGET_MODEL effort=$TARGET_EFFORT endpoint=$T worktree=$WT"
 }
 
 # --- verbs ------------------------------------------------------------------
@@ -781,21 +761,15 @@ case "$VERB" in
     state=$(agent_state)
     case "$state" in
       alive) ;;
-      unverified)
-        # No recovery-grade classifier on this backend. Interrupt is
-        # non-destructive and its endpoint-existence postcondition is still
-        # real, so it proceeds - the printed proof names exactly what was
-        # verified rather than implying more.
-        ;;
       dead|missing) die "no agent is running at task $ID's recorded endpoint (state: $state); there is nothing to interrupt" ;;
       *) die "task $ID's endpoint reads '$state' rather than a positively classified state; refusing to send a lifecycle key into an unattributed endpoint" ;;
     esac
     proof=$(do_interrupt)
-    echo "interrupt-delivered $ID harness=$HARNESS backend=$BACKEND verified=$proof"
+    echo "interrupt-delivered $ID harness=$HARNESS endpoint=$T verified=$proof"
     ;;
   exit)
     result=$(do_exit)
-    echo "$result $ID harness=$HARNESS backend=$BACKEND endpoint=$T worktree=$WT"
+    echo "$result $ID harness=$HARNESS endpoint=$T worktree=$WT"
     ;;
   relaunch)
     do_relaunch

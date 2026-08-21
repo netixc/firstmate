@@ -221,25 +221,11 @@ assert_no_grep 'command:' "$ROOT/bin/fm-trace-context-lib.sh" "trace-context lib
 fm_trace_context_resolve "$CFG_OFF" "$NOMETA" >/dev/null || fail "resolve must return 0 when off"
 pass "the resolver has no sleep/timeout/command hang source and always returns success"
 
-# --- supported backend resolver matrix ---------------------------------------
+# --- Herdr execution remains trace-context independent ----------------------
 
-# shellcheck source=/dev/null
-. "$ROOT/bin/fm-backend.sh"
-for backend in tmux herdr; do
-  case "$backend" in
-    tmux)
-      resolved_backend=$(FM_BACKEND='' FM_BACKEND_CONFIG_DIR="$CFG_OFF" TMUX='test,1,0' HERDR_ENV='' fm_backend_name)
-      carrier=$(FM_TRACE_CONTEXT=on TMUX='test,1,0' HERDR_ENV='' fm_trace_context_resolve "$CFG_OFF" "$WORK/$backend.meta")
-      ;;
-    herdr)
-      resolved_backend=$(FM_BACKEND='' FM_BACKEND_CONFIG_DIR="$CFG_OFF" TMUX='' HERDR_ENV=1 fm_backend_name 2>/dev/null)
-      carrier=$(FM_TRACE_CONTEXT=on TMUX='' HERDR_ENV=1 fm_trace_context_resolve "$CFG_OFF" "$WORK/$backend.meta")
-      ;;
-  esac
-  [ "$resolved_backend" = "$backend" ] || fail "$backend runtime context resolved as '$resolved_backend'"
-  fm_trace_context_valid "$carrier" || fail "$backend runtime context must resolve a valid traceparent: '$carrier'"
-done
-pass "tmux and Herdr runtime contexts both resolve valid carriers through public interfaces"
+carrier=$(FM_TRACE_CONTEXT=on HERDR_ENV=1 fm_trace_context_resolve "$CFG_OFF" "$WORK/herdr.meta")
+fm_trace_context_valid "$carrier" || fail "Herdr execution must resolve a valid traceparent: '$carrier'"
+pass "Herdr execution resolves trace context through the public interface"
 
 # --- no prompt / task-prose reads (code only, comments stripped) --------------
 

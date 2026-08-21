@@ -7,7 +7,7 @@
 #          Silent = all good.
 #          Lines: "MISSING: <tool> (install: <command>)",
 #                 "MISSING_MANUAL: <tool> (instructions: <url>)", "NEEDS_GH_AUTH",
-#                 "BACKEND_INVALID: <name> (known: <names>)",
+#                 "SESSION_INVALID: <retired or unsupported selection>",
 #                 "STARTUP_MEMORY_BUDGET: invalid config/startup-memory-budget - <reason>",
 #                 "CREW_DISPATCH: invalid config/crew-dispatch.json - <reason>",
 #                 "FLEET_SYNC: <repo>: skipped|recovered|STUCK: <detail>",
@@ -39,10 +39,10 @@
 #          quarantine diagnostics for divergent shared captain-preference
 #          copies; no-op/current and successful updates stay quiet.
 #          SECONDMATE_LIVENESS lines report only actionable failures from the
-#          recovery-grade state owned by bin/fm-backend.sh's
-#          fm_backend_agent_state: skipped distinguishes an existing ambiguous
-#          process, an unreadable target, and an unverified backend; respawn
-#          failed names whether the endpoint was missing or agent-less.
+#          recovery-grade state owned by bin/fm-herdr.sh's
+#          fm_herdr_agent_state: skipped distinguishes an existing ambiguous
+#          process, an unreadable target, a preserved retired record, and an
+#          unverified harness; respawn failed names missing versus agent-less.
 #          Already-live and successfully relaunched secondmates are silent
 #          unless FM_BOOTSTRAP_VERBOSE_FACTS=1 requests BOOTSTRAP_INFO facts.
 #          A TANGLE line means the firstmate primary checkout (FM_ROOT) is stranded
@@ -146,8 +146,8 @@ DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 . "$SCRIPT_DIR/fm-startup-memory-budget-lib.sh"
 # shellcheck source=bin/fm-relay-lib.sh disable=SC1091
 . "$SCRIPT_DIR/fm-relay-lib.sh"
-# shellcheck source=bin/fm-backend.sh disable=SC1091
-. "$SCRIPT_DIR/fm-backend.sh"
+# shellcheck source=bin/fm-herdr.sh disable=SC1091
+. "$SCRIPT_DIR/fm-herdr.sh"
 # shellcheck source=bin/fm-remote-readiness-lib.sh disable=SC1091
 . "$SCRIPT_DIR/fm-remote-readiness-lib.sh"
 # fm-timing-lib.sh is inert unless FM_TIMING_LOG names a file, which only the
@@ -574,11 +574,8 @@ report_relaunch() {  # <id> <cause> <where>
 secondmate_liveness_sweep() {
   # Idempotent secondmate liveness guarantee - SESSION START ONLY. The detailed
   # state machine and its only recovery-authorizing states are owned by
-  # fm_backend_agent_state. A missing tmux pane is not enough: tmux must prove
-  # the window or session absent. This preserves duplicate prevention for
-  # existing ambiguous processes and every transiently unreadable target while
-  # adding the missing-session path the original bare-shell and Herdr-husk sweep
-  # lacked.
+  # fm_herdr_agent_state. Structured missing, dead, ambiguous, and unreadable
+  # outcomes preserve duplicate prevention and recovery-grade liveness.
   # A meta with no window remains owned by secondmate-provisioning recovery.
   # Secondmate homes never contain kind=secondmate meta, so this is naturally a
   # primary-only no-op there. Mid-session liveness remains explicitly out of
@@ -609,7 +606,7 @@ secondmate_liveness_sweep() {
 # unchanged.
 secondmate_liveness_one() {  # <meta> <id>
   local meta=$1 id=$2
-  local window harness backend target agent_state out cause remote_host remote_rc readiness_reason route_out remote_backend
+  local window harness endpoint_class target agent_state out cause remote_host remote_rc readiness_reason
   window=$(fm_meta_get "$meta" window)
   [ -n "$window" ] || return 0
   harness=$(fm_meta_get "$meta" harness)
@@ -645,7 +642,7 @@ secondmate_liveness_one() {  # <meta> <id>
     agent_state=$(printf '%s\n' "$out" | tail -1)
     case "$agent_state" in
       alive)
-        if route_out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh route "$id" < /dev/null 2>/dev/null); then
+        if "$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh route "$id" < /dev/null >/dev/null 2>&1; then
           remote_rc=0
         else
           remote_rc=$?
@@ -656,11 +653,6 @@ secondmate_liveness_one() {  # <meta> <id>
         fi
         if [ "$remote_rc" -ne 0 ]; then
           echo "SECONDMATE_LIVENESS: secondmate $id: skipped: alive remote endpoint route is unreadable on $remote_host; inspect and migrate or retire it explicitly"
-          return 0
-        fi
-        remote_backend=$(printf '%s\n' "$route_out" | sed -n 's/^backend=//p' | tail -1)
-        if [ "$remote_backend" != herdr ]; then
-          echo "SECONDMATE_LIVENESS: secondmate $id: skipped: alive remote endpoint is recorded on backend '${remote_backend:-missing}'; migrate or retire it explicitly"
           return 0
         fi
         [ "${FM_BOOTSTRAP_VERBOSE_FACTS:-0}" != 1 ] || echo "BOOTSTRAP_INFO: remote secondmate $id already live (host=$remote_host)"
@@ -681,10 +673,13 @@ secondmate_liveness_one() {  # <meta> <id>
     esac
     return 0
   fi
-  backend=$(fm_backend_of_meta "$meta")
-  target=$(fm_backend_target_of_meta "$meta")
-  [ -n "$target" ] || target="$window"
-  agent_state=$(fm_backend_agent_state "$backend" "$target" 2>/dev/null) || agent_state=unreadable
+  endpoint_class=$(fm_herdr_meta_kind "$meta")
+  if [ "$endpoint_class" != herdr ]; then
+    echo "SECONDMATE_LIVENESS: secondmate $id: skipped: $endpoint_class endpoint record preserved for manual reconciliation"
+    return 0
+  fi
+  target=$(fm_endpoint_target_of_meta "$meta")
+  agent_state=$(fm_herdr_agent_state "$target" 2>/dev/null) || agent_state=unreadable
   case "$harness" in
     pi) ;;    *)
       case "$agent_state" in dead|missing) agent_state=unverified-harness ;; esac
@@ -693,34 +688,34 @@ secondmate_liveness_one() {  # <meta> <id>
   case "$agent_state" in
     alive)
       if [ "${FM_BOOTSTRAP_VERBOSE_FACTS:-0}" = 1 ]; then
-        echo "BOOTSTRAP_INFO: secondmate $id already live (backend=$backend)"
+        echo "BOOTSTRAP_INFO: secondmate $id already live (Herdr endpoint=$target)"
       fi
       ;;
     dead|missing)
       if [ "$agent_state" = dead ]; then
         cause="confirmed agent absence on existing endpoint"
-        fm_backend_kill "$backend" "$target" 2>/dev/null || true
+        fm_herdr_kill "$target" 2>/dev/null || true
       else
         cause="recorded endpoint confidently missing"
       fi
       if out=$(FM_SPAWN_NO_GUARD=1 "$FM_ROOT/bin/fm-spawn.sh" "$id" --secondmate 2>&1); then
         SECONDMATE_RESPAWNED_IDS="$SECONDMATE_RESPAWNED_IDS $id"
-        report_relaunch "$id" "$cause" "backend=$backend"
+        report_relaunch "$id" "$cause" "Herdr endpoint=$target"
       else
         echo "SECONDMATE_LIVENESS: secondmate $id: respawn failed after $cause: $(first_line "$out")"
       fi
       ;;
     ambiguous)
-      echo "SECONDMATE_LIVENESS: secondmate $id: skipped: existing endpoint has ambiguous agent process (backend=$backend)"
+      echo "SECONDMATE_LIVENESS: secondmate $id: skipped: existing Herdr endpoint has ambiguous agent process"
       ;;
     unreadable)
-      echo "SECONDMATE_LIVENESS: secondmate $id: skipped: endpoint probe unreadable (backend=$backend)"
+      echo "SECONDMATE_LIVENESS: secondmate $id: skipped: Herdr endpoint probe unreadable"
       ;;
     unverified-harness)
-      echo "SECONDMATE_LIVENESS: secondmate $id: skipped: recorded harness '$harness' is unverified for recovery (backend=$backend)"
+      echo "SECONDMATE_LIVENESS: secondmate $id: skipped: recorded harness '$harness' is unverified for recovery"
       ;;
     *)
-      echo "SECONDMATE_LIVENESS: secondmate $id: skipped: agent recovery classifier unverified (backend=$backend)"
+      echo "SECONDMATE_LIVENESS: secondmate $id: skipped: Herdr agent recovery classifier unverified"
       ;;
   esac
   return 0
@@ -749,7 +744,7 @@ secondmate_handoff_detect() {
 
 install_cmd() {
   case "$1" in
-    tmux|node|git|gh|curl|jq) echo "brew install $1  # or the platform's package manager" ;;
+    node|git|gh|curl|jq) echo "brew install $1  # or the platform's package manager" ;;
     treehouse) echo "curl -fsSL https://kunchenguid.github.io/treehouse/install.sh | sh" ;;
     no-mistakes) echo "curl -fsSL https://raw.githubusercontent.com/kunchenguid/no-mistakes/main/docs/install.sh | sh" ;;
     gh-axi|lavish-axi) echo "npm install -g $1 && $1 setup hooks" ;;
@@ -775,19 +770,15 @@ missing_tool_diagnostic() {
   echo "MISSING: $tool (install: $(install_cmd "$tool"))"
 }
 
-# Required-tool detection follows the RESOLVED backend, not a one-size default:
-# a universal toolchain every home needs plus the backend-specific delta owned by
-# fm_backend_required_tools (bin/fm-backend.sh). A Herdr home is never told
-# tmux is missing. A backend value with
-# no verified dependency set is reported before the universal checks continue.
+# Every home uses Pi in Herdr. Keep universal tools separate from the direct
+# session requirements so diagnostics remain actionable.
 COMMON_TOOLS="node git gh no-mistakes gh-axi ego-browser lavish-axi tasks-axi quota-axi"
-BACKEND=$(fm_backend_name)
-BACKEND_VALID=1
-if ! BACKEND_TOOLS=$(fm_backend_required_tools "$BACKEND"); then
-  BACKEND_VALID=0
-  BACKEND_TOOLS=""
+HERDR_TOOLS=$(fm_herdr_required_tools)
+SESSION_SELECTION_VALID=1
+SESSION_SELECTION_ERROR=
+if ! SESSION_SELECTION_ERROR=$(fm_herdr_require_runtime 2>&1); then
+  SESSION_SELECTION_VALID=0
 fi
-TOOLS="$BACKEND_TOOLS $COMMON_TOOLS"
 NO_MISTAKES_MIN=1.31.2
 # AXI-FAMILY FLOOR POLICY. Every axi-family floor is the CURRENT LATEST published
 # version of that tool, captain-bumped periodically to keep the whole fleet on the
@@ -1129,12 +1120,11 @@ fi
 # leaves this machine, so it stays on the session-start critical path.
 detect_local_tools() {
   local t ego_browser_skill
-  if [ "$BACKEND_VALID" -eq 0 ]; then
-    echo "BACKEND_INVALID: $BACKEND (known: $FM_BACKEND_KNOWN)"
+  if [ "$SESSION_SELECTION_VALID" -eq 0 ]; then
+    echo "SESSION_INVALID: $SESSION_SELECTION_ERROR"
   fi
-  for t in $BACKEND_TOOLS; do
-    fm_backend_required_tool_available "$BACKEND" "$t" \
-      || missing_tool_diagnostic "$t"
+  for t in $HERDR_TOOLS; do
+    command -v "$t" >/dev/null 2>&1 || missing_tool_diagnostic "$t"
   done
   for t in $COMMON_TOOLS; do
     command -v "$t" >/dev/null || missing_tool_diagnostic "$t"
@@ -1145,9 +1135,8 @@ detect_local_tools() {
   fi
   [ -f "$ego_browser_skill" ] && [ -r "$ego_browser_skill" ] \
     || missing_tool_diagnostic ego-browser-skill
-  # Both supported backends use treehouse, whose durable lease support is required.
-  if fm_backend_list_contains "$TOOLS" treehouse \
-    && command -v treehouse >/dev/null 2>&1 && ! treehouse_supports_lease; then
+  # Treehouse's durable lease support is required for isolated work allocation.
+  if command -v treehouse >/dev/null 2>&1 && ! treehouse_supports_lease; then
     echo "MISSING: treehouse (install: $(install_cmd treehouse))"
   fi
   if command -v no-mistakes >/dev/null 2>&1 && ! tool_version_at_least no-mistakes "$NO_MISTAKES_MIN"; then

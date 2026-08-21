@@ -58,7 +58,7 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(CDPATH='' cd "$SCRIPT_DIR/.." && pwd -P)}"
 . "$SCRIPT_DIR/fm-tasks-axi-lib.sh"
 REQUIRED_TOOLS=(git jq herdr tasks-axi treehouse)
 HARNESS_TOOLS=(pi)
-OPTIONAL_TOOLS=(tmux no-mistakes gh)
+OPTIONAL_TOOLS=(no-mistakes gh)
 LAUNCH_AGENT_LABEL=dev.firstmate.herdr.fm-remote
 # The dedicated remote-secondmate session. The user's interactive Herdr work
 # remains in the separate default session, which this readiness check never
@@ -142,17 +142,16 @@ herdr_cli_available() {
 herdr_adapter_load() {
   [ -z "${FM_REMOTE_DOCTOR_HERDR_LOADED:-}" ] || return 0
   herdr_cli_available || return 1
-  [ -f "$SCRIPT_DIR/fm-backend.sh" ] && [ -f "$SCRIPT_DIR/backends/herdr.sh" ] || return 1
-  # shellcheck source=bin/fm-backend.sh
-  . "$SCRIPT_DIR/fm-backend.sh" || return 1
-  fm_backend_source herdr || return 1
+  [ -f "$SCRIPT_DIR/fm-herdr.sh" ] && [ -f "$SCRIPT_DIR/fm-herdr.sh" ] || return 1
+  # shellcheck source=bin/fm-herdr.sh
+  . "$SCRIPT_DIR/fm-herdr.sh" || return 1
   FM_REMOTE_DOCTOR_HERDR_LOADED=1
 }
 
 herdr_server_running() {
   local running
   herdr_adapter_load || return 1
-  running=$(fm_backend_herdr_cli "$HERDR_SESSION_NAME" status --json 2>/dev/null \
+  running=$(fm_herdr_cli "$HERDR_SESSION_NAME" status --json 2>/dev/null \
     | jq -r '.server.running // false' 2>/dev/null) || return 1
   [ "$running" = true ]
 }
@@ -664,7 +663,7 @@ start_herdr_server() {
     fix_report herdr-server failed "herdr and jq must both resolve before the server can be started"
     return 1
   fi
-  if fm_backend_herdr_server_ensure "$HERDR_SESSION_NAME" >/dev/null 2>&1; then
+  if fm_herdr_server_ensure "$HERDR_SESSION_NAME" >/dev/null 2>&1; then
     fix_report herdr-server applied "started the herdr server for session $HERDR_SESSION_NAME"
     return 0
   fi

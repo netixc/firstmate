@@ -5,9 +5,9 @@
 # A remote second mate always launches on the Herdr backend
 # (docs/remote-secondmates.md), so a remote-route test needs a herdr CLI on the
 # remote code root's own bin directory. This fixture models the workspace, tab,
-# pane, and agent facts bin/backends/herdr.sh actually reads, backed by a JSON
+# pane, and agent facts bin/fm-herdr.sh actually reads, backed by a JSON
 # state file mutated with real jq, using the same verified herdr behaviors as
-# tests/fm-backend-herdr.test.sh's stateful fake: workspace create seeds one
+# tests/fm-herdr.test.sh's stateful fake: workspace create seeds one
 # default tab and returns its tab and root pane in the same response, closing a
 # tab's only pane closes the tab, and agent get reports agent_not_found for a
 # pane no agent has registered on.
@@ -82,7 +82,17 @@ case "${1:-} ${2:-}" in
     if [ "$(jq_state -r --arg p "$pane" '[.tabs[]|select(.pane_id==$p)]|length')" = 0 ]; then
       printf '{"error":{"code":"pane_not_found","message":"%s"}}\n' "$pane"
     else
-      printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "$pane"
+      pane_cwd=${FM_FAKE_HERDR_PANE_PATH:-}
+      if [ -n "${FM_FAKE_HERDR_PANE_COUNTFILE:-}" ]; then
+        pane_reads=$(cat "$FM_FAKE_HERDR_PANE_COUNTFILE" 2>/dev/null || printf 0)
+        pane_reads=$((pane_reads + 1))
+        printf '%s\n' "$pane_reads" > "$FM_FAKE_HERDR_PANE_COUNTFILE"
+        if [ "$pane_reads" -le "${FM_FAKE_HERDR_PANE_STALE_READS:-0}" ]; then
+          pane_cwd=${FM_FAKE_HERDR_PANE_STALE:-}
+        fi
+      fi
+      [ -n "$pane_cwd" ] || pane_cwd=$(jq_state -r --arg p "$pane" '.tabs[]|select(.pane_id==$p)|.cwd // empty')
+      printf '{"result":{"pane":{"pane_id":"%s","foreground_cwd":"%s"}}}\n' "$pane" "$pane_cwd"
     fi
     ;;
   "pane close")
@@ -90,12 +100,31 @@ case "${1:-} ${2:-}" in
       '.tabs |= [.[]|select(.pane_id != $p)]
        | .typed |= with_entries(select(.key != $p))
        | .working |= with_entries(select(.key != $p))' | save ;;
+  "pane run")
+    [ ! -f "$SEND_FAIL" ] || exit 1
+    case "${4:-}" in
+      "export TRACEPARENT="*)
+        [ "${FM_FAKE_TRACEPARENT_SEND_FAIL:-0}" != 1 ] || exit 1
+        [ "${FM_FAKE_TRACEPARENT_SEND_UNSAFE:-0}" != 1 ] || exit 2
+        if [ "${FM_FAKE_TRACE_METADATA_APPEND_FAIL:-0}" = 1 ] && [ -n "${FM_FAKE_META_PATH:-}" ]; then
+          chmod a-w "$FM_FAKE_META_PATH"
+        fi
+        ;;
+    esac
+    [ -z "${FM_FAKE_HERDR_LAUNCH_LOG:-}" ] || printf '%s\n' "${4:-}" >> "$FM_FAKE_HERDR_LAUNCH_LOG"
+    ;;
   "pane send-text")
     [ ! -f "$SEND_FAIL" ] || exit 1
+    [ -z "${FM_FAKE_HERDR_LAUNCH_LOG:-}" ] || printf '%s\n' "${4:-}" >> "$FM_FAKE_HERDR_LAUNCH_LOG"
     jq_state --arg p "${3:-}" '.typed[$p] = true' | save ;;
   "pane send-keys")
     [ ! -f "$SEND_FAIL" ] || exit 1
-    jq_state --arg p "${3:-}" '.typed[$p] = true | .working[$p] = true' | save ;;
+    jq_state --arg p "${3:-}" --arg cwd "${FM_FAKE_HERDR_PANE_PATH:-}" '
+      .typed[$p] = true | .working[$p] = true
+      | if ($cwd | length) > 0 then
+          .tabs |= map(if .pane_id == $p then .cwd = $cwd else . end)
+        else . end
+    ' | save ;;
   "pane read") printf '\n' ;;
   "pane process-info") printf '{"result":{"process":{"name":"pi"}}}\n' ;;
   "agent get")

@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# Herdr-only selection and retired metadata behavior through public helpers.
+set -u
+
+# shellcheck source=tests/lib.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+TMP_ROOT=$(fm_test_tmproot fm-herdr-selection)
+
+runtime_check() { # <config-dir> [env assignments through caller]
+  FM_CONFIG_OVERRIDE=$1 FM_ROOT_OVERRIDE=$ROOT bash -c \
+    '. "$FM_ROOT_OVERRIDE/bin/fm-herdr.sh"; fm_herdr_require_runtime'
+}
+
+test_default_and_explicit_herdr() {
+  local config=$TMP_ROOT/default-config
+  mkdir -p "$config"
+  (unset FM_BACKEND TMUX TMUX_PANE; runtime_check "$config") \
+    || fail "absent runtime configuration must resolve directly to Herdr"
+  printf 'herdr\n' > "$config/backend"
+  (unset FM_BACKEND TMUX TMUX_PANE; runtime_check "$config") \
+    || fail "legacy explicit config/backend=herdr should remain harmless"
+  (unset TMUX TMUX_PANE; FM_BACKEND=herdr runtime_check "$config") \
+    || fail "legacy explicit FM_BACKEND=herdr should remain harmless"
+  pass "runtime selection: absent or explicit Herdr uses the sole path"
+}
+
+test_retired_and_unknown_selection_refused() {
+  local config=$TMP_ROOT/refused-config out
+  mkdir -p "$config"
+  printf 'tmux\n' > "$config/backend"
+  out=$(unset FM_BACKEND TMUX TMUX_PANE; runtime_check "$config" 2>&1) \
+    && fail "config/backend=tmux must be refused"
+  assert_contains "$out" "tmux session support is retired" "tmux config refusal should be actionable"
+  rm -f "$config/backend"
+  out=$(unset TMUX TMUX_PANE; FM_BACKEND=tmux runtime_check "$config" 2>&1) \
+    && fail "FM_BACKEND=tmux must be refused"
+  assert_contains "$out" "FM_BACKEND cannot select tmux" "tmux env refusal should name its source"
+  out=$(unset FM_BACKEND TMUX_PANE; TMUX=fake runtime_check "$config" 2>&1) \
+    && fail "a tmux execution environment must not be reinterpreted as Herdr"
+  assert_contains "$out" "leave the tmux environment" "tmux nesting refusal should be actionable"
+  printf 'future-provider\n' > "$config/backend"
+  out=$(unset FM_BACKEND TMUX TMUX_PANE; runtime_check "$config" 2>&1) \
+    && fail "unknown runtime configuration must be refused"
+  assert_contains "$out" "Herdr is the only supported" "unknown selection should name the sole path"
+  pass "runtime selection: tmux and unknown choices stop without fallback"
+}
+
+test_metadata_classification_and_identity() {
+  local state=$TMP_ROOT/state meta out before
+  mkdir -p "$state"
+  meta=$state/legacy.meta
+  fm_write_meta "$meta" "window=firstmate:fm-legacy" "worktree=/tmp/legacy"
+  before=$(shasum -a 256 "$meta" | awk '{print $1}')
+  # shellcheck source=/dev/null
+  . "$ROOT/bin/fm-herdr.sh"
+  [ "$(fm_herdr_meta_kind "$meta")" = retired-tmux ] \
+    || fail "fieldless metadata must classify as retired tmux evidence"
+  out=$(fm_herdr_require_meta "$meta" legacy 2>&1) \
+    && fail "fieldless metadata must not authorize Herdr control"
+  assert_contains "$out" "preserving its records for manual reconciliation" \
+    "legacy refusal should state the preservation requirement"
+  [ "$(shasum -a 256 "$meta" | awk '{print $1}')" = "$before" ] \
+    || fail "legacy refusal must not rewrite metadata"
+
+  fm_write_meta "$state/current.meta" \
+    "backend=herdr" "window=lab:w1:p1" "endpoint_task_id=current" \
+    "herdr_session=lab" "herdr_workspace_id=w1" "herdr_tab_id=t1" \
+    "herdr_pane_id=w1:p1" "worktree=/tmp/current" "project=/tmp/project"
+  fm_herdr_validate_task_endpoint "$state/current.meta" current \
+    || fail "exact current Herdr metadata should validate"
+  [ "$FM_HERDR_VALIDATED_TARGET" = lab:w1:p1 ] \
+    || fail "validation must preserve exact endpoint identity"
+  pass "metadata: current Herdr validates; legacy evidence is preserved"
+}
+
+test_retired_cli_selection_refused() {
+  local home=$TMP_ROOT/home out
+  mkdir -p "$home/state" "$home/data" "$home/config"
+  out=$(FM_HOME="$home" FM_SPAWN_NO_GUARD=1 \
+    "$ROOT/bin/fm-spawn.sh" x "$ROOT" --scout --backend tmux 2>&1) \
+    && fail "--backend tmux must be refused"
+  assert_contains "$out" "--backend tmux is unsupported" \
+    "retired command-line selection should be explicit"
+  [ ! -e "$home/state/x.meta" ] || fail "retired selection must not publish metadata"
+  pass "spawn: retired --backend tmux stops before mutation"
+}
+
+test_default_and_explicit_herdr
+test_retired_and_unknown_selection_refused
+test_metadata_classification_and_identity
+test_retired_cli_selection_refused
+
+echo "All Herdr selection tests passed."

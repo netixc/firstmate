@@ -11,7 +11,7 @@
 # With no explicit paths, the file set depends on context:
 #   - In CI (GITHUB_ACTIONS=true or CI=true), on the main branch, or when no
 #     merge-base against origin/main (or local main) can be found, it lints
-#     the full canonical set: bin/*.sh bin/backends/*.sh tests/*.sh. This is
+#     the full canonical set: bin/*.sh tests/*.sh. This is
 #     what CI always runs, so CI coverage never depends on a local diff.
 #   - Otherwise (an ordinary local branch with a real merge-base) it lints
 #     only the canonical-set files changed since that merge-base, including
@@ -55,7 +55,7 @@ fm_lint_worker_stop() {
 }
 
 fm_lint_worker() {  # <manifest> <output-dir> <shard-index>
-  local manifest=$1 output_dir=$2 shard_index=$3 tab index path output rc=0
+  local manifest=$1 output_dir=$2 shard_index=$3 tab index path output rc=0 root_rc
   local -a roots
   roots=()
   tab=$(printf '\t')
@@ -64,17 +64,24 @@ fm_lint_worker() {  # <manifest> <output-dir> <shard-index>
     roots+=("$path")
   done < "$manifest"
   output="$output_dir/shard.$shard_index"
+  : > "$output.out"
   if [ "${#roots[@]}" -gt 0 ]; then
     trap 'fm_lint_worker_stop; exit 129' HUP
     trap 'fm_lint_worker_stop; exit 130' INT
     trap 'fm_lint_worker_stop; exit 143' TERM
-    "$FM_LINT_SHELLCHECK" --norc --external-sources -- "${roots[@]}" > "$output.out" 2>&1 &
-    FM_LINT_WORKER_SHELLCHECK_PID=$!
-    wait "$FM_LINT_WORKER_SHELLCHECK_PID" || rc=$?
-    FM_LINT_WORKER_SHELLCHECK_PID=
+    # Invoke ShellCheck once per canonical root. A single multi-root process
+    # repeatedly expands the same external source graph and becomes
+    # superlinearly slow as shared libraries gain callers; root-at-a-time keeps
+    # the identical flags and complete file set while bounding that fan-out.
+    for path in "${roots[@]}"; do
+      root_rc=0
+      "$FM_LINT_SHELLCHECK" --norc --external-sources -- "$path" >> "$output.out" 2>&1 &
+      FM_LINT_WORKER_SHELLCHECK_PID=$!
+      wait "$FM_LINT_WORKER_SHELLCHECK_PID" || root_rc=$?
+      FM_LINT_WORKER_SHELLCHECK_PID=
+      [ "$root_rc" -eq 0 ] || rc=$root_rc
+    done
     trap - HUP INT TERM
-  else
-    : > "$output.out"
   fi
   printf '%s\n' "$rc" > "$output.rc"
   return "$rc"
@@ -161,7 +168,7 @@ fm_lint_changed_base_ref() {
 }
 
 # fm_lint_is_canonical_root tests membership in the canonical set (a direct
-# *.sh child of bin/, bin/backends/, or tests/) without the shell case
+# *.sh child of bin/ or tests/) without the shell case
 # statement's non-pathname wildcard matching a path separator by accident.
 fm_lint_is_canonical_root() {
   local path=$1 dir base
@@ -174,7 +181,7 @@ fm_lint_is_canonical_root() {
     *) return 1 ;;
   esac
   case "$dir" in
-    bin|bin/backends|tests) return 0 ;;
+    bin|tests) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -195,7 +202,7 @@ else
   fi
 
   if [ "$full_lint" -eq 1 ]; then
-    ROOTS=(bin/*.sh bin/backends/*.sh tests/*.sh)
+    ROOTS=(bin/*.sh tests/*.sh)
   else
     CHANGED_MODE=1
     ROOTS=()

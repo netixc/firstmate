@@ -2,13 +2,15 @@
 # Behavior tests for fm-spawn.sh concrete dispatch profile flags.
 #
 # These tests drive fm-spawn through meta writing and launch construction with a
-# fake tmux pane and a real isolated git worktree. The fake tmux captures the
-# literal launch command sent with `tmux send-keys -l`, so assertions pin the
+# structured Herdr CLI seam and a real isolated git worktree. The fixture
+# captures literal `pane send-text` payloads, so assertions pin the
 # command firstmate would run without starting any real harness.
 set -u
 
 # shellcheck source=tests/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck source=tests/remote-herdr-fixture.sh
+. "$ROOT/tests/remote-herdr-fixture.sh"
 
 SPAWN="$ROOT/bin/fm-spawn.sh"
 TMP_ROOT=$(fm_test_tmproot fm-spawn-dispatch-profile)
@@ -31,41 +33,12 @@ SH
 }
 
 make_spawn_fakebin() {
-  local dir=$1 fakebin
+  local dir=$1 fakebin herdr_root
   fakebin=$(fm_fakebin "$dir")
-  cat > "$fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-set -u
-case "$*" in
-  *"#{pane_current_path}"*) printf '%s\n' "${FM_FAKE_PANE_PATH:-}"; exit 0 ;;
-esac
-case "${1:-}" in
-  display-message) printf 'firstmate\n'; exit 0 ;;
-  list-windows) exit 0 ;;
-  has-session|new-session|new-window|kill-window) exit 0 ;;
-  send-keys)
-    if [ -n "${FM_FAKE_LAUNCH_LOG:-}" ]; then
-      shift
-      literal=0
-      while [ $# -gt 0 ]; do
-        case "$1" in
-          -t) shift 2 ;;
-          -l) literal=1; shift ;;
-          *) break ;;
-        esac
-      done
-      if [ "$literal" = 1 ]; then
-        printf '%s\n' "${1:-}" >> "$FM_FAKE_LAUNCH_LOG"
-      else
-        printf '%s\n' "${1:-}" >> "$FM_FAKE_LAUNCH_LOG.text"
-      fi
-    fi
-    exit 0
-    ;;
-esac
-exit 0
-SH
-  chmod +x "$fakebin/tmux"
+  herdr_root="$dir/herdr-root"
+  install_remote_herdr_fixture "$herdr_root" "$dir/herdr.state" "$dir/herdr.log" \
+    "$dir/herdr-send-fail" "$dir/herdr.sock"
+  ln -s "$herdr_root/bin/herdr" "$fakebin/herdr"
   fm_fake_exit0 "$fakebin" treehouse
   make_spawn_pi_probe "$fakebin" pi
   make_spawn_pi_probe "$fakebin" pi
@@ -111,11 +84,12 @@ run_spawn() {
   shift 4
   : > "$launchlog"
   : > "$launchlog.text"
-  FM_ROOT_OVERRIDE='' FM_HOME="$home" \
+  env -u HERDR_ENV -u HERDR_PANE_ID -u HERDR_WORKSPACE_ID -u HERDR_TAB_ID -u HERDR_SOCKET \
+    FM_ROOT_OVERRIDE='' FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
-    FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$wt" TMUX="fake,1,0" \
-    FM_FAKE_LAUNCH_LOG="$launchlog" FM_FAKE_PI_VERSION="${FM_TEST_PI_VERSION:-0.84.0}" \
+    FM_SPAWN_NO_GUARD=1 HERDR_SESSION=lab FM_FAKE_HERDR_PANE_PATH="$wt" \
+    FM_FAKE_HERDR_LAUNCH_LOG="$launchlog" FM_FAKE_PI_VERSION="${FM_TEST_PI_VERSION:-0.84.0}" \
     PATH="$fakebin:$PATH" \
     "$SPAWN" "$@" 2>&1
 }
@@ -153,8 +127,8 @@ test_relative_home_overrides_launch_with_absolute_cross_process_paths() {
     CDPATH="$CASE_DIR/cdpath" FM_ROOT_OVERRIDE='' FM_HOME=home \
       FM_STATE_OVERRIDE=home/state FM_DATA_OVERRIDE=home/data \
       FM_PROJECTS_OVERRIDE=home/projects FM_CONFIG_OVERRIDE=home/config \
-      FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$WT_DIR" TMUX="fake,1,0" \
-      FM_FAKE_LAUNCH_LOG="$LAUNCH_LOG" \
+      FM_SPAWN_NO_GUARD=1 TMUX='' TMUX_PANE='' HERDR_ENV='' HERDR_PANE_ID='' HERDR_SOCKET_PATH='' HERDR_SESSION=lab FM_FAKE_HERDR_PANE_PATH="$WT_DIR" \
+      FM_FAKE_HERDR_LAUNCH_LOG="$LAUNCH_LOG" \
       PATH="$FAKEBIN_DIR:$PATH" \
       "$SPAWN" "$id" "$PROJ_DIR" --mode no-mistakes --yolo off 2>&1
   )
@@ -184,8 +158,8 @@ test_home_defaults_preserve_absolute_or_resolve_relative_paths() {
     FM_ROOT_OVERRIDE='' FM_HOME=home \
       FM_STATE_OVERRIDE='' FM_DATA_OVERRIDE='' \
       FM_PROJECTS_OVERRIDE=home/projects FM_CONFIG_OVERRIDE=home/config \
-      FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$WT_DIR" TMUX="fake,1,0" \
-      FM_FAKE_LAUNCH_LOG="$LAUNCH_LOG" \
+      FM_SPAWN_NO_GUARD=1 TMUX='' TMUX_PANE='' HERDR_ENV='' HERDR_PANE_ID='' HERDR_SOCKET_PATH='' HERDR_SESSION=lab FM_FAKE_HERDR_PANE_PATH="$WT_DIR" \
+      FM_FAKE_HERDR_LAUNCH_LOG="$LAUNCH_LOG" \
       PATH="$FAKEBIN_DIR:$PATH" \
       "$SPAWN" "$relative_id" "$PROJ_DIR" --mode no-mistakes --yolo off 2>&1
   )
@@ -204,8 +178,8 @@ test_home_defaults_preserve_absolute_or_resolve_relative_paths() {
     FM_ROOT_OVERRIDE='' FM_HOME="$linked_home" \
       FM_STATE_OVERRIDE='' FM_DATA_OVERRIDE='' \
       FM_PROJECTS_OVERRIDE="$linked_home/projects" FM_CONFIG_OVERRIDE="$linked_home/config" \
-      FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$WT_DIR" TMUX="fake,1,0" \
-      FM_FAKE_LAUNCH_LOG="$LAUNCH_LOG" \
+      FM_SPAWN_NO_GUARD=1 TMUX='' TMUX_PANE='' HERDR_ENV='' HERDR_PANE_ID='' HERDR_SOCKET_PATH='' HERDR_SESSION=lab FM_FAKE_HERDR_PANE_PATH="$WT_DIR" \
+      FM_FAKE_HERDR_LAUNCH_LOG="$LAUNCH_LOG" \
       PATH="$FAKEBIN_DIR:$PATH" \
       "$SPAWN" "$absolute_id" "$PROJ_DIR" --mode no-mistakes --yolo off 2>&1
   )
@@ -233,8 +207,8 @@ test_absolute_override_spelling_is_preserved_in_launch_paths() {
     FM_ROOT_OVERRIDE='' FM_HOME="$linked_home" \
       FM_STATE_OVERRIDE="$linked_home/state" FM_DATA_OVERRIDE="$linked_home/data" \
       FM_PROJECTS_OVERRIDE="$linked_home/projects" FM_CONFIG_OVERRIDE="$linked_home/config" \
-      FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$WT_DIR" TMUX="fake,1,0" \
-      FM_FAKE_LAUNCH_LOG="$LAUNCH_LOG" \
+      FM_SPAWN_NO_GUARD=1 TMUX='' TMUX_PANE='' HERDR_ENV='' HERDR_PANE_ID='' HERDR_SOCKET_PATH='' HERDR_SESSION=lab FM_FAKE_HERDR_PANE_PATH="$WT_DIR" \
+      FM_FAKE_HERDR_LAUNCH_LOG="$LAUNCH_LOG" \
       PATH="$FAKEBIN_DIR:$PATH" \
       "$SPAWN" "$id" "$PROJ_DIR" --mode no-mistakes --yolo off 2>&1
   )
@@ -337,7 +311,7 @@ test_active_dispatch_profile_allows_explicit_harness() {
   task_tmp="/tmp/fm-$id"
   assert_present "$task_tmp/gotmp" "spawn did not create its Go temp directory"
   assert_grep "tasktmp=$task_tmp" "$HOME_DIR/state/$id.meta" "spawn metadata did not record its task temp root"
-  assert_grep "export GOTMPDIR=$task_tmp/gotmp" "$LAUNCH_LOG.text" "spawn did not export its Go temp directory into the pane"
+  assert_grep "export GOTMPDIR=$task_tmp/gotmp" "$LAUNCH_LOG" "spawn did not export its Go temp directory into the pane"
   rm -rf "$task_tmp"
   launch=$(cat "$LAUNCH_LOG")
   assert_contains "$launch" "'$FAKEBIN_DIR/pi' --tui-mode regular --model 'gpt-5' --thinking 'high' -e" \
@@ -446,8 +420,8 @@ test_pi_missing_binary_refuses_before_endpoint_or_metadata() {
   out=$(FM_ROOT_OVERRIDE='' FM_HOME="$HOME_DIR" \
     FM_STATE_OVERRIDE="$HOME_DIR/state" FM_DATA_OVERRIDE="$HOME_DIR/data" \
     FM_PROJECTS_OVERRIDE="$HOME_DIR/projects" FM_CONFIG_OVERRIDE="$HOME_DIR/config" \
-    FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$WT_DIR" TMUX="fake,1,0" \
-    FM_FAKE_LAUNCH_LOG="$LAUNCH_LOG" PATH="$FAKEBIN_DIR:/usr/bin:/bin:/usr/sbin:/sbin" \
+    FM_SPAWN_NO_GUARD=1 TMUX='' TMUX_PANE='' HERDR_ENV='' HERDR_PANE_ID='' HERDR_SOCKET_PATH='' HERDR_SESSION=lab FM_FAKE_HERDR_PANE_PATH="$WT_DIR" \
+    FM_FAKE_HERDR_LAUNCH_LOG="$LAUNCH_LOG" PATH="$FAKEBIN_DIR:/usr/bin:/bin:/usr/sbin:/sbin" \
     "$SPAWN" "$id" "$PROJ_DIR" --mode no-mistakes --yolo off 2>&1)
   status=$?
   expect_code 1 "$status" "a missing pi executable should refuse the spawn"

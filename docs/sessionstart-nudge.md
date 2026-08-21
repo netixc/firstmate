@@ -77,10 +77,9 @@ It streams the hook to completion and retains at most 512 KiB for message delive
 It separately proves the run wrapper's silence for the gate environment and an unmarked linked worktree.
 It proves the run wrapper's source routing end to end against a real `fm-session-start.sh`, including completion-gated `--reemit` selection, resume delegation, Pi CLI continuation classification, an unrecognized source falling through to the full digest, and bounded loud delivery of an oversized Pi digest.
 `tests/fm-session-start.test.sh` proves the runtime bound through the forced pure-Bash fallback: a TERM-resistant digest that exceeds its budget is force-killed with its grandchild, still emits its completed stages, names the incomplete stage and every stage it never reached, leaves no completion proof, and exits 0.
-`tests/fm-pi-primary-live-e2e.test.sh` exercises the native Pi startup path with first-message and later-message Ahoy regressions.
-`tests/fm-sessionstart-hook-live-e2e.test.sh` is the opt-in live guard for the Pi run-tier adapters; it confirms each installed adapter in that suite invokes the run wrapper and delivers its output into context.
-It verifies context-preserving reopen sources for those adapters and context-reset delivery wherever their tracked TUI surface is reachable.
-`tests/fm-sessionstart-instruction-refresh-live-e2e.test.sh` is the separate opt-in real-Pi guard for a post-start AGENTS.md update followed by compaction.
+`tests/fm-session-start.test.sh` covers source routing, re-emission, and instruction-baseline refresh.
+`tests/fm-pi-primary-types.test.sh` type-checks the tracked Pi session extensions.
+The active Pi-and-Herdr lifecycle evidence is maintained in [`verification/supervision.md`](verification/supervision.md).
 `tests/fm-turnend-guard.test.sh`, `tests/fm-pi-watch-extension.test.sh`, and `tests/fm-daemon.test.sh` cover marked guard, monitoring, and away-mode delivery.
 
 [`verification/supervision.md`](verification/supervision.md#native-session-start-delivery) records the active version-scoped transport evidence.
