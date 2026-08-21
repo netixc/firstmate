@@ -28,7 +28,7 @@
 # per-harness trust table; a record whose source is not trusted for the
 # task's recorded harness classifies unknown, so one adapter's writer can
 # never classify another adapter):
-#   pi-ext           Pi per-task extension (agent_start/agent_settled)
+#   pi-ext           tracked Pi worker extension (agent_start/agent_settled)
 # Firstmate-owned sources accepted for every converted adapter:
 #   fm-spawn         the launch-brief turn seeded at spawn
 #   fm-recovery      a documented recovery reset after relaunch
