@@ -678,7 +678,11 @@ secondmate_liveness_one() {  # <meta> <id>
     echo "SECONDMATE_LIVENESS: secondmate $id: skipped: $endpoint_class endpoint record preserved for manual reconciliation"
     return 0
   fi
-  target=$(fm_endpoint_target_of_meta "$meta")
+  if ! fm_herdr_validate_task_endpoint "$meta" "$id" >/dev/null 2>&1; then
+    echo "SECONDMATE_LIVENESS: secondmate $id: skipped: invalid or ambiguous Herdr endpoint record preserved for manual reconciliation"
+    return 0
+  fi
+  target=$FM_HERDR_VALIDATED_TARGET
   agent_state=$(fm_herdr_agent_state "$target" 2>/dev/null) || agent_state=unreadable
   case "$harness" in
     pi) ;;    *)

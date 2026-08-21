@@ -73,9 +73,21 @@ test_ambiguous_or_foreign_metadata_refuses() {
   printf 'window=lab:w2:p2\n' >> "$home/state/duplicate.meta"
   out=$(run_send "$home" "$fb" "$log" lab:w2:p2 hello 2>&1) \
     && fail "duplicate endpoint should refuse through explicit target resolution"
-  assert_contains "$out" "missing, empty, or ambiguous Herdr endpoint" "duplicate endpoint refusal should name the ambiguity"
+  assert_contains "$out" "ambiguous or invalid task ownership" "duplicate endpoint refusal should name the ambiguity"
   [ ! -s "$log" ] || fail "invalid endpoint metadata reached Herdr"
   pass "fm-send strict: ambiguous and foreign endpoint identities fail closed"
+}
+
+test_duplicate_endpoint_owners_refuse() {
+  local home=$TMP_ROOT/duplicate-owners fb log out
+  mkdir -p "$home/state"; fb=$(make_stubs "$home"); log=$home/herdr.log; : > "$log"
+  write_meta "$home" owner-a lab:w3:p1
+  write_meta "$home" owner-b lab:w3:p1
+  out=$(run_send "$home" "$fb" "$log" lab:w3:p1 hello 2>&1) \
+    && fail "an endpoint recorded for two tasks should refuse"
+  assert_contains "$out" "ambiguous or invalid task ownership" "duplicate owner refusal should name the ownership ambiguity"
+  [ ! -s "$log" ] || fail "a multiply owned endpoint reached Herdr"
+  pass "fm-send strict: duplicate endpoint owners fail closed"
 }
 
 test_unset_home_and_unresolved_refuse() {
@@ -121,6 +133,7 @@ test_explicit_exact_target_and_key() {
 
 test_exact_id_send
 test_ambiguous_or_foreign_metadata_refuses
+test_duplicate_endpoint_owners_refuse
 test_unset_home_and_unresolved_refuse
 test_legacy_shapes_and_prefixless_panes_refuse
 test_explicit_exact_target_and_key

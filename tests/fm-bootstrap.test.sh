@@ -105,6 +105,29 @@ test_tmux_environment_is_not_reinterpreted() {
   pass "bootstrap never reinterprets a tmux process as Herdr"
 }
 
+test_ambiguous_secondmate_endpoint_is_preserved() {
+  local home fb log out
+  home=$(new_home ambiguous-secondmate); fb=$(make_toolchain "$TMP_ROOT/ambiguous-secondmate")
+  log=$home/herdr.log
+  cat > "$fb/herdr" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$FM_HERDR_LOG"
+printf '{"error":{"code":"agent_not_found"}}\n'
+SH
+  chmod +x "$fb/herdr"
+  fm_write_meta "$home/state/mate.meta" \
+    "kind=secondmate" "harness=pi" "backend=herdr" \
+    "window=lab:w1:p1" "window=lab:w2:p1" "endpoint_task_id=mate" \
+    "herdr_session=lab" "herdr_workspace_id=w1" "herdr_tab_id=t1" \
+    "herdr_pane_id=w1:p1" "worktree=/tmp/mate" "project=/tmp/project"
+  out=$(PATH="$fb:$BASE_PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    FM_HERDR_LOG="$log" FM_BOOTSTRAP_NETWORK=only "$BOOTSTRAP" 2>&1)
+  assert_contains "$out" "invalid or ambiguous Herdr endpoint record preserved" \
+    "bootstrap should report the preserved identity defect"
+  [ ! -s "$log" ] || fail "bootstrap controlled an ambiguous secondmate endpoint"
+  pass "bootstrap preserves ambiguous secondmate endpoints without control"
+}
+
 test_treehouse_requires_durable_leases() {
   local home fb out
   home=$(new_home lease); fb=$(make_toolchain "$TMP_ROOT/lease")
@@ -122,4 +145,5 @@ test_complete_toolchain_is_quiet
 test_missing_herdr_is_actionable
 test_retired_and_unknown_selection_is_actionable
 test_tmux_environment_is_not_reinterpreted
+test_ambiguous_secondmate_endpoint_is_preserved
 test_treehouse_requires_durable_leases

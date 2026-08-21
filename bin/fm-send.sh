@@ -158,7 +158,7 @@ fm_send_meta_for_key_value() {  # <state-dir> <key> <value>
 }
 
 fm_send_resolve_target() {  # <raw-target>
-  local raw=$1 meta pane_meta target id session hint
+  local raw=$1 meta pane_meta target id session hint meta_rc
 
   RESOLVED_TARGET=""
   TARGET_ROUTE=""
@@ -207,7 +207,12 @@ fm_send_resolve_target() {  # <raw-target>
     return 1
   fi
 
-  meta=$(fm_endpoint_meta_for_target "$raw" "$STATE" 2>/dev/null || true)
+  meta_rc=0
+  meta=$(fm_endpoint_meta_for_target "$raw" "$STATE" 2>/dev/null) || meta_rc=$?
+  if [ "$meta_rc" -eq 2 ]; then
+    echo "error: explicit target '$raw' has ambiguous or invalid task ownership; preserving endpoint records for manual reconciliation" >&2
+    return 1
+  fi
   if [ -n "$meta" ]; then
     id=$(fm_send_id_from_meta "$meta")
     fm_herdr_validate_task_endpoint "$meta" "$id" || return 1

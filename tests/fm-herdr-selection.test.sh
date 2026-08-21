@@ -42,6 +42,11 @@ test_retired_and_unknown_selection_refused() {
   out=$(unset FM_BACKEND TMUX TMUX_PANE; runtime_check "$config" 2>&1) \
     && fail "unknown runtime configuration must be refused"
   assert_contains "$out" "Herdr is the only supported" "unknown selection should name the sole path"
+  printf 'herdr\ntmux\n' > "$config/backend"
+  out=$(unset FM_BACKEND TMUX TMUX_PANE; runtime_check "$config" 2>&1) \
+    && fail "multiple runtime selections must be refused"
+  assert_contains "$out" "multiple session selections" "multiline config refusal should name the ambiguity"
+  assert_contains "$out" "tmux is retired" "multiline config refusal should not hide retired tmux evidence"
   pass "runtime selection: tmux and unknown choices stop without fallback"
 }
 

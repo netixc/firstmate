@@ -64,18 +64,23 @@ fm_herdr_retired_selection_check() {  # <source> <value>
 # Tmux and unknown settings are refused, and a tmux-nested process is never
 # silently reinterpreted as Herdr.
 fm_herdr_require_runtime() {
-  local line value
+  local line value count
   if [ -n "${FM_BACKEND:-}" ]; then
     fm_herdr_retired_selection_check FM_BACKEND "$FM_BACKEND" || return 1
   fi
   if [ -f "$FM_HERDR_CONFIG_DIR/backend" ]; then
     value=
+    count=0
     while IFS= read -r line || [ -n "$line" ]; do
       line=$(printf '%s' "$line" | tr -d '[:space:]')
       [ -n "$line" ] || continue
       value=$line
-      break
+      count=$((count + 1))
     done < "$FM_HERDR_CONFIG_DIR/backend"
+    if [ "$count" -gt 1 ]; then
+      echo "error: config/backend contains multiple session selections; Herdr is the only supported session execution path and tmux is retired." >&2
+      return 1
+    fi
     [ -z "$value" ] || fm_herdr_retired_selection_check config/backend "$value" || return 1
   fi
   if [ -n "${TMUX:-}" ] || [ -n "${TMUX_PANE:-}" ]; then
@@ -185,15 +190,23 @@ fm_herdr_validate_task_endpoint() {  # <meta-file> <task-id>
 }
 
 fm_endpoint_meta_for_target() {  # <target> <state-dir>
-  local target=$1 state=$2 meta window
+  local target=$1 state=$2 meta id match= count=0 invalid=0
   for meta in "$state"/*.meta; do
     [ -e "$meta" ] || continue
-    window=$(fm_meta_get "$meta" window)
-    [ -n "$window" ] && [ "$window" = "$target" ] || continue
-    printf '%s' "$meta"
-    return 0
+    grep -Fqx "window=$target" "$meta" 2>/dev/null || continue
+    id=${meta##*/}
+    id=${id%.meta}
+    if ! fm_herdr_validate_task_endpoint "$meta" "$id" >/dev/null 2>&1 \
+      || [ "$FM_HERDR_VALIDATED_TARGET" != "$target" ]; then
+      invalid=1
+      continue
+    fi
+    match=$meta
+    count=$((count + 1))
   done
-  return 1
+  [ "$invalid" -eq 0 ] && [ "$count" -le 1 ] || return 2
+  [ "$count" -eq 1 ] || return 1
+  printf '%s' "$match"
 }
 
 fm_task_id_for_selector() {  # <raw-target> <state-dir>
