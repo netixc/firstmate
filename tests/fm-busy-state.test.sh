@@ -15,6 +15,8 @@ set -u
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 # shellcheck source=/dev/null
+. "$ROOT/bin/fm-herdr.sh"
+# shellcheck source=/dev/null
 . "$ROOT/bin/fm-busy-lib.sh"
 
 TMP_ROOT=$(fm_test_tmproot fm-busy-state)
@@ -286,6 +288,22 @@ test_boolean_view_never_promotes_unknown() {
   pass "the boolean view reports busy only on an exact busy verdict"
 }
 
+test_meta_classification_requires_exact_endpoint_identity() {
+  local state meta out
+  state=$(new_state_dir meta-identity)
+  meta=$state/t1.meta
+  fm_write_meta "$meta" \
+    "backend=herdr" "window=lab:w1:p1" "window=lab:w2:p1" \
+    "endpoint_task_id=t1" "herdr_session=lab" "herdr_workspace_id=w1" \
+    "herdr_tab_id=t1" "herdr_pane_id=w1:p1" \
+    "worktree=/tmp/t1" "project=/tmp/project" "harness=pi"
+  "$EV" arm "$state" t1 >/dev/null
+  out=$(fm_busy_classify_meta "$meta" t1 "$state")
+  [ "$out" = "unknown invalid-endpoint" ] \
+    || fail "ambiguous endpoint metadata must classify unknown, got '$out'"
+  pass "metadata busy classification requires exact endpoint identity"
+}
+
 test_arm_seeds_busy_spawn
 test_apply_advances_seq_and_source
 test_apply_current_gen_reset
@@ -302,5 +320,6 @@ test_dead_endpoint_overrides
 test_herdr_native_busy_only
 test_record_read_leaves_caller_shell_intact
 test_boolean_view_never_promotes_unknown
+test_meta_classification_requires_exact_endpoint_identity
 
 echo "all fm-busy-state tests passed"

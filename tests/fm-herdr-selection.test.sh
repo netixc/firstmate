@@ -73,6 +73,23 @@ test_metadata_classification_and_identity() {
   pass "metadata: current Herdr validates; legacy evidence is preserved"
 }
 
+test_selector_refuses_foreign_identity() {
+  local state=$TMP_ROOT/selector-state meta out
+  mkdir -p "$state"
+  meta=$state/current.meta
+  fm_write_meta "$meta" \
+    "backend=herdr" "window=lab:w1:p1" "endpoint_task_id=other" \
+    "herdr_session=lab" "herdr_workspace_id=w1" "herdr_tab_id=t1" \
+    "herdr_pane_id=w1:p1" "worktree=/tmp/current" "project=/tmp/project"
+  # shellcheck source=/dev/null
+  . "$ROOT/bin/fm-herdr.sh"
+  out=$(fm_herdr_resolve_selector current "$state" 2>&1) \
+    && fail "selector resolution must reject metadata bound to another task"
+  assert_contains "$out" "belongs to task other, not current" \
+    "selector refusal should preserve the filename-to-task binding"
+  pass "selector resolution: foreign endpoint identity fails closed"
+}
+
 test_retired_cli_selection_refused() {
   local home=$TMP_ROOT/home out
   mkdir -p "$home/state" "$home/data" "$home/config"
@@ -88,6 +105,7 @@ test_retired_cli_selection_refused() {
 test_default_and_explicit_herdr
 test_retired_and_unknown_selection_refused
 test_metadata_classification_and_identity
+test_selector_refuses_foreign_identity
 test_retired_cli_selection_refused
 
 echo "All Herdr selection tests passed."

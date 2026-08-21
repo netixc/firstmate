@@ -227,12 +227,13 @@ fm_expected_label_of_selector() {  # <raw-target> <state-dir>
 }
 
 fm_herdr_resolve_selector() {  # <raw-target> <state-dir>
-  local raw=$1 state=$2 meta target
+  local raw=$1 state=$2 meta target id
   meta=$(fm_meta_for_selector "$raw" "$state" 2>/dev/null || true)
   if [ -n "$meta" ]; then
-    fm_herdr_require_meta "$meta" || return 1
-    target=$(fm_endpoint_target_of_meta "$meta")
-    [ -n "$target" ] || { echo "error: no Herdr target recorded in $meta" >&2; return 1; }
+    id=${meta##*/}
+    id=${id%.meta}
+    fm_herdr_validate_task_endpoint "$meta" "$id" || return 1
+    target=$FM_HERDR_VALIDATED_TARGET
     printf '%s' "$target"
     return 0
   fi

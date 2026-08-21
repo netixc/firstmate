@@ -60,6 +60,24 @@ test_exact_id_send() {
   pass "fm-send strict: exact task ids use exact Herdr metadata"
 }
 
+test_ambiguous_or_foreign_metadata_refuses() {
+  local home=$TMP_ROOT/identity fb log out
+  mkdir -p "$home/state"; fb=$(make_stubs "$home"); log=$home/herdr.log; : > "$log"
+  write_meta "$home" foreign
+  printf 'endpoint_task_id=another-task\n' >> "$home/state/foreign.meta"
+  out=$(run_send "$home" "$fb" "$log" foreign hello 2>&1) \
+    && fail "duplicate task binding should refuse"
+  assert_contains "$out" "lacks one exact task binding" "duplicate binding refusal should name the identity defect"
+
+  write_meta "$home" duplicate lab:w2:p1
+  printf 'window=lab:w2:p2\n' >> "$home/state/duplicate.meta"
+  out=$(run_send "$home" "$fb" "$log" lab:w2:p2 hello 2>&1) \
+    && fail "duplicate endpoint should refuse through explicit target resolution"
+  assert_contains "$out" "missing, empty, or ambiguous Herdr endpoint" "duplicate endpoint refusal should name the ambiguity"
+  [ ! -s "$log" ] || fail "invalid endpoint metadata reached Herdr"
+  pass "fm-send strict: ambiguous and foreign endpoint identities fail closed"
+}
+
 test_unset_home_and_unresolved_refuse() {
   local home=$TMP_ROOT/refuse fb log out
   mkdir -p "$home/state"; fb=$(make_stubs "$home"); log=$home/herdr.log; : > "$log"
@@ -102,6 +120,7 @@ test_explicit_exact_target_and_key() {
 }
 
 test_exact_id_send
+test_ambiguous_or_foreign_metadata_refuses
 test_unset_home_and_unresolved_refuse
 test_legacy_shapes_and_prefixless_panes_refuse
 test_explicit_exact_target_and_key

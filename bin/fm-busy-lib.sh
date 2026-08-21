@@ -34,7 +34,7 @@
 #   fm-recovery      a documented recovery reset after relaunch
 # Classifier-only sources (never written into a record):
 #   endpoint-gone, herdr-native, missing, malformed, gen-mismatch,
-#   source-mismatch, no-target
+#   source-mismatch, invalid-endpoint, no-target
 #
 # Classification (fm_busy_classify): busy | idle | unknown | dead, always
 # with the producing source as the second token. Precedence:
@@ -218,7 +218,11 @@ fm_busy_classify_meta() {  # <meta-file> <id> <state-dir>
     printf 'unknown %s' "$classification"
     return 0
   }
-  target=$(fm_endpoint_target_of_meta "$meta")
+  if ! fm_herdr_validate_task_endpoint "$meta" "$id" 2>/dev/null; then
+    printf 'unknown invalid-endpoint'
+    return 0
+  fi
+  target=$FM_HERDR_VALIDATED_TARGET
   harness=$(fm_meta_get "$meta" harness)
   if [ -z "$target" ]; then
     printf 'unknown no-target'
