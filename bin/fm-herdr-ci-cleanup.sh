@@ -16,6 +16,11 @@
 #   fm-herdr-ci-cleanup.sh teardown <snapshot-path>
 set -eu
 
+FM_HERDR_CI_CLEANUP_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=/dev/null
+. "$FM_HERDR_CI_CLEANUP_ROOT/bin/fm-herdr.sh"
+fm_herdr_require_runtime || exit 1
+
 die() {
   printf 'fm-herdr-ci-cleanup.sh: %s\n' "$*" >&2
   exit 1
