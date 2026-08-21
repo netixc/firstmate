@@ -12,6 +12,7 @@ STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 
 # shellcheck source=bin/fm-herdr.sh
 . "$SCRIPT_DIR/fm-herdr.sh"
+fm_herdr_require_runtime
 
 "$SCRIPT_DIR/fm-guard.sh" || true
 

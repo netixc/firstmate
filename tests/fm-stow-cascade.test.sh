@@ -54,6 +54,7 @@ chmod +x "$FAKEBIN/fake-ssh"
 cat > "$FAKEBIN/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
+[ -z "${FM_HERDR_LOG:-}" ] || printf '%s\n' "$*" >> "$FM_HERDR_LOG"
 case "${1:-} ${2:-}" in
   "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
   "pane get") printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "${3:-}" ;;
@@ -254,6 +255,29 @@ test_transport_routes_by_placement_and_liveness() {
   pass "transport follows placement and live-agent state, and a remote home without an agent defers"
 }
 
+test_ambiguous_local_endpoint_is_deferred_without_probe() {
+  local primary home out s log rc
+  primary=$(new_primary ambiguous-endpoint)
+  home=$(new_home ambiguous-local)
+  local_record ambiguous-local "$home" > "$primary/data/secondmates.md"
+  write_secondmate_meta "$primary/state/ambiguous-local.meta" "$home"
+  printf 'window=lab:w-foreign:p1\n' >> "$primary/state/ambiguous-local.meta"
+  log=$primary/herdr.log
+
+  set +e
+  out=$(run_cascade "$primary" FM_HERDR_LOG="$log")
+  rc=$?
+  set -e
+  s=$(stanza "$out" ambiguous-local)
+  [ "$(value_in "$s" transport)" = deferred ] \
+    || fail "an ambiguous local endpoint did not defer curation"
+  assert_contains "$s" 'record preserved for manual reconciliation' \
+    "ambiguous local endpoint preservation was not actionable"
+  [ ! -s "$log" ] || fail "stow cascade probed an ambiguous endpoint identity"
+  expect_code 3 "$rc" "an ambiguous endpoint should remain an explicit exception"
+  pass "stow cascade preserves ambiguous local endpoints without probing"
+}
+
 test_receipt_facts_are_complete_and_show_before_and_after() {
   local primary home before after s
   primary=$(new_primary receipt)
@@ -368,6 +392,7 @@ test_no_cascade_without_secondmates_or_from_a_secondmate_home() {
 test_budget_is_enforced_per_home_and_never_summed
 test_every_registered_home_is_enumerated_exactly_once
 test_transport_routes_by_placement_and_liveness
+test_ambiguous_local_endpoint_is_deferred_without_probe
 test_receipt_facts_are_complete_and_show_before_and_after
 test_a_slow_remote_is_bounded_and_the_rest_still_report
 test_no_cascade_without_secondmates_or_from_a_secondmate_home

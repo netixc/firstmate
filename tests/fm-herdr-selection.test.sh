@@ -107,10 +107,26 @@ test_retired_cli_selection_refused() {
   pass "spawn: retired --backend tmux stops before mutation"
 }
 
+test_public_control_paths_refuse_tmux_environment() {
+  local home=$TMP_ROOT/public-controls path out
+  mkdir -p "$home/state" "$home/data" "$home/config"
+  for path in fm-peek.sh fm-send.sh fm-control.sh fm-teardown.sh; do
+    out=$(TMUX=fake FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+      "$ROOT/bin/$path" task-a interrupt 2>&1) \
+      && fail "$path accepted a tmux execution environment"
+    assert_contains "$out" "leave the tmux environment" \
+      "$path did not reject the retired environment before control"
+  done
+  [ -z "$(find "$home/state" -mindepth 1 -print -quit)" ] \
+    || fail "retired environment refusal mutated task state"
+  pass "public Herdr control paths reject tmux execution environments"
+}
+
 test_default_and_explicit_herdr
 test_retired_and_unknown_selection_refused
 test_metadata_classification_and_identity
 test_selector_refuses_foreign_identity
 test_retired_cli_selection_refused
+test_public_control_paths_refuse_tmux_environment
 
 echo "All Herdr selection tests passed."

@@ -133,7 +133,11 @@ fm_herdr_require_meta() {  # <meta-file> [task-id]
 }
 
 fm_endpoint_target_of_meta() {  # <meta-file>
-  fm_meta_get "$1" window
+  local meta=$1 id
+  id=${meta##*/}
+  id=${id%.meta}
+  fm_herdr_validate_task_endpoint "$meta" "$id" >/dev/null 2>&1 || return 1
+  printf '%s' "$FM_HERDR_VALIDATED_TARGET"
 }
 
 fm_herdr_validate_task_endpoint() {  # <meta-file> <task-id>

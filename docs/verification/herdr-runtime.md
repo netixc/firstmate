@@ -479,16 +479,16 @@ printf 'bin '; git ls-files 'bin/**' | count_paths
 printf 'tests '; git ls-files 'tests/**' | count_paths
 printf 'pi '; { git ls-files '.pi/extensions/**'; git ls-files '.pi/worker-extensions/**'; } | sort -u | count_paths
 printf 'agents '; wc -l < AGENTS.md
-git diff HEAD --numstat | awk '{a+=$1;d+=$2} END{print "added="a,"deleted="d,"net="a-d}'
+git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2} END{print "added="a,"deleted="d,"net="a-d}'
 ```
 
 ```text
-all 130424 316
-bin 54045 127
-tests 56030 118
+all 130618 316
+bin 54083 127
+tests 56186 118
 pi 2045 9
 agents 562
-added=5050 deleted=31830 net=-26780
+added=5244 deleted=31830 net=-26586
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 26,780 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 26,586 lines smaller.

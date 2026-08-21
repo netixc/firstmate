@@ -12,9 +12,10 @@ make_world() {
   local home=$TMP_ROOT/home fb=$TMP_ROOT/fakebin
   mkdir -p "$home/state" "$home/data" "$home/config" "$fb"
   printf '## In flight\n\n## Queued\n\n## Done\n' > "$home/data/backlog.md"
-  cat > "$fb/herdr" <<'SH'
+cat > "$fb/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
+[ -z "${FM_HERDR_LOG:-}" ] || printf '%s\n' "$*" >> "$FM_HERDR_LOG"
 case "${1:-} ${2:-}" in
   "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
   "pane get") printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "${3:-}" ;;
@@ -34,6 +35,12 @@ SH
     "window=firstmate:fm-legacy" "worktree=/tmp/legacy" "project=alpha" \
     "harness=pi" "kind=ship" "mode=direct-PR"
   printf 'blocked: manual reconciliation\n' > "$home/state/legacy.status"
+  fm_write_meta "$home/state/ambiguous.meta" \
+    "backend=herdr" "window=lab:w-ambiguous:p1" "window=lab:w-foreign:p1" \
+    "endpoint_task_id=ambiguous" "herdr_session=lab" \
+    "herdr_workspace_id=w-ambiguous" "herdr_tab_id=t-ambiguous" \
+    "herdr_pane_id=w-ambiguous:p1" "worktree=/tmp/ambiguous" "project=alpha" \
+    "harness=pi" "kind=secondmate" "mode=direct-PR"
   printf '%s|%s\n' "$home" "$fb"
 }
 
@@ -44,19 +51,26 @@ run_snapshot() { # <home> <fakebin>
 }
 
 test_snapshot_session_contract() {
-  local rec home fb json
+  local rec home fb json log
   rec=$(make_world); IFS='|' read -r home fb <<EOF
 $rec
 EOF
-  json=$(run_snapshot "$home" "$fb") || fail "fleet snapshot failed"
+  log=$home/herdr.log
+  json=$(FM_HERDR_LOG="$log" run_snapshot "$home" "$fb") || fail "fleet snapshot failed"
   printf '%s' "$json" | jq -e '
-    (.tasks | length) == 2
+    (.tasks | length) == 3
     and (.tasks[] | select(.id=="current") | .session_path) == "herdr"
     and (.tasks[] | select(.id=="current") | .endpoint.exists) == true
     and (.tasks[] | select(.id=="legacy") | .session_path) == "retired-tmux"
     and (.tasks[] | select(.id=="legacy") | .endpoint.exists) == null
+    and (.tasks[] | select(.id=="ambiguous") | .session_path) == "herdr"
+    and (.tasks[] | select(.id=="ambiguous") | .endpoint.exists) == null
     and ([.tasks[] | has("backend")] | any | not)
   ' >/dev/null || fail "snapshot did not expose the Herdr-only session contract: $json"
+  if grep -F 'w-ambiguous:p1' "$log" >/dev/null \
+    || grep -F 'w-foreign:p1' "$log" >/dev/null; then
+    fail "snapshot probed an ambiguous endpoint identity"
+  fi
   pass "fleet snapshot reports current Herdr and preserved legacy identity without a provider field"
 }
 

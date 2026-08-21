@@ -800,6 +800,8 @@ for meta in "$STATE"/*.meta; do
     backend=$(fm_herdr_meta_kind "$meta")
     if [ "$backend" != herdr ]; then
       printf 'endpoint: unknown (%s record preserved for manual reconciliation; window=%s)\n' "$backend" "$window"
+    elif [ -z "$target" ]; then
+      printf 'endpoint: unknown (invalid Herdr record preserved for manual reconciliation; window=%s)\n' "$window"
     elif fm_herdr_target_exists "$target"; then
       printf 'endpoint: alive (Herdr window=%s)\n' "$window"
     else
