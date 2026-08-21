@@ -105,6 +105,34 @@ test_tmux_environment_is_not_reinterpreted() {
   pass "bootstrap never reinterprets a tmux process as Herdr"
 }
 
+test_invalid_selection_stops_network_sweeps() {
+  local home fb log out rc before
+  home=$(new_home invalid-network); fb=$(make_toolchain "$TMP_ROOT/invalid-network")
+  log=$home/herdr.log
+  cat > "$fb/herdr" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$FM_HERDR_LOG"
+printf '{"result":{"agent":{"agent_status":"working","provider":"pi"}}}\n'
+SH
+  chmod +x "$fb/herdr"
+  fm_write_meta "$home/state/mate.meta" \
+    "kind=secondmate" "harness=pi" "backend=herdr" \
+    "window=lab:w1:p1" "endpoint_task_id=mate" \
+    "herdr_session=lab" "herdr_workspace_id=w1" "herdr_tab_id=t1" \
+    "herdr_pane_id=w1:p1" "worktree=/tmp/mate" "project=/tmp/project"
+  before=$(shasum -a 256 "$home/state/mate.meta" | awk '{print $1}')
+  out=$(TMUX=fake PATH="$fb:$BASE_PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    FM_HERDR_LOG="$log" FM_BOOTSTRAP_NETWORK=only "$BOOTSTRAP" 2>&1)
+  rc=$?
+  [ "$rc" -ne 0 ] || fail "network-only bootstrap accepted a tmux execution environment"
+  assert_contains "$out" 'SESSION_INVALID:' "network-only bootstrap did not report the retired selection"
+  assert_contains "$out" 'leave the tmux environment' "network-only refusal was not actionable"
+  [ ! -s "$log" ] || fail "invalid selection reached a Herdr liveness probe"
+  [ "$(shasum -a 256 "$home/state/mate.meta" | awk '{print $1}')" = "$before" ] \
+    || fail "invalid selection rewrote endpoint metadata"
+  pass "invalid runtime selection stops every network bootstrap sweep"
+}
+
 test_ambiguous_secondmate_endpoint_is_preserved() {
   local home fb log out
   home=$(new_home ambiguous-secondmate); fb=$(make_toolchain "$TMP_ROOT/ambiguous-secondmate")
@@ -145,5 +173,6 @@ test_complete_toolchain_is_quiet
 test_missing_herdr_is_actionable
 test_retired_and_unknown_selection_is_actionable
 test_tmux_environment_is_not_reinterpreted
+test_invalid_selection_stops_network_sweeps
 test_ambiguous_secondmate_endpoint_is_preserved
 test_treehouse_requires_durable_leases

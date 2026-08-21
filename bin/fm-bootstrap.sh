@@ -1110,6 +1110,11 @@ if [ "${1:-}" = "install" ]; then
   exit 0
 fi
 
+if [ "${FM_BOOTSTRAP_DETECT_ONLY:-0}" != 1 ] && [ "$SESSION_SELECTION_VALID" -eq 0 ]; then
+  echo "SESSION_INVALID: $SESSION_SELECTION_ERROR"
+  exit 1
+fi
+
 # This is the first mutating sweep at a locked session boundary. It migrates
 # legacy Relay task metadata before PR-check authentication, then pauses an
 # identity-matched watcher, holds its lock, and neutralizes legacy PR checks
