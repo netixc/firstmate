@@ -161,8 +161,10 @@ test_relative_home_overrides_launch_with_absolute_cross_process_paths() {
   status=$?
   expect_code 0 "$status" "spawn with relative home overrides should succeed"
   launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "-e '$home_real/state/$id.pi-ext.ts'" \
-    "relative FM_STATE_OVERRIDE leaked into Pi's cross-process extension path"
+  assert_contains "$launch" "FM_WORKER_LIFECYCLE_CONTEXT='$home_real/state/$id.meta'" \
+    "relative FM_STATE_OVERRIDE leaked into Pi's worker context path"
+  assert_contains "$launch" "-e '$ROOT/.pi/worker-extensions/fm-worker-lifecycle.ts'" \
+    "Pi did not explicitly load the tracked worker-lifecycle extension"
   assert_contains "$launch" "< '$home_real/data/$id/brief.md'" \
     "relative FM_DATA_OVERRIDE leaked into the cross-process brief path"
   pass "relative home overrides ignore CDPATH and become absolute before spawn launch construction"
@@ -190,8 +192,8 @@ test_home_defaults_preserve_absolute_or_resolve_relative_paths() {
   status=$?
   expect_code 0 "$status" "spawn with relative FM_HOME defaults should succeed"
   launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "-e '$home_real/state/$relative_id.pi-ext.ts'" \
-    "relative FM_HOME leaked into Pi's default cross-process extension path"
+  assert_contains "$launch" "FM_WORKER_LIFECYCLE_CONTEXT='$home_real/state/$relative_id.meta'" \
+    "relative FM_HOME leaked into Pi's default worker context path"
   assert_contains "$launch" "< '$home_real/data/$relative_id/brief.md'" \
     "relative FM_HOME leaked into the default cross-process brief path"
 
@@ -210,20 +212,21 @@ test_home_defaults_preserve_absolute_or_resolve_relative_paths() {
   status=$?
   expect_code 0 "$status" "spawn with absolute symlink-spelled FM_HOME defaults should succeed"
   launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "-e '$linked_home/state/$absolute_id.pi-ext.ts'" \
-    "absolute FM_HOME spelling changed in Pi's default cross-process extension path"
+  assert_contains "$launch" "FM_WORKER_LIFECYCLE_CONTEXT='$home_real/state/$absolute_id.meta'" \
+    "Pi's worker context path did not canonicalize an absolute symlink-spelled home"
   assert_contains "$launch" "< '$linked_home/data/$absolute_id/brief.md'" \
     "absolute FM_HOME spelling changed in the default cross-process brief path"
   pass "FM_HOME defaults resolve relative paths and preserve absolute spellings"
 }
 
 test_absolute_override_spelling_is_preserved_in_launch_paths() {
-  local rec id out status launch linked_home
+  local rec id out status launch linked_home home_real
   id=profile-absolute-paths-z1c
   rec=$(make_spawn_case profile-absolute-paths pi "$id")
   read_case_record "$rec"
   linked_home="$CASE_DIR/home-link"
   ln -s "$HOME_DIR" "$linked_home"
+  home_real=$(cd "$HOME_DIR" && pwd -P)
   : > "$LAUNCH_LOG"
 
   out=$(
@@ -238,8 +241,8 @@ test_absolute_override_spelling_is_preserved_in_launch_paths() {
   status=$?
   expect_code 0 "$status" "spawn with absolute symlink-spelled overrides should succeed"
   launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "-e '$linked_home/state/$id.pi-ext.ts'" \
-    "absolute FM_STATE_OVERRIDE spelling changed in Pi's cross-process extension path"
+  assert_contains "$launch" "FM_WORKER_LIFECYCLE_CONTEXT='$home_real/state/$id.meta'" \
+    "Pi's worker context path did not canonicalize an absolute symlink-spelled override"
   assert_contains "$launch" "< '$linked_home/data/$id/brief.md'" \
     "absolute FM_DATA_OVERRIDE spelling changed in the cross-process brief path"
   pass "absolute override spellings are preserved in spawn launch paths"
@@ -377,7 +380,7 @@ test_production_spawn_rejects_raw_launch_command() {
 }
 
 test_pi_threads_model_and_max_effort() {
-  local rec id out status launch
+  local rec id out status launch state_real
   id=profile-pi-z8
   rec=$(make_spawn_case profile-pi pi "$id")
   read_case_record "$rec"
@@ -388,46 +391,22 @@ test_pi_threads_model_and_max_effort() {
   expect_code 0 "$status" "pi spawn with max effort should succeed"
   assert_meta_profile "$HOME_DIR/state/$id.meta" pi openai-codex/gpt-5.6-luna max
   launch=$(cat "$LAUNCH_LOG")
+  state_real=$(cd "$HOME_DIR/state" && pwd -P)
   assert_contains "$launch" "'$FAKEBIN_DIR/pi' --tui-mode regular --model 'openai-codex/gpt-5.6-luna' --thinking 'max' -e" \
     "pi launch did not force the regular TUI while threading the requested model and max thinking level"
   assert_not_contains "$launch" "FM_FIRSTMATE_PI_LAUNCH_BRIEF=" \
     "pi launch still exports the removed Calm input-reroute binding"
   assert_contains "$launch" "fm-operational-input.sh' encode launch-brief" \
     "pi launch lost the canonical typed launch-brief envelope"
-  pass "pi receives --model and --thinking max profile flags"
-}
-
-test_pi_threads_sol_profile_and_preserves_semantic_wiring() {
-  local rec id out status launch
-  id=profile-pi-z8b
-  rec=$(make_spawn_case profile-pi-sol pi "$id")
-  read_case_record "$rec"
-
-  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
-    --model openai-codex/gpt-5.6-sol --effort max)
-  status=$?
-  expect_code 0 "$status" "pi spawn with max effort should succeed"
-  assert_contains "$out" "spawned $id harness=pi" "pi spawn did not preserve its visible identity"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" pi openai-codex/gpt-5.6-sol max
-  launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "'$FAKEBIN_DIR/pi' --tui-mode regular --model 'openai-codex/gpt-5.6-sol' --thinking 'max' -e" \
-    "pi launch did not force the regular TUI with Pi's model, thinking, and extension semantics"
-  assert_contains "$launch" "fm-operational-input.sh' encode launch-brief" \
-    "pi launch lost the canonical typed launch-brief envelope"
-  assert_present "$HOME_DIR/state/$id.pi-ext.ts" "pi launch did not install Pi's turn-end extension"
+  assert_absent "$HOME_DIR/state/$id.pi-ext.ts" "Pi launch generated a per-task extension artifact"
   assert_present "$HOME_DIR/state/$id.busy-gen" "pi spawn did not arm the busy-state contract"
   assert_contains "$(cat "$HOME_DIR/state/$id.busy-state")" "state=busy source=fm-spawn" \
     "pi spawn did not seed the busy-state record from the launch brief"
-  local ext gen
-  ext=$(cat "$HOME_DIR/state/$id.pi-ext.ts")
-  gen=$(cat "$HOME_DIR/state/$id.busy-gen")
-  assert_contains "$ext" 'pi.on("agent_start"' "pi extension lost the semantic agent_start busy edge"
-  assert_contains "$ext" 'pi.on("agent_settled"' "pi extension lost the semantic agent_settled idle edge"
-  assert_contains "$ext" 'ctx.isIdle()' "pi extension no longer confirms idle with ctx.isIdle()"
-  assert_contains "$ext" "\"--gen\", \"$gen\"" "pi extension does not carry the armed incarnation gen"
-  assert_contains "$ext" '"--source", "pi-ext"' "pi extension does not attribute its semantic source"
-  assert_contains "$ext" 'pi.on("turn_end"' "pi extension lost the turn-end notification touch"
-  pass "pi shares Pi launch semantics while preserving its configured and recorded identity"
+  assert_contains "$launch" "FM_WORKER_LIFECYCLE_CONTEXT='$state_real/$id.meta'" \
+    "Pi launch did not pass the bounded task context"
+  assert_contains "$launch" "-e '$ROOT/.pi/worker-extensions/fm-worker-lifecycle.ts'" \
+    "Pi launch did not explicitly load the tracked worker extension"
+  pass "Pi receives its profile, tracked lifecycle extension, and bounded task context"
 }
 
 test_pi_tui_mode_probe_is_safe_for_old_and_new_pi() {
@@ -572,7 +551,6 @@ test_active_dispatch_profile_allows_positional_harness
 test_production_spawn_rejects_raw_launch_command
 test_pi_threads_model_and_max_effort
 test_pi_tui_mode_probe_is_safe_for_old_and_new_pi
-test_pi_threads_sol_profile_and_preserves_semantic_wiring
 test_pi_missing_binary_refuses_before_endpoint_or_metadata
 test_pi_persistent_secondmate_uses_primary_extensions
 test_batch_forwards_shared_profile_flags

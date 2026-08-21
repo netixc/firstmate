@@ -144,12 +144,8 @@ Tmux liveness accepts exact `pi` and `Pi` process evidence for vanilla Pi and re
 Keep the brief as one positional argument.
 Multiple positional args become separate queued messages; `fm-spawn`'s template already does this correctly.
 
-Project trust dialog can appear on the first pi run in any not-yet-trusted directory, observed even on clean worktrees.
-Accept with Enter.
-The decision persists per path in `~/.pi/agent/trust.json`, so later spawns in the same worktree slot skip it.
-
-`fm-spawn` keeps the turn-end extension in `state/`, outside the worktree, because project-local extension files make the trust gate strictly worse and pollute the project.
-The extension must listen for pi's `turn_end` event, not `agent_end`, so the watcher wakes after each completed turn instead of only when the whole agent run exits.
+Project trust can still appear for a fresh target's own local resources, but Pi loads Firstmate's explicit external worker extension before that decision and the extension does not create a trust prompt.
+`fm-spawn` explicitly loads `.pi/worker-extensions/fm-worker-lifecycle.ts` outside primary auto-discovery and gives it one validated task-metadata path; `bin/fm-busy-lib.sh` remains the lifecycle contract owner.
 Pi sets `PI_CODING_AGENT=true` for its children; this is its harness-detection env marker.
 
 **Primary-session guard fact (verified 2026-07-09, Pi 0.80.5).**

@@ -12,9 +12,9 @@
 # verbs addressed to an exact task id, with the per-harness mechanics owned
 # here rather than improvised per harness in agent prose.
 #
-# This file owns three capability tables plus their pure artifact-path tables
-# and nothing else. It has no side effects, runs no backend command, and reads
-# no state, so it can be sourced by a test as a pure contract:
+# This file owns three capability tables and nothing else.
+# It has no side effects, runs no backend command, and reads no state, so it can
+# be sourced by a test as a pure contract:
 #
 #   1. Verb allowlist. There is no arbitrary-text and no generic raw-key entry
 #      point on the control plane; a caller either names an allowlisted verb or
@@ -112,18 +112,4 @@ fm_control_backend_state_verified() {  # <backend>
     tmux|herdr) return 0 ;;
   esac
   return 1
-}
-
-# The per-task wiring artifacts a harness leaves behind, so a relaunch that
-# changes harness (or re-arms the same one with a fresh busy generation) can
-# clear the previous incarnation's wiring instead of leaving a stale hook
-# pointing at a retired generation. Prints zero or more absolute paths, one per
-# line: worktree-resident hook files and firstmate-owned state tokens only,
-# never a harness's own managed config.
-fm_control_harness_wiring_paths() {  # <harness> <worktree> <state-dir> <id>
-  local harness=${1-} wt=${2-} state=${3-} id=${4-}
-  [ -n "$wt" ] && [ -n "$state" ] && [ -n "$id" ] || return 1
-  case "$harness" in
-    pi) printf '%s\n' "$state/$id.pi-ext.ts" ;;
-  esac
 }

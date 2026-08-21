@@ -6,9 +6,8 @@
 # real agent):
 #   1. A same-harness relaunch keeps every identity axis and reuses the SAME
 #      endpoint and worktree - it replaces an agent, it never forks a task.
-#   2. An explicit Pi relaunch keeps the record aligned, and the
-#      previous harness's per-task wiring is cleared, and profile axes chosen
-#      for the old harness do not silently carry to the new one.
+#   2. A Pi relaunch keeps the record aligned, explicitly loads the tracked
+#      worker extension, and mints a new busy generation.
 #   3. The progress note is required where the replacement needs it, lands in
 #      the instructions the replacement reads, and never rewrites a charter.
 #   4. A refusal before the agent is stopped changes nothing.
@@ -236,7 +235,6 @@ run_control() {  # <case-dir> <args...>
     FM_REAL_GIT="${FM_REAL_GIT:-}" FM_FAKE_GIT_FAILURE="${FM_FAKE_GIT_FAILURE:-}" \
     FM_REAL_MV="${FM_REAL_MV:-}" FM_FAKE_COMPLETE_JOURNAL_MV_FAIL="${FM_FAKE_COMPLETE_JOURNAL_MV_FAIL:-}" \
     FM_FAKE_META_PUBLISH_MV_FAIL="${FM_FAKE_META_PUBLISH_MV_FAIL:-}" \
-    FM_REAL_RM="${FM_REAL_RM:-}" FM_FAKE_RM_FAIL_PATH="${FM_FAKE_RM_FAIL_PATH:-}" \
     FM_FAKE_TRACE_PREPARE="${FM_FAKE_TRACE_PREPARE:-}" \
     FM_FAKE_META_WRITER_READY="${FM_FAKE_META_WRITER_READY:-}" \
     FM_FAKE_TRACE_EXPORTED="${FM_FAKE_TRACE_EXPORTED:-}" \
@@ -303,23 +301,10 @@ SH
   chmod +x "$1/fakebin/mv"
 }
 
-make_rm_failure_stub() {  # <case-dir>
-  cat > "$1/fakebin/rm" <<'SH'
-#!/usr/bin/env bash
-for arg in "$@"; do
-  if [ -n "${FM_FAKE_RM_FAIL_PATH:-}" ] && [ "$arg" = "$FM_FAKE_RM_FAIL_PATH" ]; then
-    exit 1
-  fi
-done
-exec "$FM_REAL_RM" "$@"
-SH
-  chmod +x "$1/fakebin/rm"
-}
-
 # --- 1. same-harness relaunch -----------------------------------------------
 
 test_same_harness_relaunch_keeps_identity_and_reuses_the_endpoint() {
-  local dir out rc gen_before gen_after
+  local dir out rc gen_before gen_after state_real
   dir=$(new_case same rl1)
   add_ship_task "$dir" rl1 pi
   gen_before=$("$ROOT/bin/fm-busy-event.sh" arm "$dir/home/state" rl1)
@@ -334,13 +319,18 @@ test_same_harness_relaunch_keeps_identity_and_reuses_the_endpoint() {
   [ "$(meta_field "$dir" rl1 kind)" = ship ] || fail "kind must survive the relaunch"
   [ "$(meta_field "$dir" rl1 project)" = "$dir/proj" ] || fail "project must survive the relaunch"
   gen_after=$(meta_field "$dir" rl1 busy_gen)
+  state_real=$(cd "$dir/home/state" && pwd -P)
   [ -n "$gen_after" ] && [ "$gen_after" != "$gen_before" ] \
     || fail "a relaunch must arm a fresh busy generation, got '$gen_after'"
   [ "$(journal_field "$dir" rl1 phase)" = complete ] \
     || fail "the transaction journal should end complete"
   assert_grep "/quit" "$dir/fake/literal" "the previous agent should have been exited"
-  assert_grep "encode launch-brief" "$dir/fake/literal" "the replacement should have been launched"
-  pass "fm-control relaunch: a same-harness relaunch replaces the agent in the same endpoint and worktree"
+  assert_grep "FM_WORKER_LIFECYCLE_CONTEXT='$state_real/rl1.meta'" "$dir/fake/literal" \
+    "the replacement did not receive its canonical task context"
+  assert_grep "-e '$ROOT/.pi/worker-extensions/fm-worker-lifecycle.ts'" "$dir/fake/literal" \
+    "the replacement did not explicitly load the tracked worker extension"
+  assert_absent "$dir/home/state/rl1.pi-ext.ts" "relaunch generated a per-task TypeScript artifact"
+  pass "fm-control relaunch: a same-harness replacement reuses its endpoint with a fresh tracked lifecycle binding"
 }
 
 test_relaunch_preserves_durable_task_metadata() {
@@ -539,28 +529,7 @@ test_relaunch_requires_a_note_for_a_ship_task() {
   pass "fm-control relaunch: a ship task refuses without the progress note its replacement needs"
 }
 
-# --- 2. Pi wiring and profile continuity ------------------------------------
-
-test_explicit_pi_relaunch_replaces_prior_wiring() {
-  local dir out rc
-  dir=$(new_case switch rl4)
-  add_ship_task "$dir" rl4 pi
-  # Wiring the previous Pi incarnation left in the task state.
-  printf '// prior Pi extension\n' > "$dir/home/state/rl4.pi-ext.ts"
-  printf 'pi' > "$dir/fake/becomes"
-  out=$(run_control "$dir" rl4 relaunch --harness pi --note "switching runtime"); rc=$?
-  expect_code 0 "$rc" "an explicit Pi relaunch should succeed"$'\n'"$out"
-  assert_contains "$out" "harness=pi from=pi" "the outcome should name both harnesses"
-  [ "$(meta_field "$dir" rl4 harness)" = pi ] || fail "the record should follow the switch"
-  [ -e "$dir/home/state/rl4.pi-ext.ts" ] \
-    || fail "the replacement Pi harness must publish fresh per-task wiring"
-  assert_no_grep 'prior Pi extension' "$dir/home/state/rl4.pi-ext.ts" \
-    "the previous incarnation's wiring survived the switch"
-  assert_grep "pi" "$dir/fake/literal" "the replacement launch should be the new harness"
-  [ "$(journal_field "$dir" rl4 from_harness)" = pi ] || fail "the journal should record the origin harness"
-  [ "$(journal_field "$dir" rl4 to_harness)" = pi ] || fail "the journal should record the target harness"
-  pass "fm-control relaunch: explicit Pi relaunch replaces the old wiring"
-}
+# --- 2. Pi profile continuity -----------------------------------------------
 
 test_same_harness_relaunch_keeps_the_profile_axes() {
   local dir out rc
@@ -598,29 +567,6 @@ test_relaunch_onto_an_unverified_harness_is_refused() {
   pass "fm-control relaunch: refuses to relaunch onto an adapter with no verified mechanics"
 }
 
-
-test_wiring_removal_failure_refuses_before_replacement_arm() {
-  local dir hook out rc real_rm
-  dir=$(new_case wiring-failure rl29)
-  add_ship_task "$dir" rl29 pi
-  hook="$(cd "$dir/home/state" && pwd -P)/rl29.pi-ext.ts"
-  printf '// prior Pi extension\n' > "$hook"
-  real_rm=$(command -v rm)
-  make_rm_failure_stub "$dir"
-  out=$(FM_REAL_RM="$real_rm" FM_FAKE_RM_FAIL_PATH="$hook" \
-    run_control "$dir" rl29 relaunch --note "retry after wiring cleanup"); rc=$?
-  expect_code 1 "$rc" "an undeletable prior hook must fail closed"$'\n'"$out"
-  assert_contains "$out" "could not retire pi wiring" \
-    "the failure should identify prior wiring cleanup"
-  [ -e "$hook" ] || fail "the fixture should retain the undeletable prior hook"
-  assert_no_grep "encode launch-brief" "$dir/fake/literal" \
-    "replacement launch must not be armed after wiring cleanup fails"
-  [ "$(journal_field "$dir" rl29 phase)" = failed:launching ] \
-    || fail "the transaction should record the partial launch failure"
-  [ "$(journal_field "$dir" rl29 rollback)" = prior-record-kept ] \
-    || fail "unpublished rollback should retain the live durable record"
-  pass "fm-control relaunch: wiring cleanup failure refuses replacement arming"
-}
 
 test_secondmate_relaunch_picks_up_the_configured_harness_pin() {
   local dir home out rc
@@ -943,7 +889,7 @@ test_complete_journal_failure_rolls_back_from_durable_phase() {
   pass "fm-control relaunch: failed journal replacement preserves durable phase"
 }
 
-test_prepublication_abort_retires_replacement_wiring_and_busy_state() {
+test_prepublication_abort_retires_replacement_busy_state() {
   local dir out rc real_mv meta
   dir=$(new_case prepublishcleanup rl28)
   add_ship_task "$dir" rl28 pi
@@ -955,8 +901,6 @@ test_prepublication_abort_retires_replacement_wiring_and_busy_state() {
   expect_code 1 "$rc" "a failed metadata publication should fail closed"$'\n'"$out"
   [ "$(meta_field "$dir" rl28 harness)" = pi ] \
     || fail "a failed publication should retain the prior durable record"
-  [ ! -e "$dir/home/state/rl28.pi-ext.ts" ] \
-    || fail "an aborted replacement should remove its harness wiring"
   [ ! -e "$dir/home/state/rl28.busy-gen" ] \
     || fail "an aborted replacement should retire its busy generation"
   [ ! -e "$dir/home/state/rl28.busy-state" ] \
@@ -1249,11 +1193,9 @@ test_relaunch_timeout_cleanup_reaps_blocked_transport_tree
 test_disabled_relaunch_clears_prior_trace_context
 test_relaunch_appends_the_progress_note_to_the_instructions
 test_relaunch_requires_a_note_for_a_ship_task
-test_explicit_pi_relaunch_replaces_prior_wiring
 test_same_harness_relaunch_keeps_the_profile_axes
 test_explicit_model_wins_over_the_recorded_one
 test_relaunch_onto_an_unverified_harness_is_refused
-test_wiring_removal_failure_refuses_before_replacement_arm
 test_secondmate_relaunch_picks_up_the_configured_harness_pin
 test_secondmate_relaunch_ignores_invalid_configured_effort_before_stop
 test_explicit_pi_secondmate_relaunch_retains_running_profile_axes
@@ -1268,7 +1210,7 @@ test_prepublication_failure_keeps_concurrent_durable_metadata
 test_post_publication_launch_failure_keeps_the_new_record
 test_stop_transport_failure_reconciles_a_dead_agent
 test_complete_journal_failure_rolls_back_from_durable_phase
-test_prepublication_abort_retires_replacement_wiring_and_busy_state
+test_prepublication_abort_retires_replacement_busy_state
 test_journal_records_the_checkpoint_it_proved
 test_secondmate_relaunch_checkpoints_child_work_and_spares_the_charter
 test_secondmate_relaunch_refuses_an_unmarked_home

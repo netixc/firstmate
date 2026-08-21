@@ -73,19 +73,45 @@ Pi compaction is the only supported stale-cache refresh pair.
 
 ## Semantic busy state
 
-The per-adapter semantic sources behind [`bin/fm-busy-lib.sh`](../../bin/fm-busy-lib.sh) were live-verified on 2026-07-28 against firstmate-launched workers wired exactly as `fm-spawn` writes them.
-Each pass polled `state/<id>.busy-state` while a real turn ran.
+The tracked worker extension was live-verified on 2026-08-20 with Pi 0.84.2 and Herdr 0.8.0 in a guarded named session.
+A fresh disposable Git target explicitly loaded the extension outside auto-discovery with `--no-extensions -e <tracked-worker-extension>` and one canonical metadata path; no project-trust prompt appeared.
+Two controlled prompts exposed `state: working · source: pane · harness busy (pi-ext)` through `bin/fm-crew-state.sh`, then settled to `v1 ... state=idle source=pi-ext event=agent-settled`; `turn-ended` was touched without becoming current-state truth.
+Rearming between prompts changed the generation, and the first Pi process's late callbacks left the replacement seed unchanged before the replacement lifecycle took ownership.
 
-| Harness | Version verified | Semantic source | Observed result |
-| --- | --- | --- | --- |
-| Pi | 0.82.0 | Extension `agent_start` / `agent_settled` with `ctx.isIdle()` | The spawn seed `busy source=fm-spawn`, then `busy source=pi-ext event=agent-start`, then `idle source=pi-ext event=agent-settled`; the turn-end marker was still touched. |
+Exact recovered invocation:
 
-Deterministic entry points:
+```sh
+/bin/bash /Users/control/firstmate/data/pi-native-simplification-a1/live-proof-rerun.sh
+```
+
+Exact recorded stdout:
+
+```text
+PI_VERSION=0.84.2
+HERDR_STATUS={"status":"running","running":true,"version":"0.8.0","protocol":19,"capabilities":{"live_handoff":true,"detached_server_daemon":false},"compatible":true,"socket":"/Users/control/.config/herdr/sessions/fm-lab-pi-native-simpli-11092-19614/herdr.sock","session":"fm-lab-pi-native-simpli-11092-19614","restart_needed":false}
+FIRST_STATE=state: working · source: pane · harness busy (pi-ext)
+SECOND_STATE=state: working · source: pane · harness busy (pi-ext)
+FINAL_RECORD=v1 gen=g1787271773.13142.18417 seq=3 state=idle source=pi-ext event=agent-settled ts=1787271800
+OLD_GENERATION_REJECTED=g1787271771.12687.23791->g1787271773.13142.18417
+TRUST_PROMPT=absent
+EXTERNAL_EXTENSION=/Users/control/.treehouse/firstmate-af9cb2/2/firstmate/.pi/worker-extensions/fm-worker-lifecycle.ts
+```
+
+Exact recorded stderr and exit status:
+
+```text
+STDERR_BEGIN
+STDERR_END
+EXIT_STATUS=0
+```
+
+Portable behavior and strict type entry points:
 
 ```sh
 tests/fm-busy-state.test.sh
 tests/fm-busy-adapter-wiring.test.sh
 tests/fm-crew-state.test.sh
+tests/fm-pi-primary-types.test.sh
 ```
 
 ## Turn-end guard

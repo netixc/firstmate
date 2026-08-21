@@ -568,6 +568,7 @@ test_local_only_fork_remote_allows() {
   write_meta "$case_dir" local-only ship
   wt_commit "$case_dir" "fix the thing"
   add_fork_with_pushed_branch "$case_dir"
+  printf '// pre-rollout generated extension\n' > "$case_dir/state/task-x1.pi-ext.ts"
 
   set +e
   run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
@@ -575,6 +576,7 @@ test_local_only_fork_remote_allows() {
   set -e
 
   expect_code 0 "$rc" "fork-allow: teardown should succeed when HEAD is on a fork remote"
+  assert_absent "$case_dir/state/task-x1.pi-ext.ts" "teardown retained a pre-rollout generated extension"
   ! grep -q REFUSED "$case_dir/stderr" || fail "fork-allow: teardown printed a REFUSED line"
   pass "local-only worktree with HEAD on a fork remote is torn down (fix holds)"
 }
