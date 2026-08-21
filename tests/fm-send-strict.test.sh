@@ -16,7 +16,14 @@ set -u
 printf '%s\n' "$*" >> "$FM_HERDR_LOG"
 case "${1:-} ${2:-}" in
   "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
-  "session list") printf '{"sessions":[{"name":"%s","running":true,"socket_path":"%s/herdr.sock"}]}\n' "${HERDR_SESSION:-lab}" "${FM_HOME:-/tmp}" ;;
+  "session list")
+    count=$(cat "${FM_HERDR_SESSION_LIST_COUNT:-/dev/null}" 2>/dev/null || printf 0)
+    count=$((count + 1))
+    [ -z "${FM_HERDR_SESSION_LIST_COUNT:-}" ] || printf '%s' "$count" > "$FM_HERDR_SESSION_LIST_COUNT"
+    socket=herdr.sock
+    [ "${FM_HERDR_RESTART_AFTER_LOCK_RESOLUTION:-0}" != 1 ] || [ "$count" -le 1 ] || socket=herdr-restarted.sock
+    printf '{"sessions":[{"name":"%s","running":true,"socket_path":"%s/%s"}]}\n' "${HERDR_SESSION:-lab}" "${FM_HOME:-/tmp}" "$socket"
+    ;;
   "pane get")
     if [ "${FM_HERDR_MISSING:-0}" = 1 ]; then printf '{"error":{"code":"pane_not_found"}}\n'
     else
@@ -91,6 +98,22 @@ test_live_identity_is_rechecked_under_send_lock() {
   assert_not_contains "$(cat "$log")" 'pane send-text' \
     "send reached the pane after its live component identity changed"
   pass "fm-send strict: live identity stays authorized through the locked send"
+}
+
+test_session_identity_is_rechecked_under_send_lock() {
+  local home=$TMP_ROOT/session-restart fb log out
+  mkdir -p "$home/state"; fb=$(make_stubs "$home"); log=$home/herdr.log; : > "$log"
+  write_meta "$home" lane-restart
+  : > "$home/session-list-count"
+  out=$(FM_HERDR_RESTART_AFTER_LOCK_RESOLUTION=1 \
+    FM_HERDR_SESSION_LIST_COUNT="$home/session-list-count" \
+    run_send "$home" "$fb" "$log" lane-restart 'do not deliver' 2>&1) \
+    && fail "send controlled a replacement session under its predecessor's lock"
+  assert_contains "$out" "session identity changed while authorizing" \
+    "send did not explain its session-restart refusal"
+  assert_not_contains "$(cat "$log")" 'pane send-text' \
+    "send reached the replacement session under a stale lock"
+  pass "fm-send strict: session identity stays bound to the held lock"
 }
 
 test_ambiguous_or_foreign_metadata_refuses() {
@@ -207,6 +230,7 @@ test_explicit_exact_target_and_key() {
 
 test_exact_id_send
 test_live_identity_is_rechecked_under_send_lock
+test_session_identity_is_rechecked_under_send_lock
 test_ambiguous_or_foreign_metadata_refuses
 test_duplicate_endpoint_owners_refuse
 test_cross_component_identity_refuses

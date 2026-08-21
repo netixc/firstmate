@@ -456,17 +456,16 @@ FM_TEST_SUMMARY total=4 failed=0 skipped_gate=0 duration_ms=152830
 FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=4 duration_ms=152632 failed=0
 ```
 
-The final locked live-identity regression rerun used:
+The final session-lock and native-transition regression rerun used:
 
 ```sh
-bin/fm-test-run.sh tests/fm-crew-state.test.sh tests/fm-send-strict.test.sh tests/fm-daemon.test.sh
+bin/fm-test-run.sh tests/fm-send-strict.test.sh tests/fm-supervision-events.test.sh
 ```
 
 ```text
-FM_TEST_SUMMARY total=3 failed=0 skipped_gate=0 duration_ms=52666
-FM_TEST_SUMMARY_FAMILY family=herdr-session count=1 duration_ms=7554 failed=0
-FM_TEST_SUMMARY_FAMILY family=pure-contract-unit count=1 duration_ms=43817 failed=0
-FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=1136 failed=0
+FM_TEST_SUMMARY total=2 failed=0 skipped_gate=0 duration_ms=16131
+FM_TEST_SUMMARY_FAMILY family=herdr-session count=1 duration_ms=8021 failed=0
+FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=8003 failed=0
 ```
 
 Strict tracked-extension checking used TypeScript 5.9.3:
@@ -485,7 +484,7 @@ Review-phase changed-source lint and the documentation check used:
 
 ```sh
 bin/fm-lint.sh bin/fm-bootstrap.sh bin/fm-control.sh bin/fm-crew-state.sh bin/fm-fleet-snapshot.sh bin/fm-herdr.sh bin/fm-peek.sh bin/fm-pending-reply-lib.sh bin/fm-remote-secondmate-control.sh bin/fm-send.sh bin/fm-stow-cascade.sh bin/fm-supervise-daemon.sh bin/fm-watch.sh tests/fm-daemon.test.sh tests/fm-secondmate-safety.test.sh tests/fm-send-strict.test.sh tests/fm-supervision-events.test.sh
-bin/fm-lint.sh bin/fm-herdr.sh bin/fm-crew-state.sh tests/fm-crew-state.test.sh
+bin/fm-lint.sh bin/fm-herdr.sh bin/fm-watch.sh tests/fm-send-strict.test.sh tests/fm-supervision-events.test.sh
 bin/fm-doc-audience-check.sh
 ```
 
@@ -507,12 +506,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 131832 316
-bin 54545 127
-tests 56914 118
+all 131913 316
+bin 54574 127
+tests 56967 118
 pi 2045 9
 agents 562
-added=6533 deleted=31905 net=-25372
+added=6614 deleted=31905 net=-25291
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,372 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,291 lines smaller.

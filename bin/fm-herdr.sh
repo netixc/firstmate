@@ -1076,7 +1076,7 @@ fm_herdr_presentation_session_lock_path() {  # <session>
 }
 
 fm_herdr_with_live_task_endpoint() {  # <meta-file> <task-id> <callback> [args...]
-  local meta=$1 id=$2 callback=$3 target session lock_path
+  local meta=$1 id=$2 callback=$3 target session lock_path verified_lock_path
   shift 3
   fm_herdr_validate_task_endpoint "$meta" "$id" || return 2
   target=$FM_HERDR_VALIDATED_TARGET
@@ -1095,6 +1095,11 @@ fm_herdr_with_live_task_endpoint() {  # <meta-file> <task-id> <callback> [args..
     while [ "$attempt" -lt "${FM_HERDR_LIVE_LOCK_ATTEMPTS:-50}" ]; do
       if fm_lock_try_acquire "$lock_path"; then
         trap 'fm_lock_release "$lock_path" || true' EXIT
+        verified_lock_path=$(fm_herdr_presentation_session_lock_path "$session") || return 2
+        [ "$verified_lock_path" = "$lock_path" ] || {
+          echo "REFUSED: Herdr session identity changed while authorizing task $id; preserving task state and nothing was changed." >&2
+          return 2
+        }
         fm_herdr_validate_live_task_endpoint "$meta" "$id" || return 2
         [ "$FM_HERDR_VALIDATED_TARGET" = "$target" ] || {
           echo "REFUSED: Herdr endpoint metadata changed while authorizing task $id; preserving task state and nothing was changed." >&2

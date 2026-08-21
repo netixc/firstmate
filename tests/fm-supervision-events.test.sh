@@ -138,6 +138,35 @@ pass "event_wait_or_sleep: herdr windows go on the event pane list, but kind=sec
 
 reset_state
 write_endpoint_meta tk3 default:wG:pQ ship
+# shellcheck disable=SC2329 # Runtime overrides called by the isolated watcher.
+fm_herdr_events_capable() { return 0; }
+# shellcheck disable=SC2329 # Runtime overrides called by the isolated watcher.
+fm_herdr_wait_transition() {
+  local lock
+  lock=$(fm_herdr_presentation_session_lock_path default) || fail "event wait could not resolve its session lock"
+  fm_lock_try_acquire "$lock" || fail "event wait monopolized the endpoint-control lock"
+  fm_lock_release "$lock"
+  return 1
+}
+event_wait_or_sleep
+pass "event_wait_or_sleep: blocking transition waits leave endpoint control unlocked"
+
+reset_state
+write_endpoint_meta tk3 default:wG:pQ ship
+# shellcheck disable=SC2329 # Runtime overrides called by the isolated watcher.
+fm_herdr_events_capable() { return 0; }
+# shellcheck disable=SC2329 # Runtime overrides called by the isolated watcher.
+fm_herdr_wait_transition() {
+  printf 'wG:pQ\twG:t-foreign\twG\n' > "$ENDPOINT_MAP"
+  mkrec wG:pQ blocked
+}
+event_wait_or_sleep
+[ ! -s "$WAKE_LOG" ] || fail "a transition for an endpoint that moved during the wait reached supervision"
+[ ! -e "$STATE_DIR/.wake-queue" ] || fail "a moved endpoint transition was durably acknowledged"
+pass "event_wait_or_sleep: returned transitions are revalidated before acknowledgement"
+
+reset_state
+write_endpoint_meta tk3 default:wG:pQ ship
 printf 'wG:pQ\twG:t-foreign\twG\n' > "$ENDPOINT_MAP"
 # shellcheck disable=SC2329 # Runtime override called by the isolated watcher.
 fm_herdr_events_capable() { return 0; }

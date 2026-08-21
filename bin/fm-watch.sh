@@ -645,7 +645,7 @@ heartbeat_scan_finds_actionable() {
 # supervision cycle: the reader is a short-lived subprocess of THIS watcher, not
 # a second watcher, so every guard/beacon/arm/turn-end mechanism is unchanged.
 event_wait_or_sleep() {
-  local w session first_session="" first_task first_meta rec rc
+  local w session first_session="" rec rc
   local windows=()
   while IFS= read -r w; do
     [ "$(window_endpoint_class "$w")" = herdr ] || continue
@@ -677,12 +677,19 @@ event_wait_or_sleep() {
     return
   fi
 
-  first_task=$(window_to_task "${windows[0]}" "$STATE")
-  first_meta="$STATE/$first_task.meta"
+  if ! _fm_watch_validate_wait_windows "$STATE" "${windows[@]}"; then
+    _event_cap_fails=$((_event_cap_fails + 1))
+    [ "$_event_cap_fails" -ge "$EVENT_CAP_FAIL_MAX" ] && _event_cap_ok=0
+    sleep "$POLL"
+    return
+  fi
+
   rec=$(FM_HERDR_EVENTS_CAPABILITY_CONFIRMED=1 \
-    fm_herdr_with_live_task_endpoint "$first_meta" "$first_task" \
-      _fm_watch_wait_transition "$first_session" "$POLL" "$STATE" "${windows[@]}")
+    fm_herdr_wait_transition "$first_session" "$POLL" "$STATE" "${windows[@]}")
   rc=$?
+  if [ "$rc" -eq 0 ] && ! _fm_watch_validate_transition "$first_session" "$STATE" "$rec"; then
+    rc=1
+  fi
   case "$rc" in
     0)
       _event_cap_fails=0
@@ -699,16 +706,33 @@ event_wait_or_sleep() {
   esac
 }
 
-_fm_watch_wait_transition() {
-  local session=$2 poll=$3 state=$4 w task meta
-  shift 4
+_fm_watch_live_identity_only() {
+  return 0
+}
+
+_fm_watch_validate_wait_windows() {
+  local state=$1 w task meta
+  shift
   for w in "$@"; do
     task=$(window_to_task "$w" "$state") || return 2
     meta="$state/$task.meta"
-    fm_herdr_validate_live_task_endpoint "$meta" "$task" >/dev/null 2>&1 || return 2
-    [ "$FM_HERDR_VALIDATED_TARGET" = "$w" ] || return 2
+    fm_herdr_with_live_task_endpoint "$meta" "$task" \
+      _fm_watch_live_identity_only >/dev/null 2>&1 || return 2
   done
-  fm_herdr_wait_transition "$session" "$poll" "$state" "$@"
+}
+
+_fm_watch_validate_transition() {
+  local session=$1 state=$2 rec=$3 pane workspace window meta task
+  pane=$(fm_herdr_transition_pane_id "$rec")
+  workspace=$(fm_herdr_transition_workspace_id "$rec")
+  [ -n "$pane" ] && [ -n "$workspace" ] || return 2
+  window="$session:$pane"
+  [ "${pane%%:*}" = "$workspace" ] || return 2
+  meta=$(fm_endpoint_meta_for_target "$window" "$state" 2>/dev/null) || return 2
+  task=${meta##*/}
+  task=${task%.meta}
+  fm_herdr_with_live_task_endpoint "$meta" "$task" \
+    _fm_watch_live_identity_only >/dev/null 2>&1
 }
 
 # --- Main entry: the runtime below runs only when this file is executed as a
