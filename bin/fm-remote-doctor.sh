@@ -56,6 +56,8 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(CDPATH='' cd "$SCRIPT_DIR/.." && pwd -P)}"
 . "$SCRIPT_DIR/fm-remote-job-lib.sh"
 # shellcheck source=bin/fm-tasks-axi-lib.sh
 . "$SCRIPT_DIR/fm-tasks-axi-lib.sh"
+# shellcheck source=bin/fm-herdr.sh
+. "$SCRIPT_DIR/fm-herdr.sh"
 REQUIRED_TOOLS=(git jq herdr tasks-axi treehouse)
 HARNESS_TOOLS=(pi)
 OPTIONAL_TOOLS=(no-mistakes gh)
@@ -84,6 +86,8 @@ case "${1:-}" in
   *) usage ;;
 esac
 [ "$#" -eq 0 ] || usage
+
+fm_herdr_require_runtime || exit 1
 
 PLATFORM=$(fm_remote_job_platform)
 UID_NUM=$(id -u 2>/dev/null) || UID_NUM=

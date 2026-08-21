@@ -402,6 +402,7 @@ test_historical_remote_route_remains_compatible() {
   home=$(setup_remote_home remote-historical)
   sed '/^backend=/d' "$home/state/rsm.meta" > "$home/state/rsm.meta.next"
   mv "$home/state/rsm.meta.next" "$home/state/rsm.meta"
+  printf 'remote_backend=herdr\n' >> "$home/state/rsm.meta"
   out=$(env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" \
     FM_SEND_LOG="$log" FM_SEND_SETTLE=0 FM_SSH_BIN="$fb/fake-ssh" FM_SSH_LOG="$ssh_log" \
     "$SEND" rsm "do not send" 2>&1); rc=$?

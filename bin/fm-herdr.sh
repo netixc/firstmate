@@ -205,15 +205,25 @@ fm_herdr_validate_task_endpoint() {  # <meta-file> <task-id> [record-only]
 
 fm_herdr_validate_remote_route() {  # <meta-file> <task-id> [record-only]
   local meta=$1 id=$2 mode=${3:-unique-owner} window binding worktree project home
-  local host root session target pane state other other_id backend_count backend count=0 invalid=0
+  local host root session target pane state other other_id backend_count backend remote_backend_count remote_backend count=0 invalid=0
   FM_HERDR_VALIDATED_REMOTE_HOST=
   FM_HERDR_VALIDATED_REMOTE_TARGET=
   [ -f "$meta" ] && [ ! -L "$meta" ] || return 1
   case "$id" in ''|*[!A-Za-z0-9._-]*) return 1 ;; esac
   backend_count=$(grep -c '^backend=' "$meta" 2>/dev/null || true)
+  remote_backend_count=$(grep -c '^remote_backend=' "$meta" 2>/dev/null || true)
   if [ "$backend_count" -eq 1 ]; then
     backend=$(fm_meta_exact_value "$meta" backend) || return 1
     [ "$backend" = herdr ] || return 1
+    if [ "$remote_backend_count" -ne 0 ]; then
+      [ "$remote_backend_count" -eq 1 ] || return 1
+      remote_backend=$(fm_meta_exact_value "$meta" remote_backend) || return 1
+      [ "$remote_backend" = herdr ] || return 1
+    fi
+  elif [ "$backend_count" -eq 0 ]; then
+    [ "$remote_backend_count" -eq 1 ] || return 1
+    remote_backend=$(fm_meta_exact_value "$meta" remote_backend) || return 1
+    [ "$remote_backend" = herdr ] || return 1
   elif [ "$backend_count" -ne 0 ]; then
     return 1
   fi

@@ -100,7 +100,7 @@ for configured_path in "$ROOT" "$HOME_PATH"; do
 done
 
 META="$STATE/$MATCH_ID.meta"
-if [ -f "$META" ] && [ -n "$(fm_meta_get "$META" remote_host)" ]; then
+if [ -e "$META" ] || [ -L "$META" ]; then
   fm_herdr_validate_remote_route "$META" "$MATCH_ID" >/dev/null 2>&1 \
     || die "remote secondmate $MATCH_ID has invalid or ambiguous Herdr route metadata; preserving its records for manual reconciliation"
   [ "$FM_HERDR_VALIDATED_REMOTE_HOST" = "$HOST" ] \

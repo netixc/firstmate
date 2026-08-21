@@ -95,8 +95,13 @@ test_remote_route_identity() {
     && [ "$FM_HERDR_VALIDATED_REMOTE_TARGET" = fm-remote:w1:p1 ] \
     || fail "remote route validation changed exact host or endpoint identity"
   sed '/^backend=/d' "$meta" > "$meta.next" && mv "$meta.next" "$meta"
+  printf 'remote_backend=herdr\n' >> "$meta"
   fm_herdr_validate_remote_route "$meta" ios \
     || fail "the previous explicit remote Herdr record shape should remain compatible"
+  sed 's/^remote_backend=.*/remote_backend=tmux/' "$meta" > "$meta.next" && mv "$meta.next" "$meta"
+  fm_herdr_validate_remote_route "$meta" ios >/dev/null 2>&1 \
+    && fail "historical remote metadata explicitly selecting tmux must be refused"
+  sed 's/^remote_backend=.*/remote_backend=herdr/' "$meta" > "$meta.next" && mv "$meta.next" "$meta"
   sed '/^remote_target=/d' "$meta" > "$meta.next" && mv "$meta.next" "$meta"
   fm_herdr_validate_remote_route "$meta" ios >/dev/null 2>&1 \
     && fail "providerless metadata without an exact remote Herdr endpoint must remain retired evidence"
@@ -150,18 +155,19 @@ test_public_control_paths_refuse_tmux_environment() {
 test_direct_herdr_entrypoints_refuse_tmux_environment() {
   local home=$TMP_ROOT/direct-controls spec path out
   local -a command
-  mkdir -p "$home/state" "$home/data" "$home/config"
+  mkdir -p "$home/state" "$home/data" "$home/config" "$home/account"
   for spec in \
     'fm-afk-launch.sh reconcile' \
     'fm-herdr-session-cleanup.sh' \
     'fm-remote-secondmate-control.sh state task-a' \
     'fm-crew-state.sh task-a' \
     'fm-fleet-snapshot.sh --json' \
+    'fm-remote-doctor.sh --fix' \
     'fm-stow-cascade.sh' \
     'fm-watch.sh'; do
     read -r -a command <<< "$spec"
     path=${command[0]}
-    out=$(TMUX=fake FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    out=$(TMUX=fake HOME="$home/account" FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
       "$ROOT/bin/$path" "${command[@]:1}" 2>&1) \
       && fail "$path accepted a tmux execution environment"
     assert_contains "$out" "leave the tmux environment" \
@@ -171,6 +177,8 @@ test_direct_herdr_entrypoints_refuse_tmux_environment() {
     || fail "retired environment acquired the away launcher lock"
   [ ! -e "$home/state/.watch.lock" ] \
     || fail "retired environment acquired the watcher lock"
+  [ -z "$(find "$home/account" -mindepth 1 -print -quit)" ] \
+    || fail "retired environment let remote doctor mutate its account"
   pass "direct Herdr entrypoints reject tmux before reads or mutations"
 }
 

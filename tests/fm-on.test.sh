@@ -477,6 +477,7 @@ fm_write_meta "$LOCAL_HOME/state/ios.meta" \
   "window=remote:ios" "endpoint_task_id=ios" \
   "worktree=$REMOTE_HOME" "project=$REMOTE_ROOT" "home=$REMOTE_HOME" \
   "remote_host=other-mac" "remote_root=$REMOTE_ROOT" \
+  "remote_backend=herdr" \
   "remote_herdr_session=fm-remote" "remote_target=fm-remote:w1:p1"
 : > "$SSH_COUNT"
 out=$(fm_on ios fm-probe-two.sh 2>&1) \
@@ -486,8 +487,22 @@ assert_contains "$out" "does not match its configured registry route" \
 ssh_after_mismatch=$(cat "$SSH_COUNT" 2>/dev/null || true)
 [ "${ssh_after_mismatch:-0}" -eq 0 ] \
   || fail "mismatched metadata and registry routes launched SSH"
+
+fm_write_meta "$LOCAL_HOME/state/ios.meta" \
+  "window=remote:ios" "endpoint_task_id=ios" \
+  "worktree=$REMOTE_HOME" "project=$REMOTE_ROOT" "home=$REMOTE_HOME" \
+  "remote_root=$REMOTE_ROOT" "remote_backend=herdr" \
+  "remote_herdr_session=fm-remote" "remote_target=fm-remote:w1:p1"
+: > "$SSH_COUNT"
+out=$(fm_on ios fm-probe-two.sh 2>&1) \
+  && fail "an existing route record without an exact remote host was dispatched: $out"
+assert_contains "$out" "invalid or ambiguous Herdr route metadata" \
+  "missing remote host refusal did not preserve the invalid record"
+ssh_after_missing_host=$(cat "$SSH_COUNT" 2>/dev/null || true)
+[ "${ssh_after_missing_host:-0}" -eq 0 ] \
+  || fail "an existing record with no remote host launched SSH"
 rm -f "$LOCAL_HOME/state/ios.meta"
-pass "fm-on binds validated metadata to the exact registry route"
+pass "fm-on binds every existing metadata record to the exact registry route"
 
 : > "$SSH_COUNT"
 set +e
