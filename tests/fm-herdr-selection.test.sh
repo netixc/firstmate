@@ -47,7 +47,30 @@ test_retired_and_unknown_selection_refused() {
     && fail "multiple runtime selections must be refused"
   assert_contains "$out" "multiple session selections" "multiline config refusal should name the ambiguity"
   assert_contains "$out" "tmux is retired" "multiline config refusal should not hide retired tmux evidence"
+  printf 'h e r d r\n' > "$config/backend"
+  out=$(unset FM_BACKEND TMUX TMUX_PANE; runtime_check "$config" 2>&1) \
+    && fail "internally spaced runtime configuration must be refused"
+  assert_contains "$out" "unsupported session selection 'h e r d r'" \
+    "internal whitespace must not be silently reinterpreted"
+  printf '  herdr  \n' > "$config/backend"
+  (unset FM_BACKEND TMUX TMUX_PANE; runtime_check "$config") \
+    || fail "leading and trailing configuration whitespace should be harmless"
   pass "runtime selection: tmux and unknown choices stop without fallback"
+}
+
+test_afk_start_refuses_tmux_before_mutation() {
+  local home=$TMP_ROOT/afk-start out
+  mkdir -p "$home/state" "$home/config"
+  printf 'buffered escalation\n' > "$home/state/.subsuper-escalations"
+  out=$(TMUX=fake FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    "$ROOT/bin/fm-afk-start.sh" 2>&1) \
+    && fail "fm-afk-start accepted a tmux execution environment"
+  assert_contains "$out" "leave the tmux environment" \
+    "fm-afk-start did not reject tmux before away-mode mutation"
+  [ ! -e "$home/state/.afk" ] || fail "retired environment created the away-mode flag"
+  [ "$(cat "$home/state/.subsuper-escalations")" = 'buffered escalation' ] \
+    || fail "retired environment deleted prior escalation state"
+  pass "away-mode start rejects tmux before state mutation"
 }
 
 test_metadata_classification_and_identity() {
@@ -185,6 +208,7 @@ test_direct_herdr_entrypoints_refuse_tmux_environment() {
 
 test_default_and_explicit_herdr
 test_retired_and_unknown_selection_refused
+test_afk_start_refuses_tmux_before_mutation
 test_metadata_classification_and_identity
 test_remote_route_identity
 test_selector_refuses_foreign_identity

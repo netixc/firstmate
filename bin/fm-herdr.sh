@@ -72,7 +72,7 @@ fm_herdr_require_runtime() {
     value=
     count=0
     while IFS= read -r line || [ -n "$line" ]; do
-      line=$(printf '%s' "$line" | tr -d '[:space:]')
+      line=$(printf '%s' "$line" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
       [ -n "$line" ] || continue
       value=$line
       count=$((count + 1))

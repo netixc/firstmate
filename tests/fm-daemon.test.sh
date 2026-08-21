@@ -46,6 +46,21 @@ test_pause_classification_and_tracking() {
   pass "declared external waits retain separate durable tracking"
 }
 
+test_unmatched_stale_escalates_without_shared_markers() {
+  local state out
+  state=$(new_state unmatched-stale)
+  out=$(classify_stale 'sess:fm-victim' "$state")
+  case "$out" in
+    escalate\|*unsupported*preserved*) ;;
+    *) fail "unmatched stale endpoint did not escalate as preserved evidence: $out" ;;
+  esac
+  FM_ESCALATE_BATCH_SECS=90 handle_wake 'stale: sess:fm-victim' "$state"
+  assert_contains "$(cat "$state/.subsuper-escalations")" 'unsupported stale endpoint preserved' \
+    "unmatched stale wake was acknowledged without durable escalation"
+  [ ! -e "$state/.subsuper-stale-" ] || fail "unmatched stale wake created the shared empty-identity marker"
+  pass "unmatched stale endpoints escalate durably without shared identity markers"
+}
+
 test_escalation_buffer_is_durable() {
   local state
   state=$(new_state buffer)
@@ -134,6 +149,7 @@ test_supervisor_target_is_herdr_only() {
 
 test_signal_classification
 test_pause_classification_and_tracking
+test_unmatched_stale_escalates_without_shared_markers
 test_escalation_buffer_is_durable
 test_injection_presence_and_target_guards
 test_injection_busy_and_composer_guards

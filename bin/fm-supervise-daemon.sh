@@ -335,7 +335,10 @@ classify_signal() {  # <reason-after-colon> <state>
 # timestamp marker; persistence is escalated by housekeeping's recheck, not here.
 classify_stale() {  # <window> <state>
   local win=$1 state=$2 task last seen
-  task=$(window_to_task "$win" "$state")
+  task=$(window_to_task "$win" "$state") || {
+    printf 'escalate|unsupported stale endpoint preserved for manual reconciliation: %s' "$win"
+    return
+  }
   last=$(last_status_line "$state/$task.status")
   if [ -n "$last" ] && status_is_paused "$last"; then
     # A DECLARED external-wait pause (fm-classify-lib.sh): an idle pane is EXPECTED,
@@ -399,15 +402,17 @@ classify_unknown() {  # <reason>
 _stale_key() { printf '%s' "$1" | tr ':/.' '___'; }
 
 stale_marker_record() {  # <window> <state>  — create if absent
-  local win=$1 state=$2 key marker
-  key=$(_stale_key "$(window_to_task "$win" "$state")")
+  local win=$1 state=$2 task key marker
+  task=$(window_to_task "$win" "$state") || return 1
+  key=$(_stale_key "$task")
   marker="$state/.subsuper-stale-$key"
   [ -e "$marker" ] || _now > "$marker"
 }
 
 stale_marker_remove() {  # <window> <state>
-  local win=$1 state=$2 key
-  key=$(_stale_key "$(window_to_task "$win" "$state")")
+  local win=$1 state=$2 task key
+  task=$(window_to_task "$win" "$state") || return 1
+  key=$(_stale_key "$task")
   rm -f "$state/.subsuper-stale-$key"
 }
 
@@ -417,15 +422,17 @@ stale_marker_remove() {  # <window> <state>
 # create-if-absent so the timestamp is stable across a churny idle pane (many
 # distinct stale hashes map to one marker), keeping the cadence hash-immune.
 pause_marker_record() {  # <window> <state> - create if absent
-  local win=$1 state=$2 key marker
-  key=$(_stale_key "$(window_to_task "$win" "$state")")
+  local win=$1 state=$2 task key marker
+  task=$(window_to_task "$win" "$state") || return 1
+  key=$(_stale_key "$task")
   marker="$state/.subsuper-paused-$key"
   [ -e "$marker" ] || _now > "$marker"
 }
 
 pause_marker_remove() {  # <window> <state>
-  local win=$1 state=$2 key
-  key=$(_stale_key "$(window_to_task "$win" "$state")")
+  local win=$1 state=$2 task key
+  task=$(window_to_task "$win" "$state") || return 1
+  key=$(_stale_key "$task")
   rm -f "$state/.subsuper-paused-$key"
 }
 
@@ -509,7 +516,7 @@ mark_escalated_seen() {  # <kind> <arg> <state>
         mark_status_seen "$state" "$task" "$last"
       done ;;
     stale)
-      task=$(window_to_task "$arg" "$state")
+      task=$(window_to_task "$arg" "$state") || return 0
       last=$(last_status_line "$state/$task.status")
       [ -n "$last" ] && status_is_captain_relevant "$last" \
         && mark_status_seen "$state" "$task" "$last" ;;

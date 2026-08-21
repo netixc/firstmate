@@ -934,12 +934,19 @@ EOF
     "backend=herdr" "window=sess:w1:p-dead" "endpoint_task_id=task-dead" \
     "herdr_session=sess" "herdr_workspace_id=w1" "herdr_tab_id=t-dead" \
     "herdr_pane_id=w1:p-dead" "worktree=/tmp/dead" "project=/tmp/project" "kind=ship"
+  fm_write_meta "$home/state/remote-old.meta" \
+    "remote_backend=herdr" "window=remote:remote-old" "endpoint_task_id=remote-old" \
+    "worktree=/remote/home" "project=/remote/root" "home=/remote/home" \
+    "remote_host=remote-host" "remote_root=/remote/root" \
+    "remote_herdr_session=fm-remote" "remote_target=fm-remote:w1:p-remote" "kind=secondmate"
 
   out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
   assert_contains "$out" "endpoint: alive (Herdr window=sess:w1:p-live)" "live Herdr endpoint not reported alive"
   assert_contains "$out" "endpoint: dead (Herdr window=sess:w1:p-dead)" "dead Herdr endpoint not reported dead"
+  assert_contains "$out" "endpoint: remote (Herdr route=fm-remote:w1:p-remote host=remote-host)" \
+    "historical explicit remote Herdr route was misreported as legacy evidence"
 
-  pass "herdr endpoint liveness is reported per task: alive for a live pane, dead for a gone one"
+  pass "Herdr endpoint reporting preserves local liveness and historical remote routes"
 }
 
 # --- composition: real scripts run, not reimplemented ------------------------

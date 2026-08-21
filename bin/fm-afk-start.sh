@@ -39,6 +39,8 @@ FM_AFK_DAEMON="$FM_AFK_START_DIR/fm-supervise-daemon.sh"
 
 # shellcheck source=bin/fm-wake-lib.sh
 . "$FM_AFK_START_DIR/fm-wake-lib.sh"
+# shellcheck source=bin/fm-herdr.sh
+. "$FM_AFK_START_DIR/fm-herdr.sh"
 
 fm_afk_start_usage() {
   sed -n '2,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
@@ -123,6 +125,8 @@ fm_afk_start_main() {
     -h|--help) fm_afk_start_usage; return 0 ;;
     * ) echo "usage: $(basename "${BASH_SOURCE[1]:-fm-afk-start.sh}")" >&2; return 2 ;;
   esac
+
+  fm_herdr_require_runtime || return 1
 
   mkdir -p "$FM_AFK_STATE"
   if [ "${FM_AFK_STATE_PREPARED:-0}" = 1 ]; then
