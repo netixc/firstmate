@@ -395,12 +395,30 @@ test_remote_secondmate_answer_closes_locally() {
   pass "fm-send --resolve-key: a remote-secondmate answer closes the same local ledger, transport-only difference"
 }
 
+test_historical_remote_route_remains_compatible() {
+  local dir fb log home ssh_log rc out
+  dir="$TMP_ROOT/remote-historical"; mkdir -p "$dir"
+  fb=$(make_stubs "$dir"); log="$dir/send.log"; ssh_log="$dir/ssh.log"; : > "$ssh_log"
+  home=$(setup_remote_home remote-historical)
+  sed '/^backend=/d' "$home/state/rsm.meta" > "$home/state/rsm.meta.next"
+  mv "$home/state/rsm.meta.next" "$home/state/rsm.meta"
+  out=$(env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" \
+    FM_SEND_LOG="$log" FM_SEND_SETTLE=0 FM_SSH_BIN="$fb/fake-ssh" FM_SSH_LOG="$ssh_log" \
+    "$SEND" rsm "do not send" 2>&1); rc=$?
+  [ "$rc" -eq 0 ] || fail "historical explicit remote Herdr metadata was rejected: $out"
+  [ -s "$ssh_log" ] || fail "historical explicit remote Herdr metadata did not reach its route"
+  grep -Fqx 'window=remote:rsm' "$home/state/rsm.meta" \
+    || fail "historical remote compatibility rewrote its route record"
+  pass "fm-send: historical explicit remote Herdr routes remain compatible"
+}
+
 test_providerless_remote_route_is_preserved() {
   local dir fb log home ssh_log rc out
   dir="$TMP_ROOT/remote-providerless"; mkdir -p "$dir"
   fb=$(make_stubs "$dir"); log="$dir/send.log"; ssh_log="$dir/ssh.log"; : > "$ssh_log"
   home=$(setup_remote_home remote-providerless)
-  sed '/^backend=/d' "$home/state/rsm.meta" > "$home/state/rsm.meta.next"
+  sed '/^backend=/d;/^remote_herdr_session=/d;/^remote_target=/d' "$home/state/rsm.meta" \
+    > "$home/state/rsm.meta.next"
   mv "$home/state/rsm.meta.next" "$home/state/rsm.meta"
   out=$(env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" \
     FM_SEND_LOG="$log" FM_SEND_SETTLE=0 FM_SSH_BIN="$fb/fake-ssh" FM_SSH_LOG="$ssh_log" \
@@ -408,9 +426,7 @@ test_providerless_remote_route_is_preserved() {
   [ "$rc" -ne 0 ] || fail "providerless remote metadata authorized a send"
   assert_contains "$out" "preserving its records" "providerless remote refusal omitted reconciliation guidance"
   [ ! -s "$ssh_log" ] || fail "providerless remote metadata reached the remote transport"
-  grep -Fqx 'window=remote:rsm' "$home/state/rsm.meta" \
-    || fail "providerless remote refusal rewrote its route record"
-  pass "fm-send: providerless remote evidence is preserved and never controlled"
+  pass "fm-send: ambiguous providerless remote evidence is preserved"
 }
 
 # The reported failure: a remote secondmate reply line prepends a
@@ -526,6 +542,7 @@ test_failed_send_does_not_close
 test_multiple_keys_close_together
 test_local_secondmate_answer_marked_and_closed
 test_remote_secondmate_answer_closes_locally
+test_historical_remote_route_remains_compatible
 test_providerless_remote_route_is_preserved
 test_remote_reply_corr_tag_does_not_block_resolve_key
 test_remote_transport_failure_does_not_close

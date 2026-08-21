@@ -95,9 +95,12 @@ test_remote_route_identity() {
     && [ "$FM_HERDR_VALIDATED_REMOTE_TARGET" = fm-remote:w1:p1 ] \
     || fail "remote route validation changed exact host or endpoint identity"
   sed '/^backend=/d' "$meta" > "$meta.next" && mv "$meta.next" "$meta"
+  fm_herdr_validate_remote_route "$meta" ios \
+    || fail "the previous explicit remote Herdr record shape should remain compatible"
+  sed '/^remote_target=/d' "$meta" > "$meta.next" && mv "$meta.next" "$meta"
   fm_herdr_validate_remote_route "$meta" ios >/dev/null 2>&1 \
-    && fail "providerless remote metadata must remain retired legacy evidence"
-  pass "metadata: remote Herdr routes require explicit exact identity"
+    && fail "providerless metadata without an exact remote Herdr endpoint must remain retired evidence"
+  pass "metadata: exact historical and current remote Herdr routes validate"
 }
 
 test_selector_refuses_foreign_identity() {

@@ -167,9 +167,16 @@ PATH="$FAKEBIN:$ORIGINAL_PATH" FM_GATE_REFUSE_BYPASS=1 FM_HOME="$SENDER_HOME" \
   "$ROOT/bin/fm-send.sh" "$ID" "$REQUEST" >/dev/null
 wait_for_prompt "$REQUEST" || fail "real Pi did not receive the exact-id fm-send request"
 GOT=$(jq -r --arg needle "$REQUEST" 'select(.prompt | contains($needle)) | .prompt' "$CAPTURE" | tail -1)
-[ "$GOT" = "${FM_FROMFIRST_MARK}${REQUEST}" ] \
-  || fail "real Pi exact-id prompt did not contain exactly one terminal-safe marker"$'\n'"--- bytes ---"$'\n'"$(printf '%s' "$GOT" | od -An -tx1)"
-printf 'evidence: exact-id received-hex=%s\n' "$(printf '%s' "$GOT" | od -An -tx1 | tr -d ' \n')"
+fm_message_from_firstmate "$GOT" \
+  || fail "real Pi exact-id prompt lacked the terminal-safe from-firstmate carrier"
+MARKED_BODY=${GOT#"$FM_FROMFIRST_MARK"}
+case "$MARKED_BODY" in *"$FM_FROMFIRST_MARK"*) fail "real Pi exact-id prompt duplicated its carrier" ;; esac
+CORR_FIELD=${MARKED_BODY%% *}
+case "$CORR_FIELD" in corr=????????????????) ;; *) fail "real Pi exact-id prompt lacked one correlation id" ;; esac
+case "${CORR_FIELD#corr=}" in *[!0-9a-f]*) fail "real Pi exact-id correlation id was malformed" ;; esac
+[ "${MARKED_BODY#* }" = "$REQUEST" ] \
+  || fail "real Pi exact-id prompt changed the request body"
+printf '%s\n' 'evidence: exact-id carrier=from-firstmate corr=valid body=exact'
 pass "real Pi/Herdr: exact-id FM_HOME send delivers exactly one from-firstmate marker"
 wait_for_idle || fail "real Pi did not become idle after the exact-id capture"
 
@@ -185,3 +192,24 @@ if fm_message_from_firstmate "$GOT"; then
 fi
 printf 'evidence: direct-input received-hex=%s\n' "$(printf '%s' "$GOT" | od -An -tx1 | tr -d ' \n')"
 pass "real Pi/Herdr: direct captain terminal input stays unmarked"
+
+CONTROL_OUT=$(PATH="$FAKEBIN:$ORIGINAL_PATH" FM_HOME="$SENDER_HOME" \
+  FM_ROOT_OVERRIDE="$ROOT" HERDR_SESSION="$SESSION" FM_CONTROL_POLL=0.2 \
+  "$ROOT/bin/fm-control.sh" "$ID" interrupt) \
+  || fail "real Pi lifecycle interrupt failed: $CONTROL_OUT"
+case "$CONTROL_OUT" in
+  *"interrupt-delivered $ID harness=pi endpoint=$TARGET verified=agent-alive"*) ;;
+  *) fail "real Pi lifecycle interrupt omitted its live-agent postcondition: $CONTROL_OUT" ;;
+esac
+pass "real Pi/Herdr: lifecycle control preserves the live exact endpoint"
+
+TEARDOWN_OUT=$(PATH="$FAKEBIN:$ORIGINAL_PATH" FM_HOME="$SENDER_HOME" \
+  FM_ROOT_OVERRIDE="$ROOT" HERDR_SESSION="$SESSION" FM_GATE_REFUSE_BYPASS=1 \
+  FM_TEARDOWN_GUARD_DONE=1 "$ROOT/bin/fm-teardown.sh" "$ID" --force 2>&1) \
+  || fail "real Pi lifecycle teardown failed: $TEARDOWN_OUT"
+[ ! -e "$META" ] || fail "real Pi lifecycle teardown retained parent metadata"
+[ ! -e "$SECOND_HOME" ] || fail "real Pi lifecycle teardown retained the secondmate home"
+if "$LAB_HELPER" run "$SESSION" pane get "$PANE" >/dev/null 2>&1; then
+  fail "real Pi lifecycle teardown retained the exact Herdr endpoint"
+fi
+pass "real Pi/Herdr: teardown removes the endpoint, home, and metadata"

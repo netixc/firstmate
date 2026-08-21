@@ -327,11 +327,20 @@ Real captures verified these active distinctions:
 - A bare shell prompt has no safe agent-composer container and is unknown.
 
 `tests/fm-composer-ghost.test.sh`, `tests/fm-composer-lib.test.sh`, and the Herdr composer cases pin the exact captured ANSI bytes.
-The U+2063 operational and routed-request separators were exercised through a real Pi-on-Herdr path; the byte-exact active regression is:
+The U+2063 operational and routed-request separators plus lifecycle control and teardown were reverified on 2026-08-21 with Herdr 0.8.0 and Pi 0.84.2; the active real Pi-on-Herdr regression is:
 
 ```sh
 FM_SEND_MARKER_HERDR_E2E=1 \
   tests/fm-send-secondmate-marker-herdr-e2e.test.sh
+```
+
+```text
+evidence: exact-id carrier=from-firstmate corr=valid body=exact
+ok - real Pi/Herdr: exact-id FM_HOME send delivers exactly one from-firstmate marker
+evidence: direct-input received-hex=464d5f4d41524b45525f48455244525f444952454354206361707461696e20696e707574
+ok - real Pi/Herdr: direct captain terminal input stays unmarked
+ok - real Pi/Herdr: lifecycle control preserves the live exact endpoint
+ok - real Pi/Herdr: teardown removes the endpoint, home, and metadata
 ```
 
 ### Native blocked event
@@ -483,12 +492,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 130831 316
-bin 54191 127
-tests 56291 118
+all 130937 316
+bin 54214 127
+tests 56365 118
 pi 2045 9
 agents 562
-added=5471 deleted=31844 net=-26373
+added=5581 deleted=31848 net=-26267
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 26,373 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 26,267 lines smaller.

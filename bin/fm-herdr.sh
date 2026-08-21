@@ -205,12 +205,18 @@ fm_herdr_validate_task_endpoint() {  # <meta-file> <task-id> [record-only]
 
 fm_herdr_validate_remote_route() {  # <meta-file> <task-id> [record-only]
   local meta=$1 id=$2 mode=${3:-unique-owner} window binding worktree project home
-  local host root session target pane state other other_id count=0 invalid=0
+  local host root session target pane state other other_id backend_count backend count=0 invalid=0
   FM_HERDR_VALIDATED_REMOTE_HOST=
   FM_HERDR_VALIDATED_REMOTE_TARGET=
   [ -f "$meta" ] && [ ! -L "$meta" ] || return 1
   case "$id" in ''|*[!A-Za-z0-9._-]*) return 1 ;; esac
-  fm_herdr_require_meta "$meta" "$id" || return 1
+  backend_count=$(grep -c '^backend=' "$meta" 2>/dev/null || true)
+  if [ "$backend_count" -eq 1 ]; then
+    backend=$(fm_meta_exact_value "$meta" backend) || return 1
+    [ "$backend" = herdr ] || return 1
+  elif [ "$backend_count" -ne 0 ]; then
+    return 1
+  fi
   window=$(fm_meta_exact_value "$meta" window) || return 1
   binding=$(fm_meta_exact_value "$meta" endpoint_task_id) || return 1
   worktree=$(fm_meta_exact_value "$meta" worktree) || return 1
