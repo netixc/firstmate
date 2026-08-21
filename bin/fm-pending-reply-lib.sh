@@ -1198,7 +1198,7 @@ fm_pending_reply_tick() {  # <state-dir>
       remote_host=$(fm_meta_get "$meta" remote_host)
       endpoint_class=$(fm_herdr_meta_kind "$meta")
       if [ "$endpoint_class" = herdr ]; then
-        target=$(fm_endpoint_target_of_meta "$meta")
+        target=$(fm_endpoint_live_target_of_meta "$meta")
       fi
       sm_home=$(fm_meta_get "$meta" home)
       harness=$(fm_meta_get "$meta" harness)

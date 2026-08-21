@@ -739,6 +739,10 @@ if remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh key ios E
   > "$TMP_ROOT/live-component-key.out" 2>&1; then
   fail "remote key controlled a pane whose live tab identity contradicted its record"
 fi
+if remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh launch ios pi - - \
+  > "$TMP_ROOT/live-component-launch.out" 2>&1; then
+  fail "remote launch reported recovery through a mismatched live endpoint"
+fi
 [ "$(grep -c '^pane send-text ' "$HERDR_LOG" || true)" -eq "$send_text_before" ] \
   || fail "remote send reached the mismatched live pane"
 [ "$(grep -c '^pane send-keys ' "$HERDR_LOG" || true)" -eq "$send_keys_before" ] \
@@ -747,6 +751,8 @@ assert_grep 'live Herdr component identity does not match' "$TMP_ROOT/live-compo
   "remote send did not explain the live component mismatch"
 assert_grep 'live Herdr component identity does not match' "$TMP_ROOT/live-component-key.out" \
   "remote key did not explain the live component mismatch"
+assert_grep 'live Herdr component identity does not match' "$TMP_ROOT/live-component-launch.out" \
+  "remote launch did not explain the live component mismatch"
 mv -f "$TMP_ROOT/herdr-before-live-component-mismatch.state" "$HERDR_STATE"
 [ "$(sed -n 's/^herdr_tab_id=//p' "$remote_route_meta")" = "$remote_live_tab" ] \
   || fail "live component refusal rewrote the durable remote tab identity"

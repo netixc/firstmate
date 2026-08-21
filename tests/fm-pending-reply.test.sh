@@ -852,11 +852,14 @@ test_busy_idle_observation_via_herdr() {
 
 test_unknown_herdr_state_uses_capture_fallback() {
   (
-    local home state corr rec sm_home
+    local home state corr rec sm_home fb
     home=$(setup_parent fallback-herdr)
     state="$home/state"
     sm_home="$home/sm"
     mkdir -p "$sm_home/state"
+    fb=$(make_stubs "$home")
+    # shellcheck disable=SC2030 # Fixture path is intentionally subshell-local.
+    export PATH="$fb:$PATH"
     export FM_PENDING_REPLY_GRACE_SECS=10
     # shellcheck disable=SC2030 # fixture clock is intentionally subshell-local
     export FM_PENDING_REPLY_NOW=10000
@@ -890,11 +893,14 @@ test_unknown_herdr_state_uses_capture_fallback() {
 
 test_tick_skips_terminal_and_reuses_target_observation() {
   (
-    local home state open1 open2 resolved escalated rec probe_log probes scan_log scans snapshot
+    local home state open1 open2 resolved escalated rec probe_log probes scan_log scans snapshot fb
     home=$(setup_parent observation-cache)
     state="$home/state"
     probe_log="$home/backend-probes.log"
     scan_log="$home/status-scans.log"
+    fb=$(make_stubs "$home")
+    # shellcheck disable=SC2031 # Fixture path is intentionally subshell-local.
+    export PATH="$fb:$PATH"
     : > "$probe_log"
     : > "$scan_log"
     # This fixture clock is intentionally scoped to the isolated subshell.

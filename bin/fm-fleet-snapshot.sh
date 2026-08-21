@@ -435,7 +435,7 @@ task_json_lines() {
       fi
     else
       session_path=$(fm_herdr_meta_kind "$meta")
-      target=$(fm_endpoint_target_of_meta "$meta")
+      target=$(fm_endpoint_live_target_of_meta "$meta")
     fi
     status_log="$STATE/$id.status"
     report_path="$DATA/$id/report.md"

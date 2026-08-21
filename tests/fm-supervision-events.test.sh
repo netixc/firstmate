@@ -14,7 +14,33 @@ set -u
 
 TMP=$(fm_test_tmproot fm-supervision-events)
 STATE_DIR="$TMP/state"
-mkdir -p "$STATE_DIR"
+FAKEBIN="$TMP/fakebin"
+ENDPOINT_MAP="$TMP/endpoints"
+mkdir -p "$STATE_DIR" "$FAKEBIN"
+: > "$ENDPOINT_MAP"
+cat > "$FAKEBIN/herdr" <<'SH'
+#!/usr/bin/env bash
+set -u
+case "${1:-} ${2:-}" in
+  "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
+  "pane get")
+    row=$(awk -F '\t' -v pane="${3:-}" '$1 == pane { print; exit }' "$FM_TEST_ENDPOINT_MAP")
+    [ -n "$row" ] || exit 1
+    IFS="$(printf '\t')" read -r pane tab workspace <<EOF
+$row
+EOF
+    printf '{"result":{"pane":{"pane_id":"%s","tab_id":"%s","workspace_id":"%s"}}}\n' "$pane" "$tab" "$workspace"
+    ;;
+  "tab get")
+    workspace=$(awk -F '\t' -v tab="${3:-}" '$2 == tab { print $3; exit }' "$FM_TEST_ENDPOINT_MAP")
+    [ -n "$workspace" ] || exit 1
+    printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"%s"}}}\n' "${3:-}" "$workspace"
+    ;;
+esac
+SH
+chmod +x "$FAKEBIN/herdr"
+export FM_TEST_ENDPOINT_MAP="$ENDPOINT_MAP"
+export PATH="$FAKEBIN:$PATH"
 
 # Source the watcher with an isolated state/home. The guard returns before the
 # lock/loop, so only the functions load.
@@ -37,6 +63,7 @@ reset_state() {
     "$STATE_DIR"/.herdr-escalated-* "$TMP"/panes "$TMP"/wtcalls "$TMP"/wtcalled 2>/dev/null || true
   : > "$WAKE_LOG"
   : > "$SLEEP_LOG"
+  : > "$ENDPOINT_MAP"
   _event_cap_key=""
   _event_cap_ok=0
   _event_cap_fails=0
@@ -54,6 +81,7 @@ write_endpoint_meta() {  # <id> <target> <kind>
     "herdr_session=${target%%:*}" "herdr_workspace_id=${rest%%:*}" \
     "herdr_tab_id=${rest%%:*}:t-$id" "herdr_pane_id=$rest" \
     "worktree=/tmp/$id" "project=/tmp/project" "kind=$kind" "harness=pi"
+  printf '%s\t%s:t-%s\t%s\n' "$rest" "${rest%%:*}" "$id" "${rest%%:*}" >> "$ENDPOINT_MAP"
 }
 
 # --- handle_push_transition: enqueue + wake for a non-paused blocked crew -----
@@ -106,6 +134,18 @@ PANES=$(cat "$TMP/panes" 2>/dev/null || true)
 case "$PANES" in *"default:wG:pQ"*) : ;; *) fail "the ship window must be in the event pane list, got '$PANES'" ;; esac
 case "$PANES" in *"default:wA:pS"*) fail "a kind=secondmate window must be EXCLUDED from the event pane list, got '$PANES'" ;; *) : ;; esac
 pass "event_wait_or_sleep: herdr windows go on the event pane list, but kind=secondmate endpoints are excluded"
+
+reset_state
+write_endpoint_meta tk3 default:wG:pQ ship
+printf 'wG:pQ\twG:t-foreign\twG\n' > "$ENDPOINT_MAP"
+# shellcheck disable=SC2329 # Runtime override called by the isolated watcher.
+fm_herdr_events_capable() { return 0; }
+# shellcheck disable=SC2329 # Runtime override called by the isolated watcher.
+fm_herdr_wait_transition() { printf 'CALLED\n' > "$TMP/wtcalled"; return 1; }
+event_wait_or_sleep
+[ ! -e "$TMP/wtcalled" ] || fail "a mismatched live endpoint reached watcher observation"
+grep -q 'SLEEP' "$SLEEP_LOG" || fail "a mismatched live endpoint did not leave the watcher on its safe polling path"
+pass "event_wait_or_sleep: mismatched live endpoint identity is excluded from observation"
 
 reset_state
 write_endpoint_meta tk3 default:wG:pQ ship

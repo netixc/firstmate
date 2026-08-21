@@ -191,6 +191,7 @@ cmd_launch() {
     current=$(fm_herdr_agent_state "$REMOTE_ENDPOINT_TARGET" 2>/dev/null || printf 'unreadable\n')
     case "$current" in
       alive)
+        remote_endpoint_require_live "$id"
         print_route "$id"
         return 0
         ;;

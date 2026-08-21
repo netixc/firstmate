@@ -140,6 +140,14 @@ fm_endpoint_target_of_meta() {  # <meta-file>
   printf '%s' "$FM_HERDR_VALIDATED_TARGET"
 }
 
+fm_endpoint_live_target_of_meta() {  # <meta-file>
+  local meta=$1 id
+  id=${meta##*/}
+  id=${id%.meta}
+  fm_herdr_validate_live_task_endpoint "$meta" "$id" >/dev/null 2>&1 || return 1
+  printf '%s' "$FM_HERDR_VALIDATED_TARGET"
+}
+
 fm_herdr_validate_task_endpoint() {  # <meta-file> <task-id> [record-only|live-control]
   local meta=$1 id=$2 mode=${3:-unique-owner} window worktree project binding session workspace tab pane state owner owner_rc pane_info tab_info
   FM_HERDR_VALIDATED_TARGET=

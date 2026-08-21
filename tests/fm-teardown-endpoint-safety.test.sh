@@ -95,7 +95,7 @@ EOF
 }
 
 test_locked_teardown_revalidates_live_identity() {
-  local id=cleanup-race rec world home fb log changed lock ready release holder_pid teardown_pid rc waited
+  local id=cleanup-race rec world home fb log changed lock ready release holder_pid teardown_pid sleeper_pid sleeper_alive rc waited
   rec=$(make_teardown_world locked-race "$id" present)
   IFS='|' read -r world home fb <<EOF
 $rec
@@ -139,6 +139,9 @@ SH
   waited=0
   while [ ! -e "$ready" ] && [ "$waited" -lt 100 ]; do sleep 0.05; waited=$((waited + 1)); done
   [ -e "$ready" ] || fail "locked-race: lock holder did not start"
+  mkdir -p "$world/missing-wt"
+  (cd "$world/missing-wt" && exec sleep 300) &
+  sleeper_pid=$!
   PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" FM_HERDR_LOG="$log" \
     FM_HERDR_COMPONENT_CHANGED="$changed" "$TEARDOWN" "$id" --force \
     > "$world/stdout" 2> "$world/stderr" &
@@ -152,6 +155,8 @@ SH
     : > "$release"
     wait "$holder_pid" 2>/dev/null || true
     wait "$teardown_pid" 2>/dev/null || true
+    kill "$sleeper_pid" 2>/dev/null || true
+    wait "$sleeper_pid" 2>/dev/null || true
     fail "locked-race: teardown never inspected the pane before waiting"
   }
   sleep 0.3
@@ -160,7 +165,12 @@ SH
   wait "$holder_pid" || fail "locked-race: lock holder failed"
   rc=0
   wait "$teardown_pid" || rc=$?
+  sleeper_alive=0
+  kill -0 "$sleeper_pid" 2>/dev/null && sleeper_alive=1
+  kill "$sleeper_pid" 2>/dev/null || true
+  wait "$sleeper_pid" 2>/dev/null || true
   [ "$rc" -ne 0 ] || fail "locked-race: teardown accepted a component identity replaced during its lock wait"
+  [ "$sleeper_alive" -eq 1 ] || fail "locked-race: identity refusal reaped a task process before authorization"
   assert_present "$home/state/$id.meta" "locked-race: refusal removed the endpoint record"
   assert_no_grep 'pane close ' "$log" "locked-race: refusal closed the replaced pane"
   assert_grep 'does not match its recorded live pane' "$world/stderr" \

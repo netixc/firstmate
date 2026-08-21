@@ -241,7 +241,7 @@ recorded_windows() {
   local meta w seen=
   for meta in "$STATE"/*.meta; do
     [ -e "$meta" ] || continue
-    w=$(fm_endpoint_target_of_meta "$meta")
+    w=$(fm_endpoint_live_target_of_meta "$meta")
     [ -n "$w" ] || continue
     case "$seen" in
       *"|$w|"*) continue ;;

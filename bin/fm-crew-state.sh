@@ -142,7 +142,7 @@ LOG_VERB=$(status_line_verb "$LOG_LINE")
 # A matching no-mistakes run remains authoritative even when the endpoint is
 # unavailable or carries retired legacy metadata.
 ENDPOINT_CLASS=$(fm_herdr_meta_kind "$META")
-HERDR_TARGET=$(fm_endpoint_target_of_meta "$META")
+HERDR_TARGET=$(fm_endpoint_live_target_of_meta "$META")
 pane_readable() {  # <target>
   [ "$ENDPOINT_CLASS" = herdr ] || return 1
   fm_herdr_capture "$1" 1 >/dev/null 2>&1

@@ -18,7 +18,11 @@ set -u
 [ -z "${FM_HERDR_LOG:-}" ] || printf '%s\n' "$*" >> "$FM_HERDR_LOG"
 case "${1:-} ${2:-}" in
   "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
-  "pane get") printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "${3:-}" ;;
+  "pane get")
+    workspace=${3%%:*}; task=${workspace#w-}
+    printf '{"result":{"pane":{"pane_id":"%s","tab_id":"%s:t-%s","workspace_id":"%s"}}}\n' "${3:-}" "$workspace" "$task" "$workspace"
+    ;;
+  "tab get") printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"%s"}}}\n' "${3:-}" "${3%%:*}" ;;
   "agent get") printf '{"result":{"agent":{"agent_status":"idle","provider":"pi"}}}\n' ;;
   "pane read") printf 'idle Pi pane\n' ;;
 esac

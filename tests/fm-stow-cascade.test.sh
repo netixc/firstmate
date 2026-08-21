@@ -68,8 +68,9 @@ SH
 chmod +x "$FAKEBIN/herdr"
 
 write_secondmate_meta() { # <meta> <home> [target] [parent] [harness]
-  local meta=$1 home=$2 target=${3:-lab:w1:p1} parent=${4:-main} harness=${5:-pi} id rest
+  local meta=$1 home=$2 target=${3:-} parent=${4:-main} harness=${5:-pi} id rest
   id=$(basename "$meta" .meta)
+  [ -n "$target" ] || target="lab:w-$id:p1"
   case "$target" in *:*:*) ;; *) target="lab:w-$id:p1" ;; esac
   rest=${target#*:}
   fm_write_meta "$meta" "backend=herdr" "window=$target" "endpoint_task_id=$id" \

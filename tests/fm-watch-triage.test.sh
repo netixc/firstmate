@@ -184,10 +184,10 @@ test_stale_is_terminal_classifier() {
   printf 'done: ready in branch fm/x\n' > "$state/term.status"
   stale_is_terminal "sess:fm-term" "$state" && fail "unrecorded tmux-shaped stale target was classified terminal"
   fm_write_meta "$state/term.meta" \
-    "backend=herdr" "window=sess:fm-term" "endpoint_task_id=term" \
+    "backend=herdr" "window=sess:w-term:p1" "endpoint_task_id=term" \
     "herdr_session=sess" "herdr_workspace_id=w-term" "herdr_tab_id=w-term:t-term" \
-    "herdr_pane_id=fm-term" "worktree=/tmp/term" "project=/tmp/project"
-  stale_is_terminal "sess:fm-term" "$state" || fail "validated terminal stale status not classified terminal"
+    "herdr_pane_id=w-term:p1" "worktree=/tmp/term" "project=/tmp/project"
+  stale_is_terminal "sess:w-term:p1" "$state" || fail "validated terminal stale status not classified terminal"
   fm_write_meta "$state/herdr-term.meta" \
     "window=default:w1:p2" "backend=herdr" "endpoint_task_id=herdr-term" \
     "herdr_session=default" "herdr_workspace_id=w1" "herdr_tab_id=w1:t1" \
@@ -589,7 +589,8 @@ set -u
 case "${1:-} ${2:-}" in
   "status --json") printf '{"client":{"version":"0.7.1","protocol":14},"server":{"running":true,"protocol":14}}\n' ;;
   "pane read") cat "$FM_FAKE_HERDR_CAPTURE" ;;
-  "pane get") printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "${3:-}" ;;
+  "pane get") printf '{"result":{"pane":{"pane_id":"%s","tab_id":"w-done:t-done","workspace_id":"w-done"}}}\n' "${3:-}" ;;
+  "tab get") printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"w-done"}}}\n' "${3:-}" ;;
   "agent get") printf '{"result":{"agent":{"agent_status":"idle","provider":"pi"}}}\n' ;;
 esac
 SH

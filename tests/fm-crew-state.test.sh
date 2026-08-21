@@ -119,6 +119,7 @@ SH
   cat > "$fb/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
+[ -z "${FM_FAKE_HERDR_LOG:-}" ] || printf '%s\n' "$*" >> "$FM_FAKE_HERDR_LOG"
 case "${1:-}" in
   status)
     [ "${2:-}" = --json ] && {
@@ -133,7 +134,9 @@ case "${1:-}" in
         if [ "${FM_FAKE_HERDR_MISSING:-0}" = 1 ]; then
           printf '{"error":{"code":"pane_not_found"}}\n'
         else
-          printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "${3:-}"
+          workspace=${3%%:*}
+          tab=${FM_FAKE_HERDR_LIVE_TAB:-$workspace:t-${FM_FAKE_HERDR_TASK_ID:-unknown}}
+          printf '{"result":{"pane":{"pane_id":"%s","tab_id":"%s","workspace_id":"%s"}}}\n' "${3:-}" "$tab" "$workspace"
         fi
         exit 0 ;;
       read)
@@ -141,6 +144,10 @@ case "${1:-}" in
         if [ "${FM_FAKE_HERDR_BUSY:-${FM_FAKE_BUSY:-0}}" = 1 ]; then printf 'work in progress\nesc to interrupt\n'
         else printf 'all quiet\n> \n'; fi
         exit 0 ;;
+    esac ;;
+  tab)
+    case "${2:-}" in
+      get) printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"%s"}}}\n' "${3:-}" "${3%%:*}"; exit 0 ;;
     esac ;;
   agent)
     case "${2:-}" in
@@ -170,7 +177,7 @@ make_no_timeout_toolbin() {  # <dir> -> echoes toolbin path
 # Run the helper for one case dir. FM_FAKE_* env (run output, busy flag) are read
 # from the caller's environment by the fakes above.
 run_crew_state() {  # <case-dir> <id>
-  PATH="$1/fakebin:$PATH" FM_STATE_OVERRIDE="$1/state" "$CREW_STATE" "$2"
+  PATH="$1/fakebin:$PATH" FM_STATE_OVERRIDE="$1/state" FM_FAKE_HERDR_TASK_ID="$2" "$CREW_STATE" "$2"
 }
 
 new_case() {  # <name> -> echoes case dir with an empty state/
@@ -198,9 +205,12 @@ reset_fakes() {
   FM_FAKE_HERDR_BUSY=0
   FM_FAKE_HERDR_MISSING=0
   FM_FAKE_HERDR_AGENT_STATUS=""
+  FM_FAKE_HERDR_LIVE_TAB=""
+  FM_FAKE_HERDR_LOG=""
   FM_FAKE_CI_LOGS=""
   export FM_FAKE_AXI_STATUS FM_FAKE_AXI_STATUS_RUN FM_FAKE_RUNS_LIST FM_FAKE_BUSY FM_FAKE_BUSY_TEXT
-  export FM_FAKE_HERDR_BUSY FM_FAKE_HERDR_MISSING FM_FAKE_HERDR_AGENT_STATUS FM_FAKE_CI_LOGS
+  export FM_FAKE_HERDR_BUSY FM_FAKE_HERDR_MISSING FM_FAKE_HERDR_AGENT_STATUS \
+    FM_FAKE_HERDR_LIVE_TAB FM_FAKE_HERDR_LOG FM_FAKE_CI_LOGS
 }
 
 # --- run-object fixtures (TOON, as `no-mistakes axi status` emits) -----------
@@ -873,6 +883,29 @@ test_no_run_herdr_unknown_uses_backend_capture() {
   pass "herdr's native busy verdict reads working with no record present"
 }
 
+test_no_run_herdr_live_identity_mismatch_is_not_observed() {
+  command -v jq >/dev/null 2>&1 || { pass "herdr live identity refusal skipped without jq"; return; }
+  reset_fakes
+  local d log out
+  d=$(new_case herdr-live-identity-mismatch)
+  make_repo_on_branch "$d/wt" fm/feat-herdr-mismatch
+  make_fakebin "$d" >/dev/null
+  fm_write_meta "$d/state/feat-herdr-mismatch.meta" "window=default:w1:p5" \
+    "worktree=$d/wt" "kind=ship" "backend=herdr" "harness=pi"
+  log=$d/herdr.log
+  : > "$log"
+  FM_FAKE_HERDR_LIVE_TAB=w1:t-foreign
+  FM_FAKE_HERDR_AGENT_STATUS=working
+  FM_FAKE_HERDR_BUSY=1
+  FM_FAKE_HERDR_LOG=$log
+  out=$(run_crew_state "$d" feat-herdr-mismatch)
+  assert_contains "$out" "state: unknown" "a mismatched live component must not drive crew state"
+  assert_contains "$out" "source: none" "a mismatched live component must remain unobserved"
+  assert_no_grep 'pane read ' "$log" "crew state captured a pane with mismatched live identity"
+  assert_no_grep 'agent get ' "$log" "crew state read agent state from a mismatched live pane"
+  pass "crew state refuses observation through a mismatched live Herdr identity"
+}
+
 # Regression (2026-07 herdr false-surface incident, now solved semantically):
 # herdr's agent.get reports generation state ("working" only while the model is
 # actively streaming - docs/herdr-backend.md "Busy state"), not "this crew's
@@ -1112,7 +1145,8 @@ SH
   "$ROOT/bin/fm-busy-event.sh" apply "$d/state" feat-timeout busy --gen "$gen" \
     --source pi-ext --event user-prompt-submit
   start=$SECONDS
-  out=$(FM_FAKE_NM_CALLS="$calls_file" PATH="$d/fakebin:$toolbin" FM_STATE_OVERRIDE="$d/state" FM_CREW_STATE_NM_TIMEOUT=1 "$CREW_STATE" feat-timeout)
+  out=$(FM_FAKE_NM_CALLS="$calls_file" PATH="$d/fakebin:$toolbin" FM_STATE_OVERRIDE="$d/state" \
+    FM_FAKE_HERDR_TASK_ID=feat-timeout FM_CREW_STATE_NM_TIMEOUT=1 "$CREW_STATE" feat-timeout)
   elapsed=$((SECONDS - start))
   assert_contains "$out" "state: working" "timed-out no-mistakes falls back to pane"
   assert_contains "$out" "source: pane" "timed-out no-mistakes -> pane source"
@@ -1342,6 +1376,7 @@ test_other_branch_run_ignored
 test_no_run_busy_pane
 test_no_run_footer_text_alone_is_not_working
 test_no_run_herdr_unknown_uses_backend_capture
+test_no_run_herdr_live_identity_mismatch_is_not_observed
 test_no_run_herdr_idle_agent_status_outranked_by_record
 test_no_run_herdr_idle_agent_status_and_idle_record_stays_idle
 test_no_run_idle_pane_uses_log
