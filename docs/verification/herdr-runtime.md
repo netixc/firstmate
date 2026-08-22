@@ -676,6 +676,19 @@ fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
 fm-doc-audience-check: ok surfaces=51 local_links=166
 ```
 
+The final native-transition executable transport rerun used:
+
+```sh
+bash -n tests/fm-herdr-transition.test.sh && tests/fm-herdr-transition.test.sh && shellcheck -x tests/fm-herdr-transition.test.sh && bin/fm-doc-audience-check.sh && git diff --check
+```
+
+```text
+ok - event reader subscribes to the requested pane through Herdr's executable wire interface
+ok - event reader emits only normalized four-field Herdr transition records
+# fm-herdr-transition.test.sh: all assertions passed
+fm-doc-audience-check: ok surfaces=51 local_links=166
+```
+
 Review-phase changed-source lint and the documentation check used:
 
 ```sh
@@ -702,12 +715,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 131790 313
+all 131824 313
 bin 54223 126
-tests 57130 117
+tests 57152 117
 pi 2048 9
 agents 559
-added=8193 deleted=33607 net=-25414
+added=8229 deleted=33609 net=-25380
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,414 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,380 lines smaller.

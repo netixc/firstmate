@@ -262,7 +262,7 @@ The push path only shortens latency.
 Polling runs every cycle and remains the permanent fallback when protocol 16, the event schema, Python, connection, subscription, or repeated reader execution is unavailable.
 There is still one watcher process; the event reader is a bounded child of that watcher.
 
-`tests/fm-herdr-eventwait-smoke.test.sh`, `tests/fm-herdr-transition.test.sh`, and `tests/fm-supervision-events.test.sh` cover capability, subscribe-then-reconcile ordering, dedupe, exemptions, and polling fallback.
+`tests/fm-herdr-eventwait-smoke.test.sh`, `tests/fm-herdr-transition.test.sh`, and `tests/fm-supervision-events.test.sh` cover the event transport, subscribe-then-reconcile ordering, dedupe, exemptions, and polling fallback.
 
 ## Away-mode supervisor support
 
@@ -270,9 +270,8 @@ The away daemon supports only an exact Herdr supervisor pane.
 Target existence, native state, capture, composer state, and verified submit all use the explicit named-session CLI owner.
 The pane-independent max-defer alert is configured in [`wedge-alarm.md`](wedge-alarm.md).
 
-Harnesses with native tracked background execution can run the daemon in their terminal.
-Pi has no such mechanism.
-`bin/fm-afk-launch.sh` therefore creates a dedicated unfocused Herdr workspace, runs the daemon there with an explicit supervisor target, records the exact daemon pane, and closes only that pane on stop.
+Pi runs the away daemon in a dedicated unfocused Herdr workspace with an explicit supervisor target.
+`bin/fm-afk-launch.sh` records the exact daemon pane and closes only that pane on stop.
 It never splits the captain's active tab and never uses shell `&`.
 Recovery reconciles only the recorded exact id.
 

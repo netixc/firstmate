@@ -1,53 +1,75 @@
 #!/usr/bin/env bash
-# Herdr native-transition record and status-action policy unit tests.
-# The sole event owner is bin/fm-herdr.sh.
+# Herdr native-transition executable transport tests.
 set -u
 
 # shellcheck source=tests/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-# shellcheck source=/dev/null
-. "$ROOT/bin/fm-herdr.sh"
+command -v python3 >/dev/null 2>&1 || { echo "skip: python3 not found"; exit 0; }
 
-# --- record construction + accessors ----------------------------------------
+TMP=$(fm_test_tmproot fm-herdr-transition)
+SOCK="$TMP/herdr.sock"
+REQUEST="$TMP/request.json"
+SERVER="$TMP/server.py"
 
-REC=$(fm_herdr_transition_record "wG:pQ" "wG" "" "blocked" "pi")
-[ "$(fm_herdr_transition_pane_id "$REC")" = "wG:pQ" ] || fail "pane_id accessor wrong: $REC"
-[ "$(fm_herdr_transition_workspace_id "$REC")" = "wG" ] || fail "workspace_id accessor wrong: $REC"
-[ "$(fm_herdr_transition_from_status "$REC")" = "" ] || fail "from_status should be empty: $REC"
-[ "$(fm_herdr_transition_to_status "$REC")" = "blocked" ] || fail "to_status accessor wrong: $REC"
-[ "$(fm_herdr_transition_agent "$REC")" = "pi" ] || fail "agent accessor wrong: $REC"
-pass "fm_herdr_transition_record builds a 5-field record and every accessor reads its field"
+cat > "$SERVER" <<'PY'
+import json
+import socket
+import sys
+import time
 
-# The record is exactly TAB-separated (five fields, four tabs).
-TABS=$(printf '%s' "$REC" | tr -cd '\t' | wc -c | tr -d '[:space:]')
-[ "$TABS" = "4" ] || fail "record must have exactly 4 TAB separators, got $TABS"
-pass "fm_herdr_transition_record uses a single TAB between each of the five fields"
+sock_path, request_path = sys.argv[1:]
+server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+server.bind(sock_path)
+server.listen(1)
+connection, _ = server.accept()
+request = b""
+while b"\n" not in request:
+    request += connection.recv(65536)
+with open(request_path, "wb") as output:
+    output.write(request.split(b"\n", 1)[0])
+messages = [
+    {"result": {"type": "subscription_started"}},
+    {"event": "unrelated", "data": {"pane_id": "ignored"}},
+    {"event": "pane.agent_status_changed", "data": {"pane_id": "wG:pQ", "workspace_id": "wG", "agent_status": "blocked", "agent": "pi"}},
+    {"event": "pane.agent_status_changed", "data": {"pane_id": "wG:pQ", "workspace_id": "", "agent_status": "working", "agent": "multi\tline\nagent"}},
+]
+for message in messages:
+    connection.sendall((json.dumps(message) + "\n").encode())
+time.sleep(1)
+PY
 
-# A field containing a stray TAB/newline is scrubbed to spaces so the record
-# never desyncs into more than five fields.
-DIRTY=$(fm_herdr_transition_record "wG:pQ" "wG" "" "blocked" $'multi\tline\nagent')
-DIRTY_TABS=$(printf '%s' "$DIRTY" | tr -cd '\t' | wc -c | tr -d '[:space:]')
-[ "$DIRTY_TABS" = "4" ] || fail "a field with a stray TAB must not add columns, got $DIRTY_TABS tabs"
-[ "$(fm_herdr_transition_to_status "$DIRTY")" = "blocked" ] || fail "stray-field scrub desynced to_status: $DIRTY"
-pass "fm_herdr_transition_record scrubs TAB/newline out of fields so the record stays exactly five columns"
+python3 "$SERVER" "$SOCK" "$REQUEST" &
+SERVER_PID=$!
+i=0
+while [ ! -S "$SOCK" ] && [ "$i" -lt 100 ]; do
+  sleep 0.01
+  i=$((i + 1))
+done
+[ -S "$SOCK" ] || fail "event fixture did not create its Herdr socket"
 
-# Empty optional fields are allowed (herdr leaves workspace/agent empty on the
-# reconcile path).
-REC2=$(fm_herdr_transition_record "w1:p3" "" "" "working" "")
-[ "$(fm_herdr_transition_pane_id "$REC2")" = "w1:p3" ] || fail "pane_id wrong with empty optionals: $REC2"
-[ "$(fm_herdr_transition_to_status "$REC2")" = "working" ] || fail "to_status wrong with empty optionals: $REC2"
-pass "fm_herdr_transition_record tolerates empty workspace/from/agent fields"
+OUT=$(python3 "$ROOT/bin/fm-herdr-eventwait.py" "$SOCK" 0.4 wG:pQ)
+RC=$?
+wait "$SERVER_PID" 2>/dev/null || true
+[ "$RC" -eq 0 ] || fail "event reader returned $RC instead of a clean bounded wait"
 
-# --- the single-owner policy table ------------------------------------------
+python3 - "$REQUEST" <<'PY' || fail "event reader sent the wrong Herdr subscription"
+import json
+import sys
 
-[ "$(fm_herdr_transition_policy blocked)" = "actionable" ] || fail "blocked must be actionable"
-[ "$(fm_herdr_transition_policy working)" = "absorb" ] || fail "working must be absorb"
-[ "$(fm_herdr_transition_policy idle)" = "defer" ] || fail "idle must be defer"
-[ "$(fm_herdr_transition_policy "done")" = "defer" ] || fail "done must be defer"
-[ "$(fm_herdr_transition_policy unknown)" = "fallback" ] || fail "unknown must be fallback"
-[ "$(fm_herdr_transition_policy "")" = "fallback" ] || fail "empty status must be fallback"
-[ "$(fm_herdr_transition_policy some-future-status)" = "fallback" ] || fail "an unrecognized status must be fallback"
-pass "fm_herdr_transition_policy is the single-owner status->action table (blocked=actionable, working=absorb, idle/done=defer, else=fallback)"
+with open(sys.argv[1], encoding="utf-8") as source:
+    request = json.load(source)
+expected = {
+    "id": "fm-eventwait",
+    "method": "events.subscribe",
+    "params": {"subscriptions": [{"type": "pane.agent_status_changed", "pane_id": "wG:pQ"}]},
+}
+raise SystemExit(0 if request == expected else 1)
+PY
+pass "event reader subscribes to the requested pane through Herdr's executable wire interface"
+
+EXPECTED=$(printf '@subscribed\nwG:pQ\twG\tblocked\tpi\nwG:pQ\t\tworking\tmulti line agent')
+[ "$OUT" = "$EXPECTED" ] || fail "event reader projected the transition stream incorrectly: $OUT"
+pass "event reader emits only normalized four-field Herdr transition records"
 
 echo "# fm-herdr-transition.test.sh: all assertions passed"
