@@ -211,6 +211,7 @@ When literal injection and Enter both succeeded but that read-back remains pendi
 That result is neither confirmed queue acceptance nor proof of non-submission.
 Pi 0.84.2's `input` event occurs before later input transforms and handled-input decisions, and Pi exposes no supported post-transform, post-queue event, so Firstmate does not promote that earlier event to success.
 Stronger busy-steer confirmation remains unsupported until a generation-bound mechanism can prove a newer exact receipt for the intended endpoint, unique send identity, payload digest, and UTF-8 length without accepting transformed, handled, failed, stale, or mismatched input.
+Because Pi 0.84.2 exposes no such receipt surface, stale or mismatched receipt acceptance is not an applicable executable case, and unrecognized artifacts remain unconfirmed rather than becoming success.
 
 `pane read --lines N` can return empty output when N is below the viewport height.
 The capture owner requests at least 200 lines from Herdr and trims locally to the caller's bound.

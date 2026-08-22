@@ -71,6 +71,8 @@ case "${1:-} ${2:-}" in
   "pane read")
     if [ "${FM_HERDR_BUSY_PENDING:-0}" = 1 ]; then
       printf '╭────────────────────────╮\n│ ❯ unsent composer text │\n╰────────────────────────╯\n'
+    elif [ "${FM_HERDR_UNRECOGNIZED_RENDER:-0}" = 1 ]; then
+      printf 'artifact without composer boundaries\n'
     fi
     ;;
   "agent get")
@@ -104,6 +106,7 @@ run_send() { # <home> <fakebin> <log> <args...>
     FM_HERDR_REPLACE_AFTER_TARGET_CHECK="${FM_HERDR_REPLACE_AFTER_TARGET_CHECK:-0}" \
     FM_HERDR_BUSY_BASELINE="${FM_HERDR_BUSY_BASELINE:-0}" \
     FM_HERDR_BUSY_PENDING="${FM_HERDR_BUSY_PENDING:-0}" \
+    FM_HERDR_UNRECOGNIZED_RENDER="${FM_HERDR_UNRECOGNIZED_RENDER:-0}" \
     FM_HERDR_ENTER_FAIL="${FM_HERDR_ENTER_FAIL:-0}" \
     FM_HERDR_ENTER_FAIL_AFTER="${FM_HERDR_ENTER_FAIL_AFTER:-}" \
     FM_HERDR_LITERAL_FAIL="${FM_HERDR_LITERAL_FAIL:-0}" \
@@ -133,7 +136,8 @@ test_busy_unknown_is_truthful_unconfirmed() {
   local home=$TMP_ROOT/busy-unknown fb log out rc sends enters
   mkdir -p "$home/state"; fb=$(make_stubs "$home"); log=$home/herdr.log; : > "$log"
   write_meta "$home" lane-busy
-  out=$(FM_HERDR_BUSY_BASELINE=1 run_send "$home" "$fb" "$log" lane-busy 'unique busy steer' 2>&1)
+  out=$(FM_HERDR_BUSY_BASELINE=1 FM_HERDR_UNRECOGNIZED_RENDER=1 \
+    run_send "$home" "$fb" "$log" lane-busy 'unique busy steer' 2>&1)
   rc=$?
   expect_code 3 "$rc" "busy unknown submit should use the delivered-but-unconfirmed status"
   assert_contains "$out" 'submission is unconfirmed (verdict=unknown' \
@@ -146,7 +150,7 @@ test_busy_unknown_is_truthful_unconfirmed() {
   enters=$(grep -c 'pane send-keys w1:p1 enter' "$log")
   [ "$sends" -eq 1 ] && [ "$enters" -eq 1 ] \
     || fail "busy unknown submit must inject and submit once (text=$sends enter=$enters)"
-  pass "fm-send strict: busy unknown submission stays truthful and never invites a blind resend"
+  pass "fm-send strict: unrecognized busy rendering stays truthful and never invites a blind resend"
 }
 
 test_busy_pending_is_unconfirmed_without_retyping() {

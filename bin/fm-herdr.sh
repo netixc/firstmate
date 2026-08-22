@@ -3321,8 +3321,9 @@ fm_herdr_composer_state() {  # <target> -> empty|pending|pending-unproven|unknow
 # submit vocabulary. Empty means confirmed submitted for every Pi caller; how
 # a caller confirms it is an internal decision, and Herdr's is no longer
 # literally "the composer read empty". Unknown after successful literal and
-# Enter transport is uncertainty rather than failed submission; an Enter
-# transport error is send-failed and can never enter that uncertainty path.
+# Enter transport is uncertainty rather than failed submission. A first Enter
+# transport error is send-failed; a later retry error after any successful
+# Enter preserves delivered-but-unconfirmed uncertainty.
 fm_herdr_send_text_submit() {  # <target> <text> <retries> <enter-sleep> <settle>
   local target=$1 text=$2 retries=$3 sleep_s=$4 settle=$5 i=0 verdict baseline confirm_sleep enter_sent=0
   local raw_status

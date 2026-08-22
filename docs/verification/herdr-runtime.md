@@ -362,8 +362,10 @@ ok - real Pi/Herdr: release processes the one ordinary busy steer exactly once w
 ```
 
 The ordinary busy steer returns exit 3 with `submission unconfirmed` while native state remains working, then appears as exactly one processed user message after release.
-The handled input never becomes a user message, and the transformed input is processed only in its transformed form, so Pi's earlier `input` event cannot serve as exact queue-acceptance proof.
-`tests/fm-send-strict.test.sh` separately pins single literal injection, Enter-only retry, transport failure, wrong endpoint, pending composer, concurrent-send refusal, idle success, and no-blind-resend behavior through the public executable path.
+The handled input is rejected before queueing and never becomes a user message, while the transformed input is processed only in its transformed form, so Pi's earlier `input` event cannot serve as exact queue-acceptance proof.
+`tests/fm-send-strict.test.sh` separately pins unrecognized rendering, single literal injection, first-Enter failure, later Enter-only retry failure, wrong endpoint, pending composer, concurrent-send refusal, idle success, and no-blind-resend behavior through the public executable path.
+`tests/fm-send-resolve-key.test.sh` pins remote inner exit 3 and remote transport failure without outer success, delivery confirmation, or decision closure.
+Receipt staleness and mismatch have no executable Pi case because Pi 0.84.2 exposes no supported queue-commit receipt surface.
 The complete portable Herdr session family also passed from the secondmate-marked task copy after `tests/fm-herdr.test.sh` bound its primary-home label cases to scratch `FM_HOME` state:
 
 ```sh

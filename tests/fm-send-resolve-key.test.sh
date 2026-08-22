@@ -486,7 +486,7 @@ test_remote_transport_failure_does_not_close() {
     FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" FM_SEND_LOG="$log" FM_SEND_SETTLE=0 \
     FM_SSH_BIN="$fb/fake-ssh" FM_SSH_LOG="$ssh_log" FM_FAKE_SSH_RC=1 \
     "$SEND" rsm --resolve-key quota "quota refreshed, resume" >/dev/null 2>&1; rc=$?
-  [ "$rc" -ne 0 ] || fail "a failed remote transport should exit nonzero"
+  expect_code 1 "$rc" "a failed remote transport must not become outer success"
   if grep -F 'resolved' "$home/state/rsm.status" >/dev/null; then
     fail "a failed remote send still closed the decision: $(cat "$home/state/rsm.status")"
   fi
