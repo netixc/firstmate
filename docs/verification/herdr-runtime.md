@@ -118,6 +118,7 @@ ok - real herdr E2E: teardown closes only the worker's own pane and leaves the l
 ```
 
 That suite's headline case runs `bin/fm-spawn.sh` inside a real Herdr pane, so the parent identity comes from Herdr's own injection rather than a composed environment.
+The no-parent fixture verifies a defensive Herdr placement seam and does not make running the primary outside Herdr a supported path.
 Cross-session and contradictory bindings are covered deterministically in `tests/fm-herdr.test.sh`, which can script a second server's socket without provisioning one.
 
 ### Per-home and presentation topology
@@ -849,12 +850,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 132467 313
+all 132468 313
 bin 54426 126
 tests 57459 117
 pi 2048 9
 agents 559
-added=9428 deleted=34165 net=-24737
+added=9441 deleted=34177 net=-24736
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 24,737 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 24,736 lines smaller.

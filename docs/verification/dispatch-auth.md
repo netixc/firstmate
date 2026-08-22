@@ -9,7 +9,7 @@ Task chronology, incident transcripts, and credential metadata stay in private r
 Firstmate resolves a candidate's provider family, credential surface, and applicable quota by reading the evidence below and reasoning in the open.
 No script maps a model to a provider, a provider to a credential store, or a name prefix to a family, so the facts here are what that reasoning rests on.
 Credential paths below are shown with the home directory replaced by `<home>`.
-The `codex` quota provider key and its CLI/auth-store paths are evidence for Pi's `openai-codex/*` model authentication only; they do not name a Firstmate worker harness.
+The `codex` quota provider key and its CLI/auth-store paths are evidence for Pi's `openai-codex/*` model authentication only; they do not select a Firstmate worker runtime.
 
 ## Quota granularity the judgment depends on
 
@@ -139,7 +139,7 @@ Neither this per-source shape nor `state.authStatus` exists before quota-axi 0.1
 
 ## Regression coverage
 
-`tests/fm-spawn-dispatch-profile.test.sh` owns spawn's deterministic profile and harness refusals.
+`tests/fm-spawn-dispatch-profile.test.sh` owns spawn's deterministic profile and retired runtime-selector refusals.
 `tests/fm-bootstrap.test.sh` owns the quota-axi version-floor diagnostic.
 `tests/fm-quota-array-dispatch-live-e2e.test.sh` drives the public Pi skill-loading interface against one fake `quota-axi --json` snapshot per case.
 It covers sharply unequal candidate reserves, explicit accounting for unmeasurable runway, and the strongest-reasoning constraint.

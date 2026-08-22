@@ -20,6 +20,7 @@ Firstmate invokes its CLI as a separate process.
 No session selection or first-run provisioning is required: absent configuration uses Herdr directly.
 Retired tmux or unknown explicit selection stops before endpoint or worktree creation and never falls back.
 Spawn also stops when `herdr`, `jq`, the selected named server, or the protocol floor is unavailable.
+Run the primary Pi session in a reachable Herdr pane; running Firstmate outside Herdr is not a supported primary path.
 
 The required CI lane uses the pinned installers in `bin/fm-install-herdr.sh` and `bin/fm-install-treehouse.sh`.
 Those script headers own release assets, checksums, download bounds, and post-install gates.
@@ -28,7 +29,6 @@ Real Pi credential tests remain opt-in rather than part of default CI.
 ## Watching and task containers
 
 The ordinary topology puts one task tab per endpoint in the exact workspace of the Firstmate or secondmate that launches it.
-When the launcher has no Herdr workspace to inherit, the integration maintains one durable home-labeled workspace instead.
 The primary home label is `firstmate`.
 A secondmate home label is `2ndmate-<secondmate-id>`, derived from its validated `.fm-secondmate-home` marker.
 A secondmate launched by the primary receives a narrowly scoped home override during container creation.
@@ -49,9 +49,9 @@ A `--secondmate` launch is the deliberate exception: it stands up that secondmat
 A claimed parent identity that cannot be resolved exactly stops the spawn before any worker endpoint exists, rather than falling back to a label search.
 That covers a missing or unusable socket identity, a closed or unreadable launcher pane, a pane and tab that disagree about their workspace, a workspace missing from the session, and a pane belonging to another named session or Herdr server.
 
-Firstmate running outside Herdr entirely has no launcher workspace to inherit, so its workers use this home's own labeled workspace, created on first use.
-That path needs the home label to identify exactly one workspace: two workspaces sharing it are an unresolvable placement and refuse rather than adopting either.
-Avoid naming a personal workspace `firstmate` or `2ndmate-<id>` for that reason, because the integration cannot distinguish that label collision from its own container.
+The defensive no-parent placement seam requires the home label to identify exactly one workspace: two workspaces sharing it are an unresolvable placement and refuse rather than adopting either.
+That seam does not make a Firstmate outside Herdr a supported primary path.
+Avoid naming a personal workspace `firstmate` or `2ndmate-<id>` because the integration cannot distinguish that label collision from its own container.
 An older secondmate workspace using `firstmate-<id>` is not migrated automatically; rename it manually before expecting new tasks or recovery to use it.
 Recovery and list-live still scan the first workspace matching the home label, because they address panes they already recorded rather than choosing where new work goes.
 
@@ -88,7 +88,7 @@ After the new workspace converges to one exact task endpoint beneath one exact p
 Another parent with the same presentation label does not prevent publication or participate in restart reclaim.
 The token is visible in the workspace title because Herdr exposes no verified hidden persistent field, but neither token, title, nor journal authorizes send, capture, task ownership, Treehouse return, or general recovery.
 
-The owning parent is the launcher's own exact workspace, resolved from the same identity the flat path uses, and falls back to a unique home-label lookup only for a Firstmate outside Herdr.
+The owning parent is the launcher's own exact workspace, resolved from the same identity the flat path uses; the defensive no-parent seam uses a unique home-label lookup.
 Projected children are never collapsed back into that parent; it is the placement and ordering reference the projection is bound under.
 The normal `fm-<id>` task tab is created in the exact new workspace returned by Herdr.
 Only the exact seeded default tab returned by the same workspace-create response can be pruned.
@@ -295,10 +295,10 @@ Tests use thin compatibility wrappers in `tests/herdr-test-safety.sh` and never 
 
 - Presentation ordering needs protocol 16 and Python and is best-effort only.
 - Mutable labels can collide; they are never placement or destructive authority.
-- A Firstmate outside Herdr cannot resolve a launcher workspace, so a colliding home label refuses new spawns until the collision is cleared.
+- The defensive no-parent placement seam refuses a colliding home label rather than guessing.
 - Ghost and placeholder recognition uses ANSI de-emphasis when available; an unstyled glyph row carrying trailing non-idle text fails safely to `unknown`.
 - Mid-session secondmate liveness is not implemented.
-- The primary must run in a reachable Herdr pane so away mode has an exact supervisor target.
+- The primary must run in a reachable Herdr pane; away mode also requires that exact supervisor identity.
 
 ## Regression entry points
 

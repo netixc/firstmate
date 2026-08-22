@@ -53,7 +53,7 @@ Full detail on every feature lives in [docs/architecture.md](docs/architecture.m
 
 ### Requirements
 
-- Pi, the verified primary agent harness.
+- Pi, the sole primary and worker runtime.
 - Git and the GitHub CLI, authenticated through `gh auth login`.
 - Herdr and `jq`, with a supported Herdr server available.
 
@@ -74,7 +74,7 @@ git clone https://github.com/kunchenguid/firstmate
 cd firstmate
 ```
 
-Then launch Pi; AGENTS.md takes over from there:
+Open the clone in a Herdr pane, then launch Pi there; AGENTS.md takes over from there:
 
 **Pi**
 
