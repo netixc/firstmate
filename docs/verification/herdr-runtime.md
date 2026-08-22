@@ -739,6 +739,24 @@ fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
 fm-doc-audience-check: ok surfaces=51 local_links=166
 ```
 
+The final Pi-hook and live Pi/Herdr test-family check used:
+
+```sh
+bash -n bin/fm-startup-network.sh bin/fm-watch.sh bin/fm-test-run.sh bin/fm-composer-lib.sh tests/fm-test-run.test.sh && \
+  bin/fm-test-run.sh --list-families | grep -Fx live-pi-herdr-optin && \
+  tests/fm-test-run.test.sh | tail -1 && \
+  bin/fm-lint.sh bin/fm-test-run.sh tests/fm-test-run.test.sh && \
+  bin/fm-doc-audience-check.sh && \
+  git diff --check
+```
+
+```text
+live-pi-herdr-optin
+ok - aggregate-json merges lane timing artifacts
+fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
+fm-doc-audience-check: ok surfaces=51 local_links=166
+```
+
 Review-phase changed-source lint and the documentation check used:
 
 ```sh
@@ -765,12 +783,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 131897 313
+all 131917 313
 bin 54209 126
-tests 57190 117
+tests 57192 117
 pi 2048 9
 agents 559
-added=8752 deleted=34059 net=-25307
+added=8797 deleted=34084 net=-25287
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,307 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,287 lines smaller.

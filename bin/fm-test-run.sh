@@ -181,7 +181,7 @@ family_for_basename() {
     fm-afk-pi-herdr-return-e2e.test.sh|\
     fm-herdr-version-floor-live-e2e.test.sh|\
     fm-quota-array-dispatch-live-e2e.test.sh|fm-send-secondmate-marker-herdr-e2e.test.sh)
-      printf '%s\n' live-harness-optin
+      printf '%s\n' live-pi-herdr-optin
       ;;
     fm-herdr.test.sh|fm-herdr-selection.test.sh|\
     fm-control.test.sh|fm-control-relaunch.test.sh|\
@@ -210,7 +210,7 @@ family_for_basename() {
 expected_gate_skip_for_family() {
   case "$1" in
     real-herdr-gated) printf '%s\n' herdr ;;
-    live-harness-optin) printf '%s\n' optin-env ;;
+    live-pi-herdr-optin) printf '%s\n' optin-env ;;
     snapshot-bearings) printf '%s\n' optional-binary ;;
     *) printf '%s\n' none ;;
   esac
@@ -223,7 +223,7 @@ watcher-wake-lock
 real-herdr-gated
 secondmate
 session-bootstrap
-live-harness-optin
+live-pi-herdr-optin
 herdr-session
 pr-forge
 afk
@@ -321,7 +321,7 @@ is_proven_isolated_script() {
 
 # The portable serial remainder: every tests/*.test.sh that is neither
 # proven-isolated nor real-herdr-gated. Watcher, lock, AFK, daemon, Secondmate lifecycle,
-# bootstrap, live-harness opt-in, real Herdr, and other
+# bootstrap, live Pi/Herdr opt-in, real Herdr, and other
 # unproven work stays here. Derived rather than enumerated so a newly added test
 # lands here by default instead of falling out of every lane.
 list_portable_serial() {
@@ -829,7 +829,7 @@ families_for_changed_path() {
     bin/fm-supervisor-target-lib.sh)
       printf '%s\n' watcher-wake-lock
       printf '%s\n' real-herdr-gated
-      printf '%s\n' live-harness-optin
+      printf '%s\n' live-pi-herdr-optin
       printf '%s\n' afk
       ;;
     bin/fm-startup-memory-budget.sh|bin/fm-startup-memory-budget-lib.sh)
@@ -848,10 +848,10 @@ families_for_changed_path() {
       printf '%s\n' session-bootstrap
       ;;
     bin/fm-sessionstart-run.sh|.pi/extensions/fm-primary-turnend-guard.ts)
-      # The run tier's two harness-supplied facts (source vocabulary and
-      # context-reset stdout injection) only show up against a real harness.
+      # Pi's session-open source vocabulary and context-reset stdout injection
+      # only show up against a real Pi process.
       printf '%s\n' session-bootstrap
-      printf '%s\n' live-harness-optin
+      printf '%s\n' live-pi-herdr-optin
       ;;
     bin/fm-timeout-lib.sh)
       # The shared hard bound: session start's runtime bound, the fleet/bearings
@@ -878,7 +878,7 @@ families_for_changed_path() {
       # re-selects real-Herdr coverage alongside the portable families.
       printf '%s\n' herdr-session
       printf '%s\n' pure-contract-unit
-      printf '%s\n' live-harness-optin
+      printf '%s\n' live-pi-herdr-optin
       ;;
     bin/fm-spawn.sh|bin/fm-send.sh|\
     bin/fm-peek.sh|bin/fm-composer*)
@@ -907,7 +907,7 @@ families_for_changed_path() {
       ;;
     .agents/skills/quota-array-dispatch/SKILL.md)
       printf '%s\n' pure-contract-unit
-      printf '%s\n' live-harness-optin
+      printf '%s\n' live-pi-herdr-optin
       ;;
     .agents/skills/*/SKILL.md)
       printf '%s\n' pure-contract-unit

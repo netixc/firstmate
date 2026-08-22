@@ -296,8 +296,8 @@ wedge_timer_check() {  # <window> <since-file> <triage-label> <escalation-count-
 }
 
 # busy_turn_over_age: 0 iff <task>'s latest completed-turn marker is at least
-# BUSY_TURN_MAX_SECS old. Ages the per-task turn-ended marker, the harness-neutral
-# signal every verified harness's turn-end hook touches; before any turn has
+# BUSY_TURN_MAX_SECS old. Ages the per-task turn-ended marker that Pi's turn-end
+# hook touches; before any turn has
 # completed, ages the task's spawn record instead so a fresh task still gets a
 # bound. The caller checks that the pane is busy and routes a crossed bound
 # through the existing wedge_timer_check, never anything that touches the
@@ -1104,8 +1104,8 @@ EOF
     pf="$STATE/.paused-$key"   # flag: this key's stale is using the bounded pause cadence
     prev=$(cat "$hf" 2>/dev/null || true)
     # Busy match: a Herdr's native semantic state when available (herdr), else
-    # the last 6 non-blank lines only (the TUI footer area, where every verified
-    # harness renders its busy indicator) so busy-looking strings in displayed
+    # the last 6 non-blank lines only (the TUI footer area, where Pi renders its
+    # busy indicator) so busy-looking strings in displayed
     # content cannot suppress stale detection. Read once per window per poll and
     # reused below so a busy verdict is consistent within one cycle.
     if window_is_busy "$w"; then busy_now=0; else busy_now=1; fi

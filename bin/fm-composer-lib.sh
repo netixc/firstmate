@@ -12,7 +12,7 @@
 #               is detectable and can be stripped.
 #               With styled=0, ghost text is unreadable, so a bare glyph row
 #               carrying trailing non-idle text degrades to `unknown` rather
-#               than `pending`: the text may be the harness's own idle
+#               than `pending`: the text may be Pi's own idle
 #               suggestion, and a false `pending` blocks every safe caller.
 #   identity=1  Herdr's native `agent get` identity/state probe exists. It makes
 #               Pi's blank separated composer provable; with identity=0 that
@@ -27,7 +27,7 @@
 # escalations into whatever it calls empty. Positive container proof means one
 # of the shapes in the catalogue below.
 #
-# THE SHAPE CATALOGUE (all verified against real harnesses; byte-level
+# THE SHAPE CATALOGUE (verified against real Pi; byte-level
 # captures in data/fm-composer-consolidation-audit-s1/report.md and
 # docs/verification/herdr-runtime.md):
 #   bordered   - a complete boxed composer: a top border, side-bordered content
@@ -45,7 +45,7 @@
 # it is a dead-shell prompt and classifies `unknown` (never a safe injection
 # target).
 #
-# GHOST/PLACEHOLDER TEXT: a harness may fill an otherwise-empty composer with
+# GHOST/PLACEHOLDER TEXT: Pi may fill an otherwise-empty composer with
 # de-emphasized ghost text that a plain capture cannot tell apart from text a human typed.
 # fm_composer_strip_ghost is the ONE ANSI-aware extractor of "real typed
 # content": it drops every dim/faint (SGR 2) run and keeps only normal-intensity,
@@ -53,7 +53,7 @@
 #
 # UNICODE WHITESPACE (issue #1988; open PRs #1995/#2047 target the same
 # defect and #1995's naming is adopted here so the implementations converge):
-# a harness may separate its prompt glyph from composer content with a
+# Pi may separate its prompt glyph from composer content with a
 # non-ASCII space. POSIX `[[:space:]]` includes U+00A0 only
 # under some locales, so every trim used to be locale-dependent: the same live
 # pane read `empty` under a UTF-8 shell and `pending` under LC_ALL=C (a
@@ -92,9 +92,9 @@ fm_composer_strip_ansi() {
 # ASCII whitespace is absent because POSIX `[[:space:]]` already covers it.
 # U+200B ZERO WIDTH SPACE is deliberately absent: Unicode gives it
 # White_Space=No (a format character), so listing it would substitute this
-# owner's own guess for the property it claims to follow. The live harness
-# guard (bin/fm-test-run.sh, live-harness-optin) is what catches a harness
-# that starts drawing its composer with a character outside this property.
+# owner's own guess for the property it claims to follow. The live Pi guard
+# (`bin/fm-test-run.sh --family live-pi-herdr-optin`) catches a Pi release that
+# starts drawing its composer with a character outside this property.
 FM_COMPOSER_UNICODE_SPACES=()
 for _fm_composer_space_octal in \
   '\0302\0205' '\0302\0240' '\0341\0232\0200' \
@@ -111,7 +111,7 @@ unset -v _fm_composer_space_octal _fm_composer_space_utf8
 # fm_composer_normalize_spaces_var: the ONE Unicode-whitespace mapping.
 # Replaces in place through the named variable so no caller needs a subshell.
 # Substitution, never deletion: deleting would silently join "foo<NBSP>bar"
-# into one token, while a space preserves the separation the harness drew.
+# into one token, while a space preserves the separation Pi drew.
 fm_composer_normalize_spaces_var() {  # <varname>
   local __fmns_name=$1 __fmns_text=${!1} __fmns_space
   for __fmns_space in "${FM_COMPOSER_UNICODE_SPACES[@]}"; do

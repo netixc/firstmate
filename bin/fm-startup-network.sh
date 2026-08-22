@@ -45,7 +45,7 @@
 #        fm-startup-network.sh run --locked <0|1>
 #          Run the checks in the foreground and publish the result. This is what
 #          `start` detaches with its private generation reservation; run it
-#          directly to redo the stage by hand from the lock-owning harness.
+#          directly to redo the stage by hand from the lock-owning Pi session.
 #        fm-startup-network.sh harvest --pid <pid>
 #          Print the digest's NETWORK CHECKS section and release the inline-print
 #          claim. Called by bin/fm-session-start.sh, not by hand.
@@ -231,7 +231,7 @@ EOF
   fi
 
   # Detached three ways, each closing a different failure:
-  #   - stdio to /dev/null, because the digest's stdout is a pipe the harness
+  #   - stdio to /dev/null, because the digest's stdout is a pipe Pi's hook
   #     reads to EOF; a worker holding that pipe open would strand session
   #     initialization behind the very work this stage exists to take off the
   #     blocking path.

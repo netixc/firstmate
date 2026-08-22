@@ -37,7 +37,7 @@ test_list_all_exact_suite_coverage() {
 }
 
 test_family_selection() {
-  local listed line
+  local listed line families
   listed=$("$RUNNER" --list --family pure-contract-unit)
   [ -n "$listed" ] || fail "--family pure-contract-unit selected nothing"
   printf '%s\n' "$listed" | grep -Fq 'tests/fm-test-run.test.sh' \
@@ -55,6 +55,8 @@ test_family_selection() {
   fam_count=$(printf '%s\n' "$listed" | wc -l | tr -d ' ')
   [ "$fam_count" -lt "$all_count" ] \
     || fail "pure-contract-unit must be a proper subset of --all"
+  families=$("$RUNNER" --list-families)
+  assert_contains "$families" "live-pi-herdr-optin" "family inventory omitted the supported live Pi/Herdr opt-in lane"
   pass "family selection returns a proper subset of the suite"
 }
 
