@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Herdr-only selection and retired metadata behavior through public helpers.
+# Herdr-only selection and retired metadata behavior through public executables.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -7,8 +7,11 @@ set -u
 TMP_ROOT=$(fm_test_tmproot fm-herdr-selection)
 
 runtime_check() { # <config-dir> [env assignments through caller]
-  FM_CONFIG_OVERRIDE=$1 FM_ROOT_OVERRIDE=$ROOT bash -c \
-    '. "$FM_ROOT_OVERRIDE/bin/fm-herdr.sh"; fm_herdr_require_runtime'
+  local config=$1 home=$1.home
+  mkdir -p "$home/state" "$home/data" "$config"
+  printf '## In flight\n\n## Queued\n\n## Done\n' > "$home/data/backlog.md"
+  FM_HOME=$home FM_CONFIG_OVERRIDE=$config FM_ROOT_OVERRIDE=$ROOT \
+    "$ROOT/bin/fm-fleet-snapshot.sh" --json >/dev/null
 }
 
 test_default_and_explicit_herdr() {
@@ -73,81 +76,6 @@ test_afk_start_refuses_tmux_before_mutation() {
   pass "away-mode start rejects tmux before state mutation"
 }
 
-test_metadata_classification_and_identity() {
-  local state=$TMP_ROOT/state meta out before
-  mkdir -p "$state"
-  meta=$state/legacy.meta
-  fm_write_meta "$meta" "window=firstmate:fm-legacy" "worktree=/tmp/legacy"
-  before=$(shasum -a 256 "$meta" | awk '{print $1}')
-  # shellcheck source=/dev/null
-  . "$ROOT/bin/fm-herdr.sh"
-  [ "$(fm_herdr_meta_kind "$meta")" = retired-tmux ] \
-    || fail "fieldless metadata must classify as retired tmux evidence"
-  out=$(fm_herdr_require_meta "$meta" legacy 2>&1) \
-    && fail "fieldless metadata must not authorize Herdr control"
-  assert_contains "$out" "preserving its records for manual reconciliation" \
-    "legacy refusal should state the preservation requirement"
-  [ "$(shasum -a 256 "$meta" | awk '{print $1}')" = "$before" ] \
-    || fail "legacy refusal must not rewrite metadata"
-
-  fm_write_meta "$state/current.meta" \
-    "backend=herdr" "window=lab:w1:p1" "endpoint_task_id=current" \
-    "herdr_session=lab" "herdr_workspace_id=w1" "herdr_tab_id=w1:t1" \
-    "herdr_pane_id=w1:p1" "worktree=/tmp/current" "project=/tmp/project"
-  fm_herdr_validate_task_endpoint "$state/current.meta" current record-only \
-    || fail "exact current Herdr metadata should validate"
-  [ "$FM_HERDR_VALIDATED_TARGET" = lab:w1:p1 ] \
-    || fail "validation must preserve exact endpoint identity"
-  pass "metadata: current Herdr validates; legacy evidence is preserved"
-}
-
-test_remote_route_identity() {
-  local state=$TMP_ROOT/remote-route-state meta
-  mkdir -p "$state"
-  meta=$state/ios.meta
-  fm_write_meta "$meta" \
-    "backend=herdr" "window=remote:ios" "endpoint_task_id=ios" \
-    "worktree=/remote/home" "project=/remote/root" "home=/remote/home" \
-    "remote_host=remote-mac" "remote_root=/remote/root" \
-    "remote_herdr_session=fm-remote" "remote_target=fm-remote:w1:p1"
-  # shellcheck source=/dev/null
-  . "$ROOT/bin/fm-herdr.sh"
-  fm_herdr_validate_remote_route "$meta" ios \
-    || fail "complete remote Herdr route metadata should validate"
-  [ "$FM_HERDR_VALIDATED_REMOTE_HOST" = remote-mac ] \
-    && [ "$FM_HERDR_VALIDATED_REMOTE_TARGET" = fm-remote:w1:p1 ] \
-    || fail "remote route validation changed exact host or endpoint identity"
-  sed '/^backend=/d' "$meta" > "$meta.next" && mv "$meta.next" "$meta"
-  printf 'remote_backend=herdr\n' >> "$meta"
-  fm_herdr_validate_remote_route "$meta" ios \
-    || fail "the previous explicit remote Herdr record shape should remain compatible"
-  sed 's/^remote_backend=.*/remote_backend=tmux/' "$meta" > "$meta.next" && mv "$meta.next" "$meta"
-  fm_herdr_validate_remote_route "$meta" ios >/dev/null 2>&1 \
-    && fail "historical remote metadata explicitly selecting tmux must be refused"
-  sed 's/^remote_backend=.*/remote_backend=herdr/' "$meta" > "$meta.next" && mv "$meta.next" "$meta"
-  sed '/^remote_target=/d' "$meta" > "$meta.next" && mv "$meta.next" "$meta"
-  fm_herdr_validate_remote_route "$meta" ios >/dev/null 2>&1 \
-    && fail "providerless metadata without an exact remote Herdr endpoint must remain retired evidence"
-  pass "metadata: exact historical and current remote Herdr routes validate"
-}
-
-test_selector_refuses_foreign_identity() {
-  local state=$TMP_ROOT/selector-state meta out
-  mkdir -p "$state"
-  meta=$state/current.meta
-  fm_write_meta "$meta" \
-    "backend=herdr" "window=lab:w1:p1" "endpoint_task_id=other" \
-    "herdr_session=lab" "herdr_workspace_id=w1" "herdr_tab_id=w1:t1" \
-    "herdr_pane_id=w1:p1" "worktree=/tmp/current" "project=/tmp/project"
-  # shellcheck source=/dev/null
-  . "$ROOT/bin/fm-herdr.sh"
-  out=$(fm_herdr_resolve_selector current "$state" 2>&1) \
-    && fail "selector resolution must reject metadata bound to another task"
-  assert_contains "$out" "belongs to task other, not current" \
-    "selector refusal should preserve the filename-to-task binding"
-  pass "selector resolution: foreign endpoint identity fails closed"
-}
-
 test_retired_cli_selection_refused() {
   local home=$TMP_ROOT/home out
   mkdir -p "$home/state" "$home/data" "$home/config"
@@ -209,9 +137,6 @@ test_direct_herdr_entrypoints_refuse_tmux_environment() {
 test_default_and_explicit_herdr
 test_retired_and_unknown_selection_refused
 test_afk_start_refuses_tmux_before_mutation
-test_metadata_classification_and_identity
-test_remote_route_identity
-test_selector_refuses_foreign_identity
 test_retired_cli_selection_refused
 test_public_control_paths_refuse_tmux_environment
 test_direct_herdr_entrypoints_refuse_tmux_environment

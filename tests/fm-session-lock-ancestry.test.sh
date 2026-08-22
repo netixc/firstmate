@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Portable session-lock ancestry contract for surviving verified harnesses.
+# Portable Pi session-lock ancestry contract.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -7,6 +7,8 @@ set -u
 
 TMP_ROOT=$(fm_test_tmproot fm-session-lock-ancestry)
 LIB="$ROOT/bin/fm-session-lock-lib.sh"
+FM_TEST_READLINK=$(command -v readlink)
+export FM_TEST_READLINK
 
 lib_eval() {  # <fakebin> <expression>
   local fakebin=$1 expr=$2
@@ -44,6 +46,12 @@ case "${FM_TEST_SHAPE:-pi}:$pid:$field" in
   falsedirect:*:comm=) printf '%s\n' /tmp/fake/pi ;;
   falsedirect:*:args=) printf '%s\n' /tmp/fake/pi ;;
   falsedirect:*:ppid=) printf '%s\n' 1 ;;
+  falsebare:*:comm=) printf '%s\n' pi ;;
+  falsebare:*:args=) printf '%s\n' pi ;;
+  falsebare:*:ppid=) printf '%s\n' 1 ;;
+  pathpi:*:comm=) printf '%s\n' pi ;;
+  pathpi:*:args=) printf '%s\n' pi ;;
+  pathpi:*:ppid=) printf '%s\n' 1 ;;
   nodescript:*:comm=) printf '%s\n' /usr/bin/node ;;
   nodescript:*:args=) printf '/usr/bin/node %s/pi\n' "$FM_TEST_PI_BIN" ;;
   nodescript:*:ppid=) printf '%s\n' 1 ;;
@@ -75,6 +83,16 @@ case "${FM_TEST_SHAPE:-pi}:$pid:$field" in
 esac
 SH
   chmod +x "$fakebin/ps"
+  cat > "$fakebin/readlink" <<'SH'
+#!/usr/bin/env bash
+set -u
+case "${FM_TEST_SHAPE:-}:$1" in
+  pathpi:/proc/*/exe) printf '%s/pi\n' "$FM_TEST_PI_BIN" ;;
+  falsebare:/proc/*/exe) printf '%s\n' /tmp/fake/pi ;;
+  *) exec "$FM_TEST_READLINK" "$@" ;;
+esac
+SH
+  chmod +x "$fakebin/readlink"
   cat > "$fakebin/pi" <<'SH'
 #!/usr/bin/env bash
 exit 0
@@ -114,10 +132,10 @@ test_gap_stops_ancestry() {
   dir="$TMP_ROOT/gap"; mkdir -p "$dir/state"
   fakebin=$(make_ps "$dir" gap)
   got=$(FM_TEST_SHAPE=gap lib_eval "$fakebin" 'fm_pi_ancestry_pid') || fail "inner Pi ancestry was not found"
-  [ "$got" = 700 ] || fail "ancestry crossed a non-harness gap: $got"
+  [ "$got" = 700 ] || fail "ancestry crossed a non-Pi gap: $got"
   printf '720\n' > "$dir/state/.lock"
   if FM_TEST_SHAPE=gap lib_eval "$fakebin" "fm_session_lock_owned_by_self '$dir/state'"; then
-    fail "a harness beyond a non-harness gap claimed the lock"
+    fail "a Pi process beyond a non-Pi gap claimed the lock"
   fi
   pass "session-lock: ancestry never crosses a non-Pi gap"
 }
@@ -136,7 +154,7 @@ test_live_competitor_is_not_self() {
 
 test_public_lock_requires_exact_pi_identity() {
   local shape dir fakebin out rc
-  for shape in falsepath falsearg falseargv0 falsedirect; do
+  for shape in falsepath falsearg falseargv0 falsedirect falsebare; do
     dir="$TMP_ROOT/$shape"; mkdir -p "$dir/state"
     fakebin=$(make_ps "$dir" "$shape")
     rc=0
@@ -154,6 +172,12 @@ test_public_lock_requires_exact_pi_identity() {
     FM_STATE_OVERRIDE="$dir/state" PATH="$fakebin:$PATH" \
     "$ROOT/bin/fm-lock.sh" 2>&1) || fail "fm-lock refused the exact installed Pi script identity: $out"
   assert_contains "$out" "lock acquired: Pi pid" "fm-lock did not admit the exact Pi script identity"
+  dir="$TMP_ROOT/pathpi"; mkdir -p "$dir/state"
+  fakebin=$(make_ps "$dir" pathpi)
+  out=$(FM_TEST_SHAPE=pathpi FM_TEST_PI_BIN="$fakebin" \
+    FM_STATE_OVERRIDE="$dir/state" PATH="$fakebin:$PATH" \
+    "$ROOT/bin/fm-lock.sh" 2>&1) || fail "fm-lock refused Pi launched through PATH: $out"
+  assert_contains "$out" "lock acquired: Pi pid" "fm-lock did not admit Pi through OS executable identity"
   pass "session-lock: public admission requires the exact Pi executable identity"
 }
 

@@ -81,26 +81,26 @@ Mark an axis not applicable only after inspecting its integration surface, and u
 For critical safety, routing, startup, and supervision infrastructure, prefer deterministic and idempotent enforcement over relying on agent memory alone.
 Keep instructions as the authority and discovery layer, but make repeated execution converge safely and make invalid or unsafe states fail closed wherever the runtime can enforce them.
 
-### Harness-dependent checks
+### Pi-dependent checks
 
 This section is the single owner of the rule and of how to satisfy it.
 
-A check is harness-dependent when its verdict comes from something the vendor emits: a process name, rendered output, a spinner or keybind glyph, a banner, or a key the harness binds.
-Anything in that class must be proven end to end against the real harness, because a stub or fake agent can only confirm the assumption already written into the stub.
+A check is Pi-dependent when its verdict comes from something Pi emits: a process name, rendered output, a spinner or keybind glyph, a banner, or a key Pi binds.
+Anything in that class must be proven end to end against real Pi, because a stub or fake agent can only confirm the assumption already written into the stub.
 That proof is authorized to spend tokens; the cost is small against a check that silently stops working.
 
 Build the check on the most structural signal that answers the question, and prefer a kernel or protocol fact over anything a release note could change.
 When a rendered surface is genuinely the only source, read more than one independent signal and let any of them carry a positive verdict, so no single vendor string is load-bearing.
-Where a surface signal is unavoidable, back it with a guard that fails loudly naming the harness and version rather than degrading quietly.
+Where a surface signal is unavoidable, back it with a guard that fails loudly naming Pi and its version rather than degrading quietly.
 
 Every such check needs two tests, because they fail for different reasons:
 
 - A portable regression in `tests/` that pins the logic through the public Herdr integration seam, using real processes where process identity matters.
   Drive independent signals apart deliberately and assert the verdict survives losing one; assert the divergence itself so the case cannot go quietly vacuous.
   Confirm which signal a given construction actually blinds on each supported platform rather than assuming, because the same trick can break different sources on macOS and Linux.
-- A live guard in the `live-harness-optin` family (`bin/fm-test-run.sh`), env-gated and self-skipping, that exercises every INSTALLED harness for real and fails naming the harness and version.
-  Report an absent harness explicitly rather than passing silently over it, and refuse a pass that checked nothing.
-  This guard is opt-in and on-demand because standard CI has neither harness binaries nor credentials; run it after every harness upgrade and before trusting refreshed per-harness evidence.
+- An env-gated, self-skipping live Pi guard registered with `bin/fm-test-run.sh` that exercises the installed Pi for real and fails naming its version.
+  Report an absent Pi explicitly rather than passing silently over it, and refuse a pass that checked nothing.
+  This guard is opt-in and on-demand because standard CI has neither the Pi binary nor credentials; run it after every Pi upgrade and before trusting refreshed Pi evidence.
 
 Record dated Pi-and-Herdr results in `docs/verification/herdr-runtime.md`, and point at the live guard that refreshes them rather than leaving a version-scoped observation to rot into a false claim.
 

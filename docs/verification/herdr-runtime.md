@@ -586,19 +586,22 @@ FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=2122 failed=
 fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
 ```
 
-The final exact Pi process-identity rerun used:
+The final exact Pi process-identity and public Herdr behavior rerun used:
 
 ```sh
-bash -n bin/fm-session-lock-lib.sh tests/fm-session-lock-ancestry.test.sh && \
-  bin/fm-test-run.sh tests/fm-session-lock-ancestry.test.sh && \
-  bin/fm-lint.sh bin/fm-session-lock-lib.sh tests/fm-session-lock-ancestry.test.sh && \
+bash -n bin/fm-session-lock-lib.sh tests/fm-session-lock-ancestry.test.sh tests/fm-herdr-selection.test.sh && \
+  bin/fm-test-run.sh tests/fm-session-lock-ancestry.test.sh tests/fm-herdr-selection.test.sh tests/fm-fleet-snapshot-view.test.sh tests/fm-on.test.sh tests/fm-send-strict.test.sh && \
+  bin/fm-lint.sh bin/fm-session-lock-lib.sh tests/fm-session-lock-ancestry.test.sh tests/fm-herdr-selection.test.sh && \
   bin/fm-doc-audience-check.sh && \
   git diff --check
 ```
 
 ```text
-FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=2512
-FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=2452 failed=0
+FM_TEST_SUMMARY total=5 failed=0 skipped_gate=0 duration_ms=35303
+FM_TEST_SUMMARY_FAMILY family=herdr-session count=2 duration_ms=9119 failed=0
+FM_TEST_SUMMARY_FAMILY family=secondmate count=1 duration_ms=16261 failed=0
+FM_TEST_SUMMARY_FAMILY family=snapshot-bearings count=1 duration_ms=4772 failed=0
+FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=4936 failed=0
 fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
 fm-doc-audience-check: ok surfaces=51 local_links=166
 ```
@@ -674,12 +677,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 131855 313
-bin 54266 126
-tests 57174 117
+all 131816 313
+bin 54275 126
+tests 57123 117
 pi 2045 9
 agents 559
-added=8160 deleted=33509 net=-25349
+added=8130 deleted=33518 net=-25388
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,349 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,388 lines smaller.

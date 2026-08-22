@@ -28,23 +28,32 @@ fm_pi_canonical_path() {  # <path>
   printf '%s/%s\n' "$dir" "$(basename "$path")"
 }
 
-fm_pi_process_matches() {  # <comm> <args>
-  local comm=$1 args=$2 base script pi_path candidate
+fm_pi_process_executable() {  # <pid> <comm>
+  local pid=$1 comm=$2 path
+  path=$(readlink "/proc/$pid/exe" 2>/dev/null || true)
+  if [ -n "$path" ]; then
+    printf '%s\n' "$path"
+    return 0
+  fi
+  case "$comm" in
+    /*)
+      printf '%s\n' "$comm"
+      return 0
+      ;;
+  esac
+  command -v lsof >/dev/null 2>&1 || return 1
+  path=$(lsof -a -p "$pid" -d txt -Fn 2>/dev/null | sed -n 's/^n//p' | sed -n '1p')
+  [ -n "$path" ] || return 1
+  printf '%s\n' "$path"
+}
+
+fm_pi_process_matches() {  # <pid> <comm> <args>
+  local pid=$1 comm=$2 args=$3 base script pi_path candidate
   base=$(basename -- "$comm")
   if [ "$base" = pi ]; then
     pi_path=$(command -v pi 2>/dev/null) || return 1
     pi_path=$(fm_pi_canonical_path "$pi_path") || return 1
-    candidate=$comm
-    case "$candidate" in
-      */*) ;;
-      *)
-        candidate=${args%% *}
-        case "$candidate" in
-          */*) ;;
-          *) return 1 ;;
-        esac
-        ;;
-    esac
+    candidate=$(fm_pi_process_executable "$pid" "$comm") || return 1
     candidate=$(fm_pi_canonical_path "$candidate") || return 1
     [ "$candidate" = "$pi_path" ]
     return
@@ -72,7 +81,7 @@ fm_pi_ancestry_pid() {
   for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
     comm=$(ps -o comm= -p "$pid" 2>/dev/null) || break
     args=$(ps -o args= -p "$pid" 2>/dev/null)
-    if fm_pi_process_matches "$comm" "$args"; then
+    if fm_pi_process_matches "$pid" "$comm" "$args"; then
       printf '%s\n' "$pid"
       return 0
     fi
@@ -87,7 +96,7 @@ fm_pi_pid_alive() {
   kill -0 "$pid" 2>/dev/null || return 1
   comm=$(ps -o comm= -p "$pid" 2>/dev/null) || return 1
   args=$(ps -o args= -p "$pid" 2>/dev/null)
-  fm_pi_process_matches "$comm" "$args"
+  fm_pi_process_matches "$pid" "$comm" "$args"
 }
 
 # True when the current session's Pi process owns the home lock.
