@@ -700,6 +700,17 @@ fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
 fm-doc-audience-check: ok surfaces=51 local_links=166
 ```
 
+The final Pi-only runtime contract documentation check used:
+
+```sh
+bash -n bin/fm-watch-arm.sh && bin/fm-lint.sh bin/fm-watch-arm.sh && bin/fm-doc-audience-check.sh && git diff --check
+```
+
+```text
+fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
+fm-doc-audience-check: ok surfaces=51 local_links=166
+```
+
 Review-phase changed-source lint and the documentation check used:
 
 ```sh
@@ -726,12 +737,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 131830 313
-bin 54218 126
+all 131836 313
+bin 54215 126
 tests 57152 117
 pi 2048 9
 agents 559
-added=8239 deleted=33613 net=-25374
+added=8278 deleted=33646 net=-25368
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,374 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,368 lines smaller.
