@@ -722,6 +722,23 @@ fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
 fm-doc-audience-check: ok surfaces=51 local_links=166
 ```
 
+The final Pi lock admission and Herdr evidence-owner rerun used:
+
+```sh
+bash -n bin/fm-lock.sh bin/fm-herdr.sh tests/fm-session-lock-ancestry.test.sh && tests/fm-session-lock-ancestry.test.sh && bin/fm-lint.sh bin/fm-lock.sh bin/fm-herdr.sh tests/fm-session-lock-ancestry.test.sh && bin/fm-doc-audience-check.sh && git diff --check
+```
+
+```text
+ok - session-lock: Pi ancestry owns its exact lock
+ok - session-lock: nested Pi ancestry preserves the exact inner owner
+ok - session-lock: ancestry never crosses a non-Pi gap
+ok - session-lock: a live competing pi session is live but never self
+ok - session-lock: public admission requires the exact Pi executable identity
+ok - session-lock: explicit tmux environment refuses before state creation
+fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
+fm-doc-audience-check: ok surfaces=51 local_links=166
+```
+
 Review-phase changed-source lint and the documentation check used:
 
 ```sh
@@ -748,12 +765,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 131838 313
-bin 54206 126
-tests 57152 117
+all 131874 313
+bin 54209 126
+tests 57168 117
 pi 2048 9
 agents 559
-added=8296 deleted=33662 net=-25366
+added=8702 deleted=34032 net=-25330
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,366 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,330 lines smaller.

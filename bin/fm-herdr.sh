@@ -3094,7 +3094,7 @@ fm_herdr_send_key() {  # <target> <key>
 # fm_herdr_capture: bounded plain-text pane capture for fm-peek.sh and fm-watch.sh.
 # `--source recent` selects Herdr's recent scrollback.
 #
-# Verified CLI quirk (herdr-verification-p2.md "pane read --lines bug", v0.7.1):
+# Verified CLI quirk (docs/herdr-backend.md "Current transport behavior", v0.7.1):
 # `pane read --source recent --lines N` returns COMPLETELY EMPTY output when N
 # is smaller than the pane's current viewport height (observed threshold ~23
 # rows for a default-sized pane), instead of clamping to the last N lines - it
@@ -3180,8 +3180,8 @@ fm_herdr_composer_state() {  # <target> -> empty|pending|pending-unproven|unknow
 # fm_herdr_send_text_submit: type <text> into <target> once (raw,
 # unsubmitted, via send_literal), then submit with a named Enter key, retried
 # (Enter only, never retyped) until herdr's NATIVE agent-state (agent get)
-# confirms a real turn started. Verified hazard (herdr-verification-p2.md
-# "slash/$ autocomplete popup"): a `/`- or `$`-prefixed send opens a
+# confirms a real turn started. See docs/herdr-backend.md "Current transport
+# behavior" and "Composer and injection safety". A `/`- or `$`-prefixed send opens a
 # completion popup within ~0.1s, so the caller's <settle> before the first
 # Enter prevents Pi's completion popup from consuming the submission.
 #
@@ -3499,8 +3499,8 @@ fm_herdr_pane_for_tab() {  # <session> <workspace_id> <tab_id>
 # label looks like a firstmate task window (fm-<id>) in <session>'s, THIS
 # HOME'S OWN workspace (fm_herdr_workspace_label - never another
 # home's), by LABEL - never by trusting a stored pane id, since ids are not
-# guaranteed stable across every server lifecycle (see herdr-verification-p2.md
-# "ID stability"). A caller running as a given home (e.g. a secondmate
+# guaranteed stable across every server lifecycle (see docs/herdr-backend.md
+# "Restart and liveness behavior"). A caller running as a given home (e.g. a secondmate
 # recovering its own in-flight work) naturally scopes to that home's own
 # workspace because FM_HOME already names it - no glue needed, unlike the
 # primary-spawns-a-secondmate path in fm-spawn.sh. Read-only: a session/

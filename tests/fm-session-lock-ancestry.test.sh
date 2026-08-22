@@ -181,8 +181,24 @@ test_public_lock_requires_exact_pi_identity() {
   pass "session-lock: public admission requires the exact Pi executable identity"
 }
 
+test_public_lock_refuses_tmux_before_state_creation() {
+  local dir fakebin out rc=0
+  dir="$TMP_ROOT/tmux-refusal"
+  mkdir -p "$dir"
+  fakebin=$(make_ps "$dir" pathpi)
+  out=$(TMUX=fake FM_TEST_SHAPE=pathpi FM_TEST_PI_BIN="$fakebin" \
+    FM_STATE_OVERRIDE="$dir/state" PATH="$fakebin:$PATH" \
+    "$ROOT/bin/fm-lock.sh" 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "fm-lock accepted an explicit tmux environment"
+  assert_contains "$out" "tmux session execution is retired" \
+    "fm-lock did not clearly refuse the explicit tmux environment"
+  [ ! -e "$dir/state" ] || fail "fm-lock created state before refusing tmux"
+  pass "session-lock: explicit tmux environment refuses before state creation"
+}
+
 test_pi_owns_lock
 test_nested_pi_process_keeps_inner_owner
 test_gap_stops_ancestry
 test_live_competitor_is_not_self
 test_public_lock_requires_exact_pi_identity
+test_public_lock_refuses_tmux_before_state_creation
