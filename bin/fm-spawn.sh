@@ -61,8 +61,8 @@
 #   duplicate-agent risk is independently absent. Treehouse allocation and task
 #   metadata are unchanged.
 #   A clean projected create or exact resume makes one bounded attempt to hold
-#   the one session-scoped presentation-order lock (keyed by named session plus
-#   canonical socket, outside any home's state/) through launch handoff. Lock
+#   the one named-session presentation-order lock (outside any home's state/)
+#   through launch handoff. Lock
 #   contention warns and falls back to the ordinary flat layout before any
 #   projection mutation. The exact response-derived new workspace is inserted
 #   immediately after its owning parent (firstmate or 2ndmate-<id>) contiguous
@@ -677,7 +677,7 @@ spawn_abort_cleanup() {
 }
 trap spawn_abort_cleanup EXIT
 
-# One bounded lock per live Herdr session/socket, shared across all homes.
+# One bounded lock per named Herdr session, shared across all homes.
 # <session> is required so secondmate and primary spawns serialize against the
 # same session without writing any other home's state directory.
 spawn_herdr_presentation_order_lock_acquire() {
@@ -1765,6 +1765,12 @@ else
   fi
 fi
 
+if [ "$HERDR_PRESENTATION_ORDER_LOCK_HELD" != 1 ]; then
+  spawn_herdr_presentation_order_lock_acquire "$HERDR_SES" || {
+    echo "error: herdr launch could not acquire its session lock" >&2
+    exit 1
+  }
+fi
 META_WINDOW=$T
 SPAWN_GEN="s$(date +%s).${BASHPID:-$$}.$RANDOM"
 SPAWN_META_PATH="$STATE/$ID.meta"
@@ -1833,6 +1839,11 @@ if [ "$SPAWN_TASK_SET_LOCK_HELD" = 1 ]; then
   SPAWN_TASK_SET_LOCK_HELD=0
   fm_lock_release "$SPAWN_TASK_SET_LOCK"
 fi
+fm_herdr_validate_live_task_endpoint "$STATE/$ID.meta" "$ID" || exit 1
+[ "$FM_HERDR_VALIDATED_TARGET" = "$T" ] || {
+  echo "error: herdr launch endpoint changed before delivery" >&2
+  exit 1
+}
 
 sq_brief=$(shell_quote "$BRIEF")
 sq_piworkerctx=$(shell_quote "$STATE_REAL/$ID.meta")
@@ -1915,11 +1926,9 @@ fi
 sleep 0.3
 spawn_send_literal "$T" "$LAUNCH"
 sleep 0.3
-if [ "${HERDR_PROJECTED:-0}" -eq 1 ]; then
-  HERDR_PROJECTION_ABORT_CLEANUP=0
-  spawn_herdr_presentation_order_lock_release
-fi
 spawn_send_key "$T" Enter
+HERDR_PROJECTION_ABORT_CLEANUP=0
+spawn_herdr_presentation_order_lock_release
 if [ "$KIND" = secondmate ] && [ "${FM_SKIP_SECONDMATE_INHERIT:-0}" != 1 ]; then
   if ! fm_config_reread_discard_pending "$PROJ_ABS" "$ID" "$FM_HOME"; then
     if fm_config_reread_quarantine_pending "$PROJ_ABS" "$ID" "$FM_HOME"; then

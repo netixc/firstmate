@@ -41,6 +41,12 @@ SH
 printf '%s\n' "$*" >> "$LOG"
 jq_state() { jq "$@" "$STATE"; }
 save() { tmp="$STATE.tmp.$$"; cat > "$tmp" && mv "$tmp" "$STATE"; }
+require_delivery_lock() {
+  [ -z "${FM_FAKE_HERDR_EXPECTED_LOCK:-}" ] || [ -d "$FM_FAKE_HERDR_EXPECTED_LOCK" ] || {
+    printf 'expected delivery lock is not held: %s\n' "$FM_FAKE_HERDR_EXPECTED_LOCK" >&2
+    return 1
+  }
+}
 ws=""; label=""; cwd=""
 args=("$@")
 for ((i=0; i<${#args[@]}; i++)); do
@@ -109,6 +115,11 @@ case "${1:-} ${2:-}" in
   "pane run")
     [ ! -f "$SEND_FAIL" ] || exit 1
     case "${4:-}" in
+      "export GOTMPDIR="*|"export TRACEPARENT="*)
+        require_delivery_lock || exit 1
+        ;;
+    esac
+    case "${4:-}" in
       "export TRACEPARENT="*)
         [ "${FM_FAKE_TRACEPARENT_SEND_FAIL:-0}" != 1 ] || exit 1
         [ "${FM_FAKE_TRACEPARENT_SEND_UNSAFE:-0}" != 1 ] || exit 2
@@ -121,10 +132,12 @@ case "${1:-} ${2:-}" in
     ;;
   "pane send-text")
     [ ! -f "$SEND_FAIL" ] || exit 1
+    require_delivery_lock || exit 1
     [ -z "${FM_FAKE_HERDR_LAUNCH_LOG:-}" ] || printf '%s\n' "${4:-}" >> "$FM_FAKE_HERDR_LAUNCH_LOG"
     jq_state --arg p "${3:-}" '.typed[$p] = true' | save ;;
   "pane send-keys")
     [ ! -f "$SEND_FAIL" ] || exit 1
+    require_delivery_lock || exit 1
     jq_state --arg p "${3:-}" --arg cwd "${FM_FAKE_HERDR_PANE_PATH:-}" '
       .typed[$p] = true | .working[$p] = true
       | if ($cwd | length) > 0 then
@@ -145,7 +158,7 @@ case "${1:-} ${2:-}" in
     fi
     ;;
   "session list"*)
-    printf '{"sessions":[{"name":"default","running":true,"socket_path":"%s"},{"name":"fm-remote","running":true,"socket_path":"%s"}]}\n' "$SOCKET" "$SOCKET" ;;
+    printf '{"sessions":[{"name":"default","running":true,"socket_path":"%s"},{"name":"lab","running":true,"socket_path":"%s"},{"name":"fm-remote","running":true,"socket_path":"%s"}]}\n' "$SOCKET" "$SOCKET" "$SOCKET" ;;
 esac
 exit 0
 SH

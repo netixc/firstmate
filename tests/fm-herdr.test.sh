@@ -2503,13 +2503,15 @@ SH
 }
 
 test_presentation_session_lock_path_is_shared_across_homes() {
-  local dir log resp fb path_a path_b path_other path_tmp path_private
+  local dir log resp fb path_a path_b path_restarted path_other path_tmp path_private
   dir="$TMP_ROOT/presentation-session-lock"; mkdir -p "$dir/responses" "$dir/sockdir"
   log="$dir/log"; resp="$dir/responses"; : > "$log"
   : > "$dir/sockdir/fmtest.sock"
   printf '%s\n' "{\"sessions\":[{\"name\":\"fmtest\",\"running\":true,\"socket_path\":\"$dir/sockdir/fmtest.sock\"}]}" > "$resp/1.out"
   printf '%s\n' "{\"sessions\":[{\"name\":\"fmtest\",\"running\":true,\"socket_path\":\"$dir/sockdir/fmtest.sock\"}]}" > "$resp/2.out"
-  printf '%s\n' "{\"sessions\":[{\"name\":\"other\",\"running\":true,\"socket_path\":\"$dir/sockdir/other.sock\"}]}" > "$resp/3.out"
+  printf '%s\n' "{\"sessions\":[{\"name\":\"fmtest\",\"running\":true,\"socket_path\":\"$dir/sockdir/fmtest-restarted.sock\"}]}" > "$resp/3.out"
+  printf '%s\n' "{\"sessions\":[{\"name\":\"other\",\"running\":true,\"socket_path\":\"$dir/sockdir/other.sock\"}]}" > "$resp/4.out"
+  : > "$dir/sockdir/fmtest-restarted.sock"
   : > "$dir/sockdir/other.sock"
   fb=$(make_herdr_fakebin "$dir")
   path_a=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
@@ -2518,7 +2520,11 @@ test_presentation_session_lock_path_is_shared_across_homes() {
   path_b=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_presentation_session_lock_path fmtest' "$ROOT") \
     || fail "session lock path resolution failed for home B"
-  [ "$path_a" = "$path_b" ] || fail "same session/socket must resolve one shared lock path"
+  [ "$path_a" = "$path_b" ] || fail "same named session must resolve one shared lock path"
+  path_restarted=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_presentation_session_lock_path fmtest' "$ROOT") \
+    || fail "session lock path resolution failed after socket replacement"
+  [ "$path_restarted" = "$path_a" ] || fail "a named session restart split its shared lock path"
   case "$path_a" in
     /tmp/firstmate-herdr-presentation/order-*.lock) ;;
     *) fail "session lock path must use the shared machine namespace: $path_a" ;;
@@ -2533,8 +2539,8 @@ test_presentation_session_lock_path_is_shared_across_homes() {
   # Symlink parents such as /tmp -> /private/tmp must not split the lock identity.
   if [ -L /tmp ] || [ "$(cd /tmp && pwd -P)" != /tmp ]; then
     : > /tmp/fm-herdr-lock-canon-$$.sock
-    printf '%s\n' '{"sessions":[{"name":"canon","running":true,"socket_path":"/tmp/fm-herdr-lock-canon-'"$$"'.sock"}]}' > "$resp/4.out"
-    printf '%s\n' "{\"sessions\":[{\"name\":\"canon\",\"running\":true,\"socket_path\":\"$(cd /tmp && pwd -P)/fm-herdr-lock-canon-$$.sock\"}]}" > "$resp/5.out"
+    printf '%s\n' '{"sessions":[{"name":"canon","running":true,"socket_path":"/tmp/fm-herdr-lock-canon-'"$$"'.sock"}]}' > "$resp/5.out"
+    printf '%s\n' "{\"sessions\":[{\"name\":\"canon\",\"running\":true,\"socket_path\":\"$(cd /tmp && pwd -P)/fm-herdr-lock-canon-$$.sock\"}]}" > "$resp/6.out"
     path_tmp=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
       bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_presentation_session_lock_path canon' "$ROOT") \
       || fail "lock path with /tmp socket failed"
@@ -2545,7 +2551,7 @@ test_presentation_session_lock_path_is_shared_across_homes() {
     [ "$path_tmp" = "$path_private" ] \
       || fail "symlink parent socket paths must resolve one lock: $path_tmp vs $path_private"
   fi
-  pass "herdr presentation lock: one path per session/socket across homes"
+  pass "herdr presentation lock: one stable path per named session across homes"
 }
 
 test_presentation_session_lock_path_rejects_malformed_socket() {
@@ -3863,24 +3869,22 @@ test_wait_transition_stream_blocked_returns_record() {
   pass "fm_herdr_wait_transition: a streamed ->blocked edge returns the record sub-poll"
 }
 
-test_wait_transition_stream_absorb_clears_then_timeout() {
-  local dir state agent fb reader lines rc marker
+test_wait_transition_stream_absorb_returns_uncommitted_record() {
+  local dir state agent fb reader lines out rc marker
   dir="$TMP_ROOT/wt-stream-absorb"; state="$dir/state"; agent="$dir/agents"; mkdir -p "$state" "$agent"
   fb=$(make_herdr_eventfake "$dir")
   set_fake_agent "$agent" "wG:pQ" idle
   : > "$state/.herdr-escalated-sess_wG_pQ"   # previously escalated
   reader=$(make_fake_reader "$dir"); lines="$dir/lines"
   marker="$state/.herdr-escalated-sess_wG_pQ"
-  # Stream a working edge (absorb) then an idle edge (defer). Neither is a fresh
-  # actionable edge, so the wait ends as a clean timeout (rc 1) and the marker
-  # is cleared by the working edge.
   printf 'wG:pQ\t\tworking\tpi\nwG:pQ\t\tidle\tpi\n' > "$lines"
-  rc=$(PATH="$fb:$PATH" FM_HERDR_EVENTS_FORCE=1 FM_FAKE_SESSION_NAME=sess FM_FAKE_SOCKET="$dir/x.sock" FM_FAKE_AGENT_DIR="$agent" \
+  out=$(PATH="$fb:$PATH" FM_HERDR_EVENTS_FORCE=1 FM_FAKE_SESSION_NAME=sess FM_FAKE_SOCKET="$dir/x.sock" FM_FAKE_AGENT_DIR="$agent" \
     FM_HERDR_EVENT_READER="$reader" FM_FAKE_READER_LINES="$lines" \
-    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_wait_transition sess 2 "$1" sess:wG:pQ; echo $?' "$ROOT" "$state" | tail -1)
-  [ "$rc" = 1 ] || fail "a stream of only working/idle edges must end as a clean timeout (rc 1), got $rc"
-  [ ! -e "$marker" ] || fail "a streamed working edge must clear the escalation marker"
-  pass "fm_herdr_wait_transition: streamed working clears the marker, idle/done are deferred (clean timeout)"
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_wait_transition sess 2 "$1" sess:wG:pQ' "$ROOT" "$state"); rc=$?
+  [ "$rc" = 0 ] || fail "a working edge with a marker must return for validated application, got $rc"
+  case "$out" in *working*) : ;; *) fail "a working edge must print its normalized record, got '$out'" ;; esac
+  [ -e "$marker" ] || fail "an unlocked transition wait cleared the escalation marker"
+  pass "fm_herdr_wait_transition: working dedupe changes remain uncommitted"
 }
 
 test_wait_transition_reader_failure_returns_2() {
@@ -4082,7 +4086,7 @@ test_wait_transition_reconcile_blocked_returns_record
 test_wait_transition_subscribes_before_reconcile
 test_wait_transition_reconcile_dedupes_when_marked
 test_wait_transition_stream_blocked_returns_record
-test_wait_transition_stream_absorb_clears_then_timeout
+test_wait_transition_stream_absorb_returns_uncommitted_record
 test_wait_transition_reader_failure_returns_2
 test_wait_transition_bad_ack_returns_2_and_cleans_up
 test_wait_transition_clean_timeout_returns_1

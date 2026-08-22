@@ -973,7 +973,7 @@ fm_herdr_projection_workspace_label() {  # <task-id> <projection-id>
 }
 
 # fm_herdr_presentation_session_lock_path: one machine-private lock
-# path per live named Herdr session/socket, shared across every Firstmate home
+# path per named Herdr session, shared across every Firstmate home
 # that uses that session.
 # The path is never under any one home's state/ and secondmates never write the
 # primary home. Returns non-zero when the named session's socket cannot be
@@ -1017,8 +1017,8 @@ fm_herdr_presentation_lock_namespace_valid() {
 # or empty path. An unresolvable directory is left as-is rather than treated as
 # a failure, so a socket whose directory was removed still compares by its own
 # literal path. Single owner for every socket-identity comparison in this
-# integration (the presentation session lock and the launcher-identity same-session
-# proof both use it).
+# integration, including presentation reachability and launcher same-session
+# proof.
 fm_herdr_canonical_socket_path() {  # <socket-path>
   local socket=$1 sock_dir sock_base
   [ -n "$socket" ] || return 1
@@ -1055,10 +1055,11 @@ fm_herdr_presentation_session_lock_path() {  # <session>
   local session=$1 socket key dir hash
   [ -n "$session" ] || return 1
   socket=$(fm_herdr_presentation_session_socket_path "$session") || return 1
+  [ -n "$socket" ] || return 1
   if command -v shasum >/dev/null 2>&1; then
-    hash=$(printf '%s\0%s' "$session" "$socket" | shasum -a 256 2>/dev/null | awk '{print $1}')
+    hash=$(printf '%s' "$session" | shasum -a 256 2>/dev/null | awk '{print $1}')
   elif command -v sha256sum >/dev/null 2>&1; then
-    hash=$(printf '%s\0%s' "$session" "$socket" | sha256sum 2>/dev/null | awk '{print $1}')
+    hash=$(printf '%s' "$session" | sha256sum 2>/dev/null | awk '{print $1}')
   else
     return 1
   fi
@@ -1076,7 +1077,7 @@ fm_herdr_presentation_session_lock_path() {  # <session>
 }
 
 fm_herdr_with_live_task_endpoint() {  # <meta-file> <task-id> <callback> [args...]
-  local meta=$1 id=$2 callback=$3 target session lock_path verified_lock_path
+  local meta=$1 id=$2 callback=$3 target session lock_path
   shift 3
   fm_herdr_validate_task_endpoint "$meta" "$id" || return 2
   target=$FM_HERDR_VALIDATED_TARGET
@@ -1095,11 +1096,6 @@ fm_herdr_with_live_task_endpoint() {  # <meta-file> <task-id> <callback> [args..
     while [ "$attempt" -lt "${FM_HERDR_LIVE_LOCK_ATTEMPTS:-50}" ]; do
       if fm_lock_try_acquire "$lock_path"; then
         trap 'fm_lock_release "$lock_path" || true' EXIT
-        verified_lock_path=$(fm_herdr_presentation_session_lock_path "$session") || return 2
-        [ "$verified_lock_path" = "$lock_path" ] || {
-          echo "REFUSED: Herdr session identity changed while authorizing task $id; preserving task state and nothing was changed." >&2
-          return 2
-        }
         fm_herdr_validate_live_task_endpoint "$meta" "$id" || return 2
         [ "$FM_HERDR_VALIDATED_TARGET" = "$target" ] || {
           echo "REFUSED: Herdr endpoint metadata changed while authorizing task $id; preserving task state and nothing was changed." >&2
@@ -3429,11 +3425,11 @@ fm_herdr_list_live() {  # <session>
 # docs/herdr-session path.md "Native pane.agent_status_changed push escalation").
 # fm_herdr_wait_transition is the watcher's bounded wait primitive for
 # herdr homes: instead of a blind sleep, it blocks on herdr's native event
-# stream and returns the instant a subscribed pane transitions to `blocked`, so
+# stream and returns the instant a subscribed pane changes dedupe state, so
 # a crew waiting on the human wakes its supervisor sub-second instead of after
 # the ~240s stale-pane wedge timer. Everything not `blocked` is streamed too
 # (the policy, not the subscription, makes `blocked` the sole immediate action)
-# so `working` edges clear the per-pane dedupe marker. Polling stays the
+# so a validated `working` edge can clear the per-pane dedupe marker. Polling stays the
 # permanent fail-closed backstop: below-capability, a connect/subscribe failure,
 # or a missing reader all fall back to the caller sleeping the same budget.
 
@@ -3542,6 +3538,21 @@ fm_herdr_apply_transition() {  # <state_dir> <session> <record>
   return 1
 }
 
+fm_herdr_transition_candidate() {  # <state_dir> <session> <record>
+  local state=$1 session=$2 record=$3 pane_id to action window marker
+  pane_id=$(fm_herdr_transition_pane_id "$record")
+  [ -n "$pane_id" ] || return 1
+  to=$(fm_herdr_transition_to_status "$record")
+  action=$(fm_herdr_transition_policy "$to")
+  window="$session:$pane_id"
+  marker=$(fm_herdr_escalation_marker "$state" "$window")
+  case "$action" in
+    actionable) [ -e "$marker" ] || { printf '%s' "$record"; return 0; } ;;
+    absorb) [ ! -e "$marker" ] || { printf '%s' "$record"; return 0; } ;;
+  esac
+  return 1
+}
+
 fm_herdr_commit_transition() {  # <state_dir> <session> <record>
   local state=$1 session=$2 record=$3 pane_id window marker
   pane_id=$(fm_herdr_transition_pane_id "$record")
@@ -3559,8 +3570,8 @@ fm_herdr_clear_transition() {  # <state_dir> <window>
 }
 
 # fm_herdr_wait_transition: the bounded event wait. Blocks up to
-# <timeout_secs> for one of <pane_window...> ("<session>:<pane_id>") to reach a
-# fresh `blocked` edge, then prints the normalized record and returns 0.
+# <timeout_secs> for one of <pane_window...> ("<session>:<pane_id>") to produce
+# a dedupe-changing transition, then prints the normalized record and returns 0.
 # Returns 1 on a clean timeout (the reader ran the full budget, no fresh
 # actionable edge - the caller has effectively already slept and just continues)
 # and 2 when the event path is unusable (not capable, socket unresolved, reader
@@ -3631,7 +3642,7 @@ fm_herdr_wait_transition() {  # <session> <timeout_secs> <state_dir> <pane_windo
       raw=$(fm_herdr_agent_status_raw "$session" "$pane_id")
       [ -n "$raw" ] || continue
       record=$(fm_herdr_normalize_event "$pane_id" "" "$raw" "")
-      if hit=$(fm_herdr_apply_transition "$state" "$session" "$record"); then
+      if hit=$(fm_herdr_transition_candidate "$state" "$session" "$record"); then
         printf '%s' "$hit"
         rc=0
         break
@@ -3654,7 +3665,7 @@ fm_herdr_wait_transition() {  # <session> <timeout_secs> <state_dir> <pane_windo
     agent=$(printf '%s' "$line" | cut -f4)
     [ -n "$pane_id" ] || continue
     record=$(fm_herdr_normalize_event "$pane_id" "$ws" "$status" "$agent")
-    if hit=$(fm_herdr_apply_transition "$state" "$session" "$record"); then
+    if hit=$(fm_herdr_transition_candidate "$state" "$session" "$record"); then
       printf '%s' "$hit"
       rc=0
       break

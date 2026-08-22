@@ -167,6 +167,32 @@ pass "event_wait_or_sleep: returned transitions are revalidated before acknowled
 
 reset_state
 write_endpoint_meta tk3 default:wG:pQ ship
+marker=$(fm_herdr_escalation_marker "$STATE_DIR" default:wG:pQ)
+: > "$marker"
+# shellcheck disable=SC2329 # Runtime overrides called by the isolated watcher.
+fm_herdr_events_capable() { return 0; }
+# shellcheck disable=SC2329 # Runtime overrides called by the isolated watcher.
+fm_herdr_wait_transition() {
+  printf 'wG:pQ\twG:t-foreign\twG\n' > "$ENDPOINT_MAP"
+  mkrec wG:pQ working
+}
+event_wait_or_sleep
+[ -e "$marker" ] || fail "an unvalidated working transition cleared the task's dedupe marker"
+pass "event_wait_or_sleep: foreign working transitions cannot mutate dedupe state"
+
+reset_state
+write_endpoint_meta tk3 default:wG:pQ ship
+# shellcheck disable=SC2329 # Runtime overrides called by the isolated watcher.
+fm_herdr_events_capable() { return 0; }
+# shellcheck disable=SC2329 # Runtime overrides called by the isolated watcher.
+fm_herdr_wait_transition() { fm_herdr_transition_record wG:pQ "" "" blocked pi; }
+event_wait_or_sleep
+[ -s "$WAKE_LOG" ] || fail "a live-validated level reconcile did not reach supervision"
+[ -e "$STATE_DIR/.wake-queue" ] || fail "a live-validated level reconcile was not durably queued"
+pass "event_wait_or_sleep: level reconciliation accepts live component identity"
+
+reset_state
+write_endpoint_meta tk3 default:wG:pQ ship
 printf 'wG:pQ\twG:t-foreign\twG\n' > "$ENDPOINT_MAP"
 # shellcheck disable=SC2329 # Runtime override called by the isolated watcher.
 fm_herdr_events_capable() { return 0; }

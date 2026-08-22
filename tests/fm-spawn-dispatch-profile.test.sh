@@ -319,6 +319,24 @@ test_active_dispatch_profile_allows_explicit_harness() {
   pass "active crew-dispatch profile allows an explicit resolved harness"
 }
 
+test_launch_delivery_holds_endpoint_lock() {
+  local rec id out status expected_lock
+  id=profile-launch-lock-z13b
+  rec=$(make_spawn_case profile-launch-lock pi "$id")
+  read_case_record "$rec"
+  expected_lock=$(PATH="$FAKEBIN_DIR:$PATH" HERDR_SESSION=lab \
+    bash -c '. "$1/bin/fm-herdr.sh"; fm_herdr_presentation_session_lock_path lab' _ "$ROOT") \
+    || fail "could not resolve the spawn presentation lock"
+  out=$(FM_FAKE_HERDR_EXPECTED_LOCK="$expected_lock" \
+    run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" pi)
+  status=$?
+  expect_code 0 "$status" "spawn delivery should retain its endpoint authorization lock: $out"
+  assert_present "$HOME_DIR/state/$id.meta" "locked spawn delivery did not publish metadata"
+  assert_contains "$(cat "$LAUNCH_LOG")" "FM_WORKER_LIFECYCLE_CONTEXT=" \
+    "locked spawn delivery did not type the Pi launch"
+  pass "spawn delivery retains endpoint authorization through Enter"
+}
+
 test_active_dispatch_profile_allows_positional_harness() {
   local rec id out status
   id=profile-positional-z14
@@ -521,6 +539,7 @@ test_unresolvable_relative_overrides_fail_loudly
 test_active_dispatch_profile_requires_explicit_harness_for_ship
 test_active_dispatch_profile_requires_explicit_harness_for_scout
 test_active_dispatch_profile_allows_explicit_harness
+test_launch_delivery_holds_endpoint_lock
 test_active_dispatch_profile_allows_positional_harness
 test_production_spawn_rejects_raw_launch_command
 test_pi_threads_model_and_max_effort

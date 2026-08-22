@@ -21,7 +21,7 @@ case "${1:-} ${2:-}" in
     count=$((count + 1))
     [ -z "${FM_HERDR_SESSION_LIST_COUNT:-}" ] || printf '%s' "$count" > "$FM_HERDR_SESSION_LIST_COUNT"
     socket=herdr.sock
-    [ "${FM_HERDR_RESTART_AFTER_LOCK_RESOLUTION:-0}" != 1 ] || [ "$count" -le 1 ] || socket=herdr-restarted.sock
+    [ "${FM_HERDR_REPLACEMENT_SESSION:-0}" != 1 ] || socket=herdr-restarted.sock
     printf '{"sessions":[{"name":"%s","running":true,"socket_path":"%s/%s"}]}\n' "${HERDR_SESSION:-lab}" "${FM_HOME:-/tmp}" "$socket"
     ;;
   "pane get")
@@ -100,20 +100,24 @@ test_live_identity_is_rechecked_under_send_lock() {
   pass "fm-send strict: live identity stays authorized through the locked send"
 }
 
-test_session_identity_is_rechecked_under_send_lock() {
-  local home=$TMP_ROOT/session-restart fb log out
+test_session_replacement_uses_stable_send_lock() {
+  local home=$TMP_ROOT/session-restart fb log expected_lock
   mkdir -p "$home/state"; fb=$(make_stubs "$home"); log=$home/herdr.log; : > "$log"
   write_meta "$home" lane-restart
+  expected_lock=$(PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" HERDR_SESSION=lab \
+    FM_HERDR_LOG="$log" FM_HERDR_STATE="$home/herdr.state" \
+    bash -c '. "$1/bin/fm-herdr.sh"; fm_herdr_presentation_session_lock_path lab' _ "$ROOT") \
+    || fail "could not resolve the pre-restart presentation lock"
+  export FM_EXPECTED_LOCK="$expected_lock"
   : > "$home/session-list-count"
-  out=$(FM_HERDR_RESTART_AFTER_LOCK_RESOLUTION=1 \
+  FM_EXPECTED_LOCK="$expected_lock" FM_HERDR_REPLACEMENT_SESSION=1 \
     FM_HERDR_SESSION_LIST_COUNT="$home/session-list-count" \
-    run_send "$home" "$fb" "$log" lane-restart 'do not deliver' 2>&1) \
-    && fail "send controlled a replacement session under its predecessor's lock"
-  assert_contains "$out" "session identity changed while authorizing" \
-    "send did not explain its session-restart refusal"
-  assert_not_contains "$(cat "$log")" 'pane send-text' \
-    "send reached the replacement session under a stale lock"
-  pass "fm-send strict: session identity stays bound to the held lock"
+    run_send "$home" "$fb" "$log" lane-restart 'deliver once' >/dev/null 2>&1 \
+    || fail "send lost stable serialization when its named session socket changed"
+  assert_contains "$(cat "$log")" 'pane send-text w1:p1 deliver once' \
+    "send did not deliver under the stable named-session lock"
+  unset FM_EXPECTED_LOCK
+  pass "fm-send strict: session replacement retains one authorization lock"
 }
 
 test_ambiguous_or_foreign_metadata_refuses() {
@@ -230,7 +234,7 @@ test_explicit_exact_target_and_key() {
 
 test_exact_id_send
 test_live_identity_is_rechecked_under_send_lock
-test_session_identity_is_rechecked_under_send_lock
+test_session_replacement_uses_stable_send_lock
 test_ambiguous_or_foreign_metadata_refuses
 test_duplicate_endpoint_owners_refuse
 test_cross_component_identity_refuses

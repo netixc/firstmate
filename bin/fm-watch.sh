@@ -687,8 +687,9 @@ event_wait_or_sleep() {
   rec=$(FM_HERDR_EVENTS_CAPABILITY_CONFIRMED=1 \
     fm_herdr_wait_transition "$first_session" "$POLL" "$STATE" "${windows[@]}")
   rc=$?
-  if [ "$rc" -eq 0 ] && ! _fm_watch_validate_transition "$first_session" "$STATE" "$rec"; then
-    rc=1
+  if [ "$rc" -eq 0 ]; then
+    rec=$(_fm_watch_apply_transition "$first_session" "$STATE" "$rec")
+    rc=$?
   fi
   case "$rc" in
     0)
@@ -721,18 +722,27 @@ _fm_watch_validate_wait_windows() {
   done
 }
 
-_fm_watch_validate_transition() {
+_fm_watch_apply_transition_locked() {
+  local target=$1 session=$2 state=$3 rec=$4 workspace pane
+  workspace=$(fm_herdr_transition_workspace_id "$rec")
+  pane=${target#*:}
+  [ "$pane" != "$target" ] || return 2
+  [ -z "$workspace" ] || [ "${pane%%:*}" = "$workspace" ] || return 2
+  fm_herdr_apply_transition "$state" "$session" "$rec"
+}
+
+_fm_watch_apply_transition() {
   local session=$1 state=$2 rec=$3 pane workspace window meta task
   pane=$(fm_herdr_transition_pane_id "$rec")
   workspace=$(fm_herdr_transition_workspace_id "$rec")
-  [ -n "$pane" ] && [ -n "$workspace" ] || return 2
+  [ -n "$pane" ] || return 2
   window="$session:$pane"
-  [ "${pane%%:*}" = "$workspace" ] || return 2
+  [ -z "$workspace" ] || [ "${pane%%:*}" = "$workspace" ] || return 2
   meta=$(fm_endpoint_meta_for_target "$window" "$state" 2>/dev/null) || return 2
   task=${meta##*/}
   task=${task%.meta}
   fm_herdr_with_live_task_endpoint "$meta" "$task" \
-    _fm_watch_live_identity_only >/dev/null 2>&1
+    _fm_watch_apply_transition_locked "$session" "$state" "$rec" 2>/dev/null
 }
 
 # --- Main entry: the runtime below runs only when this file is executed as a

@@ -506,12 +506,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 131913 316
-bin 54574 127
-tests 56967 118
+all 132009 316
+bin 54604 127
+tests 57033 118
 pi 2045 9
 agents 562
-added=6614 deleted=31905 net=-25291
+added=6740 deleted=31935 net=-25195
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,291 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,195 lines smaller.
