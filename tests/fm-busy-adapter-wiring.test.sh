@@ -125,7 +125,7 @@ test_context_validation() {
   assert_inert "" absent
 
   dir="$CASE/invalid"
-  mkdir -p "$dir/malformed" "$dir/symlink" "$dir/nonregular" "$dir/inconsistent"
+  mkdir -p "$dir/malformed" "$dir/symlink" "$dir/nonregular" "$dir/inconsistent" "$dir/unsupported"
   meta="$dir/malformed/$ID.meta"
   printf 'not metadata\n' > "$meta"
   assert_inert "$meta" malformed
@@ -144,6 +144,12 @@ test_context_validation() {
   printf '%s\n' "$gen" > "$dir/inconsistent/$ID.busy-gen"
   perl -pi -e 's/^busy_gen=.*/busy_gen=wrong-generation/' "$meta"
   assert_inert "$meta" inconsistent
+
+  meta="$dir/unsupported/$ID.meta"
+  cp "$CONTEXT" "$meta"
+  printf '%s\n' "$gen" > "$dir/unsupported/$ID.busy-gen"
+  printf 'harness=legacy-agent\n' >> "$meta"
+  assert_inert "$meta" unsupported-runtime
   pass "worker lifecycle context is absent by default and rejects unsafe or inconsistent inputs"
 }
 

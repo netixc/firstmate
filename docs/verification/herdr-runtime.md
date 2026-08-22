@@ -639,7 +639,21 @@ fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
 fm-doc-audience-check: ok surfaces=51 local_links=166
 ```
 
-Strict tracked-extension checking used TypeScript 5.9.3:
+The final selector-free Pi lifecycle and supervision-language rerun used:
+
+```sh
+tests/fm-busy-adapter-wiring.test.sh && tests/fm-pi-primary-types.test.sh && bin/fm-doc-audience-check.sh && git diff --check
+```
+
+```text
+ok - tracked Pi lifecycle preserves busy, idle, turn-end, ordering, and stale-generation behavior
+ok - worker lifecycle context is absent by default and rejects unsafe or inconsistent inputs
+all fm-busy-adapter-wiring tests passed
+skip: tsc not found for Pi extension typecheck
+fm-doc-audience-check: ok surfaces=51 local_links=166
+```
+
+The skipped typecheck component was then completed with TypeScript 5.9.3:
 
 ```sh
 npm install --silent --no-audit --no-fund --prefix .review-typescript typescript@5.9.3
@@ -677,12 +691,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 131816 313
+all 131838 313
 bin 54275 126
-tests 57123 117
-pi 2045 9
+tests 57129 117
+pi 2047 9
 agents 559
-added=8130 deleted=33518 net=-25388
+added=8161 deleted=33527 net=-25366
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,388 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,366 lines smaller.
