@@ -3381,6 +3381,21 @@ test_send_text_submit_enter_failure_is_send_failed() {
   pass "fm_herdr_send_text_submit: Enter transport failure is never promoted to confirmation uncertainty"
 }
 
+test_send_text_submit_later_enter_failure_stays_unconfirmed() {
+  local dir log resp fb out enter_count
+  dir="$TMP_ROOT/submit-later-enter-fail"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
+  printf '{"result":{"agent":{"agent_status":"working"}}}\n' > "$resp/2.out"
+  printf '╭─────╮\n│ ❯ queued │\n╰─────╯\n' > "$resp/4.out"
+  printf '1\n' > "$resp/5.exit"
+  fb=$(make_herdr_fakebin "$dir")
+  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SUBMIT_POLLS=1 \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_send_text_submit default:w1:p2 "x" 3 0.01 0.01' "$ROOT" )
+  [ "$out" = pending ] || fail "send_text_submit should preserve unconfirmed submission after a later Enter failure, got '$out'"
+  enter_count=$(grep -c $'\x1f''pane'$'\x1f''send-keys'$'\x1f''w1:p2'$'\x1f''enter' "$log")
+  [ "$enter_count" -eq 2 ] || fail "send_text_submit should attempt only the initial and failed retry Enter, sent $enter_count Enter(s)"
+  pass "fm_herdr_send_text_submit: a later Enter failure preserves the earlier successful submission attempt"
+}
+
 test_send_text_submit_unknown_on_capture_failure() {
   local dir log resp fb out enter_count
   dir="$TMP_ROOT/submit-read-fail"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
@@ -4099,6 +4114,7 @@ test_send_text_submit_confirms_blocked_after_enter
 test_send_text_submit_slow_transition_within_one_enter_needs_no_extra_enter
 test_send_text_submit_send_failed
 test_send_text_submit_enter_failure_is_send_failed
+test_send_text_submit_later_enter_failure_stays_unconfirmed
 test_send_text_submit_unknown_on_capture_failure
 test_scripts_route_explicit_target_through_herdr_meta
 test_normalize_event_leaves_from_empty

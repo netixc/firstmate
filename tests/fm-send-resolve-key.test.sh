@@ -27,6 +27,8 @@ set -u
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-marker-lib.sh"
+# shellcheck source=/dev/null
+. "$ROOT/bin/fm-pending-reply-lib.sh"
 
 SEND="$ROOT/bin/fm-send.sh"
 DRAIN="$ROOT/bin/fm-wake-drain.sh"
@@ -494,6 +496,31 @@ test_remote_transport_failure_does_not_close() {
   pass "fm-send --resolve-key: a failed remote transport never closes the decision"
 }
 
+test_remote_unconfirmed_send_stays_unconfirmed() {
+  local dir fb log home ssh_log rc out rec
+  dir="$TMP_ROOT/remote-unconfirmed"; mkdir -p "$dir"
+  fb=$(make_stubs "$dir"); log="$dir/send.log"; ssh_log="$dir/ssh.log"; : > "$ssh_log"
+  home=$(setup_remote_home remote-unconfirmed)
+  printf 'needs-decision [key=queue-proof]: accept only exact confirmation\n' > "$home/state/rsm.status"
+
+  out=$(env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" \
+    FM_SEND_LOG="$log" FM_SEND_SETTLE=0 FM_SSH_BIN="$fb/fake-ssh" FM_SSH_LOG="$ssh_log" FM_FAKE_SSH_RC=3 \
+    "$SEND" rsm --resolve-key queue-proof "keep the decision open" 2>&1); rc=$?
+  expect_code 3 "$rc" "a remote inner exit 3 must cross the boundary unchanged"
+  assert_contains "$out" 'submission is unconfirmed' \
+    "the remote unconfirmed result was promoted to delivery success"
+  if grep -F 'resolved' "$home/state/rsm.status" >/dev/null; then
+    fail "a remote unconfirmed send closed its decision: $(cat "$home/state/rsm.status")"
+  fi
+  rec=$(find "$home/state/pending-replies" -type f ! -name '.*' -print -quit)
+  [ -n "$rec" ] || fail "remote unconfirmed send discarded its pending-reply record"
+  [ -z "$(fm_pending_reply_get "$rec" delivered_epoch)" ] \
+    || fail "remote unconfirmed send marked pending-reply delivery confirmed"
+  [ "$(fm_pending_reply_get "$rec" phase)" = awaiting_report ] \
+    || fail "remote unconfirmed send did not keep its pending reply armed"
+  pass "fm-send remote: unconfirmed submission stays exit 3 without committing delivery"
+}
+
 test_flag_misuse_refuses() {
   local dir fb log home err rc
   dir="$TMP_ROOT/misuse"; mkdir -p "$dir"
@@ -553,4 +580,5 @@ test_historical_remote_route_remains_compatible
 test_providerless_remote_route_is_preserved
 test_remote_reply_corr_tag_does_not_block_resolve_key
 test_remote_transport_failure_does_not_close
+test_remote_unconfirmed_send_stays_unconfirmed
 test_flag_misuse_refuses

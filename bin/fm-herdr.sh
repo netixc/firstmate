@@ -3324,7 +3324,7 @@ fm_herdr_composer_state() {  # <target> -> empty|pending|pending-unproven|unknow
 # Enter transport is uncertainty rather than failed submission; an Enter
 # transport error is send-failed and can never enter that uncertainty path.
 fm_herdr_send_text_submit() {  # <target> <text> <retries> <enter-sleep> <settle>
-  local target=$1 text=$2 retries=$3 sleep_s=$4 settle=$5 i=0 verdict baseline confirm_sleep
+  local target=$1 text=$2 retries=$3 sleep_s=$4 settle=$5 i=0 verdict baseline confirm_sleep enter_sent=0
   local raw_status
   fm_herdr_parse_target "$target" || { printf 'unknown'; return 0; }
   fm_herdr_send_literal "$target" "$text" || { printf 'send-failed'; return 0; }
@@ -3333,7 +3333,12 @@ fm_herdr_send_text_submit() {  # <target> <text> <retries> <enter-sleep> <settle
   baseline=$(fm_herdr_classify_submit_agent_status "$raw_status")
   confirm_sleep=$(fm_herdr_submit_confirm_budget "$sleep_s")
   while :; do
-    fm_herdr_send_key "$target" Enter || { printf 'send-failed'; return 0; }
+    if fm_herdr_send_key "$target" Enter; then
+      enter_sent=1
+    else
+      [ "$enter_sent" = 1 ] && printf 'pending' || printf 'send-failed'
+      return 0
+    fi
     if [ "$baseline" = idle ]; then
       verdict=$(fm_herdr_wait_for_working "$FM_HERDR_SESSION" "$FM_HERDR_PANE" \
         "$confirm_sleep" "$FM_HERDR_SUBMIT_POLLS")

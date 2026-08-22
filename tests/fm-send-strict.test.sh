@@ -61,7 +61,11 @@ case "${1:-} ${2:-}" in
     fi
     ;;
   "pane send-keys")
+    enter_count=$(cat "$FM_HOME/enter-count" 2>/dev/null || printf 0)
+    enter_count=$((enter_count + 1))
+    printf '%s' "$enter_count" > "$FM_HOME/enter-count"
     [ "${FM_HERDR_ENTER_FAIL:-0}" != 1 ] || exit 1
+    [ -z "${FM_HERDR_ENTER_FAIL_AFTER:-}" ] || [ "$enter_count" -le "$FM_HERDR_ENTER_FAIL_AFTER" ] || exit 1
     : > "$FM_HERDR_STATE"
     ;;
   "pane read")
@@ -101,6 +105,7 @@ run_send() { # <home> <fakebin> <log> <args...>
     FM_HERDR_BUSY_BASELINE="${FM_HERDR_BUSY_BASELINE:-0}" \
     FM_HERDR_BUSY_PENDING="${FM_HERDR_BUSY_PENDING:-0}" \
     FM_HERDR_ENTER_FAIL="${FM_HERDR_ENTER_FAIL:-0}" \
+    FM_HERDR_ENTER_FAIL_AFTER="${FM_HERDR_ENTER_FAIL_AFTER:-}" \
     FM_HERDR_LITERAL_FAIL="${FM_HERDR_LITERAL_FAIL:-0}" \
     FM_HERDR_LIVE_LOCK_ATTEMPTS="${FM_HERDR_LIVE_LOCK_ATTEMPTS:-50}" \
     "$SEND" "$@"
@@ -159,6 +164,25 @@ test_busy_pending_is_unconfirmed_without_retyping() {
   [ "$sends" -eq 1 ] && [ "$enters" -eq 3 ] \
     || fail "busy pending submit must type once and retry only Enter (text=$sends enter=$enters)"
   pass "fm-send strict: pending composer confirmation never retypes the steer"
+}
+
+test_later_enter_failure_preserves_unconfirmed_submission() {
+  local home=$TMP_ROOT/later-enter-fail fb log out rc sends enters
+  mkdir -p "$home/state"; fb=$(make_stubs "$home"); log=$home/herdr.log; : > "$log"
+  write_meta "$home" lane-later-enter
+  out=$(FM_HERDR_BUSY_BASELINE=1 FM_HERDR_BUSY_PENDING=1 FM_HERDR_ENTER_FAIL_AFTER=1 \
+    run_send "$home" "$fb" "$log" lane-later-enter 'one attempted steer' 2>&1)
+  rc=$?
+  expect_code 3 "$rc" "a later Enter retry failure must preserve delivered-but-unconfirmed status"
+  assert_contains "$out" 'submission is unconfirmed (verdict=pending' \
+    "a later Enter retry failure lost the earlier successful submission attempt"
+  assert_not_contains "$out" 'text not sent' \
+    "a later Enter retry failure claimed the earlier submission attempt never happened"
+  sends=$(grep -c 'pane send-text w1:p1 one attempted steer' "$log")
+  enters=$(grep -c 'pane send-keys w1:p1 enter' "$log")
+  [ "$sends" -eq 1 ] && [ "$enters" -eq 2 ] \
+    || fail "later Enter failure must type once and attempt Enter twice (text=$sends enter=$enters)"
+  pass "fm-send strict: a failed Enter retry cannot erase an earlier successful attempt"
 }
 
 test_transport_failures_are_not_unconfirmed_delivery() {
@@ -391,6 +415,7 @@ test_explicit_target_uses_bound_transport() {
 test_exact_id_send
 test_busy_unknown_is_truthful_unconfirmed
 test_busy_pending_is_unconfirmed_without_retyping
+test_later_enter_failure_preserves_unconfirmed_submission
 test_transport_failures_are_not_unconfirmed_delivery
 test_concurrent_send_refuses_before_injection
 test_live_identity_is_rechecked_under_send_lock
