@@ -1,0 +1,11 @@
+$ FM_BACKEND=tmux bin/fm-fleet-snapshot.sh --json
+error: tmux session support is retired; FM_BACKEND cannot select tmux. Run Pi on Herdr and remove the tmux selection.
+exit=1 state_entries=0
+
+$ TMUX=/tmp/tmux-legacy bin/fm-peek.sh task-a
+error: tmux session execution is retired; leave the tmux environment and run Pi on Herdr.
+exit=1 state_entries=0
+
+$ bin/fm-spawn.sh task-a . --scout --backend tmux
+error: tmux session support is retired; --backend tmux is unsupported. Run Pi on Herdr and remove the option.
+exit=1 state_entries=0

@@ -1,0 +1,19 @@
+$ tests/fm-herdr-selection.test.sh
+ok - runtime selection: absent or explicit Herdr uses the sole path
+ok - runtime selection: tmux and unknown choices stop without fallback
+ok - away-mode start rejects tmux before state mutation
+ok - spawn: retired --backend tmux stops before mutation
+ok - public Herdr control paths reject tmux execution environments
+ok - direct Herdr entrypoints reject tmux before reads or mutations
+All Herdr selection tests passed.
+
+$ tests/fm-teardown-endpoint-safety.test.sh
+ok - cleanup identity accepts exact current Herdr metadata
+ok - missing, duplicate, malformed, mismatched, and legacy identity all refuse
+ok - unreachable and ambiguous Herdr stop cleanup with durable records intact
+ok - teardown revalidates live Herdr identity after acquiring its presentation lock
+
+$ tests/fm-herdr-transition.test.sh
+ok - event reader subscribes to the requested pane through Herdr's executable wire interface
+ok - event reader emits only normalized four-field Herdr transition records
+# fm-herdr-transition.test.sh: all assertions passed

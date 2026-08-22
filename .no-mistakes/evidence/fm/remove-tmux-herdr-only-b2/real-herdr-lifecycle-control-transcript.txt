@@ -1,0 +1,13 @@
+$ tests/fm-herdr-default-smoke.test.sh
+ok - real Herdr: fm-spawn.sh uses Herdr with no runtime selection
+ok - real herdr: default Herdr spawn records explicit backend=herdr and herdr_session/workspace/tab/pane fields in meta
+ok - real herdr: the default Herdr spawn's launch command actually ran in the herdr pane
+ok - real herdr: teardown completes the default Herdr spawn/teardown cycle (meta cleared, pane closed)
+ok - real herdr: isolated lab session removed and default fleet session unchanged
+
+$ tests/fm-control-herdr-smoke.test.sh
+ok - real herdr: exit on a pane with no registered agent is idempotent success
+ok - real herdr: interrupt refuses when herdr's own agent registry reports no agent
+ok - real herdr: interrupt delivers the harness's key and proves the agent survived it
+ok - real herdr: no control verb removed the endpoint or the task's local copy
+ok - real herdr: an agent that does not stop fails closed instead of being reported as stopped
