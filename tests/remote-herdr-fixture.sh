@@ -48,9 +48,18 @@ require_delivery_lock() {
     return 1
   }
   [ "${FM_FAKE_HERDR_REQUIRE_BOUND:-0}" != 1 ] || {
-    [ -n "${HERDR_SOCKET_PATH:-}" ] && [ -e "$HERDR_SOCKET_PATH" ] \
-      && [ "$HERDR_SOCKET_PATH" -ef "$SOCKET" ] || {
+    [ -n "${FM_HERDR_AUTHORIZED_SOCKET:-}" ] && [ -e "$FM_HERDR_AUTHORIZED_SOCKET" ] \
+      && [ "$FM_HERDR_AUTHORIZED_SOCKET" -ef "$SOCKET" ] || {
       printf 'delivery transport is not bound to the authorized Herdr socket\n' >&2
+      return 1
+    }
+  }
+}
+require_bound_read() {
+  [ "${FM_FAKE_HERDR_REQUIRE_BOUND_READ:-0}" != 1 ] || {
+    [ -n "${FM_HERDR_AUTHORIZED_SOCKET:-}" ] && [ -e "$FM_HERDR_AUTHORIZED_SOCKET" ] \
+      && [ "$FM_HERDR_AUTHORIZED_SOCKET" -ef "$SOCKET" ] || {
+      printf 'read transport is not bound to the authorized Herdr socket\n' >&2
       return 1
     }
   }
@@ -95,9 +104,11 @@ case "${1:-} ${2:-}" in
   "pane list")
     jq_state --arg w "$ws" '{result:{panes:[.tabs[]|select(.workspace_id==$w)|{pane_id:.pane_id, tab_id:.tab_id}]}}' ;;
   "pane get")
+    require_bound_read || exit 1
     pane=${3:-}
     if [ "$(jq_state -r --arg p "$pane" '[.tabs[]|select(.pane_id==$p)]|length')" = 0 ]; then
       printf '{"error":{"code":"pane_not_found","message":"%s"}}\n' "$pane"
+      exit 1
     else
       pane_cwd=${FM_FAKE_HERDR_PANE_PATH:-}
       if [ -n "${FM_FAKE_HERDR_PANE_COUNTFILE:-}" ]; then
@@ -116,6 +127,7 @@ case "${1:-} ${2:-}" in
     fi
     ;;
   "pane close")
+    require_bound_read || exit 1
     jq_state --arg p "${3:-}" \
       '.tabs |= [.[]|select(.pane_id != $p)]
        | .typed |= with_entries(select(.key != $p))

@@ -9,10 +9,7 @@
 #   - exact task id through explicit FM_HOME receives exactly one marker;
 #   - direct terminal input remains unmarked.
 #
-# Every Herdr call, including calls made inside the production backend adapter,
-# is routed through bin/fm-herdr-lab.sh. The PATH shim strips only the adapter's
-# already-validated trailing --session pair, then delegates to the lab helper,
-# which appends its own required trailing --session before invoking real Herdr.
+# Herdr calls route through bin/fm-herdr-lab.sh.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -32,6 +29,7 @@ for tool in git herdr jq pi; do
 done
 
 LAB_HELPER=${HERDR_LAB_HELPER:-$ROOT/bin/fm-herdr-lab.sh}
+case "$LAB_HELPER" in /*) ;; *) LAB_HELPER="$ROOT/$LAB_HELPER" ;; esac
 SESSION=$("$LAB_HELPER" name fm-send-secondmate-marker-v7)
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/fm-send-marker-herdr-e2e.XXXXXX")
 SENDER_HOME="$TMP_ROOT/sender-home"
@@ -56,10 +54,9 @@ cleanup() {
 trap cleanup EXIT
 
 mkdir -p "$SENDER_HOME/state" "$SENDER_HOME/data" "$SENDER_HOME/config" "$SENDER_HOME/projects" "$FAKEBIN"
+"$LAB_HELPER" provision "$SESSION"
 
-# Route production adapter invocations through the same guarded helper as every
-# explicit E2E probe. The helper itself runs with the original PATH, preventing
-# recursion into this shim.
+# Route production Herdr calls through the guarded lab helper.
 cat > "$FAKEBIN/herdr" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
@@ -114,7 +111,6 @@ EOF
 printf '#!/usr/bin/env bash\nexec %q -e %q "$@"\n' "$REAL_PI" "$CAPTURE_EXTENSION" > "$FAKEBIN/pi"
 chmod +x "$FAKEBIN/pi"
 
-"$LAB_HELPER" provision "$SESSION"
 PATH="$FAKEBIN:$ORIGINAL_PATH" FM_GATE_REFUSE_BYPASS=1 FM_HOME="$SENDER_HOME" HERDR_SESSION="$SESSION" \
   "$ROOT/bin/fm-spawn.sh" "$ID" "$SECOND_HOME" --secondmate >/dev/null
 

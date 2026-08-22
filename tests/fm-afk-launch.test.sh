@@ -8,80 +8,79 @@ TMP_ROOT=$(fm_test_tmproot fm-afk-launch)
 HOME_DIR=$TMP_ROOT/home
 mkdir -p "$HOME_DIR/state"
 export FM_HOME=$HOME_DIR FM_STATE_OVERRIDE=$HOME_DIR/state FM_ROOT_OVERRIDE=$ROOT
+# shellcheck source=tests/remote-herdr-fixture.sh
+. "$ROOT/tests/remote-herdr-fixture.sh"
 # shellcheck source=bin/fm-afk-launch.sh
 . "$ROOT/bin/fm-afk-launch.sh"
 
-reset_record() { rm -f "$FM_AFK_LAUNCH_RECORD"; }
-TEST_GENERATION="$HOME_DIR/herdr.sock"$'\t''1:2'
-TEST_CURRENT_GENERATION=$TEST_GENERATION
-
-fm_herdr_with_session_generation() {
-  local required=$2 callback=$4
-  shift 4
-  [ "$required" = "$TEST_CURRENT_GENERATION" ] || return 2
-  "$callback" "$@"
+setup_public_case() {
+  local name=$1 dir
+  dir=$TMP_ROOT/$name
+  mkdir -p "$dir/home/state" "$dir/fake"
+  install_remote_herdr_fixture "$dir/fake" "$dir/herdr.json" "$dir/herdr.log" \
+    "$dir/send-fail" "$dir/herdr.sock"
+  jq '.workspaces=[{workspace_id:"ws1",label:"afk",cwd:"/tmp"}]
+      | .tabs=[{tab_id:"ws1:t1",label:"afk",workspace_id:"ws1",pane_id:"ws1:p1",cwd:"/tmp"}]' \
+    "$dir/herdr.json" > "$dir/herdr.next"
+  mv "$dir/herdr.next" "$dir/herdr.json"
+  printf '%s' "$dir"
 }
 
-test_record_round_trip() {
-  reset_record
-  fm_afk_launch_record_write herdr lab:w1:p1 ws1 "$TEST_GENERATION" || fail "Herdr record write failed"
-  fm_afk_launch_record_read || fail "Herdr record read failed"
-  [ "$FM_AFK_REC_KIND" = herdr ] && [ "$FM_AFK_REC_TARGET" = lab:w1:p1 ] \
-    || fail "Herdr record identity changed"
-  [ "$FM_AFK_REC_WORKSPACE" = ws1 ] && [ "$FM_AFK_REC_GENERATION" = "$TEST_GENERATION" ] \
-    || fail "Herdr record lost its workspace or session generation"
-  pass "away launcher round-trips exact Herdr terminal and session identity"
+write_current_record() {
+  local dir=$1 identity socket
+  socket=$(fm_herdr_canonical_socket_path "$dir/herdr.sock") || fail "socket path unavailable"
+  identity=$(fm_herdr_socket_identity "$socket") || fail "socket identity unavailable"
+  printf 'herdr\tlab:ws1:p1\tws1\t%s\t%s\n' "$socket" "$identity" \
+    > "$dir/home/state/.afk-daemon-terminal"
 }
 
-test_legacy_record_is_preserved() {
-  local record before
-  for record in $'tmux\tfm-afk-old\t' $'herdr\tlab:w1:p1\tws1'; do
-    reset_record
-    printf '%s\n' "$record" > "$FM_AFK_LAUNCH_RECORD"
-    before=$(shasum -a 256 "$FM_AFK_LAUNCH_RECORD" | awk '{print $1}')
-    fm_afk_launch_record_read >/dev/null 2>&1 && fail "legacy record should refuse"
-    [ "$(shasum -a 256 "$FM_AFK_LAUNCH_RECORD" | awk '{print $1}')" = "$before" ] \
-      || fail "legacy record refusal rewrote exact identity"
+run_public_reconcile() {
+  local dir=$1
+  shift
+  FM_HOME="$dir/home" FM_STATE_OVERRIDE="$dir/home/state" FM_ROOT_OVERRIDE="$ROOT" \
+    FM_FAKE_HERDR_REQUIRE_BOUND_READ=1 PATH="$dir/fake/bin:$PATH" \
+    "$ROOT/bin/fm-afk-launch.sh" reconcile "$@"
+}
+
+test_public_generation_bound_cleanup() {
+  local dir out
+  dir=$(setup_public_case public-cleanup)
+  write_current_record "$dir"
+  out=$(run_public_reconcile "$dir" 2>&1) || fail "public reconcile refused the recorded generation: $out"
+  [ ! -e "$dir/home/state/.afk-daemon-terminal" ] || fail "public reconcile retained the closed record"
+  [ "$(jq '[.tabs[] | select(.pane_id == "ws1:p1")] | length' "$dir/herdr.json")" = 0 ] \
+    || fail "public reconcile did not close the exact Herdr pane"
+  pass "public away reconcile closes only its generation-bound Herdr terminal"
+}
+
+test_public_replacement_generation_preserves_record() {
+  local dir
+  dir=$(setup_public_case public-replacement)
+  write_current_record "$dir"
+  mv "$dir/herdr.sock" "$dir/herdr.prior.sock"
+  : > "$dir/herdr.sock"
+  run_public_reconcile "$dir" >/dev/null 2>&1 && fail "replacement generation should refuse cleanup"
+  [ -f "$dir/home/state/.afk-daemon-terminal" ] || fail "replacement generation lost the reconciliation record"
+  [ "$(jq '[.tabs[] | select(.pane_id == "ws1:p1")] | length' "$dir/herdr.json")" = 1 ] \
+    || fail "replacement generation closed the recorded pane"
+  pass "public away reconcile preserves records across Herdr replacement"
+}
+
+test_public_legacy_records_are_preserved() {
+  local dir record before out
+  dir=$(setup_public_case public-legacy)
+  for record in $'tmux\tfm-afk-old\t' $'herdr\tlab:ws1:p1\tws1'; do
+    printf '%s\n' "$record" > "$dir/home/state/.afk-daemon-terminal"
+    before=$(shasum -a 256 "$dir/home/state/.afk-daemon-terminal" | awk '{print $1}')
+    out=$(run_public_reconcile "$dir" 2>&1) && fail "legacy record should refuse public reconciliation"
+    [ "$(shasum -a 256 "$dir/home/state/.afk-daemon-terminal" | awk '{print $1}')" = "$before" ] \
+      || fail "legacy refusal rewrote exact identity"
+    case "$record" in
+      tmux*) assert_contains "$out" 'retired tmux support' "historical tmux record was not classified as retired" ;;
+      herdr*) assert_contains "$out" 'lacks session-generation identity' "historical Herdr record lost its actionable refusal" ;;
+    esac
   done
-  pass "retired away-terminal records stay intact for manual reconciliation"
-}
-
-test_confirmed_absence_retires_exact_record() {
-  reset_record
-  fm_afk_launch_record_write herdr lab:w1:p1 ws1 "$TEST_GENERATION" || fail "record write failed"
-  fm_afk_launch_record_read || fail "record read failed"
-  # shellcheck disable=SC2329
-  fm_herdr_cli() { printf '%s\n' '{"error":{"code":"pane_not_found"}}'; return 1; }
-  fm_afk_launch_close_recorded || fail "confirmed absence should retire record despite close error"
-  [ ! -e "$FM_AFK_LAUNCH_RECORD" ] || fail "confirmed absence retained record"
-  pass "generation-bound confirmed absence retires the exact terminal record"
-}
-
-test_unconfirmed_close_preserves_record() {
-  reset_record
-  fm_afk_launch_record_write herdr lab:w1:p1 ws1 "$TEST_GENERATION" || fail "record write failed"
-  fm_afk_launch_record_read || fail "record read failed"
-  # shellcheck disable=SC2329
-  fm_herdr_cli() {
-    printf '%s\n' '{"result":{"pane":{"pane_id":"w1:p1","workspace_id":"other"}}}'
-  }
-  fm_afk_launch_close_recorded >/dev/null 2>&1 && fail "unconfirmed teardown should refuse"
-  [ -f "$FM_AFK_LAUNCH_RECORD" ] || fail "unconfirmed teardown lost exact id"
-  pass "unconfirmed Herdr close preserves exact reconciliation identity"
-}
-
-test_replacement_generation_preserves_record() {
-  local calls=0
-  reset_record
-  fm_afk_launch_record_write herdr lab:w1:p1 ws1 "$TEST_GENERATION" || fail "record write failed"
-  fm_afk_launch_record_read || fail "record read failed"
-  TEST_CURRENT_GENERATION="$HOME_DIR/herdr.sock"$'\t''1:3'
-  fm_herdr_cli() { calls=$((calls + 1)); }
-  fm_afk_launch_close_recorded >/dev/null 2>&1 && fail "replacement generation should refuse cleanup"
-  [ "$calls" -eq 0 ] || fail "replacement generation reached terminal transport"
-  [ -f "$FM_AFK_LAUNCH_RECORD" ] || fail "replacement generation lost the reconciliation record"
-  TEST_CURRENT_GENERATION=$TEST_GENERATION
-  pass "away cleanup preserves records across Herdr session replacement"
+  pass "public away reconcile preserves retired records for manual reconciliation"
 }
 
 test_launcher_lock_identity() {
@@ -93,9 +92,7 @@ test_launcher_lock_identity() {
   pass "away launcher lock binds and releases exact process identity"
 }
 
-test_record_round_trip
-test_legacy_record_is_preserved
-test_confirmed_absence_retires_exact_record
-test_unconfirmed_close_preserves_record
-test_replacement_generation_preserves_record
+test_public_generation_bound_cleanup
+test_public_replacement_generation_preserves_record
+test_public_legacy_records_are_preserved
 test_launcher_lock_identity

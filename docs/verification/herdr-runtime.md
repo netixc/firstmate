@@ -770,21 +770,30 @@ fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
 fm-doc-audience-check: ok surfaces=52 local_links=168
 ```
 
-The final generation-bound spawn, away-terminal, and supervisor control rerun used:
+The final generation-bound away-terminal, supervisor, and real Pi/Herdr lifecycle rerun used:
 
 ```sh
-tests/fm-trace-context-spawn.test.sh | tail -1 && \
+set -o pipefail && \
+  lifecycle=$(FM_SEND_MARKER_HERDR_E2E=1 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
+    bash tests/fm-send-secondmate-marker-herdr-e2e.test.sh) && \
+  printf '%s\n' "$lifecycle" | grep -E '^ok - real Pi/Herdr:' && \
+  printf 'versions: ' && herdr --version && printf 'Pi ' && pi --version && \
   tests/fm-afk-launch.test.sh | tail -1 && \
   tests/fm-daemon.test.sh | tail -1 && \
-  bin/fm-lint.sh bin/fm-herdr.sh bin/fm-spawn.sh bin/fm-afk-launch.sh bin/fm-supervise-daemon.sh tests/remote-herdr-fixture.sh tests/fm-trace-context-spawn.test.sh tests/fm-afk-launch.test.sh tests/fm-daemon.test.sh && \
+  bin/fm-lint.sh bin/fm-herdr.sh bin/fm-afk-launch.sh bin/fm-supervise-daemon.sh tests/remote-herdr-fixture.sh tests/fm-afk-launch.test.sh tests/fm-daemon.test.sh tests/fm-afk-pi-herdr-return-e2e.test.sh tests/fm-send-strict.test.sh tests/fm-trace-context-spawn.test.sh && \
   bin/fm-doc-audience-check.sh && \
   git diff --check
 ```
 
 ```text
-# all fm-trace-context-spawn tests passed
+ok - real Pi/Herdr: exact-id FM_HOME send delivers exactly one from-firstmate marker
+ok - real Pi/Herdr: direct captain terminal input stays unmarked
+ok - real Pi/Herdr: lifecycle control preserves the live exact endpoint
+ok - real Pi/Herdr: teardown removes the endpoint, home, and metadata
+versions: herdr 0.8.0
+Pi 0.84.2
 ok - away launcher lock binds and releases exact process identity
-ok - daemon stops actionably and preserves buffers unless Pi is live on one Herdr generation
+ok - daemon read-only liveness ignores unrelated presentation lock contention
 fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
 fm-doc-audience-check: ok surfaces=51 local_links=166
 ```
@@ -802,12 +811,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 132140 313
-bin 54326 126
-tests 57279 117
+all 132248 313
+bin 54365 126
+tests 57339 117
 pi 2048 9
 agents 559
-added=9055 deleted=34119 net=-25064
+added=9171 deleted=34127 net=-24956
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,064 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 24,956 lines smaller.

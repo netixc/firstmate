@@ -1116,8 +1116,9 @@ fm_daemon_with_supervisor_generation() {  # <target> <session-generation> <callb
 }
 
 fm_daemon_supervisor_agent_state() {  # <target> <session-generation>
-  fm_daemon_with_supervisor_generation "$1" "$2" \
-    _fm_daemon_supervisor_agent_state_bound "$1"
+  local target=$1 generation=$2 session=${1%%:*}
+  fm_herdr_with_readonly_session_generation "$session" "$generation" \
+    "away supervisor $target" _fm_daemon_supervisor_agent_state_bound "$target"
 }
 
 # --- INJECT_SKIP prefix match (literal prefixes, no regex) ------------------
@@ -1345,7 +1346,7 @@ fm_super_main() {
     target_state=unreadable
   else
     FM_SUPERVISOR_SESSION_GENERATION=$target_generation
-    target_state=$(fm_daemon_supervisor_agent_state "$TARGET" "$target_generation" 2>/dev/null || printf unreadable)
+    target_state=$(fm_daemon_supervisor_agent_state "$TARGET" "$target_generation" 2>>"$LOG" || printf unreadable)
   fi
   if [ "$target_state" != alive ]; then
     echo "error: supervisor Herdr endpoint '$TARGET' is $target_state; start Pi on reachable Herdr and restart away mode; buffered notifications remain in $STATE" >&2
@@ -1410,7 +1411,7 @@ fm_super_main() {
   while true; do
     # --- Herdr availability guard ------------------------------------------
     target_state=$(fm_daemon_supervisor_agent_state "$TARGET" \
-      "$FM_SUPERVISOR_SESSION_GENERATION" 2>/dev/null || printf unreadable)
+      "$FM_SUPERVISOR_SESSION_GENERATION" 2>>"$LOG" || printf unreadable)
     case "$target_state" in
       alive) ;;
       *)

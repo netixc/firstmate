@@ -260,6 +260,52 @@ SH
   pass "daemon stops actionably and preserves buffers unless Pi is live on one Herdr generation"
 }
 
+test_daemon_liveness_ignores_presentation_lock_contention() {
+  local state fakebin lock_path daemon_pid out attempt
+  state=$(new_state runtime-lock-contention)
+  fakebin=${state%/state}/fakebin
+  out=$state/daemon.out
+  mkdir -p "$fakebin"
+  : > "$state/herdr.sock"
+  cat > "$fakebin/herdr" <<'SH'
+#!/usr/bin/env bash
+set -u
+case "${1:-} ${2:-}" in
+  "status --json") printf '%s\n' '{"client":{"version":"0.7.5","protocol":16},"server":{"running":true}}' ;;
+  "session list") printf '{"sessions":[{"name":"lab","running":true,"socket_path":"%s/herdr.sock"}]}\n' "$FM_STATE_OVERRIDE" ;;
+  "pane get") printf '%s\n' '{"result":{"pane":{"pane_id":"w-primary:p1"}}}' ;;
+  "agent get") printf '%s\n' '{"result":{"agent":{"agent_status":"idle"}}}' ;;
+esac
+SH
+  chmod +x "$fakebin/herdr"
+  lock_path=$(FM_STATE_OVERRIDE="$state" PATH="$fakebin:$PATH" \
+    fm_herdr_presentation_session_lock_path lab) || fail "could not resolve presentation lock"
+  fm_lock_try_acquire "$lock_path" || fail "could not hold presentation lock"
+  FM_STATE_OVERRIDE="$state" FM_HOME="${state%/state}" FM_SUPERVISOR_TARGET=lab:w-primary:p1 \
+    FM_HERDR_LIVE_LOCK_ATTEMPTS=5 PATH="$fakebin:$PATH" \
+    "$ROOT/bin/fm-supervise-daemon.sh" >"$out" 2>&1 &
+  daemon_pid=$!
+  for attempt in $(seq 1 30); do
+    grep -F 'daemon starting' "$state/.supervise-daemon.log" >/dev/null 2>&1 && break
+    kill -0 "$daemon_pid" 2>/dev/null || break
+    sleep 0.1
+  done
+  kill -0 "$daemon_pid" 2>/dev/null || {
+    fm_lock_release "$lock_path"
+    fail "healthy daemon stopped under unrelated presentation lock contention: $(cat "$out")"
+  }
+  grep -F 'daemon starting' "$state/.supervise-daemon.log" >/dev/null 2>&1 || {
+    kill -TERM "$daemon_pid" 2>/dev/null || true
+    wait "$daemon_pid" 2>/dev/null || true
+    fm_lock_release "$lock_path"
+    fail "healthy daemon did not start while presentation lock was contended"
+  }
+  kill -TERM "$daemon_pid" 2>/dev/null || true
+  wait "$daemon_pid" 2>/dev/null || true
+  fm_lock_release "$lock_path"
+  pass "daemon read-only liveness ignores unrelated presentation lock contention"
+}
+
 test_signal_classification
 test_pause_classification_and_tracking
 test_unmatched_stale_escalates_without_shared_markers
@@ -271,3 +317,4 @@ test_wedge_alarm_preserves_buffer
 test_supervisor_target_is_herdr_only
 test_stale_observation_refuses_moved_live_endpoint
 test_daemon_stops_when_herdr_is_not_live
+test_daemon_liveness_ignores_presentation_lock_contention

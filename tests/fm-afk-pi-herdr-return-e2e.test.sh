@@ -30,6 +30,7 @@ for tool in herdr jq pi python3; do
 done
 
 LAB_HELPER=${HERDR_LAB_HELPER:-$ROOT/bin/fm-herdr-lab.sh}
+case "$LAB_HELPER" in /*) ;; *) LAB_HELPER="$ROOT/$LAB_HELPER" ;; esac
 SESSION=$("$LAB_HELPER" name fm-afk-pi-return-e2e)
 TMP_ROOT=$(fm_test_tmproot fm-afk-pi-return-e2e)
 HOME_DIR="$TMP_ROOT/home"
@@ -84,8 +85,7 @@ export default function (pi: ExtensionAPI) {
 }
 EOF
 
-# Route production adapter invocations through the guarded helper too. The shim
-# removes only the adapter's validated trailing pair, then the helper appends it.
+# Route production Herdr calls through the guarded lab helper.
 cat > "$FAKEBIN/herdr" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
@@ -171,6 +171,7 @@ assert_blocker_open() {
 }
 
 CHILD_OUT=$("$LAB_HELPER" run "$SESSION" tab create --workspace "$WORKSPACE" --cwd "$PROJECT" --label fm-repair-task --no-focus)
+CHILD_TAB=$(printf '%s' "$CHILD_OUT" | jq -r '.result.tab.tab_id')
 CHILD_PANE=$(printf '%s' "$CHILD_OUT" | jq -r '.result.root_pane.pane_id')
 CHILD_TARGET="$SESSION:$CHILD_PANE"
 cat > "$STATE/repair-task.meta" <<EOF
@@ -178,8 +179,13 @@ window=$CHILD_TARGET
 backend=herdr
 kind=ship
 mode=no-mistakes
+endpoint_task_id=repair-task
+herdr_session=$SESSION
+herdr_workspace_id=$WORKSPACE
+herdr_tab_id=$CHILD_TAB
+herdr_pane_id=$CHILD_PANE
 worktree=$PROJECT
-project=synthetic-project
+project=$PROJECT
 EOF
 cat > "$HOME_DIR/data/backlog.md" <<'EOF'
 ## In flight
@@ -195,7 +201,8 @@ PATH="$FAKEBIN:$ORIGINAL_PATH" HERDR_SESSION="$SESSION" FM_HOME="$HOME_DIR" FM_S
   "$ROOT/bin/fm-afk-launch.sh" start >/dev/null
 DAEMON_STARTED=1
 for _ in $(seq 1 100); do [ -s "$STATE/.supervise-daemon.pid" ] && break; sleep 0.1; done
-[ -s "$STATE/.supervise-daemon.pid" ] || fail "away daemon did not start"
+[ -s "$STATE/.supervise-daemon.pid" ] \
+  || fail "away daemon did not start: $(cat "$STATE/.supervise-daemon.log" 2>/dev/null)"
 
 # Pending input is never an injection target. Leave a real draft in Pi before
 # the live child emits blocked:, then wait through max-defer.
@@ -206,7 +213,8 @@ composer=$(PATH="$FAKEBIN:$ORIGINAL_PATH" HERDR_SESSION="$SESSION" fm_herdr_comp
 CHILD_CMD=$(printf "printf 'blocked [key=synthetic-dependency]: firstmate can refresh the synthetic token\\n' >> %q; exec sleep 120" "$STATE/repair-task.status")
 "$LAB_HELPER" run "$SESSION" pane run "$CHILD_PANE" "$CHILD_CMD" >/dev/null
 for _ in $(seq 1 160); do [ -s "$STATE/.subsuper-inject-wedged" ] && break; sleep 0.1; done
-[ -s "$STATE/.subsuper-inject-wedged" ] || fail "persistently pending real Pi composer did not raise the defense-in-depth alarm"
+[ -s "$STATE/.subsuper-inject-wedged" ] \
+  || fail "persistently pending real Pi composer did not raise the defense-in-depth alarm: $(cat "$STATE/.supervise-daemon.log" 2>/dev/null)"
 [ -s "$STATE/.subsuper-escalations" ] || fail "pending real Pi composer lost the buffered blocker"
 [ ! -s "$CAPTURE" ] || fail "daemon submitted into Pi while the real human draft was pending"
 plain=$("$LAB_HELPER" run "$SESSION" pane read "$PRIMARY_PANE" --source recent --lines 200)
@@ -228,7 +236,7 @@ for _ in $(seq 1 80); do
 done
 [ "$composer" = empty ] || fail "genuinely idle Pi separator composer did not classify empty (got $composer)"
 wait_for_prompt 'any(.[]; .prompt | startswith("\u2063Supervisor escalate"))' \
-  || fail "real Pi did not receive the buffered escalation after becoming safely idle"
+  || fail "real Pi did not receive the buffered escalation after becoming safely idle: $(cat "$STATE/.supervise-daemon.log" 2>/dev/null)"
 INJECT_HEX=$(jq -r 'select(.prompt | startswith("\u2063Supervisor escalate")) | .hex' "$CAPTURE" | tail -1)
 case "$INJECT_HEX" in e281a3*) ;; *) fail "real Pi escalation lost the terminal-safe marker: $INJECT_HEX" ;; esac
 for _ in $(seq 1 80); do [ ! -s "$STATE/.subsuper-escalations" ] && break; sleep 0.1; done

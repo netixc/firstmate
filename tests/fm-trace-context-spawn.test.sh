@@ -52,7 +52,7 @@ run_spawn() {
   local home=$1 wt=$2 fakebin=$3 launchlog=$4
   shift 4
   : > "$launchlog"
-  env -u FM_TRACE_CONTEXT -u HERDR_ENV -u HERDR_PANE_ID -u HERDR_WORKSPACE_ID -u HERDR_TAB_ID -u HERDR_SOCKET_PATH -u TMUX -u TMUX_PANE \
+  env -u FM_TRACE_CONTEXT -u HERDR_ENV -u HERDR_PANE_ID -u HERDR_WORKSPACE_ID -u HERDR_TAB_ID -u HERDR_SOCKET_PATH -u HERDR_CLIENT_SOCKET_PATH -u TMUX -u TMUX_PANE \
     FM_ROOT_OVERRIDE='' FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
@@ -71,7 +71,7 @@ run_spawn_tc() {
   local tc=$1 home=$2 wt=$3 fakebin=$4 launchlog=$5
   shift 5
   : > "$launchlog"
-  env -u HERDR_ENV -u HERDR_PANE_ID -u HERDR_WORKSPACE_ID -u HERDR_TAB_ID -u HERDR_SOCKET_PATH -u TMUX -u TMUX_PANE FM_TRACE_CONTEXT="$tc" \
+  env -u HERDR_ENV -u HERDR_PANE_ID -u HERDR_WORKSPACE_ID -u HERDR_TAB_ID -u HERDR_SOCKET_PATH -u HERDR_CLIENT_SOCKET_PATH -u TMUX -u TMUX_PANE FM_TRACE_CONTEXT="$tc" \
     FM_ROOT_OVERRIDE='' FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
@@ -139,7 +139,7 @@ run_two_level() {
   smlog="$base/sm-launch.log"
   smfake=$(make_spawn_fakebin "$base/sm-fake")
   : > "$smlog"
-  env -u HERDR_ENV -u HERDR_PANE_ID -u HERDR_WORKSPACE_ID -u HERDR_TAB_ID -u HERDR_SOCKET_PATH -u TMUX -u TMUX_PANE FM_TRACE_CONTEXT="$penv" \
+  env -u HERDR_ENV -u HERDR_PANE_ID -u HERDR_WORKSPACE_ID -u HERDR_TAB_ID -u HERDR_SOCKET_PATH -u HERDR_CLIENT_SOCKET_PATH -u TMUX -u TMUX_PANE FM_TRACE_CONTEXT="$penv" \
     FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$prim" \
     FM_STATE_OVERRIDE="$prim/state" FM_DATA_OVERRIDE="$prim/data" \
     FM_PROJECTS_OVERRIDE="$prim/projects" FM_CONFIG_OVERRIDE="$prim/config" \
@@ -165,7 +165,7 @@ run_two_level() {
   wlog="$base/worker-launch.log"
   wfake=$(make_spawn_fakebin "$base/w-fake")
   : > "$wlog"
-  env -u HERDR_ENV -u HERDR_PANE_ID -u HERDR_WORKSPACE_ID -u HERDR_TAB_ID -u HERDR_SOCKET_PATH -u TMUX -u TMUX_PANE FM_TRACE_CONTEXT="$TL_ENV_TC" TRACEPARENT="$TL_CARRIER" \
+  env -u HERDR_ENV -u HERDR_PANE_ID -u HERDR_WORKSPACE_ID -u HERDR_TAB_ID -u HERDR_SOCKET_PATH -u HERDR_CLIENT_SOCKET_PATH -u TMUX -u TMUX_PANE FM_TRACE_CONTEXT="$TL_ENV_TC" TRACEPARENT="$TL_CARRIER" \
     FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$sm" \
     FM_STATE_OVERRIDE="$sm/state" FM_DATA_OVERRIDE="$sm/data" \
     FM_PROJECTS_OVERRIDE="$sm/projects" FM_CONFIG_OVERRIDE="$sm/config" \

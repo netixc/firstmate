@@ -178,6 +178,10 @@ fm_afk_launch_record_read() {
   IFS=$'\t' read -r FM_AFK_REC_KIND FM_AFK_REC_TARGET FM_AFK_REC_WORKSPACE \
     FM_AFK_REC_SOCKET FM_AFK_REC_SOCKET_IDENTITY \
     < "$FM_AFK_LAUNCH_RECORD" || true
+  if [ "$FM_AFK_REC_KIND" = tmux ]; then
+    fm_afk_launch_log "recorded daemon terminal uses retired tmux support; preserving its exact id for manual reconciliation"
+    return 2
+  fi
   if [ "$fields" = 3 ] && [ "$FM_AFK_REC_KIND" = herdr ]; then
     fm_afk_launch_log "recorded Herdr daemon terminal lacks session-generation identity; preserving its exact id for manual reconciliation"
     return 2
@@ -191,10 +195,6 @@ fm_afk_launch_record_read() {
   fi
   case "$FM_AFK_REC_KIND" in
     herdr) FM_AFK_REC_GENERATION="$FM_AFK_REC_SOCKET"$'\t'"$FM_AFK_REC_SOCKET_IDENTITY" ;;
-    tmux)
-      fm_afk_launch_log "recorded daemon terminal uses retired tmux support; preserving its exact id for manual reconciliation"
-      return 2
-      ;;
     *) return 2 ;;
   esac || { fm_afk_launch_log "daemon terminal record is malformed; refusing to act on it"; return 2; }
 }
