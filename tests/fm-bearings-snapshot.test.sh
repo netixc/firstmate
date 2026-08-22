@@ -10,6 +10,7 @@ TMP_ROOT=$(fm_test_tmproot fm-bearings)
 make_world() {
   local home=$TMP_ROOT/home fb=$TMP_ROOT/fakebin gen
   mkdir -p "$home/state" "$home/data" "$home/config" "$fb"
+  : > "$home/herdr.sock"
   printf '## In flight\n\n## Queued\n\n## Done\n' > "$home/data/backlog.md"
   cat > "$fb/herdr" <<'SH'
 #!/usr/bin/env bash
@@ -17,7 +18,11 @@ set -u
 case "${1:-} ${2:-}" in
   "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
   "session list") printf '{"sessions":[{"name":"%s","running":true,"socket_path":"%s/herdr.sock"}]}\n' "${HERDR_SESSION:-lab}" "${FM_HOME:-/tmp}" ;;
-  "pane get") printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "${3:-}" ;;
+  "pane get")
+    workspace=${3%%:*}; task=${workspace#w-}
+    printf '{"result":{"pane":{"pane_id":"%s","tab_id":"%s:t-%s","workspace_id":"%s"}}}\n' "${3:-}" "$workspace" "$task" "$workspace"
+    ;;
+  "tab get") printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"%s"}}}\n' "${3:-}" "${3%%:*}" ;;
   "agent get") printf '{"result":{"agent":{"agent_status":"idle","provider":"pi"}}}\n' ;;
   "pane read") printf 'idle Pi pane\n' ;;
 esac

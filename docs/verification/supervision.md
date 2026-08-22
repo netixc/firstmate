@@ -115,20 +115,20 @@ tests/fm-supervision-instructions.test.sh
 FM_AFK_PI_HERDR_E2E=1 tests/fm-afk-pi-herdr-return-e2e.test.sh
 ```
 
-The Pi-owned pull-guard boundary (`bin/fm-guard.sh` remains silent during Pi's proven extension hand-off and rejects retired supervision selectors before mutation) was verified on 2026-08-22 with isolated behavior suites.
-The same run verifies that session start admits only an exact Pi primary before acquiring fleet state.
+Pi-only session admission, live endpoint identity in snapshots, and paused watcher reconciliation were verified on 2026-08-22 with isolated behavior suites.
+The same run verifies that identity mismatches preserve supervision tracking and remain unknown rather than reporting a foreign endpoint as live.
 
 ```sh
-bin/fm-test-run.sh tests/fm-guard-stale-banner.test.sh tests/fm-session-start.test.sh tests/fm-spawn-dispatch-profile.test.sh
+bin/fm-test-run.sh tests/fm-session-start.test.sh tests/fm-fleet-snapshot-view.test.sh tests/fm-bearings-snapshot.test.sh tests/fm-watch-triage.test.sh
 ```
 
 Observed output:
 
 ```text
-FM_TEST_SUMMARY total=3 failed=0 skipped_gate=0 duration_ms=270276
-FM_TEST_SUMMARY_FAMILY family=herdr-session count=1 duration_ms=47969 failed=0
-FM_TEST_SUMMARY_FAMILY family=session-bootstrap count=1 duration_ms=215130 failed=0
-FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=7037 failed=0
+FM_TEST_SUMMARY total=4 failed=0 skipped_gate=0 duration_ms=294080
+FM_TEST_SUMMARY_FAMILY family=session-bootstrap count=1 duration_ms=207082 failed=0
+FM_TEST_SUMMARY_FAMILY family=snapshot-bearings count=2 duration_ms=7702 failed=0
+FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=79100 failed=0
 ```
 
 The broader relevant regression pass was rerun on 2026-08-02 without live-home or daemon mutation.

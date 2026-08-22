@@ -15,7 +15,7 @@
 #             source is treated as `startup`, because taking the helm redundantly
 #             is cheap and idempotent while not taking it is the whole bug.
 #
-# Source routing (see docs/sessionstart-nudge.md for the per-harness names):
+# Source routing (see docs/sessionstart-nudge.md for the Pi source names):
 #   startup, new            full digest - this process has not taken the helm
 #   clear, compact          `--reemit` digest only when this lock owner recorded
 #                           a completed full startup; otherwise a full digest,

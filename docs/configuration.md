@@ -177,7 +177,7 @@ The executable interrupt and exit mechanics live in [`bin/fm-control-lib.sh`](..
 Launch mechanics live directly in [`bin/fm-spawn.sh`](../bin/fm-spawn.sh).
 Pi launches adapt the regular-TUI safeguard to the installed CLI's capabilities; [`fm-spawn.sh --help`](../bin/fm-spawn.sh) owns the exact version-safe launch mechanics.
 Enabled primary-session turn-end guard integrations are tracked as repo-level hook files and documented in [`docs/turnend-guard.md`](turnend-guard.md).
-Primary-session watcher wake protocols are rendered at session start by [`bin/fm-supervision-instructions.sh`](../bin/fm-supervision-instructions.sh) from [`docs/supervision-protocols/`](supervision-protocols/).
+The primary-session watcher wake protocol is rendered at session start by [`bin/fm-supervision-instructions.sh`](../bin/fm-supervision-instructions.sh) from [`docs/supervision-protocols/pi.md`](supervision-protocols/pi.md).
 Pi uses the two tracked primary extensions.
 `--harness`, positional worker-runtime selection, `config/crew-harness`, and `config/secondmate-harness` are retired and rejected before spawn mutation.
 `--model` and `--effort` remain concrete Pi profile axes for local and remote launches.

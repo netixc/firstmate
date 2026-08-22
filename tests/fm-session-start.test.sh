@@ -803,7 +803,7 @@ EOF
 }
 
 test_tmux_environment_refuses_before_fleet_mutation() {
-  local rec root home fakebin out
+  local rec root home fakebin out rc=0
   rec=$(new_world tmux-environment-refusal)
   IFS='|' read -r root home fakebin <<EOF
 $rec
@@ -811,7 +811,8 @@ EOF
   make_fake_toolchain "$fakebin"
   make_fake_ps_default "$fakebin"
 
-  out=$(TMUX=fake run_session_start "$home" "$root" "$fakebin:$BASE_PATH" 2>&1)
+  out=$(TMUX=fake run_session_start "$home" "$root" "$fakebin:$BASE_PATH" 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "session start reported success for a retired tmux environment"
   assert_contains "$out" "leave the tmux environment" \
     "session start did not reject the retired execution environment"
   [ -z "$(find "$home/state" -mindepth 1 -print -quit)" ] \

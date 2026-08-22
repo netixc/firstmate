@@ -11,6 +11,7 @@ TMP_ROOT=$(fm_test_tmproot fm-fleet-snapshot-view)
 make_world() {
   local home=$TMP_ROOT/home fb=$TMP_ROOT/fakebin
   mkdir -p "$home/state" "$home/data" "$home/config" "$fb"
+  : > "$home/herdr.sock"
   printf '## In flight\n\n## Queued\n\n## Done\n' > "$home/data/backlog.md"
 cat > "$fb/herdr" <<'SH'
 #!/usr/bin/env bash
@@ -46,6 +47,11 @@ SH
     "herdr_workspace_id=w-ambiguous" "herdr_tab_id=w-ambiguous:t-ambiguous" \
     "herdr_pane_id=w-ambiguous:p1" "worktree=/tmp/ambiguous" "project=alpha" \
     "harness=pi" "kind=secondmate" "mode=direct-PR"
+  fm_write_meta "$home/state/mismatch.meta" \
+    "backend=herdr" "window=lab:w-mismatch:p1" "endpoint_task_id=mismatch" \
+    "herdr_session=lab" "herdr_workspace_id=w-mismatch" "herdr_tab_id=w-mismatch:t-recorded" \
+    "herdr_pane_id=w-mismatch:p1" "worktree=/tmp/mismatch" "project=alpha" \
+    "harness=pi" "kind=secondmate" "mode=direct-PR"
   printf '%s|%s\n' "$home" "$fb"
 }
 
@@ -63,13 +69,16 @@ EOF
   log=$home/herdr.log
   json=$(FM_HERDR_LOG="$log" run_snapshot "$home" "$fb") || fail "fleet snapshot failed"
   printf '%s' "$json" | jq -e '
-    (.tasks | length) == 3
+    (.tasks | length) == 4
     and (.tasks[] | select(.id=="current") | .session_path) == "herdr"
     and (.tasks[] | select(.id=="current") | .endpoint.exists) == true
     and (.tasks[] | select(.id=="legacy") | .session_path) == "retired-tmux"
     and (.tasks[] | select(.id=="legacy") | .endpoint.exists) == null
     and (.tasks[] | select(.id=="ambiguous") | .session_path) == "herdr"
     and (.tasks[] | select(.id=="ambiguous") | .endpoint.exists) == null
+    and (.tasks[] | select(.id=="mismatch") | .session_path) == "herdr"
+    and (.tasks[] | select(.id=="mismatch") | .endpoint.exists) == null
+    and (.tasks[] | select(.id=="mismatch") | .endpoint.agent_alive) == "unknown"
     and ([.tasks[] | has("backend")] | any | not)
   ' >/dev/null || fail "snapshot did not expose the Herdr-only session contract: $json"
   if grep -F 'w-ambiguous:p1' "$log" >/dev/null \

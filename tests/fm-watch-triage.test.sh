@@ -613,6 +613,74 @@ SH
   pass "a stale pane sitting on a terminal status is surfaced (queue + exit)"
 }
 
+test_paused_reconcile_preserves_tracking_on_live_identity_mismatch() {
+  local dir state fakebin out capture_file counter window key pane_hash sig pid i=0 count=0
+  dir=$(make_case paused-identity-mismatch); state="$dir/state"; fakebin="$dir/fakebin"
+  out="$dir/watch.out"; capture_file="$dir/pane.txt"; counter="$dir/pane-get-count"
+  window="test:w-paused:p1"
+  printf 'paused pane' > "$capture_file"
+  printf '0\n' > "$counter"
+  : > "$dir/herdr.sock"
+  fm_write_meta "$state/paused.meta" \
+    "backend=herdr" "window=$window" "endpoint_task_id=paused" \
+    "herdr_session=test" "herdr_workspace_id=w-paused" "herdr_tab_id=w-paused:t-paused" \
+    "herdr_pane_id=w-paused:p1" "worktree=/tmp/paused" "project=/tmp/project" \
+    "kind=ship" "harness=pi"
+  cat > "$fakebin/herdr" <<'SH'
+#!/usr/bin/env bash
+set -u
+case "${1:-} ${2:-}" in
+  "status --json") printf '{"client":{"version":"0.7.1","protocol":14},"server":{"running":true,"protocol":14}}\n' ;;
+  "session list") printf '{"sessions":[{"name":"%s","running":true,"socket_path":"%s/herdr.sock"}]}\n' "${HERDR_SESSION:-test}" "${FM_HOME:-/tmp}" ;;
+  "pane read") cat "$FM_FAKE_HERDR_CAPTURE" ;;
+  "pane get")
+    count=$(cat "$FM_FAKE_HERDR_PANE_COUNT" 2>/dev/null || printf 0)
+    count=$((count + 1))
+    printf '%s\n' "$count" > "$FM_FAKE_HERDR_PANE_COUNT"
+    if [ "$count" -le 2 ]; then
+      printf '{"result":{"pane":{"pane_id":"%s","tab_id":"w-paused:t-paused","workspace_id":"w-paused"}}}\n' "${3:-}"
+    else
+      printf '{"result":{"pane":{"pane_id":"%s","tab_id":"w-paused:t-foreign","workspace_id":"w-paused"}}}\n' "${3:-}"
+    fi
+    ;;
+  "tab get") printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"w-paused"}}}\n' "${3:-}" ;;
+  "agent get") printf '{"result":{"agent":{"agent_status":"idle","provider":"pi"}}}\n' ;;
+esac
+SH
+  chmod +x "$fakebin/herdr"
+  printf 'paused: awaiting external dependency\n' > "$state/paused.status"
+  sig=$(seen_sig "$state/paused.status"); printf '%s' "$sig" > "$state/.seen-paused_status"
+  key=$(printf '%s' "$window" | tr ':/.' '___')
+  pane_hash=$(hash_text "paused pane")
+  printf '%s' "$pane_hash" > "$state/.hash-$key"
+  printf '1\n' > "$state/.count-$key"
+  : > "$state/.paused-$key"
+  printf '%s' "$pane_hash" > "$state/.stale-$key"
+  printf '123\n' > "$state/.stale-since-$key"
+  printf '2\n' > "$state/.wedge-escalations-$key"
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_FAKE_HERDR_CAPTURE="$capture_file" \
+    FM_FAKE_HERDR_PANE_COUNT="$counter" HERDR_SESSION=test FM_STATE_OVERRIDE="$state" \
+    FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_POLL=1 FM_SIGNAL_GRACE=1 \
+    FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 FM_PAUSE_RESURFACE_SECS=999999 \
+    "$WATCH" > "$out" &
+  pid=$!
+  while [ "$i" -lt 80 ]; do
+    count=$(cat "$counter" 2>/dev/null || printf 0)
+    [ "$count" -ge 4 ] && break
+    is_live_non_zombie "$pid" || break
+    sleep 0.1
+    i=$((i + 1))
+  done
+  [ "$count" -ge 4 ] || { reap "$pid"; fail "paused reconciliation did not reach live identity validation"; }
+  [ -e "$state/.paused-$key" ] || { reap "$pid"; fail "identity mismatch cleared paused tracking"; }
+  [ -e "$state/.stale-$key" ] || { reap "$pid"; fail "identity mismatch cleared stale tracking"; }
+  [ -e "$state/.stale-since-$key" ] || { reap "$pid"; fail "identity mismatch cleared the stale timer"; }
+  [ -e "$state/.wedge-escalations-$key" ] || { reap "$pid"; fail "identity mismatch cleared wedge tracking"; }
+  [ ! -s "$state/.wake-queue" ] || { reap "$pid"; fail "foreign live identity produced a paused wake"; }
+  reap "$pid"
+  pass "paused reconciliation preserves tracking when live endpoint identity changes"
+}
+
 # --- stale pane, STALE terminal status overridden by an active run: absorbed ---
 # Regression for the 2026-07 herdr false-surface incidents: a crew's own status
 # log gets no new entry once firstmate hands it to a no-mistakes validation
@@ -1000,6 +1068,7 @@ test_secondmate_status_note_surfaced_despite_busy_agent
 test_self_announced_close_does_not_rewake_but_next_note_does
 test_actionable_signal_surfaced
 test_terminal_stale_surfaced
+test_paused_reconcile_preserves_tracking_on_live_identity_mismatch
 test_procevent_captured_result_surfaces_proactively
 test_procevent_unacknowledged_result_redrains_until_handled
 test_procevent_marker_keys_are_injective

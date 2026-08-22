@@ -270,6 +270,10 @@ if [ "$DETECTED_PRIMARY" != pi ]; then
   exit 1
 fi
 
+# shellcheck source=bin/fm-herdr.sh
+. "$SCRIPT_DIR/fm-herdr.sh"
+fm_herdr_require_runtime || exit 1
+
 if [ -z "${FM_SESSION_START_STAGE_FILE:-}" ]; then
   SESSION_START_BUDGET=${FM_SESSION_START_TIMEOUT:-120}
   # A non-positive or non-numeric budget is not a budget (`timeout 0` disables
@@ -326,9 +330,6 @@ if [ -z "${FM_SESSION_START_STAGE_FILE:-}" ]; then
   exit 0
 fi
 
-# shellcheck source=bin/fm-herdr.sh
-. "$SCRIPT_DIR/fm-herdr.sh"
-fm_herdr_require_runtime || exit 1
 # shellcheck source=bin/fm-tasks-axi-lib.sh
 . "$SCRIPT_DIR/fm-tasks-axi-lib.sh"
 # shellcheck source=bin/fm-public-followup-lib.sh

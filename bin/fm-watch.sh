@@ -56,7 +56,7 @@
 #   check: inactive-outcome bounded poll-loop reconciliation found a suspicious
 #                          inactive terminal outcome that still lacks its durable
 #                          upstream receipt
-# For normal supervision, resume the session-start primary-harness protocol
+# For normal supervision, resume the session-start Pi protocol
 # after each printed reason. Direct duplicate invocations of this script still
 # no-op through the watcher singleton lock.
 set -u
@@ -359,6 +359,31 @@ clear_pause_tracking() {  # <window>
   rm -f "$STATE/.stale-$key" "$STATE/.stale-since-$key" "$STATE/.wedge-escalations-$key"
 }
 
+_fm_watch_pause_live_reconcile() {  # <target> <window>
+  local target=$1 win=$2 state
+  state=$(fm_herdr_agent_state "$target")
+  case "$state" in
+    alive)
+      clear_pause_tracking "$win"
+      printf 'cleared'
+      ;;
+    dead|missing) printf 'dead' ;;
+    *) printf 'unknown' ;;
+  esac
+}
+
+pause_live_agent_class() {  # <window> <task>
+  local win=$1 task=$2 meta result
+  if ! fm_herdr_target_exists "$win" >/dev/null 2>&1; then
+    printf 'dead'
+    return
+  fi
+  meta="$STATE/$task.meta"
+  result=$(fm_herdr_with_live_task_endpoint "$meta" "$task" \
+    _fm_watch_pause_live_reconcile "$win" 2>/dev/null) || result=unknown
+  printf '%s' "$result"
+}
+
 # Reconcile a declared pause or captain-held status with authoritative crew state.
 # Only a confidently dead ordinary crew may recover paused classification after
 # fm-crew-state has fallen back to stopped or unknown.
@@ -377,15 +402,15 @@ pause_state_class() {  # <window> <task>
   if [ -e "$STATE/.paused-$key" ] && [ "$(age_of "$recheck_file")" -lt "$STALE_ESCALATE_SECS" ]; then
     if [ "$(window_kind "$win")" != secondmate ]; then
       if [ "$(window_endpoint_class "$win")" = herdr ]; then
-        agent_alive=$(fm_herdr_agent_alive "$win" 2>/dev/null) || agent_alive=unknown
+        agent_alive=$(pause_live_agent_class "$win" "$task")
       else
         agent_alive=unknown
       fi
-      if [ "$agent_alive" != dead ]; then
-        rm -f "$recheck_file"
-        printf 'none'
-        return
-      fi
+      case "$agent_alive" in
+        cleared) printf 'cleared'; return ;;
+        dead) ;;
+        *) printf 'unknown'; return ;;
+      esac
     fi
     printf 'paused'
     return
@@ -398,15 +423,15 @@ pause_state_class() {  # <window> <task>
   fi
   if [ "$(window_kind "$win")" != secondmate ]; then
     if [ "$(window_endpoint_class "$win")" = herdr ]; then
-      agent_alive=$(fm_herdr_agent_alive "$win" 2>/dev/null) || agent_alive=unknown
+      agent_alive=$(pause_live_agent_class "$win" "$task")
     else
       agent_alive=unknown
     fi
-    if [ "$agent_alive" != dead ]; then
-      rm -f "$recheck_file"
-      printf 'none'
-      return
-    fi
+    case "$agent_alive" in
+      cleared) printf 'cleared'; return ;;
+      dead) ;;
+      *) printf 'unknown'; return ;;
+    esac
   fi
   [ "$class" = none ] && [ "${agent_alive:-unknown}" = dead ] && class=paused
   case "$class" in
@@ -1086,7 +1111,8 @@ EOF
         if [ "$kind" = secondmate ]; then
           case "$(pause_state_class "$w" "$task")" in
             paused) handle_paused_stale "$w" "$task" "$h" ;;
-            *)      clear_pause_tracking "$w" ;;
+            unknown|cleared) : ;;
+            *) clear_pause_tracking "$w" ;;
           esac
         elif afk_present; then
           # Daemon owns triage: one-shot per distinct stale hash, as before.
@@ -1142,6 +1168,8 @@ EOF
           #   - paused: the crew declared an external wait, or a declared pause or
           #     captain hold is paired with a confidently dead agent, so absorb on
           #     the long PAUSE_RESURFACE_SECS cadence instead of wedge-escalating;
+          #   - cleared: a live, identity-validated endpoint cleared pause tracking;
+          #   - unknown: live identity or agent state was inconclusive, so preserve tracking;
           #   - none: no running pipeline, no exact busy verdict, no declared pause.
           #     Surface immediately so firstmate inspects the inconclusive state
           #     (it may be done via an interactive menu that wrote no done: status,
@@ -1159,6 +1187,11 @@ EOF
               paused)
                 handle_paused_stale "$w" "$task" "$h"
                 ;;
+              unknown)
+                ;;
+              cleared)
+                surface_nonterminal_stale "$w" "$h"
+                ;;
               *)
                 surface_nonterminal_stale "$w" "$h"
                 ;;
@@ -1172,6 +1205,7 @@ EOF
                          printf '%s' "$h" > "$sf"
                          wedge_timer_check "$w" "$ssf" "non-terminal stale (provably working after a declared pause)" "$ewf"
                          triage_log "absorbed non-terminal stale (provably working): $w" ;;
+                unknown|cleared) : ;;
                 *)       handle_paused_stale "$w" "$task" "$h" ;;
               esac
             else
@@ -1204,7 +1238,8 @@ EOF
       if ! afk_present && status_is_paused_or_captain_held "$(last_status_line "$STATE/$task.status")" && [ "$busy_now" -ne 0 ]; then
         case "$(pause_state_class "$w" "$task")" in
           paused) handle_paused_stale "$w" "$task" "$h" ;;
-          *)      clear_pause_tracking "$w" ;;
+          unknown|cleared) : ;;
+          *) clear_pause_tracking "$w" ;;
         esac
       else
         [ -e "$pf" ] && clear_pause_tracking "$w"

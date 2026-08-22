@@ -59,7 +59,7 @@ The experience it creates is a new way of working built on one verified executio
 It is an agent distro, not an app: instructions, skills, scripts, and state conventions that Pi inhabits through Herdr.
 The first mate can read, understand, and evolve every part of itself: plain instructions, scripts, and text records keep the whole system introspectable, hot-modifiable, and self-evolving by the very agent that runs it.
 When something is not working well, the captain can ask the first mate and it figures it out; captains using their own firstmate to improve the shared surface is how the fleet evolves in the open.
-Harness adapters earn trust through verification.
+The Pi-on-Herdr execution path earns trust through verification.
 Contracts bind to semantics a vendor actually exposes, never to the pixels of today's UI.
 Quota, model, and effort choices stay inspectable and captain-owned; the first mate never downgrades the intelligence doing the work without the captain's standing, explicit permission.
 

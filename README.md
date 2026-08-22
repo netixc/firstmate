@@ -60,9 +60,9 @@ Full detail on every feature lives in [docs/architecture.md](docs/architecture.m
 The first mate detects and offers to install supported missing tools after you approve.
 Herdr setup is linked in [Documentation](#documentation).
 
-### Supported harness
+### Pi runtime
 
-**Pi is the supported harness** for running the primary firstmate session.
+**Pi is required** for running the primary firstmate session.
 Pi uses its tracked primary watcher extension and has a verified turn-end guard path when launched with the documented setup.
 
 
@@ -176,7 +176,7 @@ Firstmate's skills live in two separate places with different audiences:
 - [docs/verification/herdr-runtime.md](docs/verification/herdr-runtime.md) - active maintainer verification for Herdr runtime guarantees.
 - [docs/turnend-guard.md](docs/turnend-guard.md) - the primary session's current "no turn ends blind" backstop, scope, loop safety, and compatibility limits.
 - [docs/verification/supervision.md](docs/verification/supervision.md) - active maintainer verification for session-start, guard, continuity, and wedge integrations.
-- [docs/supervision-protocols/](docs/supervision-protocols/) - rendered primary-harness watcher protocols for Pi and the unknown-harness fallback.
+- [docs/supervision-protocols/pi.md](docs/supervision-protocols/pi.md) - the rendered Pi primary watcher protocol.
 - [docs/scripts.md](docs/scripts.md) - the `bin/` toolbelt reference.
 - [docs/documentation-audiences.md](docs/documentation-audiences.md) - documentation audiences and the machine-checked placement boundary.
 - [`AGENTS.md`](AGENTS.md) - the distro's always-loaded operating contract and routing index for conditional procedures.

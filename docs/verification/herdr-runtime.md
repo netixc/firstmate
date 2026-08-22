@@ -468,24 +468,24 @@ FM_TEST_SUMMARY_FAMILY family=herdr-session count=1 duration_ms=8021 failed=0
 FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=8003 failed=0
 ```
 
-The final direct-Pi admission, supervision, Secondmate launch, and real Pi-on-Herdr lifecycle rerun used:
+The final admission, live-identity snapshot, watcher, and real Pi-on-Herdr lifecycle rerun used:
 
 ```sh
-bash -n bin/fm-guard.sh bin/fm-harness.sh bin/fm-session-start.sh bin/fm-spawn.sh bin/fm-supervision-lib.sh bin/fm-wake-drain.sh bin/fm-wake-lib.sh tests/fm-guard-stale-banner.test.sh tests/fm-session-start.test.sh tests/fm-spawn-dispatch-profile.test.sh && \
-  bin/fm-test-run.sh tests/fm-guard-stale-banner.test.sh tests/fm-session-start.test.sh tests/fm-spawn-dispatch-profile.test.sh && \
+bash -n bin/fm-fleet-snapshot.sh bin/fm-session-start.sh bin/fm-watch.sh tests/fm-bearings-snapshot.test.sh tests/fm-fleet-snapshot-view.test.sh tests/fm-session-start.test.sh tests/fm-watch-triage.test.sh && \
+  bin/fm-test-run.sh tests/fm-session-start.test.sh tests/fm-fleet-snapshot-view.test.sh tests/fm-bearings-snapshot.test.sh tests/fm-watch-triage.test.sh && \
   lifecycle=$(FM_SEND_MARKER_HERDR_E2E=1 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
     bash tests/fm-send-secondmate-marker-herdr-e2e.test.sh) && \
   printf '%s\n' "$lifecycle" && \
   printf '%s\n' "$lifecycle" | grep -F 'ok - real Pi/Herdr: teardown removes the endpoint, home, and metadata' >/dev/null && \
   git diff --check && \
-  printf '%s\n' 'focused direct-Pi admission, supervision, launch, and lifecycle verification: ok'
+  printf '%s\n' 'focused admission, identity, watcher, snapshot, and lifecycle verification: ok'
 ```
 
 ```text
-FM_TEST_SUMMARY total=3 failed=0 skipped_gate=0 duration_ms=270276
-FM_TEST_SUMMARY_FAMILY family=herdr-session count=1 duration_ms=47969 failed=0
-FM_TEST_SUMMARY_FAMILY family=session-bootstrap count=1 duration_ms=215130 failed=0
-FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=7037 failed=0
+FM_TEST_SUMMARY total=4 failed=0 skipped_gate=0 duration_ms=294080
+FM_TEST_SUMMARY_FAMILY family=session-bootstrap count=1 duration_ms=207082 failed=0
+FM_TEST_SUMMARY_FAMILY family=snapshot-bearings count=2 duration_ms=7702 failed=0
+FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=79100 failed=0
 warning: secondmate marker-pi-sm sync skipped before launch: primary default-branch commit cannot be resolved
 ●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ●  WATCHER DOWN - SUPERVISION IS OFF
@@ -500,7 +500,7 @@ evidence: direct-input received-hex=464d5f4d41524b45525f48455244525f444952454354
 ok - real Pi/Herdr: direct captain terminal input stays unmarked
 ok - real Pi/Herdr: lifecycle control preserves the live exact endpoint
 ok - real Pi/Herdr: teardown removes the endpoint, home, and metadata
-focused direct-Pi admission, supervision, launch, and lifecycle verification: ok
+focused admission, identity, watcher, snapshot, and lifecycle verification: ok
 ```
 
 Strict tracked-extension checking used TypeScript 5.9.3:
@@ -541,12 +541,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 131453 314
-bin 54250 127
-tests 56928 117
+all 131581 314
+bin 54294 127
+tests 57012 117
 pi 2045 9
 agents 559
-added=7461 deleted=33212 net=-25751
+added=7610 deleted=33233 net=-25623
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,751 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,623 lines smaller.
