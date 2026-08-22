@@ -98,6 +98,7 @@ A missing or non-Herdr supervisor target refuses at daemon startup.
 Stalled escalation delivery writes `state/.subsuper-inject-wedged` and attempts a configured active alert after `FM_MAX_DEFER_SECS` instead of silently deferring forever.
 On an unmarked return, `bin/fm-afk-return.sh` owns ordered shutdown, durable catch-up evidence, and the fail-closed gate that keeps ordinary work behind every live firstmate-actionable blocker.
 `fm-send.sh` selects a pre-Enter popup-settle for slash commands, then adds its own `FM_SEND_SETTLE` pause after successful text sends so immediate peeks catch the receiving turn starting; the sub-supervisor uses only the shared submit core and does not pay that post-submit pause.
+The primary Pi extension's typed `fm_send` tool is only an argv adapter for recorded task selectors, literal text, and optional decision keys, and does not replace or duplicate `bin/fm-send.sh`'s routing and delivery ownership.
 
 Text for a worker to read and commands that drive a worker's process are separate planes.
 `fm-send.sh` is the data plane and always routing-marks a `kind=secondmate` target, which is right for a message and wrong for a lifecycle command, because a marked exit command arrives as chat the agent reasons about instead of executing.

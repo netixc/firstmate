@@ -54,6 +54,15 @@ export const Type = {
   Object(properties) {
     return { type: "object", properties, additionalProperties: false };
   },
+  String(options = {}) {
+    return { type: "string", ...options };
+  },
+  Array(items, options = {}) {
+    return { type: "array", items, ...options };
+  },
+  Optional(schema) {
+    return { ...schema, optional: true };
+  },
 };
 JS
 }

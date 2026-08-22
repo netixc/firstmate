@@ -1,4 +1,4 @@
-// Firstmate primary watcher bridge for Pi.
+// Firstmate primary Pi watcher bridge and statically registered send adapter.
 //
 // Session-generation ownership (stated once here):
 // Pi emits session_shutdown for ordinary same-process replacements (/new, /resume,
@@ -97,6 +97,66 @@ const armReadyTimeoutMs = positiveInteger(
 );
 const armRetireTimeoutMs = positiveInteger("FM_WATCH_ARM_RETIRE_TIMEOUT_MS", 1000);
 const repairOnlyHint = "call fm_watch_arm_pi again only after a later notification says the cycle is missing, failed, or unhealthy";
+const fmSendScript = resolve(root, "bin/fm-send.sh");
+const fmSendResultSchema = "fm-send-result.v1" as const;
+const fmSendOutputLimit = 4096;
+const taskSelectorPattern = /^[A-Za-z0-9._-]+$/;
+const decisionKeyPattern = /^[A-Za-z0-9._-]+$/;
+const fmSendUnconfirmedInstruction =
+  "Inspect the endpoint before any retry; do not retype or blindly resend.";
+
+type FmSendStatus = "confirmed" | "unconfirmed";
+
+type FmSendDetails = {
+  schema: typeof fmSendResultSchema;
+  status: FmSendStatus;
+  exitCode: 0 | 3;
+  diagnostic?: string;
+  instruction?: string;
+};
+
+function boundFmSendText(text: string): string {
+  const bytes = Buffer.from(text, "utf8");
+  if (bytes.length <= fmSendOutputLimit) return text;
+  const suffix = "\n[truncated]";
+  const keepBytes = Math.max(0, fmSendOutputLimit - Buffer.byteLength(suffix, "utf8"));
+  let end = keepBytes;
+  while (end > 0 && end < bytes.length && (bytes[end] & 0xc0) === 0x80) end -= 1;
+  return `${bytes.subarray(0, end).toString("utf8")}${suffix}`;
+}
+
+function fmSendDiagnostic(stdout: string, stderr: string): string {
+  return boundFmSendText([stderr, stdout].filter((value) => value.length > 0).join("\n"));
+}
+
+function validateFmSendInput(params: {
+  target: string;
+  message: string;
+  resolveKeys?: string[];
+}): void {
+  if (!taskSelectorPattern.test(params.target)) {
+    throw new Error("fm_send target must be a recorded task selector, not a raw Herdr endpoint");
+  }
+  if (params.message.length === 0) {
+    throw new Error("fm_send message must be nonempty");
+  }
+  const keys = params.resolveKeys ?? [];
+  if (keys.some((key) => !decisionKeyPattern.test(key))) {
+    throw new Error("fm_send resolveKeys must contain only safe decision-key strings");
+  }
+  if (new Set(keys).size !== keys.length) {
+    throw new Error("fm_send resolveKeys must not contain duplicates");
+  }
+}
+
+function fmSendError(result: { code: number; stdout: string; stderr: string; killed: boolean }): Error {
+  const stdout = boundFmSendText(result.stdout);
+  const stderr = boundFmSendText(result.stderr);
+  return new Error(
+    `fm_send delivery is unconfirmed (exit code ${result.code}${result.killed ? ", process cancelled" : ""}). ` +
+      `Do not infer delivery. ${fmSendUnconfirmedInstruction}\nstdout: ${stdout}\nstderr: ${stderr}`,
+  );
+}
 const shuttingDownMessage = "watcher: not armed - Pi session is shutting down";
 
 let nextGenerationId = 0;
@@ -537,6 +597,94 @@ export default function (pi: ExtensionAPI) {
         content: [{ type: "text", text: result.message }],
         details: result,
       };
+    },
+  });
+
+  pi.registerTool({
+    name: "fm_send",
+    label: "Send to Firstmate task",
+    description:
+      "Send literal text once to a recorded Firstmate task selector through bin/fm-send.sh. Raw Herdr endpoints are not accepted. " +
+      "Use resolveKeys only for safe decision keys answered by the message.",
+    promptSnippet: "Send literal text to a recorded Firstmate task selector and optionally answer decision keys.",
+    promptGuidelines: [
+      "Use fm_send for a message to a recorded task selector, not a raw Herdr endpoint or a lifecycle action.",
+      `If fm_send returns an unconfirmed result, ${fmSendUnconfirmedInstruction}`,
+    ],
+    parameters: Type.Object(
+      {
+        target: Type.String({
+          description: "Recorded task id or fm-<id> selector; raw Herdr endpoints are not accepted.",
+          minLength: 1,
+          pattern: "^[A-Za-z0-9._-]+$",
+        }),
+        message: Type.String({
+          description: "Nonempty literal text to send without shell interpretation.",
+          minLength: 1,
+        }),
+        resolveKeys: Type.Optional(
+          Type.Array(
+            Type.String({
+              description: "Safe decision key answered by the message.",
+              minLength: 1,
+              pattern: "^[A-Za-z0-9._-]+$",
+            }),
+            { uniqueItems: true },
+          ),
+        ),
+      },
+      { additionalProperties: false },
+    ),
+    execute: async (_toolCallId, params, signal) => {
+      validateFmSendInput(params);
+      if (!process.env.FM_HOME) {
+        throw new Error("fm_send requires an explicit inherited FM_HOME and refuses to derive one from the code root");
+      }
+      if (signal?.aborted) {
+        throw new Error(`fm_send was cancelled before execution; delivery is unconfirmed. ${fmSendUnconfirmedInstruction}`);
+      }
+
+      const args = [
+        params.target,
+        ...(params.resolveKeys ?? []).flatMap((key) => ["--resolve-key", key]),
+        params.message,
+      ];
+      const result = await pi.exec(fmSendScript, args, { signal, cwd: root });
+      if (result.killed || signal?.aborted) {
+        throw fmSendError(result);
+      }
+      if (result.code === 0) {
+        const details: FmSendDetails = {
+          schema: fmSendResultSchema,
+          status: "confirmed",
+          exitCode: 0,
+        };
+        return {
+          content: [{ type: "text", text: "fm_send: delivery confirmed" }],
+          details,
+        };
+      }
+      if (result.code === 3) {
+        const diagnostic = fmSendDiagnostic(result.stdout, result.stderr);
+        const details: FmSendDetails = {
+          schema: fmSendResultSchema,
+          status: "unconfirmed",
+          exitCode: 3,
+          ...(diagnostic ? { diagnostic } : {}),
+          instruction: fmSendUnconfirmedInstruction,
+        };
+        const text = [
+          diagnostic,
+          `fm_send: delivery is unconfirmed. ${fmSendUnconfirmedInstruction}`,
+        ]
+          .filter((value) => value.length > 0)
+          .join("\n\n");
+        return {
+          content: [{ type: "text", text }],
+          details,
+        };
+      }
+      throw fmSendError(result);
     },
   });
 
