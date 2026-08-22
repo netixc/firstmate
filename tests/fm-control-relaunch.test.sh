@@ -17,6 +17,7 @@ make_world() { # <name> <id>
   mkdir -p "$home/state" "$home/data/$id" "$home/config" "$fb"
   fm_git_worktree "$project" "$wt" "fm/$id"
   printf 'task instructions\n' > "$home/data/$id/brief.md"
+  : > "$home/herdr.sock"
   printf alive > "$world/agent"
   : > "$world/herdr.log"
   cat > "$fb/herdr" <<'SH'

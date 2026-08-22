@@ -13,7 +13,7 @@ metadata:
 
 This skill is the single owner of the completion-aware profile-array selection procedure.
 `AGENTS.md` section 4 owns the always-loaded intake boundary, load trigger, malformed-config refusal, every-candidate accounting, and strongest-reasoning/tie safety rules.
-`harness-adapters` owns harness verification, model/provider discovery, and effort fallback.
+`pi-operations` owns Pi model/provider discovery and effort fallback.
 `quota-axi` remains data-only, reports whatever granularity the vendor supplies, and never recommends, selects, ranks, or infers a route.
 Do not add a daemon, opaque composite score, routing wrapper, hard-coded model-specific policy, or producer-side route recommendation.
 Deterministic shell owns only schema, configuration, and version validation plus concrete spawn safeguards; every model-to-provider, provider-to-credential, and quota-applicability relation is yours to establish transparently and to show your evidence for.
@@ -22,7 +22,7 @@ Deterministic shell owns only schema, configuration, and version validation plus
 
 Run `quota-axi --json` once per intake and reuse that snapshot for every candidate.
 Do not take a second snapshot to settle a candidate, and read `quota-axi auth --json` when a candidate's credential surface is in question.
-For each candidate, preserve explicit `harness`, `model`, and `provider`; `harness-adapters` owns identity, and model/provider never infer harness:
+For each candidate, preserve its explicit `model` and `provider`; the worker runtime is always Pi:
 
 - task/profile fit and required reasoning class
 - applicable effective headroom (`effectivePercentRemaining`) from the established provider/model scope
@@ -39,7 +39,7 @@ The compact default output intentionally omits numeric reserve, while `--json` a
 ## Establish the provider relation before reading quota
 
 Deterministic shell must never map a model to a provider, a provider to a credential store, or a name prefix to a family.
-You establish those relations yourself, in the open, from the candidate's own authoritative catalog (`harness-adapters` owns the per-harness discovery surface) plus the one intake snapshot.
+You establish those relations yourself, in the open, from Pi's authoritative catalog (`pi-operations` owns that discovery surface) plus the one intake snapshot.
 Name the evidence for each relation you assert so the conclusion is inspectable.
 
 1. Confirm the catalog lists the candidate's model and record the provider family it reports.
@@ -52,7 +52,7 @@ Name the evidence for each relation you assert so the conclusion is inspectable.
 
 ## Authentication is scoped to the selected surface
 
-A candidate authenticates through its own tuple's surface; another harness's CLI can never gate it, and `harness=pi` with `model=xai/grok-*` is Pi using xAI.
+A candidate authenticates through its own Pi model/provider tuple, and `model=xai/grok-*` is Pi using xAI.
 `quota-axi auth --json` lists each provider's credential sources independently, so read the one source the candidate actually uses rather than collapsing a provider to a single status.
 A provider can carry a healthy source beside a missing or expired one; the unused source's state is not the candidate's state.
 A Pi-hosted family may authenticate through the vendor's own store with no `pi:`-prefixed source at all, which is normal and never evidence against the candidate.
@@ -62,8 +62,8 @@ Uncertainty and ineligibility are different findings:
 - No model-level window, no matching auth source, an absent `state.authStatus`, an unmeasurable or `unknown` scope, or a surface quota-axi does not model at all is disclosed uncertainty.
   Keep the candidate eligible, state the unknown, and prefer known sustainable evidence when otherwise comparable.
 - An expired credential is a short-lived session token the owning vendor renews on next use, not a sign-out.
-- Only concrete contradictory evidence blocks: an authoritative catalog proving the model unsupported, or proof that the credential the candidate actually selects is unusable.
-- Reserve login wording for that proven-unusable case, and name the harness, model, surface, and evidence.
+- Only concrete contradictory evidence blocks: Pi's catalog proving the model unsupported, or proof that the credential the candidate actually selects is unusable.
+- Reserve login wording for that proven-unusable case, and name the model, surface, and evidence.
 
 When a credential's local classification is the only thing standing between a candidate and a block, preserve it as uncertainty rather than launching a vendor CLI or probing a credential store directly.
 
@@ -102,9 +102,9 @@ Never use headroom, runway, pace, or reserve to silently replace that reasoning 
 8. Older schemas or absent runway/pace fields: do not crash, fabricate runway or pace, treat absence as healthy, or silently exclude a candidate.
    State which evidence is unavailable, retain the candidate, and apply only the comparisons the snapshot supports.
 9. Genuine ties: stop and report every tied candidate for captain choice.
-   Do not select by array order, harness name, or another arbitrary identity ordering.
+   Do not select by array order or another arbitrary identity ordering.
    Report duplicate concrete profiles as a configuration error.
 
 Account for every candidate visibly before selecting or escalating, naming its catalog evidence, provider relation, applicable quota and authentication facts, remaining uncertainty, fit and reasoning class, effective headroom, usable runway, likely-completion reasoning, and later pace or reserve evidence when used.
-A blocked credential report must name `harness`, `model`, authentication surface, and concrete failure evidence; never emit a bare provider-level unauthenticated statement.
+A blocked credential report must name the Pi model, authentication surface, and concrete failure evidence; never emit a bare provider-level unauthenticated statement.
 Never conclude with an unexplained "best quota" label.

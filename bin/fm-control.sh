@@ -13,13 +13,13 @@
 # That marking is right for a message and wrong for a lifecycle command - a
 # marked "/quit" arrives as ordinary chat the agent reasons ABOUT instead of
 # executing. This script is the control plane: semantic process control with a
-# closed verb list, per-harness mechanics owned by an executable adapter
+# closed verb list, direct Pi mechanics owned by an executable contract
 # (bin/fm-control-lib.sh) rather than improvised in agent prose, and a verified
 # postcondition for every action. There is deliberately NO arbitrary-text and
 # NO generic raw-key entry point here; fm-send remains the only way to send an
 # agent something to read.
 #
-#   interrupt  Deliver the harness's verified interrupt sequence. The agent
+#   interrupt  Deliver Pi's verified interrupt sequence. The agent
 #              keeps running. Postcondition: delivery succeeded, the endpoint
 #              still exists, and Herdr still classifies the agent as alive.
 #              Cancellation is confirmed only from Pi's acknowledgement and
@@ -27,13 +27,13 @@
 #              as proof of the action.
 #   exit       Stop the agent, preserving its terminal endpoint, worktree, and
 #              every uncommitted change. Interrupts first when the task reads
-#              busy, then submits the harness's exit command. Postcondition:
+#              busy, then submits Pi's exit command. Postcondition:
 #              Herdr's recovery-grade classifier reports the agent gone.
 #              Already-stopped is success (idempotent).
 #   relaunch   Transactionally replace the running Pi agent with a new one, in
 #              the SAME endpoint and SAME worktree, optionally changing model
 #              or effort. Every replacement runs Pi directly.
-#              An unsupported recorded harness refuses before any lifecycle action.
+#              A non-Pi recorded runtime refuses before any lifecycle action.
 #              --note is required for a ship or scout, whose replacement
 #              inherits the local copy but none of the conversation; a
 #              secondmate reconciles its own home's records at startup, so its
@@ -52,7 +52,7 @@
 #
 # `resume` is not a verb: Pi has no verified pane-resume contract.
 # `relaunch` covers the same need because the brief on disk, not a
-# harness-private session, is the durable instruction.
+# Pi-private session, is the durable instruction.
 #
 # Targeting is EXACT: only a bare task id with a state/<id>.meta record in
 # THIS home is accepted, and the record must pass the shared endpoint-identity
@@ -65,8 +65,7 @@
 # host, so no postcondition this plane verifies could be read for it here.
 #
 # Fail-closed boundaries:
-#   - An unverified harness, or a harness whose control mechanics are unknown,
-#     is refused rather than guessed at.
+#   - A record that does not name Pi is refused rather than reinterpreted.
 #   - `exit` and `relaunch` require Herdr's recovery-grade agent-state
 #     classifier, because without it the "the agent stopped" postcondition
 #     cannot be proven.
@@ -277,10 +276,8 @@ KIND=$(fm_meta_get "$META" kind)
 WT=$(fm_meta_get "$META" worktree)
 [ -n "$KIND" ] || KIND=ship
 
-HARNESS=$(fm_control_harness_family "$RECORDED_HARNESS") \
-  || die "task $ID records harness '${RECORDED_HARNESS:-none}', which has no verified control mechanics; fm-control refuses to guess an interrupt key or exit command"
-fm_control_harness_supported "$HARNESS" \
-  || die "task $ID records harness '${RECORDED_HARNESS:-none}', which has no verified control mechanics; fm-control refuses to guess an interrupt key or exit command"
+[ "$RECORDED_HARNESS" = pi ] \
+  || die "task $ID records harness '${RECORDED_HARNESS:-none}' rather than Pi; fm-control refuses to reinterpret another runtime"
 
 # --- shared helpers ---------------------------------------------------------
 
@@ -316,8 +313,8 @@ wait_agent_state() {  # <timeout> <wanted>...
 # send_interrupt_keys: deliver Pi's interrupt key the verified number of times.
 send_interrupt_keys() {
   local key repeat i=0
-  key=$(fm_control_interrupt_key "$HARNESS")
-  repeat=$(fm_control_interrupt_repeat "$HARNESS")
+  key=$(fm_control_interrupt_key)
+  repeat=$(fm_control_interrupt_repeat)
   while [ "$i" -lt "$repeat" ]; do
     fm_herdr_send_key "$T" "$key" \
       || die "interrupt key $key was not delivered to task $ID on Herdr"
@@ -390,7 +387,7 @@ do_exit() {
       esac
       ;;
   esac
-  cmd=$(fm_control_exit_command "$HARNESS")
+  cmd=$(fm_control_exit_command)
   # The submit verdict is NOT the postcondition here: a successful exit command
   # destroys the composer the verdict is read from, so a post-exit read can
   # legitimately report anything. Only a hard transport failure aborts; the
@@ -427,11 +424,9 @@ RELAUNCH_META_PUBLISHED=0
 RELAUNCH_AGENT_CONFIRMED=0
 RELAUNCH_TX=
 RELAUNCH_BRIEF=
-PRIOR_HARNESS=$HARNESS
 PRIOR_RECORDED_HARNESS=$RECORDED_HARNESS
 PRIOR_MODEL=
 PRIOR_EFFORT=
-TARGET_HARNESS=$HARNESS
 TARGET_MODEL=
 TARGET_EFFORT=
 
@@ -449,7 +444,7 @@ journal_write() {  # <phase> [extra-line]...
     echo "from_harness=$PRIOR_RECORDED_HARNESS"
     echo "from_model=$PRIOR_MODEL"
     echo "from_effort=$PRIOR_EFFORT"
-    echo "to_harness=$TARGET_HARNESS"
+    echo "to_harness=pi"
     echo "to_model=$TARGET_MODEL"
     echo "to_effort=$TARGET_EFFORT"
     local line
@@ -501,17 +496,17 @@ relaunch_rollback() {
     exited|launching)
       if [ "$RELAUNCH_AGENT_CONFIRMED" = 1 ]; then
         journal_write "failed:$RELAUNCH_PHASE" "rollback=none-new-agent-confirmed" || true
-        echo "error: $ID's replacement is running on $TARGET_HARNESS, but transaction completion could not be persisted; its published record was retained for reconciliation" >&2
+        echo "error: $ID's replacement Pi agent is running, but transaction completion could not be persisted; its published record was retained for reconciliation" >&2
       elif [ "$RELAUNCH_META_PUBLISHED" = 1 ] \
          || { [ -n "$RELAUNCH_TX" ] \
               && [ "$(fm_meta_get "$META" control_relaunch_tx)" = "$RELAUNCH_TX" ]; }; then
         # The launch owner published the new incarnation's record. Leaving it
         # in place is the honest state: the task is now recorded on the new
-        # harness with no agent confirmed, which is exactly what recovery
-        # reconciles. Rewriting it back to the old harness would be a second,
+        # Pi with no agent confirmed, which is exactly what recovery
+        # reconciles. Rewriting it back to the prior record would be a second,
         # worse inaccuracy.
         journal_write "failed:$RELAUNCH_PHASE" "rollback=none-new-record-kept" || true
-        echo "error: $ID was relaunched on $TARGET_HARNESS but no running agent could be confirmed; its work is preserved at $WT" >&2
+        echo "error: $ID was relaunched on Pi but no running agent could be confirmed; its work is preserved at $WT" >&2
       else
         journal_write "failed:$RELAUNCH_PHASE" "rollback=prior-record-kept" || true
         echo "error: $ID's agent was stopped but the replacement did not launch; no agent is running, and its work plus the recorded progress note are preserved at $WT" >&2
@@ -522,13 +517,11 @@ relaunch_rollback() {
 }
 
 resolve_relaunch_profile() {
-  PRIOR_HARNESS=$HARNESS
   PRIOR_RECORDED_HARNESS=$RECORDED_HARNESS
   PRIOR_MODEL=$(fm_meta_get "$META" model)
   PRIOR_EFFORT=$(fm_meta_get "$META" effort)
   [ -n "$PRIOR_MODEL" ] || PRIOR_MODEL=default
   [ -n "$PRIOR_EFFORT" ] || PRIOR_EFFORT=default
-  TARGET_HARNESS=pi
   if [ "$MODEL_SET" = 1 ]; then
     TARGET_MODEL=$NEW_MODEL
   else
@@ -678,7 +671,7 @@ do_relaunch() {
   journal_write exited "${CHECKPOINT_LINES[@]}" "$note_line" "exit_result=$exit_result"
 
   # The launch owner (fm-spawn --relaunch) clears the previous incarnation's
-  # per-task harness wiring before arming the new one, so nothing to do here.
+  # per-task Pi wiring before arming the new one, so nothing to do here.
   RELAUNCH_TX="${BASHPID:-$$}.$(date -u +%Y%m%dT%H%M%SZ).$RANDOM"
   journal_write launching "${CHECKPOINT_LINES[@]}" "$note_line" "relaunch_tx=$RELAUNCH_TX"
   spawn_args=("$ID" --relaunch)
@@ -690,7 +683,7 @@ do_relaunch() {
   else
     [ "$(fm_meta_get "$META" control_relaunch_tx)" != "$RELAUNCH_TX" ] \
       || RELAUNCH_META_PUBLISHED=1
-    die "the replacement agent for $ID could not be launched on $TARGET_HARNESS"
+    die "the replacement Pi agent for $ID could not be launched"
   fi
 
   state=$(wait_agent_state "$LAUNCH_WAIT" alive) || {
@@ -700,7 +693,7 @@ do_relaunch() {
 
   journal_write complete "${CHECKPOINT_LINES[@]}" "$note_line" "exit_result=$exit_result"
   RELAUNCH_ACTIVE=0
-  echo "relaunched $ID harness=$TARGET_HARNESS from=$PRIOR_RECORDED_HARNESS model=$TARGET_MODEL effort=$TARGET_EFFORT endpoint=$T worktree=$WT"
+  echo "relaunched $ID harness=pi from=$PRIOR_RECORDED_HARNESS model=$TARGET_MODEL effort=$TARGET_EFFORT endpoint=$T worktree=$WT"
 }
 
 # --- verbs ------------------------------------------------------------------
@@ -725,11 +718,11 @@ control_do_exit() {
 case "$VERB" in
   interrupt)
     proof=$(fm_herdr_with_live_task_endpoint "$META" "$ID" control_do_interrupt)
-    echo "interrupt-delivered $ID harness=$HARNESS endpoint=$T verified=$proof"
+    echo "interrupt-delivered $ID harness=pi endpoint=$T verified=$proof"
     ;;
   exit)
     result=$(fm_herdr_with_live_task_endpoint "$META" "$ID" control_do_exit)
-    echo "$result $ID harness=$HARNESS endpoint=$T worktree=$WT"
+    echo "$result $ID harness=pi endpoint=$T worktree=$WT"
     ;;
   relaunch)
     do_relaunch

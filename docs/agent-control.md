@@ -9,7 +9,7 @@ The **control plane** is [`bin/fm-control.sh`](../bin/fm-control.sh): allowliste
 
 The split exists because the data plane's marking is exactly right for a message and exactly wrong for a lifecycle command.
 A routing-marked `/quit` arrives as ordinary chat - `[fm-from-firstmate] /quit` - which the agent reasons about instead of executing.
-The failure repeated across harnesses and homes, and the workaround (remember to use an unmarked send for agent-control commands, and improvise the right key or command per harness) lived only in agent prose, so it failed again every time a session did not happen to recall it.
+The failure repeated across homes, and the workaround (remember to use an unmarked send for agent-control commands and improvise Pi's key or command) lived only in agent prose, so it failed again every time a session did not happen to recall it.
 
 ## What the control plane owns
 
@@ -18,11 +18,11 @@ The failure repeated across harnesses and homes, and the workaround (remember to
 - The **verb allowlist**: `interrupt`, `exit`, `relaunch`.
   There is no arbitrary-text and no generic raw-key entry point.
   A caller either names an allowlisted verb or is refused.
-- **Per-harness mechanics**: the key that cancels a running turn, how many times it must be delivered, and the command that exits the agent.
-  These were previously carried only in the [`harness-adapters`](../.agents/skills/harness-adapters/SKILL.md) skill's per-adapter tables, which now point here.
+- **Pi mechanics**: the key that cancels a running turn, how many times it must be delivered, and the command that exits the agent.
+  The [`pi-operations`](../.agents/skills/pi-operations/SKILL.md) skill carries the corresponding operator facts.
 
-A recorded `harness=` must resolve to the exact verified Pi adapter.
-An unrecognized value resolves to no adapter rather than being guessed into one.
+A recorded `harness=` must be exactly `pi`.
+Any other or missing value is preserved and refused rather than reinterpreted.
 
 ## Verbs
 
@@ -30,7 +30,7 @@ An unrecognized value resolves to no adapter rather than being guessed into one.
 | --- | --- | --- |
 | `interrupt` | Deliver Pi's verified interrupt sequence while leaving the agent running. | Delivery succeeds, the exact Herdr endpoint still exists, and native state still reports Pi alive; cancellation is confirmed only from Pi's acknowledgement and otherwise reports `cancel=unconfirmed`. |
 | `exit` | Stop the agent, preserving the endpoint, the worktree, and every uncommitted change. | Herdr's recovery-grade classifier reports the agent gone. Already-stopped is idempotent success. |
-| `relaunch` | Replace the running Pi agent with a new one in the same endpoint and worktree, optionally changing model and effort. | The new agent is alive on the recorded endpoint, and the durable record names the Pi harness that is actually running. |
+| `relaunch` | Replace the running Pi agent with a new one in the same endpoint and worktree, optionally changing model and effort. | The new agent is alive on the recorded endpoint, and the durable record names Pi as the runtime actually running. |
 
 An exit that delivers lifecycle input but cannot prove the agent stopped fails with `exit=unconfirmed`, reports the observed agent state and any interrupt cancellation claim, and never claims that nothing changed.
 Interrupt never rewrites busy state as proof of its own success.
@@ -48,7 +48,7 @@ Pi has no verified pane-resume contract.
 
 1. **Resolve the profile.**
    Pi is fixed; an explicit `--model` or `--effort` replaces the matching recorded axis.
-   An unsupported recorded harness refuses before the checkpoint.
+   A record that does not name Pi refuses before the checkpoint.
    A same-Pi relaunch retains its recorded model and effort unless explicit values replace them.
 2. **Safe checkpoint.**
    The recorded worktree must exist and be a worktree root; its head and dirty state are recorded.
@@ -64,8 +64,8 @@ Pi has no verified pane-resume contract.
 
 - A refusal **before** the agent is stopped leaves the durable record and the instructions byte-identical.
 - A launch failure **after** the agent is stopped restores the prior durable record, keeps the progress note so a later recovery still has it, marks the journal `failed:launching`, and reports plainly that no agent is running and where the work is preserved.
-- If the launch owner already published the new record but no running agent can be confirmed, the new record is kept: the task is recorded on the new harness with no agent confirmed, which is exactly what recovery reconciles.
-  Rewriting it back to the old harness would be a second, worse inaccuracy.
+- If the launch owner already published the new record but no running agent can be confirmed, the new Pi record is kept, which is exactly what recovery reconciles.
+  Rewriting it back to the prior record would be a second, worse inaccuracy.
 
 ## Fail-closed boundaries
 
@@ -75,8 +75,7 @@ Pi has no verified pane-resume contract.
 - A remotely placed secondmate is refused by name.
   Its agent runs on another host, so none of the postconditions this plane verifies could be read for it here; local exact-Herdr endpoint validation refuses the remote route record.
   Drive that lifecycle on its own host and reconcile it through the secondmate recovery path.
-- An unverified harness is refused rather than guessed at.
-- An unsupported recorded harness is refused before the agent or durable state is touched.
+- A record that does not name Pi is refused before the agent or durable state is touched.
 - `exit` and `relaunch` require Herdr's recovery-grade agent-state classifier because without it the "the agent stopped" postcondition cannot be proven.
 - An ambiguous or unreadable endpoint state refuses.
   Only a positively classified state acts.
@@ -86,7 +85,7 @@ Pi has no verified pane-resume contract.
 
 Pi interrupts with `Escape` and exits with `/quit`.
 Herdr delivers Pi's named keys and provides the recovery-grade native process state used for every postcondition.
-The executable facts live in `bin/fm-control-lib.sh`; empirical evidence lives in the `harness-adapters` skill and [`verification/herdr-runtime.md`](verification/herdr-runtime.md).
+The executable facts live in `bin/fm-control-lib.sh`; empirical evidence lives in the `pi-operations` skill and [`verification/herdr-runtime.md`](verification/herdr-runtime.md).
 
 ## Verification
 

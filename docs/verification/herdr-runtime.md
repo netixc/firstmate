@@ -436,13 +436,13 @@ FM_TEST_SUMMARY_FAMILY family=herdr-session count=12 duration_ms=492517 failed=0
 Remote and local Secondmate routing used:
 
 ```sh
-bin/fm-test-run.sh tests/fm-secondmate-safety.test.sh tests/fm-remote-secondmate-lifecycle-e2e.test.sh tests/fm-remote-secondmate-parent-binding.test.sh tests/fm-remote-secondmate-trace-context.test.sh tests/fm-secondmate-harness.test.sh
+bin/fm-test-run.sh tests/fm-secondmate-safety.test.sh tests/fm-remote-secondmate-lifecycle-e2e.test.sh tests/fm-remote-secondmate-parent-binding.test.sh tests/fm-remote-secondmate-trace-context.test.sh
 ```
 
 ```text
-FM_TEST_SUMMARY total=5 failed=0 skipped_gate=0 duration_ms=186633
-FM_TEST_SUMMARY_FAMILY family=secondmate count=4 duration_ms=156762 failed=0
-FM_TEST_SUMMARY_FAMILY family=unclassified count=1 duration_ms=29633 failed=0
+FM_TEST_SUMMARY total=4 failed=0 skipped_gate=0 duration_ms=179589
+FM_TEST_SUMMARY_FAMILY family=secondmate count=3 duration_ms=150315 failed=0
+FM_TEST_SUMMARY_FAMILY family=unclassified count=1 duration_ms=29075 failed=0
 ```
 
 Watcher durability, native transition fallback, and away-mode guards used:
@@ -540,12 +540,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 131707 315
-bin 54397 127
-tests 56960 117
+all 131632 315
+bin 54359 127
+tests 56962 117
 pi 2045 9
 agents 559
-added=7038 deleted=32535 net=-25497
+added=7211 deleted=32783 net=-25572
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,497 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,572 lines smaller.
