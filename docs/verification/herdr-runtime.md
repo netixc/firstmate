@@ -452,8 +452,8 @@ bin/fm-test-run.sh tests/fm-watch-triage.test.sh tests/fm-wake-queue.test.sh tes
 ```
 
 ```text
-FM_TEST_SUMMARY total=4 failed=0 skipped_gate=0 duration_ms=152830
-FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=4 duration_ms=152632 failed=0
+FM_TEST_SUMMARY total=4 failed=0 skipped_gate=0 duration_ms=164675
+FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=4 duration_ms=164494 failed=0
 ```
 
 The final session-lock and native-transition regression rerun used:
@@ -468,20 +468,21 @@ FM_TEST_SUMMARY_FAMILY family=herdr-session count=1 duration_ms=8021 failed=0
 FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=8003 failed=0
 ```
 
-The final Pi-only spawn, remote routing, bound-socket transport, and real Pi-on-Herdr lifecycle rerun used:
+The final direct-Pi busy, supervision, bound-socket transport, and real Pi-on-Herdr lifecycle rerun used:
 
 ```sh
-bash -n bin/fm-bootstrap.sh bin/fm-config-inherit-lib.sh bin/fm-control.sh bin/fm-harness.sh bin/fm-remote-secondmate-control.sh bin/fm-spawn.sh && \
-  bash tests/fm-send-strict.test.sh >/dev/null && \
-  bash tests/fm-supervision-events.test.sh >/dev/null && \
-  bash tests/fm-spawn-dispatch-profile.test.sh >/dev/null && \
-  bash tests/fm-remote-secondmate-lifecycle-e2e.test.sh >/dev/null && \
+bash -n bin/fm-busy-lib.sh bin/fm-composer-lib.sh bin/fm-herdr.sh bin/fm-pending-reply-lib.sh bin/fm-remote-secondmate-control.sh bin/fm-session-start.sh bin/fm-supervise-daemon.sh bin/fm-supervision-instructions.sh bin/fm-watch.sh && \
+  bash tests/fm-busy-state.test.sh >/dev/null && \
+  bash tests/fm-busy-adapter-wiring.test.sh >/dev/null && \
+  bash tests/fm-composer-lib.test.sh >/dev/null && \
+  bash tests/fm-supervision-instructions.test.sh >/dev/null && \
+  bash tests/fm-session-start.test.sh >/dev/null && \
   lifecycle=$(FM_SEND_MARKER_HERDR_E2E=1 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
     bash tests/fm-send-secondmate-marker-herdr-e2e.test.sh) && \
   printf '%s\n' "$lifecycle" && \
   printf '%s\n' "$lifecycle" | grep -F 'ok - real Pi/Herdr: teardown removes the endpoint, home, and metadata' >/dev/null && \
   git diff --check && \
-  printf '%s\n' 'focused Pi-only spawn, Herdr routing, and lifecycle verification: ok'
+  printf '%s\n' 'focused direct-Pi busy, supervision, and lifecycle verification: ok'
 ```
 
 ```text
@@ -491,7 +492,7 @@ warning: secondmate marker-pi-sm sync skipped before launch: primary default-bra
 ●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
 ●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
 ●  This is a supervision warning only; the requested message WILL still be sent.
-●  repair missing watcher supervision according to the session-start block for this harness; do not use shell &.
+●  repair a missing or failed watcher cycle with the Pi tool fm_watch_arm_pi, or restart Pi with -e /Users/control/.no-mistakes/worktrees/874f0de57f61/01M0JV34M9BNN5H9SSWGKW5BG2/.pi/extensions/fm-primary-turnend-guard.ts -e /Users/control/.no-mistakes/worktrees/874f0de57f61/01M0JV34M9BNN5H9SSWGKW5BG2/.pi/extensions/fm-primary-pi-watch.ts if the extensions are not loaded.
 ●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 evidence: exact-id carrier=from-firstmate corr=valid body=exact
 ok - real Pi/Herdr: exact-id FM_HOME send delivers exactly one from-firstmate marker
@@ -499,7 +500,7 @@ evidence: direct-input received-hex=464d5f4d41524b45525f48455244525f444952454354
 ok - real Pi/Herdr: direct captain terminal input stays unmarked
 ok - real Pi/Herdr: lifecycle control preserves the live exact endpoint
 ok - real Pi/Herdr: teardown removes the endpoint, home, and metadata
-focused Pi-only spawn, Herdr routing, and lifecycle verification: ok
+focused direct-Pi busy, supervision, and lifecycle verification: ok
 ```
 
 Strict tracked-extension checking used TypeScript 5.9.3:
@@ -540,12 +541,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 131632 315
-bin 54359 127
-tests 56962 117
+all 131542 314
+bin 54281 127
+tests 56966 117
 pi 2045 9
 agents 559
-added=7211 deleted=32783 net=-25572
+added=7363 deleted=33025 net=-25662
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,572 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,662 lines smaller.

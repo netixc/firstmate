@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # bin/fm-composer-lib.sh - the ONE fleet-wide owner of composer classification:
-# every shape a verified harness draws, every glyph, every container proof, and
+# every Pi shape, every glyph, every container proof, and
 # the empty|pending|pending-unproven|unknown verdict used by Herdr.
 #
 # WHY THIS EXISTS: Herdr captures the screen and describes the evidence; this
@@ -204,37 +204,25 @@ fm_composer_strip_ghost() {
 # These live here, in the ONE shared composer/delivery owner, rather than in any
 # single Herdr read caller, because every Herdr read needs them for the SAME job:
 # proving a submitted Enter actually landed. Herdr runs the
-# same harnesses and faces the same acknowledgement problem.
+# Pi and faces the same acknowledgement problem.
 #
 # This is a DELIVERY guard, deliberately NOT a worker-state source. The semantic
 # busy contract - what firstmate records and supervises on - is owned by
-# bin/fm-busy-lib.sh, which forbids classifying a harness from rendered text.
+# bin/fm-busy-lib.sh, which forbids classifying Pi from rendered text.
 # Matching a footer to confirm a keystroke landed is a different question from
 # asking what a worker is doing, and the two must not be conflated.
-# Delivery-only rendered busy footers per harness. Pi renders "Working...".
-# The harness-less default is the UNION of the per-harness tokens below, used
-# when a caller has no recorded harness for the pane (the submit cores read the
-# baseline and the post-Enter transition this way).
-FM_DELIVERY_BUSY_REGEX_DEFAULT='Working\.\.\.'
-FM_DELIVERY_PI_BUSY_REGEX_DEFAULT='Working\.\.\.'
+# Pi's delivery-only rendered busy footer.
+FM_PI_DELIVERY_BUSY_REGEX_DEFAULT='Working\.\.\.'
 
-fm_busy_lines_match() {  # [harness]
-  local harness=${1:-} lines regex
+fm_busy_lines_match() {
+  local lines regex
   IFS= read -r -d '' lines || true
   if [ -n "${FM_BUSY_REGEX:-}" ]; then
     regex=$FM_BUSY_REGEX
   else
-    case "$harness" in
-      pi) regex=$FM_DELIVERY_PI_BUSY_REGEX_DEFAULT ;;
-      '') regex=$FM_DELIVERY_BUSY_REGEX_DEFAULT ;;
-      *)
-        # A supplied harness must never borrow another harness's signature.
-        # Register its verified signature explicitly before classifying it busy.
-        regex=
-        ;;
-    esac
+    regex=$FM_PI_DELIVERY_BUSY_REGEX_DEFAULT
   fi
-  [ -n "$regex" ] && printf '%s' "$lines" | grep -qiE "$regex"
+  printf '%s' "$lines" | grep -qiE "$regex"
 }
 
 # Shell prompt glyphs are genuine empty composers only inside a verified
@@ -243,9 +231,8 @@ fm_busy_lines_match() {  # [harness]
 # exposed to pathname expansion.
 FM_COMPOSER_SHELL_PROMPT_GLYPHS=$(printf '%s\n' '>' '❯' '$' '%' '#')
 
-# FM_COMPOSER_IDLE_RE lets an unverified harness declare composer text it
-# renders in an empty composer that a plain capture cannot distinguish from
-# typed text. The default deliberately matches nothing.
+# FM_COMPOSER_IDLE_RE lets a caller declare Pi composer text that a plain
+# capture cannot distinguish from typed text. The default matches nothing.
 FM_COMPOSER_IDLE_RE_DEFAULT='a^'
 
 # The bounded row window callers should capture for a composer read. One

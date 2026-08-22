@@ -241,10 +241,6 @@
       "audience": "agent-runtime"
     },
     {
-      "path": "docs/supervision-protocols/unknown.md",
-      "audience": "agent-runtime"
-    },
-    {
       "path": "docs/trace-context.md",
       "audience": "maintainer-architecture"
     },

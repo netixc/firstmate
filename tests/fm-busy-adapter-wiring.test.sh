@@ -59,7 +59,7 @@ EOF
   )
 }
 
-classify() { fm_busy_classify "lab:w-$1:p1" pi "$1" "$2"; }
+classify() { fm_busy_classify "lab:w-$1:p1" "$1" "$2"; }
 
 setup_case() { # <name> <id>
   local name=$1

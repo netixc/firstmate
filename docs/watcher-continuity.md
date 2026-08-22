@@ -72,4 +72,4 @@ The same suite covers ordinary same-process session replacement for `/new`, `/re
 The goal is continuity without a Pi model-memory re-arm step.
 No zero-latency guarantee is claimed because lock verification, watcher startup, and bounded retry delays remain deliberate safety work.
 
-[`verification/supervision.md`](verification/supervision.md#watcher-continuity) records the current cross-harness live evidence and exact opt-in commands.
+[`verification/supervision.md`](verification/supervision.md#watcher-continuity) records the current Pi live evidence and exact opt-in commands.

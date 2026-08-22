@@ -5,9 +5,9 @@
 # Covers the captain-approved redesign invariants: busy/idle/unknown/dead with
 # explicit source attribution; missing, malformed, stale (gen-mismatch), and
 # untrusted (source-mismatch) semantic data classify unknown - never idle;
-# adapter isolation (one adapter's writer can never classify another adapter);
+# Pi source isolation (an untrusted writer can never classify as Pi activity);
 # endpoint death is the only process-level override and
-# yields dead, never busy; converted adapters never classify from rendered
+# yields dead, never busy; Pi never classifies from rendered
 # footer text. All hermetic over temp dirs; no real agent session is invoked.
 set -u
 
@@ -36,7 +36,7 @@ test_arm_seeds_busy_spawn() {
   gen=$("$EV" arm "$state" t1) || fail "arm failed"
   [ -f "$state/t1.busy-gen" ] || fail "arm did not write the gen sidecar"
   [ "$(cat "$state/t1.busy-gen")" = "$gen" ] || fail "sidecar gen does not match printed gen"
-  out=$(fm_busy_classify w1 pi t1 "$state")
+  out=$(fm_busy_classify w1 t1 "$state")
   [ "$out" = "busy fm-spawn" ] || fail "seed should classify 'busy fm-spawn', got '$out'"
   pass "arm mints a gen sidecar and seeds busy fm-spawn at seq=1"
 }
@@ -47,11 +47,11 @@ test_apply_advances_seq_and_source() {
   gen=$("$EV" arm "$state" t1)
   "$EV" apply "$state" t1 idle --gen "$gen" --source pi-ext --event stop \
     || fail "apply idle failed"
-  out=$(fm_busy_classify w1 pi t1 "$state")
+  out=$(fm_busy_classify w1 t1 "$state")
   [ "$out" = "idle pi-ext" ] || fail "expected 'idle pi-ext', got '$out'"
   "$EV" apply "$state" t1 busy --gen "$gen" --source pi-ext --event user-prompt-submit \
     || fail "apply busy failed"
-  out=$(fm_busy_classify w1 pi t1 "$state")
+  out=$(fm_busy_classify w1 t1 "$state")
   [ "$out" = "busy pi-ext" ] || fail "expected 'busy pi-ext', got '$out'"
   seq=$(fm_busy_record_read "$state" t1 | awk '{print $4}')
   [ "$seq" = 3 ] || fail "expected seq 3 after seed + two applies, got '$seq'"
@@ -64,7 +64,7 @@ test_apply_current_gen_reset() {
   "$EV" arm "$state" t1 >/dev/null
   "$EV" apply "$state" t1 unknown --current-gen --source fm-recovery --event relaunch \
     || fail "apply unknown failed"
-  out=$(fm_busy_classify w1 pi t1 "$state")
+  out=$(fm_busy_classify w1 t1 "$state")
   [ "$out" = "unknown fm-recovery" ] || fail "expected 'unknown fm-recovery', got '$out'"
   pass "firstmate-owned recovery events bind to the current gen"
 }
@@ -99,7 +99,7 @@ test_retire_serializes_and_rejects_stale_gen() {
   if "$EV" retire "$state" t1 --gen "$old_gen" 2>/dev/null; then
     fail "retire accepted a superseded incarnation"
   fi
-  out=$(fm_busy_classify w1 pi t1 "$state")
+  out=$(fm_busy_classify w1 t1 "$state")
   [ "$out" = "busy fm-spawn" ] || fail "stale retirement changed the new incarnation, got '$out'"
   [ "$(cat "$state/t1.busy-gen")" = "$new_gen" ] || fail "stale retirement changed the new gen"
   pass "retire waits for the writer lock and cannot remove a new incarnation"
@@ -136,7 +136,7 @@ test_stale_gen_event_rejected() {
   if "$EV" apply "$state" t1 idle --gen "$old_gen" --source pi-ext --event stop 2>/dev/null; then
     fail "an event carrying a stale gen must be rejected"
   fi
-  out=$(fm_busy_classify w1 pi t1 "$state")
+  out=$(fm_busy_classify w1 t1 "$state")
   [ "$out" = "busy fm-spawn" ] || fail "stale event must not change the record, got '$out'"
   pass "a late event from a previous incarnation is rejected, record unchanged"
 }
@@ -148,7 +148,7 @@ test_stale_gen_record_unknown() {
   # Simulate a record left behind by a superseded incarnation.
   printf 'g-superseded.1.1\n' > "$state/t1.busy-gen.new"
   mv "$state/t1.busy-gen.new" "$state/t1.busy-gen"
-  out=$(fm_busy_classify w1 pi t1 "$state")
+  out=$(fm_busy_classify w1 t1 "$state")
   [ "$out" = "unknown gen-mismatch" ] || fail "stale record must classify 'unknown gen-mismatch', got '$out'"
   pass "a record from a stale incarnation classifies unknown, never idle"
 }
@@ -158,7 +158,7 @@ test_stale_gen_record_unknown() {
 test_missing_record_unknown_not_idle() {
   local state out
   state=$(new_state_dir missing)
-  out=$(fm_busy_classify w1 pi t1 "$state")
+  out=$(fm_busy_classify w1 t1 "$state")
   [ "$out" = "unknown missing" ] || fail "Pi with no record must be 'unknown missing', got '$out'"
   pass "a converted adapter with no record classifies unknown, never idle"
 }
@@ -175,11 +175,11 @@ test_malformed_record_unknown() {
     "v1 gen=$gen seq=1 state=busy source=bad source event=x ts=1" \
     "v1 gen=$gen seq=1 state=busy source=pi-ext event=x ts=1 rogue=1"; do
     printf '%s\n' "$bad" > "$state/t1.busy-state"
-    out=$(fm_busy_classify w1 pi t1 "$state")
+    out=$(fm_busy_classify w1 t1 "$state")
     [ "$out" = "unknown malformed" ] || fail "malformed record '$bad' must be 'unknown malformed', got '$out'"
   done
   printf 'v1 gen=%s seq=1 state=busy source=pi-ext event=x ts=1\nsecond line\n' "$gen" > "$state/t1.busy-state"
-  out=$(fm_busy_classify w1 pi t1 "$state")
+  out=$(fm_busy_classify w1 t1 "$state")
   [ "$out" = "unknown malformed" ] || fail "multi-line record must be 'unknown malformed', got '$out'"
   pass "malformed records classify unknown malformed, never busy or idle"
 }
@@ -188,19 +188,19 @@ test_record_without_sidecar_unknown() {
   local state out
   state=$(new_state_dir orphan-record)
   printf 'v1 gen=g1.1.1 seq=1 state=busy source=pi-ext event=x ts=1\n' > "$state/t1.busy-state"
-  out=$(fm_busy_classify w1 pi t1 "$state")
+  out=$(fm_busy_classify w1 t1 "$state")
   [ "$out" = "unknown malformed" ] || fail "record without an armed gen must be unknown, got '$out'"
   pass "a record with no armed gen sidecar classifies unknown"
 }
 
-# --- adapter isolation ---------------------------------------------------------
+# --- Pi source isolation -------------------------------------------------------
 
-test_converted_adapters_without_records_are_unknown() {
+test_pi_without_records_is_unknown() {
   local state out
   state=$(new_state_dir no-record)
-  out=$(fm_busy_classify w1 pi t1 "$state")
+  out=$(fm_busy_classify w1 t1 "$state")
   [ "$out" = "unknown missing" ] || fail "Pi must never classify from footer text, got '$out'"
-  pass "converted adapters without semantic records remain unknown"
+  pass "Pi without semantic records remains unknown"
 }
 
 
@@ -212,13 +212,13 @@ test_dead_endpoint_overrides() {
   gen=$("$EV" arm "$state" t1)
   # shellcheck disable=SC2329 # invoked indirectly through fm_busy_classify_live
   fm_herdr_target_exists() { return 1; }
-  out=$(fm_busy_classify_live w1 pi t1 "$state")
+  out=$(fm_busy_classify_live w1 t1 "$state")
   [ "$out" = "dead endpoint-gone" ] || fail "gone endpoint must classify dead, got '$out'"
   # shellcheck disable=SC2329 # invoked indirectly through fm_busy_classify_live
   fm_herdr_target_exists() { return 0; }
-  out=$(fm_busy_classify_live w1 pi t1 "$state")
+  out=$(fm_busy_classify_live w1 t1 "$state")
   [ "$out" = "busy fm-spawn" ] || fail "live endpoint must fall through to the record, got '$out'"
-  out=$(fm_busy_classify_live '' pi t1 "$state")
+  out=$(fm_busy_classify_live '' t1 "$state")
   [ "$out" = "unknown no-target" ] || fail "empty target must classify unknown, got '$out'"
   unset -f fm_herdr_target_exists
   pass "endpoint death is the only process-level override and yields dead, never busy"
@@ -230,17 +230,17 @@ test_herdr_native_busy_only() {
   # shellcheck disable=SC2329 # invoked indirectly through fm_busy_classify
   fm_herdr_busy_state() { printf '%s' "$FAKE_NATIVE"; }
   FAKE_NATIVE=busy
-  out=$(fm_busy_classify s:p pi t1 "$state")
+  out=$(fm_busy_classify s:p t1 "$state")
   [ "$out" = "busy herdr-native" ] || fail "native busy with no record must classify busy, got '$out'"
   FAKE_NATIVE=idle
-  out=$(fm_busy_classify s:p pi t1 "$state")
+  out=$(fm_busy_classify s:p t1 "$state")
   [ "$out" = "unknown missing" ] || fail "native idle must NOT classify idle, got '$out'"
   # A valid record outranks the native verdict.
   local gen
   gen=$("$EV" arm "$state" t1)
   "$EV" apply "$state" t1 idle --gen "$gen" --source pi-ext --event stop
   FAKE_NATIVE=busy
-  out=$(fm_busy_classify s:p pi t1 "$state")
+  out=$(fm_busy_classify s:p t1 "$state")
   [ "$out" = "idle pi-ext" ] || fail "the adapter record must outrank herdr's native verdict, got '$out'"
   unset -f fm_herdr_busy_state
   pass "herdr's native verdict is trusted for busy only, and records outrank it"
@@ -267,7 +267,7 @@ test_record_read_leaves_caller_shell_intact() {
   # A glob-shaped field must survive parsing literally rather than expanding.
   printf 'v1 gen=%s seq=1 state=busy source=* event=x ts=1\n' "$(cat "$state/t1.busy-gen")" \
     > "$state/t1.busy-state"
-  out=$(fm_busy_classify w1 pi t1 "$state")
+  out=$(fm_busy_classify w1 t1 "$state")
   [ "$out" = "unknown malformed" ] || fail "a glob-shaped source must be rejected, not expanded, got '$out'"
   pass "record parsing never clobbers the caller's positional parameters, glob setting, or fields"
 }
@@ -276,13 +276,13 @@ test_boolean_view_never_promotes_unknown() {
   local state gen
   state=$(new_state_dir boolean)
   gen=$("$EV" arm "$state" t1)
-  fm_busy_is_busy w1 pi t1 "$state" || fail "busy record must read busy"
+  fm_busy_is_busy w1 t1 "$state" || fail "busy record must read busy"
   "$EV" apply "$state" t1 idle --gen "$gen" --source pi-ext --event stop
-  if fm_busy_is_busy w1 pi t1 "$state"; then
+  if fm_busy_is_busy w1 t1 "$state"; then
     fail "idle record must not read busy"
   fi
   printf 'garbage\n' > "$state/t1.busy-state"
-  if fm_busy_is_busy w1 pi t1 "$state"; then
+  if fm_busy_is_busy w1 t1 "$state"; then
     fail "malformed record must not read busy"
   fi
   pass "the boolean view reports busy only on an exact busy verdict"
@@ -301,6 +301,14 @@ test_meta_classification_requires_exact_endpoint_identity() {
   out=$(fm_busy_classify_meta "$meta" t1 "$state")
   [ "$out" = "unknown invalid-endpoint" ] \
     || fail "ambiguous endpoint metadata must classify unknown, got '$out'"
+  fm_write_meta "$meta" \
+    "backend=herdr" "window=lab:w1:p1" "endpoint_task_id=t1" \
+    "herdr_session=lab" "herdr_workspace_id=w1" "herdr_tab_id=w1:t1" \
+    "herdr_pane_id=w1:p1" "worktree=/tmp/t1" "project=/tmp/project" \
+    "harness=legacy-agent"
+  out=$(fm_busy_classify_meta "$meta" t1 "$state")
+  [ "$out" = "unknown source-mismatch" ] \
+    || fail "retired runtime metadata must be preserved as unknown, got '$out'"
   pass "metadata busy classification requires exact endpoint identity"
 }
 
@@ -315,7 +323,7 @@ test_stale_gen_record_unknown
 test_missing_record_unknown_not_idle
 test_malformed_record_unknown
 test_record_without_sidecar_unknown
-test_converted_adapters_without_records_are_unknown
+test_pi_without_records_is_unknown
 test_dead_endpoint_overrides
 test_herdr_native_busy_only
 test_record_read_leaves_caller_shell_intact

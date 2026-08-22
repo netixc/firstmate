@@ -39,8 +39,7 @@
 #   3. inactive outcomes + wake-drain - runs the local bounded inactive-outcome
 #                       reconciliation before presenting durable wakes and advancing
 #                       recovery handling state, so both only run when locked.
-#   4. supervision-instructions - the one emitted operating block for the
-#                       detected primary harness.
+#   4. supervision-instructions - the Pi operating block.
 #   5. read-once contract - the do-not-re-read contract covering every source
 #                       represented by the two digests below.
 #   6. fleet digest   - a compact data/backlog.md identity/metadata listing,
@@ -321,7 +320,14 @@ if [ -z "${FM_SESSION_START_STAGE_FILE:-}" ]; then
   exit 0
 fi
 
-PRIMARY_HARNESS=$("$SCRIPT_DIR/fm-harness.sh" 2>/dev/null || printf unknown)
+DETECTED_PRIMARY=$("$SCRIPT_DIR/fm-harness.sh" 2>/dev/null || printf unknown)
+case "$DETECTED_PRIMARY" in
+  pi|unknown) ;;
+  *)
+    printf 'error: Pi is required as the primary runtime; detected %s\n' "$DETECTED_PRIMARY" >&2
+    exit 1
+    ;;
+esac
 
 # shellcheck source=bin/fm-herdr.sh
 . "$SCRIPT_DIR/fm-herdr.sh"
@@ -577,10 +583,7 @@ agents_baseline_drifted() {  # <rebuilding-session-pid>
 # working Firstmate delivery path arrive here. Other adapters fresh-read on reset.
 agents_refresh_required() {  # <rebuilding-session-pid>
   local lock_pid=$1
-  case "$PRIMARY_HARNESS:$SESSION_SOURCE" in
-    pi:compact) ;;
-    *) return 1 ;;
-  esac
+  [ "$SESSION_SOURCE" = compact ] || return 1
   agents_baseline_drifted "$lock_pid"
 }
 
@@ -728,22 +731,19 @@ AFK_PRESENT=0
 RELAY_PRESENT=0
 [ -f "$CONFIG/relay.env" ] && RELAY_PRESENT=1
 
-if [ "$PRIMARY_HARNESS" = pi ]; then
-  PI_EXT="$FM_ROOT/.pi/extensions/fm-primary-pi-watch.ts"
-  PI_TURNEND_EXT="$FM_ROOT/.pi/extensions/fm-primary-turnend-guard.ts"
-  PI_WATCH_MARKER="$STATE/.pi-watch-extension-loaded"
-  PI_TURNEND_MARKER="$STATE/.pi-turnend-extension-loaded"
-  PI_LOCK="$STATE/.lock"
-  PI_RESTART_COMMAND=pi
-  PI_WATCH_VERSION=$(fm_pi_extension_version "$PI_EXT" || printf '')
-  PI_TURNEND_VERSION=$(fm_pi_extension_version "$PI_TURNEND_EXT" || printf '')
-  if ! fm_pi_extension_loaded "$PI_WATCH_MARKER" "$PI_WATCH_VERSION" "$PI_LOCK" \
-    || ! fm_pi_extension_loaded "$PI_TURNEND_MARKER" "$PI_TURNEND_VERSION" "$PI_LOCK"; then
-    printf 'PI_WATCH_EXTENSION: not loaded - approve Pi project trust once per clone, then restart %s so %s and %s auto-load for turn-end guard and background wake coverage; use -e %s -e %s only if project hooks are not trusted\n' "$PI_RESTART_COMMAND" "$PI_TURNEND_EXT" "$PI_EXT" "$PI_TURNEND_EXT" "$PI_EXT"
-  fi
+PI_EXT="$FM_ROOT/.pi/extensions/fm-primary-pi-watch.ts"
+PI_TURNEND_EXT="$FM_ROOT/.pi/extensions/fm-primary-turnend-guard.ts"
+PI_WATCH_MARKER="$STATE/.pi-watch-extension-loaded"
+PI_TURNEND_MARKER="$STATE/.pi-turnend-extension-loaded"
+PI_LOCK="$STATE/.lock"
+PI_RESTART_COMMAND=pi
+PI_WATCH_VERSION=$(fm_pi_extension_version "$PI_EXT" || printf '')
+PI_TURNEND_VERSION=$(fm_pi_extension_version "$PI_TURNEND_EXT" || printf '')
+if ! fm_pi_extension_loaded "$PI_WATCH_MARKER" "$PI_WATCH_VERSION" "$PI_LOCK" \
+  || ! fm_pi_extension_loaded "$PI_TURNEND_MARKER" "$PI_TURNEND_VERSION" "$PI_LOCK"; then
+  printf 'PI_WATCH_EXTENSION: not loaded - approve Pi project trust once per clone, then restart %s so %s and %s auto-load for turn-end guard and background wake coverage; use -e %s -e %s only if project hooks are not trusted\n' "$PI_RESTART_COMMAND" "$PI_TURNEND_EXT" "$PI_EXT" "$PI_TURNEND_EXT" "$PI_EXT"
 fi
 "$SCRIPT_DIR/fm-supervision-instructions.sh" \
-  --harness "$PRIMARY_HARNESS" \
   --read-only "$READ_ONLY" \
   --afk "$AFK_PRESENT" \
   --relay "$RELAY_PRESENT"
@@ -923,14 +923,14 @@ supervision.
 EOF
 elif [ -f "$CONFIG/relay.env" ]; then
   cat <<EOF
-Follow the supervision operating instructions block above for harness '$PRIMARY_HARNESS'.
+Follow the Pi supervision operating instructions block above.
 Relay is active, so the emitted block's cadence instruction applies.
 This script never starts supervision itself.
 
 EOF
 else
 cat <<EOF
-Follow the supervision operating instructions block above for harness '$PRIMARY_HARNESS'.
+Follow the Pi supervision operating instructions block above.
 This script never starts supervision itself.
 
 EOF

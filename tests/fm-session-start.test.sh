@@ -1861,9 +1861,9 @@ EOF
   out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
 
   assert_contains "$out" "RELAY: Relay on" "bootstrap did not activate Relay"
-  assert_contains "$out" "SUPERVISION OPERATING INSTRUCTIONS - primary harness: pi" "supervision block missing"
+  assert_contains "$out" "SUPERVISION OPERATING INSTRUCTIONS - Pi primary" "supervision block missing"
   assert_contains "$out" "- Relay: active" "supervision block did not mention X cadence"
-  assert_contains "$out" "Follow the supervision operating instructions block above" "next step did not point back to the emitted supervision block"
+  assert_contains "$out" "Follow the Pi supervision operating instructions block above" "next step did not point back to the emitted supervision block"
 
   pass "session start emits Relay cadence guidance in the harness supervision block"
 }
@@ -1900,9 +1900,9 @@ EOF
 
   out=$(FM_FAKE_HARNESS=pi run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
 
-  block_count=$(printf '%s\n' "$out" | grep -c '^SUPERVISION OPERATING INSTRUCTIONS - primary harness:')
+  block_count=$(printf '%s\n' "$out" | grep -c '^SUPERVISION OPERATING INSTRUCTIONS - Pi primary$')
   [ "$block_count" -eq 1 ] || fail "expected exactly one supervision block, got $block_count"
-  assert_contains "$out" "SUPERVISION OPERATING INSTRUCTIONS - primary harness: pi" "pi supervision block missing"
+  assert_contains "$out" "SUPERVISION OPERATING INSTRUCTIONS - Pi primary" "pi supervision block missing"
   assert_contains "$out" "Mode: Pi extension background wake." "pi snippet missing from session start"
   assert_contains "$out" "PI_WATCH_EXTENSION: not loaded" "pi extension load diagnostic missing"
   assert_contains "$out" "restart pi so $root/.pi/extensions/fm-primary-turnend-guard.ts and $root/.pi/extensions/fm-primary-pi-watch.ts auto-load" "pi extension load diagnostic omits the turn-end guard extension"

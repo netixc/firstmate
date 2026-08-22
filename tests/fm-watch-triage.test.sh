@@ -578,6 +578,7 @@ test_terminal_stale_surfaced() {
   out="$dir/watch.out"; drain_out="$dir/drain.out"; capture_file="$dir/pane.txt"
   window="test:w-done:p1"
   printf 'finished, awaiting review' > "$capture_file"
+  : > "$dir/herdr.sock"
   fm_write_meta "$state/done.meta" \
     "backend=herdr" "window=$window" "endpoint_task_id=done" \
     "herdr_session=test" "herdr_workspace_id=w-done" "herdr_tab_id=w-done:t-done" \
@@ -602,7 +603,7 @@ SH
   pane_hash=$(hash_text "finished, awaiting review")
   printf '%s' "$pane_hash" > "$state/.hash-$key"
   printf '1\n' > "$state/.count-$key"
-  PATH="$fakebin:$PATH" FM_FAKE_HERDR_CAPTURE="$capture_file" HERDR_SESSION=test \
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_FAKE_HERDR_CAPTURE="$capture_file" HERDR_SESSION=test \
     FM_STATE_OVERRIDE="$state" FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
   pid=$!
   wait_for_exit "$pid" 80 || fail "watcher did not exit for a stale pane on a terminal status"

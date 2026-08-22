@@ -272,13 +272,14 @@ cmd_capture() {
 }
 
 cmd_observe() {
-  local id=$1 harness
+  local id=$1
   validate_id "$id"
   validate_home "$id"
   remote_endpoint_require "$id"
-  harness=$(fm_meta_get "$REMOTE_ENDPOINT_META" harness)
+  [ "$(fm_meta_exact_value "$REMOTE_ENDPOINT_META" harness 2>/dev/null || true)" = pi ] \
+    || die "remote secondmate $id does not record Pi as its worker runtime; preserving its endpoint"
   remote_endpoint_live_operation "$id" \
-    fm_pending_reply_herdr_observation "$harness"
+    fm_pending_reply_herdr_observation
   printf '\n'
 }
 

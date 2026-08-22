@@ -103,15 +103,13 @@ test_real_text_is_pending() {
   pass "fm_composer_classify_content: real unsubmitted text reads pending (including a popup argument-hint fill)"
 }
 
-test_delivery_busy_signatures_are_limited_to_verified_harnesses() {
-  printf 'Working...\0' | fm_busy_lines_match pi \
-    || fail "Pi's verified delivery footer must remain recognized"
+test_delivery_busy_signature_is_pi() {
   printf 'Working...\0' | fm_busy_lines_match \
-    || fail "the harness-neutral matcher must retain the Pi footer"
-  if printf 'Working...\0' | fm_busy_lines_match legacy-agent; then
-    fail "an unsupported harness borrowed a verified harness's delivery footer"
+    || fail "Pi's verified delivery footer must remain recognized"
+  if printf 'Waiting...\0' | fm_busy_lines_match; then
+    fail "unverified rendered text was interpreted as Pi's delivery footer"
   fi
-  pass "delivery busy matching recognizes only the retained Pi signature"
+  pass "delivery busy matching recognizes Pi's retained signature directly"
 }
 
 # =============================================================================
@@ -272,7 +270,7 @@ test_empty_content_is_empty
 test_idle_placeholder_is_empty
 test_idle_placeholder_case_mode_is_explicit
 test_real_text_is_pending
-test_delivery_busy_signatures_are_limited_to_verified_harnesses
+test_delivery_busy_signature_is_pi
 test_matrix_pi_separated_needs_identity
 test_matrix_bordered_shell_glyph_box
 test_strict_blank_row_divergence

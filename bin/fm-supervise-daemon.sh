@@ -172,7 +172,7 @@ WEDGE_ALARM_NOTIFIER_PID=
 # The captain-relevant verb set and the status classifiers (last_status_line,
 # status_is_captain_relevant, window_to_task, scan_captain_relevant_statuses) now
 # live in bin/fm-classify-lib.sh, shared with the always-on watcher.
-# Composer-empty detection, submit acknowledgement, and the harness-scoped
+# Composer-empty detection, submit acknowledgement, and the Pi
 # supervisor-pane busy guard are direct Herdr primitives.
 INJECT_FAIL_SLEEP_DEFAULT=30
 INJECT_CONFIRM_RETRIES_DEFAULT=3
@@ -537,30 +537,15 @@ mark_escalated_seen() {  # <kind> <arg> <state>
 #
 # This rendered reader applies only to the supervisor pane during away-mode
 # injection. It never classifies a recorded worker task. The detected primary
-# harness selects exactly one signature, so output from another harness cannot
-# make the primary read busy.
-#
-# Resolved lazily and memoized: harness detection walks process ancestry, which
-# is too heavy to pay on every source of this library (the unit tests and the
-# launcher source it purely for its pure functions).
-fm_daemon_primary_harness() {
-  if [ -z "${FM_DAEMON_PRIMARY_HARNESS:-}" ]; then
-    FM_DAEMON_PRIMARY_HARNESS=$("$FM_DAEMON_DIR/fm-harness.sh" 2>/dev/null || printf 'unknown')
-    [ -n "$FM_DAEMON_PRIMARY_HARNESS" ] || FM_DAEMON_PRIMARY_HARNESS=unknown
-  fi
-  printf '%s' "$FM_DAEMON_PRIMARY_HARNESS"
-}
-
 pane_is_busy() {  # <target>
-  local target=$1 native tail40 harness
-  harness=$(fm_daemon_primary_harness)
+  local target=$1 native tail40
   native=$(fm_herdr_busy_state "$target" 2>/dev/null)
   case "$native" in
     busy) return 0 ;;
   esac
   tail40=$(fm_herdr_capture "$target" 40 2>/dev/null) || return 1
   printf '%s' "$tail40" | grep -v '^[[:space:]]*$' | tail -12 \
-    | fm_busy_lines_match "$harness"
+    | fm_busy_lines_match
 }
 
 # pane_input_pending dispatches through fm_herdr_composer_state and treats
@@ -577,34 +562,27 @@ task_window_endpoint_class() {  # <window> <state>
   fm_herdr_meta_kind "$meta"
 }
 
-task_window_harness() {  # <window> <state>
-  local win=$1 state=$2 task meta
-  task=$(window_to_task "$win" "$state")
-  meta="$state/$task.meta"
-  grep '^harness=' "$meta" 2>/dev/null | cut -d= -f2- || true
-}
-
 # stale_window_is_busy: 0 when the task is PROVABLY working through the
 # semantic busy-state contract (bin/fm-busy-lib.sh), 1 when it is not, and 2
 # when the endpoint could not be read at all. Only an exact busy verdict is
 # working: unknown semantic state never becomes busy and never becomes a
 # silent idle, so a stale pane whose state cannot be proven surfaces.
 stale_window_is_busy() {  # <window> <state>
-  local win=$1 state=$2 endpoint_class harness task meta verdict
+  local win=$1 state=$2 endpoint_class task meta verdict
   endpoint_class=$(task_window_endpoint_class "$win" "$state")
   [ "$endpoint_class" = herdr ] || return 2
-  harness=$(task_window_harness "$win" "$state")
   task=$(window_to_task "$win" "$state")
   meta="$state/$task.meta"
+  [ "$(fm_meta_exact_value "$meta" harness 2>/dev/null || true)" = pi ] || return 2
   verdict=$(fm_herdr_with_live_task_endpoint "$meta" "$task" \
-    _fm_daemon_stale_busy_observation "$harness" "$task" "$state") || return 2
+    _fm_daemon_stale_busy_observation "$task" "$state") || return 2
   [ "${verdict%% *}" = busy ]
 }
 
 _fm_daemon_stale_busy_observation() {
-  local win=$1 harness=$2 task=$3 state=$4
+  local win=$1 task=$2 state=$3
   fm_herdr_capture "$win" 40 >/dev/null 2>&1 || return 1
-  fm_busy_classify "$win" "$harness" "$task" "$state"
+  fm_busy_classify "$win" "$task" "$state"
 }
 
 escalate_add() {  # <state> <distilled-item>

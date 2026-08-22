@@ -8,8 +8,6 @@ set -u
 . "$ROOT/bin/fm-supervise-daemon.sh"
 
 TMP_ROOT=$(fm_test_tmproot fm-daemon)
-FM_DAEMON_PRIMARY_HARNESS=pi
-export FM_DAEMON_PRIMARY_HARNESS
 
 new_state() { local d=$TMP_ROOT/$1; mkdir -p "$d/state"; printf '%s\n' "$d/state"; }
 

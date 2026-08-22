@@ -89,7 +89,7 @@ Roughly 0.07 ms per session start, from a single `[ -f "$FM_HOME/.env" ]` test t
 
 Verified worker harness (`pi`): not applicable after inspection.
 Nothing here reads or renders harness-specific state.
-The only supervision surfaces touched are the session-start digest, which `bin/fm-supervision-instructions.sh` already renders per harness without knowing this section exists, and the wake payload produced by the existing relay poll, which every harness protocol consumes identically.
+The only supervision surfaces touched are the session-start digest, whose Pi block is rendered by `bin/fm-supervision-instructions.sh` without knowing this section exists, and the wake payload produced by the existing Relay poll, which the Pi supervision protocol consumes.
 
 Herdr session execution: not applicable after inspection.
 No command here reads Herdr endpoint identity, resolves a target, or captures a pane.

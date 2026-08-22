@@ -1217,11 +1217,13 @@ fm_herdr_live_agent_state_task_endpoint() {  # <meta-file> <task-id>
 }
 
 _fm_herdr_live_busy_classify() {
-  fm_busy_classify "$1" "$2" "$3" "$4"
+  fm_busy_classify "$1" "$2" "$3"
 }
 
-fm_herdr_live_busy_task_endpoint() {  # <meta-file> <task-id> <harness> <state-dir>
-  fm_herdr_with_live_task_endpoint "$1" "$2" _fm_herdr_live_busy_classify "$3" "$2" "$4"
+fm_herdr_live_busy_task_endpoint() {  # <meta-file> <task-id> <state-dir>
+  [ "$(fm_meta_exact_value "$1" harness 2>/dev/null || true)" = pi ] \
+    || { printf 'unknown source-mismatch'; return 0; }
+  fm_herdr_with_live_task_endpoint "$1" "$2" _fm_herdr_live_busy_classify "$2" "$3"
 }
 
 _fm_herdr_live_send_key() {

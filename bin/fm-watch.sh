@@ -125,7 +125,7 @@ SIGNAL_GRACE=${FM_SIGNAL_GRACE:-30}   # seconds to linger after a signal so trai
                                       # signals (a status write, then the same turn's
                                       # turn-end hook) coalesce into one wake
 # Busy state is decided by the semantic contract in bin/fm-busy-lib.sh, which
-# is the single owner of per-harness sources, source attribution, and the one
+# is the single owner of Pi sources, source attribution, and the one
 # Always-on wake triage: most wakes during a long crew validation are benign (a
 # working: note or turn-end while a pipeline runs, a no-change heartbeat). Rather
 # than wake firstmate's LLM for each, this watcher classifies every wake in bash
@@ -199,7 +199,7 @@ window_is_busy() {  # <window>
   meta="$STATE/$task.meta"
   if [ -n "$task" ] && [ -f "$meta" ]; then
     verdict=$(fm_herdr_with_live_task_endpoint "$meta" "$task" \
-      _fm_watch_busy_observation "$task" "$STATE") || verdict='unknown unreadable'
+      _fm_watch_busy_observation "$meta" "$task" "$STATE") || verdict='unknown unreadable'
   else
     verdict='unknown missing'
   fi
@@ -207,8 +207,10 @@ window_is_busy() {  # <window>
 }
 
 _fm_watch_busy_observation() {
-  local target=$1 task=$2 state=$3
-  fm_busy_classify "$target" "$(window_harness "$target")" "$task" "$state"
+  local target=$1 meta=$2 task=$3 state=$4
+  [ "$(fm_meta_exact_value "$meta" harness 2>/dev/null || true)" = pi ] \
+    || { printf 'unknown source-mismatch'; return 0; }
+  fm_busy_classify "$target" "$task" "$state"
 }
 
 window_kind() {
@@ -228,13 +230,6 @@ window_endpoint_class() {
   meta=$(fm_endpoint_meta_for_target "$1" "$STATE" 2>/dev/null || true)
   [ -n "$meta" ] || { printf 'unsupported'; return 0; }
   fm_herdr_meta_kind "$meta"
-}
-
-window_harness() {
-  local w=$1 meta
-  meta=$(fm_endpoint_meta_for_target "$w" "$STATE" 2>/dev/null || true)
-  [ -n "$meta" ] || return 0
-  grep '^harness=' "$meta" | cut -d= -f2- || true
 }
 
 window_label() {

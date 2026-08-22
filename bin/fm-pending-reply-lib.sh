@@ -639,12 +639,11 @@ fm_pending_reply_fallback_idle_eligible() {  # <record-path>
 # category as the submit acknowledgement matcher in bin/fm-composer-lib.sh - never task
 # state, and never a source consumers can confuse with semantic state.
 #
-# It stays harness-scoped (fm_busy_lines_match with the recorded harness, no
-# global OR of every vendor signature), so one harness's output cannot make
-# another read busy, and a weak rendered idle degrades to `fallback-idle`,
+# It matches Pi's delivery footer directly, and a weak rendered idle degrades
+# to `fallback-idle`,
 # which the caller accepts as idle only after its grace window.
-fm_pending_reply_herdr_observation() {  # <target> [harness]
-  local target=$1 harness=${2-} native tail40
+fm_pending_reply_herdr_observation() {  # <target>
+  local target=$1 native tail40
   native=$(fm_herdr_busy_state "$target" 2>/dev/null || printf 'unknown')
   case "$native" in
     busy|idle) printf '%s' "$native"; return 0 ;;
@@ -652,7 +651,7 @@ fm_pending_reply_herdr_observation() {  # <target> [harness]
   tail40=$(fm_herdr_capture "$target" 40 2>/dev/null) \
     || { printf 'unknown'; return 0; }
   if printf '%s' "$tail40" | grep -v '^[[:space:]]*$' | tail -6 \
-    | fm_busy_lines_match "$harness"; then
+    | fm_busy_lines_match; then
     printf 'busy'
   else
     printf 'fallback-idle'
@@ -1193,7 +1192,6 @@ fm_pending_reply_tick() {  # <state-dir>
     target=
     busy=unknown
     sm_home=
-    harness=
     if [ -f "$meta" ]; then
       remote_host=$(fm_meta_get "$meta" remote_host)
       endpoint_class=$(fm_herdr_meta_kind "$meta")
@@ -1201,7 +1199,6 @@ fm_pending_reply_tick() {  # <state-dir>
         target=$(fm_endpoint_target_of_meta "$meta")
       fi
       sm_home=$(fm_meta_get "$meta" home)
-      harness=$(fm_meta_get "$meta" harness)
       if [ -n "$remote_host" ]; then
         if fm_herdr_validate_remote_route "$meta" "$task_id" >/dev/null 2>&1; then
           target="remote:$task_id"
@@ -1226,9 +1223,11 @@ fm_pending_reply_tick() {  # <state-dir>
             observation=$("$_FM_PENDING_REPLY_LIB_DIR/fm-on.sh" "$task_id" \
               fm-remote-secondmate-control.sh observe "$task_id" < /dev/null 2>/dev/null || printf 'unknown')
             case "$observation" in busy|idle|fallback-idle|unknown) ;; *) observation=unknown ;; esac
-          else
+          elif [ "$(fm_meta_exact_value "$meta" harness 2>/dev/null || true)" = pi ]; then
             observation=$(fm_herdr_with_live_task_endpoint "$meta" "$task_id" \
-              fm_pending_reply_herdr_observation "$harness" 2>/dev/null || printf 'unknown')
+              fm_pending_reply_herdr_observation 2>/dev/null || printf 'unknown')
+          else
+            observation=unknown
           fi
           observation_tasks+=("$task_id")
           observation_values+=("$observation")

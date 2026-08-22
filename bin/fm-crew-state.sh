@@ -150,7 +150,7 @@ pane_readable() {  # <target>
 # Native Herdr busy is accepted only as positive activity evidence when no
 # extension record exists; native idle never closes a turn.
 crew_busy_verdict() {  # <target>
-  fm_herdr_live_busy_task_endpoint "$META" "$ID" "$HARNESS" "$STATE"
+  fm_herdr_live_busy_task_endpoint "$META" "$ID" "$STATE"
 }
 
 # --- no-mistakes run lookup (authoritative when a run matches this branch) --
