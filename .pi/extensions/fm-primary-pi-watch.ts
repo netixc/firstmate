@@ -1,4 +1,4 @@
-// Firstmate primary watcher bridge for Pi.
+// Firstmate primary Pi watcher bridge and statically registered send adapter.
 //
 // Session-generation ownership (stated once here):
 // Pi emits session_shutdown for ordinary same-process replacements (/new, /resume,
