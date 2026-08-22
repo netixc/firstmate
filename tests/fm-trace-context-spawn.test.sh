@@ -35,7 +35,6 @@ make_spawn_case() {
   launchlog="$case_dir/launch.log"
   fakebin=$(make_spawn_fakebin "$case_dir/fake")
   mkdir -p "$home/data" "$home/projects" "$home/state" "$home/config"
-  printf 'pi\n' > "$home/config/crew-harness"
   printf '%s\n' "$$" > "$home/state/.lock"
   printf '%s off\n' "$$" > "$home/state/.trace-context-effective"
   fm_git_worktree "$proj" "$wt" "wt-$name"
@@ -121,7 +120,6 @@ run_two_level() {
   prim="$base/primary"
   sm="$base/sm"
   mkdir -p "$prim/config" "$prim/data" "$prim/state" "$prim/projects"
-  printf 'pi\n' > "$prim/config/crew-harness"
   [ "$pfile" = present ] && : > "$prim/config/trace-context"
   touch "$prim/state/.last-watcher-beat"
   start_trace_session "$prim" "$penv"
@@ -392,7 +390,6 @@ test_two_routed_tasks_through_one_secondmate_root_distinct_traces() {
   base="$TMP_ROOT/routed-boundary"
   sm="$base/sm-home"
   mkdir -p "$sm/data" "$sm/projects" "$sm/state" "$sm/config"
-  printf 'pi\n' > "$sm/config/crew-harness"
   : > "$sm/config/trace-context"
   printf '%s\n' "$$" > "$sm/state/.lock"
   touch "$sm/state/.last-watcher-beat"

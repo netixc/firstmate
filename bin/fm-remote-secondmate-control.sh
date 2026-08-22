@@ -2,7 +2,7 @@
 # Host-local lifecycle control for the remote secondmate home selected by fm-on.
 #
 # Usage:
-#   fm-remote-secondmate-control.sh launch <id> <harness> <model|-> <effort|-> [traceparent]
+#   fm-remote-secondmate-control.sh launch <id> <model|-> <effort|-> [traceparent]
 #   fm-remote-secondmate-control.sh state <id>
 #   fm-remote-secondmate-control.sh route <id>
 #   fm-remote-secondmate-control.sh send <id> <message>
@@ -180,15 +180,11 @@ cmd_route() {
 }
 
 cmd_launch() {
-  local id=$1 harness=$2 model=$3 effort=$4 traceparent=${5:-}
+  local id=$1 model=$2 effort=$3 traceparent=${4:-}
   local current meta out herdr_session
 
   validate_id "$id"
   validate_home "$id"
-  case "$harness" in
-    pi) ;;
-    *) die "unverified remote secondmate harness: $harness" ;;
-  esac
   case "$effort" in -|low|medium|high|xhigh|max) ;; *) die "invalid remote secondmate effort: $effort" ;; esac
   # Herdr is required on this host: its server belongs to the GUI login session,
   # so the endpoint survives every SSH disconnection that a remote route depends
@@ -217,7 +213,7 @@ cmd_launch() {
       *) die "remote endpoint state is $current; refusing duplicate launch" ;;
     esac
   fi
-  ARGS=("$id" "$TARGET_HOME" --secondmate --harness "$harness")
+  ARGS=("$id" "$TARGET_HOME" --secondmate)
   [ "$model" = - ] || ARGS+=(--model "$model")
   [ "$effort" = - ] || ARGS+=(--effort "$effort")
   [ -z "$traceparent" ] || ARGS+=(--traceparent "$traceparent")
@@ -355,7 +351,7 @@ cmd_retire() {
 }
 
 case "${1:-}" in
-  launch) shift; [ "$#" -ge 4 ] && [ "$#" -le 5 ] || usage; cmd_launch "$@" ;;
+  launch) shift; [ "$#" -ge 3 ] && [ "$#" -le 4 ] || usage; cmd_launch "$@" ;;
   state) shift; [ "$#" -eq 1 ] || usage; validate_id "$1"; validate_home "$1"; state_value "$1" ;;
   route) shift; [ "$#" -eq 1 ] || usage; cmd_route "$1" ;;
   send) shift; [ "$#" -eq 2 ] || usage; cmd_send "$@" ;;

@@ -70,7 +70,6 @@ setup_case() { # <name> <id>
   ID=$2
   FAKEBIN=$(make_fakebin "$CASE/fake")
   mkdir -p "$HOME_DIR/data/$ID" "$HOME_DIR/projects" "$HOME_DIR/state" "$HOME_DIR/config"
-  printf 'pi\n' > "$HOME_DIR/config/crew-harness"
   printf 'brief\n' > "$HOME_DIR/data/$ID/brief.md"
   fm_git_worktree "$PROJ" "$WT" "busy-$name"
   touch "$HOME_DIR/state/.last-watcher-beat"

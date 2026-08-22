@@ -48,7 +48,6 @@ test_projectless_secondmate_spawn() {
   local world parent home id=domain-a fb out
   world=$TMP_ROOT/projectless; parent=$world/parent; home=$world/home
   mkdir -p "$parent/state" "$parent/data/$id" "$parent/config" "$parent/projects"
-  printf 'pi\n' > "$parent/config/crew-harness"
   printf 'charter instructions\n' > "$parent/data/$id/brief.md"
   seed_home "$home" "$id"
   fb=$(make_fakebin "$world/fake")

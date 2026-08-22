@@ -24,7 +24,7 @@ This feature parents no SDK span by itself.
 
 Because the injected carrier and the recorded carrier are the same string, an observer that reads the metadata reconstructs exactly the identity the child received.
 The injection sits at the unconditional pre-launch export site, so it covers ship, scout, and Secondmate spawns on Pi.
-This is the same coverage `GOTMPDIR` already has and requires no trace-specific `launch_template()` behavior.
+This is the same coverage `GOTMPDIR` already has and requires no trace-specific Pi launch behavior.
 Ship, scout, and Secondmate spawns reach that site through Herdr.
 
 ### Remote Secondmate routes

@@ -47,9 +47,7 @@ Pi has no verified pane-resume contract.
 `relaunch` is the only verb that changes durable records, so it runs as a transaction with a journal at `state/<id>.control-relaunch`, the prior record preserved beside it, and a ship or scout's prior instructions preserved when a progress note is appended.
 
 1. **Resolve the profile.**
-   An explicit `--harness`, `--model`, or `--effort` wins.
-   Otherwise a `kind=secondmate` task re-resolves its durable `config/secondmate-harness` pin, including that file's optional model and effort tokens, exactly as every other respawn does - so setting the pin and relaunching is the ordinary way to move a secondmate's runtime.
-   A ship or scout keeps the harness already recorded for it, because that harness comes from firstmate's dispatch-profile judgment at intake and must not be silently re-read from configuration.
+   Pi is fixed; an explicit `--model` or `--effort` replaces the matching recorded axis.
    An unsupported recorded harness refuses before the checkpoint.
    A same-Pi relaunch retains its recorded model and effort unless explicit values replace them.
 2. **Safe checkpoint.**

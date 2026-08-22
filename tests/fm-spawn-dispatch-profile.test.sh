@@ -46,7 +46,7 @@ make_spawn_fakebin() {
 }
 
 make_spawn_case() {
-  local name=$1 harness=$2 case_dir home proj wt fakebin launchlog id
+  local name=$1 _legacy_harness=$2 case_dir home proj wt fakebin launchlog id
   shift 2
   case_dir="$TMP_ROOT/$name"
   home="$case_dir/home"
@@ -55,7 +55,6 @@ make_spawn_case() {
   launchlog="$case_dir/launch.log"
   fakebin=$(make_spawn_fakebin "$case_dir/fake")
   mkdir -p "$home/data" "$home/projects" "$home/state" "$home/config"
-  printf '%s\n' "$harness" > "$home/config/crew-harness"
   fm_git_worktree "$proj" "$wt" "wt-$name"
   touch "$home/state/.last-watcher-beat"
   for id in "$@"; do
@@ -67,7 +66,7 @@ make_spawn_case() {
 
 enable_dispatch_profile() {
   local home=$1
-  printf '%s\n' '{"rules":[{"when":"current events","use":{"harness":"pi","model":"xai/grok-4","effort":"high"}}],"default":{"harness":"pi","model":"gpt-5","effort":"medium"}}' \
+  printf '%s\n' '{"rules":[{"when":"current events","use":{"model":"xai/grok-4","effort":"high"}}],"default":{"model":"gpt-5","effort":"medium"}}' \
     > "$home/config/crew-dispatch.json"
 }
 
@@ -263,7 +262,7 @@ test_unresolvable_relative_overrides_fail_loudly() {
   pass "unresolvable relative spawn overrides fail with named diagnostics"
 }
 
-test_active_dispatch_profile_requires_explicit_harness_for_ship() {
+test_active_dispatch_profile_uses_direct_pi_for_ship() {
   local rec id out status
   id=profile-required-ship-z11
   rec=$(make_spawn_case profile-required-ship pi "$id")
@@ -272,14 +271,12 @@ test_active_dispatch_profile_requires_explicit_harness_for_ship() {
 
   out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR")
   status=$?
-  expect_code 1 "$status" "ship spawn without explicit harness should fail when dispatch profiles are active"
-  assert_contains "$out" "config/crew-dispatch.json is active - pass an explicit harness resolved from the dispatch rules" \
-    "spawn did not explain the dispatch-profile backstop"
-  assert_absent "$HOME_DIR/state/$id.meta" "ship refusal should happen before meta is written"
-  pass "active crew-dispatch profile requires an explicit harness for ship spawns"
+  expect_code 0 "$status" "ship spawn should run Pi directly when dispatch profiles are active"
+  assert_meta_profile "$HOME_DIR/state/$id.meta" pi default default
+  pass "active crew-dispatch profiles no longer select the ship runtime"
 }
 
-test_active_dispatch_profile_requires_explicit_harness_for_scout() {
+test_active_dispatch_profile_uses_direct_pi_for_scout() {
   local rec id out status
   id=profile-required-scout-z12
   rec=$(make_spawn_case profile-required-scout pi "$id")
@@ -288,35 +285,24 @@ test_active_dispatch_profile_requires_explicit_harness_for_scout() {
 
   out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" --scout)
   status=$?
-  expect_code 1 "$status" "scout spawn without explicit harness should fail when dispatch profiles are active"
-  assert_contains "$out" "config/crew-dispatch.json is active - pass an explicit harness resolved from the dispatch rules" \
-    "scout refusal did not explain the dispatch-profile backstop"
-  assert_absent "$HOME_DIR/state/$id.meta" "scout refusal should happen before meta is written"
-  pass "active crew-dispatch profile requires an explicit harness for scout spawns"
+  expect_code 0 "$status" "scout spawn should run Pi directly when dispatch profiles are active"
+  assert_meta_profile "$HOME_DIR/state/$id.meta" pi default default
+  pass "active crew-dispatch profiles no longer select the scout runtime"
 }
 
-test_active_dispatch_profile_allows_explicit_harness() {
-  local rec id out status launch task_tmp
+test_harness_option_is_retired() {
+  local rec id out status
   id=profile-explicit-z13
   rec=$(make_spawn_case profile-explicit pi "$id")
   read_case_record "$rec"
   enable_dispatch_profile "$HOME_DIR"
 
-  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id" "$PROJ_DIR" --harness pi --model gpt-5 --effort high)
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" --harness pi)
   status=$?
-  expect_code 0 "$status" "explicit harness should satisfy active dispatch-profile requirement"
-  assert_contains "$out" "spawned $id harness=pi" "spawn did not report explicit pi harness"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" pi gpt-5 high
-  task_tmp="/tmp/fm-$id"
-  assert_present "$task_tmp/gotmp" "spawn did not create its Go temp directory"
-  assert_grep "tasktmp=$task_tmp" "$HOME_DIR/state/$id.meta" "spawn metadata did not record its task temp root"
-  assert_grep "export GOTMPDIR=$task_tmp/gotmp" "$LAUNCH_LOG" "spawn did not export its Go temp directory into the pane"
-  rm -rf "$task_tmp"
-  launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "'$FAKEBIN_DIR/pi' --tui-mode regular --model 'gpt-5' --thinking 'high' -e" \
-    "explicit harness launch did not thread model and effort"
-  pass "active crew-dispatch profile allows an explicit resolved harness"
+  expect_code 1 "$status" "the retired harness option should fail"
+  assert_contains "$out" "--harness is retired because Pi is the sole worker runtime" "retired harness option was not explained"
+  assert_absent "$HOME_DIR/state/$id.meta" "retired harness option published metadata"
+  pass "the worker-runtime command-line selector is retired"
 }
 
 test_launch_delivery_holds_endpoint_lock() {
@@ -328,7 +314,7 @@ test_launch_delivery_holds_endpoint_lock() {
     bash -c '. "$1/bin/fm-herdr.sh"; fm_herdr_presentation_session_lock_path lab' _ "$ROOT") \
     || fail "could not resolve the spawn presentation lock"
   out=$(FM_FAKE_HERDR_EXPECTED_LOCK="$expected_lock" \
-    run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" pi)
+    run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR")
   status=$?
   expect_code 0 "$status" "spawn delivery should retain its endpoint authorization lock: $out"
   assert_present "$HOME_DIR/state/$id.meta" "locked spawn delivery did not publish metadata"
@@ -337,7 +323,7 @@ test_launch_delivery_holds_endpoint_lock() {
   pass "spawn delivery retains endpoint authorization through Enter"
 }
 
-test_active_dispatch_profile_allows_positional_harness() {
+test_positional_harness_is_retired() {
   local rec id out status
   id=profile-positional-z14
   rec=$(make_spawn_case profile-positional pi "$id")
@@ -347,10 +333,10 @@ test_active_dispatch_profile_allows_positional_harness() {
   out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
     "$id" "$PROJ_DIR" pi --model gpt-5 --effort high)
   status=$?
-  expect_code 0 "$status" "positional harness should satisfy active dispatch-profile requirement"
-  assert_contains "$out" "spawned $id harness=pi" "spawn did not report positional pi harness"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" pi gpt-5 high
-  pass "active crew-dispatch profile allows the legacy positional harness form"
+  expect_code 1 "$status" "positional harness should be retired"
+  assert_contains "$out" "worker-runtime positional arguments are retired" "retired positional harness was not explained"
+  assert_absent "$HOME_DIR/state/$id.meta" "retired positional harness published metadata"
+  pass "the worker-runtime positional selector is retired"
 }
 
 test_production_spawn_rejects_raw_launch_command() {
@@ -364,7 +350,7 @@ test_production_spawn_rejects_raw_launch_command() {
     "$id" "$PROJ_DIR" "custom-agent --flag")
   status=$?
   expect_code 1 "$status" "production spawn must reject a raw launch command"
-  assert_contains "$out" "production spawn accepts only the verified Pi harness" \
+  assert_contains "$out" "worker-runtime positional arguments are retired" \
     "raw launch refusal did not name the Pi-only contract"
   assert_absent "$HOME_DIR/state/$id.meta" "raw launch refusal published task metadata"
   [ ! -s "$LAUNCH_LOG" ] || fail "raw launch refusal typed a launch command"
@@ -455,7 +441,6 @@ test_pi_persistent_secondmate_uses_primary_extensions() {
   id=profile-pi-secondmate-z8d
   rec=$(make_spawn_case profile-pi-secondmate pi "$id")
   read_case_record "$rec"
-  printf '%s\n' pi > "$HOME_DIR/config/secondmate-harness"
   sm="$CASE_DIR/secondmate-home"
   make_seeded_secondmate_home "$sm" "$id"
   sm=$(cd "$sm" && pwd -P)
@@ -481,37 +466,38 @@ test_batch_forwards_shared_profile_flags() {
   enable_dispatch_profile "$HOME_DIR"
 
   out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id1=$PROJ_DIR" "$id2=$PROJ_DIR" --harness pi --model gpt-5 --effort high)
+    "$id1=$PROJ_DIR" "$id2=$PROJ_DIR" --model gpt-5 --effort high)
   status=$?
   expect_code 0 "$status" "batch spawn with shared profile flags should succeed"
   assert_contains "$out" "spawned $id1 harness=pi" "first batch task did not use shared harness"
   assert_contains "$out" "spawned $id2 harness=pi" "second batch task did not use shared harness"
   assert_meta_profile "$HOME_DIR/state/$id1.meta" pi gpt-5 high
   assert_meta_profile "$HOME_DIR/state/$id2.meta" pi gpt-5 high
-  pass "batch dispatch forwards shared --harness, --model, and --effort to every pair"
+  pass "batch dispatch runs Pi directly and forwards shared model and effort"
 }
 
-test_unsupported_harness_is_rejected_generically() {
+test_retired_worker_config_is_rejected() {
   local rec id config_id unsupported out status
   id=profile-unsupported-harness-z20
   rec=$(make_spawn_case profile-unsupported-harness pi "$id")
   read_case_record "$rec"
   unsupported=legacy-agent
-  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" "$unsupported")
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" --harness "$unsupported")
   status=$?
   expect_code 1 "$status" "an unsupported harness must be refused"
-  assert_contains "$out" "error: unknown harness '$unsupported'" "unsupported harness refusal did not use generic unknown-harness validation"
+  assert_contains "$out" "--harness is retired because Pi is the sole worker runtime" "unsupported harness selector was not retired"
   [ ! -e "$HOME_DIR/state/$id.meta" ] || fail "unsupported harness refusal published task metadata"
 
   config_id=profile-stale-config-z21
   rec=$(make_spawn_case profile-stale-config "$unsupported" "$config_id")
   read_case_record "$rec"
+  printf '%s\n' "$unsupported" > "$HOME_DIR/config/crew-harness"
   out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$config_id" "$PROJ_DIR")
   status=$?
   expect_code 1 "$status" "stale unsupported configuration must be refused"
-  assert_contains "$out" "error: no launch template for harness '$unsupported'" "stale config did not use generic unsupported-harness validation"
+  assert_contains "$out" "crew-harness is retired because Pi is the sole worker runtime" "stale worker config was not clearly retired"
   [ ! -e "$HOME_DIR/state/$config_id.meta" ] || fail "stale config refusal published task metadata"
-  pass "fm-spawn: unsupported launch and stale configuration are rejected generically"
+  pass "fm-spawn rejects retired worker-runtime selectors"
 }
 
 test_active_dispatch_profile_does_not_block_secondmate_launch() {
@@ -536,18 +522,18 @@ test_relative_home_overrides_launch_with_absolute_cross_process_paths
 test_home_defaults_preserve_absolute_or_resolve_relative_paths
 test_absolute_override_spelling_is_preserved_in_launch_paths
 test_unresolvable_relative_overrides_fail_loudly
-test_active_dispatch_profile_requires_explicit_harness_for_ship
-test_active_dispatch_profile_requires_explicit_harness_for_scout
-test_active_dispatch_profile_allows_explicit_harness
+test_active_dispatch_profile_uses_direct_pi_for_ship
+test_active_dispatch_profile_uses_direct_pi_for_scout
+test_harness_option_is_retired
 test_launch_delivery_holds_endpoint_lock
-test_active_dispatch_profile_allows_positional_harness
+test_positional_harness_is_retired
 test_production_spawn_rejects_raw_launch_command
 test_pi_threads_model_and_max_effort
 test_pi_tui_mode_probe_is_safe_for_old_and_new_pi
 test_pi_missing_binary_refuses_before_endpoint_or_metadata
 test_pi_persistent_secondmate_uses_primary_extensions
 test_batch_forwards_shared_profile_flags
-test_unsupported_harness_is_rejected_generically
+test_retired_worker_config_is_rejected
 test_active_dispatch_profile_does_not_block_secondmate_launch
 
 echo "# all fm-spawn-dispatch-profile tests passed"

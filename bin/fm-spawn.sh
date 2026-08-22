@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Spawn a direct report: a crewmate in a treehouse worktree, or a
 # secondmate in its isolated firstmate home.
-# Usage: fm-spawn.sh <task-id> <project-dir> --mode <no-mistakes|direct-PR|local-only> --yolo <on|off> [--harness pi] [--model <name>] [--effort <level>]
-#        fm-spawn.sh <task-id> <project-dir> --scout [--harness pi] [--model <name>] [--effort <level>]
-#        fm-spawn.sh <task-id> [<firstmate-home>] [--harness pi] [--model <name>] [--effort <level>] --secondmate
+# Usage: fm-spawn.sh <task-id> <project-dir> --mode <no-mistakes|direct-PR|local-only> --yolo <on|off> [--model <name>] [--effort <level>]
+#        fm-spawn.sh <task-id> <project-dir> --scout [--model <name>] [--effort <level>]
+#        fm-spawn.sh <task-id> [<firstmate-home>] [--model <name>] [--effort <level>] --secondmate
 #   --mode and --yolo are this task's delivery contract, REQUIRED for every ship
 #   spawn and refused on --scout and --secondmate spawns. Firstmate resolves both
 #   per task at intake (AGENTS.md section 7); data/projects.md holds the captain's
@@ -16,7 +16,7 @@
 #   loud one-line deviation notice is printed and the spawn continues.
 #   no-mistakes-prod-only is a registry policy rather than a task mode and is
 #   refused as a flag value.
-#        fm-spawn.sh <task-id> --relaunch [--harness <name>] [--model <name>] [--effort <level>]
+#        fm-spawn.sh <task-id> --relaunch [--model <name>] [--effort <level>]
 #   --relaunch launches a replacement agent for an EXISTING task into that
 #   task's own recorded endpoint and worktree instead of creating either. It is
 #   the launch half of the control plane (bin/fm-control.sh relaunch), which
@@ -28,8 +28,8 @@
 #   refused alongside it; only an explicit Pi model and effort may change. It
 #   refuses unless Herdr proves the endpoint agent-free and its shell is in the
 #   recorded worktree before arming the new incarnation.
-#   --harness <name> is the explicit per-spawn harness/profile adapter. The old
-#   positional harness arg still works for back-compat.
+#   Pi is the sole worker runtime. The retired --harness option is recognized
+#   only to refuse runtime selection; it never changes the Pi launch.
 #   --model <name> and --effort <low|medium|high|xhigh|max> are concrete profile
 #   axes chosen by firstmate at intake. They are only threaded into harnesses whose
 #   installed CLIs were verified to support that axis; unsupported axes are omitted
@@ -77,31 +77,15 @@
 #   serialize. A fresh spawn first takes the
 #   per-home task-set lock and refuses rather than waits when forced teardown owns
 #   it; relaunch is exempt because the existing task's control lock covers it.
-#   With no harness arg, a crewmate/scout spawn resolves the CREW harness only when
-#   config/crew-dispatch.json is absent. When that file exists, crewmate/scout
-#   spawns require an explicit harness so firstmate cannot silently skip dispatch
-#   profile consultation. A --secondmate spawn is exempt and resolves the SECONDMATE
-#   harness (config/secondmate-harness -> config/crew-harness -> own), so the
-#   secondmate-vs-crewmate split is DURABLE across every respawn (recovery,
-#   /updatefirstmate, restart). A bare verified adapter name overrides it for
-#   this spawn (either kind). Production launches accept only Pi. A narrow
+#   Dispatch profiles choose only Pi-supported model and effort axes. A narrow
 #   FM_SPAWN_TEST_RAW_LAUNCH=1 seam remains for Herdr integration tests that
 #   also set FM_SPAWN_NO_GUARD=1 and need a deterministic marker command; it is
-#   never a production adapter path.
+#   never a production runtime path.
 #   For Pi, fm-spawn resolves the executable name from PATH once, probes that
 #   concrete path with --help, and launches the same path. It adds --tui-mode
 #   regular only when that help advertises the flag; a failed or inconclusive
 #   probe omits it so older Pi versions remain launchable. A missing Pi
 #   executable refuses before endpoint creation.
-#   config/secondmate-harness may also carry an optional model and effort as extra
-#   whitespace-separated tokens ("<harness> [<model>] [<effort>]"). For a
-#   --secondmate spawn, those tokens apply only when this spawn also resolves its
-#   harness from config/secondmate-harness. An explicit per-spawn --harness or
-#   positional harness arg starts with clean model/effort
-#   defaults unless the caller also passes explicit --model/--effort flags. When
-#   the file governs the spawn, its model/effort tokens are re-resolved on every
-#   respawn exactly like the harness axis, and explicit --model/--effort flags
-#   still win over the file's tokens.
 #   A --secondmate spawn also propagates the primary's declared inherited local
 #   material, so the secondmate's OWN crewmates inherit primary config and the
 #   secondmate receives the primary's read-only shared captain-preference file
@@ -121,14 +105,13 @@
 # Batch dispatch: pass one or more `id=repo` pairs instead of a single <id> <project>, e.g.
 #     fm-spawn.sh fix-a-k3=projects/foo add-b-q7=projects/bar [--scout]
 #   Each pair re-execs this script in single-task mode, so the single path stays the only
-#   source of truth; shared --scout/--harness/--model/--effort/--mode/--yolo
+#   source of truth; shared --scout/--model/--effort/--mode/--yolo
 #   applies to every pair. A ship batch therefore carries one delivery contract, and each
 #   pair still checks it against its own brief; a batch spanning modes is two invocations.
-#   If config/crew-dispatch.json exists, shared --harness is required for crewmate
-#   and scout batches. The loop lives here, in bash, so callers never hand-write a
+#   The loop lives here, in bash, so callers never hand-write a
 #   multi-task shell loop (the tool shell is zsh, which does not word-split unquoted
 #   $vars and silently breaks ad-hoc `for ... in $pairs` loops).
-#   Launch templates live in launch_template() below; placeholders replaced before launch:
+#   The Pi launch command uses these placeholders before launch:
 #     __BRIEF__    absolute path to data/<task-id>/brief.md
 #     __PIBIN__    quoted concrete Pi executable path resolved from PATH
 #     __PITUIMODE__ optional --tui-mode regular when that executable advertises it
@@ -229,14 +212,12 @@ fm_refuse_if_gate_agent
 [ -n "${FM_SPAWN_NO_GUARD:-}" ] || "$FM_ROOT/bin/fm-guard.sh" || true
 KIND=ship
 KIND_SET=0
-HARNESS_ARG=
 MODEL=
 EFFORT=
 BACKEND_ARG=
 MODE=
 YOLO=
 TRACEPARENT_ARG=
-HARNESS_SET=0
 MODEL_SET=0
 EFFORT_SET=0
 BACKEND_SET=0
@@ -252,7 +233,7 @@ for a in "$@"; do
       --*) echo "error: --$want_value requires a value" >&2; exit 1 ;;
     esac
     case "$want_value" in
-      harness) HARNESS_ARG=$a; HARNESS_SET=1 ;;
+      harness) echo "error: --harness is retired because Pi is the sole worker runtime; remove the option" >&2; exit 1 ;;
       model) MODEL=$a; MODEL_SET=1 ;;
       effort) EFFORT=$a; EFFORT_SET=1 ;;
       backend) BACKEND_ARG=$a; BACKEND_SET=1 ;;
@@ -269,7 +250,7 @@ for a in "$@"; do
     --secondmate) KIND=secondmate; KIND_SET=1 ;;
     --relaunch) RELAUNCH=1 ;;
     --harness) want_value=harness ;;
-    --harness=*) HARNESS_ARG=${a#--harness=}; HARNESS_SET=1 ;;
+    --harness=*) echo "error: --harness is retired because Pi is the sole worker runtime; remove the option" >&2; exit 1 ;;
     --model) want_value=model ;;
     --model=*) MODEL=${a#--model=}; MODEL_SET=1 ;;
     --effort) want_value=effort ;;
@@ -286,7 +267,6 @@ for a in "$@"; do
   esac
 done
 [ -z "$want_value" ] || { echo "error: --$want_value requires a value" >&2; exit 1; }
-[ "$HARNESS_SET" -eq 0 ] || [ -n "$HARNESS_ARG" ] || { echo "error: --harness requires a non-empty value" >&2; exit 1; }
 [ "$MODEL_SET" -eq 0 ] || [ -n "$MODEL" ] || { echo "error: --model requires a non-empty value" >&2; exit 1; }
 [ "$EFFORT_SET" -eq 0 ] || [ -n "$EFFORT" ] || { echo "error: --effort requires a non-empty value" >&2; exit 1; }
 [ "$BACKEND_SET" -eq 0 ] || [ -n "$BACKEND_ARG" ] || { echo "error: --backend requires a non-empty value" >&2; exit 1; }
@@ -301,6 +281,12 @@ fi
 [ "$MODE_SET" -eq 0 ] || [ -n "$MODE" ] || { echo "error: --mode requires a non-empty value" >&2; exit 1; }
 [ "$YOLO_SET" -eq 0 ] || [ -n "$YOLO" ] || { echo "error: --yolo requires a non-empty value" >&2; exit 1; }
 [ "$TRACEPARENT_SET" -eq 0 ] || [ -n "$TRACEPARENT_ARG" ] || { echo "error: --traceparent requires a non-empty value" >&2; exit 1; }
+for retired_worker_config in "$CONFIG/crew-harness" "$CONFIG/secondmate-harness"; do
+  if [ -e "$retired_worker_config" ] || [ -L "$retired_worker_config" ]; then
+    echo "error: $(basename "$retired_worker_config") is retired because Pi is the sole worker runtime; remove the file" >&2
+    exit 1
+  fi
+done
 # A parent-delivered carrier replaces this home's own resolution, so it is
 # refused unless it is a secondmate spawn carrying a strictly valid W3C value.
 # Nothing else may reach the pane's TRACEPARENT export.
@@ -399,34 +385,15 @@ spawn_remote_secondmate() {
     echo "error: remote secondmate spawn accepts no local home positional argument" >&2
     return 2
   fi
-  if [ -n "$HARNESS_ARG" ]; then
-    harness=$HARNESS_ARG
-  elif [ -n "$positional" ]; then
-    harness=$positional
-  else
-    harness=$("$FM_ROOT/bin/fm-harness.sh" secondmate)
+  if [ -n "$positional" ]; then
+    fm_lock_release "$registry_lock" || true
+    fm_lock_release "$SPAWN_TASK_LOCK" || true
+    echo "error: remote secondmate spawn accepts no worker-runtime positional; Pi is always used" >&2
+    return 2
   fi
-  case "$harness" in
-    pi) ;;
-    *)
-      fm_lock_release "$registry_lock" || true
-      fm_lock_release "$SPAWN_TASK_LOCK" || true
-      echo "error: remote secondmate spawn requires Pi, not '$harness'" >&2
-      return 1
-      ;;
-  esac
+  harness=pi
   model=${MODEL:--}
   effort=${EFFORT:--}
-  if [ -z "$HARNESS_ARG" ] && [ -z "$positional" ]; then
-    if [ "$MODEL_SET" -eq 0 ]; then
-      model=$("$SCRIPT_DIR/fm-harness.sh" secondmate-model)
-      [ -n "$model" ] || model=-
-    fi
-    if [ "$EFFORT_SET" -eq 0 ]; then
-      effort=$("$SCRIPT_DIR/fm-harness.sh" secondmate-effort)
-      [ -n "$effort" ] || effort=-
-    fi
-  fi
   # A remote second mate always runs in the host's dedicated Herdr session.
   case "$effort" in
     -|low|medium|high|xhigh|max) ;;
@@ -511,7 +478,7 @@ spawn_remote_secondmate() {
   if [ "$(fm_trace_context_session_effective "$STATE/.trace-context-effective")" = on ]; then
     remote_traceparent=$(FM_TRACE_CONTEXT=on fm_trace_context_resolve "$CONFIG" "$meta" || true)
   fi
-  launch_args=("$id" "$harness" "$model" "$effort")
+  launch_args=("$id" "$model" "$effort")
   [ -z "$remote_traceparent" ] || launch_args+=("$remote_traceparent")
   if out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh launch \
     "${launch_args[@]}" < /dev/null 2>&1); then
@@ -716,17 +683,12 @@ if [ "$RELAUNCH" -eq 1 ] && [ "${#POS[@]}" -gt 0 ] && [ "${POS[0]}" != "$idpart"
   exit 1
 fi
 if [ "${#POS[@]}" -gt 0 ] && [ "${POS[0]}" != "$idpart" ] && case "$idpart" in */*) false ;; *) true ;; esac; then
-  if [ "$KIND" != secondmate ] && [ -z "$HARNESS_ARG" ] && [ -f "$CONFIG/crew-dispatch.json" ]; then
-    echo "error: config/crew-dispatch.json is active - pass an explicit harness resolved from the dispatch rules (the consultation backstop, so the rules are never silently skipped)." >&2
-    exit 1
-  fi
   rc=0
   shared_args=()
-  [ -z "$HARNESS_ARG" ] || shared_args+=(--harness "$HARNESS_ARG")
   [ -z "$MODEL" ] || shared_args+=(--model "$MODEL")
   [ -z "$EFFORT" ] || shared_args+=(--effort "$EFFORT")
   # One delivery contract applies to every pair in a batch, exactly like the shared
-  # harness. Each pair still re-validates it against its own brief, so a batch
+  # profile. Each pair still re-validates it against its own brief, so a batch
   # spanning several modes is two invocations rather than a silent mixed dispatch.
   [ "$MODE_SET" -eq 0 ] || shared_args+=(--mode "$MODE")
   [ "$YOLO_SET" -eq 0 ] || shared_args+=(--yolo "$YOLO")
@@ -817,7 +779,6 @@ FIRSTMATE_HOME=
 # re-launch the task it names. The endpoint identity check is the same shared
 # validation teardown uses, so a malformed, ambiguous, or foreign record
 # refuses here exactly as it refuses there.
-RELAUNCH_PRIOR_HARNESS=
 if [ "$RELAUNCH" -eq 1 ]; then
   [ "${#POS[@]}" -eq 1 ] || {
     echo "error: --relaunch takes the task id only; its project or home comes from the task's own record" >&2
@@ -840,7 +801,6 @@ if [ "$RELAUNCH" -eq 1 ]; then
     && [ "$(fm_herdr_pane_presence_state "$FM_HERDR_SESSION" "$FM_HERDR_PANE")" = present ]; then
     fm_herdr_validate_live_task_endpoint "$RELAUNCH_META" "$ID" || exit 1
   fi
-  RELAUNCH_PRIOR_HARNESS=$(fm_meta_get "$RELAUNCH_META" harness)
   KIND=$(fm_meta_get "$RELAUNCH_META" kind)
   [ -n "$KIND" ] || KIND=ship
   MODE=$(fm_meta_get "$RELAUNCH_META" mode)
@@ -864,40 +824,14 @@ if [ "$RELAUNCH" -eq 1 ]; then
   HERDR_WORKSPACE_ID=$(fm_meta_get "$RELAUNCH_META" herdr_workspace_id)
   HERDR_TAB_ID=$(fm_meta_get "$RELAUNCH_META" herdr_tab_id)
   HERDR_PANE_ID=$(fm_meta_get "$RELAUNCH_META" herdr_pane_id)
-  # With no explicit harness, a relaunch reuses the harness already recorded
-  # for this task. It must NOT fall through to the fresh-spawn config
-  # resolution, which would silently move an existing task onto whatever the
-  # crew or secondmate default currently says. Choosing a different harness is
-  # the caller's explicit decision, made with --harness (bin/fm-control.sh
-  # resolves that decision, including a secondmate's durable pin).
-  ARG3=${HARNESS_ARG:-$RELAUNCH_PRIOR_HARNESS}
-  [ -n "$ARG3" ] || {
-    echo "error: task $ID has no recorded harness; pass --harness to relaunch it" >&2
-    exit 1
-  }
+  ARG3=
 elif [ "$KIND" = secondmate ]; then
-  case "${POS[1]:-}" in
-    ''|pi)
-      ARG3=${POS[1]:-}
-      ;;
-    *' '*)
-      if [ "${#POS[@]}" -gt 2 ] || [ -d "${POS[1]}" ]; then
-        FIRSTMATE_HOME=${POS[1]}
-        ARG3=${POS[2]:-}
-      else
-        ARG3=${POS[1]}
-      fi
-      ;;
-    *)
-      FIRSTMATE_HOME=${POS[1]}
-      ARG3=${POS[2]:-}
-      ;;
-  esac
+  FIRSTMATE_HOME=${POS[1]:-}
+  ARG3=${POS[2]:-}
 else
   PROJ=${POS[1]}
   ARG3=${POS[2]:-}
 fi
-[ -z "$HARNESS_ARG" ] || ARG3=$HARNESS_ARG
 
 shell_quote() {
   printf "'"
@@ -927,104 +861,46 @@ pi_supports_tui_mode() {
   printf '%s\n' "$help" | grep -Eq -- '(^|[[:space:]])--tui-mode([[:space:]=]|$)'
 }
 
-# The verified launch command per adapter. The knowledge half of each adapter
-# (busy-state source, exit command, dialogs, quirks) lives in the harness-adapters skill.
-launch_template() {
-  local harness=$1 kind=${2:-ship}
+pi_launch_command() {
+  local kind=${1:-ship}
   # shellcheck disable=SC2016  # single quotes are deliberate: $(cat ...) expands in the crewmate pane, not here
-  case "$harness" in
-    pi)
-      if [ "$kind" = secondmate ]; then
-        printf '%s' '__PIBIN____PITUIMODE__ __MODELFLAG____EFFORTFLAG__-e __PITURNEND__ -e __PIWATCH__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
-      else
-        printf '%s' 'FM_WORKER_LIFECYCLE_CONTEXT=__PIWORKERCTX__ __PIBIN____PITUIMODE__ __MODELFLAG____EFFORTFLAG__-e __PIWORKEREXT__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
-      fi
-      ;;
-    *) return 1 ;;
-  esac
+  if [ "$kind" = secondmate ]; then
+    printf '%s' '__PIBIN____PITUIMODE__ __MODELFLAG____EFFORTFLAG__-e __PITURNEND__ -e __PIWATCH__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
+  else
+    printf '%s' 'FM_WORKER_LIFECYCLE_CONTEXT=__PIWORKERCTX__ __PIBIN____PITUIMODE__ __MODELFLAG____EFFORTFLAG__-e __PIWORKEREXT__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
+  fi
 }
 
-case "$ARG3" in
-  *' '*)
-    if [ "${FM_SPAWN_TEST_RAW_LAUNCH:-0}" != 1 ] \
-      || [ "${FM_SPAWN_NO_GUARD:-0}" != 1 ]; then
-      echo "error: production spawn accepts only the verified Pi harness" >&2
-      exit 1
-    fi
-    LAUNCH=$ARG3
-    HARNESS=""
-    for word in $LAUNCH; do
-      case "$word" in [A-Za-z_]*=*) continue ;; *) HARNESS=$(basename "$word"); break ;; esac
-    done
-    ;;
-  '')
-    # No explicit harness: resolve from config. A secondmate AGENT launches on the
-    # secondmate harness (config/secondmate-harness -> config/crew-harness -> own);
-    # every other kind uses the crew harness only when no dispatch profile file is
-    # active. Resolving here on every spawn is what makes the split DURABLE - a
-    # respawn (recovery, /updatefirstmate, restart) re-resolves, so
-    # config/secondmate-harness keeps governing secondmate launches across restarts.
-    # The launch_template lookup below is the verified-adapter guard for both
-    # kinds: a harness with no template aborts the spawn.
-    if [ "$KIND" = secondmate ]; then
-      HARNESS=$("$FM_ROOT/bin/fm-harness.sh" secondmate)
-      harness_src='config/secondmate-harness (falling back to config/crew-harness)'
-    else
-      if [ -f "$CONFIG/crew-dispatch.json" ]; then
-        echo "error: config/crew-dispatch.json is active - pass an explicit harness resolved from the dispatch rules (the consultation backstop, so the rules are never silently skipped)." >&2
-        exit 1
-      fi
-      HARNESS=$("$FM_ROOT/bin/fm-harness.sh" crew)
-      harness_src='config/crew-harness'
-    fi
-    LAUNCH=$(launch_template "$HARNESS" "$KIND") || { echo "error: no launch template for harness '$HARNESS' (from $harness_src or detection); only Pi is supported" >&2; exit 1; }
-    ;;
-  *)
-    HARNESS=$ARG3
-    LAUNCH=$(launch_template "$HARNESS" "$KIND") || { echo "error: unknown harness '$HARNESS'; only Pi is supported" >&2; exit 1; }
-    ;;
-esac
-
-case "$HARNESS" in
-  pi)
-    PI_BIN=$(resolve_pi_executable "$HARNESS") || {
-      echo "error: pi executable not found on PATH; install Pi before spawning a worker" >&2
+if [ -n "$ARG3" ]; then
+  if [ "${FM_SPAWN_TEST_RAW_LAUNCH:-0}" != 1 ] \
+    || [ "${FM_SPAWN_NO_GUARD:-0}" != 1 ] \
+    || case "$ARG3" in *' '*) false ;; *) true ;; esac; then
+    echo "error: worker-runtime positional arguments are retired; Pi is always used" >&2
+    exit 1
+  fi
+  LAUNCH=$ARG3
+  HARNESS=""
+  for word in $LAUNCH; do
+    case "$word" in [A-Za-z_]*=*) continue ;; *) HARNESS=$(basename "$word"); break ;; esac
+  done
+else
+  HARNESS=pi
+  LAUNCH=$(pi_launch_command "$KIND")
+  PI_BIN=$(resolve_pi_executable pi) || {
+    echo "error: pi executable not found on PATH; install Pi before spawning a worker" >&2
+    exit 1
+  }
+  PI_TUI_MODE=
+  if pi_supports_tui_mode "$PI_BIN"; then
+    PI_TUI_MODE=' --tui-mode regular'
+  fi
+  LAUNCH=${LAUNCH//__PITUIMODE__/$PI_TUI_MODE}
+  if [ "$KIND" != secondmate ]; then
+    PI_WORKER_EXTENSION="$FM_ROOT/.pi/worker-extensions/fm-worker-lifecycle.ts"
+    [ -f "$PI_WORKER_EXTENSION" ] && [ ! -L "$PI_WORKER_EXTENSION" ] || {
+      echo "error: tracked Pi worker-lifecycle extension is missing or unsafe: $PI_WORKER_EXTENSION" >&2
       exit 1
     }
-    PI_TUI_MODE=
-    if pi_supports_tui_mode "$PI_BIN"; then
-      PI_TUI_MODE=' --tui-mode regular'
-    fi
-    LAUNCH=${LAUNCH//__PITUIMODE__/$PI_TUI_MODE}
-    if [ "$KIND" != secondmate ]; then
-      PI_WORKER_EXTENSION="$FM_ROOT/.pi/worker-extensions/fm-worker-lifecycle.ts"
-      [ -f "$PI_WORKER_EXTENSION" ] && [ ! -L "$PI_WORKER_EXTENSION" ] || {
-        echo "error: tracked Pi worker-lifecycle extension is missing or unsafe: $PI_WORKER_EXTENSION" >&2
-        exit 1
-      }
-    fi
-    ;;
-esac
-
-# config/secondmate-harness may carry optional model/effort tokens alongside the
-# harness ("<harness> [<model>] [<effort>]"). They apply only when this is a
-# --secondmate spawn and no explicit per-spawn harness was supplied, so
-# the harness itself came from the secondmate config fallback chain. Resolving
-# here on every spawn makes the pin durable across respawns. Precedence: explicit
-# --model/--effort flags still win over the file's tokens.
-if [ "$KIND" = secondmate ] && [ -z "$ARG3" ]; then
-  if [ "$MODEL_SET" -eq 0 ]; then
-    SM_MODEL=$("$SCRIPT_DIR/fm-harness.sh" secondmate-model)
-    [ -z "$SM_MODEL" ] || MODEL=$SM_MODEL
-  fi
-  if [ "$EFFORT_SET" -eq 0 ]; then
-    SM_EFFORT=$("$SCRIPT_DIR/fm-harness.sh" secondmate-effort)
-    if [ -n "$SM_EFFORT" ]; then
-      case "$SM_EFFORT" in
-        low|medium|high|xhigh|max) EFFORT=$SM_EFFORT ;;
-        *) echo "warning: config/secondmate-harness effort token '$SM_EFFORT' is not one of low, medium, high, xhigh, max; ignoring" >&2 ;;
-      esac
-    fi
   fi
 fi
 
@@ -1032,27 +908,17 @@ secondmate_registry_value() {
   secondmate_registry_field "$DATA/secondmates.md" "$1" "$2"
 }
 
-model_flag_for_harness() {
-  local harness=$1 model=$2
+pi_model_flag() {
+  local model=$1
   [ -n "$model" ] && [ "$model" != default ] || return 0
-  case "$harness" in
-    pi)
-      printf -- '--model %s ' "$(shell_quote "$model")"
-      ;;
-  esac
+  printf -- '--model %s ' "$(shell_quote "$model")"
 }
 
-effort_flag_for_harness() {
-  local harness=$1 effort=$2
+pi_effort_flag() {
+  local effort=$1
   [ -n "$effort" ] && [ "$effort" != default ] || return 0
-  case "$harness" in
-    pi)
-      # Pi 0.80.6 accepts the full shared effort vocabulary, including max, through
-      # its --thinking flag.
-      case "$effort" in
-        low|medium|high|xhigh|max) printf -- '--thinking %s ' "$(shell_quote "$effort")" ;;
-      esac
-      ;;
+  case "$effort" in
+    low|medium|high|xhigh|max) printf -- '--thinking %s ' "$(shell_quote "$effort")" ;;
   esac
 }
 
@@ -1703,22 +1569,16 @@ if [ "$RELAUNCH" -eq 1 ]; then
   RELAUNCH_REPLACEMENT_PENDING=1
   RELAUNCH_REPLACEMENT_STATE=$STATE_REAL
 fi
-if [ "$KIND" != secondmate ]; then
-  # Arm the semantic busy-state contract (bin/fm-busy-lib.sh) for every
-  # adapter with a verified semantic source. The launch brief sent below IS a
+if [ "$KIND" != secondmate ] && [ "$HARNESS" = pi ]; then
+  # Arm the semantic busy-state contract (bin/fm-busy-lib.sh). The launch brief sent below IS a
   # submitted turn, so the seed record is busy/fm-spawn. The tracked Pi
   # extension captures this exact generation from validated task metadata, and
   # the writer rejects callbacks from a superseded incarnation as stale.
-  BUSY_GEN=
-  case "$HARNESS" in
-    pi)
-      BUSY_GEN=$("$FM_ROOT/bin/fm-busy-event.sh" arm "$STATE_REAL" "$ID") || {
-        echo "error: failed to arm the busy-state contract for $ID" >&2
-        exit 1
-      }
-      [ "$RELAUNCH" -ne 1 ] || RELAUNCH_REPLACEMENT_BUSY_GEN=$BUSY_GEN
-      ;;
-  esac
+  BUSY_GEN=$("$FM_ROOT/bin/fm-busy-event.sh" arm "$STATE_REAL" "$ID") || {
+    echo "error: failed to arm the busy-state contract for $ID" >&2
+    exit 1
+  }
+  [ "$RELAUNCH" -ne 1 ] || RELAUNCH_REPLACEMENT_BUSY_GEN=$BUSY_GEN
 fi
 
 # Delivery posture recorded in meta so fm-teardown's safety check and the
@@ -1852,8 +1712,8 @@ sq_piturnend=$(shell_quote "$PROJ_ABS/.pi/extensions/fm-primary-turnend-guard.ts
 sq_piwatch=$(shell_quote "$PROJ_ABS/.pi/extensions/fm-primary-pi-watch.ts")
 sq_opinput=$(shell_quote "$FM_ROOT/bin/fm-operational-input.sh")
 sq_worktree=$(shell_quote "$WT")
-MODELFLAG=$(model_flag_for_harness "$HARNESS" "$MODEL")
-EFFORTFLAG=$(effort_flag_for_harness "$HARNESS" "$EFFORT")
+MODELFLAG=$(pi_model_flag "$MODEL")
+EFFORTFLAG=$(pi_effort_flag "$EFFORT")
 LAUNCH=${LAUNCH//__MODELFLAG__/$MODELFLAG}
 LAUNCH=${LAUNCH//__EFFORTFLAG__/$EFFORTFLAG}
 LAUNCH=${LAUNCH//__BRIEF__/$sq_brief}
@@ -1862,9 +1722,7 @@ LAUNCH=${LAUNCH//__PIWORKEREXT__/$sq_piworkerext}
 LAUNCH=${LAUNCH//__PITURNEND__/$sq_piturnend}
 LAUNCH=${LAUNCH//__PIWATCH__/$sq_piwatch}
 LAUNCH=${LAUNCH//__OPINPUT__/$sq_opinput}
-case "$HARNESS" in
-  pi) LAUNCH=${LAUNCH//__PIBIN__/"$(shell_quote "$PI_BIN")"} ;;
-esac
+[ "$HARNESS" != pi ] || LAUNCH=${LAUNCH//__PIBIN__/"$(shell_quote "$PI_BIN")"}
 LAUNCH=${LAUNCH//__WORKTREE__/$sq_worktree}
 if [ "$KIND" = secondmate ]; then
   sq_home=$(shell_quote "$PROJ_ABS")

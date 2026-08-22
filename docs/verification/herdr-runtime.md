@@ -468,28 +468,38 @@ FM_TEST_SUMMARY_FAMILY family=herdr-session count=1 duration_ms=8021 failed=0
 FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=8003 failed=0
 ```
 
-The post-`cd9b400` endpoint-generation, transition, spawn-delivery, and real Pi-on-Herdr lifecycle rerun used:
+The final Pi-only spawn, remote routing, bound-socket transport, and real Pi-on-Herdr lifecycle rerun used:
 
 ```sh
-bash tests/fm-send-strict.test.sh >/dev/null && \
+bash -n bin/fm-bootstrap.sh bin/fm-config-inherit-lib.sh bin/fm-control.sh bin/fm-harness.sh bin/fm-remote-secondmate-control.sh bin/fm-spawn.sh && \
+  bash tests/fm-send-strict.test.sh >/dev/null && \
   bash tests/fm-supervision-events.test.sh >/dev/null && \
   bash tests/fm-spawn-dispatch-profile.test.sh >/dev/null && \
+  bash tests/fm-remote-secondmate-lifecycle-e2e.test.sh >/dev/null && \
   lifecycle=$(FM_SEND_MARKER_HERDR_E2E=1 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
     bash tests/fm-send-secondmate-marker-herdr-e2e.test.sh) && \
   printf '%s\n' "$lifecycle" && \
   printf '%s\n' "$lifecycle" | grep -F 'ok - real Pi/Herdr: teardown removes the endpoint, home, and metadata' >/dev/null && \
   git diff --check && \
-  printf '%s\n' 'focused Herdr generation, transition, spawn, and Pi lifecycle verification: ok'
+  printf '%s\n' 'focused Pi-only spawn, Herdr routing, and lifecycle verification: ok'
 ```
 
 ```text
+warning: secondmate marker-pi-sm sync skipped before launch: primary default-branch commit cannot be resolved
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the requested message WILL still be sent.
+●  repair missing watcher supervision according to the session-start block for this harness; do not use shell &.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 evidence: exact-id carrier=from-firstmate corr=valid body=exact
 ok - real Pi/Herdr: exact-id FM_HOME send delivers exactly one from-firstmate marker
 evidence: direct-input received-hex=464d5f4d41524b45525f48455244525f444952454354206361707461696e20696e707574
 ok - real Pi/Herdr: direct captain terminal input stays unmarked
 ok - real Pi/Herdr: lifecycle control preserves the live exact endpoint
 ok - real Pi/Herdr: teardown removes the endpoint, home, and metadata
-focused Herdr generation, transition, spawn, and Pi lifecycle verification: ok
+focused Pi-only spawn, Herdr routing, and lifecycle verification: ok
 ```
 
 Strict tracked-extension checking used TypeScript 5.9.3:
@@ -530,12 +540,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 132168 316
-bin 54705 127
-tests 57067 118
+all 131707 315
+bin 54397 127
+tests 56960 117
 pi 2045 9
-agents 562
-added=6900 deleted=31936 net=-25036
+agents 559
+added=7038 deleted=32535 net=-25497
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,036 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,497 lines smaller.

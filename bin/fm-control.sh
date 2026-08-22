@@ -4,8 +4,7 @@
 #
 # Usage: fm-control.sh <task-id> interrupt
 #        fm-control.sh <task-id> exit
-#        fm-control.sh <task-id> relaunch [--harness pi] [--model <name>]
-#                                         [--effort <level>]
+#        fm-control.sh <task-id> relaunch [--model <name>] [--effort <level>]
 #                                         (--note <text> | --note-file <path>)
 #
 # Why this exists, and how it differs from fm-send.sh. bin/fm-send.sh is the
@@ -33,10 +32,7 @@
 #              Already-stopped is success (idempotent).
 #   relaunch   Transactionally replace the running Pi agent with a new one, in
 #              the SAME endpoint and SAME worktree, optionally changing model
-#              or effort. With no explicit axis, a secondmate re-resolves its
-#              durable config/secondmate-harness pin (Pi plus its optional model
-#              and effort tokens) exactly as any other respawn does, while a
-#              ship or scout keeps the exact Pi adapter already recorded for it.
+#              or effort. Every replacement runs Pi directly.
 #              An unsupported recorded harness refuses before any lifecycle action.
 #              --note is required for a ship or scout, whose replacement
 #              inherits the local copy but none of the conversation; a
@@ -178,10 +174,8 @@ if ! fm_control_verb_allowed "$VERB"; then
   exit 2
 fi
 
-NEW_HARNESS=
 NEW_MODEL=
 NEW_EFFORT=
-HARNESS_SET=0
 MODEL_SET=0
 EFFORT_SET=0
 NOTE=
@@ -193,7 +187,7 @@ for a in "$@"; do
       --*) die "--$want_value requires a value" ;;
     esac
     case "$want_value" in
-      harness) NEW_HARNESS=$a; HARNESS_SET=1 ;;
+      harness) die "--harness is retired because Pi is the sole worker runtime; remove the option" ;;
       model) NEW_MODEL=$a; MODEL_SET=1 ;;
       effort) NEW_EFFORT=$a; EFFORT_SET=1 ;;
       note) NOTE=$a; NOTE_SET=1 ;;
@@ -208,7 +202,7 @@ for a in "$@"; do
   fi
   case "$a" in
     --harness) want_value=harness ;;
-    --harness=*) NEW_HARNESS=${a#--harness=}; HARNESS_SET=1 ;;
+    --harness=*) die "--harness is retired because Pi is the sole worker runtime; remove the option" ;;
     --model) want_value=model ;;
     --model=*) NEW_MODEL=${a#--model=}; MODEL_SET=1 ;;
     --effort) want_value=effort ;;
@@ -227,10 +221,9 @@ done
 [ -z "$want_value" ] || die "--$want_value requires a value"
 
 if [ "$VERB" != relaunch ]; then
-  [ "$HARNESS_SET" = 0 ] && [ "$MODEL_SET" = 0 ] && [ "$EFFORT_SET" = 0 ] && [ "$NOTE_SET" = 0 ] \
-    || die "--harness, --model, --effort, and --note apply to 'relaunch' only"
+  [ "$MODEL_SET" = 0 ] && [ "$EFFORT_SET" = 0 ] && [ "$NOTE_SET" = 0 ] \
+    || die "--model, --effort, and --note apply to 'relaunch' only"
 fi
-[ "$HARNESS_SET" = 0 ] || [ -n "$NEW_HARNESS" ] || die "--harness requires a non-empty value"
 [ "$MODEL_SET" = 0 ] || [ -n "$NEW_MODEL" ] || die "--model requires a non-empty value"
 [ "$EFFORT_SET" = 0 ] || [ -n "$NEW_EFFORT" ] || die "--effort requires a non-empty value"
 case "$NEW_EFFORT" in
@@ -436,9 +429,6 @@ RELAUNCH_TX=
 RELAUNCH_BRIEF=
 PRIOR_HARNESS=$HARNESS
 PRIOR_RECORDED_HARNESS=$RECORDED_HARNESS
-CONFIG_HARNESS=
-CONFIG_MODEL=
-CONFIG_EFFORT=
 PRIOR_MODEL=
 PRIOR_EFFORT=
 TARGET_HARNESS=$HARNESS
@@ -538,59 +528,16 @@ resolve_relaunch_profile() {
   PRIOR_EFFORT=$(fm_meta_get "$META" effort)
   [ -n "$PRIOR_MODEL" ] || PRIOR_MODEL=default
   [ -n "$PRIOR_EFFORT" ] || PRIOR_EFFORT=default
-  CONFIG_HARNESS=
-  CONFIG_MODEL=
-  CONFIG_EFFORT=
-  if [ "$KIND" = secondmate ]; then
-    # A secondmate's harness, model, and effort are a durable configured pin
-    # that every respawn re-resolves (the secondmate-provisioning contract), so
-    # a relaunch with no explicit harness picks up a newly configured one
-    # instead of freezing whatever this incarnation happens to run. Crewmates
-    # and scouts deliberately do NOT resolve config here: their harness comes
-    # from firstmate's own dispatch-profile judgment at intake, and silently
-    # re-resolving it would bypass that consultation.
-    CONFIG_HARNESS=$("$SCRIPT_DIR/fm-harness.sh" secondmate 2>/dev/null || true)
-    CONFIG_MODEL=$("$SCRIPT_DIR/fm-harness.sh" secondmate-model 2>/dev/null || true)
-    CONFIG_EFFORT=$("$SCRIPT_DIR/fm-harness.sh" secondmate-effort 2>/dev/null || true)
-    case "$CONFIG_EFFORT" in
-      ''|low|medium|high|xhigh|max) ;;
-      *)
-        echo "warning: config/secondmate-harness effort token '$CONFIG_EFFORT' is not one of low, medium, high, xhigh, max; ignoring" >&2
-        CONFIG_EFFORT=
-        ;;
-    esac
-  fi
-  if [ "$HARNESS_SET" = 1 ]; then
-    fm_control_harness_supported "$NEW_HARNESS" \
-      || die "'$NEW_HARNESS' is not a verified harness; fm-control refuses to relaunch onto an adapter with no verified control or launch mechanics"
-    TARGET_HARNESS=$NEW_HARNESS
-  elif [ "$HARNESS_SET" = 0 ] && [ -n "$CONFIG_HARNESS" ]; then
-    fm_control_harness_supported "$CONFIG_HARNESS" \
-      || die "the configured secondmate harness '$CONFIG_HARNESS' is not verified; fm-control refuses to relaunch onto an adapter with no verified control or launch mechanics"
-    TARGET_HARNESS=$CONFIG_HARNESS
-  else
-    TARGET_HARNESS=$PRIOR_HARNESS
-  fi
-  # A model or effort chosen for the previous harness does not transfer to a
-  # different one, so an explicit harness change resets both axes unless the
-  # caller names them too.
+  TARGET_HARNESS=pi
   if [ "$MODEL_SET" = 1 ]; then
     TARGET_MODEL=$NEW_MODEL
-  elif [ "$HARNESS_SET" = 0 ] && [ -n "$CONFIG_HARNESS" ]; then
-    TARGET_MODEL=${CONFIG_MODEL:-default}
-  elif [ "$TARGET_HARNESS" = "$PRIOR_HARNESS" ]; then
-    TARGET_MODEL=$PRIOR_MODEL
   else
-    TARGET_MODEL=default
+    TARGET_MODEL=$PRIOR_MODEL
   fi
   if [ "$EFFORT_SET" = 1 ]; then
     TARGET_EFFORT=$NEW_EFFORT
-  elif [ "$HARNESS_SET" = 0 ] && [ -n "$CONFIG_HARNESS" ]; then
-    TARGET_EFFORT=${CONFIG_EFFORT:-default}
-  elif [ "$TARGET_HARNESS" = "$PRIOR_HARNESS" ]; then
-    TARGET_EFFORT=$PRIOR_EFFORT
   else
-    TARGET_EFFORT=default
+    TARGET_EFFORT=$PRIOR_EFFORT
   fi
 }
 
@@ -734,7 +681,7 @@ do_relaunch() {
   # per-task harness wiring before arming the new one, so nothing to do here.
   RELAUNCH_TX="${BASHPID:-$$}.$(date -u +%Y%m%dT%H%M%SZ).$RANDOM"
   journal_write launching "${CHECKPOINT_LINES[@]}" "$note_line" "relaunch_tx=$RELAUNCH_TX"
-  spawn_args=("$ID" --relaunch --harness "$TARGET_HARNESS")
+  spawn_args=("$ID" --relaunch)
   [ "$TARGET_MODEL" = default ] || spawn_args+=(--model "$TARGET_MODEL")
   [ "$TARGET_EFFORT" = default ] || spawn_args+=(--effort "$TARGET_EFFORT")
   if FM_CONTROL_RELAUNCH_TX="$RELAUNCH_TX" \
