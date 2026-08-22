@@ -120,7 +120,9 @@ function boundFmSendText(text: string): string {
   if (bytes.length <= fmSendOutputLimit) return text;
   const suffix = "\n[truncated]";
   const keepBytes = Math.max(0, fmSendOutputLimit - Buffer.byteLength(suffix, "utf8"));
-  return `${bytes.subarray(0, keepBytes).toString("utf8")}${suffix}`;
+  let end = keepBytes;
+  while (end > 0 && end < bytes.length && (bytes[end] & 0xc0) === 0x80) end -= 1;
+  return `${bytes.subarray(0, end).toString("utf8")}${suffix}`;
 }
 
 function fmSendDiagnostic(stdout: string, stderr: string): string {
@@ -609,27 +611,30 @@ export default function (pi: ExtensionAPI) {
       "Use fm_send for a message to a recorded task selector, not a raw Herdr endpoint or a lifecycle action.",
       `If fm_send returns an unconfirmed result, ${fmSendUnconfirmedInstruction}`,
     ],
-    parameters: Type.Object({
-      target: Type.String({
-        description: "Recorded task id or fm-<id> selector; raw Herdr endpoints are not accepted.",
-        minLength: 1,
-        pattern: "^[A-Za-z0-9._-]+$",
-      }),
-      message: Type.String({
-        description: "Nonempty literal text to send without shell interpretation.",
-        minLength: 1,
-      }),
-      resolveKeys: Type.Optional(
-        Type.Array(
-          Type.String({
-            description: "Safe decision key answered by the message.",
-            minLength: 1,
-            pattern: "^[A-Za-z0-9._-]+$",
-          }),
-          { uniqueItems: true },
+    parameters: Type.Object(
+      {
+        target: Type.String({
+          description: "Recorded task id or fm-<id> selector; raw Herdr endpoints are not accepted.",
+          minLength: 1,
+          pattern: "^[A-Za-z0-9._-]+$",
+        }),
+        message: Type.String({
+          description: "Nonempty literal text to send without shell interpretation.",
+          minLength: 1,
+        }),
+        resolveKeys: Type.Optional(
+          Type.Array(
+            Type.String({
+              description: "Safe decision key answered by the message.",
+              minLength: 1,
+              pattern: "^[A-Za-z0-9._-]+$",
+            }),
+            { uniqueItems: true },
+          ),
         ),
-      ),
-    }),
+      },
+      { additionalProperties: false },
+    ),
     execute: async (_toolCallId, params, signal) => {
       validateFmSendInput(params);
       if (!process.env.FM_HOME) {

@@ -125,6 +125,7 @@ for (const invalid of [
   { target: "worker-1", message: "" },
   { target: "worker-1", message: "literal", resolveKeys: ["bad key"] },
   { target: "worker-1", message: "literal", resolveKeys: ["same", "same"] },
+  { target: "worker-1", message: "literal", endpoint: "lab:w1:p1" },
 ]) {
   if (Value.Check(schema, invalid)) throw new Error(`fm_send schema accepted invalid input: ${JSON.stringify(invalid)}`);
 }
@@ -171,8 +172,9 @@ if (JSON.stringify(argv) !== JSON.stringify(expectedArgv)) {
 }
 
 process.env.FM_FAKE_SEND_EXIT = "3";
-process.env.FM_FAKE_SEND_STDERR = `useful diagnostic ${"x".repeat(10000)}`;
-process.env.FM_FAKE_SEND_STDOUT = `stdout ${"y".repeat(10000)}`;
+const diagnosticLabel = "useful diagnostic ";
+process.env.FM_FAKE_SEND_STDERR = `${diagnosticLabel}${"x".repeat(4083 - Buffer.byteLength(diagnosticLabel))}\u{1F6A2}tail`;
+process.env.FM_FAKE_SEND_STDOUT = "";
 writeFileSync(process.env.FM_FAKE_SEND_LOG, "");
 const beforeUnconfirmed = calls.length;
 const unconfirmed = await tool.execute("unconfirmed", { target: "worker-1", message: "once" }, undefined, undefined, {});
@@ -181,12 +183,15 @@ if (unconfirmed.details?.schema !== "fm-send-result.v1" || unconfirmed.details?.
 }
 if (!unconfirmed.details.diagnostic?.includes("useful diagnostic")) throw new Error("exit 3 lost the useful script diagnostic");
 if (new TextEncoder().encode(unconfirmed.details.diagnostic).length > 4096) throw new Error("exit 3 diagnostic exceeded its byte bound");
+if (unconfirmed.details.diagnostic.includes("\uFFFD")) throw new Error("exit 3 diagnostic split a UTF-8 character");
 if (!unconfirmed.content[0].text.includes("do not retype or blindly resend")) {
   throw new Error("exit 3 did not instruct the caller to inspect without blindly resending");
 }
 if (calls.length !== beforeUnconfirmed + 1) throw new Error("exit 3 caused a retry");
 
 process.env.FM_FAKE_SEND_EXIT = "7";
+process.env.FM_FAKE_SEND_STDERR = `stderr ${"x".repeat(10000)}`;
+process.env.FM_FAKE_SEND_STDOUT = `stdout ${"y".repeat(10000)}`;
 writeFileSync(process.env.FM_FAKE_SEND_LOG, "");
 const beforeFailure = calls.length;
 const failureError = await rejects(
