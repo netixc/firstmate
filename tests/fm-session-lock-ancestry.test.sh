@@ -10,7 +10,7 @@ LIB="$ROOT/bin/fm-session-lock-lib.sh"
 
 lib_eval() {  # <fakebin> <expression>
   local fakebin=$1 expr=$2
-  PATH="$fakebin:$PATH" bash -c '
+  FM_TEST_PI_BIN="$fakebin" PATH="$fakebin:$PATH" bash -c '
     . "$0"
     kill() { return 0; }
     eval "$1"
@@ -41,28 +41,31 @@ case "${FM_TEST_SHAPE:-pi}:$pid:$field" in
   falseargv0:*:comm=) printf '%s\n' /usr/bin/sleep ;;
   falseargv0:*:args=) printf '%s\n' pi ;;
   falseargv0:*:ppid=) printf '%s\n' 1 ;;
+  falsedirect:*:comm=) printf '%s\n' /tmp/fake/pi ;;
+  falsedirect:*:args=) printf '%s\n' /tmp/fake/pi ;;
+  falsedirect:*:ppid=) printf '%s\n' 1 ;;
   nodescript:*:comm=) printf '%s\n' /usr/bin/node ;;
   nodescript:*:args=) printf '/usr/bin/node %s/pi\n' "$FM_TEST_PI_BIN" ;;
   nodescript:*:ppid=) printf '%s\n' 1 ;;
-  pi:700:comm=|nested:700:comm=|gap:700:comm=) printf '%s\n' pi ;;
-  pi:700:args=|nested:700:args=|gap:700:args=) printf '%s\n' pi ;;
+  pi:700:comm=|nested:700:comm=|gap:700:comm=) printf '%s/pi\n' "$FM_TEST_PI_BIN" ;;
+  pi:700:args=|nested:700:args=|gap:700:args=) printf '%s/pi\n' "$FM_TEST_PI_BIN" ;;
   pi:700:ppid=) printf '%s\n' 1 ;;
   nested:700:ppid=) printf '%s\n' 710 ;;
-  nested:710:comm=) printf '%s\n' pi ;;
-  nested:710:args=) printf '%s\n' pi ;;
+  nested:710:comm=) printf '%s/pi\n' "$FM_TEST_PI_BIN" ;;
+  nested:710:args=) printf '%s/pi\n' "$FM_TEST_PI_BIN" ;;
   nested:710:ppid=) printf '%s\n' 1 ;;
   gap:700:ppid=) printf '%s\n' 710 ;;
   gap:710:comm=) printf '%s\n' bash ;;
   gap:710:args=) printf '%s\n' 'bash tests/run.sh' ;;
   gap:710:ppid=) printf '%s\n' 720 ;;
-  gap:720:comm=) printf '%s\n' pi ;;
-  gap:720:args=) printf '%s\n' pi ;;
+  gap:720:comm=) printf '%s/pi\n' "$FM_TEST_PI_BIN" ;;
+  gap:720:args=) printf '%s/pi\n' "$FM_TEST_PI_BIN" ;;
   gap:720:ppid=) printf '%s\n' 1 ;;
-  competitor:600:comm=) printf '%s\n' pi ;;
-  competitor:600:args=) printf '%s\n' pi ;;
+  competitor:600:comm=) printf '%s/pi\n' "$FM_TEST_PI_BIN" ;;
+  competitor:600:args=) printf '%s/pi\n' "$FM_TEST_PI_BIN" ;;
   competitor:600:ppid=) printf '%s\n' 1 ;;
-  competitor:650:comm=) printf '%s\n' pi ;;
-  competitor:650:args=) printf '%s\n' pi ;;
+  competitor:650:comm=) printf '%s/pi\n' "$FM_TEST_PI_BIN" ;;
+  competitor:650:args=) printf '%s/pi\n' "$FM_TEST_PI_BIN" ;;
   competitor:650:ppid=) printf '%s\n' 1 ;;
   *:comm=) printf '%s\n' bash ;;
   *:args=) printf '%s\n' 'bash tests/run.sh' ;;
@@ -133,7 +136,7 @@ test_live_competitor_is_not_self() {
 
 test_public_lock_requires_exact_pi_identity() {
   local shape dir fakebin out rc
-  for shape in falsepath falsearg falseargv0; do
+  for shape in falsepath falsearg falseargv0 falsedirect; do
     dir="$TMP_ROOT/$shape"; mkdir -p "$dir/state"
     fakebin=$(make_ps "$dir" "$shape")
     rc=0

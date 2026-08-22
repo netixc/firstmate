@@ -32,7 +32,22 @@ fm_pi_process_matches() {  # <comm> <args>
   local comm=$1 args=$2 base script pi_path candidate
   base=$(basename -- "$comm")
   if [ "$base" = pi ]; then
-    return 0
+    pi_path=$(command -v pi 2>/dev/null) || return 1
+    pi_path=$(fm_pi_canonical_path "$pi_path") || return 1
+    candidate=$comm
+    case "$candidate" in
+      */*) ;;
+      *)
+        candidate=${args%% *}
+        case "$candidate" in
+          */*) ;;
+          *) return 1 ;;
+        esac
+        ;;
+    esac
+    candidate=$(fm_pi_canonical_path "$candidate") || return 1
+    [ "$candidate" = "$pi_path" ]
+    return
   fi
   case "$base" in
     node|nodejs|python|python[0-9]|python[0-9].[0-9])
