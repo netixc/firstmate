@@ -10,6 +10,7 @@ TMP_ROOT=$(fm_test_tmproot fm-send-strict)
 make_stubs() { # <dir>
   local fb=$1/fakebin
   mkdir -p "$fb"
+  : > "$1/herdr.sock"
   cat > "$fb/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
@@ -41,7 +42,15 @@ case "${1:-} ${2:-}" in
       : > "$FM_HOME/session-replaced"
     fi
     ;;
-  "pane send-text") [ -z "${FM_EXPECTED_LOCK:-}" ] || [ -e "$FM_EXPECTED_LOCK" ] ;;
+  "pane send-text")
+    [ -z "${FM_EXPECTED_LOCK:-}" ] || [ -e "$FM_EXPECTED_LOCK" ] || exit 1
+    if [ "${FM_HERDR_REPLACE_AFTER_VALIDATION:-0}" = 1 ]; then
+      [ -n "${HERDR_SOCKET_PATH:-}" ] || exit 1
+      [ "$HERDR_SOCKET_PATH" -ef "$FM_HOME/herdr-prior.sock" ] || exit 1
+      [ ! "$HERDR_SOCKET_PATH" -ef "$FM_HOME/herdr.sock" ] || exit 1
+      : > "$FM_HOME/bound-generation-used"
+    fi
+    ;;
   "pane send-keys") : > "$FM_HERDR_STATE" ;;
   "agent get")
     if [ -e "$FM_HERDR_STATE" ]; then status=working; else status=idle; fi
@@ -104,8 +113,8 @@ test_live_identity_is_rechecked_under_send_lock() {
   pass "fm-send strict: live identity stays authorized through the locked send"
 }
 
-test_session_replacement_refuses_stale_authorization() {
-  local home=$TMP_ROOT/session-restart fb log expected_lock out
+test_session_replacement_uses_bound_transport() {
+  local home=$TMP_ROOT/session-restart fb log expected_lock
   mkdir -p "$home/state"; fb=$(make_stubs "$home"); log=$home/herdr.log; : > "$log"
   : > "$home/herdr.sock"
   write_meta "$home" lane-restart
@@ -114,15 +123,15 @@ test_session_replacement_refuses_stale_authorization() {
     bash -c '. "$1/bin/fm-herdr.sh"; fm_herdr_presentation_session_lock_path lab' _ "$ROOT") \
     || fail "could not resolve the pre-restart presentation lock"
   export FM_EXPECTED_LOCK="$expected_lock"
-  out=$(FM_EXPECTED_LOCK="$expected_lock" FM_HERDR_REPLACE_AFTER_VALIDATION=1 \
-    run_send "$home" "$fb" "$log" lane-restart 'do not deliver' 2>&1) \
-    && fail "send controlled a replacement Herdr session under stale authorization"
-  assert_contains "$out" 'Herdr session generation changed during an authorized endpoint operation' \
-    "send did not explain its replacement-session refusal"
-  assert_not_contains "$(cat "$log")" 'pane send-text' \
-    "send reached a replacement Herdr session"
+  FM_EXPECTED_LOCK="$expected_lock" FM_HERDR_REPLACE_AFTER_VALIDATION=1 \
+    run_send "$home" "$fb" "$log" lane-restart 'deliver to prior generation' >/dev/null 2>&1 \
+    || fail "send lost its bound Herdr transport during session replacement"
+  [ -e "$home/bound-generation-used" ] \
+    || fail "send resolved the replacement session instead of its authorized socket generation"
+  assert_contains "$(cat "$log")" 'pane send-text w1:p1 deliver to prior generation' \
+    "send did not reach the socket generation authorized under the presentation lock"
   unset FM_EXPECTED_LOCK
-  pass "fm-send strict: session replacement invalidates live authorization"
+  pass "fm-send strict: session replacement cannot retarget bound transport"
 }
 
 test_ambiguous_or_foreign_metadata_refuses() {
@@ -239,7 +248,7 @@ test_explicit_exact_target_and_key() {
 
 test_exact_id_send
 test_live_identity_is_rechecked_under_send_lock
-test_session_replacement_refuses_stale_authorization
+test_session_replacement_uses_bound_transport
 test_ambiguous_or_foreign_metadata_refuses
 test_duplicate_endpoint_owners_refuse
 test_cross_component_identity_refuses

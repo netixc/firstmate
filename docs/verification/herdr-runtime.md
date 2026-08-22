@@ -474,13 +474,21 @@ The post-`cd9b400` endpoint-generation, transition, spawn-delivery, and real Pi-
 bash tests/fm-send-strict.test.sh >/dev/null && \
   bash tests/fm-supervision-events.test.sh >/dev/null && \
   bash tests/fm-spawn-dispatch-profile.test.sh >/dev/null && \
-  FM_SEND_MARKER_HERDR_E2E=1 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
-    bash tests/fm-send-secondmate-marker-herdr-e2e.test.sh >/dev/null && \
+  lifecycle=$(FM_SEND_MARKER_HERDR_E2E=1 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
+    bash tests/fm-send-secondmate-marker-herdr-e2e.test.sh) && \
+  printf '%s\n' "$lifecycle" && \
+  printf '%s\n' "$lifecycle" | grep -F 'ok - real Pi/Herdr: teardown removes the endpoint, home, and metadata' >/dev/null && \
   git diff --check && \
   printf '%s\n' 'focused Herdr generation, transition, spawn, and Pi lifecycle verification: ok'
 ```
 
 ```text
+evidence: exact-id carrier=from-firstmate corr=valid body=exact
+ok - real Pi/Herdr: exact-id FM_HOME send delivers exactly one from-firstmate marker
+evidence: direct-input received-hex=464d5f4d41524b45525f48455244525f444952454354206361707461696e20696e707574
+ok - real Pi/Herdr: direct captain terminal input stays unmarked
+ok - real Pi/Herdr: lifecycle control preserves the live exact endpoint
+ok - real Pi/Herdr: teardown removes the endpoint, home, and metadata
 focused Herdr generation, transition, spawn, and Pi lifecycle verification: ok
 ```
 
@@ -522,12 +530,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 132110 316
-bin 54666 127
-tests 57056 118
+all 132167 316
+bin 54705 127
+tests 57066 118
 pi 2045 9
 agents 562
-added=6842 deleted=31936 net=-25094
+added=6899 deleted=31936 net=-25037
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,094 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,037 lines smaller.

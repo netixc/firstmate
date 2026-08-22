@@ -701,18 +701,20 @@ fm_herdr_workspace_label() {
 # fm_herdr_version_check, which is intentionally session-independent
 # (reads only .client.* fields).
 fm_herdr_cli() {  # <session> <herdr-subcommand-and-args...>
-  local session=$1 generation
+  local session=$1 identity
   shift
-  if [ -n "${FM_HERDR_BOUND_SESSION_GENERATION:-}" ]; then
+  if [ -n "${FM_HERDR_BOUND_SOCKET:-}" ]; then
     [ "$session" = "${FM_HERDR_BOUND_SESSION:-}" ] || {
       echo "REFUSED: Herdr session changed during an authorized endpoint operation; preserving task state and nothing was changed." >&2
       return 2
     }
-    generation=$(fm_herdr_presentation_session_generation "$session") || return 2
-    [ "$generation" = "$FM_HERDR_BOUND_SESSION_GENERATION" ] || {
+    identity=$(fm_herdr_socket_identity "$FM_HERDR_BOUND_SOCKET") || return 2
+    [ "$identity" = "${FM_HERDR_BOUND_SOCKET_IDENTITY:-}" ] || {
       echo "REFUSED: Herdr session generation changed during an authorized endpoint operation; preserving task state and nothing was changed." >&2
       return 2
     }
+    HERDR_SESSION="$session" HERDR_SOCKET_PATH="$FM_HERDR_BOUND_SOCKET" herdr "$@"
+    return $?
   fi
   HERDR_SESSION="$session" herdr "$@" --session "$session"
 }
@@ -1067,13 +1069,18 @@ fm_herdr_presentation_session_socket_path() {  # <session>
   fm_herdr_canonical_socket_path "$socket"
 }
 
+fm_herdr_socket_identity() {  # <socket-path>
+  local socket=$1
+  if [ "$(uname -s 2>/dev/null)" = Darwin ]; then
+    stat -f '%d:%i' "$socket" 2>/dev/null
+  else
+    stat -c '%d:%i' "$socket" 2>/dev/null
+  fi
+}
+
 fm_herdr_socket_generation() {  # <socket-path>
   local socket=$1 identity
-  if [ "$(uname -s 2>/dev/null)" = Darwin ]; then
-    identity=$(stat -f '%d:%i' "$socket" 2>/dev/null) || identity=missing
-  else
-    identity=$(stat -c '%d:%i' "$socket" 2>/dev/null) || identity=missing
-  fi
+  identity=$(fm_herdr_socket_identity "$socket") || return 1
   printf '%s\t%s' "$socket" "$identity"
 }
 
@@ -1081,6 +1088,33 @@ fm_herdr_presentation_session_generation() {  # <session>
   local socket
   socket=$(fm_herdr_presentation_session_socket_path "$1") || return 1
   fm_herdr_socket_generation "$socket"
+}
+
+fm_herdr_bound_socket_create() {  # <session-generation>
+  local generation=$1 source expected dir alias identity attempt=0
+  source=${generation%%$'\t'*}
+  expected=${generation#*$'\t'}
+  [ -n "$source" ] && [ -n "$expected" ] && [ "$source" != "$expected" ] || return 1
+  dir=$(fm_herdr_presentation_lock_namespace) || return 1
+  fm_herdr_presentation_lock_namespace_valid "$dir" || return 1
+  while [ "$attempt" -lt 10 ]; do
+    alias="$dir/socket-$$-${RANDOM:-0}-$attempt.sock"
+    if ln "$source" "$alias" 2>/dev/null; then
+      identity=$(fm_herdr_socket_identity "$alias") || identity=
+      if [ "$identity" = "$expected" ]; then
+        printf '%s' "$alias"
+        return 0
+      fi
+      rm -f "$alias"
+    fi
+    attempt=$((attempt + 1))
+  done
+  return 1
+}
+
+fm_herdr_bound_socket_release() {  # <socket-path>
+  local socket=$1
+  [ -z "$socket" ] || rm -f "$socket"
 }
 
 fm_herdr_presentation_session_lock_path() {  # <session>
@@ -1129,21 +1163,27 @@ fm_herdr_with_live_task_endpoint() {  # <meta-file> <task-id> <callback> [args..
     return 2
   }
   (
-    local attempt=0
+    local attempt=0 bound_socket="" bound_identity
     if ! declare -F fm_lock_try_acquire >/dev/null 2>&1; then
       # shellcheck source=bin/fm-wake-lib.sh
       . "$FM_HERDR_ROOT/bin/fm-wake-lib.sh"
     fi
     while [ "$attempt" -lt "${FM_HERDR_LIVE_LOCK_ATTEMPTS:-50}" ]; do
       if fm_lock_try_acquire "$lock_path"; then
-        trap 'fm_lock_release "$lock_path" || true' EXIT
+        trap 'fm_herdr_bound_socket_release "$bound_socket" || true; fm_lock_release "$lock_path" || true' EXIT
         verified_generation=$(fm_herdr_presentation_session_generation "$session") || return 2
         [ "$verified_generation" = "$required_generation" ] || {
           echo "REFUSED: Herdr session generation changed while authorizing task $id; preserving task state and nothing was changed." >&2
           return 2
         }
+        bound_socket=$(fm_herdr_bound_socket_create "$required_generation") || {
+          echo "REFUSED: Herdr session transport could not be bound while authorizing task $id; preserving task state and nothing was changed." >&2
+          return 2
+        }
+        bound_identity=${required_generation#*$'\t'}
         FM_HERDR_BOUND_SESSION=$session
-        FM_HERDR_BOUND_SESSION_GENERATION=$required_generation
+        FM_HERDR_BOUND_SOCKET=$bound_socket
+        FM_HERDR_BOUND_SOCKET_IDENTITY=$bound_identity
         fm_herdr_validate_live_task_endpoint "$meta" "$id" || return 2
         [ "$FM_HERDR_VALIDATED_TARGET" = "$target" ] || {
           echo "REFUSED: Herdr endpoint metadata changed while authorizing task $id; preserving task state and nothing was changed." >&2
@@ -1906,7 +1946,7 @@ fm_herdr_projection_order_best_effort() {  # <session> <created-workspace-id> <p
 # call. Bounded poll for the server to report running.
 fm_herdr_server_ensure() {  # <session>
   local session=$1 running out i
-  if [ -n "${FM_HERDR_BOUND_SESSION_GENERATION:-}" ]; then
+  if [ -n "${FM_HERDR_BOUND_SOCKET:-}" ]; then
     out=$(fm_herdr_cli "$session" status --json) || return $?
   else
     out=$(fm_herdr_cli "$session" status --json 2>/dev/null) || out=
