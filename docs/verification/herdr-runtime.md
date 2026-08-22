@@ -689,6 +689,17 @@ ok - event reader emits only normalized four-field Herdr transition records
 fm-doc-audience-check: ok surfaces=51 local_links=166
 ```
 
+The final direct Pi-on-Herdr AFK entrypoint lint used:
+
+```sh
+bash -n bin/fm-afk-start.sh && bin/fm-lint.sh bin/fm-afk-start.sh && bin/fm-doc-audience-check.sh && git diff --check
+```
+
+```text
+fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
+fm-doc-audience-check: ok surfaces=51 local_links=166
+```
+
 Review-phase changed-source lint and the documentation check used:
 
 ```sh
@@ -715,12 +726,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 131824 313
-bin 54223 126
+all 131830 313
+bin 54218 126
 tests 57152 117
 pi 2048 9
 agents 559
-added=8229 deleted=33609 net=-25380
+added=8239 deleted=33613 net=-25374
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,380 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,374 lines smaller.
