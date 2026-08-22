@@ -131,6 +131,19 @@ FM_TEST_SUMMARY_FAMILY family=snapshot-bearings count=2 duration_ms=7702 failed=
 FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=79100 failed=0
 ```
 
+The final identity-reconciliation and Pi supervision wording pass used:
+
+```sh
+bin/fm-test-run.sh tests/fm-watch-triage.test.sh tests/fm-guard-stale-banner.test.sh
+```
+
+Observed output:
+
+```text
+FM_TEST_SUMMARY total=2 failed=0 skipped_gate=0 duration_ms=83376
+FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=2 duration_ms=83263 failed=0
+```
+
 The broader relevant regression pass was rerun on 2026-08-02 without live-home or daemon mutation.
 
 ```sh

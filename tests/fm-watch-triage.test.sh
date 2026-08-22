@@ -614,9 +614,10 @@ SH
 }
 
 test_paused_reconcile_preserves_tracking_on_live_identity_mismatch() {
-  local dir state fakebin out capture_file counter window key pane_hash sig pid i=0 count=0
+  local dir state fakebin out drain_out capture_file counter window key pane_hash sig pid
   dir=$(make_case paused-identity-mismatch); state="$dir/state"; fakebin="$dir/fakebin"
-  out="$dir/watch.out"; capture_file="$dir/pane.txt"; counter="$dir/pane-get-count"
+  out="$dir/watch.out"; drain_out="$dir/drain.out"
+  capture_file="$dir/pane.txt"; counter="$dir/pane-get-count"
   window="test:w-paused:p1"
   printf 'paused pane' > "$capture_file"
   printf '0\n' > "$counter"
@@ -664,21 +665,18 @@ SH
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 FM_PAUSE_RESURFACE_SECS=999999 \
     "$WATCH" > "$out" &
   pid=$!
-  while [ "$i" -lt 80 ]; do
-    count=$(cat "$counter" 2>/dev/null || printf 0)
-    [ "$count" -ge 4 ] && break
-    is_live_non_zombie "$pid" || break
-    sleep 0.1
-    i=$((i + 1))
-  done
-  [ "$count" -ge 4 ] || { reap "$pid"; fail "paused reconciliation did not reach live identity validation"; }
-  [ -e "$state/.paused-$key" ] || { reap "$pid"; fail "identity mismatch cleared paused tracking"; }
-  [ -e "$state/.stale-$key" ] || { reap "$pid"; fail "identity mismatch cleared stale tracking"; }
-  [ -e "$state/.stale-since-$key" ] || { reap "$pid"; fail "identity mismatch cleared the stale timer"; }
-  [ -e "$state/.wedge-escalations-$key" ] || { reap "$pid"; fail "identity mismatch cleared wedge tracking"; }
-  [ ! -s "$state/.wake-queue" ] || { reap "$pid"; fail "foreign live identity produced a paused wake"; }
-  reap "$pid"
-  pass "paused reconciliation preserves tracking when live endpoint identity changes"
+  wait_for_exit "$pid" 80 || fail "paused reconciliation did not surface the live identity mismatch"
+  grep -F "check: Herdr endpoint identity or agent state unavailable for paused ($window); preserve metadata and reconcile manually" "$out" >/dev/null \
+    || fail "identity mismatch did not print an actionable reconciliation wake"
+  [ -e "$state/.paused-$key" ] || fail "identity mismatch cleared paused tracking"
+  [ -e "$state/.stale-$key" ] || fail "identity mismatch cleared stale tracking"
+  [ -e "$state/.stale-since-$key" ] || fail "identity mismatch cleared the stale timer"
+  [ -e "$state/.wedge-escalations-$key" ] || fail "identity mismatch cleared wedge tracking"
+  FM_STATE_OVERRIDE="$state" "$DRAIN" > "$drain_out" 2>/dev/null || fail "identity mismatch wake drain failed"
+  grep "$(printf '\tcheck\tendpoint-reconciliation-paused\t')" "$drain_out" \
+    | grep -F 'preserve metadata and reconcile manually' >/dev/null \
+    || fail "identity mismatch was not durably queued for manual reconciliation"
+  pass "paused reconciliation preserves tracking and surfaces live identity changes"
 }
 
 # --- stale pane, STALE terminal status overridden by an active run: absorbed ---

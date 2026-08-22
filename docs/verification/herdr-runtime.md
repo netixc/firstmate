@@ -490,7 +490,7 @@ warning: secondmate marker-pi-sm sync skipped before launch: primary default-bra
 ●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ●  WATCHER DOWN - SUPERVISION IS OFF
 ●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
-●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  Trust the emitted Pi supervision protocol; do not use shell & for watcher repair.
 ●  This is a supervision warning only; the requested message WILL still be sent.
 ●  repair a missing or failed watcher cycle with the Pi tool fm_watch_arm_pi, or restart Pi with -e /Users/control/.no-mistakes/worktrees/874f0de57f61/01M0JV34M9BNN5H9SSWGKW5BG2/.pi/extensions/fm-primary-turnend-guard.ts -e /Users/control/.no-mistakes/worktrees/874f0de57f61/01M0JV34M9BNN5H9SSWGKW5BG2/.pi/extensions/fm-primary-pi-watch.ts if the extensions are not loaded.
 ●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -501,6 +501,43 @@ ok - real Pi/Herdr: direct captain terminal input stays unmarked
 ok - real Pi/Herdr: lifecycle control preserves the live exact endpoint
 ok - real Pi/Herdr: teardown removes the endpoint, home, and metadata
 focused admission, identity, watcher, snapshot, and lifecycle verification: ok
+```
+
+The final paused-endpoint reconciliation and Pi supervision wording rerun used:
+
+```sh
+bash -n bin/fm-watch.sh bin/fm-guard.sh tests/fm-watch-triage.test.sh tests/fm-guard-stale-banner.test.sh && \
+  bin/fm-test-run.sh tests/fm-watch-triage.test.sh tests/fm-guard-stale-banner.test.sh && \
+  bin/fm-lint.sh bin/fm-watch.sh bin/fm-guard.sh tests/fm-watch-triage.test.sh tests/fm-guard-stale-banner.test.sh && \
+  bin/fm-doc-audience-check.sh && \
+  lifecycle=$(FM_SEND_MARKER_HERDR_E2E=1 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
+    bash tests/fm-send-secondmate-marker-herdr-e2e.test.sh) && \
+  printf '%s\n' "$lifecycle" && \
+  printf '%s\n' "$lifecycle" | grep -F 'ok - real Pi/Herdr: teardown removes the endpoint, home, and metadata' >/dev/null && \
+  git diff --check && \
+  printf '%s\n' 'focused watcher reconciliation and Pi supervision verification: ok'
+```
+
+```text
+FM_TEST_SUMMARY total=2 failed=0 skipped_gate=0 duration_ms=83376
+FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=2 duration_ms=83263 failed=0
+fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
+fm-doc-audience-check: ok surfaces=51 local_links=166
+warning: secondmate marker-pi-sm sync skipped before launch: primary default-branch commit cannot be resolved
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
+●  Trust the emitted Pi supervision protocol; do not use shell & for watcher repair.
+●  This is a supervision warning only; the requested message WILL still be sent.
+●  repair a missing or failed watcher cycle with the Pi tool fm_watch_arm_pi, or restart Pi with -e /Users/control/.no-mistakes/worktrees/874f0de57f61/01M0JV34M9BNN5H9SSWGKW5BG2/.pi/extensions/fm-primary-turnend-guard.ts -e /Users/control/.no-mistakes/worktrees/874f0de57f61/01M0JV34M9BNN5H9SSWGKW5BG2/.pi/extensions/fm-primary-pi-watch.ts if the extensions are not loaded.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+evidence: exact-id carrier=from-firstmate corr=valid body=exact
+ok - real Pi/Herdr: exact-id FM_HOME send delivers exactly one from-firstmate marker
+evidence: direct-input received-hex=464d5f4d41524b45525f48455244525f444952454354206361707461696e707574
+ok - real Pi/Herdr: direct captain terminal input stays unmarked
+ok - real Pi/Herdr: lifecycle control preserves the live exact endpoint
+ok - real Pi/Herdr: teardown removes the endpoint, home, and metadata
+focused watcher reconciliation and Pi supervision verification: ok
 ```
 
 Strict tracked-extension checking used TypeScript 5.9.3:
@@ -541,12 +578,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 131581 314
-bin 54294 127
-tests 57012 117
+all 131623 314
+bin 54305 127
+tests 57010 117
 pi 2045 9
 agents 559
-added=7610 deleted=33233 net=-25623
+added=7677 deleted=33258 net=-25581
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,623 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,581 lines smaller.

@@ -105,7 +105,7 @@ test_first_stale_call_prints_full_banner() {
   out=$(run_guard_case "$dir")
   [ "$(count_text "$out" "WATCHER DOWN - SUPERVISION IS OFF")" -eq 1 ] \
     || fail "first stale guard call did not print exactly one full banner: $out"
-  assert_contains "$out" "Trust the emitted supervision protocol" \
+  assert_contains "$out" "Trust the emitted Pi supervision protocol" \
     "full banner must keep the actionable watcher-repair instruction"
   assert_contains "$out" "WILL still run" \
     "full banner must keep the guarded-operation continuation line"

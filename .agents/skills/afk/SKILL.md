@@ -23,27 +23,11 @@ batched digest rather than per-wake injections.
    terminal record, and rollback.
    The flag survives a firstmate restart, so recovery re-enters afk when it is present.
 
-2. **Ensure the sub-supervisor daemon is running as a tracked background process.**
-   Its hosting differs by harness.
-   Pick the right path:
-   - **Harness WITH a native in-pane tracked-background tool**: first run
-     `bin/fm-afk-launch.sh start-native`, then run
-     `FM_AFK_STATE_PREPARED=1 bin/fm-afk-start.sh` through that native tool.
-     This is a deliberate no-separate-terminal exception because the harness-hosted job creates no terminal or layout mutation, and a shell launcher cannot invoke a harness-native background tool.
-     The launcher still owns lifecycle state and records the no-terminal mode, while the daemon inherits and auto-discovers the captain pane.
-     If the native launch fails, run `bin/fm-afk-launch.sh stop` to roll back the prepared lifecycle.
-     Do not wrap it in `nohup ... &` (Herdr can reap fire-and-forget shell children after a tool call returns).
-   - **Harness WITHOUT one** (e.g. pi): run `bin/fm-afk-launch.sh start`. It is
-     the single owner of the daemon terminal: it creates a NON-VISIBLE tracked
-     terminal in a dedicated Herdr `--no-focus` workspace, records its exact id,
-     and passes the captain pane
-     in as `FM_SUPERVISOR_TARGET` so the daemon injects into the captain, not its
-     own new pane. **Never manufacture a terminal by splitting the captain's
-     active pane** (`herdr pane split`): a split co-tenants the tab and visibly
-     shrinks the captain's pane (docs/herdr-backend.md "Away-mode supervisor
-     support").
-   Both paths share `bin/fm-afk-start.sh` as the daemon entry.
-   The native path tells it that the launcher already prepared lifecycle state; the terminal-backed path lets the entry perform its existing state setup inside the new terminal.
+2. **Ensure the sub-supervisor daemon is running through `bin/fm-afk-launch.sh start`.**
+   The launcher is the single owner of the daemon terminal: it creates a NON-VISIBLE tracked terminal in a dedicated Herdr `--no-focus` workspace, records its exact id, and passes the captain pane in as `FM_SUPERVISOR_TARGET` so the daemon injects into the captain, not its own new pane.
+   Never manufacture a terminal by splitting the captain's active pane (`herdr pane split`): a split co-tenants the tab and visibly shrinks the captain's pane (docs/herdr-backend.md "Away-mode supervisor support").
+   Do not wrap the daemon in `nohup ... &` because Herdr can reap fire-and-forget shell children after a tool call returns.
+   `bin/fm-afk-start.sh` is the daemon entry and performs its state setup inside the tracked terminal.
    It exits immediately if the identity-backed daemon lock already names a live process, otherwise it execs `bin/fm-supervise-daemon.sh` in the foreground.
    The daemon is **presence-gated**: it injects escalations only while
    `state/.afk` exists, and stays quiet otherwise.
@@ -61,7 +45,7 @@ No `/back` is needed. The first genuine message is the return signal:
   Run `bin/fm-afk-return.sh` before acting on the message that brought the captain back.
   That script owns correct-ordered daemon shutdown, durable wake presentation and post-handling acknowledgement, escalation and wedge evidence, and the return-catch-up gate.
   If it reports a firstmate-actionable `blocked:` event, remediate it immediately through the normal lifecycle, or explicitly reclassify it with a durable reason and close its decision key with `resolved [key=...]`, then run `bin/fm-afk-return.sh check`.
-  Once the daemon stops, resume full per-wake responsiveness through the emitted primary-harness supervision protocol while blocker handling proceeds, so the gate never creates a blind wait.
+  Once the daemon stops, resume full per-wake responsiveness through the emitted Pi supervision protocol while blocker handling proceeds, so the gate never creates a blind wait.
   Do not answer a Bearings request or perform any other ordinary captain work until the check exits successfully.
 - A message **with** the current operational prefix (`FM_OPERATIONAL_PREFIX`, U+2063 INVISIBLE SEPARATOR followed by `FIRSTMATE_OP: `), or a legacy bare `FM_INJECT_MARK` daemon escalation -> stay afk and process it.
 - Re-invoking `/afk` while already away -> stay afk (refresh the flag); this
@@ -83,14 +67,14 @@ The daemon constructs every current injection as the `away-supervisor` kind owne
 The bare `FM_INJECT_MARK` form remains accepted for legacy daemon escalations during rollout.
 U+2063 has no normal keyboard keystroke and survives terminal transport as UTF-8 text.
 This is how firstmate tells a daemon escalation apart from a real message in the same pane.
-The operational prefix travels with the message text; it does not rely on harness-level typed-vs-injected detection.
+The operational prefix travels with the message text; it does not rely on typed-vs-injected detection.
 
 ## Busy-guard and composer guard
 
 The daemon never injects into an in-use pane. Two checks run before every
 injection through direct Herdr primitives in `bin/fm-herdr.sh`:
 
-- **Primary-pane busy guard** - `pane_is_busy` trusts Herdr native `busy` when available, otherwise matches rendered output against only the detected primary harness's signature.
+- **Primary-pane busy guard** - `pane_is_busy` trusts Herdr native `busy` when available, otherwise matches rendered output against Pi's signature.
   This narrow delivery guard never classifies a recorded worker task and never uses a global union of vendor patterns.
 - **Composer-state guard** - `inject_msg` reads the full `empty`/`pending`/`pending-unproven`/`unknown` verdict from `fm_herdr_composer_state` and injects only when it is affirmatively `empty`.
   Every other or future verdict defers, including an unreadable pane, ambiguous geometry, a blank unidentified row, and a bare shell prompt left after the agent exits.
@@ -152,15 +136,14 @@ Classify each wake this way:
 Escalations are buffered up to `FM_ESCALATE_BATCH_SECS` (default 90s; 0 =
 immediate) and flushed as one single-line digest prefixed with the current
 operational prefix, carrying pre-read status summaries and a recommended action.
-The single-line format makes the submission unambiguous across harnesses, and
+The single-line format makes the submission unambiguous in Pi, and
 the operational prefix lets firstmate distinguish it from a real captain message.
 
 ## Injection hardening
 
 - **Single-line digest** - embedded newlines are collapsed to a literal
-  separator before injection, so submission is unambiguous regardless of
-  harness.
-- **Busy and composer guards on the supervisor pane** - before injecting, the daemon runs the detected-primary-harness rendered busy guard and reads `fm_herdr_composer_state` directly.
+  separator before injection, so submission is unambiguous in the Pi composer.
+- **Busy and composer guards on the supervisor pane** - before injecting, the daemon runs the Pi rendered busy guard and reads `fm_herdr_composer_state` directly.
   Only `empty` permits injection; `pending` protects half-typed or swallowed input, and `unknown` protects unreadable panes and bare dead-shell prompts.
   Every other result preserves the buffer for retry, so the daemon never merges its digest into the captain's half-typed line or types it into a shell.
 - Herdr passes its bounded capture plus native identity and styling evidence to the shared screen classifier; all structural recognition and verdict logic remains in `bin/fm-composer-lib.sh`.

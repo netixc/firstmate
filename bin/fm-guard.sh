@@ -213,7 +213,7 @@ if [ "$watcher_healthy" = false ]; then
       if [ "$READ_ONLY" -eq 1 ]; then
         printf '●  This read-only session should report the lapse, not repair it.\n'
       else
-        printf '●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.\n'
+        printf '●  Trust the emitted Pi supervision protocol; do not use shell & for watcher repair.\n'
       fi
       printf '●  %s\n' "$CONTINUE_LINE"
       printf '●  %s\n' "$fix"

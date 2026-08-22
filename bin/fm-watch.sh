@@ -384,6 +384,13 @@ pause_live_agent_class() {  # <window> <task>
   printf '%s' "$result"
 }
 
+surface_endpoint_reconciliation() {  # <window> <task>
+  local win=$1 task=$2 reason
+  reason="check: Herdr endpoint identity or agent state unavailable for $task ($win); preserve metadata and reconcile manually"
+  fm_wake_append check "endpoint-reconciliation-$task" "$reason" || exit 1
+  wake "$reason"
+}
+
 # Reconcile a declared pause or captain-held status with authoritative crew state.
 # Only a confidently dead ordinary crew may recover paused classification after
 # fm-crew-state has fallen back to stopped or unknown.
@@ -1111,7 +1118,8 @@ EOF
         if [ "$kind" = secondmate ]; then
           case "$(pause_state_class "$w" "$task")" in
             paused) handle_paused_stale "$w" "$task" "$h" ;;
-            unknown|cleared) : ;;
+            unknown) surface_endpoint_reconciliation "$w" "$task" ;;
+            cleared) : ;;
             *) clear_pause_tracking "$w" ;;
           esac
         elif afk_present; then
@@ -1188,6 +1196,7 @@ EOF
                 handle_paused_stale "$w" "$task" "$h"
                 ;;
               unknown)
+                surface_endpoint_reconciliation "$w" "$task"
                 ;;
               cleared)
                 surface_nonterminal_stale "$w" "$h"
@@ -1205,7 +1214,8 @@ EOF
                          printf '%s' "$h" > "$sf"
                          wedge_timer_check "$w" "$ssf" "non-terminal stale (provably working after a declared pause)" "$ewf"
                          triage_log "absorbed non-terminal stale (provably working): $w" ;;
-                unknown|cleared) : ;;
+                unknown)  surface_endpoint_reconciliation "$w" "$task" ;;
+                cleared)  : ;;
                 *)       handle_paused_stale "$w" "$task" "$h" ;;
               esac
             else
@@ -1238,7 +1248,8 @@ EOF
       if ! afk_present && status_is_paused_or_captain_held "$(last_status_line "$STATE/$task.status")" && [ "$busy_now" -ne 0 ]; then
         case "$(pause_state_class "$w" "$task")" in
           paused) handle_paused_stale "$w" "$task" "$h" ;;
-          unknown|cleared) : ;;
+          unknown) surface_endpoint_reconciliation "$w" "$task" ;;
+          cleared) : ;;
           *) clear_pause_tracking "$w" ;;
         esac
       else
