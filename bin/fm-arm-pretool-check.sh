@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Stable PreToolUse transport for the watcher-arm command policy.
 #
-# A firstmate primary must arm the watcher as a standalone verified harness call.
+# A firstmate primary must arm the watcher as a standalone verified Pi tool call.
 # bin/fm-arm-command-policy.mjs is the sole owner of shell classification,
 # protected execution identity, the blessed setup tree, and deny reason codes.
-# This wrapper only acquires the harness payload, discovers the active roots,
+# This wrapper only receives Pi's command payload, discovers the active roots,
 # invokes that policy, and renders the established Pi responses.
 # It never executes, sources, evaluates, or expands the submitted command.
 # See docs/arm-pretool-check.md for the complete contract and validation record.
