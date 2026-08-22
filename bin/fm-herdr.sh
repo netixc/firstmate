@@ -727,16 +727,14 @@ fm_herdr_cli() {  # <session> <herdr-subcommand-and-args...>
       echo "REFUSED: Herdr session generation changed during an authorized endpoint operation; preserving task state and nothing was changed." >&2
       return 2
     }
-    identity=$(fm_herdr_socket_identity "$FM_HERDR_BOUND_SOURCE_SOCKET") || return 2
-    [ "$identity" = "${FM_HERDR_BOUND_SOCKET_IDENTITY:-}" ] || return 2
-    if FM_HERDR_AUTHORIZED_SOCKET="$FM_HERDR_BOUND_SOCKET" \
-      env -u HERDR_CLIENT_SOCKET_PATH HERDR_SESSION="$session" herdr "$@" --session "$session"; then
+    if env -u HERDR_CLIENT_SOCKET_PATH \
+      FM_HERDR_AUTHORIZED_SOCKET="$FM_HERDR_BOUND_SOCKET" \
+      HERDR_SOCKET_PATH="$FM_HERDR_BOUND_SOCKET" \
+      HERDR_SESSION="$session" herdr "$@"; then
       result=0
     else
       result=$?
     fi
-    identity=$(fm_herdr_socket_identity "$FM_HERDR_BOUND_SOURCE_SOCKET") || return 2
-    [ "$identity" = "${FM_HERDR_BOUND_SOCKET_IDENTITY:-}" ] || return 2
     return "$result"
   fi
   env -u HERDR_CLIENT_SOCKET_PATH HERDR_SESSION="$session" herdr "$@" --session "$session"
@@ -1187,7 +1185,6 @@ fm_herdr_with_readonly_session_generation() {  # <session> <generation> <subject
     bound_identity=${required_generation#*$'\t'}
     FM_HERDR_BOUND_SESSION=$session
     FM_HERDR_BOUND_SOCKET=$bound_socket
-    FM_HERDR_BOUND_SOURCE_SOCKET=${required_generation%%$'\t'*}
     FM_HERDR_BOUND_SOCKET_IDENTITY=$bound_identity
     "$callback" "$@"
   )
@@ -1231,7 +1228,6 @@ fm_herdr_with_session_generation() {  # <session> <generation> <subject> <callba
         FM_HERDR_BOUND_SESSION=$session
         # shellcheck disable=SC2030
         FM_HERDR_BOUND_SOCKET=$bound_socket
-        FM_HERDR_BOUND_SOURCE_SOCKET=${required_generation%%$'\t'*}
         FM_HERDR_BOUND_SOCKET_IDENTITY=$bound_identity
         export FM_HERDR_BOUND_SESSION_GENERATION=$required_generation
         "$callback" "$@"

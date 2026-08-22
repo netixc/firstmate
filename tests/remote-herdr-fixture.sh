@@ -40,6 +40,7 @@ SOCKET='$socket'
 SH
   cat >> "$script" <<'SH'
 printf '%s\n' "$*" >> "$LOG"
+HERDR_INVOCATION=$*
 jq_state() { jq "$@" "$STATE"; }
 save() { tmp="$STATE.tmp.$$"; cat > "$tmp" && mv "$tmp" "$STATE"; }
 require_delivery_lock() {
@@ -49,7 +50,9 @@ require_delivery_lock() {
   }
   [ "${FM_FAKE_HERDR_REQUIRE_BOUND:-0}" != 1 ] || {
     [ -n "${FM_HERDR_AUTHORIZED_SOCKET:-}" ] && [ -e "$FM_HERDR_AUTHORIZED_SOCKET" ] \
-      && [ "$FM_HERDR_AUTHORIZED_SOCKET" -ef "$SOCKET" ] || {
+      && [ "${HERDR_SOCKET_PATH:-}" = "$FM_HERDR_AUTHORIZED_SOCKET" ] \
+      && [ "$FM_HERDR_AUTHORIZED_SOCKET" -ef "$SOCKET" ] \
+      && [[ " $HERDR_INVOCATION " != *" --session "* ]] || {
       printf 'delivery transport is not bound to the authorized Herdr socket\n' >&2
       return 1
     }
@@ -58,7 +61,9 @@ require_delivery_lock() {
 require_bound_read() {
   [ "${FM_FAKE_HERDR_REQUIRE_BOUND_READ:-0}" != 1 ] || {
     [ -n "${FM_HERDR_AUTHORIZED_SOCKET:-}" ] && [ -e "$FM_HERDR_AUTHORIZED_SOCKET" ] \
-      && [ "$FM_HERDR_AUTHORIZED_SOCKET" -ef "$SOCKET" ] || {
+      && [ "${HERDR_SOCKET_PATH:-}" = "$FM_HERDR_AUTHORIZED_SOCKET" ] \
+      && [ "$FM_HERDR_AUTHORIZED_SOCKET" -ef "$SOCKET" ] \
+      && [[ " $HERDR_INVOCATION " != *" --session "* ]] || {
       printf 'read transport is not bound to the authorized Herdr socket\n' >&2
       return 1
     }

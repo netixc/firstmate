@@ -770,7 +770,7 @@ fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
 fm-doc-audience-check: ok surfaces=52 local_links=168
 ```
 
-The final generation-bound away-terminal, supervisor, and real Pi/Herdr lifecycle rerun used:
+The final authorized-socket generation-bound away-terminal, supervisor, and real Pi/Herdr lifecycle rerun used:
 
 ```sh
 set -o pipefail && \
@@ -811,12 +811,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 132248 313
-bin 54365 126
-tests 57339 117
+all 132251 313
+bin 54361 126
+tests 57346 117
 pi 2048 9
 agents 559
-added=9171 deleted=34127 net=-24956
+added=9174 deleted=34127 net=-24953
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 24,956 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 24,953 lines smaller.
