@@ -163,32 +163,8 @@ fm_watcher_healthy() {
 # start, attach to, or replace a real watcher process, so a leftover beacon must
 # never satisfy it. bin/fm-turnend-guard.sh also keeps this strict check because
 # it fires at the turn boundary. The pull warning (bin/fm-guard.sh) wants a
-# different, model-aware question:
-
-# fm_supervision_model
-# Print the supervision model of this home's PRIMARY harness:
-#   extension   Pi: .pi/extensions/fm-primary-pi-watch.ts owns
-#               continuity. It tears the watcher down on every actionable wake and
-#               spawns the replacement itself, so a genuinely unheld singleton lock
-#               is healthy during that hand-off only with extension ownership and a
-#               fresh beacon. Any held but unhealthy lock remains down.
-#   persistent non-extension supervision (unknown legacy contexts):
-#               the watcher runs as a tracked live
-#               process, so a live identity-matched pid is the real liveness signal.
-# FM_SUPERVISION_MODEL overrides detection (tests, and callers that already know
-# the harness). Otherwise bin/fm-harness.sh is the single detection owner, so this
-# stays consistent with the harness-specific repair line the guards already emit.
-fm_supervision_model() {
-  local harness
-  case "${FM_SUPERVISION_MODEL:-}" in
-    extension|persistent) printf '%s\n' "$FM_SUPERVISION_MODEL"; return 0 ;;
-  esac
-  harness=$("$FM_WAKE_LIB_DIR/fm-harness.sh" 2>/dev/null || printf unknown)
-  case "$harness" in
-    pi) printf 'extension\n' ;;
-    *) printf 'persistent\n' ;;
-  esac
-}
+# different Pi-aware question. Pi tears the watcher down on every actionable
+# wake and replaces it through its tracked primary extension.
 
 # Pi primary supervision evidence. The Pi extensions record, in their state
 # markers, the exact build they loaded and the session process that loaded it, so
@@ -249,16 +225,15 @@ fm_pi_extension_owns_supervision() {
 }
 
 # fm_watcher_supervision_verdict <state> <watch-path> [grace] [home] [root]
-# Model-aware "is supervision healthy right now" verdict for the pull warning
+# Pi-aware "is supervision healthy right now" verdict for the pull warning
 # guard (bin/fm-guard.sh), NOT the arm layer or the turn-end guard. Sets:
-#   FM_WATCHER_VERDICT_OK      true when supervision is healthy for this model
+#   FM_WATCHER_VERDICT_OK      true when Pi supervision is healthy
 #   FM_WATCHER_VERDICT_REASON  when not ok, the true failing condition:
-#                              no-watcher   - a live watcher process is the real
-#                                             signal for this model but none holds
-#                                             the lock (the beacon is still fresh)
+#                              no-watcher   - no live watcher or proven Pi hand-off
+#                                             owns continuity while the beacon is fresh
 #                              stale-beacon - the beacon is stale beyond grace or
 #                                             absent (a genuine supervision lapse)
-# extension: a live identity-matched watcher is the ordinary healthy state, but a
+# A live identity-matched watcher is the ordinary healthy state, but a
 # genuinely unheld lock is also healthy while the beacon is fresh AND a live Pi
 # session provably owns continuity (fm_pi_extension_owns_supervision) - that is the
 # extension's own tear-down-and-respawn hand-off, which it retries and escalates
@@ -266,8 +241,6 @@ fm_pi_extension_owns_supervision() {
 # Without ownership proof an unheld lock is down exactly as before, so an unloaded,
 # version-drifted, or exited Pi session still alarms immediately, and a cycle the
 # extension never restores still alarms once the beacon passes grace.
-# persistent: require a live identity-matched watcher with a fresh beacon
-# (fm_watcher_healthy); a fresh leftover beacon with no live watcher is still down.
 # shellcheck disable=SC2034 # Read by callers after the function returns.
 FM_WATCHER_VERDICT_OK=false
 # shellcheck disable=SC2034 # Read by callers after the function returns.
@@ -275,7 +248,7 @@ FM_WATCHER_VERDICT_REASON=stale-beacon
 fm_watcher_supervision_verdict() {
   local state=$1 watch=$2 grace=${3:-${FM_GUARD_GRACE:-300}} home=${4:-$FM_HOME}
   local root=${5:-$FM_ROOT}
-  local beat age fresh=false model
+  local beat age fresh=false
   FM_WATCHER_VERDICT_OK=false
   FM_WATCHER_VERDICT_REASON=stale-beacon
   beat="$state/.last-watcher-beat"
@@ -284,12 +257,11 @@ fm_watcher_supervision_verdict() {
     ''|*[!0-9]*) ;;
     *) [ "$age" -lt "$grace" ] && fresh=true ;;
   esac
-  model=$(fm_supervision_model)
   if fm_watcher_healthy "$state" "$watch" "$grace" "$home"; then
     # shellcheck disable=SC2034 # Read by callers after the function returns.
     FM_WATCHER_VERDICT_OK=true
   elif [ "$fresh" = true ]; then
-    if [ "$model" = extension ] && fm_watcher_lock_unheld "$state" \
+    if fm_watcher_lock_unheld "$state" \
       && fm_pi_extension_owns_supervision "$state" "$root"; then
       # shellcheck disable=SC2034 # Read by callers after the function returns.
       FM_WATCHER_VERDICT_OK=true

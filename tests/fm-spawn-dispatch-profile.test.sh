@@ -454,6 +454,8 @@ test_pi_persistent_secondmate_uses_primary_extensions() {
   launch=$(cat "$LAUNCH_LOG")
   assert_contains "$launch" "'$FAKEBIN_DIR/pi' --tui-mode regular -e '$sm/.pi/extensions/fm-primary-turnend-guard.ts' -e '$sm/.pi/extensions/fm-primary-pi-watch.ts'" \
     "pi secondmate did not force the regular TUI with Pi's primary extension launch shape"
+  assert_not_contains "$launch" "FM_SUPERVISION_MODEL=" \
+    "pi secondmate launch retained a retired supervision selector"
   pass "pi persistent secondmates use Pi supervision semantics"
 }
 

@@ -304,22 +304,11 @@ SH
 }
 
 # run_session_start <home> <root> <path>
-# Drop every harness env marker from bin/fm-harness.sh detect_own so the
-# surrounding interactive shell cannot leak past the suite's fake ps harness.
-# The verified marker is PI_CODING_AGENT=true.
-# Without this, a local Pi session fails cases that pin a different fake harness while CI
-# (no ambient markers) still passes.
 run_session_start() {
-  local home=$1 root=$2 path=$3 pi_harness=${4:-}
-  if [ -n "$pi_harness" ]; then
-    env PI_CODING_AGENT=true \
-      FM_HOME="$home" FM_ROOT_OVERRIDE="$root" PATH="$path" \
-      "$SESSION_START"
-  else
-    env -u PI_CODING_AGENT \
-      FM_HOME="$home" FM_ROOT_OVERRIDE="$root" PATH="$path" \
-      "$SESSION_START"
-  fi
+  local home=$1 root=$2 path=$3
+  env PI_CODING_AGENT=true \
+    FM_HOME="$home" FM_ROOT_OVERRIDE="$root" PATH="$path" \
+    "$SESSION_START"
 }
 
 run_pi_session_start() {  # <home> <root> <path> [fm-session-start args...]
@@ -338,6 +327,23 @@ run_named_harness_session_start() {  # <harness> <home> <root> <path> [fm-sessio
     FM_FAKE_HARNESS="$harness" FM_FAKE_HARNESS_PID="$SESSION_START_TEST_HARNESS_PID" \
     FM_HOME="$home" FM_ROOT_OVERRIDE="$root" PATH="$path" \
     "$SESSION_START" "$@"
+}
+
+test_non_pi_primary_refuses_before_state_mutation() {
+  local rec root home fakebin out rc=0
+  rec=$(new_world non-pi-primary)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_harness "$fakebin" unknown
+
+  out=$(run_named_harness_session_start unknown "$home" "$root" "$fakebin:$BASE_PATH" 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "non-Pi session start unexpectedly succeeded"
+  assert_contains "$out" "Pi is required as the primary runtime; detected unknown" \
+    "non-Pi session start did not explain the runtime requirement"
+  assert_absent "$home/state/.lock" "non-Pi session start acquired the fleet lock"
+  pass "session start rejects a non-Pi primary before fleet mutation"
 }
 
 # prepare_session_start_secondmate <name>: a throwaway main home and Pi
@@ -2021,6 +2027,7 @@ EOF
 }
 
 test_context_digest_absent_empty_present
+test_non_pi_primary_refuses_before_state_mutation
 test_lock_refusal_read_only_path
 test_lock_write_failure_read_only_path
 test_trace_context_effective_state_is_frozen_after_lock

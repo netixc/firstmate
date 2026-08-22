@@ -264,6 +264,12 @@ stage() {  # <stage-name>: breadcrumb for the parent's truncation banner
 # shellcheck source=bin/fm-session-lock-lib.sh
 . "$SCRIPT_DIR/fm-session-lock-lib.sh"
 
+DETECTED_PRIMARY=$("$SCRIPT_DIR/fm-harness.sh" 2>/dev/null || printf unknown)
+if [ "$DETECTED_PRIMARY" != pi ]; then
+  printf 'error: Pi is required as the primary runtime; detected %s\n' "$DETECTED_PRIMARY" >&2
+  exit 1
+fi
+
 if [ -z "${FM_SESSION_START_STAGE_FILE:-}" ]; then
   SESSION_START_BUDGET=${FM_SESSION_START_TIMEOUT:-120}
   # A non-positive or non-numeric budget is not a budget (`timeout 0` disables
@@ -319,15 +325,6 @@ if [ -z "${FM_SESSION_START_STAGE_FILE:-}" ]; then
   rm -f "$SESSION_START_STAGE_FILE" 2>/dev/null || true
   exit 0
 fi
-
-DETECTED_PRIMARY=$("$SCRIPT_DIR/fm-harness.sh" 2>/dev/null || printf unknown)
-case "$DETECTED_PRIMARY" in
-  pi|unknown) ;;
-  *)
-    printf 'error: Pi is required as the primary runtime; detected %s\n' "$DETECTED_PRIMARY" >&2
-    exit 1
-    ;;
-esac
 
 # shellcheck source=bin/fm-herdr.sh
 . "$SCRIPT_DIR/fm-herdr.sh"

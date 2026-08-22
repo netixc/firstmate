@@ -18,7 +18,7 @@ detect_own() {
   fi
   # Layer 2: walk the parent chain and match the command name.
   local pid=$$ comm args
-  for _ in 1 2 3 4 5 6 7 8; do
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
     comm=$(ps -o comm= -p "$pid" 2>/dev/null) || break
     case "$(basename -- "$comm")" in
       pi) echo pi; return ;;
