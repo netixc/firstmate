@@ -106,7 +106,7 @@ These steps are never automated and are always reported rather than silently att
 - FileVault, which holds a reboot at pre-boot authentication before any login session exists.
 - Installing any missing required tool that no safe wrapper can resolve.
 - The required remote tool set is `git`, `jq`, `herdr`, compatible `tasks-axi`, `treehouse`, and `pi`.
-- Each worker runtime's own `/login`, and any keychain password prompt that login needs.
+- Pi's own `/login`, and any keychain password prompt that login needs.
 
 Firstmate never writes an auto-login password, never changes FileVault, and never stores an account password.
 A file at `~/.local/bin/fm-remote-entrypoint.sh` that is not Firstmate's own symlink is reported for the operator to inspect and is never overwritten.
