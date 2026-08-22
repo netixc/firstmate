@@ -165,7 +165,6 @@ case "${FM_FAKE_SSH_MODE:-normal}:$command_name:$command_rel" in
     printf 'schema=fm-remote-secondmate-control.v1\n'
     printf 'target=default:w1:p2\n'
     printf 'herdr_session=default\n'
-    printf 'harness=pi\n'
     exit 0
     ;;
   provision-block-fail:fm-remote-home-provision.sh:*)

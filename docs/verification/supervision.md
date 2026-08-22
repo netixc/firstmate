@@ -43,7 +43,7 @@ Compacted from 7,697 tokens
 compact
 ```
 
-Current Pi source classification and baseline mechanics are owned by [`../sessionstart-nudge.md`](../sessionstart-nudge.md#harness-transports) and the `bin/fm-session-start.sh` header.
+Current Pi source classification and baseline mechanics are owned by [`../sessionstart-nudge.md`](../sessionstart-nudge.md#pi-transport) and the `bin/fm-session-start.sh` header.
 Their continuation classification is covered by portable tests, not claimed as live validation in this record.
 
 ### Post-start instruction refresh
@@ -204,7 +204,7 @@ tests/fm-pi-primary-types.test.sh
 
 Observed guarantee: after ordinary `session_shutdown` for `/new`, `/resume`, and `/fork`, plus same-instance shutdown-plus-start, the replacement generation armed again without a Pi restart and without the `watcher: not armed - Pi session is shutting down` refusal.
 Stale prior-generation tool callbacks could not mutate the active child, repeated transitions kept exactly one live arm cycle, and terminal `quit` still refused late rearm.
-Pi uses the tracked `.pi/extensions/fm-primary-pi-watch.ts` path and inherits the generation owner; other primary harnesses are not applicable because they do not use this Pi extension lifecycle.
+Pi uses the tracked `.pi/extensions/fm-primary-pi-watch.ts` path and inherits the generation owner.
 
 Deterministic entry points:
 

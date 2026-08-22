@@ -307,7 +307,7 @@ test_meta_classification_requires_exact_endpoint_identity() {
     "herdr_pane_id=w1:p1" "worktree=/tmp/t1" "project=/tmp/project" \
     "harness=legacy-agent"
   out=$(fm_busy_classify_meta "$meta" t1 "$state")
-  [ "$out" = "unknown source-mismatch" ] \
+  [ "$out" = "unknown invalid-endpoint" ] \
     || fail "retired runtime metadata must be preserved as unknown, got '$out'"
   pass "metadata busy classification requires exact endpoint identity"
 }

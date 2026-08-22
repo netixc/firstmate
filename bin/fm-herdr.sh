@@ -140,6 +140,15 @@ fm_endpoint_target_of_meta() {  # <meta-file>
   printf '%s' "$FM_HERDR_VALIDATED_TARGET"
 }
 
+fm_pi_record_compatible() {  # <meta-file>
+  local meta=$1 count runtime
+  count=$(grep -c '^harness=' "$meta" 2>/dev/null || true)
+  [ "$count" -eq 0 ] && return 0
+  [ "$count" -eq 1 ] || return 1
+  runtime=$(fm_meta_exact_value "$meta" harness) || return 1
+  [ "$runtime" = pi ]
+}
+
 fm_herdr_validate_task_endpoint() {  # <meta-file> <task-id> [record-only|live-control]
   local meta=$1 id=$2 mode=${3:-unique-owner} window worktree project binding session workspace tab pane state owner owner_rc pane_info tab_info
   FM_HERDR_VALIDATED_TARGET=
@@ -152,6 +161,10 @@ fm_herdr_validate_task_endpoint() {  # <meta-file> <task-id> [record-only|live-c
     return 1
   esac
   fm_herdr_require_meta "$meta" "$id" || return 1
+  fm_pi_record_compatible "$meta" || {
+    echo "REFUSED: task $id carries unsupported worker-runtime metadata; preserving task state." >&2
+    return 1
+  }
   window=$(fm_meta_exact_value "$meta" window) || {
     echo "REFUSED: task $id has a missing, empty, or ambiguous Herdr endpoint; preserving task state." >&2
     return 1
@@ -238,6 +251,7 @@ fm_herdr_validate_remote_route() {  # <meta-file> <task-id> [record-only]
   FM_HERDR_VALIDATED_REMOTE_TARGET=
   [ -f "$meta" ] && [ ! -L "$meta" ] || return 1
   case "$id" in ''|*[!A-Za-z0-9._-]*) return 1 ;; esac
+  fm_pi_record_compatible "$meta" || return 1
   backend_count=$(grep -c '^backend=' "$meta" 2>/dev/null || true)
   remote_backend_count=$(grep -c '^remote_backend=' "$meta" 2>/dev/null || true)
   if [ "$backend_count" -eq 1 ]; then
@@ -1182,6 +1196,7 @@ fm_herdr_with_live_task_endpoint() {  # <meta-file> <task-id> <callback> [args..
         }
         bound_identity=${required_generation#*$'\t'}
         FM_HERDR_BOUND_SESSION=$session
+        # shellcheck disable=SC2030
         FM_HERDR_BOUND_SOCKET=$bound_socket
         FM_HERDR_BOUND_SOCKET_IDENTITY=$bound_identity
         fm_herdr_validate_live_task_endpoint "$meta" "$id" || return 2
@@ -1221,8 +1236,6 @@ _fm_herdr_live_busy_classify() {
 }
 
 fm_herdr_live_busy_task_endpoint() {  # <meta-file> <task-id> <state-dir>
-  [ "$(fm_meta_exact_value "$1" harness 2>/dev/null || true)" = pi ] \
-    || { printf 'unknown source-mismatch'; return 0; }
   fm_herdr_with_live_task_endpoint "$1" "$2" _fm_herdr_live_busy_classify "$2" "$3"
 }
 
@@ -1948,6 +1961,7 @@ fm_herdr_projection_order_best_effort() {  # <session> <created-workspace-id> <p
 # call. Bounded poll for the server to report running.
 fm_herdr_server_ensure() {  # <session>
   local session=$1 running out i
+  # shellcheck disable=SC2031
   if [ -n "${FM_HERDR_BOUND_SOCKET:-}" ]; then
     out=$(fm_herdr_cli "$session" status --json) || return $?
   else

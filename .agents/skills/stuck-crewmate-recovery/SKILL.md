@@ -13,10 +13,10 @@ metadata:
 
 Use this playbook when the session-start digest reports an ordinary direct report's endpoint dead or its metadata has no window, or when a direct report is stale, looping, repeatedly confused, asking a question its brief already answers, unresponsive, or when a steer failed to land.
 
-Interrupt, stop, and relaunch a worker through `bin/fm-control.sh <task-id> interrupt|exit|relaunch`, which requires the recorded Pi identity, verifies each action, and never tears down or discards anything ([`docs/agent-control.md`](../../../docs/agent-control.md)).
+Interrupt, stop, and relaunch a worker through `bin/fm-control.sh <task-id> interrupt|exit|relaunch`, which requires Pi-compatible task metadata, verifies each action, and never tears down or discards anything ([`docs/agent-control.md`](../../../docs/agent-control.md)).
 That plane covers workers running in this home; a remotely placed secondmate is refused by name and reconciled through `secondmate-provisioning` instead.
 Load `pi-operations` before a Pi-specific skill invocation or whenever Pi's own quirks matter.
-The target window's harness is recorded as `harness=` in `state/<id>.meta`.
+Historical `harness=pi` task records remain compatible; current records omit that retired selector.
 
 ## Session-start reconciliation for a dead ordinary direct report
 

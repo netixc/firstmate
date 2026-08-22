@@ -1,57 +1,49 @@
 #!/usr/bin/env bash
-# Shared session-lock harness identity.
+# Shared session-lock Pi identity.
 #
-# ONE owner of the "which verified-harness process holds this home's session
-# lock, and does the current process descend from that same harness?" decision.
+# ONE owner of the "which Pi process holds this home's session lock, and does
+# the current process descend from that same Pi process?" decision.
 # bin/fm-lock.sh uses it to acquire and inspect state/.lock.
 # This file is sourced by scripts and has no side effects on source.
 
-FM_HARNESS_RE='^pi$'
-FM_HARNESS_NAMES=(pi)
-
-fm_harness_path_name() {  # <path>
-  local path=$1 name
+fm_pi_path() {  # <path>
+  local path=$1
   [ -n "$path" ] || return 1
-  for name in "${FM_HARNESS_NAMES[@]}"; do
-    case "/$path/" in
-      */"$name"/*) printf '%s' "$name"; return 0 ;;
-    esac
-  done
+  case "/$path/" in
+    */pi/*) return 0 ;;
+  esac
   return 1
 }
 
 # True when the process described by command name $1 and full argument string $2
-# is a verified harness. Evidence is the command basename, an exact harness path
-# component in the command or argv[0], or a bare interpreter running a harness
+# is Pi. Evidence is the command basename, an exact Pi path component in the
+# command or argv[0], or a bare interpreter running Pi
 # script.
-fm_harness_process_matches() {  # <comm> <args>
-  local comm=$1 args=$2 base argv0 name
+fm_pi_process_matches() {  # <comm> <args>
+  local comm=$1 args=$2 base argv0
   base=$(basename -- "$comm")
-  if printf '%s' "$base" | grep -qE "$FM_HARNESS_RE"; then
-    return 0
-  fi
+  [ "$base" != pi ] || return 0
   argv0=${args%% *}
-  if name=$(fm_harness_path_name "$comm") || name=$(fm_harness_path_name "$argv0"); then
-    [ -n "$name" ]
-    return
+  if fm_pi_path "$comm" || fm_pi_path "$argv0"; then
+    return 0
   fi
   case "$comm" in
     *node*|*python*)
-      printf '%s' "$args" | grep -qE "$FM_HARNESS_RE" && return 0
+      case "$args" in *' pi '*|*/pi|*/pi\ *) return 0 ;; esac
       ;;
   esac
   return 1
 }
 
-# Walk up to 16 parents and print the innermost verified harness process.
-# The walk stops at the first match so it cannot cross into an unrelated harness
+# Walk up to 16 parents and print the innermost Pi process.
+# The walk stops at the first match so it cannot cross into an unrelated Pi
 # further up the process tree.
-fm_harness_ancestry_pids() {
+fm_pi_ancestry_pid() {
   local pid=$$ comm args
   for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
     comm=$(ps -o comm= -p "$pid" 2>/dev/null) || break
     args=$(ps -o args= -p "$pid" 2>/dev/null)
-    if fm_harness_process_matches "$comm" "$args"; then
+    if fm_pi_process_matches "$comm" "$args"; then
       printf '%s\n' "$pid"
       return 0
     fi
@@ -61,25 +53,21 @@ fm_harness_ancestry_pids() {
   return 1
 }
 
-fm_harness_ancestry_pid() {
-  fm_harness_ancestry_pids
-}
-
-fm_harness_pid_alive() {
+fm_pi_pid_alive() {
   local pid=$1 comm args
   kill -0 "$pid" 2>/dev/null || return 1
   comm=$(ps -o comm= -p "$pid" 2>/dev/null) || return 1
   args=$(ps -o args= -p "$pid" 2>/dev/null)
-  fm_harness_process_matches "$comm" "$args"
+  fm_pi_process_matches "$comm" "$args"
 }
 
-# True when the current session's verified harness process owns the home lock.
+# True when the current session's Pi process owns the home lock.
 fm_session_lock_owned_by_self() {
   local state=$1 lock_pid ancestry_pid
   lock_pid=$(cat "$state/.lock" 2>/dev/null || true)
   case "$lock_pid" in
     ''|*[!0-9]*) return 1 ;;
   esac
-  ancestry_pid=$(fm_harness_ancestry_pid) || return 1
+  ancestry_pid=$(fm_pi_ancestry_pid) || return 1
   [ "$ancestry_pid" = "$lock_pid" ]
 }

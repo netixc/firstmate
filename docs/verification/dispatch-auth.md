@@ -101,7 +101,7 @@ openai-codex  gpt-5.6-terra  272K     128K     yes       yes
 ```
 
 The Pi catalog is authoritative for Pi model support and reports the provider family in its own column.
-For `harness=pi`, `model=openai-codex/gpt-5.6-terra` the catalog establishes the model is supported and belongs to the `openai-codex` family, and the Codex `all_models` scope above supplies fresh, known 64 effective remaining for every model in that family.
+For `model=openai-codex/gpt-5.6-terra`, the Pi catalog establishes the model is supported and belongs to the `openai-codex` family, and the Codex `all_models` scope above supplies fresh, known 64 effective remaining for every model in that family.
 No Terra-specific window exists in the snapshot, and `quota-axi auth --json` lists no `pi:openai-codex` source.
 Both absences are missing model-level and source-level detail, not contradictory evidence, so this candidate is dispatchable with the model-level uncertainty disclosed.
 

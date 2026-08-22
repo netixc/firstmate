@@ -157,14 +157,12 @@ state_value() { # <id>; prints recovery-grade state
 }
 
 print_route() { # <id>
-  local id=$1 harness traceparent
+  local id=$1 traceparent
   remote_endpoint_require "$id"
-  harness=$(fm_meta_get "$REMOTE_ENDPOINT_META" harness)
   traceparent=$(fm_meta_get "$REMOTE_ENDPOINT_META" traceparent)
   printf 'schema=fm-remote-secondmate-control.v1\n'
   printf 'target=%s\n' "$REMOTE_ENDPOINT_TARGET"
   printf 'herdr_session=%s\n' "$REMOTE_HERDR_SESSION"
-  printf 'harness=%s\n' "$harness"
   [ -z "$traceparent" ] || printf 'traceparent=%s\n' "$traceparent"
 }
 
@@ -276,8 +274,6 @@ cmd_observe() {
   validate_id "$id"
   validate_home "$id"
   remote_endpoint_require "$id"
-  [ "$(fm_meta_exact_value "$REMOTE_ENDPOINT_META" harness 2>/dev/null || true)" = pi ] \
-    || die "remote secondmate $id does not record Pi as its worker runtime; preserving its endpoint"
   remote_endpoint_live_operation "$id" \
     fm_pending_reply_herdr_observation
   printf '\n'

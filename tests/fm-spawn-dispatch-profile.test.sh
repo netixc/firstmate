@@ -106,8 +106,8 @@ EOF
 }
 
 assert_meta_profile() {
-  local meta=$1 harness=$2 model=$3 effort=$4
-  assert_grep "harness=$harness" "$meta" "meta missing harness=$harness"
+  local meta=$1 _runtime=$2 model=$3 effort=$4
+  assert_not_contains "$(cat "$meta")" "harness=" "current metadata retained a worker-runtime selector"
   assert_grep "model=$model" "$meta" "meta missing model=$model"
   assert_grep "effort=$effort" "$meta" "meta missing effort=$effort"
 }
@@ -448,8 +448,8 @@ test_pi_persistent_secondmate_uses_primary_extensions() {
   out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$sm" --secondmate)
   status=$?
   expect_code 0 "$status" "pi persistent secondmate spawn should succeed"
-  assert_contains "$out" "spawned $id harness=pi kind=secondmate" \
-    "pi secondmate spawn did not preserve its runtime identity"
+  assert_contains "$out" "spawned $id kind=secondmate" \
+    "Pi secondmate spawn did not report its task kind"
   assert_meta_profile "$HOME_DIR/state/$id.meta" pi default default
   launch=$(cat "$LAUNCH_LOG")
   assert_contains "$launch" "'$FAKEBIN_DIR/pi' --tui-mode regular -e '$sm/.pi/extensions/fm-primary-turnend-guard.ts' -e '$sm/.pi/extensions/fm-primary-pi-watch.ts'" \
@@ -471,8 +471,8 @@ test_batch_forwards_shared_profile_flags() {
     "$id1=$PROJ_DIR" "$id2=$PROJ_DIR" --model gpt-5 --effort high)
   status=$?
   expect_code 0 "$status" "batch spawn with shared profile flags should succeed"
-  assert_contains "$out" "spawned $id1 harness=pi" "first batch task did not use shared harness"
-  assert_contains "$out" "spawned $id2 harness=pi" "second batch task did not use shared harness"
+  assert_contains "$out" "spawned $id1 kind=ship" "first batch task did not launch"
+  assert_contains "$out" "spawned $id2 kind=ship" "second batch task did not launch"
   assert_meta_profile "$HOME_DIR/state/$id1.meta" pi gpt-5 high
   assert_meta_profile "$HOME_DIR/state/$id2.meta" pi gpt-5 high
   pass "batch dispatch runs Pi directly and forwards shared model and effort"
@@ -514,7 +514,7 @@ test_active_dispatch_profile_does_not_block_secondmate_launch() {
   out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$sm" --secondmate)
   status=$?
   expect_code 0 "$status" "secondmate spawn should be exempt from the dispatch-profile explicit harness requirement"
-  assert_contains "$out" "spawned $id harness=pi kind=secondmate" "secondmate launch did not use secondmate harness resolution"
+  assert_contains "$out" "spawned $id kind=secondmate" "secondmate launch did not report success"
   assert_grep "kind=secondmate" "$HOME_DIR/state/$id.meta" "secondmate meta missing kind=secondmate"
   assert_meta_profile "$HOME_DIR/state/$id.meta" pi default default
   pass "active crew-dispatch profile does not block secondmate launches"

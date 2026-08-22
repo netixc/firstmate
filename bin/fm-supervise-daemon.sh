@@ -58,7 +58,7 @@
 #
 # The robustness shell from the prior always-inject version is preserved:
 # single-instance lock (portable helper, no flock dependency), crash-loop
-# backoff, pane-gone guard, and a signal-trapped shutdown that flushes buffered
+# backoff, actionable Herdr-loss shutdown, and a signal-trapped shutdown that flushes buffered
 # escalations before exit.
 #
 # Usage: fm-supervise-daemon.sh
@@ -174,7 +174,6 @@ WEDGE_ALARM_NOTIFIER_PID=
 # live in bin/fm-classify-lib.sh, shared with the always-on watcher.
 # Composer-empty detection, submit acknowledgement, and the Pi
 # supervisor-pane busy guard are direct Herdr primitives.
-INJECT_FAIL_SLEEP_DEFAULT=30
 INJECT_CONFIRM_RETRIES_DEFAULT=3
 INJECT_CONFIRM_SLEEP_DEFAULT=0.5
 CRASH_THRESHOLD_DEFAULT=10
@@ -573,7 +572,6 @@ stale_window_is_busy() {  # <window> <state>
   [ "$endpoint_class" = herdr ] || return 2
   task=$(window_to_task "$win" "$state")
   meta="$state/$task.meta"
-  [ "$(fm_meta_exact_value "$meta" harness 2>/dev/null || true)" = pi ] || return 2
   verdict=$(fm_herdr_with_live_task_endpoint "$meta" "$task" \
     _fm_daemon_stale_busy_observation "$task" "$state") || return 2
   [ "${verdict%% *}" = busy ]
@@ -1267,7 +1265,6 @@ fm_super_main() {
   local WATCH_ERR="$STATE/.supervise-daemon.watcher.err"
   local LOCK="$STATE/.supervise-daemon.lock"
   local PIDFILE="$STATE/.supervise-daemon.pid"
-  local INJECT_FAIL_SLEEP=${FM_INJECT_FAIL_SLEEP:-$INJECT_FAIL_SLEEP_DEFAULT}
   local CRASH_THRESHOLD=${FM_CRASH_THRESHOLD:-$CRASH_THRESHOLD_DEFAULT}
   local CRASH_WINDOW=${FM_CRASH_WINDOW:-$CRASH_WINDOW_DEFAULT}
   local CRASH_BACKOFF=${FM_CRASH_BACKOFF:-$CRASH_BACKOFF_DEFAULT}
@@ -1367,21 +1364,23 @@ fm_super_main() {
     WATCHER_PID=$!
   }
 
-  local rc reason
+  local rc reason target_state
   while true; do
-    # --- pane-gone guard (preserved) ---------------------------------------
-    # With the #29 watcher's enqueue-before-suppress, a wake is no longer
-    # swallowed by running the watcher with no injection target. We still back
-    # off while the pane is gone: self-handling needs no pane, but escalation
-    # has nowhere to go, and firstmate itself is the consumer of escalations.
-    # Catch-up signals persist in state/*.status and flow on the next run, so
-    # this delays rather than loses work.
-    if ! fm_herdr_target_exists "$TARGET"; then
-      log "warn: supervisor target '$TARGET' gone; backing off ${INJECT_FAIL_SLEEP}s, will retry"
-      # Flush is pointless with no pane; preserve any buffered escalations.
-      sleep "$INJECT_FAIL_SLEEP"
-      continue
-    fi
+    # --- Herdr availability guard ------------------------------------------
+    target_state=$(fm_herdr_agent_state "$TARGET" 2>/dev/null || printf unreadable)
+    case "$target_state" in
+      alive|dead) ;;
+      *)
+        echo "error: supervisor Herdr endpoint '$TARGET' is $target_state; restore reachable Herdr and restart away mode; buffered notifications remain in $STATE" >&2
+        log "stopping: supervisor Herdr endpoint '$TARGET' is $target_state; buffered notifications preserved"
+        [ -z "${WATCHER_PID:-}" ] || kill "$WATCHER_PID" 2>/dev/null || true
+        [ -z "${WATCHER_PID:-}" ] || wait "$WATCHER_PID" 2>/dev/null || true
+        [ -z "${CUR_TMP:-}" ] || rm -f "$CUR_TMP" 2>/dev/null || true
+        fm_lock_release "$LOCK" 2>/dev/null || true
+        rm -f "$PIDFILE" 2>/dev/null || true
+        return 1
+        ;;
+    esac
 
     # --- (re)start watcher if it has exited --------------------------------
     if [ -z "${WATCHER_PID:-}" ] || ! kill -0 "${WATCHER_PID:-}" 2>/dev/null; then

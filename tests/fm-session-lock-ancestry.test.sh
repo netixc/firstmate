@@ -67,7 +67,7 @@ test_pi_owns_lock() {
   local dir fakebin got
   dir="$TMP_ROOT/pi"; mkdir -p "$dir/state"
   fakebin=$(make_ps "$dir" pi)
-  got=$(FM_TEST_SHAPE=pi lib_eval "$fakebin" 'fm_harness_ancestry_pid') || fail "Pi ancestry was not found"
+  got=$(FM_TEST_SHAPE=pi lib_eval "$fakebin" 'fm_pi_ancestry_pid') || fail "Pi ancestry was not found"
   [ "$got" = 700 ] || fail "Pi ancestry resolved $got instead of 700"
   printf '700\n' > "$dir/state/.lock"
   FM_TEST_SHAPE=pi lib_eval "$fakebin" "fm_session_lock_owned_by_self '$dir/state'" || fail "Pi did not own its exact lock"
@@ -78,7 +78,7 @@ test_nested_pi_process_keeps_inner_owner() {
   local dir fakebin got
   dir="$TMP_ROOT/nested"; mkdir -p "$dir/state"
   fakebin=$(make_ps "$dir" nested)
-  got=$(FM_TEST_SHAPE=nested lib_eval "$fakebin" 'fm_harness_ancestry_pid') || fail "nested Pi ancestry was not found"
+  got=$(FM_TEST_SHAPE=nested lib_eval "$fakebin" 'fm_pi_ancestry_pid') || fail "nested Pi ancestry was not found"
   [ "$got" = 700 ] || fail "Pi must select the inner process pid 700, got $got"
   printf '700\n' > "$dir/state/.lock"
   FM_TEST_SHAPE=nested lib_eval "$fakebin" "fm_session_lock_owned_by_self '$dir/state'" || fail "inner Pi process did not own the lock"
@@ -93,13 +93,13 @@ test_gap_stops_ancestry() {
   local dir fakebin got
   dir="$TMP_ROOT/gap"; mkdir -p "$dir/state"
   fakebin=$(make_ps "$dir" gap)
-  got=$(FM_TEST_SHAPE=gap lib_eval "$fakebin" 'fm_harness_ancestry_pid') || fail "inner Pi ancestry was not found"
+  got=$(FM_TEST_SHAPE=gap lib_eval "$fakebin" 'fm_pi_ancestry_pid') || fail "inner Pi ancestry was not found"
   [ "$got" = 700 ] || fail "ancestry crossed a non-harness gap: $got"
   printf '720\n' > "$dir/state/.lock"
   if FM_TEST_SHAPE=gap lib_eval "$fakebin" "fm_session_lock_owned_by_self '$dir/state'"; then
     fail "a harness beyond a non-harness gap claimed the lock"
   fi
-  pass "session-lock: ancestry never crosses a non-harness gap"
+  pass "session-lock: ancestry never crosses a non-Pi gap"
 }
 
 test_live_competitor_is_not_self() {
@@ -110,7 +110,7 @@ test_live_competitor_is_not_self() {
   if FM_TEST_SHAPE=competitor lib_eval "$fakebin" "fm_session_lock_owned_by_self '$dir/state'"; then
     fail "a competing Pi session claimed this process's lock"
   fi
-  FM_TEST_SHAPE=competitor lib_eval "$fakebin" 'fm_harness_pid_alive 600' || fail "live pi competitor was classified dead"
+  FM_TEST_SHAPE=competitor lib_eval "$fakebin" 'fm_pi_pid_alive 600' || fail "live pi competitor was classified dead"
   pass "session-lock: a live competing pi session is live but never self"
 }
 

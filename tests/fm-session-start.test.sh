@@ -290,15 +290,37 @@ SH
 }
 
 make_fake_herdr() {
-  local fakebin=$1 live=$2
+  local fakebin=$1 live=$2 socket=$1/sess.sock
+  : > "$socket"
   cat > "$fakebin/herdr" <<SH
 #!/usr/bin/env bash
 set -u
-if [ "\${1:-}" = pane ] && [ "\${2:-}" = get ]; then
-  [ "\${3:-}" = "$live" ] && exit 0
-  exit 1
-fi
-exit 1
+case "\${1:-} \${2:-} \${3:-}" in
+  "session list --json")
+    printf '%s\n' '{"sessions":[{"name":"sess","running":true,"socket_path":"$socket"}]}'
+    ;;
+  "pane get $live")
+    printf '%s\n' '{"result":{"pane":{"pane_id":"$live","tab_id":"w1:t-live","workspace_id":"w1"}}}'
+    ;;
+  "pane get w1:p-moved")
+    printf '%s\n' '{"result":{"pane":{"pane_id":"w1:p-moved","tab_id":"w1:t-other","workspace_id":"w1"}}}'
+    ;;
+  "pane get w1:p-unreadable")
+    printf '%s\n' 'transport unavailable'
+    exit 1
+    ;;
+  "pane get "*)
+    printf '%s\n' '{"error":{"code":"pane_not_found"}}'
+    exit 1
+    ;;
+  "agent get $live"|"agent get w1:p-moved")
+    printf '%s\n' '{"result":{"agent":{"agent_status":"idle"}}}'
+    ;;
+  "tab get w1:t-live")
+    printf '%s\n' '{"result":{"tab":{"tab_id":"w1:t-live","workspace_id":"w1"}}}'
+    ;;
+  *) exit 1 ;;
+esac
 SH
   chmod +x "$fakebin/herdr"
 }
@@ -340,7 +362,7 @@ EOF
 
   out=$(run_named_harness_session_start unknown "$home" "$root" "$fakebin:$BASE_PATH" 2>&1) || rc=$?
   [ "$rc" -ne 0 ] || fail "non-Pi session start unexpectedly succeeded"
-  assert_contains "$out" "Pi is required as the primary runtime; detected unknown" \
+  assert_contains "$out" "Pi is required as the primary runtime" \
     "non-Pi session start did not explain the runtime requirement"
   assert_absent "$home/state/.lock" "non-Pi session start acquired the fleet lock"
   pass "session start rejects a non-Pi primary before fleet mutation"
@@ -681,7 +703,7 @@ SH
   count=$(awk 'NF { count++ } END { print count + 0 }' "$winners")
   [ "$count" -eq 1 ] || fail "concurrent session-lock acquisition produced $count winners"
 
-  pass "concurrent session-lock acquisition admits exactly one live harness"
+  pass "concurrent session-lock acquisition admits exactly one live Pi session"
 }
 
 # --- output ordering ----------------------------------------------------------
@@ -940,6 +962,14 @@ EOF
     "backend=herdr" "window=sess:w1:p-dead" "endpoint_task_id=task-dead" \
     "herdr_session=sess" "herdr_workspace_id=w1" "herdr_tab_id=w1:t-dead" \
     "herdr_pane_id=w1:p-dead" "worktree=/tmp/dead" "project=/tmp/project" "kind=ship"
+  fm_write_meta "$home/state/task-moved.meta" \
+    "backend=herdr" "window=sess:w1:p-moved" "endpoint_task_id=task-moved" \
+    "herdr_session=sess" "herdr_workspace_id=w1" "herdr_tab_id=w1:t-moved" \
+    "herdr_pane_id=w1:p-moved" "worktree=/tmp/moved" "project=/tmp/project" "kind=ship"
+  fm_write_meta "$home/state/task-unreadable.meta" \
+    "backend=herdr" "window=sess:w1:p-unreadable" "endpoint_task_id=task-unreadable" \
+    "herdr_session=sess" "herdr_workspace_id=w1" "herdr_tab_id=w1:t-unreadable" \
+    "herdr_pane_id=w1:p-unreadable" "worktree=/tmp/unreadable" "project=/tmp/project" "kind=ship"
   fm_write_meta "$home/state/remote-old.meta" \
     "remote_backend=herdr" "window=remote:remote-old" "endpoint_task_id=remote-old" \
     "worktree=/remote/home" "project=/remote/root" "home=/remote/home" \
@@ -949,6 +979,10 @@ EOF
   out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
   assert_contains "$out" "endpoint: alive (Herdr window=sess:w1:p-live)" "live Herdr endpoint not reported alive"
   assert_contains "$out" "endpoint: dead (Herdr window=sess:w1:p-dead)" "dead Herdr endpoint not reported dead"
+  assert_contains "$out" "endpoint: unknown (Herdr component identity mismatch; window=sess:w1:p-moved)" \
+    "moved Herdr endpoint was reported alive"
+  assert_contains "$out" "endpoint: unknown (Herdr unreachable or unreadable; window=sess:w1:p-unreadable)" \
+    "unreadable Herdr endpoint was reported dead"
   assert_contains "$out" "endpoint: remote (Herdr route=fm-remote:w1:p-remote host=remote-host)" \
     "historical explicit remote Herdr route was misreported as legacy evidence"
 
@@ -973,7 +1007,7 @@ EOF
   out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
 
   # fm-lock.sh's own exact success text.
-  assert_contains "$out" "lock acquired: harness pid" "fm-lock.sh's real output did not appear (composition, not reimplementation)"
+  assert_contains "$out" "lock acquired: Pi pid" "fm-lock.sh's real output did not appear (composition, not reimplementation)"
   # fm-bootstrap.sh's own exact MISSING-tool line format.
   assert_contains "$out" "MISSING: node (install:" "fm-bootstrap.sh's real detect line did not appear verbatim"
   # fm-wake-drain.sh's real drained record (raw tab-separated queue line).
@@ -1584,7 +1618,7 @@ SH
     FM_HOME="$home" FM_ROOT_OVERRIDE="$root" PATH="$fakebin:$BASE_PATH" \
     bash -c 'export FM_FAKE_HARNESS_PID=$$; exec "$1" 8 "$2"' _ "$nest" "$SESSION_START")
 
-  assert_contains "$out" "lock acquired: harness pid" \
+  assert_contains "$out" "lock acquired: Pi pid" \
     "the runtime bound's wrapper processes pushed the harness out of the bounded ancestry walk"
   assert_not_contains "$out" "READ-ONLY SESSION" \
     "a session start eight shells below its harness was wrongly refused the lock"
@@ -1872,7 +1906,7 @@ EOF
   assert_contains "$out" "- Relay: active" "supervision block did not mention X cadence"
   assert_contains "$out" "Follow the Pi supervision operating instructions block above" "next step did not point back to the emitted supervision block"
 
-  pass "session start emits Relay cadence guidance in the harness supervision block"
+  pass "session start emits Relay cadence guidance in the Pi supervision block"
 }
 
 test_next_step_afk_delegates_to_daemon() {
@@ -1920,7 +1954,7 @@ EOF
   [ "$wake_line" -lt "$sup_line" ] || fail "supervision block did not follow wake queue"
   [ "$sup_line" -lt "$context_line" ] || fail "supervision block did not precede context"
 
-  pass "session start emits exactly one detected harness block and reports Pi extension load state"
+  pass "session start emits exactly one Pi supervision block and reports extension load state"
 }
 
 test_pi_diagnostic_rejects_stale_loaded_marker() {

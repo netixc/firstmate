@@ -31,9 +31,7 @@
 #   Pi is the sole worker runtime. The retired --harness option is recognized
 #   only to refuse runtime selection; it never changes the Pi launch.
 #   --model <name> and --effort <low|medium|high|xhigh|max> are concrete profile
-#   axes chosen by firstmate at intake. They are only threaded into harnesses whose
-#   installed CLIs were verified to support that axis; unsupported axes are omitted
-#   from that harness's launch rather than guessed.
+#   axes chosen by firstmate at intake and use Pi's validated CLI semantics.
 #   Herdr is the only session path. The retired --backend option is recognized
 #   only to refuse explicit legacy or unsupported selection; it never changes
 #   or falls back from the Herdr path.
@@ -122,7 +120,7 @@
 #     __OPINPUT__   absolute path to the canonical operational-input encoder
 #     __WORKTREE__  absolute path to the task worktree
 # Verified Pi turn-end hooks are installed automatically where enabled; some live outside the worktree.
-# On success prints: spawned <id> harness=<name> kind=<ship|scout|secondmate> [mode=<mode> yolo=<on|off>] window=<Herdr-target> worktree=<path>
+# On success prints: spawned <id> kind=<ship|scout|secondmate> [mode=<mode> yolo=<on|off>] window=<Herdr-target> worktree=<path>
 # A ship task records the explicit mode/yolo it was passed; a secondmate spawn records
 # mode=secondmate, yolo=off, home=, and projects=; a scout records neither, and both the
 # success line and state/<id>.meta omit them.
@@ -351,8 +349,8 @@ else
 fi
 
 spawn_remote_secondmate() {
-  local id=$1 remote host root home harness positional model effort out rc meta tmp
-  local remote_target remote_harness remote_herdr_session registry_lock remote_lock remote_generation
+  local id=$1 remote host root home positional model effort out rc meta tmp
+  local remote_target remote_herdr_session registry_lock remote_lock remote_generation
   local remote_traceparent remote_recorded_traceparent
   local -a launch_args
   id=${POS[0]:-}
@@ -391,7 +389,6 @@ spawn_remote_secondmate() {
     echo "error: remote secondmate spawn accepts no worker-runtime positional; Pi is always used" >&2
     return 2
   fi
-  harness=pi
   model=${MODEL:--}
   effort=${EFFORT:--}
   # A remote second mate always runs in the host's dedicated Herdr session.
@@ -497,9 +494,8 @@ spawn_remote_secondmate() {
     return "$rc"
   fi
   remote_target=$(printf '%s\n' "$out" | sed -n 's/^target=//p' | tail -1)
-  remote_harness=$(printf '%s\n' "$out" | sed -n 's/^harness=//p' | tail -1)
   remote_herdr_session=$(printf '%s\n' "$out" | sed -n 's/^herdr_session=//p' | tail -1)
-  [ -n "$remote_target" ] && [ "$remote_harness" = "$harness" ] || {
+  [ -n "$remote_target" ] || {
     fm_lock_release "$remote_lock" || true
     fm_lock_release "$registry_lock" || true
     fm_lock_release "$SPAWN_TASK_LOCK" || true
@@ -528,7 +524,6 @@ spawn_remote_secondmate() {
     echo "endpoint_task_id=$id"
     echo "worktree=$home"
     echo "project=$root"
-    echo "harness=$harness"
     echo "kind=secondmate"
     echo "mode=secondmate"
     echo "yolo=off"
@@ -555,7 +550,7 @@ spawn_remote_secondmate() {
     echo "error: remote secondmate $id launched, but its reply source could not be armed; endpoint metadata is preserved" >&2
     return 1
   fi
-  echo "spawned $id harness=$harness kind=secondmate mode=secondmate yolo=off window=remote:$id worktree=$home remote=$host herdr_session=$remote_herdr_session"
+  echo "spawned $id kind=secondmate mode=secondmate yolo=off window=remote:$id worktree=$home remote=$host herdr_session=$remote_herdr_session"
   return 0
 }
 
@@ -879,12 +874,7 @@ if [ -n "$ARG3" ]; then
     exit 1
   fi
   LAUNCH=$ARG3
-  HARNESS=""
-  for word in $LAUNCH; do
-    case "$word" in [A-Za-z_]*=*) continue ;; *) HARNESS=$(basename "$word"); break ;; esac
-  done
 else
-  HARNESS=pi
   LAUNCH=$(pi_launch_command "$KIND")
   PI_BIN=$(resolve_pi_executable pi) || {
     echo "error: pi executable not found on PATH; install Pi before spawning a worker" >&2
@@ -1569,7 +1559,7 @@ if [ "$RELAUNCH" -eq 1 ]; then
   RELAUNCH_REPLACEMENT_PENDING=1
   RELAUNCH_REPLACEMENT_STATE=$STATE_REAL
 fi
-if [ "$KIND" != secondmate ] && [ "$HARNESS" = pi ]; then
+if [ "$KIND" != secondmate ] && [ -z "$ARG3" ]; then
   # Arm the semantic busy-state contract (bin/fm-busy-lib.sh). The launch brief sent below IS a
   # submitted turn, so the seed record is busy/fm-spawn. The tracked Pi
   # extension captures this exact generation from validated task metadata, and
@@ -1655,7 +1645,6 @@ preserve_relaunch_meta() {
   echo "endpoint_task_id=$ID"
   echo "worktree=$WT"
   echo "project=$PROJ_ABS"
-  echo "harness=$HARNESS"
   echo "kind=$KIND"
   [ -z "$MODE" ] || echo "mode=$MODE"
   [ -z "$YOLO" ] || echo "yolo=$YOLO"
@@ -1722,7 +1711,7 @@ LAUNCH=${LAUNCH//__PIWORKEREXT__/$sq_piworkerext}
 LAUNCH=${LAUNCH//__PITURNEND__/$sq_piturnend}
 LAUNCH=${LAUNCH//__PIWATCH__/$sq_piwatch}
 LAUNCH=${LAUNCH//__OPINPUT__/$sq_opinput}
-[ "$HARNESS" != pi ] || LAUNCH=${LAUNCH//__PIBIN__/"$(shell_quote "$PI_BIN")"}
+[ -n "$ARG3" ] || LAUNCH=${LAUNCH//__PIBIN__/"$(shell_quote "$PI_BIN")"}
 LAUNCH=${LAUNCH//__WORKTREE__/$sq_worktree}
 if [ "$KIND" = secondmate ]; then
   sq_home=$(shell_quote "$PROJ_ABS")
@@ -1764,7 +1753,7 @@ spawn_record_traceparent() {
 # the env is set when the agent starts; the brief sleep lets the export land.
 spawn_send_text_line "$T" "export GOTMPDIR=$TASK_TMP/gotmp"
 # Send through the exact channel that already ships GOTMPDIR, so every launch
-# and harness - ship, scout, and secondmate - gets it before launch. Skipped
+# and task kind - ship, scout, and secondmate - gets it before launch. Skipped
 # entirely when trace context is off.
 if [ -n "$SPAWN_TRACEPARENT" ]; then
   if spawn_send_text_line "$T" "export TRACEPARENT=$SPAWN_TRACEPARENT"; then
@@ -1798,4 +1787,4 @@ fi
 
 SPAWN_DELIVERY=
 [ -z "$MODE" ] || SPAWN_DELIVERY=" mode=$MODE yolo=$YOLO"
-echo "spawned $ID harness=$HARNESS kind=$KIND$SPAWN_DELIVERY window=$META_WINDOW worktree=$WT"
+echo "spawned $ID kind=$KIND$SPAWN_DELIVERY window=$META_WINDOW worktree=$WT"

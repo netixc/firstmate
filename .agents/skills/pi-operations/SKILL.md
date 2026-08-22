@@ -31,11 +31,11 @@ The primary-session watcher wake protocol is rendered from `docs/supervision-pro
 Do not reinterpret any of them as Pi.
 If the captain asks for another worker runtime, explain that production spawn supports only Pi and treat adding one as a separate product change.
 
-## Detection
+## Admission
 
-`bin/fm-harness.sh` reports whether the current process is running under Pi, using the verified `PI_CODING_AGENT=true` environment marker first and then exact Pi process ancestry.
+Primary session start admits Pi directly from its verified environment marker or exact Pi process ancestry.
 Worker launches do not resolve a runtime because Pi is fixed.
-For recovery, `state/<id>.meta` must record `harness=pi`; any other or missing value is preserved and refused rather than reinterpreted.
+Current task records omit a worker-runtime selector; historical `harness=pi` remains compatible, while every other recorded value is preserved and refused.
 
 ## Primary turn-end guard
 
@@ -74,7 +74,7 @@ Choose intermediate levels proportionally as complexity, uncertainty, blast radi
 Never select `max` from this fallback; use it only when the captain has explicitly expressed that per-task or standing preference.
 
 Pi uses `--model <model>` and `--thinking <low|medium|high|xhigh|max>`.
-The `harness=pi` metadata field records durable Pi identity independently of the model provider: `harness=pi` with `model=xai/grok-*` is Pi using xAI.
+The recorded model provider does not select a worker runtime: `model=xai/grok-*` is still Pi using xAI.
 Establish which credential store a tuple reads from Pi's model catalog plus `quota-axi auth --json`'s per-provider sources, and show that reasoning rather than inferring it from a model or source name.
 
 Run `pi --list-models [search]` to discover supported models in the current authenticated environment.

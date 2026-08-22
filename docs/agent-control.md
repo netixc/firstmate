@@ -21,8 +21,8 @@ The failure repeated across homes, and the workaround (remember to use an unmark
 - **Pi mechanics**: the key that cancels a running turn, how many times it must be delivered, and the command that exits the agent.
   The [`pi-operations`](../.agents/skills/pi-operations/SKILL.md) skill carries the corresponding operator facts.
 
-A recorded `harness=` must be exactly `pi`.
-Any other or missing value is preserved and refused rather than reinterpreted.
+Current task records omit a worker-runtime selector because Pi is fixed.
+Historical `harness=pi` remains compatible; any other recorded value is preserved and refused rather than reinterpreted.
 
 ## Verbs
 
@@ -30,7 +30,7 @@ Any other or missing value is preserved and refused rather than reinterpreted.
 | --- | --- | --- |
 | `interrupt` | Deliver Pi's verified interrupt sequence while leaving the agent running. | Delivery succeeds, the exact Herdr endpoint still exists, and native state still reports Pi alive; cancellation is confirmed only from Pi's acknowledgement and otherwise reports `cancel=unconfirmed`. |
 | `exit` | Stop the agent, preserving the endpoint, the worktree, and every uncommitted change. | Herdr's recovery-grade classifier reports the agent gone. Already-stopped is idempotent success. |
-| `relaunch` | Replace the running Pi agent with a new one in the same endpoint and worktree, optionally changing model and effort. | The new agent is alive on the recorded endpoint, and the durable record names Pi as the runtime actually running. |
+| `relaunch` | Replace the running Pi agent with a new one in the same endpoint and worktree, optionally changing model and effort. | The new Pi agent is alive on the recorded endpoint. |
 
 An exit that delivers lifecycle input but cannot prove the agent stopped fails with `exit=unconfirmed`, reports the observed agent state and any interrupt cancellation claim, and never claims that nothing changed.
 Interrupt never rewrites busy state as proof of its own success.
@@ -48,8 +48,8 @@ Pi has no verified pane-resume contract.
 
 1. **Resolve the profile.**
    Pi is fixed; an explicit `--model` or `--effort` replaces the matching recorded axis.
-   A record that does not name Pi refuses before the checkpoint.
-   A same-Pi relaunch retains its recorded model and effort unless explicit values replace them.
+   Historical runtime metadata must either name Pi or be absent; an explicit other runtime refuses before the checkpoint.
+   A relaunch retains its recorded model and effort unless explicit values replace them.
 2. **Safe checkpoint.**
    The recorded worktree must exist and be a worktree root; its head and dirty state are recorded.
    For a `kind=secondmate` task, the home's identity marker must match and its child records must be readable, so a relaunch can never strand child work behind an unreadable home.
@@ -75,7 +75,7 @@ Pi has no verified pane-resume contract.
 - A remotely placed secondmate is refused by name.
   Its agent runs on another host, so none of the postconditions this plane verifies could be read for it here; local exact-Herdr endpoint validation refuses the remote route record.
   Drive that lifecycle on its own host and reconcile it through the secondmate recovery path.
-- A record that does not name Pi is refused before the agent or durable state is touched.
+- A record carrying an explicit non-Pi runtime is refused before the agent or durable state is touched.
 - `exit` and `relaunch` require Herdr's recovery-grade agent-state classifier because without it the "the agent stopped" postcondition cannot be proven.
 - An ambiguous or unreadable endpoint state refuses.
   Only a positively classified state acts.

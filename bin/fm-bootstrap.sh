@@ -42,7 +42,7 @@
 #          recovery-grade state owned by bin/fm-herdr.sh's
 #          fm_herdr_agent_state: skipped distinguishes an existing ambiguous
 #          process, an unreadable target, a preserved retired record, and an
-#          unverified harness; respawn failed names missing versus agent-less.
+#          incompatible historical runtime metadata; respawn failed names missing versus agent-less.
 #          Already-live and successfully relaunched secondmates are silent
 #          unless FM_BOOTSTRAP_VERBOSE_FACTS=1 requests BOOTSTRAP_INFO facts.
 #          A TANGLE line means the firstmate primary checkout (FM_ROOT) is stranded
@@ -611,10 +611,9 @@ secondmate_liveness_sweep() {
 # unchanged.
 secondmate_liveness_one() {  # <meta> <id>
   local meta=$1 id=$2
-  local window harness endpoint_class target agent_state out cause remote_host remote_rc readiness_reason
+  local window endpoint_class target agent_state out cause remote_host remote_rc readiness_reason
   window=$(fm_meta_get "$meta" window)
   [ -n "$window" ] || return 0
-  harness=$(fm_meta_get "$meta" harness)
   remote_host=$(fm_meta_get "$meta" remote_host)
   if [ -n "$remote_host" ]; then
     if ! fm_herdr_validate_remote_route "$meta" "$id" >/dev/null 2>&1; then
@@ -694,11 +693,6 @@ secondmate_liveness_one() {  # <meta> <id>
   fi
   target=$FM_HERDR_VALIDATED_TARGET
   agent_state=$(fm_herdr_agent_state "$target" 2>/dev/null) || agent_state=unreadable
-  case "$harness" in
-    pi) ;;    *)
-      case "$agent_state" in dead|missing) agent_state=unverified-harness ;; esac
-      ;;
-  esac
   case "$agent_state" in
     alive)
       if ! fm_herdr_validate_live_task_endpoint "$meta" "$id" >/dev/null 2>&1; then
@@ -734,9 +728,6 @@ secondmate_liveness_one() {  # <meta> <id>
       ;;
     unreadable)
       echo "SECONDMATE_LIVENESS: secondmate $id: skipped: Herdr endpoint probe unreadable"
-      ;;
-    unverified-harness)
-      echo "SECONDMATE_LIVENESS: secondmate $id: skipped: recorded harness '$harness' is unverified for recovery"
       ;;
     *)
       echo "SECONDMATE_LIVENESS: secondmate $id: skipped: Herdr agent recovery classifier unverified"

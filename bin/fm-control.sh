@@ -271,13 +271,9 @@ fi
 
 fm_herdr_validate_task_endpoint "$META" "$ID" || exit 1
 T=$FM_HERDR_VALIDATED_TARGET
-RECORDED_HARNESS=$(fm_meta_get "$META" harness)
 KIND=$(fm_meta_get "$META" kind)
 WT=$(fm_meta_get "$META" worktree)
 [ -n "$KIND" ] || KIND=ship
-
-[ "$RECORDED_HARNESS" = pi ] \
-  || die "task $ID records harness '${RECORDED_HARNESS:-none}' rather than Pi; fm-control refuses to reinterpret another runtime"
 
 # --- shared helpers ---------------------------------------------------------
 
@@ -424,7 +420,6 @@ RELAUNCH_META_PUBLISHED=0
 RELAUNCH_AGENT_CONFIRMED=0
 RELAUNCH_TX=
 RELAUNCH_BRIEF=
-PRIOR_RECORDED_HARNESS=$RECORDED_HARNESS
 PRIOR_MODEL=
 PRIOR_EFFORT=
 TARGET_MODEL=
@@ -441,10 +436,8 @@ journal_write() {  # <phase> [extra-line]...
     echo "endpoint=$T"
     echo "worktree=$WT"
     echo "kind=$KIND"
-    echo "from_harness=$PRIOR_RECORDED_HARNESS"
     echo "from_model=$PRIOR_MODEL"
     echo "from_effort=$PRIOR_EFFORT"
-    echo "to_harness=pi"
     echo "to_model=$TARGET_MODEL"
     echo "to_effort=$TARGET_EFFORT"
     local line
@@ -517,7 +510,6 @@ relaunch_rollback() {
 }
 
 resolve_relaunch_profile() {
-  PRIOR_RECORDED_HARNESS=$RECORDED_HARNESS
   PRIOR_MODEL=$(fm_meta_get "$META" model)
   PRIOR_EFFORT=$(fm_meta_get "$META" effort)
   [ -n "$PRIOR_MODEL" ] || PRIOR_MODEL=default
@@ -693,7 +685,7 @@ do_relaunch() {
 
   journal_write complete "${CHECKPOINT_LINES[@]}" "$note_line" "exit_result=$exit_result"
   RELAUNCH_ACTIVE=0
-  echo "relaunched $ID harness=pi from=$PRIOR_RECORDED_HARNESS model=$TARGET_MODEL effort=$TARGET_EFFORT endpoint=$T worktree=$WT"
+  echo "relaunched $ID model=$TARGET_MODEL effort=$TARGET_EFFORT endpoint=$T worktree=$WT"
 }
 
 # --- verbs ------------------------------------------------------------------
@@ -718,11 +710,11 @@ control_do_exit() {
 case "$VERB" in
   interrupt)
     proof=$(fm_herdr_with_live_task_endpoint "$META" "$ID" control_do_interrupt)
-    echo "interrupt-delivered $ID harness=pi endpoint=$T verified=$proof"
+    echo "interrupt-delivered $ID endpoint=$T verified=$proof"
     ;;
   exit)
     result=$(fm_herdr_with_live_task_endpoint "$META" "$ID" control_do_exit)
-    echo "$result $ID harness=pi endpoint=$T worktree=$WT"
+    echo "$result $ID endpoint=$T worktree=$WT"
     ;;
   relaunch)
     do_relaunch

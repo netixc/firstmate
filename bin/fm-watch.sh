@@ -188,7 +188,7 @@ hash_pane() {
   if command -v md5 >/dev/null 2>&1; then md5 -q; else md5sum | cut -d' ' -f1; fi
 }
 
-# window_is_busy: 0 (busy) iff the task's harness is PROVABLY working, through
+# window_is_busy: 0 (busy) iff the task's Pi agent is PROVABLY working, through
 # the semantic busy-state contract (bin/fm-busy-lib.sh). Only an exact busy
 # verdict returns 0: idle, unknown, and dead all return 1, so a converted
 # Pi lifecycle whose semantic state is missing, malformed, stale, or unverified is
@@ -208,8 +208,6 @@ window_is_busy() {  # <window>
 
 _fm_watch_busy_observation() {
   local target=$1 meta=$2 task=$3 state=$4
-  [ "$(fm_meta_exact_value "$meta" harness 2>/dev/null || true)" = pi ] \
-    || { printf 'unknown source-mismatch'; return 0; }
   fm_busy_classify "$target" "$task" "$state"
 }
 

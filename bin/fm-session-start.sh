@@ -194,7 +194,7 @@
 #             and a session that owns the lock is exactly the session that must
 #             handle and acknowledge them. Lock acquisition still runs, because
 #             ownership must be re-verified rather than assumed: fm-lock.sh already treats a lock
-#             this session's own harness holds as its own, so the re-emit
+#             this session's own Pi process holds as its own, so the re-emit
 #             proceeds, while a lock another live session took meanwhile still
 #             produces the ordinary read-only path.
 #
@@ -202,10 +202,10 @@
 #             fm-sessionstart-run.sh. A genuine `startup` that owns the active
 #             session lock records AGENTS.md's SHA-256 baseline only after the
 #             digest completion record is published, keyed to that lock's
-#             harness pid. No resume, clear, reset, compact, or other rebuild
+#             Pi pid. No resume, clear, reset, compact, or other rebuild
 #             creates or replaces it. Pi compaction is the only
 #             supported stale-cache rebuild pair: a missing baseline, a baseline
-#             for another harness pid, or a changed hash causes the complete
+#             for another Pi pid, or a changed hash causes the complete
 #             current AGENTS.md to print before the bulky digest. The baseline
 #             remains immutable so every later drifted compaction refreshes
 #             again, while an equal baseline emits no instruction refresh.
@@ -264,9 +264,8 @@ stage() {  # <stage-name>: breadcrumb for the parent's truncation banner
 # shellcheck source=bin/fm-session-lock-lib.sh
 . "$SCRIPT_DIR/fm-session-lock-lib.sh"
 
-DETECTED_PRIMARY=$("$SCRIPT_DIR/fm-harness.sh" 2>/dev/null || printf unknown)
-if [ "$DETECTED_PRIMARY" != pi ]; then
-  printf 'error: Pi is required as the primary runtime; detected %s\n' "$DETECTED_PRIMARY" >&2
+if [ "${PI_CODING_AGENT:-}" != true ] && ! fm_pi_ancestry_pid >/dev/null 2>&1; then
+  printf 'error: Pi is required as the primary runtime\n' >&2
   exit 1
 fi
 
@@ -640,7 +639,7 @@ if [ "$LOCK_RC" -ne 0 ]; then
     printf '%s\n' "$BAR"
   }
 fi
-REBUILDING_SESSION_PID=$(fm_harness_ancestry_pid 2>/dev/null || true)
+REBUILDING_SESSION_PID=$(fm_pi_ancestry_pid 2>/dev/null || true)
 print_agents_refresh_if_required "$REBUILDING_SESSION_PID"
 
 if [ "$READ_ONLY" -eq 0 ]; then
@@ -816,10 +815,27 @@ for meta in "$STATE"/*.meta; do
       printf 'endpoint: remote (Herdr route=%s host=%s)\n' "$target" "$remote_host"
     elif [ -z "$target" ]; then
       printf 'endpoint: unknown (invalid Herdr record preserved for manual reconciliation; window=%s)\n' "$window"
-    elif fm_herdr_target_exists "$target"; then
-      printf 'endpoint: alive (Herdr window=%s)\n' "$window"
     else
-      printf 'endpoint: dead (Herdr window=%s)\n' "$window"
+      endpoint_state=$(fm_herdr_agent_state "$target" 2>/dev/null || printf unreadable)
+      case "$endpoint_state" in
+        missing)
+          printf 'endpoint: dead (Herdr window=%s)\n' "$window"
+          ;;
+        alive|dead)
+          if live_state=$(fm_herdr_live_agent_state_task_endpoint "$meta" "$id" 2>/dev/null); then
+            case "$live_state" in
+              alive) printf 'endpoint: alive (Herdr window=%s)\n' "$window" ;;
+              dead) printf 'endpoint: dead (Herdr window=%s)\n' "$window" ;;
+              *) printf 'endpoint: unknown (Herdr liveness unreadable; window=%s)\n' "$window" ;;
+            esac
+          else
+            printf 'endpoint: unknown (Herdr component identity mismatch; window=%s)\n' "$window"
+          fi
+          ;;
+        *)
+          printf 'endpoint: unknown (Herdr unreachable or unreadable; window=%s)\n' "$window"
+          ;;
+      esac
     fi
   else
     printf 'endpoint: unknown (no window recorded)\n'

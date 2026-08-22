@@ -169,6 +169,40 @@ test_stale_observation_refuses_moved_live_endpoint() {
   pass "daemon stale observation refuses a moved live endpoint"
 }
 
+test_daemon_stops_when_herdr_becomes_unreadable() {
+  local state fakebin counter out rc=0
+  state=$(new_state runtime-unreadable)
+  fakebin=${state%/state}/fakebin
+  counter=$state/herdr-calls
+  mkdir -p "$fakebin"
+  printf 'blocked: preserve me\n' > "$state/.subsuper-escalations"
+  cat > "$fakebin/herdr" <<'SH'
+#!/usr/bin/env bash
+set -u
+counter=${FM_FAKE_HERDR_COUNTER:?}
+calls=$(cat "$counter" 2>/dev/null || printf 0)
+calls=$((calls + 1))
+printf '%s\n' "$calls" > "$counter"
+if [ "$calls" -eq 1 ]; then
+  printf '%s\n' '{"result":{"pane":{"pane_id":"w-primary:p1"}}}'
+  exit 0
+fi
+printf '%s\n' 'transport unavailable'
+exit 1
+SH
+  chmod +x "$fakebin/herdr"
+  out=$(FM_STATE_OVERRIDE="$state" FM_HOME="${state%/state}" \
+    FM_SUPERVISOR_TARGET=lab:w-primary:p1 FM_FAKE_HERDR_COUNTER="$counter" \
+    PATH="$fakebin:$PATH" "$ROOT/bin/fm-supervise-daemon.sh" 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "daemon kept retrying after Herdr became unreadable"
+  assert_contains "$out" "restore reachable Herdr and restart away mode" \
+    "daemon did not emit an actionable Herdr requirement"
+  assert_contains "$(cat "$state/.subsuper-escalations")" "blocked: preserve me" \
+    "daemon lost buffered notifications while stopping"
+  [ ! -e "$state/.supervise-daemon.pid" ] || fail "daemon left a stale pid after Herdr loss"
+  pass "daemon stops actionably and preserves buffers when Herdr becomes unreadable"
+}
+
 test_signal_classification
 test_pause_classification_and_tracking
 test_unmatched_stale_escalates_without_shared_markers
@@ -179,3 +213,4 @@ test_injection_types_once_through_herdr
 test_wedge_alarm_preserves_buffer
 test_supervisor_target_is_herdr_only
 test_stale_observation_refuses_moved_live_endpoint
+test_daemon_stops_when_herdr_becomes_unreadable

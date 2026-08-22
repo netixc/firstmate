@@ -59,7 +59,6 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(CDPATH='' cd "$SCRIPT_DIR/.." && pwd -P)}"
 # shellcheck source=bin/fm-herdr.sh
 . "$SCRIPT_DIR/fm-herdr.sh"
 REQUIRED_TOOLS=(git jq herdr tasks-axi treehouse)
-HARNESS_TOOLS=(pi)
 OPTIONAL_TOOLS=(no-mistakes gh)
 LAUNCH_AGENT_LABEL=dev.firstmate.herdr.fm-remote
 # The dedicated remote-secondmate session. The user's interactive Herdr work
@@ -313,7 +312,7 @@ check_remote_job_worker() {
 }
 
 report_required_tools() {
-  local tool resolved harness
+  local tool resolved
   MISSING=()
   for tool in "${REQUIRED_TOOLS[@]}"; do
     resolved=$(command -v "$tool" 2>/dev/null || true)
@@ -329,15 +328,13 @@ report_required_tools() {
       MISSING+=("$tool")
     fi
   done
-  for harness in "${HARNESS_TOOLS[@]}"; do
-    resolved=$(command -v "$harness" 2>/dev/null || true)
-    if [ -n "$resolved" ] && [ -x "$resolved" ]; then
-      printf 'required harness=%s:%s\n' "$harness" "$resolved"
-      return 0
-    fi
-  done
-  printf 'required harness=MISSING\n'
-  MISSING+=(harness)
+  resolved=$(command -v pi 2>/dev/null || true)
+  if [ -n "$resolved" ] && [ -x "$resolved" ]; then
+    printf 'required pi=%s\n' "$resolved"
+    return 0
+  fi
+  printf 'required pi=MISSING\n'
+  MISSING+=(pi)
 }
 
 report_required_tools_from_worker() {
@@ -366,7 +363,7 @@ report_required_tools_from_worker() {
     fact=${line#required }
     name=${fact%%=*}
     value=${fact#*=}
-    case "$name" in git|jq|herdr|tasks-axi|treehouse|harness) ;; *) valid=0; continue ;; esac
+    case "$name" in git|jq|herdr|tasks-axi|treehouse|pi) ;; *) valid=0; continue ;; esac
     case "$seen" in *" $name "*) valid=0; continue ;; esac
     seen="$seen$name "
     count=$((count + 1))
@@ -432,14 +429,10 @@ repair_required_wrappers() {
   for tool in "${REQUIRED_TOOLS[@]}"; do
     repair_tool_wrapper "$tool" || true
   done
-  for tool in "${HARNESS_TOOLS[@]}"; do
-    resolved=$(command -v "$tool" 2>/dev/null || true)
-    [ -z "$resolved" ] || [ ! -x "$resolved" ] || return 0
-  done
-  for tool in "${HARNESS_TOOLS[@]}"; do
-    fm_remote_job_manager_tool "${HOME:-}" "$tool" >/dev/null 2>&1 || continue
-    repair_tool_wrapper "$tool" && return 0
-  done
+  resolved=$(command -v pi 2>/dev/null || true)
+  [ -z "$resolved" ] || [ ! -x "$resolved" ] || return 0
+  fm_remote_job_manager_tool "${HOME:-}" pi >/dev/null 2>&1 || return 0
+  repair_tool_wrapper pi || true
 }
 
 fix_remote_job_worker() {

@@ -198,7 +198,7 @@ CONTROL_OUT=$(PATH="$FAKEBIN:$ORIGINAL_PATH" FM_HOME="$SENDER_HOME" \
   "$ROOT/bin/fm-control.sh" "$ID" interrupt) \
   || fail "real Pi lifecycle interrupt failed: $CONTROL_OUT"
 case "$CONTROL_OUT" in
-  *"interrupt-delivered $ID harness=pi endpoint=$TARGET verified=agent-alive"*) ;;
+  *"interrupt-delivered $ID endpoint=$TARGET verified=agent-alive"*) ;;
   *) fail "real Pi lifecycle interrupt omitted its live-agent postcondition: $CONTROL_OUT" ;;
 esac
 pass "real Pi/Herdr: lifecycle control preserves the live exact endpoint"

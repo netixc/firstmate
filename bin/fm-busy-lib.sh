@@ -195,7 +195,7 @@ fm_busy_classify_live() {  # <target> <id> <state-dir>
 # fm_busy_classify_meta refuses to reinterpret retired or ambiguous endpoint
 # records as Herdr.
 fm_busy_classify_meta() {  # <meta-file> <id> <state-dir>
-  local meta=$1 id=$2 state=$3 target harness classification
+  local meta=$1 id=$2 state=$3 target classification
   [ -f "$meta" ] || { printf 'unknown missing'; return 0; }
   classification=$(fm_herdr_meta_classify "$meta") || {
     printf 'unknown %s' "$classification"
@@ -206,11 +206,6 @@ fm_busy_classify_meta() {  # <meta-file> <id> <state-dir>
     return 0
   fi
   target=$FM_HERDR_VALIDATED_TARGET
-  harness=$(fm_meta_exact_value "$meta" harness 2>/dev/null || true)
-  if [ "$harness" != pi ]; then
-    printf 'unknown source-mismatch'
-    return 0
-  fi
   if [ -z "$target" ]; then
     printf 'unknown no-target'
     return 0

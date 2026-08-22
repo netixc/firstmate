@@ -1126,7 +1126,7 @@ fm_pending_reply_tick_one() {  # <state-dir> <corr_id> <busy_state> [secondmate-
 # Never scrapes secondmate conversation; uses only parent status, backend busy
 # state, and optional secondmate-home wrong-home path checks.
 fm_pending_reply_tick() {  # <state-dir>
-  local state=$1 dir rec corr task_id phase delivered meta target busy sm_home harness remote_host
+  local state=$1 dir rec corr task_id phase delivered meta target busy sm_home remote_host
   local observation observation_task found i
   local -a observation_tasks=() observation_values=()
   dir=$(fm_pending_reply_dir "$state")
@@ -1223,11 +1223,9 @@ fm_pending_reply_tick() {  # <state-dir>
             observation=$("$_FM_PENDING_REPLY_LIB_DIR/fm-on.sh" "$task_id" \
               fm-remote-secondmate-control.sh observe "$task_id" < /dev/null 2>/dev/null || printf 'unknown')
             case "$observation" in busy|idle|fallback-idle|unknown) ;; *) observation=unknown ;; esac
-          elif [ "$(fm_meta_exact_value "$meta" harness 2>/dev/null || true)" = pi ]; then
+          else
             observation=$(fm_herdr_with_live_task_endpoint "$meta" "$task_id" \
               fm_pending_reply_herdr_observation 2>/dev/null || printf 'unknown')
-          else
-            observation=unknown
           fi
           observation_tasks+=("$task_id")
           observation_values+=("$observation")

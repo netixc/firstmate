@@ -314,7 +314,7 @@ set -e
 [ "$rc" -ne 0 ] || fail "the remote doctor passed with a missing required tool"
 assert_contains "$out" 'required herdr=MISSING' "the remote doctor did not mark a missing required tool"
 assert_contains "$out" 'required tasks-axi=MISSING' "the remote doctor did not mark every missing required tool"
-assert_contains "$out" 'required tools do not resolve on the remote runtime PATH: herdr tasks-axi treehouse harness' "the remote doctor did not name the missing tools"
+assert_contains "$out" 'required tools do not resolve on the remote runtime PATH: herdr tasks-axi treehouse pi' "the remote doctor did not name the missing tools"
 assert_contains "$out" '.local/bin' "the remote doctor did not offer the wrapper escape hatch"
 ln -sf "$(command -v git)" "$DOCTOR_BIN/git"
 # The direct doctor fixture needs the complete required tool set. These stubs
@@ -341,7 +341,7 @@ assert_contains "$out" "required git=$DOCTOR_BIN/git" "the remote doctor did not
 assert_contains "$out" "required herdr=$DOCTOR_BIN/herdr" "the remote doctor did not require herdr"
 assert_contains "$out" "required tasks-axi=$DOCTOR_BIN/tasks-axi" "the remote doctor did not require compatible tasks-axi"
 assert_contains "$out" "required treehouse=$DOCTOR_BIN/treehouse" "the remote doctor did not require treehouse"
-assert_contains "$out" "required harness=pi:$DOCTOR_BIN/pi" "the remote doctor did not require a verified harness"
+assert_contains "$out" "required pi=$DOCTOR_BIN/pi" "the remote doctor did not require Pi"
 assert_not_contains "$out" 'required tools do not resolve' "a resolved required tool was still reported missing"
 pass "the remote doctor reports its required runtime tool set and optional tools"
 

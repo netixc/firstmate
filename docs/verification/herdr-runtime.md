@@ -558,6 +558,26 @@ fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
 focused recovery-grade Herdr liveness verification: ok
 ```
 
+The final Pi admission, worker-record compatibility, away-daemon liveness, and remote-doctor bootstrap reruns used:
+
+```sh
+bin/fm-test-run.sh tests/fm-on.test.sh
+bin/fm-test-run.sh tests/fm-daemon.test.sh
+bin/fm-lint.sh bin/fm-bootstrap.sh bin/fm-busy-lib.sh bin/fm-control.sh bin/fm-crew-state.sh bin/fm-fleet-snapshot.sh bin/fm-herdr.sh bin/fm-lock.sh bin/fm-pending-reply-lib.sh bin/fm-remote-doctor.sh bin/fm-remote-entrypoint.sh bin/fm-remote-secondmate-control.sh bin/fm-session-lock-lib.sh bin/fm-session-start.sh bin/fm-spawn.sh bin/fm-supervise-daemon.sh bin/fm-test-run.sh bin/fm-watch.sh tests/fm-busy-state.test.sh tests/fm-daemon.test.sh tests/fm-session-lock-ancestry.test.sh tests/fm-session-start.test.sh tests/fm-spawn-dispatch-profile.test.sh tests/fm-on.test.sh
+bin/fm-doc-audience-check.sh
+git diff --check
+```
+
+```text
+FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=17696
+FM_TEST_SUMMARY_FAMILY family=secondmate count=1 duration_ms=17625 failed=0
+FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=1756
+FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=1683 failed=0
+fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
+fm-doc-audience-check: ok surfaces=51 local_links=166
+focused Pi admission, metadata, and Herdr liveness verification: ok
+```
+
 Strict tracked-extension checking used TypeScript 5.9.3:
 
 ```sh
@@ -596,12 +616,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 131683 314
-bin 54317 127
-tests 57026 117
+all 131691 313
+bin 54241 126
+tests 57093 117
 pi 2045 9
 agents 559
-added=7738 deleted=33259 net=-25521
+added=7935 deleted=33448 net=-25513
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,521 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,513 lines smaller.
