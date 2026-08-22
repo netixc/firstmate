@@ -43,7 +43,7 @@ exec node "${FM_FAKE_SEND_HELPER:?}" "$@"
 SH
 chmod +x "$PROJECT/bin/fm-send.sh"
 
-out=$(cd "$PROJECT" && PROJECT="$PROJECT" HOME_DIR="$HOME_DIR" EXT="$PROJECT/.pi/extensions/fm-primary-pi-watch.ts" \
+out=$(cd "$PROJECT" && env PROJECT="$PROJECT" HOME_DIR="$HOME_DIR" EXT="$PROJECT/.pi/extensions/fm-primary-pi-watch.ts" \
   FM_PACKAGE_DIR="$PI_PACKAGE_DIR" FM_FAKE_SEND_LOG="$TMP_ROOT/argv.log" \
   FM_FAKE_SEND_HELPER="$PROJECT/bin/fm-send-fixture.mjs" \
   node --input-type=module 2>&1 <<'JS'
