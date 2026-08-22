@@ -8,8 +8,22 @@ set -u
 . "$ROOT/bin/fm-supervise-daemon.sh"
 
 TMP_ROOT=$(fm_test_tmproot fm-daemon)
+FM_DAEMON_GENERATION_WRAPPER=$(declare -f fm_daemon_with_supervisor_generation)
 
 new_state() { local d=$TMP_ROOT/$1; mkdir -p "$d/state"; printf '%s\n' "$d/state"; }
+
+install_injection_generation_seam() {
+  fm_herdr_presentation_session_generation() { printf '/tmp/herdr.sock\t1:2'; }
+  fm_daemon_with_supervisor_generation() {
+    local callback=$3
+    shift 3
+    "$callback" "$@"
+  }
+}
+
+restore_injection_generation_seam() {
+  eval "$FM_DAEMON_GENERATION_WRAPPER"
+}
 
 test_signal_classification() {
   local state out kw
@@ -72,51 +86,71 @@ test_escalation_buffer_is_durable() {
 
 test_injection_presence_and_target_guards() {
   local state calls=0
+  install_injection_generation_seam
   state=$(new_state inject-guards)
   FM_SUPERVISOR_TARGET=lab:w-primary:p1
+  # shellcheck disable=SC2329
   fm_herdr_agent_state() { printf alive; }
+  # shellcheck disable=SC2329
   pane_is_busy() { return 1; }
+  # shellcheck disable=SC2329
   fm_herdr_composer_state() { printf empty; }
+  # shellcheck disable=SC2329
   fm_herdr_send_text_submit() { calls=$((calls + 1)); printf empty; }
   inject_msg hello "$state" && fail "injection should refuse while away mode is off"
   touch "$state/.afk"
+  # shellcheck disable=SC2329
   fm_herdr_agent_state() { printf dead; }
   inject_msg hello "$state" && fail "injection should refuse a missing exact target"
   [ "$calls" -eq 0 ] || fail "a guard refusal reached transport"
+  restore_injection_generation_seam
   pass "daemon injection requires away mode and an existing exact Herdr target"
 }
 
 test_injection_busy_and_composer_guards() {
   local state calls=0
+  install_injection_generation_seam
   state=$(new_state inject-composer)
   touch "$state/.afk"
   FM_SUPERVISOR_TARGET=lab:w-primary:p1
+  # shellcheck disable=SC2329
   fm_herdr_agent_state() { printf alive; }
+  # shellcheck disable=SC2329
   fm_herdr_send_text_submit() { calls=$((calls + 1)); printf empty; }
+  # shellcheck disable=SC2329
   pane_is_busy() { return 0; }
   inject_msg hello "$state" && fail "busy Firstmate pane should defer"
+  # shellcheck disable=SC2329
   pane_is_busy() { return 1; }
   for verdict in pending pending-unproven unknown; do
+    # shellcheck disable=SC2329
     fm_herdr_composer_state() { printf '%s' "$verdict"; }
     inject_msg hello "$state" && fail "$verdict composer should defer"
   done
   [ "$calls" -eq 0 ] || fail "unsafe composer reached submit"
+  restore_injection_generation_seam
   pass "daemon busy and composer guards defer every unsafe verdict"
 }
 
 test_injection_types_once_through_herdr() {
   local state submit_log
+  install_injection_generation_seam
   state=$(new_state inject-success)
   submit_log=$state/submit.log
   touch "$state/.afk"
   FM_SUPERVISOR_TARGET=lab:w-primary:p1
+  # shellcheck disable=SC2329
   fm_herdr_agent_state() { printf alive; }
+  # shellcheck disable=SC2329
   pane_is_busy() { return 1; }
+  # shellcheck disable=SC2329
   fm_herdr_composer_state() { printf empty; }
+  # shellcheck disable=SC2329
   fm_herdr_send_text_submit() { printf '%s\n' "$2" >> "$submit_log"; printf empty; }
   inject_msg 'one line' "$state" || fail "safe Herdr injection should succeed"
   [ "$(wc -l < "$submit_log" | tr -d ' ')" -eq 1 ] || fail "daemon invoked submit more than once"
   assert_contains "$(cat "$submit_log")" 'FIRSTMATE_OP: v1 away-supervisor:' "operational envelope missing"
+  restore_injection_generation_seam
   pass "daemon sends one operationally marked payload through Herdr"
 }
 
@@ -171,17 +205,24 @@ test_stale_observation_refuses_moved_live_endpoint() {
 
 test_daemon_stops_when_herdr_is_not_live() {
   local verdict state fakebin counter out rc
-  for verdict in startup-dead runtime-dead runtime-unreadable; do
+  for verdict in startup-dead runtime-dead runtime-unreadable runtime-replaced; do
   rc=0
   state=$(new_state "runtime-$verdict")
   fakebin=${state%/state}/fakebin
   counter=$state/herdr-calls
   mkdir -p "$fakebin"
+  : > "$state/herdr.sock"
   printf 'blocked: preserve me\n' > "$state/.subsuper-escalations"
   cat > "$fakebin/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
 counter=${FM_FAKE_HERDR_COUNTER:?}
+case "${1:-} ${2:-}" in
+  "session list")
+    printf '{"sessions":[{"name":"lab","running":true,"socket_path":"%s/herdr.sock"}]}\n' "$FM_STATE_OVERRIDE"
+    exit 0
+    ;;
+esac
 calls=$(cat "$counter" 2>/dev/null || printf 0)
 calls=$((calls + 1))
 printf '%s\n' "$calls" > "$counter"
@@ -192,6 +233,12 @@ fi
 if [ "${FM_FAKE_HERDR_STATE:?}" = runtime-unreadable ] && [ "$calls" -gt 2 ]; then
   printf '%s\n' 'transport unavailable'
   exit 1
+fi
+if [ "${FM_FAKE_HERDR_STATE:?}" = runtime-replaced ] && [ "$calls" -eq 2 ]; then
+  printf '%s\n' '{"result":{"agent":{"agent_status":"idle"}}}'
+  mv "$FM_STATE_OVERRIDE/herdr.sock" "$FM_STATE_OVERRIDE/herdr.prior.sock"
+  : > "$FM_STATE_OVERRIDE/herdr.sock"
+  exit 0
 fi
 if [ "${FM_FAKE_HERDR_STATE:?}" = startup-dead ] || [ "$calls" -gt 2 ]; then
   printf '%s\n' '{"error":{"code":"agent_not_found"}}'
@@ -210,7 +257,7 @@ SH
     "daemon lost buffered notifications while stopping"
   [ ! -e "$state/.supervise-daemon.pid" ] || fail "daemon left a stale pid for a $verdict endpoint"
   done
-  pass "daemon stops actionably and preserves buffers unless Pi is live on Herdr"
+  pass "daemon stops actionably and preserves buffers unless Pi is live on one Herdr generation"
 }
 
 test_signal_classification

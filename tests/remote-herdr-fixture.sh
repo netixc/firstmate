@@ -47,6 +47,13 @@ require_delivery_lock() {
     printf 'expected delivery lock is not held: %s\n' "$FM_FAKE_HERDR_EXPECTED_LOCK" >&2
     return 1
   }
+  [ "${FM_FAKE_HERDR_REQUIRE_BOUND:-0}" != 1 ] || {
+    [ -n "${HERDR_SOCKET_PATH:-}" ] && [ -e "$HERDR_SOCKET_PATH" ] \
+      && [ "$HERDR_SOCKET_PATH" -ef "$SOCKET" ] || {
+      printf 'delivery transport is not bound to the authorized Herdr socket\n' >&2
+      return 1
+    }
+  }
 }
 ws=""; label=""; cwd=""
 args=("$@")

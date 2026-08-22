@@ -1040,7 +1040,7 @@ window_for_task() {  # <task-key> [state]
 #     line, or a previous injection's unsent text), defer entirely - injecting
 #     would merge with the human's text.
 inject_msg() {  # <message> [state]
-  local msg=$1 state target retries sleep_s verdict composer encoded
+  local msg=$1 state target retries sleep_s verdict encoded session generation
   state="${2:-$(_state_root)}"
   # (1) Presence-gate: inject ONLY when afk is active. When afk is off, the
   # daemon self-handles and stays quiet; firstmate drives the normal always-on
@@ -1055,6 +1055,26 @@ inject_msg() {  # <message> [state]
   msg=$encoded
   target="${FM_SUPERVISOR_TARGET:-}"
   [ -n "$target" ] || return 1
+  session=${target%%:*}
+  [ -n "$session" ] && [ "$session" != "$target" ] || return 1
+  generation=${FM_SUPERVISOR_SESSION_GENERATION:-}
+  if [ -z "$generation" ]; then
+    generation=$(fm_herdr_presentation_session_generation "$session") || return 1
+  fi
+  retries=${FM_INJECT_CONFIRM_RETRIES:-$INJECT_CONFIRM_RETRIES_DEFAULT}
+  sleep_s=${FM_INJECT_CONFIRM_SLEEP:-$INJECT_CONFIRM_SLEEP_DEFAULT}
+  verdict=$(fm_daemon_with_supervisor_generation "$target" "$generation" \
+    _fm_daemon_inject_bound \
+    "$target" "$msg" "$retries" "$sleep_s") || return 1
+  if [ "$verdict" = empty ]; then
+    return 0
+  fi
+  log "inject failed: submit unconfirmed after $retries retries (verdict=$verdict, text may be in composer)"
+  return 1
+}
+
+_fm_daemon_inject_bound() {
+  local target=$1 msg=$2 retries=$3 sleep_s=$4 verdict composer
   [ "$(fm_herdr_agent_state "$target" 2>/dev/null || printf unreadable)" = alive ] || return 1
   # (3) Busy-guard: never inject into an in-use supervisor pane.
   if pane_is_busy "$target"; then
@@ -1079,14 +1099,25 @@ inject_msg() {  # <message> [state]
   # retype) via the shared submit primitive. Success = Herdr confirms submit.
   # An unconfirmed/unknown pane does NOT count as delivered, so the
   # buffer is preserved (strict) rather than cleared.
-  retries=${FM_INJECT_CONFIRM_RETRIES:-$INJECT_CONFIRM_RETRIES_DEFAULT}
-  sleep_s=${FM_INJECT_CONFIRM_SLEEP:-$INJECT_CONFIRM_SLEEP_DEFAULT}
-  verdict=$(fm_herdr_send_text_submit "$target" "$msg" "$retries" "$sleep_s" "$sleep_s")
-  if [ "$verdict" = empty ]; then
-    return 0  # Backend confirmed the submit.
-  fi
-  log "inject failed: submit unconfirmed after $retries retries (verdict=$verdict, text may be in composer)"
-  return 1
+  verdict=$(fm_herdr_send_text_submit "$target" "$msg" "$retries" "$sleep_s" "$sleep_s") || return 1
+  printf '%s' "$verdict"
+  return 0
+}
+
+_fm_daemon_supervisor_agent_state_bound() {
+  fm_herdr_agent_state "$1"
+}
+
+fm_daemon_with_supervisor_generation() {  # <target> <session-generation> <callback> [args...]
+  local target=$1 generation=$2 callback=$3 session=${1%%:*}
+  shift 3
+  fm_herdr_with_session_generation "$session" "$generation" \
+    "away supervisor $target" "$callback" "$@"
+}
+
+fm_daemon_supervisor_agent_state() {  # <target> <session-generation>
+  fm_daemon_with_supervisor_generation "$1" "$2" \
+    _fm_daemon_supervisor_agent_state_bound "$1"
 }
 
 # --- INJECT_SKIP prefix match (literal prefixes, no regex) ------------------
@@ -1291,7 +1322,7 @@ fm_super_main() {
     rm -f "$PIDFILE" 2>/dev/null || true
     exit 1
   fi
-  local discovered target_source target_state
+  local discovered target_source target_state target_session target_generation
   if [ -n "${FM_SUPERVISOR_TARGET:-}" ]; then
     target_source=FM_SUPERVISOR_TARGET
   else
@@ -1305,7 +1336,17 @@ fm_super_main() {
   fi
   FM_SUPERVISOR_TARGET=$discovered
   local TARGET=$FM_SUPERVISOR_TARGET
-  target_state=$(fm_herdr_agent_state "$TARGET" 2>/dev/null || printf unreadable)
+  target_session=${TARGET%%:*}
+  target_generation=${FM_SUPERVISOR_SESSION_GENERATION:-}
+  if [ -z "$target_generation" ]; then
+    target_generation=$(fm_herdr_presentation_session_generation "$target_session" 2>/dev/null || true)
+  fi
+  if [ -z "$target_generation" ]; then
+    target_state=unreadable
+  else
+    FM_SUPERVISOR_SESSION_GENERATION=$target_generation
+    target_state=$(fm_daemon_supervisor_agent_state "$TARGET" "$target_generation" 2>/dev/null || printf unreadable)
+  fi
   if [ "$target_state" != alive ]; then
     echo "error: supervisor Herdr endpoint '$TARGET' is $target_state; start Pi on reachable Herdr and restart away mode; buffered notifications remain in $STATE" >&2
     log "startup failed: supervisor Herdr endpoint '$TARGET' is $target_state; buffered notifications preserved"
@@ -1368,7 +1409,8 @@ fm_super_main() {
   local rc reason
   while true; do
     # --- Herdr availability guard ------------------------------------------
-    target_state=$(fm_herdr_agent_state "$TARGET" 2>/dev/null || printf unreadable)
+    target_state=$(fm_daemon_supervisor_agent_state "$TARGET" \
+      "$FM_SUPERVISOR_SESSION_GENERATION" 2>/dev/null || printf unreadable)
     case "$target_state" in
       alive) ;;
       *)

@@ -1156,24 +1156,20 @@ fm_herdr_presentation_session_lock_path() {  # <session>
   printf '%s/order-%s.lock' "$dir" "$key"
 }
 
-fm_herdr_with_live_task_endpoint() {  # <meta-file> <task-id> <callback> [args...]
-  local meta=$1 id=$2 callback=$3 target session lock_path generation verified_generation required_generation
-  shift 3
-  fm_herdr_validate_task_endpoint "$meta" "$id" || return 2
-  target=$FM_HERDR_VALIDATED_TARGET
-  fm_herdr_parse_target "$target" || return 2
-  session=$FM_HERDR_SESSION
+fm_herdr_with_session_generation() {  # <session> <generation> <subject> <callback> [args...]
+  local session=$1 required_generation=$2 subject=$3 callback=$4 lock_path generation verified_generation
+  shift 4
+  [ -n "$session" ] && [ -n "$required_generation" ] || return 2
   generation=$(fm_herdr_presentation_session_generation "$session") || {
-    echo "REFUSED: Herdr session generation is unavailable for task $id; preserving task state and nothing was changed." >&2
+    echo "REFUSED: Herdr session generation is unavailable for $subject; preserving state and nothing was changed." >&2
     return 2
   }
-  required_generation=${FM_HERDR_REQUIRED_SESSION_GENERATION:-$generation}
   [ "$generation" = "$required_generation" ] || {
-    echo "REFUSED: Herdr session generation changed before authorizing task $id; preserving task state and nothing was changed." >&2
+    echo "REFUSED: Herdr session generation changed before authorizing $subject; preserving state and nothing was changed." >&2
     return 2
   }
   lock_path=$(fm_herdr_presentation_session_lock_path "$session") || {
-    echo "REFUSED: Herdr presentation lock is unavailable for task $id; preserving task state and nothing was changed." >&2
+    echo "REFUSED: Herdr presentation lock is unavailable for $subject; preserving state and nothing was changed." >&2
     return 2
   }
   (
@@ -1187,11 +1183,11 @@ fm_herdr_with_live_task_endpoint() {  # <meta-file> <task-id> <callback> [args..
         trap 'fm_herdr_bound_socket_release "$bound_socket" || true; fm_lock_release "$lock_path" || true' EXIT
         verified_generation=$(fm_herdr_presentation_session_generation "$session") || return 2
         [ "$verified_generation" = "$required_generation" ] || {
-          echo "REFUSED: Herdr session generation changed while authorizing task $id; preserving task state and nothing was changed." >&2
+          echo "REFUSED: Herdr session generation changed while authorizing $subject; preserving state and nothing was changed." >&2
           return 2
         }
         bound_socket=$(fm_herdr_bound_socket_create "$required_generation") || {
-          echo "REFUSED: Herdr session transport could not be bound while authorizing task $id; preserving task state and nothing was changed." >&2
+          echo "REFUSED: Herdr session transport could not be bound while authorizing $subject; preserving state and nothing was changed." >&2
           return 2
         }
         bound_identity=${required_generation#*$'\t'}
@@ -1199,20 +1195,43 @@ fm_herdr_with_live_task_endpoint() {  # <meta-file> <task-id> <callback> [args..
         # shellcheck disable=SC2030
         FM_HERDR_BOUND_SOCKET=$bound_socket
         FM_HERDR_BOUND_SOCKET_IDENTITY=$bound_identity
-        fm_herdr_validate_live_task_endpoint "$meta" "$id" || return 2
-        [ "$FM_HERDR_VALIDATED_TARGET" = "$target" ] || {
-          echo "REFUSED: Herdr endpoint metadata changed while authorizing task $id; preserving task state and nothing was changed." >&2
-          return 2
-        }
-        "$callback" "$target" "$@"
+        export FM_HERDR_BOUND_SESSION_GENERATION=$required_generation
+        "$callback" "$@"
         return $?
       fi
       sleep 0.1
       attempt=$((attempt + 1))
     done
-    echo "REFUSED: Herdr presentation lock is contended for task $id; preserving task state and nothing was changed." >&2
+    echo "REFUSED: Herdr presentation lock is contended for $subject; preserving state and nothing was changed." >&2
     return 2
   )
+}
+
+_fm_herdr_with_live_task_endpoint_bound() {
+  local meta=$1 id=$2 target=$3 callback=$4
+  shift 4
+  fm_herdr_validate_live_task_endpoint "$meta" "$id" || return 2
+  [ "$FM_HERDR_VALIDATED_TARGET" = "$target" ] || {
+    echo "REFUSED: Herdr endpoint metadata changed while authorizing task $id; preserving task state and nothing was changed." >&2
+    return 2
+  }
+  "$callback" "$target" "$@"
+}
+
+fm_herdr_with_live_task_endpoint() {  # <meta-file> <task-id> <callback> [args...]
+  local meta=$1 id=$2 callback=$3 target session generation required_generation
+  shift 3
+  fm_herdr_validate_task_endpoint "$meta" "$id" || return 2
+  target=$FM_HERDR_VALIDATED_TARGET
+  fm_herdr_parse_target "$target" || return 2
+  session=$FM_HERDR_SESSION
+  generation=$(fm_herdr_presentation_session_generation "$session") || {
+    echo "REFUSED: Herdr session generation is unavailable for task $id; preserving task state and nothing was changed." >&2
+    return 2
+  }
+  required_generation=${FM_HERDR_REQUIRED_SESSION_GENERATION:-$generation}
+  fm_herdr_with_session_generation "$session" "$required_generation" "task $id" \
+    _fm_herdr_with_live_task_endpoint_bound "$meta" "$id" "$target" "$callback" "$@"
 }
 
 _fm_herdr_live_capture() {

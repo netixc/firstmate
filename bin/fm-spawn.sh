@@ -1743,33 +1743,36 @@ spawn_record_traceparent() {
   return "$status"
 }
 
-# Export GOTMPDIR into the crewmate's pane shell so the agent and every child
-# process (go build, go test, ...) inherit it. Sent before the launch command so
-# the env is set when the agent starts; the brief sleep lets the export land.
-spawn_send_text_line "$T" "export GOTMPDIR=$TASK_TMP/gotmp"
-# Send through the exact channel that already ships GOTMPDIR, so every launch
-# and task kind - ship, scout, and secondmate - gets it before launch. Skipped
-# entirely when trace context is off.
-if [ -n "$SPAWN_TRACEPARENT" ]; then
-  if spawn_send_text_line "$T" "export TRACEPARENT=$SPAWN_TRACEPARENT"; then
-    if ! spawn_record_traceparent; then
-      LAUNCH="unset TRACEPARENT; $LAUNCH"
+spawn_deliver_launch_bound() {
+  local target=$1 launch=$2 trace_send_status
+  spawn_send_text_line "$target" "export GOTMPDIR=$TASK_TMP/gotmp" || return $?
+  if [ -n "$SPAWN_TRACEPARENT" ]; then
+    if spawn_send_text_line "$target" "export TRACEPARENT=$SPAWN_TRACEPARENT"; then
+      if ! spawn_record_traceparent; then
+        launch="unset TRACEPARENT; $launch"
+      fi
+    else
+      trace_send_status=$?
+      if [ "$trace_send_status" -eq 2 ]; then
+        echo "error: trace-context input could not be cleared for $W; refusing to append the launch command" >&2
+        return 2
+      fi
+      launch="unset TRACEPARENT; $launch"
     fi
-  else
-    TRACE_SEND_STATUS=$?
-    if [ "$TRACE_SEND_STATUS" -eq 2 ]; then
-      echo "error: trace-context input could not be cleared for $W; refusing to append the launch command" >&2
-      exit 1
-    fi
-    LAUNCH="unset TRACEPARENT; $LAUNCH"
   fi
-fi
-sleep 0.3
-spawn_send_literal "$T" "$LAUNCH"
-sleep 0.3
-spawn_send_key "$T" Enter
-HERDR_PROJECTION_ABORT_CLEANUP=0
+  sleep 0.3
+  spawn_send_literal "$target" "$launch" || return $?
+  sleep 0.3
+  spawn_send_key "$target" Enter
+}
+
 spawn_herdr_presentation_order_lock_release
+if ! fm_herdr_with_live_task_endpoint "$STATE/$ID.meta" "$ID" \
+  spawn_deliver_launch_bound "$LAUNCH"; then
+  echo "error: herdr launch delivery lost its exact endpoint authorization" >&2
+  exit 1
+fi
+HERDR_PROJECTION_ABORT_CLEANUP=0
 if [ "$KIND" = secondmate ] && [ "${FM_SKIP_SECONDMATE_INHERIT:-0}" != 1 ]; then
   if ! fm_config_reread_discard_pending "$PROJ_ABS" "$ID" "$FM_HOME"; then
     if fm_config_reread_quarantine_pending "$PROJ_ABS" "$ID" "$FM_HOME"; then

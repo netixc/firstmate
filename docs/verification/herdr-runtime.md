@@ -770,6 +770,25 @@ fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
 fm-doc-audience-check: ok surfaces=52 local_links=168
 ```
 
+The final generation-bound spawn, away-terminal, and supervisor control rerun used:
+
+```sh
+tests/fm-trace-context-spawn.test.sh | tail -1 && \
+  tests/fm-afk-launch.test.sh | tail -1 && \
+  tests/fm-daemon.test.sh | tail -1 && \
+  bin/fm-lint.sh bin/fm-herdr.sh bin/fm-spawn.sh bin/fm-afk-launch.sh bin/fm-supervise-daemon.sh tests/remote-herdr-fixture.sh tests/fm-trace-context-spawn.test.sh tests/fm-afk-launch.test.sh tests/fm-daemon.test.sh && \
+  bin/fm-doc-audience-check.sh && \
+  git diff --check
+```
+
+```text
+# all fm-trace-context-spawn tests passed
+ok - away launcher lock binds and releases exact process identity
+ok - daemon stops actionably and preserves buffers unless Pi is live on one Herdr generation
+fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
+fm-doc-audience-check: ok surfaces=51 local_links=166
+```
+
 Tracked physical line counts were measured with deleted paths excluded:
 
 ```sh
@@ -783,12 +802,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 131917 313
-bin 54209 126
-tests 57192 117
+all 132140 313
+bin 54326 126
+tests 57279 117
 pi 2048 9
 agents 559
-added=8797 deleted=34084 net=-25287
+added=9055 deleted=34119 net=-25064
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,287 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,064 lines smaller.
