@@ -123,14 +123,15 @@ set -u
 case "${1:-}" in
   status)
     [ "${2:-}" = --json ] && {
-      printf '{"client":{"version":"0.7.1","protocol":14},"server":{"running":true}}\n'
+      printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n'
       exit 0
     } ;;
   server)
     exit 0 ;;
   session)
     [ "${2:-}" = list ] && {
-      printf '{"sessions":[{"name":"%s","running":true,"socket_path":"/tmp/%s.sock"}]}\n' "${HERDR_SESSION:-lab}" "${HERDR_SESSION:-lab}"
+      printf '{"sessions":[{"name":"%s","running":true,"socket_path":"%s/herdr.sock"}]}\n' \
+        "${HERDR_SESSION:-lab}" "$FM_STATE_OVERRIDE"
       exit 0
     } ;;
   pane)
@@ -171,7 +172,7 @@ SH
 make_no_timeout_toolbin() {  # <dir> -> echoes toolbin path
   local dir=$1 tb="$1/notimeoutbin" tool real
   mkdir -p "$tb"
-  for tool in bash git grep sed head cut tail dirname basename perl jq uname stat id mkdir shasum awk sleep mktemp readlink ln rm rmdir cat; do
+  for tool in bash env git grep sed head cut tail dirname basename perl jq uname stat id mkdir shasum awk sleep mktemp readlink ln rm rmdir cat seq tr od ps date wc; do
     real=$(command -v "$tool" || true)
     [ -n "$real" ] || fail "missing tool for no-timeout path: $tool"
     ln -s "$real" "$tb/$tool"
@@ -182,6 +183,7 @@ make_no_timeout_toolbin() {  # <dir> -> echoes toolbin path
 # Run the helper for one case dir. FM_FAKE_* env (run output, busy flag) are read
 # from the caller's environment by the fakes above.
 run_crew_state() {  # <case-dir> <id>
+  : > "$1/state/herdr.sock"
   PATH="$1/fakebin:$PATH" FM_STATE_OVERRIDE="$1/state" FM_FAKE_HERDR_TASK_ID="$2" "$CREW_STATE" "$2"
 }
 
@@ -845,11 +847,12 @@ test_no_run_busy_pane() {
   local out; out=$(run_crew_state "$d" feat-h)
   assert_contains "$out" "state: working" "busy record -> working"
   assert_contains "$out" "source: pane" "busy record -> pane source"
+  assert_contains "$out" "Pi busy" "busy record uses the Pi state label"
   assert_contains "$out" "pi-ext" "the working verdict names its semantic source"
   pass "no run + a busy semantic record reads working, attributed to its source"
 }
 
-# A converted adapter must NOT read working from rendered footer text: the
+# Pi must NOT read working from rendered footer text: the
 # redesign removed that dependency, so a pane painting "esc to interrupt" with
 # no semantic record is unknown, never working and never silently idle.
 test_no_run_footer_text_alone_is_not_working() {
@@ -863,10 +866,11 @@ test_no_run_footer_text_alone_is_not_working() {
   FM_FAKE_BUSY=1
   printf 'done: stale completion event\n' > "$d/state/feat-h2.status"
   local out; out=$(run_crew_state "$d" feat-h2)
-  assert_not_contains "$out" "state: working" "a footer alone must not read working for a converted adapter"
+  assert_not_contains "$out" "state: working" "a footer alone must not read working for Pi"
   assert_contains "$out" "state: unknown" "no semantic record -> unknown"
+  assert_contains "$out" "Pi state unavailable" "unknown semantic state uses the Pi state label"
   assert_not_contains "$out" "source: status-log" "unknown semantic state must not fall through to a stale log"
-  pass "a converted adapter never reads working from rendered footer text"
+  pass "Pi never reads working from rendered footer text"
 }
 
 test_no_run_herdr_unknown_uses_backend_capture() {
@@ -1149,6 +1153,7 @@ SH
   local gen; gen=$("$ROOT/bin/fm-busy-event.sh" arm "$d/state" feat-timeout)
   "$ROOT/bin/fm-busy-event.sh" apply "$d/state" feat-timeout busy --gen "$gen" \
     --source pi-ext --event user-prompt-submit
+  : > "$d/state/herdr.sock"
   start=$SECONDS
   out=$(FM_FAKE_NM_CALLS="$calls_file" PATH="$d/fakebin:$toolbin" FM_STATE_OVERRIDE="$d/state" \
     FM_FAKE_HERDR_TASK_ID=feat-timeout FM_CREW_STATE_NM_TIMEOUT=1 "$CREW_STATE" feat-timeout)

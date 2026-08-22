@@ -47,7 +47,7 @@
 # submit against the recorded remote Herdr pane and relays its exit status
 # unchanged. A leg that delivered the text into the live verified pane but
 # could not synchronously confirm the submit (exit 3 - typically a busy mate
-# whose harness queues the steer and keeps rendering it) is reported here as
+# whose Pi session queues the steer and keeps rendering it) is reported here as
 # DELIVERED with confirmation pending: fm-send prints a non-error notice,
 # exits 0, marks the pending-reply expectation delivered, and closes any
 # --resolve-key decisions. Empirically that pattern is a delivered steer, a
@@ -94,7 +94,7 @@
 #
 # After a successful text submit fm-send pauses FM_SEND_SETTLE seconds (default 1,
 # 0 disables) before returning: submit confirmation only proves the text was
-# accepted, but the harness needs a beat to spin up the turn before its busy
+# accepted, but Pi needs a beat to spin up the turn before its busy
 # footer appears, so an immediate peek would otherwise see the stale idle pane.
 # The pause is fm-send-only; the shared submit core (used by the away-mode daemon,
 # which only needs "submitted") does not pay it, and the --key path is unaffected.
@@ -532,7 +532,7 @@ else
       ;;
     pending)
       # The text was typed into the live target and Enter was sent; only the
-      # submit read-back stayed unconfirmed (e.g. a busy harness queues the
+      # submit read-back stayed unconfirmed (e.g. busy Pi queues the
       # steer and keeps rendering it). That is not a proven failure, so never
       # re-type the message: verify the pane instead. Exit 3 is the documented
       # delivered-unconfirmed status, and the remote send leg above depends on
@@ -583,7 +583,7 @@ else
     echo "fm-send: delivered to remote secondmate $TARGET_REMOTE_ID; the remote pane accepted the text and Enter, and only the synchronous submit confirmation is still pending. This is not a failure - do not resend; the pending-reply expectation stays armed." >&2
   fi
   # Submit landed with exact empty. Confirmation only proves the text was
-  # accepted; the harness still needs a beat to spin up the
+  # accepted; Pi still needs a beat to spin up the
   # turn before its busy footer shows. Pause so an immediate peek catches the
   # crewmate actually working instead of the stale idle pane. FM_SEND_SETTLE=0
   # disables it. Scoped to this path only, never the shared submit core.

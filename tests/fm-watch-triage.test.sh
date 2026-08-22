@@ -302,7 +302,7 @@ test_crew_is_provably_working_classifier() {
   export FM_FAKE_CREW_STATE
   FM_FAKE_CREW_STATE='state: working · source: run-step · validating (running)'
   crew_is_provably_working a || fail "active run-step not treated as provably working"
-  FM_FAKE_CREW_STATE='state: working · source: pane · harness busy'
+  FM_FAKE_CREW_STATE='state: working · source: pane · Pi busy'
   crew_is_provably_working a || fail "busy pane not treated as provably working"
   FM_FAKE_CREW_STATE='state: working · source: status-log · working: compiling'
   ! crew_is_provably_working a || fail "stale status-log working: treated as provably working"
@@ -354,7 +354,7 @@ test_crew_absorb_class_classifier() {
   export FM_FAKE_CREW_STATE
   FM_FAKE_CREW_STATE='state: working · source: run-step · validating (running)'
   [ "$(crew_absorb_class a)" = working ] || fail "active run-step not classed working"
-  FM_FAKE_CREW_STATE='state: working · source: pane · harness busy'
+  FM_FAKE_CREW_STATE='state: working · source: pane · Pi busy'
   [ "$(crew_absorb_class a)" = working ] || fail "busy pane not classed working"
   FM_FAKE_CREW_STATE='state: paused · source: status-log · awaiting upstream'
   [ "$(crew_absorb_class a)" = paused ] || fail "declared pause not classed paused"
@@ -449,7 +449,7 @@ test_turn_ended_provably_working_absorbed() {
   : > "$state/task.turn-ended"
   # A busy pane is the second form of positive evidence (covers a queued
   # continuation right after the turn-end).
-  export FM_FAKE_CREW_STATE='state: working · source: pane · harness busy'
+  export FM_FAKE_CREW_STATE='state: working · source: pane · Pi busy'
   watch_bg "$state" "$fakebin" "$out"
   pid=$!
   if ! wait_live "$pid" 30; then

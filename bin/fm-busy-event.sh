@@ -17,7 +17,7 @@
 #         --source S --event E
 #       Append one lifecycle event: validate the gen against the armed
 #       sidecar, advance seq under the lock, atomically replace the record.
-#       Adapter wiring passes the exact --gen embedded at arm time, so a
+#       Pi hook wiring passes the exact --gen embedded at arm time, so a
 #       hook that outlives its incarnation fails closed here. The legacy
 #       spawn lifecycle and firstmate recovery
 #       paths (fm-recovery) may pass --current-gen to bind to the incarnation
@@ -30,8 +30,8 @@
 #       is already retired, so any orphan record is removed idempotently.
 #
 # Exit codes: 0 applied; 1 refused (stale gen, unarmed task, lock timeout,
-# invalid input); 2 usage. Adapter hook command lines append `|| true` so a
-# refusal never breaks the harness's own lifecycle.
+# invalid input); 2 usage. Pi hook command lines append `|| true` so a
+# refusal never breaks Pi's own lifecycle.
 set -u
 
 usage() {

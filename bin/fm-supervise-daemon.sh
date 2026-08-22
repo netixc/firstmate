@@ -114,7 +114,7 @@
 #                                   Enter is retried. Composer-empty detection is
 #                                   structural and style-aware (bin/fm-composer-lib.sh):
 #                                   it drops dim/faint ghost text and strips the
-#                                   harness's box borders before deciding, so a
+#                                   Pi's box borders before deciding, so a
 #                                   ghost-only or bordered-but-empty composer is
 #                                   not misread as pending input.
 #          FM_INJECT_CONFIRM_SLEEP  seconds between daemon submit checks
@@ -542,7 +542,7 @@ mark_escalated_seen() {  # <kind> <arg> <state>
 # This includes real unsubmitted text, ambiguous structure, unreadable state,
 # blank or otherwise unidentified rows (the strict container-proof rule owned
 # by bin/fm-composer-lib.sh), and future verdicts. The detector drops
-# dim/faint ghost text and strips the harness's composer box borders, so an
+# dim/faint ghost text and strips Pi's composer box borders, so an
 # aligned ghost-only or idle bordered composer is correctly
 # proven empty while a modal dialog or dead shell never is.
 # pane_is_busy / pane_input_pending use direct Herdr primitives.

@@ -899,7 +899,7 @@ relay_remove_artifact() {
 # non-Relay user sees zero change. Prints one confirmation line on opt-in, and one on opt-out
 # only when it actually removed artifacts. It never touches the watcher itself;
 # applying a cadence transition to a running watcher is the caller's job via
-# the emitted harness-aware supervision repair instruction.
+# the emitted Pi supervision repair instruction.
 relay_setup() {
   local env_file token shim cadence shim_body cadence_body tool missing shim_home
   [ "${FM_RELAY_LOCAL_MIGRATION_OK:-0}" = 1 ] || return 0

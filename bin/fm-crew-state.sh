@@ -532,9 +532,9 @@ pane_readable "$HERDR_TARGET" || emit unknown none "Herdr target gone: $HERDR_TA
 if [ "$KIND" != secondmate ]; then
   BUSY_VERDICT=$(crew_busy_verdict "$HERDR_TARGET")
   case "${BUSY_VERDICT%% *}" in
-    busy) emit working pane "harness busy (${BUSY_VERDICT#* })" ;;
+    busy) emit working pane "Pi busy (${BUSY_VERDICT#* })" ;;
     idle) ;;
-    *) emit unknown pane "harness state unavailable ($BUSY_VERDICT)" ;;
+    *) emit unknown pane "Pi state unavailable ($BUSY_VERDICT)" ;;
   esac
 fi
 
