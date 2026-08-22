@@ -180,7 +180,8 @@ family_for_basename() {
       ;;
     fm-afk-pi-herdr-return-e2e.test.sh|\
     fm-herdr-version-floor-live-e2e.test.sh|\
-    fm-quota-array-dispatch-live-e2e.test.sh|fm-send-secondmate-marker-herdr-e2e.test.sh)
+    fm-quota-array-dispatch-live-e2e.test.sh|fm-send-busy-pi-herdr-e2e.test.sh|\
+    fm-send-secondmate-marker-herdr-e2e.test.sh)
       printf '%s\n' live-pi-herdr-optin
       ;;
     fm-herdr.test.sh|fm-herdr-selection.test.sh|\
@@ -884,6 +885,9 @@ families_for_changed_path() {
     bin/fm-peek.sh|bin/fm-composer*)
       printf '%s\n' herdr-session
       printf '%s\n' pure-contract-unit
+      case "$path" in
+        bin/fm-send.sh) printf '%s\n' live-pi-herdr-optin ;;
+      esac
       ;;
     bin/fm-bearings-snapshot.sh|bin/fm-fleet-snapshot.sh|bin/fm-fleet-view.sh)
       printf '%s\n' snapshot-bearings

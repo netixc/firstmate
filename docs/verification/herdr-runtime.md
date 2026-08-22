@@ -344,6 +344,39 @@ ok - real Pi/Herdr: lifecycle control preserves the live exact endpoint
 ok - real Pi/Herdr: teardown removes the endpoint, home, and metadata
 ```
 
+### Busy Pi send uncertainty
+
+Reverified on 2026-08-22 with Pi 0.84.2 and Herdr 0.8.0.
+The guard keeps the first provider response active after every Enter, sends through public `fm-send`, and releases that response only after the synchronous results are recorded.
+
+```sh
+FM_SEND_BUSY_PI_HERDR_E2E=1 \
+  HERDR_LAB_HELPER='/Users/control/firstmate/bin/fm-herdr-lab.sh' \
+  tests/fm-send-busy-pi-herdr-e2e.test.sh
+```
+
+```text
+ok - real Pi/Herdr: busy input, including transformed and handled input, stays unconfirmed while the provider response remains active
+evidence: Pi 0.84.2; Herdr 0.8.0; input-before-release=1; handled-processed=0; transformed-processed=1; ordinary-steer-processed=1
+ok - real Pi/Herdr: release processes the one ordinary busy steer exactly once without resurrecting handled or pre-transform input
+```
+
+The ordinary busy steer returns exit 3 with `submission unconfirmed` while native state remains working, then appears as exactly one processed user message after release.
+The handled input is rejected before queueing and never becomes a user message, while the transformed input is processed only in its transformed form, so Pi's earlier `input` event cannot serve as exact queue-acceptance proof.
+`tests/fm-send-strict.test.sh` separately pins unrecognized rendering, single literal injection, first-Enter failure, later Enter-only retry failure, wrong endpoint, pending composer, concurrent-send refusal, idle success, and no-blind-resend behavior through the public executable path.
+`tests/fm-send-resolve-key.test.sh` pins remote inner exit 3 and remote transport failure without outer success, delivery confirmation, or decision closure.
+Receipt staleness and mismatch have no executable Pi case because Pi 0.84.2 exposes no supported queue-commit receipt surface.
+The complete portable Herdr session family also passed from the secondmate-marked task copy after `tests/fm-herdr.test.sh` bound its primary-home label cases to scratch `FM_HOME` state:
+
+```sh
+bin/fm-test-run.sh --family herdr-session
+```
+
+```text
+FM_TEST_SUMMARY total=12 failed=0 skipped_gate=0 duration_ms=539747
+FM_TEST_SUMMARY_FAMILY family=herdr-session count=12 duration_ms=539257 failed=0
+```
+
 ### Native blocked event
 
 The protocol-16 event path was measured on 2026-07-11 with Herdr 0.7.3 and Python 3.13:

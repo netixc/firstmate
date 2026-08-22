@@ -49,6 +49,7 @@ case "${1:-} ${2:-}" in
     ;;
   "pane send-text")
     [ -z "${FM_EXPECTED_LOCK:-}" ] || [ -e "$FM_EXPECTED_LOCK" ] || exit 1
+    [ "${FM_HERDR_LITERAL_FAIL:-0}" != 1 ] || exit 1
     if [ "${FM_HERDR_REPLACE_AFTER_VALIDATION:-0}" = 1 ] || [ "${FM_HERDR_REPLACE_AFTER_TARGET_CHECK:-0}" = 1 ]; then
       [ -n "${FM_HERDR_AUTHORIZED_SOCKET:-}" ] || exit 1
       [ "${HERDR_SOCKET_PATH:-}" = "$FM_HERDR_AUTHORIZED_SOCKET" ] || exit 1
@@ -59,9 +60,26 @@ case "${1:-} ${2:-}" in
       : > "$FM_HOME/bound-generation-used"
     fi
     ;;
-  "pane send-keys") : > "$FM_HERDR_STATE" ;;
+  "pane send-keys")
+    enter_count=$(cat "$FM_HOME/enter-count" 2>/dev/null || printf 0)
+    enter_count=$((enter_count + 1))
+    printf '%s' "$enter_count" > "$FM_HOME/enter-count"
+    [ "${FM_HERDR_ENTER_FAIL:-0}" != 1 ] || exit 1
+    [ -z "${FM_HERDR_ENTER_FAIL_AFTER:-}" ] || [ "$enter_count" -le "$FM_HERDR_ENTER_FAIL_AFTER" ] || exit 1
+    : > "$FM_HERDR_STATE"
+    ;;
+  "pane read")
+    if [ "${FM_HERDR_BUSY_PENDING:-0}" = 1 ]; then
+      printf '╭────────────────────────╮\n│ ❯ unsent composer text │\n╰────────────────────────╯\n'
+    elif [ "${FM_HERDR_UNRECOGNIZED_RENDER:-0}" = 1 ]; then
+      printf 'artifact without composer boundaries\n'
+    fi
+    ;;
   "agent get")
-    if [ -e "$FM_HERDR_STATE" ]; then status=working; else status=idle; fi
+    if [ "${FM_HERDR_BUSY_BASELINE:-0}" = 1 ]; then status=working
+    elif [ -e "$FM_HERDR_STATE" ]; then status=working
+    else status=idle
+    fi
     printf '{"result":{"agent":{"agent_status":"%s","provider":"pi"}}}\n' "$status"
     ;;
 esac
@@ -86,6 +104,13 @@ run_send() { # <home> <fakebin> <log> <args...>
     FM_HERDR_LOG="$log" FM_HERDR_STATE="$home/herdr.state" FM_SEND_SETTLE=0 \
     FM_HERDR_REPLACE_AFTER_VALIDATION="${FM_HERDR_REPLACE_AFTER_VALIDATION:-0}" \
     FM_HERDR_REPLACE_AFTER_TARGET_CHECK="${FM_HERDR_REPLACE_AFTER_TARGET_CHECK:-0}" \
+    FM_HERDR_BUSY_BASELINE="${FM_HERDR_BUSY_BASELINE:-0}" \
+    FM_HERDR_BUSY_PENDING="${FM_HERDR_BUSY_PENDING:-0}" \
+    FM_HERDR_UNRECOGNIZED_RENDER="${FM_HERDR_UNRECOGNIZED_RENDER:-0}" \
+    FM_HERDR_ENTER_FAIL="${FM_HERDR_ENTER_FAIL:-0}" \
+    FM_HERDR_ENTER_FAIL_AFTER="${FM_HERDR_ENTER_FAIL_AFTER:-}" \
+    FM_HERDR_LITERAL_FAIL="${FM_HERDR_LITERAL_FAIL:-0}" \
+    FM_HERDR_LIVE_LOCK_ATTEMPTS="${FM_HERDR_LIVE_LOCK_ATTEMPTS:-50}" \
     "$SEND" "$@"
 }
 
@@ -105,6 +130,125 @@ test_exact_id_send() {
   assert_contains "$out" 'pane send-keys w1:p1 enter' "exact id did not submit with Enter"
   unset FM_EXPECTED_LOCK
   pass "fm-send strict: exact task ids use exact Herdr metadata"
+}
+
+test_busy_unknown_is_truthful_unconfirmed() {
+  local home=$TMP_ROOT/busy-unknown fb log out rc sends enters
+  mkdir -p "$home/state"; fb=$(make_stubs "$home"); log=$home/herdr.log; : > "$log"
+  write_meta "$home" lane-busy
+  out=$(FM_HERDR_BUSY_BASELINE=1 FM_HERDR_UNRECOGNIZED_RENDER=1 \
+    run_send "$home" "$fb" "$log" lane-busy 'unique busy steer' 2>&1)
+  rc=$?
+  expect_code 3 "$rc" "busy unknown submit should use the delivered-but-unconfirmed status"
+  assert_contains "$out" 'submission is unconfirmed (verdict=unknown' \
+    "busy unknown submit did not report truthful uncertainty"
+  assert_contains "$out" 'do not retype or blindly resend' \
+    "busy unknown submit invited a duplicate full-text send"
+  assert_not_contains "$out" 'text not submitted' \
+    "busy unknown submit made the disproven non-submission claim"
+  sends=$(grep -c 'pane send-text w1:p1 unique busy steer' "$log")
+  enters=$(grep -c 'pane send-keys w1:p1 enter' "$log")
+  [ "$sends" -eq 1 ] && [ "$enters" -eq 1 ] \
+    || fail "busy unknown submit must inject and submit once (text=$sends enter=$enters)"
+  pass "fm-send strict: unrecognized busy rendering stays truthful and never invites a blind resend"
+}
+
+test_busy_pending_is_unconfirmed_without_retyping() {
+  local home=$TMP_ROOT/busy-pending fb log out rc sends enters
+  mkdir -p "$home/state"; fb=$(make_stubs "$home"); log=$home/herdr.log; : > "$log"
+  write_meta "$home" lane-pending
+  out=$(FM_HERDR_BUSY_BASELINE=1 FM_HERDR_BUSY_PENDING=1 \
+    run_send "$home" "$fb" "$log" lane-pending 'pending busy steer' 2>&1)
+  rc=$?
+  expect_code 3 "$rc" "busy pending submit should remain unconfirmed"
+  assert_contains "$out" 'submission is unconfirmed (verdict=pending' \
+    "busy pending submit lost its distinct verdict"
+  sends=$(grep -c 'pane send-text w1:p1 pending busy steer' "$log")
+  enters=$(grep -c 'pane send-keys w1:p1 enter' "$log")
+  [ "$sends" -eq 1 ] && [ "$enters" -eq 3 ] \
+    || fail "busy pending submit must type once and retry only Enter (text=$sends enter=$enters)"
+  pass "fm-send strict: pending composer confirmation never retypes the steer"
+}
+
+test_later_enter_failure_preserves_unconfirmed_submission() {
+  local home=$TMP_ROOT/later-enter-fail fb log out rc sends enters
+  mkdir -p "$home/state"; fb=$(make_stubs "$home"); log=$home/herdr.log; : > "$log"
+  write_meta "$home" lane-later-enter
+  out=$(FM_HERDR_BUSY_BASELINE=1 FM_HERDR_BUSY_PENDING=1 FM_HERDR_ENTER_FAIL_AFTER=1 \
+    run_send "$home" "$fb" "$log" lane-later-enter 'one attempted steer' 2>&1)
+  rc=$?
+  expect_code 3 "$rc" "a later Enter retry failure must preserve delivered-but-unconfirmed status"
+  assert_contains "$out" 'submission is unconfirmed (verdict=pending' \
+    "a later Enter retry failure lost the earlier successful submission attempt"
+  assert_not_contains "$out" 'text not sent' \
+    "a later Enter retry failure claimed the earlier submission attempt never happened"
+  sends=$(grep -c 'pane send-text w1:p1 one attempted steer' "$log")
+  enters=$(grep -c 'pane send-keys w1:p1 enter' "$log")
+  [ "$sends" -eq 1 ] && [ "$enters" -eq 2 ] \
+    || fail "later Enter failure must type once and attempt Enter twice (text=$sends enter=$enters)"
+  pass "fm-send strict: a failed Enter retry cannot erase an earlier successful attempt"
+}
+
+test_transport_failures_are_not_unconfirmed_delivery() {
+  local home=$TMP_ROOT/transport-fail fb log out rc
+  mkdir -p "$home/state"; fb=$(make_stubs "$home"); log=$home/herdr.log; : > "$log"
+  write_meta "$home" lane-transport
+
+  out=$(FM_HERDR_LITERAL_FAIL=1 run_send "$home" "$fb" "$log" lane-transport 'literal failure' 2>&1)
+  rc=$?
+  expect_code 1 "$rc" "literal transport failure must fail"
+  assert_contains "$out" 'text not sent' "literal transport failure was not reported as send failure"
+  assert_not_contains "$out" 'submission is unconfirmed' \
+    "literal transport failure was mislabeled as delivered-but-unconfirmed"
+
+  : > "$log"
+  out=$(FM_HERDR_ENTER_FAIL=1 run_send "$home" "$fb" "$log" lane-transport 'enter failure' 2>&1)
+  rc=$?
+  expect_code 1 "$rc" "Enter transport failure must fail"
+  assert_contains "$out" 'text not sent' "Enter transport failure was not reported as send failure"
+  assert_not_contains "$out" 'submission is unconfirmed' \
+    "Enter transport failure was mislabeled as delivered-but-unconfirmed"
+  [ "$(grep -c 'pane send-text w1:p1 enter failure' "$log")" -eq 1 ] \
+    || fail "Enter transport failure retyped the body"
+  [ "$(grep -c 'pane send-keys w1:p1 enter' "$log")" -eq 1 ] \
+    || fail "Enter transport failure made an unexpected duplicate attempt"
+  pass "fm-send strict: literal and Enter transport failures never become unconfirmed delivery"
+}
+
+test_concurrent_send_refuses_before_injection() {
+  local home=$TMP_ROOT/concurrent-send fb log lock ready stop holder out rc
+  mkdir -p "$home/state"; fb=$(make_stubs "$home"); log=$home/herdr.log; : > "$log"
+  write_meta "$home" lane-concurrent
+  lock=$(PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" HERDR_SESSION=lab \
+    FM_HERDR_LOG="$log" FM_HERDR_STATE="$home/herdr.state" \
+    bash -c '. "$1/bin/fm-herdr.sh"; fm_herdr_presentation_session_lock_path lab' _ "$ROOT") \
+    || fail "could not resolve the concurrent-send presentation lock"
+  ready=$home/holder-ready
+  stop=$home/holder-stop
+  PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" HERDR_SESSION=lab \
+    FM_HERDR_LOG="$log" FM_HERDR_STATE="$home/herdr.state" \
+    bash -c '
+      STATE=$4
+      . "$1/bin/fm-wake-lib.sh"
+      fm_lock_try_acquire "$2" || exit 1
+      trap '\''fm_lock_release "$2" || true'\'' EXIT
+      : > "$3"
+      while [ ! -e "$5" ]; do sleep 0.05; done
+    ' _ "$ROOT" "$lock" "$ready" "$home/state" "$stop" &
+  holder=$!
+  for _ in $(seq 1 100); do [ -e "$ready" ] && break; sleep 0.02; done
+  [ -e "$ready" ] || { kill "$holder" 2>/dev/null || true; wait "$holder" 2>/dev/null || true; fail "concurrent-send lock holder did not start"; }
+
+  out=$(FM_HERDR_LIVE_LOCK_ATTEMPTS=1 run_send "$home" "$fb" "$log" lane-concurrent 'must not inject' 2>&1)
+  rc=$?
+  : > "$stop"
+  wait "$holder" || fail "concurrent-send lock holder failed"
+  expect_code 1 "$rc" "a concurrent endpoint operation must refuse the send"
+  assert_contains "$out" 'presentation lock is contended' \
+    "concurrent send did not explain its serialization refusal"
+  assert_not_contains "$(cat "$log")" 'pane send-text' \
+    "concurrent send injected text without owning endpoint serialization"
+  pass "fm-send strict: concurrent endpoint operation refuses before injection"
 }
 
 test_live_identity_is_rechecked_under_send_lock() {
@@ -273,6 +417,11 @@ test_explicit_target_uses_bound_transport() {
 }
 
 test_exact_id_send
+test_busy_unknown_is_truthful_unconfirmed
+test_busy_pending_is_unconfirmed_without_retyping
+test_later_enter_failure_preserves_unconfirmed_submission
+test_transport_failures_are_not_unconfirmed_delivery
+test_concurrent_send_refuses_before_injection
 test_live_identity_is_rechecked_under_send_lock
 test_session_replacement_uses_bound_transport
 test_ambiguous_or_foreign_metadata_refuses

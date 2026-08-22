@@ -13,13 +13,15 @@
 # submit or reports an inconclusive send. If a swallowed Enter is positively
 # confirmed, fm-send exits NON-ZERO so the caller knows the steer did not land
 # instead of silently leaving an unsubmitted instruction.
-# Exit status contract: 0 = submit confirmed (or, for a remote secondmate
-# target, delivered with confirmation pending - see the remote paragraph);
+# Exit status contract: 0 = submit confirmed;
 # 3 = the text was typed into the live endpoint and Enter was sent, but the
-# submit read-back stayed unconfirmed (verify the pane before any resend, and
-# never re-type blindly; a marked request's pending-reply expectation stays
-# armed because this outcome is not a proven failure); any other nonzero = the
-# send failed and nothing may be assumed delivered.
+# submit read-back stayed pending or unknown (submission is unconfirmed; verify
+# the pane before any resend and never re-type blindly; a marked request's
+# pending-reply expectation stays armed because this outcome is not a proven
+# failure); any other nonzero = the send failed and nothing may be assumed
+# delivered. In particular, a successful literal injection plus Enter whose
+# busy-Pi confirmation remains unknown uses exit 3 and never claims the text was
+# not submitted.
 # Submission uses the same direct Herdr composer/submit core as away mode.
 # Tune with FM_SEND_RETRIES (default 3) / FM_SEND_SLEEP (0.4).
 # Slash commands get a longer pre-Enter settle so completion popups do not swallow Enter.
@@ -46,15 +48,11 @@
 # (bin/fm-remote-secondmate-control.sh cmd_send) that runs this same verified
 # submit against the recorded remote Herdr pane and relays its exit status
 # unchanged. A leg that delivered the text into the live verified pane but
-# could not synchronously confirm the submit (exit 3 - typically a busy mate
-# whose Pi session queues the steer and keeps rendering it) is reported here as
-# DELIVERED with confirmation pending: fm-send prints a non-error notice,
-# exits 0, marks the pending-reply expectation delivered, and closes any
-# --resolve-key decisions. Empirically that pattern is a delivered steer, a
-# resend duplicates the instruction, and the parent's pending-reply
-# recovery/escalation still surfaces the rare genuinely lost request. Transport
-# loss (ssh exit 255, completion unknown) and every real remote failure keep
-# failing loudly with the remote leg's own stderr attached.
+# could not synchronously confirm the submit preserves exit 3 across the remote
+# boundary. It does not mark the pending-reply expectation delivered or close
+# any --resolve-key decisions. Transport loss (ssh exit 255, completion
+# unknown) and every real remote failure keep failing loudly with the remote
+# leg's own stderr attached.
 #
 # Decision closure (answerer-closes): pass --resolve-key <key> (repeatable,
 # before the message) when this send answers an open keyed needs-decision: or
@@ -82,10 +80,8 @@
 # in this home's status log per status_open_decisions (bin/fm-classify-lib.sh), or
 # an active captain hold for the target task. A key in neither is refused before
 # sending, so a mistyped key cannot deliver an answer while silently orphaning the
-# decision. A failed or unconfirmed send never closes a key (a remote
-# delivered-with-pending-confirmation outcome counts as delivered - see the
-# remote paragraph above); a
-# delivered answer whose closing append fails exits nonzero with the exact
+# decision. A failed or unconfirmed send never closes a key. A delivered answer
+# whose closing append fails exits nonzero with the exact
 # manual close command, leaving the decision open to re-surface (the safe
 # direction). A send without the flag never closes anything: a routine steer,
 # working:, or done: event still cannot clear a captain decision. The flag is
@@ -471,10 +467,10 @@ else
   esac
   retries=${FM_SEND_RETRIES:-3}
   sleep_s=${FM_SEND_SLEEP:-0.4}
-  # Type once, submit, verify. Only exact empty confirms delivery; every other
-  # verdict preserves the loud refusal boundary.
+  # Type once, submit, verify. Exact empty confirms delivery. Pending or
+  # unknown after a successful literal injection and Enter preserves truthful
+  # uncertainty without inviting a duplicate full-text send.
   send_rc=0
-  REMOTE_DELIVERY_NOTICE=0
   if [ "$TARGET_ROUTE" = remote ]; then
     # The remote leg is this same script running host-locally against the
     # recorded Herdr pane (cmd_send in fm-remote-secondmate-control.sh), so its
@@ -489,9 +485,8 @@ else
     if [ "$send_rc" -eq 0 ]; then
       verdict=empty
     elif [ "$send_rc" -eq 3 ]; then
-      verdict=empty
+      verdict=unknown
       send_rc=0
-      REMOTE_DELIVERY_NOTICE=1
     else
       verdict=send-failed
       [ -z "$remote_err" ] || printf '%s\n' "$remote_err" >&2
@@ -530,28 +525,29 @@ else
       echo "error: text not sent to $T ($TARGET_ROUTE send failed; tried $RESOLUTION_TRIED)" >&2
       exit 1
       ;;
-    pending)
+    pending|unknown)
       # The text was typed into the live target and Enter was sent; only the
-      # submit read-back stayed unconfirmed (e.g. busy Pi queues the
-      # steer and keeps rendering it). That is not a proven failure, so never
-      # re-type the message: verify the pane instead. Exit 3 is the documented
-      # delivered-unconfirmed status, and the remote send leg above depends on
-      # it crossing the ssh boundary intact.
+      # submit read-back stayed unconfirmed. A busy Pi can accept a steer while
+      # its native state stays working and its composer remains unreadable, but
+      # that observation is not exact queue-acceptance proof. Never claim either
+      # success or non-submission and never re-type the message blindly. Exit 3
+      # is the documented delivered-but-unconfirmed status, and the remote send
+      # leg above depends on it crossing the ssh boundary intact.
       # The pending-reply expectation is deliberately NOT discarded here: this
-      # is the same not-a-failure outcome the remote leg reports as delivered,
-      # so dropping it would silently stop tracking a marked request that very
-      # likely landed. It stays armed on its unconfirmed-delivery marker, so a
-      # correlated report still resolves it and an unanswered one still
+      # is the same not-a-proven-failure outcome the remote leg reports as
+      # delivered, so dropping it would silently stop tracking a marked request
+      # that may have landed. It stays armed on its unconfirmed-delivery marker,
+      # so a correlated report still resolves it and an unanswered one still
       # surfaces through the library's own reconciliation
       # (bin/fm-pending-reply-lib.sh).
-      echo "fm-send: text delivered to $T but submission is unconfirmed (verdict=pending; tried $RESOLUTION_TRIED); do not retype or blindly resend - verify with fm-peek.sh, then re-send '--key Enter' only if the composer still holds the text" >&2
+      echo "fm-send: text delivered to $T but submission is unconfirmed (verdict=$verdict; tried $RESOLUTION_TRIED); do not retype or blindly resend - verify with fm-peek.sh, then re-send '--key Enter' only if the composer still holds the text" >&2
       exit 3
       ;;
     *)
       if [ "$PENDING_REPLY_CREATED" = 1 ] && [ -n "$PENDING_REPLY_CORR" ]; then
         fm_pending_reply_discard_undelivered "$STATE" "$PENDING_REPLY_CORR" || true
       fi
-      echo "error: text not submitted to $T (delivery unconfirmed; verdict=${verdict:-unknown}; tried $RESOLUTION_TRIED)" >&2
+      echo "error: text not submitted to $T (delivery unconfirmed; verdict=${verdict:-unrecognized}; tried $RESOLUTION_TRIED)" >&2
       exit 1
       ;;
   esac
@@ -575,12 +571,6 @@ else
   if [ -n "$RESOLVE_KEYS" ]; then
     fm_send_close_resolved_keys "$RESOLVE_ANSWER_TEXT" || exit 1
     fm_send_feed_resolved_holds "$RESOLVE_ANSWER_TEXT" || exit 1
-  fi
-  # Remote delivered-with-pending-confirmation: the outcome above is treated as
-  # delivered (expectation marked, keys closed), and this one non-error notice
-  # carries the remaining nuance so nobody re-sends the steer.
-  if [ "$REMOTE_DELIVERY_NOTICE" = 1 ]; then
-    echo "fm-send: delivered to remote secondmate $TARGET_REMOTE_ID; the remote pane accepted the text and Enter, and only the synchronous submit confirmation is still pending. This is not a failure - do not resend; the pending-reply expectation stays armed." >&2
   fi
   # Submit landed with exact empty. Confirmation only proves the text was
   # accepted; Pi still needs a beat to spin up the
