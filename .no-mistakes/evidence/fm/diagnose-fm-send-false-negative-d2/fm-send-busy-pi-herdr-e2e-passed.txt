@@ -1,0 +1,3 @@
+ok - real Pi/Herdr: busy input, including transformed and handled input, stays unconfirmed while the provider response remains active
+evidence: Pi 0.84.2; Herdr 0.8.0; input-before-release=1; handled-processed=0; transformed-processed=1; ordinary-steer-processed=1
+ok - real Pi/Herdr: release processes the one ordinary busy steer exactly once without resurrecting handled or pre-transform input
