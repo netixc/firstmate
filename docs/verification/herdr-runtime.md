@@ -540,6 +540,24 @@ ok - real Pi/Herdr: teardown removes the endpoint, home, and metadata
 focused watcher reconciliation and Pi supervision verification: ok
 ```
 
+The final recovery-grade unreachable-endpoint rerun used:
+
+```sh
+bash -n bin/fm-fleet-snapshot.sh bin/fm-watch.sh tests/fm-fleet-snapshot-view.test.sh tests/fm-watch-triage.test.sh && \
+  bin/fm-test-run.sh tests/fm-fleet-snapshot-view.test.sh tests/fm-watch-triage.test.sh && \
+  bin/fm-lint.sh bin/fm-fleet-snapshot.sh bin/fm-watch.sh tests/fm-fleet-snapshot-view.test.sh tests/fm-watch-triage.test.sh && \
+  git diff --check && \
+  printf '%s\n' 'focused recovery-grade Herdr liveness verification: ok'
+```
+
+```text
+FM_TEST_SUMMARY total=2 failed=0 skipped_gate=0 duration_ms=80105
+FM_TEST_SUMMARY_FAMILY family=snapshot-bearings count=1 duration_ms=4747 failed=0
+FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=75264 failed=0
+fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
+focused recovery-grade Herdr liveness verification: ok
+```
+
 Strict tracked-extension checking used TypeScript 5.9.3:
 
 ```sh
@@ -578,12 +596,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 131623 314
-bin 54305 127
-tests 57010 117
+all 131683 314
+bin 54317 127
+tests 57026 117
 pi 2045 9
 agents 559
-added=7677 deleted=33258 net=-25581
+added=7738 deleted=33259 net=-25521
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,581 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,521 lines smaller.

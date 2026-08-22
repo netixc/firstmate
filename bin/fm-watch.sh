@@ -373,11 +373,13 @@ _fm_watch_pause_live_reconcile() {  # <target> <window>
 }
 
 pause_live_agent_class() {  # <window> <task>
-  local win=$1 task=$2 meta result
-  if ! fm_herdr_target_exists "$win" >/dev/null 2>&1; then
-    printf 'dead'
-    return
-  fi
+  local win=$1 task=$2 meta result recovery_state
+  recovery_state=$(fm_herdr_agent_state "$win")
+  case "$recovery_state" in
+    missing) printf 'dead'; return ;;
+    alive|dead) ;;
+    *) printf 'unknown'; return ;;
+  esac
   meta="$STATE/$task.meta"
   result=$(fm_herdr_with_live_task_endpoint "$meta" "$task" \
     _fm_watch_pause_live_reconcile "$win" 2>/dev/null) || result=unknown

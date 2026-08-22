@@ -404,7 +404,7 @@ backlog_json() {  # [<backlog-path>] - defaults to this home's $BACKLOG
 
 task_json_lines() {
   local meta id kind harness mode yolo project worktree home projects session_path target status_log report_path
-  local remote_host remote_root remote_state remote_rc remote_home_present live_state
+  local remote_host remote_root remote_state remote_rc remote_home_present live_state recovery_state
   local pr pr_source event_json current_json endpoint_exists agent_alive meta_json status_json report_json worktree_json home_json
   local last_event_raw current_state current_source pending_decision blocked_event report_present=0 pr_from_status
   local open_decisions_tsv open_decisions_json
@@ -511,22 +511,32 @@ task_json_lines() {
       fi
     else
       if [ "$session_path" = herdr ] && [ -n "$target" ]; then
-        if ! fm_herdr_target_exists "$target" >/dev/null 2>&1; then
-          endpoint_exists=false
-          [ "$kind" = secondmate ] && agent_alive=dead
-        elif live_state=$(fm_herdr_live_agent_state_task_endpoint "$meta" "$id" 2>/dev/null); then
-          endpoint_exists=true
-          if [ "$kind" = secondmate ]; then
-            case "$live_state" in
-              alive) agent_alive=alive ;;
-              dead|missing) agent_alive=dead ;;
-              *) agent_alive=unknown ;;
-            esac
-          fi
-        else
-          endpoint_exists=null
-          [ "$kind" = secondmate ] && agent_alive=unknown
-        fi
+        recovery_state=$(fm_herdr_agent_state "$target")
+        case "$recovery_state" in
+          missing)
+            endpoint_exists=false
+            [ "$kind" = secondmate ] && agent_alive=dead
+            ;;
+          alive|dead)
+            if live_state=$(fm_herdr_live_agent_state_task_endpoint "$meta" "$id" 2>/dev/null); then
+              endpoint_exists=true
+              if [ "$kind" = secondmate ]; then
+                case "$live_state" in
+                  alive) agent_alive=alive ;;
+                  dead) agent_alive=dead ;;
+                  *) agent_alive=unknown ;;
+                esac
+              fi
+            else
+              endpoint_exists=null
+              [ "$kind" = secondmate ] && agent_alive=unknown
+            fi
+            ;;
+          *)
+            endpoint_exists=null
+            [ "$kind" = secondmate ] && agent_alive=unknown
+            ;;
+        esac
       fi
     fi
 

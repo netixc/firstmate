@@ -21,6 +21,7 @@ case "${1:-} ${2:-}" in
   "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
   "session list") printf '{"sessions":[{"name":"%s","running":true,"socket_path":"%s/herdr.sock"}]}\n' "${HERDR_SESSION:-lab}" "${FM_HOME:-/tmp}" ;;
   "pane get")
+    [ "${3:-}" != w-unreachable:p1 ] || exit 1
     workspace=${3%%:*}; task=${workspace#w-}
     printf '{"result":{"pane":{"pane_id":"%s","tab_id":"%s:t-%s","workspace_id":"%s"}}}\n' "${3:-}" "$workspace" "$task" "$workspace"
     ;;
@@ -52,6 +53,11 @@ SH
     "herdr_session=lab" "herdr_workspace_id=w-mismatch" "herdr_tab_id=w-mismatch:t-recorded" \
     "herdr_pane_id=w-mismatch:p1" "worktree=/tmp/mismatch" "project=alpha" \
     "harness=pi" "kind=secondmate" "mode=direct-PR"
+  fm_write_meta "$home/state/unreachable.meta" \
+    "backend=herdr" "window=lab:w-unreachable:p1" "endpoint_task_id=unreachable" \
+    "herdr_session=lab" "herdr_workspace_id=w-unreachable" "herdr_tab_id=w-unreachable:t-unreachable" \
+    "herdr_pane_id=w-unreachable:p1" "worktree=/tmp/unreachable" "project=alpha" \
+    "harness=pi" "kind=secondmate" "mode=direct-PR"
   printf '%s|%s\n' "$home" "$fb"
 }
 
@@ -69,7 +75,7 @@ EOF
   log=$home/herdr.log
   json=$(FM_HERDR_LOG="$log" run_snapshot "$home" "$fb") || fail "fleet snapshot failed"
   printf '%s' "$json" | jq -e '
-    (.tasks | length) == 4
+    (.tasks | length) == 5
     and (.tasks[] | select(.id=="current") | .session_path) == "herdr"
     and (.tasks[] | select(.id=="current") | .endpoint.exists) == true
     and (.tasks[] | select(.id=="legacy") | .session_path) == "retired-tmux"
@@ -79,6 +85,8 @@ EOF
     and (.tasks[] | select(.id=="mismatch") | .session_path) == "herdr"
     and (.tasks[] | select(.id=="mismatch") | .endpoint.exists) == null
     and (.tasks[] | select(.id=="mismatch") | .endpoint.agent_alive) == "unknown"
+    and (.tasks[] | select(.id=="unreachable") | .endpoint.exists) == null
+    and (.tasks[] | select(.id=="unreachable") | .endpoint.agent_alive) == "unknown"
     and ([.tasks[] | has("backend")] | any | not)
   ' >/dev/null || fail "snapshot did not expose the Herdr-only session contract: $json"
   if grep -F 'w-ambiguous:p1' "$log" >/dev/null \

@@ -613,9 +613,9 @@ SH
   pass "a stale pane sitting on a terminal status is surfaced (queue + exit)"
 }
 
-test_paused_reconcile_preserves_tracking_on_live_identity_mismatch() {
-  local dir state fakebin out drain_out capture_file counter window key pane_hash sig pid
-  dir=$(make_case paused-identity-mismatch); state="$dir/state"; fakebin="$dir/fakebin"
+run_paused_reconcile_unreadable_case() {
+  local mode=$1 dir state fakebin out drain_out capture_file counter window key pane_hash sig pid
+  dir=$(make_case "paused-$mode"); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; drain_out="$dir/drain.out"
   capture_file="$dir/pane.txt"; counter="$dir/pane-get-count"
   window="test:w-paused:p1"
@@ -640,6 +640,8 @@ case "${1:-} ${2:-}" in
     printf '%s\n' "$count" > "$FM_FAKE_HERDR_PANE_COUNT"
     if [ "$count" -le 2 ]; then
       printf '{"result":{"pane":{"pane_id":"%s","tab_id":"w-paused:t-paused","workspace_id":"w-paused"}}}\n' "${3:-}"
+    elif [ "$FM_FAKE_HERDR_FAILURE" = unreachable ]; then
+      exit 1
     else
       printf '{"result":{"pane":{"pane_id":"%s","tab_id":"w-paused:t-foreign","workspace_id":"w-paused"}}}\n' "${3:-}"
     fi
@@ -660,23 +662,29 @@ SH
   printf '123\n' > "$state/.stale-since-$key"
   printf '2\n' > "$state/.wedge-escalations-$key"
   PATH="$fakebin:$PATH" FM_HOME="$dir" FM_FAKE_HERDR_CAPTURE="$capture_file" \
-    FM_FAKE_HERDR_PANE_COUNT="$counter" HERDR_SESSION=test FM_STATE_OVERRIDE="$state" \
+    FM_FAKE_HERDR_PANE_COUNT="$counter" FM_FAKE_HERDR_FAILURE="$mode" \
+    HERDR_SESSION=test FM_STATE_OVERRIDE="$state" \
     FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_POLL=1 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 FM_PAUSE_RESURFACE_SECS=999999 \
     "$WATCH" > "$out" &
   pid=$!
-  wait_for_exit "$pid" 80 || fail "paused reconciliation did not surface the live identity mismatch"
+  wait_for_exit "$pid" 80 || fail "paused reconciliation did not surface the $mode endpoint"
   grep -F "check: Herdr endpoint identity or agent state unavailable for paused ($window); preserve metadata and reconcile manually" "$out" >/dev/null \
-    || fail "identity mismatch did not print an actionable reconciliation wake"
-  [ -e "$state/.paused-$key" ] || fail "identity mismatch cleared paused tracking"
-  [ -e "$state/.stale-$key" ] || fail "identity mismatch cleared stale tracking"
-  [ -e "$state/.stale-since-$key" ] || fail "identity mismatch cleared the stale timer"
-  [ -e "$state/.wedge-escalations-$key" ] || fail "identity mismatch cleared wedge tracking"
-  FM_STATE_OVERRIDE="$state" "$DRAIN" > "$drain_out" 2>/dev/null || fail "identity mismatch wake drain failed"
+    || fail "$mode endpoint did not print an actionable reconciliation wake"
+  [ -e "$state/.paused-$key" ] || fail "$mode endpoint cleared paused tracking"
+  [ -e "$state/.stale-$key" ] || fail "$mode endpoint cleared stale tracking"
+  [ -e "$state/.stale-since-$key" ] || fail "$mode endpoint cleared the stale timer"
+  [ -e "$state/.wedge-escalations-$key" ] || fail "$mode endpoint cleared wedge tracking"
+  FM_STATE_OVERRIDE="$state" "$DRAIN" > "$drain_out" 2>/dev/null || fail "$mode endpoint wake drain failed"
   grep "$(printf '\tcheck\tendpoint-reconciliation-paused\t')" "$drain_out" \
     | grep -F 'preserve metadata and reconcile manually' >/dev/null \
-    || fail "identity mismatch was not durably queued for manual reconciliation"
-  pass "paused reconciliation preserves tracking and surfaces live identity changes"
+    || fail "$mode endpoint was not durably queued for manual reconciliation"
+}
+
+test_paused_reconcile_preserves_tracking_on_unreadable_endpoint() {
+  run_paused_reconcile_unreadable_case identity
+  run_paused_reconcile_unreadable_case unreachable
+  pass "paused reconciliation preserves tracking and surfaces mismatched or unreachable endpoints"
 }
 
 # --- stale pane, STALE terminal status overridden by an active run: absorbed ---
@@ -1066,7 +1074,7 @@ test_secondmate_status_note_surfaced_despite_busy_agent
 test_self_announced_close_does_not_rewake_but_next_note_does
 test_actionable_signal_surfaced
 test_terminal_stale_surfaced
-test_paused_reconcile_preserves_tracking_on_live_identity_mismatch
+test_paused_reconcile_preserves_tracking_on_unreadable_endpoint
 test_procevent_captured_result_surfaces_proactively
 test_procevent_unacknowledged_result_redrains_until_handled
 test_procevent_marker_keys_are_injective
