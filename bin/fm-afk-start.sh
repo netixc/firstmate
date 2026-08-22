@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Enter away mode and run the sub-supervisor daemon in a harness-tracked
-# foreground process when one is not already alive.
+# Enter away mode and run the sub-supervisor daemon in its dedicated Herdr
+# terminal when one is not already alive.
 #
 # Usage: fm-afk-start.sh
 #   Sets state/.afk unless FM_AFK_STATE_PREPARED=1, checks

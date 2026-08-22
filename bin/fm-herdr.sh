@@ -390,7 +390,7 @@ fm_herdr_resolve_selector() {  # <raw-target> <state-dir>
 
 # Shared composer-content classifier (empty|pending|unknown, and the fleet-wide
 # dead-shell-vs-agent-composer rule). Owned by bin/fm-composer-lib.sh, reused by
-# every session path so the decision cannot drift.
+# all Pi composer consumers so the decision cannot drift.
 # shellcheck source=bin/fm-composer-lib.sh
 . "$FM_HERDR_ROOT/bin/fm-composer-lib.sh"
 
@@ -655,7 +655,7 @@ fm_herdr_presentation_default_supported() {  # <state-dir> [<session>]
 
 # fm_herdr_presentation_enabled <config-dir> [<state-dir>]: the one gate
 # bin/fm-spawn.sh consults before projecting this home's children into
-# disposable one-task workspaces (docs/herdr-session path.md "Presentation spaces"
+# disposable one-task workspaces (docs/herdr-backend.md "Presentation spaces"
 # owns the full contract). An explicit "off" or "on" is obeyed as written; a
 # home that configured nothing is projected only at or above the version floor,
 # and otherwise falls back to the flat layout with one warning. Sets
@@ -675,7 +675,7 @@ fm_herdr_presentation_enabled() {  # <config-dir> [<state-dir>]
 }
 
 # fm_herdr_workspace_label: the per-firstmate-HOME herdr workspace
-# label (docs/herdr-session path.md "Default task container shape"). The PRIMARY home (no
+# label (docs/herdr-backend.md "Watching and task containers"). The PRIMARY home (no
 # secondmate marker) resolves to the constant "firstmate", byte-identical to
 # every pre-existing task's recorded label - no forced migration. A SECONDMATE
 # home resolves to "2ndmate-<secondmate-id>", so its tasks land in their own
@@ -701,8 +701,8 @@ fm_herdr_workspace_label() {
 
 # fm_herdr_cli: run `herdr <args...>` scoped to <session>, setting
 # BOTH the HERDR_SESSION env var AND appending a trailing `--session <name>`
-# CLI flag. Verified empirically (docs/herdr-session path.md "Session targeting: the
-# --session flag, not HERDR_SESSION alone"): on the installed herdr 0.7.1
+# CLI flag. Verified empirically (docs/herdr-backend.md "Current transport
+# behavior"): on the installed herdr 0.7.1
 # client, the HERDR_SESSION env var is NOT reliably honored by CLI subcommands
 # once ANY other herdr server is already bound on the machine - queries
 # silently fall back to whatever server IS running (the wrong one) instead of
@@ -762,10 +762,10 @@ fm_herdr_version_check() {
   return 0
 }
 
-# fm_herdr_session: resolve which named herdr session this normal
-# spawn/op uses. HERDR_SESSION mirrors legacy terminal's $LEGACY_TERMINAL ambient-selection for
-# integration workspace/tab/pane operations: an operator (or firstmate's own
-# isolated test harness) sets it explicitly; absent means herdr's own
+# fm_herdr_session: resolve which named Herdr session this normal
+# spawn or operation uses. HERDR_SESSION selects integration workspace, tab,
+# and pane operations when an operator or Firstmate's isolated test setup sets
+# it explicitly; absent means Herdr's own
 # "default" session. Do not use HERDR_SESSION alone for destructive test
 # cleanup; tests/herdr-test-safety.sh documents and guards that path.
 fm_herdr_session() {
@@ -1954,9 +1954,8 @@ fm_herdr_projection_order_best_effort() {  # <session> <created-workspace-id> <p
   return 0
 }
 
-# fm_herdr_server_ensure: start the herdr server for <session>
-# headless (no TUI client) if not already running, mirroring legacy terminal's `legacy terminal
-# has-session || legacy terminal new-session -d`. Verified: a bare socket CLI call does
+# fm_herdr_server_ensure: start the Herdr server for <session>
+# headless (no TUI client) if it is not already running. A bare socket CLI call does
 # NOT auto-start the server, so this must run before any workspace/tab/pane
 # call. Bounded poll for the server to report running.
 fm_herdr_server_ensure() {  # <session>
@@ -1985,7 +1984,7 @@ fm_herdr_server_ensure() {  # <session>
 # first). Empty when none match. Never creates anything.
 #
 # Single owner of the home-label workspace query. Herdr enforces no workspace
-# label uniqueness at all (docs/herdr-session path.md "Label collisions"), so this
+# label uniqueness at all (docs/herdr-backend.md "Watching and task containers"), so this
 # can legitimately return MORE THAN ONE id: a captain-owned workspace can
 # collide by label, a cwd-basename-derived label can coincide, and concurrent
 # first spawns can mint two same-labeled home workspaces. Callers decide what a
@@ -2153,8 +2152,8 @@ fm_herdr_launcher_identity() {  # <session>
 # (fm_herdr_workspace_prune_default_tabs, removed) re-derived
 # "prunable" at create_task time from a pure label heuristic - exactly one
 # tab, labeled "1" - run against whatever workspace fm_herdr_workspace_find
-# had just resolved. Herdr enforces no label uniqueness (docs/herdr-session path.md
-# "Label collisions") and derives an unlabeled workspace's DISPLAYED label from
+# had just resolved. Herdr enforces no label uniqueness (docs/herdr-backend.md
+# "Watching and task containers") and derives an unlabeled workspace's DISPLAYED label from
 # its pane cwd's basename, so a captain launching herdr directly inside a
 # directory named "firstmate" produces a workspace that looks byte-identical,
 # by label alone, to firstmate's own auto-created container - one tab, label
@@ -2226,8 +2225,8 @@ fm_herdr_workspace_prune_seeded_default_tab() {  # <session> <workspace_id> <see
 #                                      (fm_herdr_launcher_identity) or
 #                                      a single label match
 #                                      (fm_herdr_workspace_find_all -
-#                                      docs/herdr-session path.md "Label
-#                                      collisions": that match can never
+#                                      docs/herdr-backend.md "Watching and task
+#                                      containers": that match can never
 #                                      distinguish an explicitly
 #                                      `--label`-created workspace from one
 #                                      whose label only coincidentally
@@ -2238,7 +2237,7 @@ fm_herdr_workspace_prune_seeded_default_tab() {  # <session> <workspace_id> <see
 #                                      this function, no matter what they are
 #                                      labeled - see
 #                                      fm_herdr_workspace_prune_seeded_default_tab.
-# --no-focus (docs/herdr-session path.md "Focus behavior"): verified that workspace
+# --no-focus (docs/herdr-backend.md "Watching and task containers"): verified that workspace
 # create does NOT focus by default once at least one workspace already exists
 # in the session, matching pre-existing (flagless) behavior; the ONE exception
 # is the very first workspace ever created in a brand-new session, which
@@ -2390,8 +2389,8 @@ fm_herdr_explicit_close_pane_confirmed() {  # <session> <pane_id>
 #              registered in it - exactly what a herdr session-layout restore
 #              produces (verified empirically: `session stop` + fresh `herdr
 #              server` restart leaves the pane alive, agent_status "unknown",
-#              agent get -> agent_not_found - docs/herdr-session path.md "ID
-#              stability across a server restart"), and what a future
+#              agent get -> agent_not_found - docs/herdr-backend.md "Restart
+#              and liveness behavior"), and what a future
 #              `resume_agents_on_restore = false` restore would produce too
 #              (a plain shell, never an agent).
 #   live     - `agent get` succeeds and reports a real agent_status (working,
@@ -2439,8 +2438,8 @@ fm_herdr_tab_is_husk() {  # <session> <pane_id>
   esac
 }
 
-# fm_herdr_agent_state: recovery-grade state for the same session-start
-# sweep as the legacy terminal classifier. It reuses the husk classifier rather than
+# fm_herdr_agent_state: recovery-grade state for the session-start sweep.
+# It reuses the husk classifier rather than
 # creating a second Herdr state machine: a structurally gone pane is `missing`,
 # a confirmed agent-less pane is `dead`, a registered agent is `alive`, and an
 # unexpected or failed API read is `unreadable`.
@@ -2468,7 +2467,7 @@ fm_herdr_agent_alive() {  # <target>
 # fm_herdr_create_task: create the task's tab (one pane) in
 # <container> ("session:workspace_id"). Herdr does NOT enforce label
 # uniqueness itself (verified: two tabs can share a label), so the duplicate
-# check is ours, mirroring legacy terminal's manual check.
+# check is enforced here before creation.
 #
 # A same-labeled tab already existing no longer means an automatic refusal:
 # herdr persists and restores its whole session layout (workspaces/tabs/
@@ -2486,7 +2485,7 @@ fm_herdr_agent_alive() {  # <target>
 # Ordering is deliberate: the REPLACEMENT tab is created FIRST, and the husk
 # is closed only AFTER that succeeds - never the reverse. Closing a
 # workspace's LAST remaining tab deletes the whole workspace on real herdr
-# (docs/herdr-session path.md "Default workspace lifecycle"), and a session-restore husk
+# (docs/herdr-backend.md "Default-tab prune safety"), and a session-restore husk
 # can legitimately be that workspace's only tab (e.g. its own seeded default
 # tab was already pruned, long before the restart, by a prior real task tab
 # existing alongside it). Herdr's lack of label-uniqueness enforcement is
@@ -3038,8 +3037,7 @@ fm_herdr_target_ready() {  # <target>
 }
 
 # fm_herdr_current_path: the live FOREGROUND process's cwd, or empty on
-# any error. Mirrors legacy terminal's pane_current_path poll used for worktree-path
-# discovery after `treehouse get`.
+# any error, used for worktree-path discovery after `treehouse get`.
 #
 # Verified pitfall: `pane get`'s `.result.pane.cwd` is the pane's cwd AT
 # CREATION TIME - the top-level shell's cwd - and does NOT update when that
@@ -3055,8 +3053,8 @@ fm_herdr_current_path() {  # <target>
     | jq -r '.result.pane.foreground_cwd // empty' 2>/dev/null
 }
 
-# fm_herdr_send_text_line: send one line of TEXT then submit,
-# ATOMICALLY - mirrors legacy terminal's `send-keys -t T text Enter`. Used for the fixed
+# fm_herdr_send_text_line: send one line of TEXT then submit atomically.
+# Used for the fixed
 # spawn-time commands (treehouse get, the GOTMPDIR export). `pane run` types
 # the command and submits it in one call (verified).
 fm_herdr_send_text_line() {  # <target> <text>
@@ -3065,9 +3063,7 @@ fm_herdr_send_text_line() {  # <target> <text>
 }
 
 # fm_herdr_send_literal: send TEXT as literal, UNSUBMITTED input - the
-# caller sends Enter separately. Mirrors legacy terminal's `send-keys -t T -l text`.
-# Verified: `pane send-text` does NOT auto-submit (contrary to the addendum's
-# original guess); it behaves exactly like legacy terminal's `-l` literal send.
+# caller sends Enter separately. Verified: `pane send-text` does not auto-submit.
 fm_herdr_send_literal() {  # <target> <text>
   fm_herdr_target_ready "$1" || return 1
   fm_herdr_cli "$FM_HERDR_SESSION" pane send-text "$FM_HERDR_PANE" "$2" >/dev/null 2>&1
@@ -3087,8 +3083,7 @@ fm_herdr_normalize_key() {  # <key>
   esac
 }
 
-# fm_herdr_send_key: one named special key. Mirrors fm-send.sh's --key
-# path (legacy terminal's `send-keys -t T key`).
+# fm_herdr_send_key: one named special key for fm-send.sh's --key path.
 fm_herdr_send_key() {  # <target> <key>
   fm_herdr_target_ready "$1" || return 1
   local key
@@ -3096,9 +3091,8 @@ fm_herdr_send_key() {  # <target> <key>
   fm_herdr_cli "$FM_HERDR_SESSION" pane send-keys "$FM_HERDR_PANE" "$key" >/dev/null 2>&1
 }
 
-# fm_herdr_capture: bounded plain-text pane capture. Mirrors
-# fm-peek.sh's/fm-watch.sh's `legacy terminal capture-pane -p -t T -S -N`. --source recent
-# is the closest herdr analogue to legacy terminal's scrollback-bounded capture.
+# fm_herdr_capture: bounded plain-text pane capture for fm-peek.sh and fm-watch.sh.
+# `--source recent` selects Herdr's recent scrollback.
 #
 # Verified CLI quirk (herdr-verification-p2.md "pane read --lines bug", v0.7.1):
 # `pane read --source recent --lines N` returns COMPLETELY EMPTY output when N
@@ -3134,11 +3128,10 @@ fm_herdr_capture_ansi() {  # <target> <lines>
 # These functions are the ONLY herdr-specific composer knowledge left: the
 # ANSI pane capture (with its small-N workaround), the native `agent get`
 # identity probe, and the capability descriptor. Every shape - the bordered
-# box, the bare agent-glyph row, and pi's
+# box, the bare agent-glyph row, and Pi's
 # identity-gated separated pair (which this integration pioneered) - now lives in
 # the shared owner (bin/fm-composer-lib.sh, fm_composer_classify_screen), so
-# a new harness shape is taught there once and every session path learns it in the
-# same commit.
+# Pi composer classification stays consistent for every caller.
 
 fm_herdr_agent_identity_raw() {  # <session> <pane> -> <agent>\t<status>
   local out
@@ -3190,7 +3183,7 @@ fm_herdr_composer_state() {  # <target> -> empty|pending|pending-unproven|unknow
 # confirms a real turn started. Verified hazard (herdr-verification-p2.md
 # "slash/$ autocomplete popup"): a `/`- or `$`-prefixed send opens a
 # completion popup within ~0.1s, so the caller's <settle> before the first
-# Enter matters here the same way it does for legacy terminal.
+# Enter prevents Pi's completion popup from consuming the submission.
 #
 # Confirmation signal (rewritten for the 2026-07-07 incident below;
 # superseded a composer-content read that itself replaced a delta-based check
@@ -3198,12 +3191,11 @@ fm_herdr_composer_state() {  # <target> -> empty|pending|pending-unproven|unknow
 # submission is confirmed by fm_herdr_wait_for_working observing a
 # submit-active agent_status after Enter, NOT by reading the composer's own
 # row. This makes the normal confirmation path cross-agent: it is the same
-# semantic signal regardless of what text a harness's idle composer happens
-# to display.
+# semantic signal regardless of what text Pi's idle composer displays.
 #
 # Incident (2026-07-07, followed up on 2026-07-08): a redelivery loop in the
 # away-mode daemon. Root cause: composer-content submit confirmation was too
-# sensitive to harness rendering details. Idle-baseline submit confirmation
+# sensitive to Pi rendering details. Idle-baseline submit confirmation
 # deliberately stays on native agent-state so delivery does not depend on
 # composer text. Composer
 # content is retained for other callers (the away-mode daemon's PRE-injection
@@ -3220,8 +3212,8 @@ fm_herdr_composer_state() {  # <target> -> empty|pending|pending-unproven|unknow
 # casing the popup shape.
 #
 # Failure-mode analysis (the two directions the caller-facing contract must
-# not get wrong - see docs/herdr-session path.md "Native agent-state submit
-# confirmation" for the empirical timing behind this):
+# not get wrong - see docs/herdr-backend.md "Composer and injection safety"
+# for the empirical timing behind this):
 #   - Slow transition: fm_herdr_wait_for_working samples repeatedly
 #     across herdr's per-attempt confirmation budget (not once at the end), so a
 #     transition landing partway through a window is still caught before this
@@ -3238,8 +3230,8 @@ fm_herdr_composer_state() {  # <target> -> empty|pending|pending-unproven|unknow
 #     an error, which is a human/escalation decision, not an automatic
 #     retry).
 # Echoes empty|pending|unknown|send-failed, a subset of the proof-carrying
-# submit vocabulary. Empty means confirmed submitted for every session path; how
-# each session path confirms it is an internal decision, and herdr's is no longer
+# submit vocabulary. Empty means confirmed submitted for every Pi caller; how
+# a caller confirms it is an internal decision, and Herdr's is no longer
 # literally "the composer read empty".
 fm_herdr_send_text_submit() {  # <target> <text> <retries> <enter-sleep> <settle>
   local target=$1 text=$2 retries=$3 sleep_s=$4 settle=$5 i=0 verdict baseline confirm_sleep
@@ -3269,8 +3261,7 @@ fm_herdr_send_text_submit() {  # <target> <text> <retries> <enter-sleep> <settle
   done
 }
 
-# fm_herdr_kill: remove the task's pane, best-effort (mirrors
-# legacy terminal-kill-window's `|| true` contract). Verified: closing a tab's only pane
+# fm_herdr_kill: remove the task's pane, best-effort. Verified: closing a tab's only pane
 # closes the tab too, so a separate tab close is unnecessary.
 # When the close would empty a non-focused workspace, Herdr 0.7.5's explicit
 # close moves focus to that workspace's neighbor with no restore anywhere in
@@ -3427,7 +3418,7 @@ fm_herdr_busy_state() {  # <target>
 #             confirmation that a real turn started or reached a prompt -
 #             the submit landed - independent of
 #             whatever the composer's own text happens to show (docs/
-#             herdr-session path.md "Incident (2026-07-07)": dynamic composer content
+#             herdr-backend.md "Composer and injection safety": dynamic composer content
 #             fooled the old confirmation). Returned the instant it is seen,
 #             without waiting out the
 #             rest of the budget.
@@ -3531,7 +3522,7 @@ fm_herdr_list_live() {  # <session>
 # --- native event push: pane.agent_status_changed subscriber -----------------
 #
 # The push half of the immediate blocked-state escalation (AGENTS.md section 8,
-# docs/herdr-session path.md "Native pane.agent_status_changed push escalation").
+# docs/herdr-backend.md "Push events and polling fallback").
 # fm_herdr_wait_transition is the watcher's bounded wait primitive for
 # herdr homes: instead of a blind sleep, it blocks on herdr's native event
 # stream and returns the instant a subscribed pane changes dedupe state, so

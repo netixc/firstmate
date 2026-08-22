@@ -52,7 +52,7 @@
 #                       data/captain-shared.md, data/learnings.md: read-only,
 #                       always safe, always runs.
 #   9. closing reminder - prints the context-specific watcher next step; this
-#                       script points back to the emitted harness supervision
+#                       script points back to the emitted Pi supervision
 #                       block and deliberately never arms the watcher itself.
 #
 # Those nine names are also the runtime-bound stage list below, so a truncated
@@ -78,7 +78,7 @@
 # waiting for them. It never reports an unconfirmed check as passed.
 #
 # ORDERING, and why FLEET STATE now runs before CONTEXT: this digest is
-# delivered through a harness that truncates an oversized payload from the TAIL,
+# delivered through Pi, which truncates an oversized payload from the TAIL,
 # and it has really been truncated in practice - a 70KB digest arrived as lines
 # 1-435 of 578, cutting off eight lines before the live-task inventory. What a
 # truncated tail drops must therefore be the CHEAPEST thing to lose. Curated
@@ -110,7 +110,7 @@
 # The tradeoff this ordering accepts: a refused (read-only) session must not
 # go dark. So on refusal, bootstrap still runs (in FM_BOOTSTRAP_DETECT_ONLY=1
 # mode) for its local read-only detect lines - missing tools, the worktree-tangle
-# check, the harness override, crew-dispatch validation, tasks-axi and quota-axi
+# check, Pi admission, crew-dispatch validation, tasks-axi and quota-axi
 # tool checks, and tasks-axi availability - none of which mutate shared state
 # and all of which are safe to compute without verified lock ownership.
 # It deliberately skips the network-only GitHub-auth probe because a read-only
