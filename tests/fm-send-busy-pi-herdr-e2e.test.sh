@@ -201,8 +201,8 @@ PANE=$(printf '%s' "$CREATE" | jq -r '.result.root_pane.pane_id // empty')
   || fail "Pi $PI_VERSION busy-send guard did not receive exact Herdr endpoint identity"
 TARGET="$SESSION:$PANE"
 
-PI_CMD=$(printf 'exec env PI_CODING_AGENT_DIR=%q pi -e %q --provider fm-busy-send-fixture --model hold --no-context-files' \
-  "$PI_DIR" "$PROVIDER_EXT")
+PI_CMD=$(printf 'exec env PI_CODING_AGENT_DIR=%q pi -e %q --provider fm-busy-send-fixture --model hold --no-context-files %q' \
+  "$PI_DIR" "$PROVIDER_EXT" "$HOLD")
 $LAB_HELPER run "$SESSION" pane run "$PANE" "$PI_CMD" >/dev/null \
   || fail "Pi $PI_VERSION busy-send guard could not launch real Pi"
 
@@ -238,9 +238,6 @@ event_count() { # <event> <text>
     'select(.event == $event and .text == $text) | .event' "$EVENTS" 2>/dev/null | wc -l | tr -d ' '
 }
 
-wait_for_native idle || fail "Pi $PI_VERSION did not become idle before the real busy-send scenario"
-$LAB_HELPER run "$SESSION" pane send-text "$PANE" "$HOLD" >/dev/null
-$LAB_HELPER run "$SESSION" pane send-keys "$PANE" enter >/dev/null
 wait_for_event_count before_agent_start "$HOLD" 1 \
   || fail "Pi $PI_VERSION did not start the held provider turn"
 wait_for_native working || fail "Pi $PI_VERSION did not remain working on the held provider response"
