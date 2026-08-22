@@ -17,12 +17,7 @@ printf '%s\n' "$*" >> "$FM_HERDR_LOG"
 case "${1:-} ${2:-}" in
   "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
   "session list")
-    count=$(cat "${FM_HERDR_SESSION_LIST_COUNT:-/dev/null}" 2>/dev/null || printf 0)
-    count=$((count + 1))
-    [ -z "${FM_HERDR_SESSION_LIST_COUNT:-}" ] || printf '%s' "$count" > "$FM_HERDR_SESSION_LIST_COUNT"
-    socket=herdr.sock
-    [ "${FM_HERDR_REPLACEMENT_SESSION:-0}" != 1 ] || socket=herdr-restarted.sock
-    printf '{"sessions":[{"name":"%s","running":true,"socket_path":"%s/%s"}]}\n' "${HERDR_SESSION:-lab}" "${FM_HOME:-/tmp}" "$socket"
+    printf '{"sessions":[{"name":"%s","running":true,"socket_path":"%s/herdr.sock"}]}\n' "${HERDR_SESSION:-lab}" "${FM_HOME:-/tmp}"
     ;;
   "pane get")
     if [ "${FM_HERDR_MISSING:-0}" = 1 ]; then printf '{"error":{"code":"pane_not_found"}}\n'
@@ -36,7 +31,15 @@ case "${1:-} ${2:-}" in
     fi ;;
   "tab get")
     workspace=${3%%:*}
+    count=$(cat "$FM_HOME/tab-get-count" 2>/dev/null || printf 0)
+    count=$((count + 1))
+    printf '%s' "$count" > "$FM_HOME/tab-get-count"
     printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"%s"}}}\n' "${3:-}" "${FM_HERDR_TAB_WORKSPACE:-$workspace}"
+    if [ "${FM_HERDR_REPLACE_AFTER_VALIDATION:-0}" = 1 ] && [ "$count" -gt 1 ] && [ ! -e "$FM_HOME/session-replaced" ]; then
+      mv "$FM_HOME/herdr.sock" "$FM_HOME/herdr-prior.sock"
+      : > "$FM_HOME/herdr.sock"
+      : > "$FM_HOME/session-replaced"
+    fi
     ;;
   "pane send-text") [ -z "${FM_EXPECTED_LOCK:-}" ] || [ -e "$FM_EXPECTED_LOCK" ] ;;
   "pane send-keys") : > "$FM_HERDR_STATE" ;;
@@ -64,6 +67,7 @@ run_send() { # <home> <fakebin> <log> <args...>
   local home=$1 fb=$2 log=$3; shift 3
   PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" \
     FM_HERDR_LOG="$log" FM_HERDR_STATE="$home/herdr.state" FM_SEND_SETTLE=0 \
+    FM_HERDR_REPLACE_AFTER_VALIDATION="${FM_HERDR_REPLACE_AFTER_VALIDATION:-0}" \
     "$SEND" "$@"
 }
 
@@ -100,24 +104,25 @@ test_live_identity_is_rechecked_under_send_lock() {
   pass "fm-send strict: live identity stays authorized through the locked send"
 }
 
-test_session_replacement_uses_stable_send_lock() {
-  local home=$TMP_ROOT/session-restart fb log expected_lock
+test_session_replacement_refuses_stale_authorization() {
+  local home=$TMP_ROOT/session-restart fb log expected_lock out
   mkdir -p "$home/state"; fb=$(make_stubs "$home"); log=$home/herdr.log; : > "$log"
+  : > "$home/herdr.sock"
   write_meta "$home" lane-restart
   expected_lock=$(PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" HERDR_SESSION=lab \
     FM_HERDR_LOG="$log" FM_HERDR_STATE="$home/herdr.state" \
     bash -c '. "$1/bin/fm-herdr.sh"; fm_herdr_presentation_session_lock_path lab' _ "$ROOT") \
     || fail "could not resolve the pre-restart presentation lock"
   export FM_EXPECTED_LOCK="$expected_lock"
-  : > "$home/session-list-count"
-  FM_EXPECTED_LOCK="$expected_lock" FM_HERDR_REPLACEMENT_SESSION=1 \
-    FM_HERDR_SESSION_LIST_COUNT="$home/session-list-count" \
-    run_send "$home" "$fb" "$log" lane-restart 'deliver once' >/dev/null 2>&1 \
-    || fail "send lost stable serialization when its named session socket changed"
-  assert_contains "$(cat "$log")" 'pane send-text w1:p1 deliver once' \
-    "send did not deliver under the stable named-session lock"
+  out=$(FM_EXPECTED_LOCK="$expected_lock" FM_HERDR_REPLACE_AFTER_VALIDATION=1 \
+    run_send "$home" "$fb" "$log" lane-restart 'do not deliver' 2>&1) \
+    && fail "send controlled a replacement Herdr session under stale authorization"
+  assert_contains "$out" 'Herdr session generation changed during an authorized endpoint operation' \
+    "send did not explain its replacement-session refusal"
+  assert_not_contains "$(cat "$log")" 'pane send-text' \
+    "send reached a replacement Herdr session"
   unset FM_EXPECTED_LOCK
-  pass "fm-send strict: session replacement retains one authorization lock"
+  pass "fm-send strict: session replacement invalidates live authorization"
 }
 
 test_ambiguous_or_foreign_metadata_refuses() {
@@ -234,7 +239,7 @@ test_explicit_exact_target_and_key() {
 
 test_exact_id_send
 test_live_identity_is_rechecked_under_send_lock
-test_session_replacement_uses_stable_send_lock
+test_session_replacement_refuses_stale_authorization
 test_ambiguous_or_foreign_metadata_refuses
 test_duplicate_endpoint_owners_refuse
 test_cross_component_identity_refuses

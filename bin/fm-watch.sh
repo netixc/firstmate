@@ -645,7 +645,7 @@ heartbeat_scan_finds_actionable() {
 # supervision cycle: the reader is a short-lived subprocess of THIS watcher, not
 # a second watcher, so every guard/beacon/arm/turn-end mechanism is unchanged.
 event_wait_or_sleep() {
-  local w session first_session="" rec rc
+  local w session first_session="" rec rc wait_generation
   local windows=()
   while IFS= read -r w; do
     [ "$(window_endpoint_class "$w")" = herdr ] || continue
@@ -684,11 +684,19 @@ event_wait_or_sleep() {
     return
   fi
 
+  wait_generation=$(fm_herdr_presentation_session_generation "$first_session") || {
+    _event_cap_fails=$((_event_cap_fails + 1))
+    [ "$_event_cap_fails" -ge "$EVENT_CAP_FAIL_MAX" ] && _event_cap_ok=0
+    sleep "$POLL"
+    return
+  }
+
   rec=$(FM_HERDR_EVENTS_CAPABILITY_CONFIRMED=1 \
     fm_herdr_wait_transition "$first_session" "$POLL" "$STATE" "${windows[@]}")
   rc=$?
   if [ "$rc" -eq 0 ]; then
-    rec=$(_fm_watch_apply_transition "$first_session" "$STATE" "$rec")
+    rec=$(FM_HERDR_REQUIRED_SESSION_GENERATION="$wait_generation" \
+      _fm_watch_apply_transition "$first_session" "$STATE" "$rec")
     rc=$?
   fi
   case "$rc" in

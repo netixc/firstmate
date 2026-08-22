@@ -23,7 +23,7 @@ cat > "$FAKEBIN/herdr" <<'SH'
 set -u
 case "${1:-} ${2:-}" in
   "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
-  "session list") printf '{"sessions":[{"name":"%s","running":true,"socket_path":"%s/herdr.sock"}]}\n' "${HERDR_SESSION:-lab}" "${FM_HOME:-/tmp}" ;;
+  "session list") printf '{"sessions":[{"name":"%s","running":true,"socket_path":"%s/herdr.sock"}]}\n' "${HERDR_SESSION:-lab}" "$FM_TEST_SESSION_DIR" ;;
   "pane get")
     row=$(awk -F '\t' -v pane="${3:-}" '$1 == pane { print; exit }' "$FM_TEST_ENDPOINT_MAP")
     [ -n "$row" ] || exit 1
@@ -41,6 +41,7 @@ esac
 SH
 chmod +x "$FAKEBIN/herdr"
 export FM_TEST_ENDPOINT_MAP="$ENDPOINT_MAP"
+export FM_TEST_SESSION_DIR="$TMP"
 export PATH="$FAKEBIN:$PATH"
 
 # Source the watcher with an isolated state/home. The guard returns before the
@@ -62,6 +63,8 @@ reset_state() {
   rm -f "$STATE_DIR"/*.meta "$STATE_DIR"/*.status "$STATE_DIR"/.wake-queue \
     "$STATE_DIR"/.wake-queue.seq "$STATE_DIR"/.watch-triage.log \
     "$STATE_DIR"/.herdr-escalated-* "$TMP"/panes "$TMP"/wtcalls "$TMP"/wtcalled 2>/dev/null || true
+  rm -f "$TMP/herdr.sock" "$TMP/herdr-prior.sock" 2>/dev/null || true
+  : > "$TMP/herdr.sock"
   : > "$WAKE_LOG"
   : > "$SLEEP_LOG"
   : > "$ENDPOINT_MAP"
@@ -164,6 +167,21 @@ event_wait_or_sleep
 [ ! -s "$WAKE_LOG" ] || fail "a transition for an endpoint that moved during the wait reached supervision"
 [ ! -e "$STATE_DIR/.wake-queue" ] || fail "a moved endpoint transition was durably acknowledged"
 pass "event_wait_or_sleep: returned transitions are revalidated before acknowledgement"
+
+reset_state
+write_endpoint_meta tk3 default:wG:pQ ship
+# shellcheck disable=SC2329 # Runtime overrides called by the isolated watcher.
+fm_herdr_events_capable() { return 0; }
+# shellcheck disable=SC2329 # Runtime overrides called by the isolated watcher.
+fm_herdr_wait_transition() {
+  mv "$TMP/herdr.sock" "$TMP/herdr-prior.sock"
+  : > "$TMP/herdr.sock"
+  mkrec wG:pQ blocked
+}
+event_wait_or_sleep
+[ ! -s "$WAKE_LOG" ] || fail "a buffered transition from a replaced Herdr session reached supervision"
+[ ! -e "$STATE_DIR/.wake-queue" ] || fail "a replaced-session transition was durably acknowledged"
+pass "event_wait_or_sleep: replaced-session transitions are discarded before acknowledgement"
 
 reset_state
 write_endpoint_meta tk3 default:wG:pQ ship

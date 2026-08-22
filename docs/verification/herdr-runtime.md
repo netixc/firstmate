@@ -468,6 +468,22 @@ FM_TEST_SUMMARY_FAMILY family=herdr-session count=1 duration_ms=8021 failed=0
 FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=8003 failed=0
 ```
 
+The post-`cd9b400` endpoint-generation, transition, spawn-delivery, and real Pi-on-Herdr lifecycle rerun used:
+
+```sh
+bash tests/fm-send-strict.test.sh >/dev/null && \
+  bash tests/fm-supervision-events.test.sh >/dev/null && \
+  bash tests/fm-spawn-dispatch-profile.test.sh >/dev/null && \
+  FM_SEND_MARKER_HERDR_E2E=1 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
+    bash tests/fm-send-secondmate-marker-herdr-e2e.test.sh >/dev/null && \
+  git diff --check && \
+  printf '%s\n' 'focused Herdr generation, transition, spawn, and Pi lifecycle verification: ok'
+```
+
+```text
+focused Herdr generation, transition, spawn, and Pi lifecycle verification: ok
+```
+
 Strict tracked-extension checking used TypeScript 5.9.3:
 
 ```sh
@@ -506,12 +522,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 132009 316
-bin 54604 127
-tests 57033 118
+all 132110 316
+bin 54666 127
+tests 57056 118
 pi 2045 9
 agents 562
-added=6740 deleted=31935 net=-25195
+added=6842 deleted=31936 net=-25094
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,195 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,094 lines smaller.
