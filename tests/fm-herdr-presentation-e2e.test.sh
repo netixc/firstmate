@@ -255,6 +255,7 @@ export FM_HERDR_WORKSPACE_MOVER="$FAKEBIN/herdr-workspace-mover"
 
 # shellcheck source=tests/herdr-test-safety.sh
 . "$ROOT/tests/herdr-test-safety.sh"
+herdr_test_install_pi "$FAKEBIN"
 # This suite runs against its own isolated lab session, so a Herdr pane
 # inherited from the terminal it was launched in must not follow spawn into it
 # as a cross-session parent identity. Every projection below is anchored on the
@@ -384,8 +385,8 @@ make_project() {  # <dir>
 
 spawn_task() {  # <id> <home> <project>
   local id=$1 home=$2 project=$3
-  FM_GATE_REFUSE_BYPASS=1 FM_SPAWN_NO_GUARD=1 FM_SPAWN_TEST_RAW_LAUNCH=1 FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
-    "$ROOT/bin/fm-spawn.sh" "$id" "$project" "sh -c 'sleep 120'" --mode no-mistakes --yolo off
+  FM_GATE_REFUSE_BYPASS=1 FM_SPAWN_NO_GUARD=1 FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    "$ROOT/bin/fm-spawn.sh" "$id" "$project" --mode no-mistakes --yolo off
 }
 
 finish_concurrent_spawn() {  # <id> <status> <stdout> <stderr>
@@ -409,8 +410,8 @@ finish_concurrent_expected_abort() {  # <id> <status> <stdout> <stderr>
 
 spawn_secondmate_task() {
   local id=$1 home=$2
-  FM_GATE_REFUSE_BYPASS=1 FM_SPAWN_NO_GUARD=1 FM_SPAWN_TEST_RAW_LAUNCH=1 FM_HOME="$HOME_DIR" FM_ROOT_OVERRIDE="$ROOT" \
-    "$ROOT/bin/fm-spawn.sh" "$id" "$home" "sh -c 'sleep 120'" --secondmate
+  FM_GATE_REFUSE_BYPASS=1 FM_SPAWN_NO_GUARD=1 FM_HOME="$HOME_DIR" FM_ROOT_OVERRIDE="$ROOT" \
+    "$ROOT/bin/fm-spawn.sh" "$id" "$home" --secondmate
 }
 
 teardown_task() {  # <id> <home>
@@ -428,6 +429,7 @@ normalize_meta() {  # <meta>
     -e 's|^herdr_tab_id=.*$|herdr_tab_id=<herdr-container-id>|' \
     -e 's|^herdr_pane_id=.*$|herdr_pane_id=<herdr-container-id>|' \
     -e 's|^spawn_gen=.*$|spawn_gen=<spawn-incarnation>|' \
+    -e 's|^busy_gen=.*$|busy_gen=<busy-generation>|' \
     "$1"
 }
 
@@ -521,8 +523,8 @@ cp "$TREEHOUSE_CALL_LOG" "$TMP_ROOT/off-treehouse.log"
 [ "$(wc -l < "$MOVE_CALL_LOG" | tr -d '[:space:]')" = "$OFF_MOVE_START" ] \
   || fail "opted-out spawn invoked the presentation-only workspace mover"
 OFF_HERDR_CALLS=$(sed -n "$((OFF_HERDR_START + 1)),${OFF_HERDR_END}p" "$HERDR_CALL_LOG")
-if printf '%s\n' "$OFF_HERDR_CALLS" | grep -E $'^(api\tschema|session\tlist)' >/dev/null 2>&1; then
-  fail "opted-out spawn added presentation-ordering capability or socket calls"
+if printf '%s\n' "$OFF_HERDR_CALLS" | grep -F $'api\tschema' >/dev/null 2>&1; then
+  fail "opted-out spawn added presentation-ordering capability calls"
 fi
 pass "real Herdr lab: an opted-out spawn retains the Stage 1 Herdr command sequence with zero ordering calls"
 teardown_task shape "$HOME_DIR" > "$TMP_ROOT/off-teardown.out" 2> "$TMP_ROOT/off-teardown.err" \
@@ -683,15 +685,14 @@ rm -f "$HOME_DIR/state/active-seeded.herdr-presentation"
 pass "real Herdr lab: active seeded-tab pruning refuses the exact pane and preserves exact focus"
 
 LOCK_CONTENTION_READY="$TMP_ROOT/lock-contention-ready"
-LOCK_CONTENTION_RELEASE="$TMP_ROOT/lock-contention-release"
 LOCK_CONTENTION_PATH=$(session_presentation_lock_path) \
   || fail "could not resolve the session presentation lock for contention"
-ROOT="$ROOT" READY="$LOCK_CONTENTION_READY" RELEASE="$LOCK_CONTENTION_RELEASE" \
+ROOT="$ROOT" READY="$LOCK_CONTENTION_READY" ERR="$TMP_ROOT/lock-contended.err" \
   LOCK="$LOCK_CONTENTION_PATH" bash -c '
   . "$ROOT/bin/fm-wake-lib.sh"
   fm_lock_try_acquire "$LOCK" || exit 1
   : > "$READY"
-  while [ ! -e "$RELEASE" ]; do sleep 0.05; done
+  while ! grep -F "presentation focus lock unavailable" "$ERR" >/dev/null 2>&1; do sleep 0.05; done
   fm_lock_release "$LOCK"
 ' &
 LOCK_CONTENTION_OWNER_PID=$!
@@ -705,7 +706,6 @@ if spawn_task lock-contended "$HOME_DIR" "$PROJECT_DIR" > "$TMP_ROOT/lock-conten
 else
   LOCK_CONTENTION_STATUS=$?
 fi
-: > "$LOCK_CONTENTION_RELEASE"
 wait "$LOCK_CONTENTION_OWNER_PID" || fail "guarded lab presentation lock owner failed"
 LOCK_CONTENTION_OWNER_PID=
 [ "$LOCK_CONTENTION_STATUS" -eq 0 ] \

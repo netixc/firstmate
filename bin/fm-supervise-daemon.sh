@@ -1055,7 +1055,7 @@ inject_msg() {  # <message> [state]
   msg=$encoded
   target="${FM_SUPERVISOR_TARGET:-}"
   [ -n "$target" ] || return 1
-  fm_herdr_target_exists "$target" || return 1
+  [ "$(fm_herdr_agent_state "$target" 2>/dev/null || printf unreadable)" = alive ] || return 1
   # (3) Busy-guard: never inject into an in-use supervisor pane.
   if pane_is_busy "$target"; then
     log "inject deferred: supervisor pane busy (agent mid-turn)"
@@ -1291,7 +1291,7 @@ fm_super_main() {
     rm -f "$PIDFILE" 2>/dev/null || true
     exit 1
   fi
-  local discovered target_source
+  local discovered target_source target_state
   if [ -n "${FM_SUPERVISOR_TARGET:-}" ]; then
     target_source=FM_SUPERVISOR_TARGET
   else
@@ -1305,9 +1305,10 @@ fm_super_main() {
   fi
   FM_SUPERVISOR_TARGET=$discovered
   local TARGET=$FM_SUPERVISOR_TARGET
-  if ! fm_herdr_target_exists "$TARGET"; then
-    echo "error: supervisor target '$TARGET' does not resolve to a Herdr pane; set FM_SUPERVISOR_TARGET to its exact <session>:<pane-id>" >&2
-    log "startup failed: Herdr target '$TARGET' not found"
+  target_state=$(fm_herdr_agent_state "$TARGET" 2>/dev/null || printf unreadable)
+  if [ "$target_state" != alive ]; then
+    echo "error: supervisor Herdr endpoint '$TARGET' is $target_state; start Pi on reachable Herdr and restart away mode; buffered notifications remain in $STATE" >&2
+    log "startup failed: supervisor Herdr endpoint '$TARGET' is $target_state; buffered notifications preserved"
     fm_lock_release "$LOCK" 2>/dev/null || true
     rm -f "$PIDFILE" 2>/dev/null || true
     exit 1
@@ -1364,14 +1365,14 @@ fm_super_main() {
     WATCHER_PID=$!
   }
 
-  local rc reason target_state
+  local rc reason
   while true; do
     # --- Herdr availability guard ------------------------------------------
     target_state=$(fm_herdr_agent_state "$TARGET" 2>/dev/null || printf unreadable)
     case "$target_state" in
-      alive|dead) ;;
+      alive) ;;
       *)
-        echo "error: supervisor Herdr endpoint '$TARGET' is $target_state; restore reachable Herdr and restart away mode; buffered notifications remain in $STATE" >&2
+        echo "error: supervisor Herdr endpoint '$TARGET' is $target_state; start Pi on reachable Herdr and restart away mode; buffered notifications remain in $STATE" >&2
         log "stopping: supervisor Herdr endpoint '$TARGET' is $target_state; buffered notifications preserved"
         [ -z "${WATCHER_PID:-}" ] || kill "$WATCHER_PID" 2>/dev/null || true
         [ -z "${WATCHER_PID:-}" ] || wait "$WATCHER_PID" 2>/dev/null || true

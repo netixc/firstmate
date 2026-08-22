@@ -6,30 +6,44 @@
 # bin/fm-lock.sh uses it to acquire and inspect state/.lock.
 # This file is sourced by scripts and has no side effects on source.
 
-fm_pi_path() {  # <path>
-  local path=$1
+fm_pi_canonical_path() {  # <path>
+  local path=$1 link dir
   [ -n "$path" ] || return 1
-  case "/$path/" in
-    */pi/*) return 0 ;;
+  case "$path" in
+    */*) ;;
+    *) path=$(command -v -- "$path" 2>/dev/null) || return 1 ;;
   esac
-  return 1
+  case "$path" in
+    /*) ;;
+    *) path="$PWD/$path" ;;
+  esac
+  while [ -L "$path" ]; do
+    link=$(readlink "$path") || return 1
+    case "$link" in
+      /*) path=$link ;;
+      *) path="$(dirname "$path")/$link" ;;
+    esac
+  done
+  dir=$(CDPATH='' cd -P -- "$(dirname "$path")" 2>/dev/null && pwd) || return 1
+  printf '%s/%s\n' "$dir" "$(basename "$path")"
 }
 
-# True when the process described by command name $1 and full argument string $2
-# is Pi. Evidence is the command basename, an exact Pi path component in the
-# command or argv[0], or a bare interpreter running Pi
-# script.
 fm_pi_process_matches() {  # <comm> <args>
-  local comm=$1 args=$2 base argv0
+  local comm=$1 args=$2 base script pi_path candidate
   base=$(basename -- "$comm")
-  [ "$base" != pi ] || return 0
-  argv0=${args%% *}
-  if fm_pi_path "$comm" || fm_pi_path "$argv0"; then
+  if [ "$base" = pi ]; then
     return 0
   fi
-  case "$comm" in
-    *node*|*python*)
-      case "$args" in *' pi '*|*/pi|*/pi\ *) return 0 ;; esac
+  case "$base" in
+    node|nodejs|python|python[0-9]|python[0-9].[0-9])
+      script=${args#* }
+      [ "$script" != "$args" ] || return 1
+      script=${script%% *}
+      pi_path=$(command -v pi 2>/dev/null) || return 1
+      pi_path=$(fm_pi_canonical_path "$pi_path") || return 1
+      candidate=$(fm_pi_canonical_path "$script") || return 1
+      [ "$candidate" = "$pi_path" ]
+      return
       ;;
   esac
   return 1

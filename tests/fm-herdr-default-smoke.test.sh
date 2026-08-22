@@ -43,6 +43,8 @@ herdr_forget_inherited_pane
 # fm-spawn-symlink-guard-s8: fm-spawn.sh normalizes PROJ_ABS and observed Herdr
 # cwd reads before the worktree-discovery comparison.
 TMP_ROOT=$(mktemp -d "$(cd "${TMPDIR:-/tmp}" && pwd -P)/fm-herdr-default-smoke.XXXXXX")
+TEST_PI_BIN="$TMP_ROOT/fakebin"
+herdr_test_install_pi "$TEST_PI_BIN"
 HERDR_LAB_HELPER="$ROOT/bin/fm-herdr-lab.sh"
 HERDR_LAB_SESSION=$("$HERDR_LAB_HELPER" name fm-default-smoke-concurrency-h3) || {
   rm -rf "$TMP_ROOT"
@@ -88,11 +90,11 @@ git -C "$PROJ" remote add origin "file://$PROJ.origin.git"
 # --- spawn with no runtime selection; Herdr is unconditional ---------------
 
 OUT_FILE="$TMP_ROOT/spawn.out"; ERR_FILE="$TMP_ROOT/spawn.err"
-env -u TMUX -u TMUX_PANE -u FM_BACKEND PATH="$PATH" \
+env -u TMUX -u TMUX_PANE -u FM_BACKEND PATH="$TEST_PI_BIN:$PATH" \
   FM_ROOT_OVERRIDE="$ROOT" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" \
   FM_CONFIG_OVERRIDE="$CONFIG" FM_PROJECTS_OVERRIDE="$TMP_ROOT/unused-projects" \
-  FM_SPAWN_NO_GUARD=1 FM_SPAWN_TEST_RAW_LAUNCH=1 \
-  "$ROOT/bin/fm-spawn.sh" "$ID" "$PROJ" "sh -c 'echo herdr-default-smoke-ok'" --mode no-mistakes --yolo off \
+  FM_SPAWN_NO_GUARD=1 \
+  "$ROOT/bin/fm-spawn.sh" "$ID" "$PROJ" --mode no-mistakes --yolo off \
   >"$OUT_FILE" 2>"$ERR_FILE"
 status=$?
 [ "$status" -eq 0 ] || fail "fm-spawn.sh did not succeed on the default Herdr path"$'\n'"--- stdout ---"$'\n'"$(cat "$OUT_FILE")"$'\n'"--- stderr ---"$'\n'"$(cat "$ERR_FILE")"
@@ -131,8 +133,8 @@ CAPTURED=$("$HERDR_LAB_HELPER" run "$HERDR_LAB_SESSION" pane read "$PANE" --sour
   fail "capture failed on the default Herdr pane"
 CAPTURED=$(printf '%s\n' "$CAPTURED" | tail -n 30)
 case "$CAPTURED" in
-  *herdr-default-smoke-ok*) : ;;
-  *) fail "the raw launch command did not run in the default Herdr pane"$'\n'"$CAPTURED" ;;
+  *'FIRSTMATE_OP: v1 launch-brief:'*) : ;;
+  *) fail "the Pi launch command did not run in the default Herdr pane"$'\n'"$CAPTURED" ;;
 esac
 pass "real herdr: the default Herdr spawn's launch command actually ran in the herdr pane"
 

@@ -346,8 +346,9 @@ test_production_spawn_rejects_raw_launch_command() {
   read_case_record "$rec"
   enable_dispatch_profile "$HOME_DIR"
 
-  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id" "$PROJ_DIR" "custom-agent --flag")
+  out=$(FM_SPAWN_TEST_RAW_LAUNCH=1 run_ship_spawn \
+    "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
+    "$id" "$PROJ_DIR" /bin/sh)
   status=$?
   expect_code 1 "$status" "production spawn must reject a raw launch command"
   assert_contains "$out" "worker-runtime positional arguments are retired" \

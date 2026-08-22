@@ -558,24 +558,80 @@ fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
 focused recovery-grade Herdr liveness verification: ok
 ```
 
-The final Pi admission, worker-record compatibility, away-daemon liveness, and remote-doctor bootstrap reruns used:
+The final exact Pi admission, Pi-only spawn, and live-agent supervision rerun used:
 
 ```sh
-bin/fm-test-run.sh tests/fm-on.test.sh
-bin/fm-test-run.sh tests/fm-daemon.test.sh
-bin/fm-lint.sh bin/fm-bootstrap.sh bin/fm-busy-lib.sh bin/fm-control.sh bin/fm-crew-state.sh bin/fm-fleet-snapshot.sh bin/fm-herdr.sh bin/fm-lock.sh bin/fm-pending-reply-lib.sh bin/fm-remote-doctor.sh bin/fm-remote-entrypoint.sh bin/fm-remote-secondmate-control.sh bin/fm-session-lock-lib.sh bin/fm-session-start.sh bin/fm-spawn.sh bin/fm-supervise-daemon.sh bin/fm-test-run.sh bin/fm-watch.sh tests/fm-busy-state.test.sh tests/fm-daemon.test.sh tests/fm-session-lock-ancestry.test.sh tests/fm-session-start.test.sh tests/fm-spawn-dispatch-profile.test.sh tests/fm-on.test.sh
-bin/fm-doc-audience-check.sh
-git diff --check
+bin/fm-test-run.sh tests/fm-session-lock-ancestry.test.sh tests/fm-session-start.test.sh tests/fm-spawn-dispatch-profile.test.sh tests/fm-daemon.test.sh
 ```
 
 ```text
-FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=17696
-FM_TEST_SUMMARY_FAMILY family=secondmate count=1 duration_ms=17625 failed=0
-FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=1756
-FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=1683 failed=0
+FM_TEST_SUMMARY total=4 failed=0 skipped_gate=0 duration_ms=275078
+FM_TEST_SUMMARY_FAMILY family=herdr-session count=1 duration_ms=48776 failed=0
+FM_TEST_SUMMARY_FAMILY family=session-bootstrap count=1 duration_ms=222228 failed=0
+FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=2 duration_ms=3862 failed=0
+```
+
+The final live-agent injection boundary rerun used:
+
+```sh
+bash -n bin/fm-supervise-daemon.sh tests/fm-daemon.test.sh && \
+  bin/fm-test-run.sh tests/fm-daemon.test.sh && \
+  bin/fm-lint.sh bin/fm-supervise-daemon.sh tests/fm-daemon.test.sh && \
+  git diff --check
+```
+
+```text
+FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=2186
+FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=2122 failed=0
+fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
+```
+
+The final exact Pi process-identity rerun used:
+
+```sh
+bash -n bin/fm-session-lock-lib.sh tests/fm-session-lock-ancestry.test.sh && \
+  bin/fm-test-run.sh tests/fm-session-lock-ancestry.test.sh && \
+  bin/fm-lint.sh bin/fm-session-lock-lib.sh tests/fm-session-lock-ancestry.test.sh && \
+  git diff --check
+```
+
+```text
+FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=2128
+FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=2067 failed=0
+fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
+```
+
+The final real Herdr presentation and real Pi-on-Herdr lifecycle rerun used:
+
+```sh
+bash tests/fm-herdr-presentation-e2e.test.sh && \
+  lifecycle=$(FM_SEND_MARKER_HERDR_E2E=1 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh bash tests/fm-send-secondmate-marker-herdr-e2e.test.sh) && \
+  printf '%s\n' "$lifecycle" && \
+  printf '%s\n' "$lifecycle" | grep -F 'ok - real Pi/Herdr: teardown removes the endpoint, home, and metadata' >/dev/null && \
+  bin/fm-lint.sh bin/fm-spawn.sh bin/fm-session-lock-lib.sh bin/fm-supervise-daemon.sh tests/herdr-test-safety.sh tests/fm-spawn-dispatch-profile.test.sh tests/fm-session-lock-ancestry.test.sh tests/fm-daemon.test.sh tests/fm-herdr-default-smoke.test.sh tests/fm-herdr-presentation-e2e.test.sh tests/fm-herdr-launcher-workspace-e2e.test.sh tests/fm-herdr-workspace-per-home-e2e.test.sh && \
+  bin/fm-doc-audience-check.sh && \
+  git diff --check
+```
+
+```text
+ok - real Herdr lab: an opted-out spawn retains the Stage 1 Herdr command sequence with zero ordering calls
+ok - real Herdr lab: a home that configured nothing is projected by default on herdr 0.8.0
+ok - real Herdr lab: every projected create, task-tab create, seeded prune, and move preserves active workspace and tab
+ok - real Herdr lab: active seeded-tab pruning refuses the exact pane and preserves exact focus
+ok - real Herdr lab: bounded lock contention warns and falls back flat without projection or focus drift
+ok - real Herdr lab: concurrent primary workers form one stable contiguous block without active workspace/tab drift
+ok - real Herdr lab: forced workspace.move failure leaves a successful worker in default order with a warning and no cleanup
+ok - real Herdr lab: concurrent post-create abort cleanup stays serialized with exact focus restoration
+ok - real Herdr lab: Treehouse commands and metadata shape are byte-identical except for endpoint IDs and spawn incarnation
+ok - real Herdr lab: exact task-pane close removes the projected workspace with no unrestored wrong-focus interval
+evidence: exact-id carrier=from-firstmate corr=valid body=exact
+ok - real Pi/Herdr: exact-id FM_HOME send delivers exactly one from-firstmate marker
+evidence: direct-input received-hex=464d5f4d41524b45525f48455244525f444952454354206361707461696e20696e707574
+ok - real Pi/Herdr: direct captain terminal input stays unmarked
+ok - real Pi/Herdr: lifecycle control preserves the live exact endpoint
+ok - real Pi/Herdr: teardown removes the endpoint, home, and metadata
 fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
 fm-doc-audience-check: ok surfaces=51 local_links=166
-focused Pi admission, metadata, and Herdr liveness verification: ok
 ```
 
 Strict tracked-extension checking used TypeScript 5.9.3:
@@ -616,12 +672,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 131691 313
-bin 54241 126
-tests 57093 117
+all 131835 313
+bin 54251 126
+tests 57171 117
 pi 2045 9
 agents 559
-added=7935 deleted=33448 net=-25513
+added=8109 deleted=33478 net=-25369
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,513 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,369 lines smaller.

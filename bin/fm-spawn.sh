@@ -75,10 +75,7 @@
 #   serialize. A fresh spawn first takes the
 #   per-home task-set lock and refuses rather than waits when forced teardown owns
 #   it; relaunch is exempt because the existing task's control lock covers it.
-#   Dispatch profiles choose only Pi-supported model and effort axes. A narrow
-#   FM_SPAWN_TEST_RAW_LAUNCH=1 seam remains for Herdr integration tests that
-#   also set FM_SPAWN_NO_GUARD=1 and need a deterministic marker command; it is
-#   never a production runtime path.
+#   Dispatch profiles choose only Pi-supported model and effort axes.
 #   For Pi, fm-spawn resolves the executable name from PATH once, probes that
 #   concrete path with --help, and launches the same path. It adds --tui-mode
 #   regular only when that help advertises the flag; a failed or inconclusive
@@ -707,6 +704,22 @@ fi
 ID=${POS[0]}
 fm_task_id_creation_valid "$ID" || { echo "error: invalid task id" >&2; exit 2; }
 if [ "$RELAUNCH" -eq 1 ]; then
+  [ "${#POS[@]}" -eq 1 ] || {
+    echo "error: --relaunch takes the task id only; its project or home comes from the task's own record" >&2
+    exit 1
+  }
+elif [ "$KIND" = secondmate ]; then
+  [ "${#POS[@]}" -le 2 ] || {
+    echo "error: worker-runtime positional arguments are retired; Pi is always used" >&2
+    exit 1
+  }
+else
+  [ "${#POS[@]}" -eq 2 ] || {
+    echo "error: worker-runtime positional arguments are retired; Pi is always used" >&2
+    exit 1
+  }
+fi
+if [ "$RELAUNCH" -eq 1 ]; then
   SPAWN_CONTROL_LOCK="$STATE/.control-$ID.lock"
   control_owner=$(cat "$SPAWN_CONTROL_LOCK/pid" 2>/dev/null || true)
   if [ "$control_owner" = "$PPID" ] && fm_pid_alive "$control_owner"; then
@@ -766,7 +779,6 @@ if ! fm_lock_try_acquire "$SPAWN_TASK_LOCK"; then
 fi
 SPAWN_TASK_LOCK_HELD=1
 PROJ=
-ARG3=
 FIRSTMATE_HOME=
 
 # --relaunch adoption: every identity axis comes from the task's own validated
@@ -775,10 +787,6 @@ FIRSTMATE_HOME=
 # validation teardown uses, so a malformed, ambiguous, or foreign record
 # refuses here exactly as it refuses there.
 if [ "$RELAUNCH" -eq 1 ]; then
-  [ "${#POS[@]}" -eq 1 ] || {
-    echo "error: --relaunch takes the task id only; its project or home comes from the task's own record" >&2
-    exit 1
-  }
   RELAUNCH_META="$STATE/$ID.meta"
   [ -f "$RELAUNCH_META" ] || {
     echo "error: --relaunch needs an existing task record; no $RELAUNCH_META" >&2
@@ -819,13 +827,10 @@ if [ "$RELAUNCH" -eq 1 ]; then
   HERDR_WORKSPACE_ID=$(fm_meta_get "$RELAUNCH_META" herdr_workspace_id)
   HERDR_TAB_ID=$(fm_meta_get "$RELAUNCH_META" herdr_tab_id)
   HERDR_PANE_ID=$(fm_meta_get "$RELAUNCH_META" herdr_pane_id)
-  ARG3=
 elif [ "$KIND" = secondmate ]; then
   FIRSTMATE_HOME=${POS[1]:-}
-  ARG3=${POS[2]:-}
 else
   PROJ=${POS[1]}
-  ARG3=${POS[2]:-}
 fi
 
 shell_quote() {
@@ -866,32 +871,22 @@ pi_launch_command() {
   fi
 }
 
-if [ -n "$ARG3" ]; then
-  if [ "${FM_SPAWN_TEST_RAW_LAUNCH:-0}" != 1 ] \
-    || [ "${FM_SPAWN_NO_GUARD:-0}" != 1 ] \
-    || case "$ARG3" in *' '*) false ;; *) true ;; esac; then
-    echo "error: worker-runtime positional arguments are retired; Pi is always used" >&2
-    exit 1
-  fi
-  LAUNCH=$ARG3
-else
-  LAUNCH=$(pi_launch_command "$KIND")
-  PI_BIN=$(resolve_pi_executable pi) || {
-    echo "error: pi executable not found on PATH; install Pi before spawning a worker" >&2
+LAUNCH=$(pi_launch_command "$KIND")
+PI_BIN=$(resolve_pi_executable pi) || {
+  echo "error: pi executable not found on PATH; install Pi before spawning a worker" >&2
+  exit 1
+}
+PI_TUI_MODE=
+if pi_supports_tui_mode "$PI_BIN"; then
+  PI_TUI_MODE=' --tui-mode regular'
+fi
+LAUNCH=${LAUNCH//__PITUIMODE__/$PI_TUI_MODE}
+if [ "$KIND" != secondmate ]; then
+  PI_WORKER_EXTENSION="$FM_ROOT/.pi/worker-extensions/fm-worker-lifecycle.ts"
+  [ -f "$PI_WORKER_EXTENSION" ] && [ ! -L "$PI_WORKER_EXTENSION" ] || {
+    echo "error: tracked Pi worker-lifecycle extension is missing or unsafe: $PI_WORKER_EXTENSION" >&2
     exit 1
   }
-  PI_TUI_MODE=
-  if pi_supports_tui_mode "$PI_BIN"; then
-    PI_TUI_MODE=' --tui-mode regular'
-  fi
-  LAUNCH=${LAUNCH//__PITUIMODE__/$PI_TUI_MODE}
-  if [ "$KIND" != secondmate ]; then
-    PI_WORKER_EXTENSION="$FM_ROOT/.pi/worker-extensions/fm-worker-lifecycle.ts"
-    [ -f "$PI_WORKER_EXTENSION" ] && [ ! -L "$PI_WORKER_EXTENSION" ] || {
-      echo "error: tracked Pi worker-lifecycle extension is missing or unsafe: $PI_WORKER_EXTENSION" >&2
-      exit 1
-    }
-  fi
 fi
 
 secondmate_registry_value() {
@@ -1559,7 +1554,7 @@ if [ "$RELAUNCH" -eq 1 ]; then
   RELAUNCH_REPLACEMENT_PENDING=1
   RELAUNCH_REPLACEMENT_STATE=$STATE_REAL
 fi
-if [ "$KIND" != secondmate ] && [ -z "$ARG3" ]; then
+if [ "$KIND" != secondmate ]; then
   # Arm the semantic busy-state contract (bin/fm-busy-lib.sh). The launch brief sent below IS a
   # submitted turn, so the seed record is busy/fm-spawn. The tracked Pi
   # extension captures this exact generation from validated task metadata, and
@@ -1711,7 +1706,7 @@ LAUNCH=${LAUNCH//__PIWORKEREXT__/$sq_piworkerext}
 LAUNCH=${LAUNCH//__PITURNEND__/$sq_piturnend}
 LAUNCH=${LAUNCH//__PIWATCH__/$sq_piwatch}
 LAUNCH=${LAUNCH//__OPINPUT__/$sq_opinput}
-[ -n "$ARG3" ] || LAUNCH=${LAUNCH//__PIBIN__/"$(shell_quote "$PI_BIN")"}
+LAUNCH=${LAUNCH//__PIBIN__/"$(shell_quote "$PI_BIN")"}
 LAUNCH=${LAUNCH//__WORKTREE__/$sq_worktree}
 if [ "$KIND" = secondmate ]; then
   sq_home=$(shell_quote "$PROJ_ABS")

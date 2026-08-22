@@ -66,6 +66,9 @@ herdr_forget_inherited_pane
 # canonicalized project and backend cwd comparisons in the worktree-discovery
 # poll.
 TMP_ROOT=$(mktemp -d "$(cd "${TMPDIR:-/tmp}" && pwd -P)/fm-herdr-e2e.XXXXXX")
+TEST_PI_BIN="$TMP_ROOT/fakebin"
+herdr_test_install_pi "$TEST_PI_BIN"
+export PATH="$TEST_PI_BIN:$PATH"
 SESSION="fm-lab-herdr-e2e-$$"
 export HERDR_SESSION="$SESSION"
 WT1=; WT2=
@@ -115,8 +118,8 @@ PROJ2="$TMP_ROOT/scratch-project-2"; make_scratch_project "$PROJ2"
 # --- 1. primary-shaped home: a crewmate spawns into the "firstmate" space ---
 
 CM1_OUT="$TMP_ROOT/cm1.out"; CM1_ERR="$TMP_ROOT/cm1.err"
-FM_SPAWN_NO_GUARD=1 FM_SPAWN_TEST_RAW_LAUNCH=1 FM_HOME="$PRIMARY_HOME" FM_ROOT_OVERRIDE="$ROOT" \
-  "$ROOT/bin/fm-spawn.sh" cm1 "$PROJ1" "sh -c 'echo primary-crew-ok'" --mode no-mistakes --yolo off \
+FM_SPAWN_NO_GUARD=1 FM_HOME="$PRIMARY_HOME" FM_ROOT_OVERRIDE="$ROOT" \
+  "$ROOT/bin/fm-spawn.sh" cm1 "$PROJ1" --mode no-mistakes --yolo off \
   >"$CM1_OUT" 2>"$CM1_ERR"
 rc=$?
 [ "$rc" -eq 0 ] || fail "primary-shaped crewmate spawn failed"$'\n'"--- stdout ---"$'\n'"$(cat "$CM1_OUT")"$'\n'"--- stderr ---"$'\n'"$(cat "$CM1_ERR")"
@@ -131,7 +134,7 @@ pass "real herdr E2E: a primary-shaped home spawns a crewmate on the herdr backe
 
 sleep 1
 CM1_CAPTURE=$(fm_herdr_capture "$SESSION:$CM1_PANE" 30) || fail "capture failed on cm1's pane"
-assert_contains_local "$CM1_CAPTURE" "primary-crew-ok" "cm1's raw launch command did not run in its herdr pane"
+assert_contains_local "$CM1_CAPTURE" "FIRSTMATE_OP: v1 launch-brief:" "cm1's Pi launch command did not run in its herdr pane"
 
 CM1_WSID=$(herdr pane get "$CM1_PANE" --session "$SESSION" 2>/dev/null | jq -r '.result.pane.workspace_id // empty')
 [ -n "$CM1_WSID" ] || fail "could not read cm1's pane workspace_id"
@@ -144,8 +147,8 @@ pass "real herdr E2E: the primary-shaped home's crewmate landed in the 'firstmat
 # exactly this call - AGENTS.md task herdr-sm-spaces-k4, requirement 3.)
 
 SM_OUT="$TMP_ROOT/sm.out"; SM_ERR="$TMP_ROOT/sm.err"
-FM_SPAWN_NO_GUARD=1 FM_SPAWN_TEST_RAW_LAUNCH=1 FM_HOME="$PRIMARY_HOME" FM_ROOT_OVERRIDE="$ROOT" \
-  "$ROOT/bin/fm-spawn.sh" e2esm1 "$SM_HOME" "sh -c 'echo secondmate-launch-ok'" --secondmate \
+FM_SPAWN_NO_GUARD=1 FM_HOME="$PRIMARY_HOME" FM_ROOT_OVERRIDE="$ROOT" \
+  "$ROOT/bin/fm-spawn.sh" e2esm1 "$SM_HOME" --secondmate \
   >"$SM_OUT" 2>"$SM_ERR"
 rc=$?
 [ "$rc" -eq 0 ] || fail "the primary's --secondmate spawn of e2esm1 failed"$'\n'"--- stdout ---"$'\n'"$(cat "$SM_OUT")"$'\n'"--- stderr ---"$'\n'"$(cat "$SM_ERR")"
@@ -170,8 +173,8 @@ pass "real herdr E2E: a --secondmate spawn by the PRIMARY lands in the SECONDMAT
 # secondmate workspace (this exact path has never run before this test) -----
 
 CM2_OUT="$TMP_ROOT/cm2.out"; CM2_ERR="$TMP_ROOT/cm2.err"
-FM_SPAWN_NO_GUARD=1 FM_SPAWN_TEST_RAW_LAUNCH=1 FM_HOME="$SM_HOME" FM_ROOT_OVERRIDE="$ROOT" \
-  "$ROOT/bin/fm-spawn.sh" cm2 "$PROJ2" "sh -c 'echo sm-crew-ok'" --mode no-mistakes --yolo off \
+FM_SPAWN_NO_GUARD=1 FM_HOME="$SM_HOME" FM_ROOT_OVERRIDE="$ROOT" \
+  "$ROOT/bin/fm-spawn.sh" cm2 "$PROJ2" --mode no-mistakes --yolo off \
   >"$CM2_OUT" 2>"$CM2_ERR"
 rc=$?
 [ "$rc" -eq 0 ] || fail "a crewmate spawned FROM the secondmate-shaped home failed"$'\n'"--- stdout ---"$'\n'"$(cat "$CM2_OUT")"$'\n'"--- stderr ---"$'\n'"$(cat "$CM2_ERR")"
@@ -186,7 +189,7 @@ pass "real herdr E2E: a crewmate spawns successfully FROM a secondmate-shaped ho
 
 sleep 1
 CM2_CAPTURE=$(fm_herdr_capture "$SESSION:$CM2_PANE" 30) || fail "capture failed on cm2's pane"
-assert_contains_local "$CM2_CAPTURE" "sm-crew-ok" "cm2's raw launch command did not run in its herdr pane"
+assert_contains_local "$CM2_CAPTURE" "FIRSTMATE_OP: v1 launch-brief:" "cm2's Pi launch command did not run in its herdr pane"
 
 CM2_WSID=$(herdr pane get "$CM2_PANE" --session "$SESSION" 2>/dev/null | jq -r '.result.pane.workspace_id // empty')
 [ "$CM2_WSID" = "$SM_WSID" ] || fail "a crewmate spawned FROM the secondmate home should land in the SAME workspace as the secondmate's own task ($SM_WSID), got '$CM2_WSID'"

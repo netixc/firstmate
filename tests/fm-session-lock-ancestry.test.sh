@@ -32,6 +32,18 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 case "${FM_TEST_SHAPE:-pi}:$pid:$field" in
+  falsepath:*:comm=) printf '%s\n' /tmp/pi/not-agent ;;
+  falsepath:*:args=) printf '%s\n' /tmp/pi/not-agent ;;
+  falsepath:*:ppid=) printf '%s\n' 1 ;;
+  falsearg:*:comm=) printf '%s\n' /usr/bin/node ;;
+  falsearg:*:args=) printf '%s\n' '/usr/bin/node /tmp/runner.js pi' ;;
+  falsearg:*:ppid=) printf '%s\n' 1 ;;
+  falseargv0:*:comm=) printf '%s\n' /usr/bin/sleep ;;
+  falseargv0:*:args=) printf '%s\n' pi ;;
+  falseargv0:*:ppid=) printf '%s\n' 1 ;;
+  nodescript:*:comm=) printf '%s\n' /usr/bin/node ;;
+  nodescript:*:args=) printf '/usr/bin/node %s/pi\n' "$FM_TEST_PI_BIN" ;;
+  nodescript:*:ppid=) printf '%s\n' 1 ;;
   pi:700:comm=|nested:700:comm=|gap:700:comm=) printf '%s\n' pi ;;
   pi:700:args=|nested:700:args=|gap:700:args=) printf '%s\n' pi ;;
   pi:700:ppid=) printf '%s\n' 1 ;;
@@ -60,6 +72,11 @@ case "${FM_TEST_SHAPE:-pi}:$pid:$field" in
 esac
 SH
   chmod +x "$fakebin/ps"
+  cat > "$fakebin/pi" <<'SH'
+#!/usr/bin/env bash
+exit 0
+SH
+  chmod +x "$fakebin/pi"
   printf '%s' "$fakebin"
 }
 
@@ -114,7 +131,31 @@ test_live_competitor_is_not_self() {
   pass "session-lock: a live competing pi session is live but never self"
 }
 
+test_public_lock_requires_exact_pi_identity() {
+  local shape dir fakebin out rc
+  for shape in falsepath falsearg falseargv0; do
+    dir="$TMP_ROOT/$shape"; mkdir -p "$dir/state"
+    fakebin=$(make_ps "$dir" "$shape")
+    rc=0
+    out=$(FM_TEST_SHAPE="$shape" FM_TEST_PI_BIN="$fakebin" \
+      FM_STATE_OVERRIDE="$dir/state" PATH="$fakebin:$PATH" \
+      "$ROOT/bin/fm-lock.sh" 2>&1) || rc=$?
+    [ "$rc" -ne 0 ] || fail "fm-lock accepted unrelated process shape $shape as Pi"
+    assert_contains "$out" "cannot locate Pi process in ancestry" \
+      "fm-lock did not clearly refuse unrelated process shape $shape"
+    [ ! -e "$dir/state/.lock" ] || fail "fm-lock published ownership for unrelated process shape $shape"
+  done
+  dir="$TMP_ROOT/nodescript"; mkdir -p "$dir/state"
+  fakebin=$(make_ps "$dir" nodescript)
+  out=$(FM_TEST_SHAPE=nodescript FM_TEST_PI_BIN="$fakebin" \
+    FM_STATE_OVERRIDE="$dir/state" PATH="$fakebin:$PATH" \
+    "$ROOT/bin/fm-lock.sh" 2>&1) || fail "fm-lock refused the exact installed Pi script identity: $out"
+  assert_contains "$out" "lock acquired: Pi pid" "fm-lock did not admit the exact Pi script identity"
+  pass "session-lock: public admission requires the exact Pi executable identity"
+}
+
 test_pi_owns_lock
 test_nested_pi_process_keeps_inner_owner
 test_gap_stops_ancestry
 test_live_competitor_is_not_self
+test_public_lock_requires_exact_pi_identity

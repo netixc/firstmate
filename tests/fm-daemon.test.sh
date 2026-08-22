@@ -74,13 +74,13 @@ test_injection_presence_and_target_guards() {
   local state calls=0
   state=$(new_state inject-guards)
   FM_SUPERVISOR_TARGET=lab:w-primary:p1
-  fm_herdr_target_exists() { return 0; }
+  fm_herdr_agent_state() { printf alive; }
   pane_is_busy() { return 1; }
   fm_herdr_composer_state() { printf empty; }
   fm_herdr_send_text_submit() { calls=$((calls + 1)); printf empty; }
   inject_msg hello "$state" && fail "injection should refuse while away mode is off"
   touch "$state/.afk"
-  fm_herdr_target_exists() { return 1; }
+  fm_herdr_agent_state() { printf dead; }
   inject_msg hello "$state" && fail "injection should refuse a missing exact target"
   [ "$calls" -eq 0 ] || fail "a guard refusal reached transport"
   pass "daemon injection requires away mode and an existing exact Herdr target"
@@ -91,7 +91,7 @@ test_injection_busy_and_composer_guards() {
   state=$(new_state inject-composer)
   touch "$state/.afk"
   FM_SUPERVISOR_TARGET=lab:w-primary:p1
-  fm_herdr_target_exists() { return 0; }
+  fm_herdr_agent_state() { printf alive; }
   fm_herdr_send_text_submit() { calls=$((calls + 1)); printf empty; }
   pane_is_busy() { return 0; }
   inject_msg hello "$state" && fail "busy Firstmate pane should defer"
@@ -110,7 +110,7 @@ test_injection_types_once_through_herdr() {
   submit_log=$state/submit.log
   touch "$state/.afk"
   FM_SUPERVISOR_TARGET=lab:w-primary:p1
-  fm_herdr_target_exists() { return 0; }
+  fm_herdr_agent_state() { printf alive; }
   pane_is_busy() { return 1; }
   fm_herdr_composer_state() { printf empty; }
   fm_herdr_send_text_submit() { printf '%s\n' "$2" >> "$submit_log"; printf empty; }
@@ -169,9 +169,11 @@ test_stale_observation_refuses_moved_live_endpoint() {
   pass "daemon stale observation refuses a moved live endpoint"
 }
 
-test_daemon_stops_when_herdr_becomes_unreadable() {
-  local state fakebin counter out rc=0
-  state=$(new_state runtime-unreadable)
+test_daemon_stops_when_herdr_is_not_live() {
+  local verdict state fakebin counter out rc
+  for verdict in startup-dead runtime-dead runtime-unreadable; do
+  rc=0
+  state=$(new_state "runtime-$verdict")
   fakebin=${state%/state}/fakebin
   counter=$state/herdr-calls
   mkdir -p "$fakebin"
@@ -183,24 +185,32 @@ counter=${FM_FAKE_HERDR_COUNTER:?}
 calls=$(cat "$counter" 2>/dev/null || printf 0)
 calls=$((calls + 1))
 printf '%s\n' "$calls" > "$counter"
-if [ "$calls" -eq 1 ]; then
+if [ "$calls" -eq 1 ] || { [ "${FM_FAKE_HERDR_STATE:?}" = runtime-dead ] && [ "$calls" -eq 3 ]; }; then
   printf '%s\n' '{"result":{"pane":{"pane_id":"w-primary:p1"}}}'
   exit 0
 fi
-printf '%s\n' 'transport unavailable'
-exit 1
+if [ "${FM_FAKE_HERDR_STATE:?}" = runtime-unreadable ] && [ "$calls" -gt 2 ]; then
+  printf '%s\n' 'transport unavailable'
+  exit 1
+fi
+if [ "${FM_FAKE_HERDR_STATE:?}" = startup-dead ] || [ "$calls" -gt 2 ]; then
+  printf '%s\n' '{"error":{"code":"agent_not_found"}}'
+else
+  printf '%s\n' '{"result":{"agent":{"agent_status":"idle"}}}'
+fi
 SH
   chmod +x "$fakebin/herdr"
   out=$(FM_STATE_OVERRIDE="$state" FM_HOME="${state%/state}" \
-    FM_SUPERVISOR_TARGET=lab:w-primary:p1 FM_FAKE_HERDR_COUNTER="$counter" \
+    FM_SUPERVISOR_TARGET=lab:w-primary:p1 FM_FAKE_HERDR_COUNTER="$counter" FM_FAKE_HERDR_STATE="$verdict" \
     PATH="$fakebin:$PATH" "$ROOT/bin/fm-supervise-daemon.sh" 2>&1) || rc=$?
-  [ "$rc" -ne 0 ] || fail "daemon kept retrying after Herdr became unreadable"
-  assert_contains "$out" "restore reachable Herdr and restart away mode" \
-    "daemon did not emit an actionable Herdr requirement"
+  [ "$rc" -ne 0 ] || fail "daemon kept supervising a $verdict Herdr endpoint"
+  assert_contains "$out" "start Pi on reachable Herdr and restart away mode" \
+    "daemon did not emit an actionable Pi-on-Herdr requirement for $verdict"
   assert_contains "$(cat "$state/.subsuper-escalations")" "blocked: preserve me" \
     "daemon lost buffered notifications while stopping"
-  [ ! -e "$state/.supervise-daemon.pid" ] || fail "daemon left a stale pid after Herdr loss"
-  pass "daemon stops actionably and preserves buffers when Herdr becomes unreadable"
+  [ ! -e "$state/.supervise-daemon.pid" ] || fail "daemon left a stale pid for a $verdict endpoint"
+  done
+  pass "daemon stops actionably and preserves buffers unless Pi is live on Herdr"
 }
 
 test_signal_classification
@@ -213,4 +223,4 @@ test_injection_types_once_through_herdr
 test_wedge_alarm_preserves_buffer
 test_supervisor_target_is_herdr_only
 test_stale_observation_refuses_moved_live_endpoint
-test_daemon_stops_when_herdr_becomes_unreadable
+test_daemon_stops_when_herdr_is_not_live
