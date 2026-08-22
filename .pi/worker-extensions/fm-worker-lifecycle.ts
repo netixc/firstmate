@@ -79,6 +79,7 @@ function loadContext(): WorkerContext | undefined {
 	const worktree = fields.get("worktree") ?? "";
 	const recordedRuntime = fields.get("harness");
 	if (!TOKEN.test(id) || !TOKEN.test(generation)) return;
+	if (fields.get("backend") !== "herdr") return;
 	if (recordedRuntime !== undefined && recordedRuntime !== "pi") return;
 	if (!new Set(["ship", "scout"]).has(fields.get("kind") ?? "")) return;
 	const stateDir = dirname(path);

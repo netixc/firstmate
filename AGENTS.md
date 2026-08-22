@@ -73,7 +73,7 @@ config/wedge-alarm  optional away-mode wedge-alarm active-alert directives; LOCA
 config/relay.env    generated Relay watcher cadence; LOCAL, gitignored; source before arming watcher when present
 data/                personal fleet records; LOCAL, gitignored as a whole
   backlog.md         task queue, dependencies, history
-  captain.md         this home's domain-local captain preferences and working style; LOCAL, gitignored, canonical even if harness memory mirrors it, and updated with inspect-then-update
+  captain.md         this home's domain-local captain preferences and working style; LOCAL, gitignored, canonical even if Pi session memory mirrors it, and updated with inspect-then-update
   captain-shared.md  main-authoritative shared captain preferences propagated read-only to secondmate homes; LOCAL, gitignored, owned by secondmate-provisioning
   learnings.md       fleet-local operational facts and gotchas; LOCAL, gitignored; dated, evidence-backed, curated, and updated with inspect-then-update - rewrite and prune rather than append forever, the same contract as captain.md; created lazily, absent until this home has a learning to store
   projects.md        thin fleet navigation registry recording each project's standing delivery posture; firstmate-private, parsed for mechanical sync and seeding by fm-project-mode.sh (section 6)
@@ -402,7 +402,7 @@ A forced repair must use the home-scoped owner path emitted by supervision instr
 Guard warnings do not replace the contract.
 Queued wakes must be presented before other action and acknowledged only after handling, stale liveness must be repaired through the emitted protocol, and the worktree-tangle warning must be resolved without touching unlanded work.
 The spawn assertion and generated ship brief must both enforce that project work starts in an isolated disposable worktree, never the primary checkout.
-Harness-aware turn-end guards are structural backstops, not permission to omit the live cycle.
+Pi turn-end guards are structural backstops, not permission to omit the live cycle.
 
 ### Away-mode stub
 

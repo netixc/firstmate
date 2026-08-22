@@ -8,7 +8,7 @@ The tracked Pi extension forwards command text without classifying it.
 
 ## Purpose and boundary
 
-A firstmate primary must arm `bin/fm-watch-arm.sh` through an observable harness call.
+A firstmate primary must arm `bin/fm-watch-arm.sh` through an observable Pi tool call.
 A shell background operator, pipeline, redirection, wrapper, or unrelated command list can hide failure or let the watcher child die with the tool call.
 The seatbelt rejects those command shapes before execution.
 
@@ -133,8 +133,8 @@ Every semantic deny includes one stable code in square brackets before its prose
 | `unclassifiable-protected-command` | Malformed or unsupported syntax contains a protected command and cannot be safely classified. |
 | `watcher-direct` | A direct `bin/fm-watch.sh` execution; the watcher must be reached through `bin/fm-watch-arm.sh`. |
 
-Reason codes are the stable contract for tests and adapters.
-Prose may improve without changing adapter behavior.
+Reason codes are the stable contract for tests and the Pi extension.
+Prose may improve without changing Pi behavior.
 
 ## Output contract
 
@@ -142,23 +142,21 @@ Prose may improve without changing adapter behavior.
 - Deny returns exit 2 and writes `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[code] reason"}` to stderr.
 - Pi returns `{block: true}` only when the checker exits 2.
 
-## Harness wiring
+## Pi extension wiring
 
-| Harness | Exact command field | Adapter behavior on checker exit 2 |
-| --- | --- | --- |
-| Pi | `event.input.command` | `.pi/extensions/fm-primary-turnend-guard.ts` passes one `--command` argument and returns `{block: true}` only for exit 2. |
+`.pi/extensions/fm-primary-turnend-guard.ts` passes `event.input.command` as one `--command` argument and returns `{block: true}` only when the checker exits 2.
 
 ## Live validation record, 2026-07-09
 
 Pi 0.80.5 ran the tracked primary extension in a git-initialized scratch Firstmate project.
-The harness allowed unrelated commands and the direct watcher arm, blocked a backgrounded arm with `[watcher-background]`, and left the deny sentinel absent.
+Pi allowed unrelated commands and the direct watcher arm, blocked a backgrounded arm with `[watcher-background]`, and left the deny sentinel absent.
 The extension also called `fm_watch_arm_pi` and created the scratch automatic-arm marker.
 
 ## Automated validation
 
 `tests/fm-arm-pretool-check.test.sh` owns the adversarial acceptance matrix.
 Every row runs through Pi-shaped CLI entry forms.
-The suite also verifies real newline bytes, direct classifier reason codes, comments, heredoc data, malformed and unsupported protected syntax, constructed dynamic payloads, malformed transport fail-open behavior, missing runtime fail-open behavior, output shapes, and exact adapter field forwarding plus exit-2 mapping.
+The suite also verifies real newline bytes, direct classifier reason codes, comments, heredoc data, malformed and unsupported protected syntax, constructed dynamic payloads, malformed transport fail-open behavior, missing runtime fail-open behavior, output shapes, and exact Pi field forwarding plus exit-2 mapping.
 
 Run:
 

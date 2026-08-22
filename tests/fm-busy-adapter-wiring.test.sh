@@ -125,7 +125,8 @@ test_context_validation() {
   assert_inert "" absent
 
   dir="$CASE/invalid"
-  mkdir -p "$dir/malformed" "$dir/symlink" "$dir/nonregular" "$dir/inconsistent" "$dir/unsupported"
+  mkdir -p "$dir/malformed" "$dir/symlink" "$dir/nonregular" "$dir/inconsistent" \
+    "$dir/providerless" "$dir/retired-provider" "$dir/unsupported"
   meta="$dir/malformed/$ID.meta"
   printf 'not metadata\n' > "$meta"
   assert_inert "$meta" malformed
@@ -145,12 +146,22 @@ test_context_validation() {
   perl -pi -e 's/^busy_gen=.*/busy_gen=wrong-generation/' "$meta"
   assert_inert "$meta" inconsistent
 
+  meta="$dir/providerless/$ID.meta"
+  sed '/^backend=/d' "$CONTEXT" > "$meta"
+  printf '%s\n' "$gen" > "$dir/providerless/$ID.busy-gen"
+  assert_inert "$meta" providerless
+
+  meta="$dir/retired-provider/$ID.meta"
+  sed 's/^backend=herdr$/backend=tmux/' "$CONTEXT" > "$meta"
+  printf '%s\n' "$gen" > "$dir/retired-provider/$ID.busy-gen"
+  assert_inert "$meta" retired-provider
+
   meta="$dir/unsupported/$ID.meta"
   cp "$CONTEXT" "$meta"
   printf '%s\n' "$gen" > "$dir/unsupported/$ID.busy-gen"
   printf 'harness=legacy-agent\n' >> "$meta"
   assert_inert "$meta" unsupported-runtime
-  pass "worker lifecycle context is absent by default and rejects unsafe or inconsistent inputs"
+  pass "worker lifecycle context rejects unsafe, non-Herdr, and inconsistent inputs"
 }
 
 test_lifecycle_and_generation

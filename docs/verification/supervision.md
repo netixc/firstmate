@@ -20,16 +20,16 @@ pi -p -e .pi/extensions/fm-primary-turnend-guard.ts \
 Observed result: `PI_SMOKE_DONE`, with one session-start execution.
 The earlier `sendUserMessage` counterfactual raced the positional prompt; the current non-triggering `pi.sendMessage` custom message did not.
 
-### Run-tier source vocabulary and context-reset injection
+### Pi source vocabulary and context-reset injection
 
-The run tier depends on three facts only the vendor can supply: the session-open source it reports, whether hook stdout reaches model context on a context-RESET open rather than only a cold one, and whether a worker the hook detaches survives the hook returning.
-The first two were measured on 2026-08-05 against a throwaway Firstmate-shaped lab carrying each harness's own tracked registration with a recorder standing in for `bin/fm-sessionstart-run.sh`.
+Pi session-start delivery depends on three observed facts: the session-open source Pi reports, whether hook stdout reaches model context on a context-RESET open rather than only a cold one, and whether a worker detached by the Pi hook survives the hook returning.
+The first two were measured on 2026-08-05 against a throwaway Firstmate-shaped lab carrying Pi's tracked registration with a recorder standing in for `bin/fm-sessionstart-run.sh`.
 Each open printed a source-stamped token, and the model was asked to quote that token back, so producing hook stdout could never be mistaken for delivering it.
 The third is recorded below.
 
-| Harness | Version verified | Cold open | Context reset | Context-preserving reopen |
-| --- | --- | --- | --- | --- |
-| Pi | 0.82.0 | `source=startup`, token quoted back in both `-p` and the TUI | `/new` raises `session_start` reason `new`, which the extension maps to `clear`; `/compact` raises `session_compact`, and both freshly injected source-stamped tokens were quoted back | `pi -c` reports reason `startup`, not `resume` |
+Pi 0.82.0 reported `source=startup` on cold open, and the token was quoted back in both `-p` and the TUI.
+`/new` raised `session_start` reason `new`, which the extension maps to `clear`; `/compact` raised `session_compact`, and both freshly injected source-stamped tokens were quoted back.
+`pi -c` reported reason `startup`, not `resume`.
 
 Pi compaction was verified on 2026-08-05 with Pi 0.82.0 in the same throwaway lab after setting `.pi/settings.json` `compaction.keepRecentTokens` to 200 and completing one substantial assistant-prose turn before issuing `/compact`.
 Pi reported `Compacted from 7,697 tokens`, the recorder observed `session_compact`, and the model quoted the freshly injected `source=compact` token back.
@@ -98,13 +98,11 @@ tests/fm-pi-primary-types.test.sh
 
 The bounded-follow-up mechanism was validated on the enabled integration path from 2026-07-08 through 2026-08-13.
 
-| Harness | Version verified | Mechanism | Observed result |
-| --- | --- | --- | --- |
-| Pi | 0.80.5 | Passive `agent_settled` callback | Exactly one guard follow-up ran for an unhealthy cycle, with no recursion across tool turns. |
+Pi 0.80.5 used the passive `agent_settled` callback to run exactly one guard follow-up for an unhealthy cycle, with no recursion across tool turns.
 
 `tests/fm-session-lock-ancestry.test.sh` pins exact Pi lock-owner ancestry and competitor isolation behind a deterministic process table.
 `tests/fm-watch-arm.test.sh` runs real watcher and arm cycles against durable on-disk state to verify that a delivered reason survives until post-handling acknowledgement and stops replaying after acknowledgement, while an unrelated queue append cannot make a watcher cycle that delivered nothing look successful.
-The same suite ingests a keyed remote-secondmate parent reply through the real adapter, establishes the incremental OPEN DECISIONS cursor, interrupts supervision, and proves re-arm replays every unacknowledged queue row plus the still-open decision through the ordinary drain path.
+The same suite ingests a keyed remote-secondmate parent reply through the real reply path, establishes the incremental OPEN DECISIONS cursor, interrupts supervision, and proves re-arm replays every unacknowledged queue row plus the still-open decision through the ordinary drain path.
 It also covers decision-only recovery, interrupted handling, handling-window generation reuse, non-fatal moved-generation acknowledgement with sequence-bounded consumption, and a persistent successor remaining live after recovery is acknowledged.
 
 Current entry points:
@@ -178,9 +176,7 @@ No credential material was copied into a fixture.
 Pi 0.80.10
 ```
 
-| Harness | Exact opt-in command | Observed guarantee |
-| --- | --- | --- |
-| Pi | `FM_AFK_PI_HERDR_E2E=1 tests/fm-afk-pi-herdr-return-e2e.test.sh` | One initial tool call led to extension-owned successors and clean child retirement on exit. |
+With Pi 0.80.10, `FM_AFK_PI_HERDR_E2E=1 tests/fm-afk-pi-herdr-return-e2e.test.sh` proved that one initial tool call led to extension-owned successors and clean child retirement on exit.
 
 Pi 0.84.1 repeated the isolated primary continuity regression on 2026-08-16.
 
