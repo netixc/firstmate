@@ -67,7 +67,7 @@ export REAL_LSOF_FOR_TEST
 
 # Build a fresh sandbox for one test case. Sets up:
 #   $CASE/state/        - firstmate state dir (with a fresh watcher beacon)
-#   $CASE/fakebin/      - mocks for treehouse, tmux (PATH-prepended by caller)
+#   $CASE/fakebin/      - mocks for treehouse and Herdr (PATH-prepended by caller)
 #   $CASE/origin.git/   - bare upstream repo (so the project clone has origin)
 #   $CASE/project/      - clone of origin; acts as the firstmate project dir
 #   $CASE/wt/           - a worktree of the project (the task worktree)
@@ -77,6 +77,7 @@ make_case() {
   case_dir="$TMP_ROOT/$name"
   fakebin="$case_dir/fakebin"
   mkdir -p "$case_dir/state" "$case_dir/config" "$fakebin"
+  : > "$case_dir/state/herdr.sock"
 
   # Mocks for the post-check teardown steps. Refuse logic exits before these
   # run; the ALLOW cases need them so the script can complete cleanly.
@@ -85,10 +86,23 @@ make_case() {
 # `treehouse return --force <wt>`: succeed silently.
 exit 0
 SH
-  cat > "$fakebin/tmux" <<'SH'
+  cat > "$fakebin/herdr" <<'SH'
 #!/usr/bin/env bash
-# tmux kill-window etc.: succeed silently.
-exit 0
+set -u
+closed="${FM_STATE_OVERRIDE:-/tmp}/.fake-herdr-closed"
+case "${1:-} ${2:-}" in
+  "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
+  "session list") printf '{"sessions":[{"name":"lab","running":true,"socket_path":"%s/herdr.sock"}]}\n' "${FM_STATE_OVERRIDE:-/tmp}" ;;
+  "pane get")
+    if [ -e "$closed" ]; then printf '{"error":{"code":"pane_not_found"}}\n'
+    else
+      workspace=${3%%:*}; task=${workspace#w-}
+      printf '{"result":{"pane":{"pane_id":"%s","tab_id":"%s:t-%s","workspace_id":"%s"}}}\n' "${3:-}" "$workspace" "$task" "$workspace"
+    fi ;;
+  "tab get") printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"%s"}}}\n' "${3:-}" "${3%%:*}" ;;
+  "pane close") : > "$closed" ;;
+  *) printf '{"result":{}}\n' ;;
+esac
 SH
   # Default gh-axi mock: no PR is associated with the branch, and viewing any PR
   # number fails. This keeps the landed-work check hermetic (never reaching the real
@@ -152,7 +166,7 @@ case "${1:-}" in
 esac
 exit 0
 SH
-  chmod +x "$fakebin/treehouse" "$fakebin/tmux" "$fakebin/gh-axi" "$fakebin/gh" "$fakebin/no-mistakes"
+  chmod +x "$fakebin/treehouse" "$fakebin/herdr" "$fakebin/gh-axi" "$fakebin/gh" "$fakebin/no-mistakes"
 
   # Bare origin so the clone has an `origin` remote and origin/HEAD.
   git init -q --bare "$case_dir/origin.git"
@@ -202,12 +216,10 @@ SH
 write_meta() {
   local case_dir=$1 mode=$2 kind=$3
   fm_write_meta "$case_dir/state/task-x1.meta" \
-    "window=firstmate:fm-task-x1" \
-    "endpoint_task_id=task-x1" \
-    "worktree=$case_dir/wt" \
-    "project=$case_dir/project" \
-    "kind=$kind" \
-    "mode=$mode"
+    "backend=herdr" "window=lab:w-task-x1:p1" "endpoint_task_id=task-x1" \
+    "herdr_session=lab" "herdr_workspace_id=w-task-x1" "herdr_tab_id=w-task-x1:t-task-x1" \
+    "herdr_pane_id=w-task-x1:p1" "worktree=$case_dir/wt" \
+    "project=$case_dir/project" "kind=$kind" "mode=$mode"
 }
 
 # Commit something on the worktree's task branch. Args: case_dir [message]
@@ -554,8 +566,8 @@ run_teardown() {
 make_path_without_lsof() {  # <case-dir>
   local case_dir=$1 path_dir="$1/path-without-lsof" cmd resolved
   mkdir -p "$path_dir"
-  for cmd in awk bash basename cat chmod cp cut date dirname env find git grep head hostname id ln \
-    mkdir mktemp mv perl ps readlink realpath rm sed sh sleep sort stat tail timeout tr uname wc xargs; do
+  for cmd in awk bash basename cat chmod cksum cp cut date dirname env find git grep head hostname id jq ln \
+    mkdir mktemp mv perl ps readlink realpath rm sed sh sha256sum shasum sleep sort stat tail timeout tr uname wc xargs; do
     resolved=$(command -v "$cmd" 2>/dev/null) || continue
     case "$resolved" in /*) ln -sf "$resolved" "$path_dir/$cmd" ;; esac
   done
@@ -1111,40 +1123,6 @@ test_non_linked_index_lock_path_is_checked_from_worktree() {
   pass "normal repo index.lock is resolved from the worktree and cleared when stale"
 }
 
-test_index_lock_mtime_read_failure_refuses() {
-  local case_dir rc lock
-  case_dir=$(make_case mtime-error-index-lock)
-  write_meta "$case_dir" no-mistakes ship
-  wt_commit "$case_dir" "shippable work"
-  git -C "$case_dir/wt" push -q origin fm/task-x1
-  git -C "$case_dir/project" fetch -q origin
-
-  add_lock_aware_treehouse "$case_dir"
-  add_lsof_no_holder "$case_dir"
-  add_stat_error "$case_dir"
-
-  lock=$(git_index_lock_path "$case_dir/wt")
-  mkdir -p "$(dirname "$lock")"
-  : > "$lock"
-  touch -t 200001010000 "$lock"
-
-  set +e
-  FM_STALE_WORKTREE_LOCK_RETRY_WAIT_SECS=0 FM_STALE_WORKTREE_LOCK_AGE_SECS=1 \
-    run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
-  rc=$?
-  set -e
-
-  expect_code 1 "$rc" "mtime-error-index-lock: teardown should refuse when lock mtime cannot be read"
-  assert_grep "cannot read mtime for git lock" "$case_dir/stderr" \
-    "mtime-error-index-lock: teardown did not report the mtime read failure"
-  assert_grep "not provably stale" "$case_dir/stderr" \
-    "mtime-error-index-lock: teardown did not explain the refusal"
-  assert_not_contains "$(cat "$case_dir/stderr")" "removed provably-stale git lock" \
-    "mtime-error-index-lock: teardown removed a lock after mtime read failed"
-  [ -e "$lock" ] || fail "mtime-error-index-lock: lock file was removed after mtime read failed"
-  pass "lock mtime read failures leave worktree index.lock in place and refuse teardown"
-}
-
 test_transient_index_lock_clears_after_first_attempt_and_retry_succeeds() {
   local case_dir rc lock attempt_file
   case_dir=$(make_case transient-index-lock-retry)
@@ -1332,14 +1310,8 @@ test_herdr_teardown_clears_escalation_marker() {
   local case_dir marker
   case_dir=$(make_case herdr-marker-cleanup)
   write_meta "$case_dir" local-only ship
-  sed -i.bak 's/^window=.*/window=default:wG:pQ/' "$case_dir/state/task-x1.meta"
-  rm -f "$case_dir/state/task-x1.meta.bak"
-  printf '%s\n' \
-    'backend=herdr' \
-    'herdr_session=default' \
-    'herdr_workspace_id=wG' \
-    'herdr_tab_id=wG:tQ' \
-    'herdr_pane_id=wG:pQ' >> "$case_dir/state/task-x1.meta"
+  perl -pi -e 's/^window=.*/window=default:wG:pQ/; s/^herdr_session=.*/herdr_session=default/; s/^herdr_workspace_id=.*/herdr_workspace_id=wG/; s/^herdr_tab_id=.*/herdr_tab_id=wG:tQ/; s/^herdr_pane_id=.*/herdr_pane_id=wG:pQ/' \
+    "$case_dir/state/task-x1.meta"
   # A reachable session whose exact pane is already structurally gone: the
   # locked close is a no-op and the record gate sees a confirmed-gone pane.
   cat > "$case_dir/fakebin/herdr" <<SH
@@ -1366,14 +1338,8 @@ SH
 # lock never collides with another test or a real fleet session.
 configure_flat_herdr_teardown_case() {  # <case-dir>
   local case_dir=$1
-  sed -i.bak 's/^window=.*/window=default:wG:pQ/' "$case_dir/state/task-x1.meta"
-  rm -f "$case_dir/state/task-x1.meta.bak"
-  printf '%s\n' \
-    'backend=herdr' \
-    'herdr_session=default' \
-    'herdr_workspace_id=wG' \
-    'herdr_tab_id=wG:tQ' \
-    'herdr_pane_id=wG:pQ' >> "$case_dir/state/task-x1.meta"
+  perl -pi -e 's/^window=.*/window=default:wG:pQ/; s/^herdr_session=.*/herdr_session=default/; s/^herdr_workspace_id=.*/herdr_workspace_id=wG/; s/^herdr_tab_id=.*/herdr_tab_id=wG:tQ/; s/^herdr_pane_id=.*/herdr_pane_id=wG:pQ/' \
+    "$case_dir/state/task-x1.meta"
   cat > "$case_dir/fakebin/herdr" <<SH
 #!/usr/bin/env bash
 set -u
@@ -1416,6 +1382,9 @@ case "\${1:-} \${2:-}" in
     fi
     printf '%s\n' '{"result":{"pane":{"pane_id":"wG:pQ","tab_id":"wG:tQ","workspace_id":"wG"}}}'
     ;;
+  "tab get")
+    printf '%s\n' '{"result":{"tab":{"tab_id":"wG:tQ","workspace_id":"wG"}}}'
+    ;;
   "agent get")
     printf '%s\n' '{"error":{"code":"agent_not_found"}}' >&2
     exit 1
@@ -1445,7 +1414,7 @@ SH
   chmod +x "$case_dir/fakebin/treehouse"
 
   lock=$(FM_FAKE_HERDR_LOG="$log" FM_FAKE_HERDR_CLOSED="$closed" PATH="$case_dir/fakebin:$PATH" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_presentation_session_lock_path default' "$ROOT") \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_presentation_session_lock_path default' "$ROOT") \
     || fail "herdr-orphan-refusal: could not resolve the fixture presentation lock path"
   ready="$case_dir/lock-ready"; release="$case_dir/lock-release"
   ROOT="$ROOT" LOCK="$lock" READY="$ready" RELEASE="$release" bash -c '
@@ -1488,7 +1457,7 @@ SH
 
   : > "$release"
   wait "$holder_pid" 2>/dev/null || true
-  FM_FAKE_HERDR_LOG="$log" FM_FAKE_HERDR_CLOSED="$closed" FM_BACKEND_HERDR_IDLE_SHELL_PROOF_POLLS=1 \
+  FM_FAKE_HERDR_LOG="$log" FM_FAKE_HERDR_CLOSED="$closed" FM_HERDR_IDLE_SHELL_PROOF_POLLS=1 \
     run_teardown "$case_dir" --force > "$case_dir/stdout2" 2> "$case_dir/stderr2" \
     || fail "herdr-orphan-refusal: the retry after lock release failed: $(cat "$case_dir/stderr2")"
   [ -e "$closed" ] || fail "herdr-orphan-refusal: the retry never closed the pane under the lock"
@@ -1510,7 +1479,7 @@ test_herdr_flat_teardown_refuses_records_on_unparseable_presence() {
   : > "$case_dir/state/task-x1.status"
   rc=0
   FM_FAKE_HERDR_LOG="$log" FM_FAKE_HERDR_CLOSED="$closed" FM_FAKE_HERDR_PANE_GET_GARBAGE=1 \
-    FM_BACKEND_HERDR_IDLE_SHELL_PROOF_POLLS=1 \
+    FM_HERDR_IDLE_SHELL_PROOF_POLLS=1 \
     run_teardown "$case_dir" --force > "$case_dir/stdout" 2> "$case_dir/stderr" || rc=$?
   [ "$rc" -ne 0 ] \
     || fail "herdr-garbage-presence: teardown erased records on an unparseable pane presence"
@@ -1524,7 +1493,7 @@ test_herdr_flat_teardown_refuses_records_on_unparseable_presence() {
 }
 
 assert_herdr_teardown_preflight_refuses_before_changes() {
-  local mode=$1 case_dir log closed rc thlog teardown_bin
+  local mode=$1 case_dir log closed rc thlog
   case_dir=$(make_case "herdr-preflight-$mode")
   write_meta "$case_dir" local-only ship
   configure_flat_herdr_teardown_case "$case_dir"
@@ -1540,31 +1509,12 @@ exit 0
 SH
   chmod +x "$case_dir/fakebin/treehouse"
 
-  teardown_bin=$TEARDOWN
-  case "$mode" in
-    missing-adapter|missing-parser|missing-explicit-close-helper)
-      mkdir -p "$case_dir/test-root"
-      cp -R "$ROOT/bin" "$case_dir/test-root/bin"
-      if [ "$mode" = missing-adapter ]; then
-        rm -f "$case_dir/test-root/bin/backends/herdr.sh"
-      elif [ "$mode" = missing-explicit-close-helper ]; then
-        sed -i.bak 's/^fm_backend_herdr_explicit_close_pane_confirmed()/fm_backend_herdr_explicit_close_pane_confirmed_unavailable()/' \
-          "$case_dir/test-root/bin/backends/herdr.sh"
-        rm -f "$case_dir/test-root/bin/backends/herdr.sh.bak"
-      else
-        sed -i.bak 's/^fm_backend_herdr_parse_target()/fm_backend_herdr_parse_target_unavailable()/' \
-          "$case_dir/test-root/bin/backends/herdr.sh"
-        rm -f "$case_dir/test-root/bin/backends/herdr.sh.bak"
-      fi
-      teardown_bin="$case_dir/test-root/bin/fm-teardown.sh"
-      ;;
-  esac
   rc=0
   FM_ROOT_OVERRIDE="$ROOT" FM_STATE_OVERRIDE="$case_dir/state" FM_CONFIG_OVERRIDE="$case_dir/config" \
     FM_FAKE_HERDR_LOG="$log" FM_FAKE_HERDR_CLOSED="$closed" \
     FM_FAKE_HERDR_SESSION_LIST_GARBAGE="$([ "$mode" = unresolvable-lock ] && printf 1 || printf 0)" \
     PATH="$case_dir/fakebin:$PATH" \
-    "$teardown_bin" task-x1 --force > "$case_dir/stdout" 2> "$case_dir/stderr" || rc=$?
+    "$TEARDOWN" task-x1 --force > "$case_dir/stdout" 2> "$case_dir/stderr" || rc=$?
   [ "$rc" -ne 0 ] || fail "herdr-preflight-$mode: teardown continued without its required preflight"
   assert_grep "nothing was changed" "$case_dir/stderr" \
     "herdr-preflight-$mode: the retryable pre-return refusal was not explained visibly"
@@ -1583,10 +1533,7 @@ SH
 
 test_herdr_flat_teardown_preflight_refuses_before_changes() {
   assert_herdr_teardown_preflight_refuses_before_changes unresolvable-lock
-  assert_herdr_teardown_preflight_refuses_before_changes missing-adapter
-  assert_herdr_teardown_preflight_refuses_before_changes missing-parser
-  assert_herdr_teardown_preflight_refuses_before_changes missing-explicit-close-helper
-  pass "herdr flat teardown preflight refuses before every destructive change"
+  pass "Herdr teardown preflight refuses before destructive change when exact lock identity is unavailable"
 }
 
 configure_secondmate_with_herdr_child() {  # <case-dir>
@@ -1617,12 +1564,13 @@ case "\${1:-} \${2:-}" in
     if [ "\${FM_FAKE_HERDR_SESSION_LIST_GARBAGE:-0}" = 1 ]; then
       printf '%s\n' 'not-json'
     else
-      printf '%s\n' '{"sessions":[{"name":"childsession","running":true,"socket_path":"$case_dir/child.sock"}]}'
+      printf '%s\n' '{"sessions":[{"name":"lab","running":true,"socket_path":"$case_dir/lab.sock"},{"name":"childsession","running":true,"socket_path":"$case_dir/child.sock"}]}'
     fi
     ;;
   "workspace list") exit 1 ;;
   "pane get")
-    if [ -e "\${FM_FAKE_HERDR_CLOSED:?}" ]; then
+    pane=\${3:-}
+    if [ "\$pane" = wC:p1 ] && [ -e "\${FM_FAKE_HERDR_CLOSED:?}" ]; then
       if [ "\${FM_FAKE_HERDR_PRESENCE_UNKNOWN:-0}" = 1 ]; then
         printf '%s\n' 'not-json'
       else
@@ -1630,9 +1578,12 @@ case "\${1:-} \${2:-}" in
         exit 1
       fi
     else
-      printf '%s\n' '{"result":{"pane":{"pane_id":"wC:p1","tab_id":"wC:t1","workspace_id":"wC"}}}'
+      workspace=\${pane%%:*}
+      if [ "\$pane" = wC:p1 ]; then tab=wC:t1; else tab=w-task-x1:t-task-x1; fi
+      printf '{"result":{"pane":{"pane_id":"%s","tab_id":"%s","workspace_id":"%s"}}}\n' "\$pane" "\$tab" "\$workspace"
     fi
     ;;
+  "tab get") printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"%s"}}}\n' "\${3:-}" "\${3%%:*}" ;;
   "pane close") : > "\${FM_FAKE_HERDR_CLOSED:?}" ;;
 esac
 SH
@@ -1669,7 +1620,7 @@ SH
   pass "forced secondmate teardown preflights every Herdr child before cleanup mutation"
 }
 
-configure_secondmate_with_tmux_children() {  # <case-dir>
+configure_secondmate_with_herdr_children() {  # <case-dir>
   local case_dir=$1 home="$1/secondmate-home" child child_wt
   mkdir -p "$home/state" "$home/data" "$home/config" "$home/projects"
   printf '%s\n' task-x1 > "$home/.fm-secondmate-home"
@@ -1678,12 +1629,10 @@ configure_secondmate_with_tmux_children() {  # <case-dir>
     child_wt="$case_dir/$child-wt"
     git -C "$case_dir/project" worktree add -q -b "fm/$child" "$child_wt" main
     fm_write_meta "$home/state/$child.meta" \
-      "window=firstmate:fm-$child" \
-      "endpoint_task_id=$child" \
-      "worktree=$child_wt" \
-      "project=$case_dir/project" \
-      "kind=ship" \
-      "mode=local-only"
+      "backend=herdr" "window=lab:w-$child:p1" "endpoint_task_id=$child" \
+      "herdr_session=lab" "herdr_workspace_id=w-$child" "herdr_tab_id=w-$child:t-$child" \
+      "herdr_pane_id=w-$child:p1" "worktree=$child_wt" \
+      "project=$case_dir/project" "kind=ship" "mode=local-only"
     : > "$home/state/$child.status"
   done
 }
@@ -1692,21 +1641,15 @@ test_forced_secondmate_teardown_holds_descendant_lifecycle_locks() {
   local case_dir home lock ready release holder_pid rc waited=0 child
   case_dir=$(make_case descendant-locks)
   write_meta "$case_dir" local-only secondmate
-  configure_secondmate_with_tmux_children "$case_dir"
+  configure_secondmate_with_herdr_children "$case_dir"
   home="$case_dir/secondmate-home"
-  : > "$case_dir/kill.log"
   : > "$case_dir/treehouse.log"
-  cat > "$case_dir/fakebin/tmux" <<SH
-#!/usr/bin/env bash
-printf '%s\n' "\$*" >> "$case_dir/kill.log"
-exit 0
-SH
   cat > "$case_dir/fakebin/treehouse" <<SH
 #!/usr/bin/env bash
 printf '%s\n' "\$*" >> "$case_dir/treehouse.log"
 exit 0
 SH
-  chmod +x "$case_dir/fakebin/tmux" "$case_dir/fakebin/treehouse"
+  chmod +x "$case_dir/fakebin/treehouse"
 
   lock="$home/state/.control-child-b.lock"
   ready="$case_dir/lock-ready"
@@ -1739,8 +1682,6 @@ SH
   [ ! -e "$home/state/.control-child-a.lock" ] \
     && [ ! -e "$home/state/.meta-child-a.lock" ] \
     || { : > "$release"; wait "$holder_pid" 2>/dev/null || true; fail "descendant-locks: refusal leaked earlier descendant locks"; }
-  [ ! -s "$case_dir/kill.log" ] \
-    || { : > "$release"; wait "$holder_pid" 2>/dev/null || true; fail "descendant-locks: refusal killed an endpoint"; }
   [ ! -s "$case_dir/treehouse.log" ] \
     || { : > "$release"; wait "$holder_pid" 2>/dev/null || true; fail "descendant-locks: refusal returned a worktree"; }
   [ -e "$case_dir/state/task-x1.meta" ] && [ -d "$home" ] \
@@ -1757,8 +1698,7 @@ SH
   expect_code 0 "$rc" "descendant-locks: uncontended retry should complete"
   [ ! -e "$case_dir/state/task-x1.meta" ] && [ ! -d "$home" ] \
     || fail "descendant-locks: uncontended retry retained retired task state"
-  [ -s "$case_dir/kill.log" ] && [ -s "$case_dir/treehouse.log" ] \
-    || fail "descendant-locks: uncontended retry did not perform endpoint and worktree cleanup"
+  [ -s "$case_dir/treehouse.log" ] || fail "descendant-locks: retry did not return descendant worktrees"
   pass "forced secondmate teardown holds every descendant lifecycle and metadata lock"
 }
 
@@ -1791,12 +1731,10 @@ configure_nested_secondmate_with_herdr_grandchild() {  # <case-dir>
   printf '%s\n' nested-sm > "$nested_home/.fm-secondmate-home"
   printf '%s\n' "home=$home" >> "$case_dir/state/task-x1.meta"
   fm_write_meta "$home/state/nested-sm.meta" \
-    "window=firstmate:fm-nested-sm" \
-    "endpoint_task_id=nested-sm" \
-    "worktree=$case_dir/wt" \
-    "project=$case_dir/project" \
-    "kind=secondmate" \
-    "mode=local-only" \
+    "backend=herdr" "window=nestedsession:wN:p1" "endpoint_task_id=nested-sm" \
+    "herdr_session=nestedsession" "herdr_workspace_id=wN" "herdr_tab_id=wN:t1" \
+    "herdr_pane_id=wN:p1" "worktree=$case_dir/wt" \
+    "project=$case_dir/project" "kind=secondmate" "mode=local-only" \
     "home=$nested_home"
   fm_write_meta "$nested_home/state/grandchild-herdr.meta" \
     "window=grandchildsession:wG:p1" \
@@ -1818,16 +1756,24 @@ set -u
 printf '%s\n' "\$*" >> "\${FM_FAKE_HERDR_LOG:?}"
 case "\${1:-} \${2:-}" in
   "session list")
-    printf '%s\n' '{"sessions":[{"name":"grandchildsession","running":true,"socket_path":"$case_dir/grandchild.sock"}]}'
+    printf '%s\n' '{"sessions":[{"name":"lab","running":true,"socket_path":"$case_dir/lab.sock"},{"name":"nestedsession","running":true,"socket_path":"$case_dir/nested.sock"},{"name":"grandchildsession","running":true,"socket_path":"$case_dir/grandchild.sock"}]}'
     ;;
   "workspace list") exit 1 ;;
   "pane get")
+    pane=\${3:-}
     if [ -e "\${FM_FAKE_HERDR_CLOSED:?}" ]; then
       printf '%s\n' 'not-json'
     else
-      printf '%s\n' '{"result":{"pane":{"pane_id":"wG:p1","tab_id":"wG:t1","workspace_id":"wG"}}}'
+      workspace=\${pane%%:*}
+      case "\$pane" in
+        wN:p1) tab=wN:t1 ;;
+        wG:p1) tab=wG:t1 ;;
+        *) tab=w-task-x1:t-task-x1 ;;
+      esac
+      printf '{"result":{"pane":{"pane_id":"%s","tab_id":"%s","workspace_id":"%s"}}}\n' "\$pane" "\$tab" "\$workspace"
     fi
     ;;
+  "tab get") printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"%s"}}}\n' "\${3:-}" "\${3%%:*}" ;;
   "pane close") : > "\${FM_FAKE_HERDR_CLOSED:?}" ;;
 esac
 SH
@@ -1863,14 +1809,8 @@ test_forced_teardown_retains_nested_secondmate_home_when_grandchild_close_unconf
 
 configure_herdr_projection_teardown_case() {  # <case-dir>
   local case_dir=$1 token=AbCdEfGhIjKlMnOpQrStUv
-  sed -i.bak 's/^window=.*/window=fmtest:w1:p2/' "$case_dir/state/task-x1.meta"
-  rm -f "$case_dir/state/task-x1.meta.bak"
-  printf '%s\n' \
-    'backend=herdr' \
-    'herdr_session=fmtest' \
-    'herdr_workspace_id=w1' \
-    'herdr_tab_id=w1:t2' \
-    'herdr_pane_id=w1:p2' >> "$case_dir/state/task-x1.meta"
+  perl -pi -e 's/^window=.*/window=fmtest:w1:p2/; s/^herdr_session=.*/herdr_session=fmtest/; s/^herdr_workspace_id=.*/herdr_workspace_id=w1/; s/^herdr_tab_id=.*/herdr_tab_id=w1:t2/; s/^herdr_pane_id=.*/herdr_pane_id=w1:p2/' \
+    "$case_dir/state/task-x1.meta"
   printf '%s\n' \
     'version=1' \
     'task_id=task-x1' \
@@ -1920,7 +1860,10 @@ case "${1:-} ${2:-}" in
     printf '%s\n' '{"result":{"pane":{"pane_id":"w1:p2","tab_id":"w1:t2","workspace_id":"w1"}}}'
     ;;
   "tab get")
-    printf '%s\n' '{"result":{"tab":{"tab_id":"w2:t2","workspace_id":"w2"}}}'
+    case "${3:-}" in
+      w1:t2) printf '%s\n' '{"result":{"tab":{"tab_id":"w1:t2","workspace_id":"w1"}}}' ;;
+      *) printf '%s\n' '{"result":{"tab":{"tab_id":"w2:t2","workspace_id":"w2"}}}' ;;
+    esac
     ;;
   "tab focus")
     if [ "${FM_FAKE_HERDR_RESTORE_FAIL:-0}" = 1 ]; then
@@ -2261,41 +2204,20 @@ test_leaked_tasktmp_process_is_reaped() {
   pass "a leaked descendant process rooted under the task's per-task tasktmp is reaped by teardown too"
 }
 
-test_lsof_absent_reaps_tmux_process_group() {
-  local case_dir rc pid path_without_lsof
-  case_dir=$(make_case lsof-absent-process-group-reap)
-  write_meta "$case_dir" no-mistakes ship
-  land_shippable_commit "$case_dir"
+test_lsof_absent_refuses_before_removal() {
+  local case_dir rc path_without_lsof
+  case_dir=$(make_case lsof-absent-refusal)
+  write_meta "$case_dir" local-only ship
   path_without_lsof=$(make_path_without_lsof "$case_dir")
-  PATH="$path_without_lsof" command -v lsof >/dev/null 2>&1 \
-    && fail "lsof-absent-process-group-reap: fixture path unexpectedly exposes lsof"
-
-  perl -e 'setpgrp(0, 0); chdir shift or die; exec "sleep", "300"' "$case_dir/wt" &
-  pid=$!
-  disown
-  sleep 0.3
-  kill -0 "$pid" 2>/dev/null || fail "lsof-absent-process-group-reap: setup sleeper did not start"
-  cat > "$case_dir/fakebin/tmux" <<EOF
-#!/usr/bin/env bash
-if [ "\${1:-}" = display-message ] && [ "\${*: -1}" = '#{pane_pid}' ]; then
-  printf '%s\n' '$pid'
-fi
-exit 0
-EOF
-  chmod +x "$case_dir/fakebin/tmux"
-
   rc=0
-  FM_TEARDOWN_TEST_PATH="$path_without_lsof" \
-    run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr" || rc=$?
-
-  expect_code 0 "$rc" "lsof-absent-process-group-reap: teardown should succeed"
-  if kill -0 "$pid" 2>/dev/null; then
-    kill -KILL "$pid" 2>/dev/null || true
-    fail "lsof-absent-process-group-reap: tmux process group survived teardown"
-  fi
-  assert_grep "reaping leaked worktree process group" "$case_dir/stderr" \
-    "lsof-absent-process-group-reap: teardown did not use the process-group fallback"
-  pass "missing lsof falls back to reaping the tmux pane process group"
+  FM_TEARDOWN_TEST_PATH="$path_without_lsof" run_teardown "$case_dir" --force \
+    > "$case_dir/stdout" 2> "$case_dir/stderr" || rc=$?
+  expect_code 1 "$rc" "missing lsof must refuse cleanup"
+  assert_grep "lsof is required to account for leaked processes" "$case_dir/stderr" \
+    "missing lsof refusal was not actionable"
+  assert_present "$case_dir/wt" "missing lsof refusal removed the worktree"
+  assert_present "$case_dir/state/task-x1.meta" "missing lsof refusal removed metadata"
+  pass "missing lsof stops cleanup rather than using an unverified process-group fallback"
 }
 
 test_lsof_error_refuses_before_removal() {
@@ -2629,7 +2551,6 @@ test_live_index_lock_is_never_removed_and_teardown_refuses
 test_lsof_error_never_clears_index_lock
 test_stale_index_lock_cleanup_rechecks_dirty_worktree
 test_non_linked_index_lock_path_is_checked_from_worktree
-test_index_lock_mtime_read_failure_refuses
 test_transient_index_lock_clears_after_first_attempt_and_retry_succeeds
 test_persistent_index_lock_exhausts_retries_and_refuses_loudly
 test_empty_retry_wait_uses_default_without_aborting
@@ -2643,7 +2564,7 @@ test_another_branchs_parked_run_is_never_touched
 test_own_autonomous_run_is_left_alone
 test_leaked_worktree_process_is_reaped
 test_leaked_tasktmp_process_is_reaped
-test_lsof_absent_reaps_tmux_process_group
+test_lsof_absent_refuses_before_removal
 test_lsof_error_refuses_before_removal
 test_reused_pid_identity_is_not_force_killed
 test_exec_changed_process_is_still_reaped

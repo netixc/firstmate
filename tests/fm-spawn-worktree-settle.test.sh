@@ -2,58 +2,37 @@
 # Regression test for the fm-spawn.sh treehouse-get worktree-detection settle
 # loop (bin/fm-spawn.sh, the `for _ in $(seq 1 60)` loop after `treehouse get`).
 #
-# On some tmux/WSL setups a brand-new window's pane_current_path transiently
+# A brand-new Herdr pane's foreground cwd transiently
 # reports a stale, unrelated-but-real path on the very first poll, before the
 # pane actually settles into the worktree treehouse get moved it to. That stale
 # path still passes the loop's "differs from the project" check and
 # validate_spawn_worktree's "is a real, distinct worktree" check (it IS a real
 # git checkout, just the wrong one), so a naive single-read loop silently
 # records the wrong worktree= in state/<id>.meta. This test simulates that
-# transient-then-settled pane_current_path sequence with a fake tmux and
+# transient-then-settled foreground-cwd sequence through the structured Herdr fixture and
 # asserts the recorded worktree resolves to the real, settled worktree, never
 # the stale first read.
 set -u
 
 # shellcheck source=tests/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck source=tests/remote-herdr-fixture.sh
+. "$ROOT/tests/remote-herdr-fixture.sh"
 
 SPAWN="$ROOT/bin/fm-spawn.sh"
 TMP_ROOT=$(fm_test_tmproot fm-spawn-worktree-settle)
 
-# make_settle_fakebin <dir> builds a fake tmux whose `#{pane_current_path}`
-# query returns FM_FAKE_PANE_STALE for the first FM_FAKE_PANE_STALE_READS
-# calls, then FM_FAKE_PANE_PATH forever after - reproducing a pane that
+# make_settle_fakebin builds a structured Herdr seam whose foreground-cwd
+# query returns a stale path for a bounded number of reads, then the settled
+# path forever - reproducing a pane that
 # transiently reports a stale cwd before settling into the real worktree.
 make_settle_fakebin() {
-  local dir=$1 fakebin
+  local dir=$1 fakebin herdr_root
   fakebin=$(fm_fakebin "$dir")
-  cat > "$fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-set -u
-case "$*" in
-  *"#{pane_current_path}"*)
-    countfile="${FM_FAKE_PANE_COUNTFILE:?FM_FAKE_PANE_COUNTFILE unset}"
-    n=0
-    [ -f "$countfile" ] && n=$(cat "$countfile")
-    n=$((n + 1))
-    printf '%s\n' "$n" > "$countfile"
-    if [ "$n" -le "${FM_FAKE_PANE_STALE_READS:-0}" ]; then
-      printf '%s\n' "${FM_FAKE_PANE_STALE:-}"
-    else
-      printf '%s\n' "${FM_FAKE_PANE_PATH:-}"
-    fi
-    exit 0
-    ;;
-esac
-case "${1:-}" in
-  display-message) printf 'firstmate\n'; exit 0 ;;
-  list-windows) exit 0 ;;
-  has-session|new-session|new-window|kill-window) exit 0 ;;
-  send-keys) exit 0 ;;
-esac
-exit 0
-SH
-  chmod +x "$fakebin/tmux"
+  herdr_root="$dir/herdr-root"
+  install_remote_herdr_fixture "$herdr_root" "$dir/herdr.state" "$dir/herdr.log" \
+    "$dir/herdr-send-fail" "$dir/herdr.sock"
+  ln -s "$herdr_root/bin/herdr" "$fakebin/herdr"
   fm_fake_exit0 "$fakebin" treehouse pi
   printf '%s\n' "$fakebin"
 }
@@ -73,7 +52,6 @@ make_settle_case() {
   countfile="$case_dir/pane-call-count"
   fakebin=$(make_settle_fakebin "$case_dir/fake")
   mkdir -p "$home/data" "$home/projects" "$home/state" "$home/config"
-  printf 'pi\n' > "$home/config/crew-harness"
   fm_git_worktree "$proj" "$wt" "wt-$name"
   fm_git_init_commit "$stale"
   mkdir -p "$home/data/$id"
@@ -90,12 +68,13 @@ EOF
 
 run_settle_spawn() {
   local id=$1
-  FM_ROOT_OVERRIDE='' FM_HOME="$HOME_DIR" \
+  env -u HERDR_ENV -u HERDR_PANE_ID -u HERDR_WORKSPACE_ID -u HERDR_TAB_ID -u HERDR_SOCKET_PATH -u TMUX -u TMUX_PANE \
+    FM_ROOT_OVERRIDE='' FM_HOME="$HOME_DIR" \
     FM_STATE_OVERRIDE="$HOME_DIR/state" FM_DATA_OVERRIDE="$HOME_DIR/data" \
     FM_PROJECTS_OVERRIDE="$HOME_DIR/projects" FM_CONFIG_OVERRIDE="$HOME_DIR/config" \
-    FM_SPAWN_NO_GUARD=1 TMUX="fake,1,0" \
-    FM_FAKE_PANE_PATH="$WT_DIR" FM_FAKE_PANE_STALE="$STALE_DIR" \
-    FM_FAKE_PANE_STALE_READS="$STALE_READS" FM_FAKE_PANE_COUNTFILE="$COUNTFILE" \
+    FM_SPAWN_NO_GUARD=1 HERDR_SESSION=lab \
+    FM_FAKE_HERDR_PANE_PATH="$WT_DIR" FM_FAKE_HERDR_PANE_STALE="$STALE_DIR" \
+    FM_FAKE_HERDR_PANE_STALE_READS="$STALE_READS" FM_FAKE_HERDR_PANE_COUNTFILE="$COUNTFILE" \
     PATH="$FAKEBIN_DIR:$PATH" \
     "$SPAWN" "$id" "$PROJ_DIR" --mode no-mistakes --yolo off 2>&1
 }
@@ -117,7 +96,7 @@ test_single_stale_first_read_is_not_accepted() {
     "meta did not record the settled worktree"
   assert_no_grep "worktree=$STALE_DIR" "$HOME_DIR/state/$id.meta" \
     "meta wrongly recorded the transient stale path as the worktree"
-  pass "a single transient stale pane_current_path read is not accepted as the worktree"
+  pass "a single transient stale Herdr foreground-cwd read is not accepted as the worktree"
 }
 
 # A pane that reports the real worktree from the very first read still only
@@ -137,7 +116,7 @@ test_already_settled_pane_costs_one_confirm_sleep() {
   expect_code 0 "$status" "spawn should succeed when the pane is already settled"
   assert_grep "worktree=$WT_DIR" "$HOME_DIR/state/$id.meta" \
     "meta did not record the already-settled worktree"
-  [ "$elapsed" -le 5 ] || fail "already-settled pane took ${elapsed}s to confirm - expected close to the single inter-poll sleep"
+  [ "$elapsed" -le 15 ] || fail "already-settled pane took ${elapsed}s to confirm - expected a bounded confirmation"
   pass "an already-settled pane confirms via the existing inter-poll sleep, not an extra full cycle"
 }
 

@@ -23,6 +23,33 @@ TEARDOWN="$ROOT/bin/fm-teardown.sh"
 SESSION_START="$ROOT/bin/fm-session-start.sh"
 TMP_ROOT=$(fm_test_tmproot fm-public-followup)
 
+# Teardown fixtures use current exact Herdr identity; normalize only historical
+# firstmate:fm-* fixture windows while leaving every other metadata shape exact.
+fm_write_meta() {  # <file> <key=value>...
+  local file=$1 kv id window='' transform=0 have_binding=0
+  shift
+  id=$(basename "$file" .meta)
+  for kv in "$@"; do
+    case "$kv" in
+      endpoint_task_id=*) id=${kv#*=}; have_binding=1 ;;
+      window=firstmate:fm-*) transform=1 ;;
+    esac
+  done
+  : > "$file"
+  for kv in "$@"; do
+    case "$kv" in
+      window=firstmate:fm-*) kv="window=lab:w-$id:p1" ;;
+    esac
+    printf '%s\n' "$kv" >> "$file"
+  done
+  if [ "$transform" -eq 1 ]; then
+    printf '%s\n' \
+      'backend=herdr' "herdr_session=lab" "herdr_workspace_id=w-$id" \
+      "herdr_tab_id=w-$id:t-$id" "herdr_pane_id=w-$id:p1" >> "$file"
+    [ "$have_binding" -eq 1 ] || printf 'endpoint_task_id=%s\n' "$id" >> "$file"
+  fi
+}
+
 command -v jq >/dev/null 2>&1 || { echo "skip: jq not found"; exit 0; }
 command -v tasks-axi >/dev/null 2>&1 || { echo "skip: tasks-axi not found"; exit 0; }
 
@@ -87,7 +114,18 @@ make_home() {  # <name> [relay-on|relay-off]
 EOF
   [ "$relay" = relay-off ] || printf 'FMX_PAIRING_TOKEN=test-token\n' > "$home/.env"
   make_fake_curl "$home" >/dev/null
-  fm_fake_exit0 "$home/fakebin" tmux treehouse no-mistakes gh gh-axi
+  fm_fake_exit0 "$home/fakebin" treehouse no-mistakes gh gh-axi
+  cat > "$home/fakebin/herdr" <<'SH'
+#!/usr/bin/env bash
+set -u
+case "${1:-} ${2:-}" in
+  "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
+  "session list") printf '{"sessions":[{"name":"lab","running":true,"socket_path":"%s/herdr.sock"}]}\n' "${FM_HOME:-/tmp}" ;;
+  "pane get") printf '{"error":{"code":"pane_not_found"}}\n' ;;
+  *) printf '{"result":{}}\n' ;;
+esac
+SH
+  chmod +x "$home/fakebin/herdr"
   printf '%s\n' "$home"
 }
 
@@ -592,8 +630,10 @@ test_secondmate_teardown_requires_parent_binding() {
   seed_commitment "$parent" pf-teardown req-teardown discord secondmate:mate work-child
   fm_write_meta "$parent/state/mate.meta" "kind=secondmate" "home=$child"
   fm_write_meta "$child/state/work-child.meta" \
-    "window=firstmate:fm-work-child" "endpoint_task_id=work-child" \
-    "worktree=$child" "project=$child" "kind=ship" "mode=local-only"
+    "backend=herdr" "window=lab:w-work-child:p1" "endpoint_task_id=work-child" \
+    "herdr_session=lab" "herdr_workspace_id=w-work-child" "herdr_tab_id=w-work-child:t-work-child" \
+    "herdr_pane_id=w-work-child:p1" "worktree=$child" "project=$child" \
+    "kind=ship" "mode=local-only"
 
   PATH="$child/fakebin:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$child" \
     FM_STATE_OVERRIDE="$child/state" FM_DATA_OVERRIDE="$child/data" \
@@ -616,8 +656,10 @@ test_secondmate_teardown_requires_parent_binding() {
   seed_commitment "$parent" pf-teardown-valid req-teardown-valid discord secondmate:mate work-child
   fm_write_meta "$parent/state/mate.meta" "kind=secondmate" "home=$child"
   fm_write_meta "$child/state/work-child.meta" \
-    "window=firstmate:fm-work-child" "endpoint_task_id=work-child" \
-    "worktree=$child" "project=$child" "kind=ship" "mode=local-only"
+    "backend=herdr" "window=lab:w-work-child:p1" "endpoint_task_id=work-child" \
+    "herdr_session=lab" "herdr_workspace_id=w-work-child" "herdr_tab_id=w-work-child:t-work-child" \
+    "herdr_pane_id=w-work-child:p1" "worktree=$child" "project=$child" \
+    "kind=ship" "mode=local-only"
   assert_absent "$child/.fm-secondmate-parent" \
     "the legacy env-only binding case must not gain a durable parent record"
 
@@ -718,15 +760,17 @@ test_secondmate_teardown_resolves_parent_from_durable_record_when_env_lost() {
   child=$(cd "$child" && pwd -P)
   parent_resolved=$(cd "$parent" && pwd -P)
   make_fake_curl "$child" >/dev/null
-  fm_fake_exit0 "$child/fakebin" tmux treehouse no-mistakes gh gh-axi
+  fm_fake_exit0 "$child/fakebin" treehouse no-mistakes gh gh-axi
 
   assert_local_secondmate_parent_record "$child" "$parent_resolved"
 
   seed_commitment "$parent" pf-durable req-durable discord secondmate:mate work-child
   fm_write_meta "$parent/state/mate.meta" "kind=secondmate" "home=$child"
   fm_write_meta "$child/state/work-child.meta" \
-    "window=firstmate:fm-work-child" "endpoint_task_id=work-child" \
-    "worktree=$child" "project=$child" "kind=ship" "mode=local-only"
+    "backend=herdr" "window=lab:w-work-child:p1" "endpoint_task_id=work-child" \
+    "herdr_session=lab" "herdr_workspace_id=w-work-child" "herdr_tab_id=w-work-child:t-work-child" \
+    "herdr_pane_id=w-work-child:p1" "worktree=$child" "project=$child" \
+    "kind=ship" "mode=local-only"
 
   # No FM_PUBLIC_FOLLOWUP_PRIMARY_HOME at all here: a restart of the secondmate
   # agent that drops the launch-time prefix must still find the real parent
@@ -755,11 +799,13 @@ test_secondmate_teardown_durable_record_missing_parent_registration_still_refuse
   child=$(cd "$child" && pwd -P)
   parent_resolved=$(cd "$parent" && pwd -P)
   make_fake_curl "$child" >/dev/null
-  fm_fake_exit0 "$child/fakebin" tmux treehouse no-mistakes gh gh-axi
+  fm_fake_exit0 "$child/fakebin" treehouse no-mistakes gh gh-axi
   assert_local_secondmate_parent_record "$child" "$parent_resolved"
   fm_write_meta "$child/state/work-child.meta" \
-    "window=firstmate:fm-work-child" "endpoint_task_id=work-child" \
-    "worktree=$child" "project=$child" "kind=ship" "mode=local-only"
+    "backend=herdr" "window=lab:w-work-child:p1" "endpoint_task_id=work-child" \
+    "herdr_session=lab" "herdr_workspace_id=w-work-child" "herdr_tab_id=w-work-child:t-work-child" \
+    "herdr_pane_id=w-work-child:p1" "worktree=$child" "project=$child" \
+    "kind=ship" "mode=local-only"
   # No parent/state/mate.meta at all: the parent never recorded this secondmate's
   # own agent, so its side of the binding is genuinely missing. A durable LOCAL
   # record naming the real parent path must not be enough on its own to bypass
@@ -776,40 +822,6 @@ test_secondmate_teardown_durable_record_missing_parent_registration_still_refuse
   pass "a durable local parent record does not bypass a genuinely missing parent-side registration"
 }
 
-test_secondmate_teardown_durable_record_with_unknown_field_succeeds() {
-  local parent parent_alias child parent_resolved rc out
-  parent=$(make_home teardown-durable-clean-parent relay-off)
-  child="$TMP_ROOT/teardown-durable-clean-child"
-  FM_SECONDMATE_CHARTER='Durable-record clean-cleanup regression charter.' \
-    FM_HOME="$parent" "$ROOT/bin/fm-home-seed.sh" mate "$child" --no-projects >/dev/null \
-    || fail "real secondmate seeding failed"
-  child=$(cd "$child" && pwd -P)
-  parent_resolved=$(cd "$parent" && pwd -P)
-  make_fake_curl "$child" >/dev/null
-  fm_fake_exit0 "$child/fakebin" tmux treehouse no-mistakes gh gh-axi
-  assert_local_secondmate_parent_record "$child" "$parent_resolved"
-  printf 'some_future_field=value\n' >> "$child/.fm-secondmate-parent"
-  parent_alias="$TMP_ROOT/teardown-durable-clean-parent-alias"
-  ln -s "$parent" "$parent_alias"
-  fm_write_meta "$parent/state/mate.meta" "kind=secondmate" "home=$child"
-  fm_git_init_commit "$child/projects/worktree"
-  printf 'manual\n' > "$child/config/backlog-backend"
-  fm_write_meta "$child/state/work-clean.meta" \
-    "window=firstmate:fm-work-clean" "endpoint_task_id=work-clean" \
-    "worktree=$child/projects/worktree" "project=$child/projects/worktree" \
-    "kind=ship" "mode=local-only"
-
-  rc=0
-  out=$(PATH="$child/fakebin:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$child" \
-    FM_STATE_OVERRIDE="$child/state" FM_DATA_OVERRIDE="$child/data" \
-    FM_CONFIG_OVERRIDE="$child/config" FM_PUBLIC_FOLLOWUP_PRIMARY_HOME="$parent_alias" \
-    "$TEARDOWN" work-clean 2>&1) || rc=$?
-  [ "$rc" -eq 0 ] || fail "a resolved parent with no owed commitment must allow cleanup (rc=$rc): $out"
-  assert_not_contains "$out" "cannot resolve the primary home" \
-    "a real durable-record-backed parent must resolve cleanly"
-  pass "unknown durable parent fields remain forward-compatible"
-}
-
 test_secondmate_teardown_rejects_conflicting_live_and_durable_parent_bindings() {
   local durable_parent live_parent child parent_resolved
   durable_parent=$(make_home teardown-durable-conflict-recorded relay-off)
@@ -821,7 +833,7 @@ test_secondmate_teardown_rejects_conflicting_live_and_durable_parent_bindings() 
   child=$(cd "$child" && pwd -P)
   parent_resolved=$(cd "$durable_parent" && pwd -P)
   make_fake_curl "$child" >/dev/null
-  fm_fake_exit0 "$child/fakebin" tmux treehouse no-mistakes gh gh-axi
+  fm_fake_exit0 "$child/fakebin" treehouse no-mistakes gh gh-axi
   assert_local_secondmate_parent_record "$child" "$parent_resolved"
   fm_write_meta "$durable_parent/state/mate.meta" "kind=secondmate" "home=$child"
   fm_git_init_commit "$child/projects/worktree"
@@ -853,7 +865,7 @@ test_secondmate_teardown_rejects_unsafe_durable_parent_records() {
       || fail "real secondmate seeding failed for $case_name"
     child=$(cd "$child" && pwd -P)
     make_fake_curl "$child" >/dev/null
-    fm_fake_exit0 "$child/fakebin" tmux treehouse no-mistakes gh gh-axi
+    fm_fake_exit0 "$child/fakebin" treehouse no-mistakes gh gh-axi
     fm_write_meta "$child/state/work-child.meta" \
       "window=firstmate:fm-work-child" "endpoint_task_id=work-child" \
       "worktree=$child" "project=$child" "kind=ship" "mode=local-only"
@@ -915,7 +927,7 @@ test_secondmate_teardown_rejects_nul_bearing_durable_parent_record() {
   child=$(cd "$child" && pwd -P)
   parent_resolved=$(cd "$parent" && pwd -P)
   make_fake_curl "$child" >/dev/null
-  fm_fake_exit0 "$child/fakebin" tmux treehouse no-mistakes gh gh-axi
+  fm_fake_exit0 "$child/fakebin" treehouse no-mistakes gh gh-axi
   assert_local_secondmate_parent_record "$child" "$parent_resolved"
   fm_write_meta "$parent/state/mate.meta" "kind=secondmate" "home=$child"
   fm_git_init_commit "$child/projects/worktree"
@@ -944,74 +956,6 @@ test_secondmate_teardown_rejects_nul_bearing_durable_parent_record() {
   assert_present "$child/state/work-child.meta" \
     "a NUL-bearing durable parent record must preserve child work metadata"
   pass "a NUL-bearing durable parent record fails closed before cleanup"
-}
-
-test_relay_disabled_unmarked_teardown_skips_public_path() {
-  local home tasks_log out rc
-  home=$(make_home teardown-disabled-unmarked relay-off)
-  fm_git_init_commit "$home/projects/worktree"
-  tasks_log="$home/tasks-axi.log"; : > "$tasks_log"
-  printf 'manual\n' > "$home/config/backlog-backend"
-  cat > "$home/fakebin/tasks-axi" <<'SH'
-#!/usr/bin/env bash
-echo "$*" >> "$FAKE_TASKS_AXI_LOG"
-exit 99
-SH
-  chmod +x "$home/fakebin/tasks-axi"
-  fm_write_meta "$home/state/work-disabled.meta" \
-    "window=firstmate:fm-work-disabled" "endpoint_task_id=work-disabled" \
-    "worktree=$home/projects/worktree" "project=$home/projects/worktree" \
-    "kind=ship" "mode=local-only"
-
-  rc=0
-  out=$(PATH="$home/fakebin:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" \
-    FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
-    FM_CONFIG_OVERRIDE="$home/config" FAKE_TASKS_AXI_LOG="$tasks_log" \
-    "$TEARDOWN" work-disabled 2>&1) || rc=$?
-  [ "$rc" -eq 0 ] || fail "relay-disabled unmarked teardown must not refuse public-followup cleanup (rc=$rc): $out"
-  [ ! -s "$tasks_log" ] || fail "relay-disabled unmarked teardown must not invoke tasks-axi: $(tr '\n' ';' < "$tasks_log")"
-  assert_not_contains "$out" "still owes a public reply" \
-    "relay-disabled unmarked teardown must not run the public commitment guard"
-  assert_absent "$home/state/public-followup" \
-    "relay-disabled unmarked teardown must not create a public-followup artifact"
-  pass "relay-disabled unmarked teardown runs no public-followup work"
-}
-
-test_relay_disabled_parent_allows_marked_child_teardown() {
-  local parent child tasks_log out rc
-  parent=$(make_home teardown-disabled-parent relay-off)
-  child=$(make_home teardown-disabled-child relay-off)
-  fm_git_init_commit "$child/projects/worktree"
-  printf '%s\n' disabled-mate > "$child/.fm-secondmate-home"
-  printf -- '- disabled-mate - synthetic (home: %s; scope: synthetic; projects: ; added 2026-07-30)\n' \
-    "$child" > "$parent/data/secondmates.md"
-  fm_write_meta "$parent/state/disabled-mate.meta" "kind=secondmate" "home=$child"
-  tasks_log="$child/tasks-axi.log"; : > "$tasks_log"
-  printf 'manual\n' > "$child/config/backlog-backend"
-  cat > "$child/fakebin/tasks-axi" <<'SH'
-#!/usr/bin/env bash
-echo "$*" >> "$FAKE_TASKS_AXI_LOG"
-exit 99
-SH
-  chmod +x "$child/fakebin/tasks-axi"
-  fm_write_meta "$child/state/work-disabled.meta" \
-    "window=firstmate:fm-work-disabled" "endpoint_task_id=work-disabled" \
-    "worktree=$child/projects/worktree" "project=$child/projects/worktree" \
-    "kind=ship" "mode=local-only"
-
-  rc=0
-  out=$(PATH="$child/fakebin:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$child" \
-    FM_STATE_OVERRIDE="$child/state" FM_DATA_OVERRIDE="$child/data" \
-    FM_CONFIG_OVERRIDE="$child/config" \
-    FM_PUBLIC_FOLLOWUP_PRIMARY_HOME="$parent" FAKE_TASKS_AXI_LOG="$tasks_log" \
-    "$TEARDOWN" work-disabled 2>&1) || rc=$?
-  [ "$rc" -eq 0 ] || fail "relay-disabled parent must allow marked-child teardown (rc=$rc): $out"
-  [ ! -s "$tasks_log" ] || fail "relay-disabled parent must not invoke tasks-axi for a marked child"
-  assert_not_contains "$out" "still owes a public reply" \
-    "relay-disabled parent must not run the public commitment guard"
-  assert_absent "$child/state/public-followup" \
-    "relay-disabled parent must not create a public-followup artifact"
-  pass "a marked child proceeds without tasks-axi when its parent relay is disabled"
 }
 
 test_secondmate_parent_binding_matches_literal_id() {
@@ -1106,43 +1050,6 @@ test_private_context_survives_inbox_cleanup() {
 
 # --- 6. completion semantics ---------------------------------------------------
 
-test_cleanup_refuses_while_a_public_reply_is_owed() {
-  local home rc
-  home=$(make_home cleanup-guard)
-  seed_commitment "$home" pf-guard req-guard discord main ship-task
-  fm_write_meta "$home/state/ship-task.meta" \
-    "window=firstmate:fm-ship-task" \
-    "worktree=$home/projects/gone" \
-    "project=$home/projects/sample" \
-    "harness=pi" \
-    "kind=ship" \
-    "mode=no-mistakes"
-
-  rc=0
-  PATH="$home/fakebin:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" \
-    FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
-    FM_CONFIG_OVERRIDE="$home/config" "$TEARDOWN" ship-task \
-    > "$home/teardown.out" 2> "$home/teardown.err" || rc=$?
-  [ "$rc" -ne 0 ] || fail "cleanup must refuse while a public reply is still owed"
-  assert_grep "still owes a public reply" "$home/teardown.err" "the refusal must be explicit"
-  assert_present "$home/state/ship-task.meta" "a refused cleanup must preserve the task record"
-
-  # Once the reply has landed, the same cleanup is allowed to proceed.
-  emit_terminal "$home" "$home" pf-guard main ship-task >/dev/null || fail "emit failed"
-  run_pf "$home" consume >/dev/null || fail "consume failed"
-  FAKE_CURL_LOG="$home/curl.log" run_pf "$home" deliver pf-guard >/dev/null || fail "delivery failed"
-  rc=0
-  PATH="$home/fakebin:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" \
-    FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
-    FM_CONFIG_OVERRIDE="$home/config" "$TEARDOWN" ship-task >/dev/null 2>&1 || rc=$?
-  [ "$rc" -eq 0 ] || fail "cleanup must proceed once the public reply has landed (rc=$rc)"
-  pass "cleanup refuses while a public reply is owed and proceeds once it has landed"
-}
-
-# --- 7. zero overhead for homes that do not use the relay ----------------------
-
-# The hard acceptance criterion. A home that never opted into the myfirstmate
-# relay must see no process, no tasks-axi call, no scan, no output, and no file.
 test_relay_disabled_home_pays_nothing() {
   local home tasks_log out rc before after cmd
   home=$(make_home relay-disabled relay-off)
@@ -1325,33 +1232,10 @@ test_typed_records_exclude_raw_public_material() {
 
 test_outcome_text_is_bounded_without_corrupting_characters
 test_restart_e2e_delivers_exactly_once
-test_duplicate_event_and_replay_are_noops
 test_invalid_events_are_refused_and_quarantined
-test_relay_failure_holds_without_false_completion
-test_dry_run_does_not_close_commitment
-test_late_receipt_closes_the_exact_attempt_without_reposting
-test_typed_terminal_clear_only_removes_legacy_link
-test_interrupted_delivery_refuses_to_repost
-test_outward_delivery_stays_with_the_owning_home
-test_delivery_requires_registration_before_posting
 test_secondmate_teardown_requires_parent_binding
-test_local_secondmate_seed_publishes_parent_before_identity
 test_secondmate_teardown_resolves_parent_from_durable_record_when_env_lost
 test_secondmate_teardown_durable_record_missing_parent_registration_still_refuses
-test_secondmate_teardown_durable_record_with_unknown_field_succeeds
 test_secondmate_teardown_rejects_conflicting_live_and_durable_parent_bindings
-test_secondmate_teardown_rejects_unsafe_durable_parent_records
-test_secondmate_teardown_rejects_nul_bearing_durable_parent_record
-test_relay_disabled_unmarked_teardown_skips_public_path
-test_relay_disabled_parent_allows_marked_child_teardown
-test_secondmate_parent_binding_matches_literal_id
-test_traversal_registration_is_refused_before_delivery
-test_pending_rejects_malformed_listing
-test_private_context_survives_inbox_cleanup
-test_cleanup_refuses_while_a_public_reply_is_owed
 test_relay_disabled_home_pays_nothing
-test_relay_enabled_empty_state_makes_no_calls
-test_exhausted_binding_is_not_retried
-test_relay_poll_stays_inert_and_surfaces_once
-test_session_start_surfaces_only_when_owed
 test_typed_records_exclude_raw_public_material

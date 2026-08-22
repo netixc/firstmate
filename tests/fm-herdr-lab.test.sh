@@ -234,6 +234,27 @@ SH
   pass "fm-herdr-lab: timed-out provisioning cancels the launch before teardown"
 }
 
+test_executables_refuse_tmux_environment_before_herdr() {
+  local lab_name="fm-lab-tmux-refusal-$$" snapshot="$TMP_ROOT/ci-snapshot.json" out status=0
+  printf '%s\n' running > "$FAKE_STATE/$lab_name"
+  printf '%s\n' '[]' > "$snapshot"
+  : > "$FAKE_LOG"
+
+  out=$(TMUX=fake run_with_fake "$ROOT/bin/fm-herdr-lab.sh" teardown "$lab_name" 2>&1) || status=$?
+  expect_code 1 "$status" "lab teardown must reject a tmux environment"
+  assert_contains "$out" "tmux session execution is retired" "lab teardown refusal was not actionable"
+  [ "$(cat "$FAKE_STATE/$lab_name")" = running ] || fail "lab teardown mutated the session under a tmux environment"
+  [ ! -s "$FAKE_LOG" ] || fail "lab teardown reached Herdr under a tmux environment"
+
+  status=0
+  out=$(TMUX=fake run_with_fake "$ROOT/bin/fm-herdr-ci-cleanup.sh" teardown "$snapshot" 2>&1) || status=$?
+  expect_code 1 "$status" "CI teardown must reject a tmux environment"
+  assert_contains "$out" "tmux session execution is retired" "CI teardown refusal was not actionable"
+  [ "$(cat "$snapshot")" = '[]' ] || fail "CI teardown rewrote its snapshot under a tmux environment"
+  [ ! -s "$FAKE_LOG" ] || fail "CI teardown reached Herdr under a tmux environment"
+  pass "Herdr lifecycle executables reject tmux before calls or mutations"
+}
+
 test_refuses_unsafe_names
 test_provision_run_and_guarded_teardown
 test_missing_tripwire_blocks_destruction
@@ -241,3 +262,4 @@ test_changed_default_trips_after_teardown
 test_stopped_owned_lab_can_reprovision
 test_failed_delete_retains_tripwire
 test_timed_out_provision_cancels_late_launch
+test_executables_refuse_tmux_environment_before_herdr

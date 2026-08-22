@@ -1,54 +1,41 @@
 #!/usr/bin/env bash
 # bin/fm-composer-lib.sh - the ONE fleet-wide owner of composer classification:
-# every shape a verified harness draws, every glyph, every container proof, and
-# the empty|pending|pending-unproven|unknown verdict, shared by every
-# session-provider adapter (tmux via bin/fm-tmux-lib.sh and Herdr via
-# bin/backends/herdr.sh).
+# every Pi shape, every glyph, every container proof, and
+# the empty|pending|pending-unproven|unknown verdict used by Herdr.
 #
-# WHY THIS EXISTS: composer shape knowledge is centralized so the supported
-# adapters cannot drift into conflicting harness classifications.
-# The consolidation rule that prevents a recurrence: an adapter CAPTURES a
-# screen and DESCRIBES its capabilities; it never classifies. A new harness
-# shape is taught to fm_composer_classify_screen below, once, and every backend
-# that can capture a screen learns it in the same commit.
+# WHY THIS EXISTS: Herdr captures the screen and describes the evidence; this
+# library owns classification. A new Pi shape is taught once here.
 #
-# THE CAPABILITY MODEL: adapters differ in what their capture primitive can
-# see, and those differences enter here as DATA (the <caps> argument), never as
-# adapter code. Capability differences change how CONFIDENTLY a shape can be
-# judged; they never change what the shapes ARE:
+# THE CAPABILITY MODEL: Herdr evidence enters as DATA in <caps>. Evidence
+# changes confidence, never what the shapes are:
 #   styled=1    the capture preserves ANSI styling, so ghost/placeholder text
-#               is detectable and can be stripped (tmux -e and Herdr ANSI).
+#               is detectable and can be stripped.
 #               With styled=0, ghost text is unreadable, so a bare glyph row
 #               carrying trailing non-idle text degrades to `unknown` rather
-#               than `pending`: the text may be the harness's own idle
+#               than `pending`: the text may be Pi's own idle
 #               suggestion, and a false `pending` blocks every safe caller.
-#   cursor=1    a cursor row is supplied (tmux #{cursor_y} only). The cursor
-#               anchors shape selection: the shape containing the cursor is the
-#               composer. Without it, the bottom-most shape wins.
-#   identity=1  a native agent identity/state probe exists (herdr `agent get`;
-#               the tmux pi foreground-process probe). Identity is what makes
+#   identity=1  Herdr's native `agent get` identity/state probe exists. It makes
 #               Pi's blank separated composer provable; with identity=0 that
 #               shape stays `unknown`.
 #   rows=<n>    the capture's bounded row count (informational).
 #
 # THE STRICT BLANK-ROW RULE (captain decision blank-row-injection-posture,
 # 2026-08-09): a blank or otherwise unidentified input row with no positive
-# container proof is `unknown` and callers defer. This replaced tmux's
-# permissive "blank cursor row = empty = safe to inject" rule fleet-wide: a
-# blank row under the cursor can be a modal dialog, a dead shell between
+# container proof is `unknown` and callers defer. A
+# blank unidentified row can be a modal dialog, a dead shell between
 # transcript rules, or a mid-redraw pane, and the away-mode injector types
 # escalations into whatever it calls empty. Positive container proof means one
 # of the shapes in the catalogue below.
 #
-# THE SHAPE CATALOGUE (all verified against real harnesses; byte-level
+# THE SHAPE CATALOGUE (verified against real Pi; byte-level
 # captures in data/fm-composer-consolidation-audit-s1/report.md and
-# docs/verification/runtime-backends.md):
+# docs/verification/herdr-runtime.md):
 #   bordered   - a complete boxed composer: a top border, side-bordered content
 #                rows of the same family, and a matching bottom border.
 #   separated  - pi: content rows between two solid horizontal `─` rules, no
 #                glyph and no side border. Provable only with a live agent
-#                identity reporting an idle/done/blocked pi (herdr `agent
-#                get`; the tmux foreground-process probe), because a blank
+#                identity reporting an idle/done/blocked Pi (`herdr agent get`),
+#                because a blank
 #                region between two transcript rules is otherwise exactly the
 #                strict rule's unidentifiable blank row.
 #
@@ -58,7 +45,7 @@
 # it is a dead-shell prompt and classifies `unknown` (never a safe injection
 # target).
 #
-# GHOST/PLACEHOLDER TEXT: a harness may fill an otherwise-empty composer with
+# GHOST/PLACEHOLDER TEXT: Pi may fill an otherwise-empty composer with
 # de-emphasized ghost text that a plain capture cannot tell apart from text a human typed.
 # fm_composer_strip_ghost is the ONE ANSI-aware extractor of "real typed
 # content": it drops every dim/faint (SGR 2) run and keeps only normal-intensity,
@@ -66,7 +53,7 @@
 #
 # UNICODE WHITESPACE (issue #1988; open PRs #1995/#2047 target the same
 # defect and #1995's naming is adopted here so the implementations converge):
-# a harness may separate its prompt glyph from composer content with a
+# Pi may separate its prompt glyph from composer content with a
 # non-ASCII space. POSIX `[[:space:]]` includes U+00A0 only
 # under some locales, so every trim used to be locale-dependent: the same live
 # pane read `empty` under a UTF-8 shell and `pending` under LC_ALL=C (a
@@ -79,7 +66,7 @@
 # one CHARACTER under UTF-8, which used to leave partial multibyte residue.
 #
 # Re-sourcing is a cheap idempotent redefinition, so this file needs no
-# include guard (matching bin/fm-tmux-lib.sh).
+# include guard.
 
 # fm_composer_strip_ansi: drop every CSI escape sequence, leaving plain text.
 # Used for STRUCTURAL row/shape detection, where ghost text must be KEPT so the
@@ -105,9 +92,9 @@ fm_composer_strip_ansi() {
 # ASCII whitespace is absent because POSIX `[[:space:]]` already covers it.
 # U+200B ZERO WIDTH SPACE is deliberately absent: Unicode gives it
 # White_Space=No (a format character), so listing it would substitute this
-# owner's own guess for the property it claims to follow. The live harness
-# guard (bin/fm-test-run.sh, live-harness-optin) is what catches a harness
-# that starts drawing its composer with a character outside this property.
+# owner's own guess for the property it claims to follow. The live Pi guard
+# (`bin/fm-test-run.sh --family live-pi-herdr-optin`) catches a Pi release that
+# starts drawing its composer with a character outside this property.
 FM_COMPOSER_UNICODE_SPACES=()
 for _fm_composer_space_octal in \
   '\0302\0205' '\0302\0240' '\0341\0232\0200' \
@@ -124,7 +111,7 @@ unset -v _fm_composer_space_octal _fm_composer_space_utf8
 # fm_composer_normalize_spaces_var: the ONE Unicode-whitespace mapping.
 # Replaces in place through the named variable so no caller needs a subshell.
 # Substitution, never deletion: deleting would silently join "foo<NBSP>bar"
-# into one token, while a space preserves the separation the harness drew.
+# into one token, while a space preserves the separation Pi drew.
 fm_composer_normalize_spaces_var() {  # <varname>
   local __fmns_name=$1 __fmns_text=${!1} __fmns_space
   for __fmns_space in "${FM_COMPOSER_UNICODE_SPACES[@]}"; do
@@ -148,7 +135,7 @@ fm_composer_normalize_trim_var() {  # <varname>
 
 # fm_composer_strip_ghost: the ONE fleet-wide ANSI-aware extractor of "real typed
 # content" from a captured, styled composer row. Reads the styled line on stdin
-# (from `tmux capture-pane -e`, `herdr pane read --format ansi`, or
+# (from `herdr pane read --format ansi` or
 # a styled capture) and prints the
 # plain, non-ghost text on stdout, dropping:
 #   - dim/faint runs (SGR 2): de-emphasized suggestion text.
@@ -212,43 +199,30 @@ fm_composer_strip_ghost() {
 }
 
 
-# --- Delivery-only rendered busy footers (backend-agnostic) -------------------
+# --- Delivery-only rendered busy footers (Herdr read-agnostic) -------------------
 #
 # These live here, in the ONE shared composer/delivery owner, rather than in any
-# single backend adapter, because every backend needs them for the SAME job:
-# proving a submitted Enter actually landed. Keeping them in bin/fm-tmux-lib.sh
-# would make signatures reachable only from tmux, even though Herdr runs the
-# same harnesses and faces the same acknowledgement problem.
+# single Herdr read caller, because every Herdr read needs them for the SAME job:
+# proving a submitted Enter actually landed. Herdr runs the
+# Pi and faces the same acknowledgement problem.
 #
 # This is a DELIVERY guard, deliberately NOT a worker-state source. The semantic
 # busy contract - what firstmate records and supervises on - is owned by
-# bin/fm-busy-lib.sh, which forbids classifying a harness from rendered text.
+# bin/fm-busy-lib.sh, which forbids classifying Pi from rendered text.
 # Matching a footer to confirm a keystroke landed is a different question from
 # asking what a worker is doing, and the two must not be conflated.
-# Delivery-only rendered busy footers per harness. Pi renders "Working...".
-# The harness-less default is the UNION of the per-harness tokens below, used
-# when a caller has no recorded harness for the pane (the submit cores read the
-# baseline and the post-Enter transition this way).
-FM_DELIVERY_BUSY_REGEX_DEFAULT='Working\.\.\.'
-FM_DELIVERY_PI_BUSY_REGEX_DEFAULT='Working\.\.\.'
+# Pi's delivery-only rendered busy footer.
+FM_PI_DELIVERY_BUSY_REGEX_DEFAULT='Working\.\.\.'
 
-fm_busy_lines_match() {  # [harness]
-  local harness=${1:-} lines regex
+fm_busy_lines_match() {
+  local lines regex
   IFS= read -r -d '' lines || true
   if [ -n "${FM_BUSY_REGEX:-}" ]; then
     regex=$FM_BUSY_REGEX
   else
-    case "$harness" in
-      pi) regex=$FM_DELIVERY_PI_BUSY_REGEX_DEFAULT ;;
-      '') regex=$FM_DELIVERY_BUSY_REGEX_DEFAULT ;;
-      *)
-        # A supplied harness must never borrow another harness's signature.
-        # Register its verified signature explicitly before classifying it busy.
-        regex=
-        ;;
-    esac
+    regex=$FM_PI_DELIVERY_BUSY_REGEX_DEFAULT
   fi
-  [ -n "$regex" ] && printf '%s' "$lines" | grep -qiE "$regex"
+  printf '%s' "$lines" | grep -qiE "$regex"
 }
 
 # Shell prompt glyphs are genuine empty composers only inside a verified
@@ -257,13 +231,12 @@ fm_busy_lines_match() {  # [harness]
 # exposed to pathname expansion.
 FM_COMPOSER_SHELL_PROMPT_GLYPHS=$(printf '%s\n' '>' '❯' '$' '%' '#')
 
-# FM_COMPOSER_IDLE_RE lets an unverified harness declare composer text it
-# renders in an empty composer that a plain capture cannot distinguish from
-# typed text. The default deliberately matches nothing.
+# FM_COMPOSER_IDLE_RE lets a caller declare Pi composer text that a plain
+# capture cannot distinguish from typed text. The default matches nothing.
 FM_COMPOSER_IDLE_RE_DEFAULT='a^'
 
-# The bounded row window adapters should capture for a composer read. One
-# shared policy (previously three per-backend variables that had drifted to
+# The bounded row window callers should capture for a composer read. One
+# shared policy (previously three per-Herdr read variables that had drifted to
 # 20/20/200): the composer is bottom-anchored, so a small tail window is
 # sufficient and keeps stale scrollback (startup banners, old transcript
 # boxes) from ever competing with the live composer.
@@ -342,7 +315,7 @@ fm_composer_idle_matches() {
 #   [idle_case] `sensitive` (default) or `insensitive`.
 #   [plain_content] the unstripped plain row.
 # Content and plain_content are normalized and re-trimmed on entry, so the
-# verdict never depends on which whitespace alphabet the calling adapter
+# verdict never depends on which whitespace alphabet the calling caller
 # trimmed with.
 fm_composer_classify_content() {  # <bordered> <content> [idle_re] [idle_case] [plain_content] [placeholder-position] [styled]
   local bordered=$1 idle_re=${3:-} idle_case=${4:-sensitive} content plain_content glyph=''
@@ -379,20 +352,18 @@ fm_composer_classify_content() {  # <bordered> <content> [idle_re] [idle_case] [
 
 # --- The screen classifier ---------------------------------------------------
 #
-# fm_composer_classify_screen <caps> <screen> [cursor_row] [identity]
+# fm_composer_classify_screen <caps> <screen> [identity]
 #   <caps>       newline-separated key=value capability facts (see header).
 #   <screen>     the captured screen: ANSI-preserving when styled=1, plain
 #                otherwise.
-#   [cursor_row] zero-based row index of the cursor within <screen>, only
-#                meaningful when caps carry cursor=1.
-#   [identity]   "<agent>\t<status>" from the backend's native identity probe,
+#   [identity]   "<agent>\t<status>" from Herdr's native identity probe,
 #                or `probe-absent` when the probe found no live identity; only
 #                meaningful when caps carry identity=1.
 # Prints exactly one verdict: empty | pending | pending-unproven | unknown,
 # or the internal sentinel `need-identity` when caps declare identity=1, no
-# identity result was supplied, and the verdict depends on it. Adapters answer
+# identity result was supplied, and the verdict depends on it. Callers answer
 # `need-identity` by running their identity probe once and re-calling with
-# either its result or `probe-absent`; the sentinel never escapes an adapter.
+# either its result or `probe-absent`; the sentinel never escapes an caller.
 # Identity stays a lazy second pass so the common non-pi read never pays for
 # the probe.
 #
@@ -415,20 +386,17 @@ _fm_composer_pi_separator_row() {  # <trimmed-row>
 
 # Row-scan results are returned through FM_COMPOSER_SCAN_* globals (bash 3.2
 # has no nameref); they are internal to this owner.
-_fm_composer_scan_screen() {  # <plain-screen> <cursor-or-empty> [extract-wrap]
-  local pane=$1 cy=${2:-}
+_fm_composer_scan_screen() {  # <plain-screen>
+  local pane=$1
   local line indent left_stripped trimmed kind family side_family
   local top_inner top_spaces='' geometry_check=0 geometry_ambiguous=0
   local content_inner content_spaces bottom_inner bottom_spaces glyph
   local current_indent='' current_family='' row=0 top=-1 valid=0 content_rows=0
-  # Complete-box results: the box containing the cursor (cursor mode) or the
-  # bottom-most complete box (no cursor).
+  # Complete-box result: the bottom-most complete box.
   FM_COMPOSER_SCAN_BOX_TOP=-1
   FM_COMPOSER_SCAN_BOX_BOTTOM=-1
   FM_COMPOSER_SCAN_BOX_AMBIG=0
   FM_COMPOSER_SCAN_INCOMPLETE_BOX_FROM=-1
-  FM_COMPOSER_SCAN_UNSAFE=0
-  FM_COMPOSER_SCAN_CURSOR_EDGE=0
   FM_COMPOSER_SCAN_SHELL_ROW=-1
   FM_COMPOSER_SCAN_PI_PAIR_FOUND=0
   FM_COMPOSER_SCAN_PI_PAIR_VALID=0
@@ -476,20 +444,12 @@ _fm_composer_scan_screen() {  # <plain-screen> <cursor-or-empty> [extract-wrap]
     elif [ "$pi_open" -ge 0 ]; then
       pi_lines=$((pi_lines + 1))
     fi
-    # Keep lower shell prompts as staleness evidence for cursorless selection.
+    # Keep lower shell prompts as staleness evidence for bottom-most selection.
     if [ "$top" -lt 0 ] && fm_composer_leading_shell_glyph_var glyph "$trimmed"; then
       FM_COMPOSER_SCAN_SHELL_ROW=$row
     fi
-    # Terminal-cursor safety: a cursor sitting on a structural edge row is never an
-    # input row.
-    if [ -n "$cy" ] && [ "$row" -eq "$cy" ] && fm_composer_row_has_edge "$trimmed"; then
-      FM_COMPOSER_SCAN_CURSOR_EDGE=1
-    fi
     # Complete-box state machine (all border families, geometry, ambiguity).
     if [ "$kind" = top ] || { [ "$kind" = ascii ] && [ "$top" -lt 0 ]; }; then
-      if [ -n "$cy" ] && [ "$top" -ge 0 ] && [ "$top" -lt "$cy" ] && [ "$cy" -le "$row" ]; then
-        FM_COMPOSER_SCAN_UNSAFE=1
-      fi
       top=$row
       FM_COMPOSER_SCAN_INCOMPLETE_BOX_FROM=$row
       current_family=$family
@@ -526,27 +486,13 @@ _fm_composer_scan_screen() {  # <plain-screen> <cursor-or-empty> [extract-wrap]
             geometry_ambiguous=1
           fi
         fi
-        if [ -n "$cy" ]; then
-          if [ "$top" -lt "$cy" ] && [ "$cy" -le "$row" ]; then
-            FM_COMPOSER_SCAN_BOX_TOP=$top
-            FM_COMPOSER_SCAN_BOX_BOTTOM=$row
-            FM_COMPOSER_SCAN_BOX_AMBIG=$geometry_ambiguous
-          fi
-        else
-          FM_COMPOSER_SCAN_BOX_TOP=$top
-          FM_COMPOSER_SCAN_BOX_BOTTOM=$row
-          FM_COMPOSER_SCAN_BOX_AMBIG=$geometry_ambiguous
-        fi
+        FM_COMPOSER_SCAN_BOX_TOP=$top
+        FM_COMPOSER_SCAN_BOX_BOTTOM=$row
+        FM_COMPOSER_SCAN_BOX_AMBIG=$geometry_ambiguous
         FM_COMPOSER_SCAN_INCOMPLETE_BOX_FROM=-1
       else
         if [ "$FM_COMPOSER_SCAN_INCOMPLETE_BOX_FROM" -lt 0 ]; then
           FM_COMPOSER_SCAN_INCOMPLETE_BOX_FROM=$row
-        fi
-        if [ -n "$cy" ]; then
-          if { [ "$top" -ge 0 ] && [ "$top" -lt "$cy" ] && [ "$cy" -le "$row" ]; } \
-             || [ "$row" -eq "$cy" ]; then
-            FM_COMPOSER_SCAN_UNSAFE=1
-          fi
         fi
       fi
       top=-1
@@ -588,9 +534,6 @@ _fm_composer_scan_screen() {  # <plain-screen> <cursor-or-empty> [extract-wrap]
   done <<EOF
 $pane
 EOF
-  if [ -n "$cy" ] && [ "$top" -ge 0 ] && [ "$top" -lt "$cy" ]; then
-    FM_COMPOSER_SCAN_UNSAFE=1
-  fi
 }
 
 # fm_composer_row_has_edge: 0 when the trimmed row starts or ends with a
@@ -685,7 +628,7 @@ _fm_composer_classify_rows() {  # <screen> <styled> <ambiguous> <first-row> <las
   fi
 }
 
-_fm_composer_select_cursorless() {
+_fm_composer_select_bottommost() {
   local plain=$1 generic=-1 next boundary raw trimmed
   FM_COMPOSER_SELECTED_KIND=
   FM_COMPOSER_SELECTED_FIRST=-1
@@ -742,8 +685,8 @@ fm_composer_extract_selected_content() {  # <caps> <screen>
 $caps
 EOF
   plain=$(printf '%s\n' "$screen" | fm_composer_strip_ansi)
-  _fm_composer_scan_screen "$plain" '' 1
-  _fm_composer_select_cursorless "$plain" || return 1
+  _fm_composer_scan_screen "$plain"
+  _fm_composer_select_bottommost "$plain" || return 1
   row=$FM_COMPOSER_SELECTED_FIRST
   while [ "$row" -le "$FM_COMPOSER_SELECTED_LAST" ]; do
     raw=$(_fm_composer_screen_row "$row" "$screen")
@@ -784,93 +727,30 @@ EOF
   printf '%s\n' "$joined" | LC_ALL=C awk '{$1=$1; printf "%s", $0}'
 }
 
-fm_composer_classify_screen() {  # <caps> <screen> [cursor_row] [identity]
-  local caps=$1 screen=$2 cy=${3:-} identity=${4:-}
-  local styled=0 cursor=0 has_identity=0 kv plain
+fm_composer_classify_screen() {  # <caps> <screen> [identity]
+  local caps=$1 screen=$2 identity=${3:-}
+  local styled=0 has_identity=0 kv plain
   while IFS= read -r kv; do
     case "$kv" in
       styled=1) styled=1 ;;
-      cursor=1) cursor=1 ;;
       identity=1) has_identity=1 ;;
     esac
   done <<EOF
 $caps
 EOF
-  [ "$cursor" = 1 ] || cy=''
-  if [ -n "$cy" ]; then
-    case "$cy" in *[!0-9]*) printf 'unknown'; return 0 ;; esac
-  fi
   plain=$(printf '%s\n' "$screen" | fm_composer_strip_ansi)
-  _fm_composer_scan_screen "$plain" "$cy"
-  if [ -n "$cy" ]; then
-    # In cursor mode (tmux), the shape CONTAINING the cursor is the composer.
-    if [ "$FM_COMPOSER_SCAN_UNSAFE" = 1 ]; then
-      printf 'unknown'; return 0
-    fi
-    if [ "$FM_COMPOSER_SCAN_BOX_TOP" -ge 0 ]; then
-      _fm_composer_classify_rows "$screen" "$styled" "$FM_COMPOSER_SCAN_BOX_AMBIG" \
-        "$((FM_COMPOSER_SCAN_BOX_TOP + 1))" "$((FM_COMPOSER_SCAN_BOX_BOTTOM - 1))"
-      return 0
-    fi
-    if [ "$FM_COMPOSER_SCAN_PI_PAIR_FOUND" = 1 ] \
-       && [ "$cy" -gt "$FM_COMPOSER_SCAN_PI_OPEN" ] \
-       && [ "$cy" -lt "$FM_COMPOSER_SCAN_PI_CLOSE" ]; then
-      _fm_composer_pi_verdict "$screen" "$styled" "$has_identity" "$identity"
-      return 0
-    fi
-    if [ "$FM_COMPOSER_SCAN_CURSOR_EDGE" = 1 ]; then
-      printf 'unknown'; return 0
-    fi
-    # STRICT: a blank or otherwise unidentified cursor row has no positive
-    # container proof. This replaced the permissive blank-cursor-row rule
-    # (captain decision blank-row-injection-posture).
-    printf 'unknown'
-    return 0
-  fi
-  # No cursor: the bottom-most shape wins, with the pi-separator staleness
-  # rules layered on (a live pi composer pair below the generic candidate
-  # proves that candidate stale).
-  if ! _fm_composer_select_cursorless "$plain"; then
-    printf 'unknown'
+  _fm_composer_scan_screen "$plain"
+  if ! _fm_composer_select_bottommost "$plain"; then
+    printf unknown
     return 0
   fi
   case "$FM_COMPOSER_SELECTED_KIND" in
-    pi)
-      _fm_composer_pi_verdict "$screen" "$styled" "$has_identity" "$identity"
-      ;;
+    pi) _fm_composer_pi_verdict "$screen" "$styled" "$has_identity" "$identity" ;;
     box)
       _fm_composer_classify_rows "$screen" "$styled" "$FM_COMPOSER_SELECTED_AMBIG" \
         "$FM_COMPOSER_SELECTED_FIRST" "$FM_COMPOSER_SELECTED_LAST"
       ;;
   esac
-}
-
-# fm_composer_submit_retry_core: the ONE verify-and-retry-Enter submit loop
-# for cursor-less capture paths, parameterised by the
-# adapter's send-key and composer-state functions. The caller has already
-# typed the text ONCE (send_literal) and settled; this loop submits with
-# Enter, re-reading the composer verdict, and retries Enter ONLY - never
-# retypes, because a swallowed Enter leaves the text in the composer and
-# retyping would duplicate it. Proven pending (and pending-unproven) retries
-# consume the budget; any other verdict returns immediately, so `unknown`
-# stays a loud refusal rather than a blind retry into an unreadable pane.
-# tmux keeps its own richer core (bin/fm-tmux-lib.sh: the idle-baseline
-# turn-started conversion its busy primitive enables), and
-# herdr confirms through native agent-state; both consume the same shared
-# verdict, so no shape knowledge lives in any of the three loops.
-fm_composer_submit_retry_core() {  # <send-key-fn> <state-fn> <target> <retries> <enter-sleep> [expected-label]
-  local send_key_fn=$1 state_fn=$2 target=$3 retries=$4 sleep_s=$5 expected_label=${6:-} i=0 state
-  while :; do
-    "$send_key_fn" "$target" Enter "$expected_label" || true
-    sleep "$sleep_s"
-    state=$("$state_fn" "$target" "$expected_label")
-    case "$state" in
-      pending|pending-unproven) ;;
-      *) printf '%s' "$state"; return 0 ;;
-    esac
-    i=$((i + 1))
-    [ "$i" -lt "$retries" ] || { printf '%s' "$state"; return 0; }
-  done
 }
 
 _fm_composer_classify_pi_rows() {  # <screen> <styled>
@@ -891,8 +771,8 @@ _fm_composer_classify_pi_rows() {  # <screen> <styled>
 
 # The pi separated-shape verdict: identity + structure conjunction (herdr's
 # rule, now fleet-wide). A missing identity capability keeps the shape
-# unknown; an unfetched identity on an identity-capable backend asks the
-# adapter to probe (lazily) and re-call. Proven input remains pending for every
+# unknown; an unfetched identity on an identity-capable Herdr read asks the
+# caller to probe (lazily) and re-call. Proven input remains pending for every
 # live pi state, while only an idle/done/blocked pi proves an empty composer.
 _fm_composer_pi_verdict() {  # <screen> <styled> <has_identity> <identity>
   local screen=$1 styled=$2 has_identity=$3 identity=$4 agent agent_status state

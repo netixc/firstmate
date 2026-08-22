@@ -45,11 +45,10 @@ esac
 # every wake-handling and recovery turn, so assert supervision health here too. A
 # lapsed supervision chain then surfaces on a plain drain-and-handle turn, not
 # only when a guarded supervision script (fm-peek/fm-send/...) happens to run.
-# Reuse fm-guard.sh's model-aware alarm and FM_GUARD_GRACE instead of duplicating
-# its supervision verdict. Under the Pi extension model, a fresh beacon stays
+# Reuse fm-guard.sh's Pi-aware alarm and FM_GUARD_GRACE instead of duplicating
+# its supervision verdict. During Pi's extension-owned hand-off, a fresh beacon stays
 # silent during a genuinely unheld-lock hand-off only while the live session
 # proves extension ownership.
-# Persistent-watcher models still require the live identity-matched watcher.
 # Never let a guard hiccup change the drain's exit status.
 assert_watcher_liveness() {
   "$SCRIPT_DIR/fm-guard.sh" || true

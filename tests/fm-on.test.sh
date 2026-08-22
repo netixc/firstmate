@@ -55,10 +55,8 @@ case "\${1:-}:\${2:-}" in
 esac
 SH
 cp "$ROOT/bin/fm-remote-doctor.sh" "$ROOT/bin/fm-tasks-axi-lib.sh" \
-  "$ROOT/bin/fm-backend.sh" "$ROOT/bin/fm-composer-lib.sh" \
-  "$ROOT/bin/fm-transition-lib.sh" "$REMOTE_ROOT/bin/"
-mkdir -p "$REMOTE_ROOT/bin/backends"
-cp "$ROOT/bin/backends/herdr.sh" "$REMOTE_ROOT/bin/backends/herdr.sh"
+  "$ROOT/bin/fm-herdr.sh" "$ROOT/bin/fm-composer-lib.sh" \
+  "$REMOTE_ROOT/bin/"
 cat > "$REMOTE_ROOT/bin/fm-mutate.sh" <<'SH'
 #!/usr/bin/env bash
 printf 'mutation\n' >> "$1"
@@ -316,7 +314,7 @@ set -e
 [ "$rc" -ne 0 ] || fail "the remote doctor passed with a missing required tool"
 assert_contains "$out" 'required herdr=MISSING' "the remote doctor did not mark a missing required tool"
 assert_contains "$out" 'required tasks-axi=MISSING' "the remote doctor did not mark every missing required tool"
-assert_contains "$out" 'required tools do not resolve on the remote runtime PATH: herdr tasks-axi treehouse harness' "the remote doctor did not name the missing tools"
+assert_contains "$out" 'required tools do not resolve on the remote runtime PATH: herdr tasks-axi treehouse pi' "the remote doctor did not name the missing tools"
 assert_contains "$out" '.local/bin' "the remote doctor did not offer the wrapper escape hatch"
 ln -sf "$(command -v git)" "$DOCTOR_BIN/git"
 # The direct doctor fixture needs the complete required tool set. These stubs
@@ -340,16 +338,10 @@ out=$(HOME="$DOCTOR_HOME" PATH="$DOCTOR_BIN:/usr/bin:/bin:/usr/sbin:/sbin" "$ROO
 rc=$?
 set -e
 assert_contains "$out" "required git=$DOCTOR_BIN/git" "the remote doctor did not report where the required tool resolved"
-doctor_tmux=$(PATH="$DOCTOR_BIN:/usr/bin:/bin:/usr/sbin:/sbin" command -v tmux 2>/dev/null || true)
-if [ -n "$doctor_tmux" ]; then
-  assert_contains "$out" "optional tmux=$doctor_tmux" "the remote doctor did not report the resolved optional tool"
-else
-  assert_contains "$out" 'optional tmux=absent' "the remote doctor did not report an absent optional tool"
-fi
 assert_contains "$out" "required herdr=$DOCTOR_BIN/herdr" "the remote doctor did not require herdr"
 assert_contains "$out" "required tasks-axi=$DOCTOR_BIN/tasks-axi" "the remote doctor did not require compatible tasks-axi"
 assert_contains "$out" "required treehouse=$DOCTOR_BIN/treehouse" "the remote doctor did not require treehouse"
-assert_contains "$out" "required harness=pi:$DOCTOR_BIN/pi" "the remote doctor did not require a verified harness"
+assert_contains "$out" "required pi=$DOCTOR_BIN/pi" "the remote doctor did not require Pi"
 assert_not_contains "$out" 'required tools do not resolve' "a resolved required tool was still reported missing"
 pass "the remote doctor reports its required runtime tool set and optional tools"
 
@@ -470,6 +462,47 @@ out=$(fm_on ios fm-probe-two.sh)
 assert_contains "$out" "home=$REMOTE_HOME" "secondmate-id routing broke after alias ambiguity"
 write_registry
 pass "ambiguous aliases refuse while exact secondmate ids remain routable"
+
+: > "$SSH_COUNT"
+if TMUX=fake fm_on ios fm-probe-two.sh >/dev/null 2>&1; then
+  fail "a local tmux execution environment reached remote dispatch"
+fi
+ssh_after_tmux=$(cat "$SSH_COUNT" 2>/dev/null || true)
+[ "${ssh_after_tmux:-0}" -eq 0 ] \
+  || fail "tmux environment refusal launched SSH"
+pass "fm-on rejects a local tmux environment before remote dispatch"
+
+mkdir -p "$LOCAL_HOME/state"
+fm_write_meta "$LOCAL_HOME/state/ios.meta" \
+  "window=remote:ios" "endpoint_task_id=ios" \
+  "worktree=$REMOTE_HOME" "project=$REMOTE_ROOT" "home=$REMOTE_HOME" \
+  "remote_host=other-mac" "remote_root=$REMOTE_ROOT" \
+  "remote_backend=herdr" \
+  "remote_herdr_session=fm-remote" "remote_target=fm-remote:w1:p1"
+: > "$SSH_COUNT"
+out=$(fm_on ios fm-probe-two.sh 2>&1) \
+  && fail "registry dispatch ignored a mismatched metadata host: $out"
+assert_contains "$out" "does not match its configured registry route" \
+  "route mismatch refusal did not identify the conflicting owners"
+ssh_after_mismatch=$(cat "$SSH_COUNT" 2>/dev/null || true)
+[ "${ssh_after_mismatch:-0}" -eq 0 ] \
+  || fail "mismatched metadata and registry routes launched SSH"
+
+fm_write_meta "$LOCAL_HOME/state/ios.meta" \
+  "window=remote:ios" "endpoint_task_id=ios" \
+  "worktree=$REMOTE_HOME" "project=$REMOTE_ROOT" "home=$REMOTE_HOME" \
+  "remote_root=$REMOTE_ROOT" "remote_backend=herdr" \
+  "remote_herdr_session=fm-remote" "remote_target=fm-remote:w1:p1"
+: > "$SSH_COUNT"
+out=$(fm_on ios fm-probe-two.sh 2>&1) \
+  && fail "an existing route record without an exact remote host was dispatched: $out"
+assert_contains "$out" "invalid or ambiguous Herdr route metadata" \
+  "missing remote host refusal did not preserve the invalid record"
+ssh_after_missing_host=$(cat "$SSH_COUNT" 2>/dev/null || true)
+[ "${ssh_after_missing_host:-0}" -eq 0 ] \
+  || fail "an existing record with no remote host launched SSH"
+rm -f "$LOCAL_HOME/state/ios.meta"
+pass "fm-on binds every existing metadata record to the exact registry route"
 
 : > "$SSH_COUNT"
 set +e

@@ -34,13 +34,6 @@ make_tools() { # <world>
 #!/usr/bin/env bash
 printf 'state: %s · source: fake\n' "${FM_FAKE_CREW_STATE:-unknown}"
 SH
-  cat > "$fake/tmux" <<'SH'
-#!/usr/bin/env bash
-case "${1:-}" in
-  display-message) printf '%%1\n' ;;
-  capture-pane) printf 'idle\n> \n' ;;
-esac
-SH
   local tool
   for tool in gh gh-axi curl; do
     cat > "$fake/$tool" <<'SH'

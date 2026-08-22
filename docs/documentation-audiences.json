@@ -26,7 +26,6 @@
   "readmeSetupTargets": [
     "docs/configuration.md",
     "docs/wedge-alarm.md",
-    "docs/tmux-backend.md",
     "docs/herdr-backend.md",
     "docs/remote-secondmates.md"
   ],
@@ -76,12 +75,8 @@
       "target": "docs/verification/supervision.md"
     },
     {
-      "source": "docs/tmux-backend.md",
-      "target": "docs/verification/runtime-backends.md"
-    },
-    {
       "source": "docs/herdr-backend.md",
-      "target": "docs/verification/runtime-backends.md"
+      "target": "docs/verification/herdr-runtime.md"
     },
     {
       "source": "docs/trace-context.md",
@@ -126,7 +121,7 @@
       "audience": "agent-runtime"
     },
     {
-      "path": ".agents/skills/harness-adapters/SKILL.md",
+      "path": ".agents/skills/pi-operations/SKILL.md",
       "audience": "agent-runtime"
     },
     {
@@ -246,14 +241,6 @@
       "audience": "agent-runtime"
     },
     {
-      "path": "docs/supervision-protocols/unknown.md",
-      "audience": "agent-runtime"
-    },
-    {
-      "path": "docs/tmux-backend.md",
-      "audience": "operator-current"
-    },
-    {
       "path": "docs/trace-context.md",
       "audience": "maintainer-architecture"
     },
@@ -274,7 +261,7 @@
       "audience": "maintainer-verification"
     },
     {
-      "path": "docs/verification/runtime-backends.md",
+      "path": "docs/verification/herdr-runtime.md",
       "audience": "maintainer-verification"
     },
     {

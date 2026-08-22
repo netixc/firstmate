@@ -62,15 +62,11 @@ ack_return() {  # <case-dir> <return-output>
     "$dir/bin/fm-wake-drain.sh" --ack-through "$sequence" --recovery-generation "$generation"
 }
 
-seed_live_blocker() {  # <case-dir> <backend> <key>
-  local dir=$1 backend=$2 key=$3 target
-  case "$backend" in
-    tmux) target='synthetic:fm-repair-task' ;;
-    herdr) target='fm-lab-synthetic:w1:p2' ;;
-  esac
+seed_live_blocker() {  # <case-dir> <key>
+  local dir=$1 key=$2
   cat > "$dir/home/state/repair-task.meta" <<EOF
-window=$target
-backend=$backend
+window=fm-lab-synthetic:w1:p2
+backend=herdr
 kind=ship
 EOF
   printf 'blocked [key=%s]: firstmate can refresh the synthetic token\n' "$key" > "$dir/home/state/repair-task.status"
@@ -80,7 +76,7 @@ test_return_gate_orders_catchup_before_bearings() {
   local dir out rc gate wake_count
   dir="$TMP_ROOT/ordering"
   install_runner "$dir"
-  seed_live_blocker "$dir" herdr synthetic-dependency
+  seed_live_blocker "$dir" synthetic-dependency
   date +%s > "$dir/home/state/.afk"
   printf 'repair-task.status: blocked synthetic dependency\n' > "$dir/home/state/.subsuper-escalations"
   printf 'fm away-mode inject WEDGED: 4555s undelivered\n' > "$dir/home/state/.subsuper-inject-wedged"
@@ -148,18 +144,17 @@ test_return_gate_orders_catchup_before_bearings() {
 }
 
 test_explicit_reclassification_requires_durable_reason() {
-  local backend dir out rc
-  for backend in tmux herdr; do
-    dir="$TMP_ROOT/reclassify-$backend"
-    install_runner "$dir"
-    seed_live_blocker "$dir" "$backend" vendor-release
+  local dir out rc
+  dir="$TMP_ROOT/reclassify-herdr"
+  install_runner "$dir"
+  seed_live_blocker "$dir" vendor-release
     date +%s > "$dir/home/state/.afk"
     : > "$dir/home/state/.fake-drain"
     set +e
     out=$(run_return "$dir" begin)
     rc=$?
     set -e
-    [ "$rc" -eq 3 ] || fail "$backend blocker did not open the return gate"
+  [ "$rc" -eq 3 ] || fail "Herdr blocker did not open the return gate"
 
     # A pause alone cannot mask the keyed blocker. The old concern must be
     # explicitly resolved with the durable reclassification reason first.
@@ -168,14 +163,13 @@ test_explicit_reclassification_requires_durable_reason() {
     out=$(run_return "$dir" check)
     rc=$?
     set -e
-    [ "$rc" -eq 3 ] || fail "$backend pause silently masked an unresolved blocked key"
+  [ "$rc" -eq 3 ] || fail "a pause silently masked an unresolved blocked key"
 
     printf 'resolved [key=vendor-release]: reclassified as an external wait because the synthetic vendor owns the next event\n' >> "$dir/home/state/repair-task.status"
     printf 'paused [key=vendor-release]: waiting for the synthetic vendor window\n' >> "$dir/home/state/repair-task.status"
-    out=$(run_return "$dir" check) || fail "$backend durable reclassification did not clear the return gate: $out"
-    [ ! -e "$dir/home/state/.afk-return-catchup" ] || fail "$backend reclassification left a gate behind"
-  done
-  pass "tmux and Herdr blockers require the same explicit durable reclassification before ordinary work"
+  out=$(run_return "$dir" check) || fail "durable reclassification did not clear the return gate: $out"
+  [ ! -e "$dir/home/state/.afk-return-catchup" ] || fail "reclassification left a gate behind"
+  pass "Herdr blockers require an explicit durable reclassification before ordinary work"
 }
 
 test_captain_decision_does_not_masquerade_as_firstmate_blocker() {
@@ -183,8 +177,8 @@ test_captain_decision_does_not_masquerade_as_firstmate_blocker() {
   dir="$TMP_ROOT/captain-decision"
   install_runner "$dir"
   cat > "$dir/home/state/decision-task.meta" <<'EOF'
-window=synthetic:fm-decision-task
-backend=tmux
+window=fm-lab-synthetic:w2:p1
+backend=herdr
 kind=ship
 EOF
   printf 'needs-decision [key=api-shape]: captain must choose the synthetic API shape\n' > "$dir/home/state/decision-task.status"
@@ -238,7 +232,7 @@ test_away_reentry_refuses_pending_return_gate() {
   mkdir -p "$dir/home/state" "$dir/home/data" "$dir/home/config"
   printf 'schema\tfm-afk-return.v1\nphase\tblocked\n' > "$dir/home/state/.afk-return-catchup"
   set +e
-  out=$(FM_HOME="$dir/home" FM_STATE_OVERRIDE="$dir/home/state" "$ROOT/bin/fm-afk-launch.sh" start-native 2>&1)
+  out=$(FM_HOME="$dir/home" FM_STATE_OVERRIDE="$dir/home/state" "$ROOT/bin/fm-afk-launch.sh" start 2>&1)
   rc=$?
   set -e
   [ "$rc" -ne 0 ] || fail "away re-entry succeeded while return catch-up was pending"

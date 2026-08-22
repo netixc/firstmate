@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
-# tests/fm-trace-context-lib.test.sh - unit tests for the native, default-off
-# W3C trace-context library (bin/fm-trace-context-lib.sh) plus structural checks
-# that bin/fm-spawn.sh wires it in at the pre-launch injection seam and that the
-# capability is inherited into secondmate homes. Pure functions, no backend and
-# no live spawn required.
+# tests/fm-trace-context-lib.test.sh - behavioral tests for the native,
+# default-off W3C trace-context public library interface and Secondmate config
+# inheritance. No live spawn is required.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -213,43 +211,53 @@ ef_res=$(FM_TRACE_CONTEXT=on fm_trace_context_resolve "$CFG_ON" "$NOMETA"); ef_r
 [ -z "$ef_res" ] && [ "$ef_res_rc" -eq 0 ] || fail "resolve must omit and STILL return 0 on entropy failure (rc=$ef_res_rc out='$ef_res')"
 pass "entropy failure omits telemetry safely: mint reports failure, resolve returns success with no carrier"
 
-# --- fail-independent timing: no hang source, always returns 0 ---------------
+# --- fail-independent timing and command-provider isolation -----------------
 
-assert_no_grep 'sleep' "$ROOT/bin/fm-trace-context-lib.sh" "trace-context lib must not sleep on the spawn path"
-assert_no_grep 'timeout' "$ROOT/bin/fm-trace-context-lib.sh" "trace-context lib must not depend on an external timeout"
-assert_no_grep 'command:' "$ROOT/bin/fm-trace-context-lib.sh" "trace-context lib must not run an arbitrary command provider"
+BLOCK_BIN="$WORK/blocking-tools"
+BLOCK_LOG="$WORK/blocking-tools.log"
+BOUNDED_OUT="$WORK/bounded-resolve.out"
+mkdir -p "$BLOCK_BIN"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  "printf '%s\\n' \"\${0##*/}\" >> \"\$FM_TRACE_STUB_LOG\"" \
+  'exit 97' > "$BLOCK_BIN/blocker"
+chmod +x "$BLOCK_BIN/blocker"
+ln -s blocker "$BLOCK_BIN/sleep"
+ln -s blocker "$BLOCK_BIN/timeout"
+ln -s blocker "$BLOCK_BIN/trace-provider"
+: > "$BLOCK_LOG"
+PATH="$BLOCK_BIN:$PATH" FM_TRACE_STUB_LOG="$BLOCK_LOG" \
+  FM_TRACE_CONTEXT_COMMAND=trace-provider TRACE_CONTEXT_COMMAND=trace-provider \
+  perl -e 'my $pid=fork; die unless defined $pid; if (!$pid) { exec @ARGV } local $SIG{ALRM}=sub { kill "TERM", $pid; waitpid $pid, 0; exit 124 }; alarm 3; waitpid $pid, 0; alarm 0; exit($? >> 8)' \
+  bash -c '. "$1"; FM_TRACE_CONTEXT=on fm_trace_context_resolve "$2" "$3"' \
+  trace-context-bounded "$ROOT/bin/fm-trace-context-lib.sh" "$CFG_ON" "$NOMETA" > "$BOUNDED_OUT"
+bounded_rc=$?
+expect_code 0 "$bounded_rc" "enabled resolver must complete within the bounded execution window"
+fm_trace_context_valid "$(cat "$BOUNDED_OUT")" || fail "bounded resolver did not emit a valid carrier"
+[ ! -s "$BLOCK_LOG" ] || fail "resolver invoked a forbidden delay, watchdog, or configurable command: $(cat "$BLOCK_LOG")"
 fm_trace_context_resolve "$CFG_OFF" "$NOMETA" >/dev/null || fail "resolve must return 0 when off"
-pass "the resolver has no sleep/timeout/command hang source and always returns success"
+pass "resolver completes within a bound, ignores command-provider inputs, and invokes no delay or watchdog tools"
 
-# --- supported backend resolver matrix ---------------------------------------
+# --- Herdr execution remains trace-context independent ----------------------
 
-# shellcheck source=/dev/null
-. "$ROOT/bin/fm-backend.sh"
-for backend in tmux herdr; do
-  case "$backend" in
-    tmux)
-      resolved_backend=$(FM_BACKEND='' FM_BACKEND_CONFIG_DIR="$CFG_OFF" TMUX='test,1,0' HERDR_ENV='' fm_backend_name)
-      carrier=$(FM_TRACE_CONTEXT=on TMUX='test,1,0' HERDR_ENV='' fm_trace_context_resolve "$CFG_OFF" "$WORK/$backend.meta")
-      ;;
-    herdr)
-      resolved_backend=$(FM_BACKEND='' FM_BACKEND_CONFIG_DIR="$CFG_OFF" TMUX='' HERDR_ENV=1 fm_backend_name 2>/dev/null)
-      carrier=$(FM_TRACE_CONTEXT=on TMUX='' HERDR_ENV=1 fm_trace_context_resolve "$CFG_OFF" "$WORK/$backend.meta")
-      ;;
-  esac
-  [ "$resolved_backend" = "$backend" ] || fail "$backend runtime context resolved as '$resolved_backend'"
-  fm_trace_context_valid "$carrier" || fail "$backend runtime context must resolve a valid traceparent: '$carrier'"
+carrier=$(FM_TRACE_CONTEXT=on HERDR_ENV=1 fm_trace_context_resolve "$CFG_OFF" "$WORK/herdr.meta")
+fm_trace_context_valid "$carrier" || fail "Herdr execution must resolve a valid traceparent: '$carrier'"
+pass "Herdr execution resolves trace context through the public interface"
+
+# --- task prose is inert and is not a carrier source -------------------------
+
+PROSE_DIR="$WORK/prose"
+PROSE_META="$PROSE_DIR/task.meta"
+PROSE_CANARY="$PROSE_DIR/executed"
+mkdir -p "$PROSE_DIR"
+for prose in brief.md prompt.md report.md task.status; do
+  printf 'traceparent=%s\n%s\n' "$VALID" "${dollar}(touch $PROSE_CANARY)" > "$PROSE_DIR/$prose"
 done
-pass "tmux and Herdr runtime contexts both resolve valid carriers through public interfaces"
-
-# --- no prompt / task-prose reads (code only, comments stripped) --------------
-
-LIB_CODE=$(sed 's/#.*$//' "$ROOT/bin/fm-trace-context-lib.sh")
-for tok in brief prompt report status ; do
-  case "$LIB_CODE" in
-    *"$tok"*) fail "trace-context lib code must never read task prose, but references '$tok'" ;;
-  esac
-done
-pass "the lib code never reads a brief, prompt, report, or status - it cannot leak content"
+prose_carrier=$(FM_TRACE_CONTEXT=on fm_trace_context_resolve "$CFG_ON" "$PROSE_META")
+fm_trace_context_valid "$prose_carrier" || fail "resolver did not mint a valid carrier beside task prose"
+[ "$prose_carrier" != "$VALID" ] || fail "resolver adopted a carrier from task prose"
+[ ! -e "$PROSE_CANARY" ] || fail "resolver executed task prose"
+pass "resolver neither reads nor executes neighboring brief, prompt, report, or status content"
 
 # --- secondmate inheritance wires the nested chain ---------------------------
 

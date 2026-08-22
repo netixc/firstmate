@@ -56,9 +56,10 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(CDPATH='' cd "$SCRIPT_DIR/.." && pwd -P)}"
 . "$SCRIPT_DIR/fm-remote-job-lib.sh"
 # shellcheck source=bin/fm-tasks-axi-lib.sh
 . "$SCRIPT_DIR/fm-tasks-axi-lib.sh"
+# shellcheck source=bin/fm-herdr.sh
+. "$SCRIPT_DIR/fm-herdr.sh"
 REQUIRED_TOOLS=(git jq herdr tasks-axi treehouse)
-HARNESS_TOOLS=(pi)
-OPTIONAL_TOOLS=(tmux no-mistakes gh)
+OPTIONAL_TOOLS=(no-mistakes gh)
 LAUNCH_AGENT_LABEL=dev.firstmate.herdr.fm-remote
 # The dedicated remote-secondmate session. The user's interactive Herdr work
 # remains in the separate default session, which this readiness check never
@@ -84,6 +85,8 @@ case "${1:-}" in
   *) usage ;;
 esac
 [ "$#" -eq 0 ] || usage
+
+fm_herdr_require_runtime || exit 1
 
 PLATFORM=$(fm_remote_job_platform)
 UID_NUM=$(id -u 2>/dev/null) || UID_NUM=
@@ -142,17 +145,16 @@ herdr_cli_available() {
 herdr_adapter_load() {
   [ -z "${FM_REMOTE_DOCTOR_HERDR_LOADED:-}" ] || return 0
   herdr_cli_available || return 1
-  [ -f "$SCRIPT_DIR/fm-backend.sh" ] && [ -f "$SCRIPT_DIR/backends/herdr.sh" ] || return 1
-  # shellcheck source=bin/fm-backend.sh
-  . "$SCRIPT_DIR/fm-backend.sh" || return 1
-  fm_backend_source herdr || return 1
+  [ -f "$SCRIPT_DIR/fm-herdr.sh" ] && [ -f "$SCRIPT_DIR/fm-herdr.sh" ] || return 1
+  # shellcheck source=bin/fm-herdr.sh
+  . "$SCRIPT_DIR/fm-herdr.sh" || return 1
   FM_REMOTE_DOCTOR_HERDR_LOADED=1
 }
 
 herdr_server_running() {
   local running
   herdr_adapter_load || return 1
-  running=$(fm_backend_herdr_cli "$HERDR_SESSION_NAME" status --json 2>/dev/null \
+  running=$(fm_herdr_cli "$HERDR_SESSION_NAME" status --json 2>/dev/null \
     | jq -r '.server.running // false' 2>/dev/null) || return 1
   [ "$running" = true ]
 }
@@ -310,7 +312,7 @@ check_remote_job_worker() {
 }
 
 report_required_tools() {
-  local tool resolved harness
+  local tool resolved
   MISSING=()
   for tool in "${REQUIRED_TOOLS[@]}"; do
     resolved=$(command -v "$tool" 2>/dev/null || true)
@@ -326,15 +328,13 @@ report_required_tools() {
       MISSING+=("$tool")
     fi
   done
-  for harness in "${HARNESS_TOOLS[@]}"; do
-    resolved=$(command -v "$harness" 2>/dev/null || true)
-    if [ -n "$resolved" ] && [ -x "$resolved" ]; then
-      printf 'required harness=%s:%s\n' "$harness" "$resolved"
-      return 0
-    fi
-  done
-  printf 'required harness=MISSING\n'
-  MISSING+=(harness)
+  resolved=$(command -v pi 2>/dev/null || true)
+  if [ -n "$resolved" ] && [ -x "$resolved" ]; then
+    printf 'required pi=%s\n' "$resolved"
+    return 0
+  fi
+  printf 'required pi=MISSING\n'
+  MISSING+=(pi)
 }
 
 report_required_tools_from_worker() {
@@ -363,7 +363,7 @@ report_required_tools_from_worker() {
     fact=${line#required }
     name=${fact%%=*}
     value=${fact#*=}
-    case "$name" in git|jq|herdr|tasks-axi|treehouse|harness) ;; *) valid=0; continue ;; esac
+    case "$name" in git|jq|herdr|tasks-axi|treehouse|pi) ;; *) valid=0; continue ;; esac
     case "$seen" in *" $name "*) valid=0; continue ;; esac
     seen="$seen$name "
     count=$((count + 1))
@@ -429,14 +429,10 @@ repair_required_wrappers() {
   for tool in "${REQUIRED_TOOLS[@]}"; do
     repair_tool_wrapper "$tool" || true
   done
-  for tool in "${HARNESS_TOOLS[@]}"; do
-    resolved=$(command -v "$tool" 2>/dev/null || true)
-    [ -z "$resolved" ] || [ ! -x "$resolved" ] || return 0
-  done
-  for tool in "${HARNESS_TOOLS[@]}"; do
-    fm_remote_job_manager_tool "${HOME:-}" "$tool" >/dev/null 2>&1 || continue
-    repair_tool_wrapper "$tool" && return 0
-  done
+  resolved=$(command -v pi 2>/dev/null || true)
+  [ -z "$resolved" ] || [ ! -x "$resolved" ] || return 0
+  fm_remote_job_manager_tool "${HOME:-}" pi >/dev/null 2>&1 || return 0
+  repair_tool_wrapper pi || true
 }
 
 fix_remote_job_worker() {
@@ -664,7 +660,7 @@ start_herdr_server() {
     fix_report herdr-server failed "herdr and jq must both resolve before the server can be started"
     return 1
   fi
-  if fm_backend_herdr_server_ensure "$HERDR_SESSION_NAME" >/dev/null 2>&1; then
+  if fm_herdr_server_ensure "$HERDR_SESSION_NAME" >/dev/null 2>&1; then
     fix_report herdr-server applied "started the herdr server for session $HERDR_SESSION_NAME"
     return 0
   fi

@@ -16,7 +16,8 @@ if [ "${FM_SESSIONSTART_TEST_HARNESS:-0}" != 1 ]; then
   HARNESS_FIXTURE=$(mktemp -d "${TMPDIR:-/tmp}/fm-sessionstart-harness.XXXXXX") || exit 1
   ln -s /bin/bash "$HARNESS_FIXTURE/pi" || exit 1
   # shellcheck disable=SC2016 # Expand in the fixture shell, not this parent.
-  FM_SESSIONSTART_TEST_HARNESS=1 PI_CODING_AGENT=true "$HARNESS_FIXTURE/pi" \
+  FM_SESSIONSTART_TEST_HARNESS=1 FM_SESSIONSTART_TEST_PI_PATH="$HARNESS_FIXTURE" \
+    PI_CODING_AGENT=true "$HARNESS_FIXTURE/pi" \
     -c '"$@"; rc=$?; :; exit "$rc"' _ "$0" "$@"
   HARNESS_STATUS=$?
   rm -rf "$HARNESS_FIXTURE"
@@ -137,8 +138,8 @@ test_owned_lock_is_silent() {
 # fm-session-start.sh can execute: a git repo on main so the tangle check
 # behaves, plus the home directories the digest reads. The deliberately bare
 # PATH keeps every bootstrap probe fast and hermetic - it reports missing tools
-# instead of reaching the host's real gh/tmux/tasks-axi.
-RUN_PATH=${FM_TEST_BASE_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
+# instead of reaching the host's real gh/Herdr/tasks-axi.
+RUN_PATH="${FM_SESSIONSTART_TEST_PI_PATH:+$FM_SESSIONSTART_TEST_PI_PATH:}${FM_TEST_BASE_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}"
 
 make_run_primary() {
   local dir=$1
@@ -174,7 +175,7 @@ test_run_startup_runs_the_full_digest() {
   out=$(run_hook "$root" --source startup </dev/null) || status=$?
   expect_code 0 "$status" "run wrapper startup"
   assert_contains "$out" "$FULL_BANNER$root" "startup did not run the full digest"
-  assert_contains "$out" "lock acquired: harness pid" \
+  assert_contains "$out" "lock acquired: Pi pid" \
     "the portable startup fixture did not supply a real harness process"
   assert_not_contains "$out" "$REEMIT_BANNER" "startup was misrouted to a context re-emit"
   assert_not_contains "$out" "FIRSTMATE_OP" "a run-tier open also emitted the nudge instruction"

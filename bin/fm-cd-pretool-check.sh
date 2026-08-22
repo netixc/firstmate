@@ -8,7 +8,7 @@
 # bin/fm-cd-command-policy.mjs is the sole owner of the block/allow decision; it
 # reuses the shell classifier owned by bin/fm-arm-command-policy.mjs. This
 # wrapper only scopes the guard to the real primary checkout, acquires the
-# harness payload, invokes that policy, and renders the established harness
+# Pi hook payload, invokes that policy, and renders the established Pi hook
 # responses. It never executes, sources, evaluates, or expands the command.
 # See docs/cd-guard.md for the complete contract and validation record.
 #

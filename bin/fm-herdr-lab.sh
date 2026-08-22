@@ -25,6 +25,10 @@
 # teardown requires that record to be identical afterward.
 set -u
 
+FM_HERDR_LAB_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=/dev/null
+. "$FM_HERDR_LAB_ROOT/bin/fm-herdr.sh"
+
 fm_herdr_lab_error() {
   echo "fm-herdr-lab: $*" >&2
 }
@@ -304,6 +308,7 @@ fm_herdr_lab_usage() {
 
 fm_herdr_lab_main() {
   local command=${1:-}
+  fm_herdr_require_runtime || return 1
   case "$command" in
     name)
       [ "$#" -eq 2 ] || { fm_herdr_lab_usage >&2; return 2; }

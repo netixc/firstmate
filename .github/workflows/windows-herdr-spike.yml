@@ -262,10 +262,9 @@ jobs:
                 if (
                   export FM_ROOT_OVERRIDE="$GITHUB_WORKSPACE"
                   export FM_HOME="$RUNNER_TEMP/fm-windows-herdr-home"
-                  export FM_BACKEND_EVENTS_CAPABILITY_CONFIRMED=1
-                  . "$GITHUB_WORKSPACE/bin/fm-backend.sh"
-                  fm_backend_source herdr
-                  fm_backend_herdr_wait_transition "$session" 3 "$event_state" "$session:$pane_id"
+                  export FM_HERDR_EVENTS_CAPABILITY_CONFIRMED=1
+                  . "$GITHUB_WORKSPACE/bin/fm-herdr.sh"
+                  fm_herdr_wait_transition "$session" 3 "$event_state" "$session:$pane_id"
                 ) >>"$details" 2>&1; then
                   event_rc=0
                 else
@@ -273,10 +272,10 @@ jobs:
                 fi
                 case "$event_rc" in
                   0|1)
-                    record 'Event path fallback to polling' PASS "adapter event wait returned $event_rc after a bounded wait; native event transport is usable"
+                    record 'Event path fallback to polling' PASS "Herdr event wait returned $event_rc after a bounded wait; native event transport is usable"
                     ;;
                   2)
-                    record 'Event path fallback to polling' DEGRADED 'adapter returned 2 for an unusable AF_UNIX/mkfifo event path, the documented signal to use polling'
+                    record 'Event path fallback to polling' DEGRADED 'Herdr returned 2 for an unusable AF_UNIX/mkfifo event path, the documented signal to use polling'
                     ;;
                   *)
                     record 'Event path fallback to polling' FAIL "adapter event wait returned unexpected status $event_rc"

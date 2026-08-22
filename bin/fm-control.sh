@@ -4,8 +4,7 @@
 #
 # Usage: fm-control.sh <task-id> interrupt
 #        fm-control.sh <task-id> exit
-#        fm-control.sh <task-id> relaunch [--harness pi] [--model <name>]
-#                                         [--effort <level>]
+#        fm-control.sh <task-id> relaunch [--model <name>] [--effort <level>]
 #                                         (--note <text> | --note-file <path>)
 #
 # Why this exists, and how it differs from fm-send.sh. bin/fm-send.sh is the
@@ -14,30 +13,27 @@
 # That marking is right for a message and wrong for a lifecycle command - a
 # marked "/quit" arrives as ordinary chat the agent reasons ABOUT instead of
 # executing. This script is the control plane: semantic process control with a
-# closed verb list, per-harness mechanics owned by an executable adapter
+# closed verb list, direct Pi mechanics owned by an executable contract
 # (bin/fm-control-lib.sh) rather than improvised in agent prose, and a verified
 # postcondition for every action. There is deliberately NO arbitrary-text and
 # NO generic raw-key entry point here; fm-send remains the only way to send an
 # agent something to read.
 #
-#   interrupt  Deliver the harness's verified interrupt sequence. The agent
+#   interrupt  Deliver Pi's verified interrupt sequence. The agent
 #              keeps running. Postcondition: delivery succeeded, the endpoint
-#              still exists, and the agent is still alive where the backend can
-#              classify that. Cancellation is confirmed only from an adapter-
-#              owned acknowledgement and otherwise reported unconfirmed. Busy
-#              state is never rewritten as proof of the action.
+#              still exists, and Herdr still classifies the agent as alive.
+#              Cancellation is confirmed only from Pi's acknowledgement and
+#              otherwise reported unconfirmed. Busy state is never rewritten
+#              as proof of the action.
 #   exit       Stop the agent, preserving its terminal endpoint, worktree, and
 #              every uncommitted change. Interrupts first when the task reads
-#              busy, then submits the harness's exit command. Postcondition:
-#              the backend's recovery-grade classifier reports the agent gone.
+#              busy, then submits Pi's exit command. Postcondition:
+#              Herdr's recovery-grade classifier reports the agent gone.
 #              Already-stopped is success (idempotent).
 #   relaunch   Transactionally replace the running Pi agent with a new one, in
 #              the SAME endpoint and SAME worktree, optionally changing model
-#              or effort. With no explicit axis, a secondmate re-resolves its
-#              durable config/secondmate-harness pin (Pi plus its optional model
-#              and effort tokens) exactly as any other respawn does, while a
-#              ship or scout keeps the exact Pi adapter already recorded for it.
-#              An unsupported recorded harness refuses before any lifecycle action.
+#              or effort. Every replacement runs Pi directly.
+#              A non-Pi recorded runtime refuses before any lifecycle action.
 #              --note is required for a ship or scout, whose replacement
 #              inherits the local copy but none of the conversation; a
 #              secondmate reconciles its own home's records at startup, so its
@@ -54,14 +50,13 @@
 # endpoint, or discarding work stays with bin/fm-teardown.sh, which owns the
 # landed-work test.
 #
-# `resume` is not a verb: it is not deterministic across the verified adapters
-# (bin/fm-control-lib.sh's header owns that reasoning). `relaunch` covers the
-# same need for every adapter because the brief on disk, not a harness-private
-# session, is the durable instruction.
+# `resume` is not a verb: Pi has no verified pane-resume contract.
+# `relaunch` covers the same need because the brief on disk, not a
+# Pi-private session, is the durable instruction.
 #
 # Targeting is EXACT: only a bare task id with a state/<id>.meta record in
 # THIS home is accepted, and the record must pass the shared endpoint-identity
-# validation (bin/fm-backend.sh's fm_backend_validate_task_endpoint). A legacy
+# validation (bin/fm-herdr.sh's fm_herdr_validate_task_endpoint). A legacy
 # fm-<id> label, an explicit session:window endpoint, and a bare window name
 # are all refused - a lifecycle command delivered to the wrong endpoint is far
 # worse than a loud refusal.
@@ -70,12 +65,10 @@
 # host, so no postcondition this plane verifies could be read for it here.
 #
 # Fail-closed boundaries:
-#   - An unverified harness, or a harness whose control mechanics are unknown,
-#     is refused rather than guessed at.
-#   - A backend that cannot deliver the harness's interrupt key is refused
-#   - `exit` and `relaunch` require a backend with a recovery-grade agent-state
-#     classifier (tmux and Herdr), because without one the "the agent stopped"
-#     postcondition cannot be proven.
+#   - A record that does not name Pi is refused rather than reinterpreted.
+#   - `exit` and `relaunch` require Herdr's recovery-grade agent-state
+#     classifier, because without it the "the agent stopped" postcondition
+#     cannot be proven.
 #   - An ambiguous or unreadable endpoint state refuses; only a positively
 #     classified state acts.
 #
@@ -119,8 +112,8 @@ DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
   exit 1
 }
 
-# shellcheck source=bin/fm-backend.sh
-. "$SCRIPT_DIR/fm-backend.sh"
+# shellcheck source=bin/fm-herdr.sh
+. "$SCRIPT_DIR/fm-herdr.sh"
 # shellcheck source=bin/fm-busy-lib.sh
 . "$SCRIPT_DIR/fm-busy-lib.sh"
 # shellcheck source=bin/fm-control-lib.sh
@@ -129,6 +122,8 @@ DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 . "$SCRIPT_DIR/fm-pr-lib.sh"
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
+
+fm_herdr_require_runtime || exit 1
 
 POLL=${FM_CONTROL_POLL:-0.5}
 EXIT_WAIT=${FM_CONTROL_EXIT_WAIT:-30}
@@ -178,10 +173,8 @@ if ! fm_control_verb_allowed "$VERB"; then
   exit 2
 fi
 
-NEW_HARNESS=
 NEW_MODEL=
 NEW_EFFORT=
-HARNESS_SET=0
 MODEL_SET=0
 EFFORT_SET=0
 NOTE=
@@ -193,7 +186,7 @@ for a in "$@"; do
       --*) die "--$want_value requires a value" ;;
     esac
     case "$want_value" in
-      harness) NEW_HARNESS=$a; HARNESS_SET=1 ;;
+      harness) die "--harness is retired because Pi is the sole worker runtime; remove the option" ;;
       model) NEW_MODEL=$a; MODEL_SET=1 ;;
       effort) NEW_EFFORT=$a; EFFORT_SET=1 ;;
       note) NOTE=$a; NOTE_SET=1 ;;
@@ -208,7 +201,7 @@ for a in "$@"; do
   fi
   case "$a" in
     --harness) want_value=harness ;;
-    --harness=*) NEW_HARNESS=${a#--harness=}; HARNESS_SET=1 ;;
+    --harness=*) die "--harness is retired because Pi is the sole worker runtime; remove the option" ;;
     --model) want_value=model ;;
     --model=*) NEW_MODEL=${a#--model=}; MODEL_SET=1 ;;
     --effort) want_value=effort ;;
@@ -227,10 +220,9 @@ done
 [ -z "$want_value" ] || die "--$want_value requires a value"
 
 if [ "$VERB" != relaunch ]; then
-  [ "$HARNESS_SET" = 0 ] && [ "$MODEL_SET" = 0 ] && [ "$EFFORT_SET" = 0 ] && [ "$NOTE_SET" = 0 ] \
-    || die "--harness, --model, --effort, and --note apply to 'relaunch' only"
+  [ "$MODEL_SET" = 0 ] && [ "$EFFORT_SET" = 0 ] && [ "$NOTE_SET" = 0 ] \
+    || die "--model, --effort, and --note apply to 'relaunch' only"
 fi
-[ "$HARNESS_SET" = 0 ] || [ -n "$NEW_HARNESS" ] || die "--harness requires a non-empty value"
 [ "$MODEL_SET" = 0 ] || [ -n "$NEW_MODEL" ] || die "--model requires a non-empty value"
 [ "$EFFORT_SET" = 0 ] || [ -n "$NEW_EFFORT" ] || die "--effort requires a non-empty value"
 case "$NEW_EFFORT" in
@@ -241,7 +233,7 @@ esac
 # --- exact task-id resolution ----------------------------------------------
 
 case "$RAW_ID" in
-  *:*) die "'$RAW_ID' is an explicit backend endpoint; fm-control accepts an exact task id only, so a lifecycle command can never land on an endpoint this home does not own" ;;
+  *:*) die "'$RAW_ID' is an explicit Herdr endpoint; fm-control accepts an exact task id only, so a lifecycle command can never land on an endpoint this home does not own" ;;
 esac
 if ! fm_task_id_creation_valid "$RAW_ID"; then
   die "'$RAW_ID' is not a valid task id"
@@ -268,7 +260,7 @@ fi
 # postcondition this plane verifies - the agent-state classification, the busy
 # verdict, the endpoint's existence - would be read here for an endpoint that
 # does not live here. Endpoint validation already refuses such a record, since
-# `window=remote:<id>` can never match a local backend's required shape, so
+# `window=remote:<id>` can never match local Herdr identity, so
 # nothing can be delivered to a wrong endpoint either way. What that refusal
 # cannot say is WHY, and "malformed metadata" is the wrong thing to tell an
 # operator about a correctly configured remote route. Name the placement
@@ -277,26 +269,16 @@ if [ -n "$(fm_meta_get "$META" remote_host)" ]; then
   die "task $ID is a remotely placed secondmate on $(fm_meta_get "$META" remote_host); its agent runs outside this home, so no lifecycle action here could verify that it interrupted, stopped, or came back. Drive its lifecycle on that host, and reconcile it through the secondmate recovery path rather than this plane"
 fi
 
-fm_backend_validate_task_endpoint "$META" "$ID" || exit 1
-BACKEND=$FM_BACKEND_VALIDATED_BACKEND
-T=$FM_BACKEND_VALIDATED_TARGET
-LABEL="fm-$ID"
-RECORDED_HARNESS=$(fm_meta_get "$META" harness)
+fm_herdr_validate_task_endpoint "$META" "$ID" || exit 1
+T=$FM_HERDR_VALIDATED_TARGET
 KIND=$(fm_meta_get "$META" kind)
 WT=$(fm_meta_get "$META" worktree)
 [ -n "$KIND" ] || KIND=ship
 
-HARNESS=$(fm_control_harness_family "$RECORDED_HARNESS") \
-  || die "task $ID records harness '${RECORDED_HARNESS:-none}', which has no verified control mechanics; fm-control refuses to guess an interrupt key or exit command"
-fm_control_harness_supported "$HARNESS" \
-  || die "task $ID records harness '${RECORDED_HARNESS:-none}', which has no verified control mechanics; fm-control refuses to guess an interrupt key or exit command"
-
-fm_backend_validate "$BACKEND" || exit 1
-
 # --- shared helpers ---------------------------------------------------------
 
 agent_state() {
-  fm_backend_agent_state "$BACKEND" "$T"
+  fm_herdr_agent_state "$T"
 }
 
 busy_verdict() {
@@ -324,29 +306,21 @@ wait_agent_state() {  # <timeout> <wanted>...
   return 1
 }
 
-require_state_verified_backend() {  # <verb>
-  fm_control_backend_state_verified "$BACKEND" && return 0
-  die "task $ID runs on the $BACKEND backend, which has no recovery-grade agent-state classifier, so '$1' cannot prove the agent actually stopped; refusing rather than reporting an unproven transition as done"
-}
-
-# send_interrupt_keys: deliver the harness's interrupt key the verified number
-# of times.
+# send_interrupt_keys: deliver Pi's interrupt key the verified number of times.
 send_interrupt_keys() {
   local key repeat i=0
-  key=$(fm_control_interrupt_key "$HARNESS")
-  repeat=$(fm_control_interrupt_repeat "$HARNESS")
-  fm_control_backend_supports_key "$BACKEND" "$key" \
-    || die "harness $HARNESS interrupts with $key, which the $BACKEND backend cannot deliver; refusing to send a different key"
+  key=$(fm_control_interrupt_key)
+  repeat=$(fm_control_interrupt_repeat)
   while [ "$i" -lt "$repeat" ]; do
-    fm_backend_send_key "$BACKEND" "$T" "$key" "$LABEL" \
-      || die "interrupt key $key was not delivered to task $ID on $BACKEND"
+    fm_herdr_send_key "$T" "$key" \
+      || die "interrupt key $key was not delivered to task $ID on Herdr"
     i=$((i + 1))
     [ "$i" -ge "$repeat" ] || sleep 0.2
   done
 }
 
 # deliver_interrupt: deliver the verified key sequence.
-# Surviving adapters expose no prompt cancellation acknowledgement.
+# Pi exposes no prompt cancellation acknowledgement.
 deliver_interrupt() {
   send_interrupt_keys
   printf 'unconfirmed'
@@ -354,17 +328,14 @@ deliver_interrupt() {
 
 verify_interrupt_running() {
   local proof after
-  fm_backend_target_exists "$BACKEND" "$T" "$LABEL" \
+  fm_herdr_target_exists "$T" \
     || die "task $ID's endpoint disappeared while interrupting it; no further control action is safe"
-  proof=endpoint
-  if fm_control_backend_state_verified "$BACKEND"; then
-    # An interrupt cancels a turn; it must never have stopped the agent. This
-    # is the postcondition that separates a landed interrupt from an accident.
-    after=$(agent_state)
-    [ "$after" = alive ] \
-      || die "task $ID's agent is '$after' after its interrupt key; an interrupt must leave the agent running"
-    proof=agent-alive
-  fi
+  # An interrupt cancels a turn; it must never have stopped the agent. This is
+  # the postcondition that separates a landed interrupt from an accident.
+  after=$(agent_state)
+  [ "$after" = alive ] \
+    || die "task $ID's agent is '$after' after its interrupt key; an interrupt must leave the agent running"
+  proof='agent-alive'
   printf '%s' "$proof"
 }
 
@@ -385,7 +356,6 @@ retire_busy_incarnation() {
 # `already-stopped` or `stopped`.
 do_exit() {
   local state cmd verdict cancel interrupt_result=not-needed
-  require_state_verified_backend exit
   state=$(agent_state)
   case "$state" in
     dead)
@@ -413,17 +383,17 @@ do_exit() {
       esac
       ;;
   esac
-  cmd=$(fm_control_exit_command "$HARNESS")
+  cmd=$(fm_control_exit_command)
   # The submit verdict is NOT the postcondition here: a successful exit command
   # destroys the composer the verdict is read from, so a post-exit read can
   # legitimately report anything. Only a hard transport failure aborts; the
   # authoritative proof is the agent-state wait below. The retried Enter still
   # matters, because a slash command opens a completion popup on some TUIs that
   # swallows the first Enter.
-  verdict=$(fm_backend_send_text_submit "$BACKEND" "$T" "$cmd" "$EXIT_RETRIES" "$POLL" 1.2 "$LABEL") \
-    || die "the exit command could not be sent to task $ID on $BACKEND"
+  verdict=$(fm_herdr_send_text_submit "$T" "$cmd" "$EXIT_RETRIES" "$POLL" 1.2) \
+    || die "the exit command could not be sent to task $ID on Herdr"
   [ "$verdict" != send-failed ] \
-    || die "the exit command could not be sent to task $ID on $BACKEND"
+    || die "the exit command could not be sent to task $ID on Herdr"
   state=$(wait_agent_state "$EXIT_WAIT" dead) || {
     die "exit-delivered $ID interrupt=$interrupt_result exit-command=delivered agent-state=$state exit=unconfirmed; the agent did not stop within ${EXIT_WAIT}s"
   }
@@ -450,14 +420,8 @@ RELAUNCH_META_PUBLISHED=0
 RELAUNCH_AGENT_CONFIRMED=0
 RELAUNCH_TX=
 RELAUNCH_BRIEF=
-PRIOR_HARNESS=$HARNESS
-PRIOR_RECORDED_HARNESS=$RECORDED_HARNESS
-CONFIG_HARNESS=
-CONFIG_MODEL=
-CONFIG_EFFORT=
 PRIOR_MODEL=
 PRIOR_EFFORT=
-TARGET_HARNESS=$HARNESS
 TARGET_MODEL=
 TARGET_EFFORT=
 
@@ -469,14 +433,11 @@ journal_write() {  # <phase> [extra-line]...
     echo "task=$ID"
     echo "phase=$phase"
     echo "ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    echo "backend=$BACKEND"
     echo "endpoint=$T"
     echo "worktree=$WT"
     echo "kind=$KIND"
-    echo "from_harness=$PRIOR_RECORDED_HARNESS"
     echo "from_model=$PRIOR_MODEL"
     echo "from_effort=$PRIOR_EFFORT"
-    echo "to_harness=$TARGET_HARNESS"
     echo "to_model=$TARGET_MODEL"
     echo "to_effort=$TARGET_EFFORT"
     local line
@@ -528,17 +489,17 @@ relaunch_rollback() {
     exited|launching)
       if [ "$RELAUNCH_AGENT_CONFIRMED" = 1 ]; then
         journal_write "failed:$RELAUNCH_PHASE" "rollback=none-new-agent-confirmed" || true
-        echo "error: $ID's replacement is running on $TARGET_HARNESS, but transaction completion could not be persisted; its published record was retained for reconciliation" >&2
+        echo "error: $ID's replacement Pi agent is running, but transaction completion could not be persisted; its published record was retained for reconciliation" >&2
       elif [ "$RELAUNCH_META_PUBLISHED" = 1 ] \
          || { [ -n "$RELAUNCH_TX" ] \
               && [ "$(fm_meta_get "$META" control_relaunch_tx)" = "$RELAUNCH_TX" ]; }; then
         # The launch owner published the new incarnation's record. Leaving it
         # in place is the honest state: the task is now recorded on the new
-        # harness with no agent confirmed, which is exactly what recovery
-        # reconciles. Rewriting it back to the old harness would be a second,
+        # Pi with no agent confirmed, which is exactly what recovery
+        # reconciles. Rewriting it back to the prior record would be a second,
         # worse inaccuracy.
         journal_write "failed:$RELAUNCH_PHASE" "rollback=none-new-record-kept" || true
-        echo "error: $ID was relaunched on $TARGET_HARNESS but no running agent could be confirmed; its work is preserved at $WT" >&2
+        echo "error: $ID was relaunched on Pi but no running agent could be confirmed; its work is preserved at $WT" >&2
       else
         journal_write "failed:$RELAUNCH_PHASE" "rollback=prior-record-kept" || true
         echo "error: $ID's agent was stopped but the replacement did not launch; no agent is running, and its work plus the recorded progress note are preserved at $WT" >&2
@@ -549,65 +510,19 @@ relaunch_rollback() {
 }
 
 resolve_relaunch_profile() {
-  PRIOR_HARNESS=$HARNESS
-  PRIOR_RECORDED_HARNESS=$RECORDED_HARNESS
   PRIOR_MODEL=$(fm_meta_get "$META" model)
   PRIOR_EFFORT=$(fm_meta_get "$META" effort)
   [ -n "$PRIOR_MODEL" ] || PRIOR_MODEL=default
   [ -n "$PRIOR_EFFORT" ] || PRIOR_EFFORT=default
-  CONFIG_HARNESS=
-  CONFIG_MODEL=
-  CONFIG_EFFORT=
-  if [ "$KIND" = secondmate ]; then
-    # A secondmate's harness, model, and effort are a durable configured pin
-    # that every respawn re-resolves (the secondmate-provisioning contract), so
-    # a relaunch with no explicit harness picks up a newly configured one
-    # instead of freezing whatever this incarnation happens to run. Crewmates
-    # and scouts deliberately do NOT resolve config here: their harness comes
-    # from firstmate's own dispatch-profile judgment at intake, and silently
-    # re-resolving it would bypass that consultation.
-    CONFIG_HARNESS=$("$SCRIPT_DIR/fm-harness.sh" secondmate 2>/dev/null || true)
-    CONFIG_MODEL=$("$SCRIPT_DIR/fm-harness.sh" secondmate-model 2>/dev/null || true)
-    CONFIG_EFFORT=$("$SCRIPT_DIR/fm-harness.sh" secondmate-effort 2>/dev/null || true)
-    case "$CONFIG_EFFORT" in
-      ''|low|medium|high|xhigh|max) ;;
-      *)
-        echo "warning: config/secondmate-harness effort token '$CONFIG_EFFORT' is not one of low, medium, high, xhigh, max; ignoring" >&2
-        CONFIG_EFFORT=
-        ;;
-    esac
-  fi
-  if [ "$HARNESS_SET" = 1 ]; then
-    fm_control_harness_supported "$NEW_HARNESS" \
-      || die "'$NEW_HARNESS' is not a verified harness; fm-control refuses to relaunch onto an adapter with no verified control or launch mechanics"
-    TARGET_HARNESS=$NEW_HARNESS
-  elif [ "$HARNESS_SET" = 0 ] && [ -n "$CONFIG_HARNESS" ]; then
-    fm_control_harness_supported "$CONFIG_HARNESS" \
-      || die "the configured secondmate harness '$CONFIG_HARNESS' is not verified; fm-control refuses to relaunch onto an adapter with no verified control or launch mechanics"
-    TARGET_HARNESS=$CONFIG_HARNESS
-  else
-    TARGET_HARNESS=$PRIOR_HARNESS
-  fi
-  # A model or effort chosen for the previous harness does not transfer to a
-  # different one, so an explicit harness change resets both axes unless the
-  # caller names them too.
   if [ "$MODEL_SET" = 1 ]; then
     TARGET_MODEL=$NEW_MODEL
-  elif [ "$HARNESS_SET" = 0 ] && [ -n "$CONFIG_HARNESS" ]; then
-    TARGET_MODEL=${CONFIG_MODEL:-default}
-  elif [ "$TARGET_HARNESS" = "$PRIOR_HARNESS" ]; then
-    TARGET_MODEL=$PRIOR_MODEL
   else
-    TARGET_MODEL=default
+    TARGET_MODEL=$PRIOR_MODEL
   fi
   if [ "$EFFORT_SET" = 1 ]; then
     TARGET_EFFORT=$NEW_EFFORT
-  elif [ "$HARNESS_SET" = 0 ] && [ -n "$CONFIG_HARNESS" ]; then
-    TARGET_EFFORT=${CONFIG_EFFORT:-default}
-  elif [ "$TARGET_HARNESS" = "$PRIOR_HARNESS" ]; then
-    TARGET_EFFORT=$PRIOR_EFFORT
   else
-    TARGET_EFFORT=default
+    TARGET_EFFORT=$PRIOR_EFFORT
   fi
 }
 
@@ -710,7 +625,6 @@ do_relaunch() {
   local exit_result state note_line
   local -a spawn_args
 
-  require_state_verified_backend relaunch
   resolve_relaunch_profile
 
   case "$KIND" in
@@ -745,14 +659,14 @@ do_relaunch() {
   journal_write noted "${CHECKPOINT_LINES[@]}" "$note_line"
 
   journal_write stopping "${CHECKPOINT_LINES[@]}" "$note_line"
-  exit_result=$(do_exit)
+  exit_result=$(fm_herdr_with_live_task_endpoint "$META" "$ID" control_do_exit)
   journal_write exited "${CHECKPOINT_LINES[@]}" "$note_line" "exit_result=$exit_result"
 
   # The launch owner (fm-spawn --relaunch) clears the previous incarnation's
-  # per-task harness wiring before arming the new one, so nothing to do here.
+  # per-task Pi wiring before arming the new one, so nothing to do here.
   RELAUNCH_TX="${BASHPID:-$$}.$(date -u +%Y%m%dT%H%M%SZ).$RANDOM"
   journal_write launching "${CHECKPOINT_LINES[@]}" "$note_line" "relaunch_tx=$RELAUNCH_TX"
-  spawn_args=("$ID" --relaunch --harness "$TARGET_HARNESS")
+  spawn_args=("$ID" --relaunch)
   [ "$TARGET_MODEL" = default ] || spawn_args+=(--model "$TARGET_MODEL")
   [ "$TARGET_EFFORT" = default ] || spawn_args+=(--effort "$TARGET_EFFORT")
   if FM_CONTROL_RELAUNCH_TX="$RELAUNCH_TX" \
@@ -761,7 +675,7 @@ do_relaunch() {
   else
     [ "$(fm_meta_get "$META" control_relaunch_tx)" != "$RELAUNCH_TX" ] \
       || RELAUNCH_META_PUBLISHED=1
-    die "the replacement agent for $ID could not be launched on $TARGET_HARNESS"
+    die "the replacement Pi agent for $ID could not be launched"
   fi
 
   state=$(wait_agent_state "$LAUNCH_WAIT" alive) || {
@@ -771,31 +685,36 @@ do_relaunch() {
 
   journal_write complete "${CHECKPOINT_LINES[@]}" "$note_line" "exit_result=$exit_result"
   RELAUNCH_ACTIVE=0
-  echo "relaunched $ID harness=$TARGET_HARNESS from=$PRIOR_RECORDED_HARNESS model=$TARGET_MODEL effort=$TARGET_EFFORT backend=$BACKEND endpoint=$T worktree=$WT"
+  echo "relaunched $ID model=$TARGET_MODEL effort=$TARGET_EFFORT endpoint=$T worktree=$WT"
 }
 
 # --- verbs ------------------------------------------------------------------
 
+control_do_interrupt() {
+  local target=$1 state
+  T=$target
+  state=$(agent_state)
+  case "$state" in
+    alive) ;;
+    dead|missing) die "no agent is running at task $ID's recorded endpoint (state: $state); there is nothing to interrupt" ;;
+    *) die "task $ID's endpoint reads '$state' rather than a positively classified state; refusing to send a lifecycle key into an unattributed endpoint" ;;
+  esac
+  do_interrupt
+}
+
+control_do_exit() {
+  T=$1
+  do_exit
+}
+
 case "$VERB" in
   interrupt)
-    state=$(agent_state)
-    case "$state" in
-      alive) ;;
-      unverified)
-        # No recovery-grade classifier on this backend. Interrupt is
-        # non-destructive and its endpoint-existence postcondition is still
-        # real, so it proceeds - the printed proof names exactly what was
-        # verified rather than implying more.
-        ;;
-      dead|missing) die "no agent is running at task $ID's recorded endpoint (state: $state); there is nothing to interrupt" ;;
-      *) die "task $ID's endpoint reads '$state' rather than a positively classified state; refusing to send a lifecycle key into an unattributed endpoint" ;;
-    esac
-    proof=$(do_interrupt)
-    echo "interrupt-delivered $ID harness=$HARNESS backend=$BACKEND verified=$proof"
+    proof=$(fm_herdr_with_live_task_endpoint "$META" "$ID" control_do_interrupt)
+    echo "interrupt-delivered $ID endpoint=$T verified=$proof"
     ;;
   exit)
-    result=$(do_exit)
-    echo "$result $ID harness=$HARNESS backend=$BACKEND endpoint=$T worktree=$WT"
+    result=$(fm_herdr_with_live_task_endpoint "$META" "$ID" control_do_exit)
+    echo "$result $ID endpoint=$T worktree=$WT"
     ;;
   relaunch)
     do_relaunch

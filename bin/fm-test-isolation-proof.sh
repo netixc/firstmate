@@ -9,7 +9,7 @@
 #
 # It does NOT:
 #   - compose production CI shard membership (fm-test-run.sh owns that partition)
-#   - run real Herdr, real default-server tmux, watcher lock races, AFK, live
+#   - run real Herdr, watcher lock races, AFK, live
 #     harnesses, or GUI backends
 #
 # Usage:
@@ -90,10 +90,7 @@ exclusion_reason() {
     fm-test-isolation-proof.test.sh)
       printf '%s\n' 'isolation-proof harness contract itself; must not re-enter concurrent matrix'
       ;;
-    fm-backend-tmux-smoke.test.sh)
-      printf '%s\n' 'real tmux on a private socket; keep exclusive of default-server contention class'
-      ;;
-    fm-backend.test.sh)
+    fm-herdr-selection.test.sh)
       printf '%s\n' 'old-vs-new main checkout diff fixture; gray-zone concurrent git/worktree cost'
       ;;
     fm-spawn-dispatch-profile.test.sh|fm-spawn-worktree-settle.test.sh|fm-trace-context-spawn.test.sh)
@@ -109,25 +106,22 @@ exclusion_reason() {
       printf '%s\n' 'session-start task/presentation lock matrix; keep serial until dedicated concurrent proof'
       ;;
     fm-daemon.test.sh|fm-guard-stale-banner.test.sh|fm-pi-watch-extension.test.sh|\
-    fm-supervision-events.test.sh|fm-turnend-guard.test.sh|fm-wake-daemon-lifecycle-e2e.test.sh|\
-    fm-wake-queue.test.sh|fm-watch-triage.test.sh|\
+    fm-supervision-events.test.sh|fm-turnend-guard.test.sh|fm-wake-queue.test.sh|fm-watch-triage.test.sh|\
     fm-watcher-lock.test.sh)
       printf '%s\n' 'watcher/wake/lock family; intentional process locks and daemon races'
       ;;
-    fm-afk-inject-e2e.test.sh|fm-afk-return.test.sh|fm-afk-inject-herdr-e2e.test.sh|\
+    fm-afk-return.test.sh|fm-afk-inject-herdr-e2e.test.sh|\
     fm-afk-launch.test.sh)
       printf '%s\n' 'AFK lifecycle / inject path; exclusive daemon and pane control'
       ;;
     fm-afk-pi-herdr-return-e2e.test.sh|\
-    fm-pi-primary-live-e2e.test.sh|\
-    fm-quota-array-dispatch-live-e2e.test.sh|fm-send-secondmate-marker-herdr-e2e.test.sh|\
-    fm-sessionstart-instruction-refresh-live-e2e.test.sh)
+    fm-quota-array-dispatch-live-e2e.test.sh|fm-send-secondmate-marker-herdr-e2e.test.sh)
       printf '%s\n' 'live harness opt-in; never default parallel CI'
       ;;
-    fm-backend-autodetect-smoke.test.sh|fm-backend-herdr-eventwait-smoke.test.sh|\
-    fm-backend-herdr-presentation-e2e.test.sh|fm-backend-herdr-prune-safety-e2e.test.sh|\
-    fm-backend-herdr-respawn-idem-e2e.test.sh|fm-backend-herdr-smoke.test.sh|\
-    fm-backend-herdr-workspace-per-home-e2e.test.sh|fm-herdr-session-cleanup-e2e.test.sh)
+    fm-herdr-default-smoke.test.sh|fm-herdr-eventwait-smoke.test.sh|\
+    fm-herdr-presentation-e2e.test.sh|fm-herdr-prune-safety-e2e.test.sh|\
+    fm-herdr-respawn-idem-e2e.test.sh|fm-herdr-smoke.test.sh|\
+    fm-herdr-workspace-per-home-e2e.test.sh|fm-herdr-session-cleanup-e2e.test.sh)
       printf '%s\n' 'real Herdr-gated; Herdr lane is a later phase'
       ;;
     *)
@@ -141,7 +135,7 @@ exclusion_reason() {
 list_parallel_candidates() {
   cat <<'EOF'
 tests/fm-arm-pretool-check.test.sh
-tests/fm-backend-herdr.test.sh
+tests/fm-herdr.test.sh
 tests/fm-brief.test.sh
 tests/fm-cd-pretool-check.test.sh
 tests/fm-composer-ghost.test.sh
@@ -160,8 +154,7 @@ tests/fm-send-strict.test.sh
 tests/fm-spawn-batch.test.sh
 tests/fm-supervision-instructions.test.sh
 tests/fm-test-run.test.sh
-tests/fm-tmux-submit-busy.test.sh
-tests/fm-transition-lib.test.sh
+tests/fm-herdr-transition.test.sh
 tests/fm-relay.test.sh
 EOF
 }
@@ -176,8 +169,7 @@ list_exclusions_for_report() {
     fi
   done <<'EOF'
 fm-test-isolation-proof.test.sh
-fm-backend-tmux-smoke.test.sh
-fm-backend.test.sh
+fm-herdr-selection.test.sh
 fm-spawn-dispatch-profile.test.sh
 fm-spawn-worktree-settle.test.sh
 fm-trace-context-spawn.test.sh
@@ -185,9 +177,7 @@ fm-pr-check-security.test.sh
 fm-teardown.test.sh
 fm-watcher-lock.test.sh
 fm-wake-queue.test.sh
-fm-afk-inject-e2e.test.sh
-fm-backend-herdr-smoke.test.sh
-fm-pi-primary-live-e2e.test.sh
+fm-herdr-smoke.test.sh
 fm-quota-array-dispatch-live-e2e.test.sh
 EOF
 }

@@ -4,18 +4,15 @@
 # The watcher (bin/fm-watch.sh) blocks until it has an actionable wake to
 # surface, then prints one reason line and exits. While state/.afk exists the
 # daemon owns triage and the watcher exits on every wake for the daemon to
-# classify. Reliability depends on arming through a mechanism that SURVIVES the
-# call and NOTIFIES on exit, so firstmate must run this script as the harness's
-# own tracked background task (e.g. run_in_background), or inside a verified
-# extension-owned lifecycle where the harness owns the process group and wake
-# notification. Run it as its own standalone
-# background task, never bundled onto the tail of another command.
+# classify. Reliability depends on Pi's tracked watcher extension keeping this
+# child attached to the live Pi process and notifying Firstmate on exit. Run it
+# only through `fm_watch_arm_pi`, never bundled onto the tail of another command.
 # NEVER fire it and forget with a shell `&` inside another call: that backgrounded
 # child is reaped when the call returns, leaving NO watcher running and a false
 # "already running" off the dying process. That exact mistake silently took
 # supervision down for ~30 minutes.
-# On a harness with a PreToolUse-equivalent hook, bin/fm-arm-pretool-check.sh
-# applies the command-position policy before the command runs; see
+# Pi's pre-tool hook runs bin/fm-arm-pretool-check.sh to apply the command-position
+# policy before the command runs; see
 # docs/arm-pretool-check.md for the blessed tree and deny reason codes. It is a
 # pre-execution seatbelt, not a substitute for the verification here.
 #
@@ -183,7 +180,7 @@ cycle_log_append() {
   cycle_active=0
 }
 
-# A persistent adapter passes the arm pid that just closed. Once this new arm
+# The Pi watcher extension passes the arm pid that just closed. Once this new arm
 # verifies its watcher, update that predecessor's final record in place so the
 # one-record-per-cycle ledger captures the actual successor outcome without an
 # extra synthetic lifecycle row.
@@ -254,7 +251,7 @@ report_attached() {
 }
 
 # Give a successor the same bounded confirmation window used for a fresh child.
-# Adapter-owned continuations normally win immediately, but the bound avoids a
+# Pi extension continuations normally win immediately, but the bound avoids a
 # false failure when process-close delivery and lock publication cross briefly.
 wait_for_healthy_successor() {
   local deadline
@@ -306,7 +303,7 @@ close_unobserved_cycle() {
 
 # Stay alive across identity-matched healthy holders. If one cycle ends, attach
 # to a verified successor. With no successor, report the wake that cycle durably
-# delivered, or fail loudly - never a clean empty completion that an adapter could
+# delivered, or fail loudly - never a clean empty completion that Pi could
 # mistake for a no-op.
 attach_and_wait() {
   local attached_pid=$1
@@ -430,7 +427,7 @@ if [ "$mode" = restart ]; then
 fi
 
 # If a genuinely live+fresh watcher already holds the lock, do not start a second
-# one - attach to that cycle and wait until it ends so the harness notify fires
+# one - attach to that cycle and wait until it ends so the Pi notification fires
 # then, not as an immediate empty wake. (--restart skips this: it just stopped
 # this home's watcher and wants a fresh one.)
 if [ "$mode" = arm ] && healthy_watcher; then
@@ -443,8 +440,8 @@ fi
 
 # Start a watcher as a tracked child and confirm it before settling in. The child
 # stays our child for its whole life: we wait on it, so killing this arm (the
-# harness-tracked task) tears the watcher down too, and the watcher's eventual
-# wake exit propagates out so the harness re-notifies firstmate.
+# Pi-tracked task) tears the watcher down too, and the watcher's eventual wake
+# exit propagates out so Pi re-notifies Firstmate.
 child=
 child_out=
 cleanup_child() {

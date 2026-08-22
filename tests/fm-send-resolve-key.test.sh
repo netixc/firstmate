@@ -33,48 +33,42 @@ DRAIN="$ROOT/bin/fm-wake-drain.sh"
 
 TMP_ROOT=$(fm_test_tmproot fm-send-resolve-key)
 
-# Stub tmux: logs literal typed text to FM_SEND_LOG and lets the submit path
-# reach a clean "empty" verdict (numeric cursor_y, empty bordered composer).
-# FM_FAKE_TMUX_SEND_FAIL=1 makes send-keys fail so the delivery-failure leg can
-# assert that a failed send closes nothing.
+# Structured Herdr responses log literal text and model idle-to-working submit
+# confirmation. FM_FAKE_HERDR_SEND_FAIL=1 drives the delivery-failure leg.
 make_stubs() {  # <dir> -> echoes fakebin dir
   local dir=$1 fb="$1/fakebin"
   mkdir -p "$fb"
-  cat > "$fb/tmux" <<'SH'
+  cat > "$fb/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
-case "${1:-}" in
-  send-keys)
-    [ "${FM_FAKE_TMUX_SEND_FAIL:-0}" = 1 ] && exit 1
-    shift
-    literal=0
-    while [ $# -gt 0 ]; do
-      case "$1" in
-        -t) shift 2 ;;
-        -l) literal=1; shift ;;
-        *) break ;;
-      esac
-    done
-    if [ "$literal" = 1 ]; then
-      printf '%s' "${1:-}" >> "$FM_SEND_LOG"
-    fi
-    exit 0 ;;
-  display-message)
-    for a in "$@"; do case "$a" in *cursor_y*) printf '1\n'; exit 0 ;; esac; done
-    printf 'fakepane\n'; exit 0 ;;
-  capture-pane) printf '╭────╮\n│    │\n╰────╯\n'; exit 0 ;;
-  list-windows) exit 0 ;;
+case "${1:-} ${2:-}" in
+  "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
+  "session list") printf '{"sessions":[{"name":"%s","running":true,"socket_path":"%s/herdr.sock"}]}\n' "${HERDR_SESSION:-lab}" "${FM_HOME:-/tmp}" ;;
+  "pane get")
+    workspace=${3%%:*}; task=${workspace#w-}
+    printf '{"result":{"pane":{"pane_id":"%s","tab_id":"%s:t-%s","workspace_id":"%s"}}}\n' "${3:-}" "$workspace" "$task" "$workspace"
+    ;;
+  "tab get") printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"%s"}}}\n' "${3:-}" "${3%%:*}" ;;
+  "pane send-text")
+    [ "${FM_FAKE_HERDR_SEND_FAIL:-0}" = 1 ] && exit 1
+    printf '%s' "${4:-}" >> "$FM_SEND_LOG"
+    ;;
+  "pane send-keys")
+    [ "${FM_FAKE_HERDR_SEND_FAIL:-0}" = 1 ] && exit 1
+    : > "$FM_HERDR_STATE"
+    ;;
+  "agent get")
+    if [ -e "$FM_HERDR_STATE" ]; then status=working; else status=idle; fi
+    printf '{"result":{"agent":{"agent_status":"%s","provider":"pi"}}}\n' "$status"
+    ;;
 esac
-exit 0
 SH
-  chmod +x "$fb/tmux"
+  chmod +x "$fb/herdr"
   cat > "$fb/sleep" <<'SH'
 #!/usr/bin/env bash
 exit 0
 SH
   chmod +x "$fb/sleep"
-  # Stub ssh transport for the remote-secondmate legs, selected via FM_SSH_BIN.
-  # Records the full remote invocation and exits FM_FAKE_SSH_RC (default 0).
   cat > "$fb/fake-ssh" <<'SH'
 #!/usr/bin/env bash
 cat > /dev/null
@@ -91,15 +85,26 @@ SH
 run_send() {
   local fb=$1 home=$2 log=$3; shift 3
   : > "$log"
+  rm -f "$home/herdr.state"
   env PATH="$fb:$PATH" \
-    FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SEND_LOG="$log" FM_SEND_SETTLE=0 \
+    FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SEND_LOG="$log" FM_HERDR_STATE="$home/herdr.state" FM_SEND_SETTLE=0 \
     "$SEND" "$@" 2>/dev/null
 }
 
 setup_home() {  # <name> -> echoes a fresh home dir with an empty state/
   local home="$TMP_ROOT/$1-$RANDOM"
   mkdir -p "$home/state"
+  : > "$home/herdr.sock"
   printf '%s\n' "$home"
+}
+
+write_local_meta() {  # <home> <id> [kind]
+  local home=$1 id=$2 kind=${3:-ship}
+  fm_write_meta "$home/state/$id.meta" \
+    "backend=herdr" "window=lab:w-$id:p1" "endpoint_task_id=$id" \
+    "herdr_session=lab" "herdr_workspace_id=w-$id" "herdr_tab_id=w-$id:t-$id" \
+    "herdr_pane_id=w-$id:p1" "worktree=/tmp/$id" "project=/tmp/project" \
+    "harness=pi" "kind=$kind"
 }
 
 drain_out() {  # <home>
@@ -111,7 +116,7 @@ test_answer_send_closes_open_decision() {
   dir="$TMP_ROOT/closes"; mkdir -p "$dir"
   fb=$(make_stubs "$dir"); log="$dir/send.log"
   home=$(setup_home closes)
-  fm_write_meta "$home/state/t1.meta" "window=sess:fm-t1" "kind=ship"
+  write_local_meta "$home" t1 ship
   printf 'needs-decision [key=api-shape]: pick REST or RPC\n' > "$home/state/t1.status"
   printf 'working: kept busy on an unrelated stream\n' >> "$home/state/t1.status"
 
@@ -141,7 +146,7 @@ test_answer_close_is_self_announced() {
   dir="$TMP_ROOT/self-announced"; mkdir -p "$dir"
   fb=$(make_stubs "$dir"); log="$dir/send.log"
   home=$(setup_home self-announced)
-  fm_write_meta "$home/state/t9.meta" "window=sess:fm-t9" "kind=ship"
+  write_local_meta "$home" t9 ship
   printf 'needs-decision [key=port-choice]: 8080 or 9090\n' > "$home/state/t9.status"
   FM_STATE_OVERRIDE="$home/state" bash -c '
     . "$1"
@@ -178,7 +183,7 @@ test_colon_first_key_position_is_answerable() {
   dir="$TMP_ROOT/colon-first"; mkdir -p "$dir"
   fb=$(make_stubs "$dir"); log="$dir/send.log"
   home=$(setup_home colon-first)
-  fm_write_meta "$home/state/t8.meta" "window=sess:fm-t8" "kind=ship"
+  write_local_meta "$home" t8 ship
   printf 'needs-decision: [key=seam-max-bound] cap the seam at 4 or 8\n' > "$home/state/t8.status"
 
   out=$(drain_out "$home")
@@ -202,7 +207,7 @@ test_answer_starts_work_never_orphans() {
   dir="$TMP_ROOT/starts-work"; mkdir -p "$dir"
   fb=$(make_stubs "$dir"); log="$dir/send.log"
   home=$(setup_home starts-work)
-  fm_write_meta "$home/state/t2.meta" "window=sess:fm-t2" "kind=ship"
+  write_local_meta "$home" t2 ship
   printf 'needs-decision [key=rollout]: big-bang or phased\n' > "$home/state/t2.status"
 
   run_send "$fb" "$home" "$log" t2 --resolve-key rollout "phased, gate each region"; rc=$?
@@ -225,7 +230,7 @@ test_routine_steer_never_closes() {
   dir="$TMP_ROOT/routine"; mkdir -p "$dir"
   fb=$(make_stubs "$dir"); log="$dir/send.log"
   home=$(setup_home routine)
-  fm_write_meta "$home/state/t3.meta" "window=sess:fm-t3" "kind=ship"
+  write_local_meta "$home" t3 ship
   printf 'needs-decision [key=schema]: split or embed\n' > "$home/state/t3.status"
 
   run_send "$fb" "$home" "$log" t3 "unrelated nudge, keep going"; rc=$?
@@ -247,12 +252,12 @@ test_not_open_key_refuses_before_send() {
   dir="$TMP_ROOT/not-open"; mkdir -p "$dir"
   fb=$(make_stubs "$dir"); log="$dir/send.log"; err="$dir/send.err"
   home=$(setup_home not-open)
-  fm_write_meta "$home/state/t4.meta" "window=sess:fm-t4" "kind=ship"
+  write_local_meta "$home" t4 ship
   printf 'needs-decision [key=real-key]: choose\n' > "$home/state/t4.status"
 
   : > "$log"
   env PATH="$fb:$PATH" \
-    FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SEND_LOG="$log" FM_SEND_SETTLE=0 \
+    FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SEND_LOG="$log" FM_HERDR_STATE="$home/herdr.state" FM_SEND_SETTLE=0 \
     "$SEND" t4 --resolve-key mistyped "the answer" >/dev/null 2>"$err"; rc=$?
   [ "$rc" -ne 0 ] || fail "a not-open key should refuse"
   assert_contains "$(cat "$err")" "--resolve-key 'mistyped'" "the refusal should name the bad key"
@@ -272,12 +277,12 @@ test_failed_send_does_not_close() {
   dir="$TMP_ROOT/send-fail"; mkdir -p "$dir"
   fb=$(make_stubs "$dir"); log="$dir/send.log"
   home=$(setup_home send-fail)
-  fm_write_meta "$home/state/t5.meta" "window=sess:fm-t5" "kind=ship"
+  write_local_meta "$home" t5 ship
   printf 'blocked [key=creds]: need the deploy token\n' > "$home/state/t5.status"
 
   : > "$log"
-  env PATH="$fb:$PATH" FM_FAKE_TMUX_SEND_FAIL=1 \
-    FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SEND_LOG="$log" FM_SEND_SETTLE=0 \
+  env PATH="$fb:$PATH" FM_FAKE_HERDR_SEND_FAIL=1 \
+    FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SEND_LOG="$log" FM_HERDR_STATE="$home/herdr.state" FM_SEND_SETTLE=0 \
     "$SEND" t5 --resolve-key creds "token is in the vault now" >/dev/null 2>&1; rc=$?
   [ "$rc" -ne 0 ] || fail "a failed backend send should exit nonzero"
   if grep -F 'resolved' "$home/state/t5.status" >/dev/null; then
@@ -294,7 +299,7 @@ test_multiple_keys_close_together() {
   dir="$TMP_ROOT/multi"; mkdir -p "$dir"
   fb=$(make_stubs "$dir"); log="$dir/send.log"
   home=$(setup_home multi)
-  fm_write_meta "$home/state/t6.meta" "window=sess:fm-t6" "kind=ship"
+  write_local_meta "$home" t6 ship
   {
     printf 'needs-decision [key=k1]: first\n'
     printf 'blocked [key=k2]: second\n'
@@ -318,7 +323,7 @@ test_local_secondmate_answer_marked_and_closed() {
   dir="$TMP_ROOT/sm"; mkdir -p "$dir"
   fb=$(make_stubs "$dir"); log="$dir/send.log"
   home=$(setup_home sm)
-  fm_write_secondmate_meta "$home/state/domain.meta" "$home" "sess:fm-domain"
+  write_local_meta "$home" domain secondmate
   printf 'needs-decision [key=fleet-split]: shard by team or by repo\n' > "$home/state/domain.status"
 
   run_send "$fb" "$home" "$log" fm-domain --resolve-key fleet-split "shard by team"; rc=$?
@@ -352,15 +357,18 @@ setup_remote_home() {  # <name> -> echoes home dir with remote meta + registry
   home=$(setup_home "$1")
   mkdir -p "$home/data"
   fm_write_meta "$home/state/rsm.meta" \
-    "window=fm-remote:w1:p1" \
+    "backend=herdr" \
+    "window=remote:rsm" \
     "endpoint_task_id=rsm" \
+    "worktree=/remote/home" \
+    "project=/remote/root" \
+    "home=/remote/home" \
     "harness=pi" \
     "kind=secondmate" \
     "mode=secondmate" \
     "yolo=off" \
     "remote_host=remote-mac" \
     "remote_root=/remote/root" \
-    "remote_backend=herdr" \
     "remote_herdr_session=fm-remote" \
     "remote_target=fm-remote:w1:p1"
   cat > "$home/data/secondmates.md" <<EOF
@@ -391,6 +399,41 @@ test_remote_secondmate_answer_closes_locally() {
     fail "the answered remote-secondmate decision still lists as open: $out"
   fi
   pass "fm-send --resolve-key: a remote-secondmate answer closes the same local ledger, transport-only difference"
+}
+
+test_historical_remote_route_remains_compatible() {
+  local dir fb log home ssh_log rc out
+  dir="$TMP_ROOT/remote-historical"; mkdir -p "$dir"
+  fb=$(make_stubs "$dir"); log="$dir/send.log"; ssh_log="$dir/ssh.log"; : > "$ssh_log"
+  home=$(setup_remote_home remote-historical)
+  sed '/^backend=/d' "$home/state/rsm.meta" > "$home/state/rsm.meta.next"
+  mv "$home/state/rsm.meta.next" "$home/state/rsm.meta"
+  printf 'remote_backend=herdr\n' >> "$home/state/rsm.meta"
+  out=$(env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" \
+    FM_SEND_LOG="$log" FM_SEND_SETTLE=0 FM_SSH_BIN="$fb/fake-ssh" FM_SSH_LOG="$ssh_log" \
+    "$SEND" rsm "do not send" 2>&1); rc=$?
+  [ "$rc" -eq 0 ] || fail "historical explicit remote Herdr metadata was rejected: $out"
+  [ -s "$ssh_log" ] || fail "historical explicit remote Herdr metadata did not reach its route"
+  grep -Fqx 'window=remote:rsm' "$home/state/rsm.meta" \
+    || fail "historical remote compatibility rewrote its route record"
+  pass "fm-send: historical explicit remote Herdr routes remain compatible"
+}
+
+test_providerless_remote_route_is_preserved() {
+  local dir fb log home ssh_log rc out
+  dir="$TMP_ROOT/remote-providerless"; mkdir -p "$dir"
+  fb=$(make_stubs "$dir"); log="$dir/send.log"; ssh_log="$dir/ssh.log"; : > "$ssh_log"
+  home=$(setup_remote_home remote-providerless)
+  sed '/^backend=/d;/^remote_herdr_session=/d;/^remote_target=/d' "$home/state/rsm.meta" \
+    > "$home/state/rsm.meta.next"
+  mv "$home/state/rsm.meta.next" "$home/state/rsm.meta"
+  out=$(env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" \
+    FM_SEND_LOG="$log" FM_SEND_SETTLE=0 FM_SSH_BIN="$fb/fake-ssh" FM_SSH_LOG="$ssh_log" \
+    "$SEND" rsm "do not send" 2>&1); rc=$?
+  [ "$rc" -ne 0 ] || fail "providerless remote metadata authorized a send"
+  assert_contains "$out" "preserving its records" "providerless remote refusal omitted reconciliation guidance"
+  [ ! -s "$ssh_log" ] || fail "providerless remote metadata reached the remote transport"
+  pass "fm-send: ambiguous providerless remote evidence is preserved"
 }
 
 # The reported failure: a remote secondmate reply line prepends a
@@ -456,35 +499,35 @@ test_flag_misuse_refuses() {
   dir="$TMP_ROOT/misuse"; mkdir -p "$dir"
   fb=$(make_stubs "$dir"); log="$dir/send.log"; err="$dir/send.err"
   home=$(setup_home misuse)
-  fm_write_meta "$home/state/t7.meta" "window=sess:fm-t7" "kind=ship"
+  write_local_meta "$home" t7 ship
   printf 'needs-decision [key=k]: choose\n' > "$home/state/t7.status"
 
   # --resolve-key with --key (both orders) is refused: an answer is text.
   : > "$log"
-  env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SEND_LOG="$log" FM_SEND_SETTLE=0 \
+  env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SEND_LOG="$log" FM_HERDR_STATE="$home/herdr.state" FM_SEND_SETTLE=0 \
     "$SEND" t7 --resolve-key k --key Enter >/dev/null 2>"$err"; rc=$?
   [ "$rc" -ne 0 ] || fail "--resolve-key before --key should refuse"
   assert_contains "$(cat "$err")" "cannot accompany --key" "the --key refusal should be explicit"
   : > "$log"
-  env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SEND_LOG="$log" FM_SEND_SETTLE=0 \
+  env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SEND_LOG="$log" FM_HERDR_STATE="$home/herdr.state" FM_SEND_SETTLE=0 \
     "$SEND" t7 --key Enter --resolve-key k >/dev/null 2>"$err"; rc=$?
   [ "$rc" -ne 0 ] || fail "--resolve-key after --key should refuse instead of being silently dropped"
   assert_contains "$(cat "$err")" "cannot accompany --key" "the trailing --resolve-key refusal should be explicit"
 
   # An empty answer message is refused.
-  env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SEND_LOG="$log" FM_SEND_SETTLE=0 \
+  env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SEND_LOG="$log" FM_HERDR_STATE="$home/herdr.state" FM_SEND_SETTLE=0 \
     "$SEND" t7 --resolve-key k >/dev/null 2>"$err"; rc=$?
   [ "$rc" -ne 0 ] || fail "an empty answer message should refuse"
   assert_contains "$(cat "$err")" "nonempty answer message" "the empty-message refusal should be explicit"
 
   # An explicit backend target has no task ledger in this home.
-  env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SEND_LOG="$log" FM_SEND_SETTLE=0 \
-    "$SEND" sess:elsewhere --resolve-key k "answer" >/dev/null 2>"$err"; rc=$?
+  env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SEND_LOG="$log" FM_HERDR_STATE="$home/herdr.state" FM_SEND_SETTLE=0 \
+    "$SEND" lab:w-elsewhere:p1 --resolve-key k "answer" >/dev/null 2>"$err"; rc=$?
   [ "$rc" -ne 0 ] || fail "an explicit backend target should refuse --resolve-key"
   assert_contains "$(cat "$err")" "no decision ledger" "the explicit-target refusal should be explicit"
 
   # A malformed key is refused before anything else.
-  env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SEND_LOG="$log" FM_SEND_SETTLE=0 \
+  env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SEND_LOG="$log" FM_HERDR_STATE="$home/herdr.state" FM_SEND_SETTLE=0 \
     "$SEND" t7 --resolve-key 'bad key!' "answer" >/dev/null 2>"$err"; rc=$?
   [ "$rc" -ne 0 ] || fail "a malformed key should refuse"
   assert_contains "$(cat "$err")" "not a valid decision key" "the malformed-key refusal should be explicit"
@@ -506,6 +549,8 @@ test_failed_send_does_not_close
 test_multiple_keys_close_together
 test_local_secondmate_answer_marked_and_closed
 test_remote_secondmate_answer_closes_locally
+test_historical_remote_route_remains_compatible
+test_providerless_remote_route_is_preserved
 test_remote_reply_corr_tag_does_not_block_resolve_key
 test_remote_transport_failure_does_not_close
 test_flag_misuse_refuses

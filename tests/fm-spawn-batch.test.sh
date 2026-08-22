@@ -2,7 +2,7 @@
 # Behavior tests for fm-spawn.sh batch dispatch (`id=repo` pairs).
 #
 # These exercise argument routing only: each spawn attempt fails fast at the
-# missing-brief check, which is reached before any tmux/treehouse side effect, so
+# missing-brief check, which is reached before any Herdr/treehouse side effect, so
 # the tests create no windows or worktrees. FM_SPAWN_NO_GUARD=1 keeps them off the
 # live watcher guard / state. Parser and path-scoping cases are table-driven; the
 # only behavior asserted on its own is "a multi-pair batch does not stop after the
@@ -14,7 +14,6 @@ set -u
 
 SPAWN="$ROOT/bin/fm-spawn.sh"
 TMP_ROOT=$(fm_test_tmproot fm-spawn-batch)
-export FM_BACKEND=tmux
 
 # Clear ambient firstmate overrides so the behavior test owns its environment.
 run_spawn() {
@@ -89,12 +88,12 @@ test_projects_path_scoping() {
     if [ "$use_override" = yes ]; then
       out=$(FM_ROOT_OVERRIDE='' FM_STATE_OVERRIDE='' FM_DATA_OVERRIDE='' FM_CONFIG_OVERRIDE='' \
         FM_HOME="$home" FM_PROJECTS_OVERRIDE="$projects" FM_SPAWN_NO_GUARD=1 \
-        PATH="$fakebin:$PATH" "$SPAWN" "$id" projects/alpha pi --mode no-mistakes --yolo off 2>&1)
+        PATH="$fakebin:$PATH" "$SPAWN" "$id" projects/alpha --mode no-mistakes --yolo off 2>&1)
     else
       mkdir -p "$home/projects/alpha"
       out=$(FM_ROOT_OVERRIDE='' FM_STATE_OVERRIDE='' FM_DATA_OVERRIDE='' FM_PROJECTS_OVERRIDE='' FM_CONFIG_OVERRIDE='' \
         FM_HOME="$home" FM_SPAWN_NO_GUARD=1 \
-        PATH="$fakebin:$PATH" "$SPAWN" "$id" projects/alpha pi --mode no-mistakes --yolo off 2>&1)
+        PATH="$fakebin:$PATH" "$SPAWN" "$id" projects/alpha --mode no-mistakes --yolo off 2>&1)
     fi
     status=$?
     [ "$status" -ne 0 ] || fail "$label: spawn with missing brief should fail"

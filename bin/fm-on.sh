@@ -35,11 +35,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
+STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 REG="$DATA/secondmates.md"
 PROTOCOL=1
 
 # shellcheck source=bin/fm-secondmate-registry-lib.sh
 . "$SCRIPT_DIR/fm-secondmate-registry-lib.sh"
+# shellcheck source=bin/fm-herdr.sh
+. "$SCRIPT_DIR/fm-herdr.sh"
+
+fm_herdr_require_runtime || exit 1
 
 die() { printf 'error: %s\n' "$1" >&2; exit 1; }
 usage() { sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
@@ -70,6 +75,7 @@ MATCHES=0
 HOST=
 ROOT=
 HOME_PATH=
+MATCH_ID=
 while IFS= read -r line || [ -n "$line" ]; do
   case "$line" in '- '*) ;; *) continue ;; esac
   secondmate_registry_parse_line "$line" || die "malformed secondmate registry entry: $line"
@@ -79,6 +85,7 @@ while IFS= read -r line || [ -n "$line" ]; do
     HOST=$SECONDMATE_REGISTRY_HOST
     ROOT=$SECONDMATE_REGISTRY_ROOT
     HOME_PATH=$SECONDMATE_REGISTRY_HOME
+    MATCH_ID=$SECONDMATE_REGISTRY_ID
   fi
 done < "$REG"
 [ "$MATCHES" -gt 0 ] || die "no remote secondmate or SSH alias matches '$ROUTE'"
@@ -91,6 +98,25 @@ for configured_path in "$ROOT" "$HOME_PATH"; do
   case "/$configured_path/" in */../*|*/./*) die "configured remote root or home contains traversal components" ;; esac
   case "$configured_path" in *'//'*) die "configured remote root or home contains an empty path component" ;; esac
 done
+
+META="$STATE/$MATCH_ID.meta"
+EXPECTED_REMOTE_TARGET=
+if [ -e "$META" ] || [ -L "$META" ]; then
+  fm_herdr_validate_remote_route "$META" "$MATCH_ID" >/dev/null 2>&1 \
+    || die "remote secondmate $MATCH_ID has invalid or ambiguous Herdr route metadata; preserving its records for manual reconciliation"
+  [ "$FM_HERDR_VALIDATED_REMOTE_HOST" = "$HOST" ] \
+    && [ "$(fm_meta_exact_value "$META" remote_root 2>/dev/null || true)" = "$ROOT" ] \
+    && [ "$(fm_meta_exact_value "$META" home 2>/dev/null || true)" = "$HOME_PATH" ] \
+    || die "remote secondmate $MATCH_ID metadata does not match its configured registry route; preserving both records for manual reconciliation"
+  EXPECTED_REMOTE_TARGET=$FM_HERDR_VALIDATED_REMOTE_TARGET
+fi
+if [ "$COMMAND" = fm-remote-secondmate-control.sh ] && [ -n "$EXPECTED_REMOTE_TARGET" ]; then
+  case "${1:-}" in
+    launch|state|route|send|key|capture|observe|retire)
+      set -- "$@" "--expected-target=$EXPECTED_REMOTE_TARGET"
+      ;;
+  esac
+fi
 
 ROOT_B64=$(printf '%s' "$ROOT" | encode_base64)
 HOME_B64=$(printf '%s' "$HOME_PATH" | encode_base64)

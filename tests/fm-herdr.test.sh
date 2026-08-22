@@ -1,12 +1,7 @@
 #!/usr/bin/env bash
-# tests/fm-backend-herdr.test.sh - fake-herdr-CLI unit tests for the herdr
-# session-provider adapter (bin/backends/herdr.sh), P2 of
-# data/fm-backend-design-d7 (herdr-addendum.md). Mirrors tests/fm-backend.test.sh's
-# fakebin/command-log convention, but herdr has no pre-refactor baseline to
-# diff against (it is new in this task), so these are direct behavior
-# assertions against a small, LOG-based, canned-response fake `herdr` + real
-# `jq` (jq itself is a real required tool for this backend, not faked).
-# The real-binary smoke test lives in tests/fm-backend-herdr-smoke.test.sh,
+# Structured-CLI unit coverage for Firstmate's sole Herdr session owner.
+# Assertions use logged canned Herdr responses plus real jq.
+# The real-binary smoke test lives in tests/fm-herdr-smoke.test.sh,
 # gated on the herdr binary actually being installed.
 set -u
 
@@ -22,8 +17,8 @@ command -v jq >/dev/null 2>&1 || { echo "skip: jq not found (required by the her
 # fake never models. The launcher cases below set HERDR_PANE_ID themselves.
 herdr_forget_inherited_pane
 
-TMP_ROOT=$(fm_test_tmproot fm-backend-herdr-tests)
-export FM_BACKEND_HERDR_SUBMIT_MIN_SLEEP=0
+TMP_ROOT=$(fm_test_tmproot fm-herdr-tests)
+export FM_HERDR_SUBMIT_MIN_SLEEP=0
 
 # make_herdr_fakebin: a `herdr` stub that logs every invocation (one line,
 # unit-separated args, to $FM_HERDR_LOG) and returns the canned response for
@@ -168,7 +163,7 @@ SH
 # fake_herdr_set_agent_status: preset <pane_id>'s agent_status in the
 # stateful fake's state file, mirroring an agent registering itself
 # out-of-band (never through a CLI call the adapter itself would make).
-# Used to exercise fm_backend_herdr_workspace_prune_seeded_default_tab's
+# Used to exercise fm_herdr_workspace_prune_seeded_default_tab's
 # defense-in-depth refuse-if-busy check.
 fake_herdr_set_agent_status() {  # <state-file> <pane_id> <status>
   local state=$1 pane=$2 status=$3 tmp="$1.tmp.$$"
@@ -193,11 +188,11 @@ test_version_check_accepts_current_protocol() {
   printf '{"client":{"version":"0.7.1","channel":"stable","protocol":14}}\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SCRIPT_STATUS=1 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_version_check' "$ROOT"
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_version_check' "$ROOT"
   status=$?
   expect_code 0 "$status" "version_check should accept protocol 14 (>= the verified minimum)"
   assert_contains "$(cat "$log")" $'\x1f''status'$'\x1f''--json' "version_check did not call herdr status --json"
-  pass "fm_backend_herdr_version_check: accepts the current protocol (14)"
+  pass "fm_herdr_version_check: accepts the current protocol (14)"
 }
 
 test_version_check_refuses_old_protocol() {
@@ -206,22 +201,22 @@ test_version_check_refuses_old_protocol() {
   printf '{"client":{"version":"0.3.0","channel":"stable","protocol":5}}\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SCRIPT_STATUS=1 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_version_check' "$ROOT" 2>&1 )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_version_check' "$ROOT" 2>&1 )
   status=$?
   [ "$status" -ne 0 ] || fail "version_check should refuse protocol 5 (below min)"
   assert_contains "$out" "protocol 5" "version_check error did not name the rejected protocol"
-  pass "fm_backend_herdr_version_check: refuses an old protocol loudly"
+  pass "fm_herdr_version_check: refuses an old protocol loudly"
 }
 
 test_version_check_refuses_missing_herdr() {
   local dir out status
   dir="$TMP_ROOT/version-missing"; mkdir -p "$dir/empty-fakebin"
   out=$( PATH="$dir/empty-fakebin:/usr/bin:/bin" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_version_check' "$ROOT" 2>&1 )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_version_check' "$ROOT" 2>&1 )
   status=$?
   [ "$status" -ne 0 ] || fail "version_check should refuse when herdr is not installed"
   assert_contains "$out" "not installed" "version_check did not report herdr as missing"
-  pass "fm_backend_herdr_version_check: refuses loudly when herdr is not installed"
+  pass "fm_herdr_version_check: refuses loudly when herdr is not installed"
 }
 
 # --- workspace_label: per-firstmate-HOME resolution (P3, herdr-sm-spaces-k4) -
@@ -229,64 +224,64 @@ test_version_check_refuses_missing_herdr() {
 test_workspace_label_primary_home_no_marker() {
   local home
   home="$TMP_ROOT/primary-home-no-marker"; mkdir -p "$home"
-  out=$( FM_HOME="$home" bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_workspace_label' "$ROOT" )
+  out=$( FM_HOME="$home" bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_workspace_label' "$ROOT" )
   [ "$out" = "firstmate" ] || fail "a primary home (no .fm-secondmate-home marker) should resolve to label 'firstmate', got '$out'"
-  pass "fm_backend_herdr_workspace_label: a primary home (no marker) resolves to 'firstmate'"
+  pass "fm_herdr_workspace_label: a primary home (no marker) resolves to 'firstmate'"
 }
 
 test_workspace_label_secondmate_home_uses_marker_id() {
   local home
   home="$TMP_ROOT/secondmate-home"; mkdir -p "$home"
   printf 'sshhip-h7\n' > "$home/.fm-secondmate-home"
-  out=$( FM_HOME="$home" bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_workspace_label' "$ROOT" )
+  out=$( FM_HOME="$home" bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_workspace_label' "$ROOT" )
   [ "$out" = "2ndmate-sshhip-h7" ] || fail "a secondmate home should resolve to '2ndmate-<id>', got '$out'"
-  pass "fm_backend_herdr_workspace_label: a secondmate home (.fm-secondmate-home) resolves to '2ndmate-<id>'"
+  pass "fm_herdr_workspace_label: a secondmate home (.fm-secondmate-home) resolves to '2ndmate-<id>'"
 }
 
 test_workspace_label_secondmate_marker_trims_whitespace() {
   local home
   home="$TMP_ROOT/secondmate-home-ws"; mkdir -p "$home"
   printf '  sshhip-h7  \n\n' > "$home/.fm-secondmate-home"
-  out=$( FM_HOME="$home" bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_workspace_label' "$ROOT" )
+  out=$( FM_HOME="$home" bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_workspace_label' "$ROOT" )
   [ "$out" = "2ndmate-sshhip-h7" ] || fail "the marker id should be trimmed of surrounding whitespace, got '$out'"
-  pass "fm_backend_herdr_workspace_label: trims whitespace around the marker's secondmate id"
+  pass "fm_herdr_workspace_label: trims whitespace around the marker's secondmate id"
 }
 
 test_workspace_label_empty_marker_falls_back_to_primary() {
   local home
   home="$TMP_ROOT/secondmate-home-empty"; mkdir -p "$home"
   : > "$home/.fm-secondmate-home"
-  out=$( FM_HOME="$home" bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_workspace_label' "$ROOT" )
+  out=$( FM_HOME="$home" bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_workspace_label' "$ROOT" )
   [ "$out" = "firstmate" ] || fail "an empty/unreadable marker should fall back to 'firstmate', got '$out'"
-  pass "fm_backend_herdr_workspace_label: an empty marker file falls back to the primary label 'firstmate'"
+  pass "fm_herdr_workspace_label: an empty marker file falls back to the primary label 'firstmate'"
 }
 
 test_workspace_label_different_secondmates_get_different_labels() {
   local home1 home2 out1 out2
   home1="$TMP_ROOT/secondmate-a"; mkdir -p "$home1"; printf 'alpha-a1\n' > "$home1/.fm-secondmate-home"
   home2="$TMP_ROOT/secondmate-b"; mkdir -p "$home2"; printf 'bravo-b2\n' > "$home2/.fm-secondmate-home"
-  out1=$( FM_HOME="$home1" bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_workspace_label' "$ROOT" )
-  out2=$( FM_HOME="$home2" bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_workspace_label' "$ROOT" )
+  out1=$( FM_HOME="$home1" bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_workspace_label' "$ROOT" )
+  out2=$( FM_HOME="$home2" bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_workspace_label' "$ROOT" )
   [ "$out1" = "2ndmate-alpha-a1" ] || fail "secondmate home1 label mismatch: $out1"
   [ "$out2" = "2ndmate-bravo-b2" ] || fail "secondmate home2 label mismatch: $out2"
   [ "$out1" != "$out2" ] || fail "two different secondmate homes must not collide on the same label"
-  pass "fm_backend_herdr_workspace_label: two different secondmate homes get two different, non-colliding labels"
+  pass "fm_herdr_workspace_label: two different secondmate homes get two different, non-colliding labels"
 }
 
-# --- fm_backend_herdr_cli: session targeting (2026-07-02 incident fix) -------
+# --- fm_herdr_cli: session targeting (2026-07-02 incident fix) -------
 
 test_cli_helper_sets_env_and_appends_trailing_session_flag() {
   local dir log resp fb
   dir="$TMP_ROOT/cli-helper"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
   fb=$(make_herdr_fakebin "$dir")
   PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_cli fmtest workspace list' "$ROOT"
-  expect_code 0 $? "fm_backend_herdr_cli should succeed"
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_cli fmtest workspace list' "$ROOT"
+  expect_code 0 $? "fm_herdr_cli should succeed"
   assert_contains "$(cat "$log")" "HERDR_SESSION=fmtest"$'\x1f''workspace'$'\x1f''list' \
-    "fm_backend_herdr_cli did not set the HERDR_SESSION env var"
+    "fm_herdr_cli did not set the HERDR_SESSION env var"
   assert_contains "$(cat "$log")" $'\x1f''workspace'$'\x1f''list'$'\x1f''--session'$'\x1f''fmtest' \
-    "fm_backend_herdr_cli did not append a trailing --session <name> flag (the fix for the env-var-alone routing bug)"
-  pass "fm_backend_herdr_cli: sets HERDR_SESSION AND appends a trailing --session flag on every call"
+    "fm_herdr_cli did not append a trailing --session <name> flag (the fix for the env-var-alone routing bug)"
+  pass "fm_herdr_cli: sets HERDR_SESSION AND appends a trailing --session flag on every call"
 }
 
 # --- launcher_identity: the exact workspace a worker must be placed in -------
@@ -304,11 +299,11 @@ test_launcher_identity_absent_without_a_herdr_pane() {
   dir="$TMP_ROOT/launcher-none"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
   fb=$(make_herdr_fakebin "$dir")
   ( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_launcher_identity fmtest' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_launcher_identity fmtest' "$ROOT" )
   status=$?
   expect_code 2 "$status" "a process with no herdr pane must report 'no launcher to inherit' (2), not a refusal"
   [ ! -s "$log" ] || fail "resolving an absent launcher identity must not call herdr at all"$'\n'"$(cat "$log")"
-  pass "fm_backend_herdr_launcher_identity: a firstmate not running inside herdr has no launcher workspace to inherit"
+  pass "fm_herdr_launcher_identity: a firstmate not running inside herdr has no launcher workspace to inherit"
 }
 
 test_launcher_identity_absent_when_herdr_env_alone_is_set() {
@@ -317,10 +312,10 @@ test_launcher_identity_absent_when_herdr_env_alone_is_set() {
   fb=$(make_herdr_fakebin "$dir")
   ( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" HERDR_ENV=1 \
     \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_launcher_identity fmtest' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_launcher_identity fmtest' "$ROOT" )
   status=$?
   expect_code 2 "$status" "HERDR_ENV=1 alone is a backend-selection marker, not a parent binding"
-  pass "fm_backend_herdr_launcher_identity: HERDR_ENV=1 without a pane id selects the backend but binds no parent"
+  pass "fm_herdr_launcher_identity: HERDR_ENV=1 without a pane id selects the backend but binds no parent"
 }
 
 test_launcher_identity_resolves_the_exact_pane_tab_and_workspace() {
@@ -333,13 +328,13 @@ test_launcher_identity_resolves_the_exact_pane_tab_and_workspace() {
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     HERDR_ENV=1 HERDR_PANE_ID=w7:p3 HERDR_SESSION=fmtest HERDR_SOCKET_PATH=/tmp/fm-herdr-unit/fmtest.sock \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_launcher_identity fmtest || exit 1
-      printf "%s|%s|%s" "$FM_BACKEND_HERDR_LAUNCHER_PANE_ID" "$FM_BACKEND_HERDR_LAUNCHER_TAB_ID" "$FM_BACKEND_HERDR_LAUNCHER_WORKSPACE_ID"' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_launcher_identity fmtest || exit 1
+      printf "%s|%s|%s" "$FM_HERDR_LAUNCHER_PANE_ID" "$FM_HERDR_LAUNCHER_TAB_ID" "$FM_HERDR_LAUNCHER_WORKSPACE_ID"' "$ROOT" )
   [ "$out" = 'w7:p3|w7:t3|w7' ] \
     || fail "launcher_identity should resolve the launcher's own pane, tab, and workspace, got '$out'"
   assert_contains "$(cat "$log")" $'\x1f''pane'$'\x1f''get'$'\x1f''w7:p3' "launcher_identity did not read its own pane"
   assert_contains "$(cat "$log")" $'\x1f''tab'$'\x1f''get'$'\x1f''w7:t3' "launcher_identity did not cross-check the owning tab"
-  pass "fm_backend_herdr_launcher_identity: resolves the launcher's exact workspace even when a same-labeled workspace sorts first"
+  pass "fm_herdr_launcher_identity: resolves the launcher's exact workspace even when a same-labeled workspace sorts first"
 }
 
 test_launcher_identity_refuses_a_pane_from_another_session_name() {
@@ -348,12 +343,12 @@ test_launcher_identity_refuses_a_pane_from_another_session_name() {
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     HERDR_ENV=1 HERDR_PANE_ID=w7:p3 HERDR_SESSION=someother \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_launcher_identity fmtest' "$ROOT" 2>&1 )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_launcher_identity fmtest' "$ROOT" 2>&1 )
   status=$?
   expect_code 1 "$status" "a launcher pane naming another herdr session must refuse"
   assert_contains "$out" "cross-session parent identity" "the cross-session refusal did not explain itself"
   [ ! -s "$log" ] || fail "a cross-session launcher identity must be refused before any herdr call"
-  pass "fm_backend_herdr_launcher_identity: refuses a launcher pane that names a different herdr session"
+  pass "fm_herdr_launcher_identity: refuses a launcher pane that names a different herdr session"
 }
 
 test_launcher_identity_refuses_a_missing_server_socket() {
@@ -362,12 +357,12 @@ test_launcher_identity_refuses_a_missing_server_socket() {
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     HERDR_ENV=1 HERDR_PANE_ID=w7:p3 HERDR_SESSION=fmtest \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_launcher_identity fmtest' "$ROOT" 2>&1 )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_launcher_identity fmtest' "$ROOT" 2>&1 )
   status=$?
   expect_code 1 "$status" "a launcher pane without an injected server socket must refuse"
   assert_contains "$out" "no injected socket identity" "the missing-socket refusal did not explain itself"
   [ ! -s "$log" ] || fail "a missing-socket launcher identity must be refused before any herdr call"
-  pass "fm_backend_herdr_launcher_identity: refuses a claimed pane without exact server identity"
+  pass "fm_herdr_launcher_identity: refuses a claimed pane without exact server identity"
 }
 
 test_launcher_identity_refuses_a_pane_from_another_server_socket() {
@@ -378,12 +373,12 @@ test_launcher_identity_refuses_a_pane_from_another_server_socket() {
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     HERDR_ENV=1 HERDR_PANE_ID=w7:p3 HERDR_SESSION=fmtest HERDR_SOCKET_PATH=/tmp/fm-herdr-unit/other.sock \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_launcher_identity fmtest' "$ROOT" 2>&1 )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_launcher_identity fmtest' "$ROOT" 2>&1 )
   status=$?
   expect_code 1 "$status" "a launcher pane on a different herdr server socket must refuse"
   assert_contains "$out" "cross-session parent identity" "the cross-socket refusal did not explain itself"
   assert_not_contains "$(cat "$log")" $'\x1f''pane'$'\x1f''get' "a cross-server launcher identity must be refused before its pane is trusted"
-  pass "fm_backend_herdr_launcher_identity: refuses a launcher pane whose injected socket belongs to another herdr server"
+  pass "fm_herdr_launcher_identity: refuses a launcher pane whose injected socket belongs to another herdr server"
 }
 
 test_launcher_identity_refuses_an_unreadable_pane() {
@@ -394,11 +389,11 @@ test_launcher_identity_refuses_an_unreadable_pane() {
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     HERDR_ENV=1 HERDR_PANE_ID=w7:p3 HERDR_SESSION=fmtest HERDR_SOCKET_PATH=/tmp/fm-herdr-unit/fmtest.sock \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_launcher_identity fmtest' "$ROOT" 2>&1 )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_launcher_identity fmtest' "$ROOT" 2>&1 )
   status=$?
   expect_code 1 "$status" "a launcher pane that no longer reads must refuse, not fall back to a label search"
   assert_contains "$out" "w7:p3" "the stale-pane refusal did not name the pane it could not resolve"
-  pass "fm_backend_herdr_launcher_identity: refuses when the launcher's own pane no longer resolves"
+  pass "fm_herdr_launcher_identity: refuses when the launcher's own pane no longer resolves"
 }
 
 test_launcher_identity_refuses_a_pane_and_tab_that_disagree() {
@@ -411,11 +406,11 @@ test_launcher_identity_refuses_a_pane_and_tab_that_disagree() {
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     HERDR_ENV=1 HERDR_PANE_ID=w7:p3 HERDR_SESSION=fmtest HERDR_SOCKET_PATH=/tmp/fm-herdr-unit/fmtest.sock \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_launcher_identity fmtest' "$ROOT" 2>&1 )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_launcher_identity fmtest' "$ROOT" 2>&1 )
   status=$?
   expect_code 1 "$status" "a pane and tab that disagree about their workspace must refuse"
   assert_contains "$out" "contradictory parent identity" "the contradictory-identity refusal did not explain itself"
-  pass "fm_backend_herdr_launcher_identity: refuses when the launcher's pane and tab disagree about their workspace"
+  pass "fm_herdr_launcher_identity: refuses when the launcher's pane and tab disagree about their workspace"
 }
 
 test_launcher_identity_refuses_a_workspace_missing_from_the_session() {
@@ -428,11 +423,11 @@ test_launcher_identity_refuses_a_workspace_missing_from_the_session() {
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     HERDR_ENV=1 HERDR_PANE_ID=w7:p3 HERDR_SESSION=fmtest HERDR_SOCKET_PATH=/tmp/fm-herdr-unit/fmtest.sock \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_launcher_identity fmtest' "$ROOT" 2>&1 )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_launcher_identity fmtest' "$ROOT" 2>&1 )
   status=$?
   expect_code 1 "$status" "a launcher workspace absent from the session listing must refuse"
   assert_contains "$out" "stale parent identity" "the stale-workspace refusal did not explain itself"
-  pass "fm_backend_herdr_launcher_identity: refuses when the launcher's workspace is gone from its own session"
+  pass "fm_herdr_launcher_identity: refuses when the launcher's workspace is gone from its own session"
 }
 
 # --- workspace_ensure placement ---------------------------------------------
@@ -447,10 +442,10 @@ test_workspace_ensure_prefers_the_launcher_over_the_first_label_match() {
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     HERDR_ENV=1 HERDR_PANE_ID=w7:p3 HERDR_SESSION=fmtest HERDR_SOCKET_PATH=/tmp/fm-herdr-unit/fmtest.sock \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_workspace_ensure fmtest /tmp' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_workspace_ensure fmtest /tmp' "$ROOT" )
   [ "$out" = w7 ] || fail "workspace_ensure should place the worker in the launcher's own workspace w7, got '$out'"
   assert_not_contains "$(cat "$log")" $'\x1f''workspace'$'\x1f''create' "the launcher's existing workspace must be reused, not duplicated"
-  pass "fm_backend_herdr_workspace_ensure: places a worker in the launcher's exact workspace, not the first same-labeled one"
+  pass "fm_herdr_workspace_ensure: places a worker in the launcher's exact workspace, not the first same-labeled one"
 }
 
 test_workspace_ensure_refuses_an_ambiguous_label_with_no_launcher() {
@@ -459,13 +454,13 @@ test_workspace_ensure_refuses_an_ambiguous_label_with_no_launcher() {
   printf '{"result":{"workspaces":[{"workspace_id":"w1","label":"firstmate"},{"workspace_id":"w7","label":"firstmate"}]}}\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" HERDR_SESSION=fmtest \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_workspace_ensure fmtest /tmp' "$ROOT" 2>&1 )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_workspace_ensure fmtest /tmp' "$ROOT" 2>&1 )
   status=$?
   expect_code 3 "$status" "two same-labeled home workspaces with no launcher identity must refuse"
   assert_contains "$out" "labeled 'firstmate'" "the ambiguity refusal did not name the duplicated label"
   assert_contains "$out" "w1 w7" "the ambiguity refusal did not name the candidate workspaces"
   assert_not_contains "$(cat "$log")" $'\x1f''workspace'$'\x1f''create' "an ambiguous placement must not mint a third same-labeled workspace"
-  pass "fm_backend_herdr_workspace_ensure: refuses to guess between two same-labeled home workspaces"
+  pass "fm_herdr_workspace_ensure: refuses to guess between two same-labeled home workspaces"
 }
 
 test_workspace_ensure_other_home_ignores_the_launcher_identity() {
@@ -477,10 +472,10 @@ test_workspace_ensure_other_home_ignores_the_launcher_identity() {
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     HERDR_ENV=1 HERDR_PANE_ID=w7:p3 HERDR_SESSION=fmtest \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_workspace_ensure fmtest /tmp other-home' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_workspace_ensure fmtest /tmp other-home' "$ROOT" )
   [ "$out" = w1 ] || fail "an other-home container should resolve by this home's own label, got '$out'"
   assert_not_contains "$(cat "$log")" $'\x1f''pane'$'\x1f''get' "an other-home container must not inherit the launcher's workspace"
-  pass "fm_backend_herdr_workspace_ensure: a --secondmate container resolves that home's own workspace, not the launcher's"
+  pass "fm_herdr_workspace_ensure: a --secondmate container resolves that home's own workspace, not the launcher's"
 }
 
 test_container_ensure_refuses_an_ambiguous_home_label() {
@@ -489,12 +484,12 @@ test_container_ensure_refuses_an_ambiguous_home_label() {
   printf '{"result":{"workspaces":[{"workspace_id":"w1","label":"firstmate"},{"workspace_id":"w7","label":"firstmate"}]}}\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" HERDR_SESSION=fmtest \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_container_ensure /tmp' "$ROOT" 2>&1 )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_container_ensure /tmp' "$ROOT" 2>&1 )
   status=$?
   [ "$status" -ne 0 ] || fail "container_ensure must fail when the home workspace is ambiguous"
   assert_contains "$out" "labeled 'firstmate'" "container_ensure buried the specific ambiguity it refused"
   assert_not_contains "$out" "failed to ensure herdr workspace" "container_ensure added a generic message over the specific one"
-  pass "fm_backend_herdr_container_ensure: surfaces the exact ambiguous-placement refusal instead of a generic failure"
+  pass "fm_herdr_container_ensure: surfaces the exact ambiguous-placement refusal instead of a generic failure"
 }
 
 # --- container_ensure / create_task ------------------------------------------
@@ -516,12 +511,12 @@ test_container_ensure_starts_server_and_workspace() {
   printf '{"result":{"workspace":{"workspace_id":"w1","label":"firstmate"},"tab":{"tab_id":"w1:t9"},"root_pane":{"pane_id":"w1:p9"}}}\n' > "$resp/6.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SCRIPT_STATUS=1 HERDR_SESSION=fmtest \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_container_ensure /tmp' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_container_ensure /tmp' "$ROOT" )
   [ "$out" = $'fmtest:w1\tw1:t9' ] || fail "container_ensure should echo '<session>:<workspace_id>\\t<seeded_default_tab_id>', got '$out'"
   assert_contains "$(cat "$log")" "HERDR_SESSION=fmtest"$'\x1f''server' "container_ensure did not start the herdr server"
   assert_contains "$(cat "$log")" $'\x1f''workspace'$'\x1f''create'$'\x1f''--cwd'$'\x1f''/tmp'$'\x1f''--label'$'\x1f''firstmate' \
     "container_ensure did not create the firstmate workspace with the given cwd"
-  pass "fm_backend_herdr_container_ensure: version-gates, starts the server, ensures the firstmate workspace, echoes session:workspace_id + the seeded default tab id"
+  pass "fm_herdr_container_ensure: version-gates, starts the server, ensures the firstmate workspace, echoes session:workspace_id + the seeded default tab id"
 }
 
 test_container_ensure_reuses_existing_workspace() {
@@ -532,10 +527,10 @@ test_container_ensure_reuses_existing_workspace() {
   printf '{"result":{"workspaces":[{"workspace_id":"w9","label":"firstmate"}]}}\n' > "$resp/3.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SCRIPT_STATUS=1 HERDR_SESSION=fmtest \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_container_ensure /tmp' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_container_ensure /tmp' "$ROOT" )
   [ "$out" = $'fmtest:w9\t' ] || fail "container_ensure should reuse the existing firstmate workspace id with an EMPTY seeded-tab field (an ADOPTED workspace is never a prune candidate), got '$out'"
   assert_not_contains "$(cat "$log")" $'\x1f''workspace'$'\x1f''create' "container_ensure should not create a workspace that already exists"
-  pass "fm_backend_herdr_container_ensure: reuses an existing firstmate workspace without recreating it, and reports no seeded default tab (adopted, not created)"
+  pass "fm_herdr_container_ensure: reuses an existing firstmate workspace without recreating it, and reports no seeded default tab (adopted, not created)"
 }
 
 test_create_task_refuses_duplicate_label() {
@@ -544,11 +539,11 @@ test_create_task_refuses_duplicate_label() {
   printf '{"result":{"tabs":[{"tab_id":"w1:t2","label":"fm-dup1","workspace_id":"w1"}]}}\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_create_task fmtest:w1 fm-dup1 /tmp/proj' "$ROOT" 2>&1 )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_create_task fmtest:w1 fm-dup1 /tmp/proj' "$ROOT" 2>&1 )
   status=$?
   [ "$status" -ne 0 ] || fail "create_task should refuse an existing tab label (herdr itself does not enforce uniqueness)"
   assert_contains "$out" "already exists" "create_task did not report the duplicate label"
-  pass "fm_backend_herdr_create_task: refuses a duplicate tab label (herdr's own tab create has no uniqueness check)"
+  pass "fm_herdr_create_task: refuses a duplicate tab label (herdr's own tab create has no uniqueness check)"
 }
 
 # --- restored-layout husk close-and-replace (herdr session.json restore) -----
@@ -578,13 +573,13 @@ test_create_task_refuses_duplicate_label_when_agent_live() {
   printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/4.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_create_task fmtest:w1 fm-dup1 /tmp/proj' "$ROOT" 2>&1 )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_create_task fmtest:w1 fm-dup1 /tmp/proj' "$ROOT" 2>&1 )
   status=$?
   [ "$status" -ne 0 ] || fail "create_task should still refuse when the duplicate's pane hosts a live (even idle) registered agent"
   assert_contains "$out" "already exists" "create_task did not report the duplicate label for a live agent"
   assert_not_contains "$(cat "$log")" $'\x1f''tab'$'\x1f''create' "create_task must not create a replacement tab when the duplicate is live"
   assert_not_contains "$(cat "$log")" $'\x1f''pane'$'\x1f''close' "create_task must not close a live agent's pane"
-  pass "fm_backend_herdr_create_task: a same-labeled tab with a live (even idle) registered agent still refuses exactly as before"
+  pass "fm_herdr_create_task: a same-labeled tab with a live (even idle) registered agent still refuses exactly as before"
 }
 
 test_create_task_refuses_when_any_duplicate_label_is_live() {
@@ -599,13 +594,13 @@ test_create_task_refuses_when_any_duplicate_label_is_live() {
   printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/7.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_create_task fmtest:w1 fm-mixed1 /tmp/proj' "$ROOT" 2>&1 )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_create_task fmtest:w1 fm-mixed1 /tmp/proj' "$ROOT" 2>&1 )
   status=$?
   [ "$status" -ne 0 ] || fail "create_task must refuse when any same-labeled tab hosts a live registered agent"
   assert_contains "$out" "already exists" "create_task did not report the duplicate label when one duplicate was live"
   assert_not_contains "$(cat "$log")" $'\x1f''tab'$'\x1f''create' "create_task must not create a replacement tab when any duplicate is live"
   assert_not_contains "$(cat "$log")" $'\x1f''pane'$'\x1f''close' "create_task must not close any duplicate pane when one duplicate is live"
-  pass "fm_backend_herdr_create_task: scans every same-labeled tab and refuses if any duplicate is live"
+  pass "fm_herdr_create_task: scans every same-labeled tab and refuses if any duplicate is live"
 }
 
 test_create_task_closes_and_replaces_dead_pane_husk() {
@@ -620,7 +615,7 @@ test_create_task_closes_and_replaces_dead_pane_husk() {
   printf '{"result":{"tabs":[{"tab_id":"w1:t3","label":"fm-husk1","workspace_id":"w1"}]}}\n' > "$resp/6.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_create_task fmtest:w1 fm-husk1 /tmp/proj' "$ROOT" ) \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_create_task fmtest:w1 fm-husk1 /tmp/proj' "$ROOT" ) \
     || fail "create_task should close-and-replace a dead-pane husk instead of refusing"
   read -r tab pane <<EOF
 $out
@@ -631,7 +626,7 @@ EOF
   assert_contains "$(cat "$log")" $'\x1f''tab'$'\x1f''create'$'\x1f''--workspace'$'\x1f''w1'$'\x1f''--cwd'$'\x1f''/tmp/proj'$'\x1f''--label'$'\x1f''fm-husk1' \
     "create_task did not create the replacement tab"
   assert_contains "$(cat "$log")" $'\x1f''tab'$'\x1f''close'$'\x1f''w1:t2' "create_task did not close the dead husk's tab"
-  pass "fm_backend_herdr_create_task: closes and replaces a same-labeled tab whose pane is dead (pane_not_found)"
+  pass "fm_herdr_create_task: closes and replaces a same-labeled tab whose pane is dead (pane_not_found)"
 }
 
 test_create_task_closes_and_replaces_no_agent_husk() {
@@ -648,7 +643,7 @@ test_create_task_closes_and_replaces_no_agent_husk() {
   printf '{"result":{"tabs":[{"tab_id":"w1:t3","label":"fm-husk2","workspace_id":"w1"}]}}\n' > "$resp/7.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_create_task fmtest:w1 fm-husk2 /tmp/proj' "$ROOT" ) \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_create_task fmtest:w1 fm-husk2 /tmp/proj' "$ROOT" ) \
     || fail "create_task should close-and-replace a no-agent husk (restored plain shell) instead of refusing"
   read -r tab pane <<EOF
 $out
@@ -659,7 +654,7 @@ EOF
   assert_contains "$(cat "$log")" $'\x1f''tab'$'\x1f''create'$'\x1f''--workspace'$'\x1f''w1'$'\x1f''--cwd'$'\x1f''/tmp/proj'$'\x1f''--label'$'\x1f''fm-husk2' \
     "create_task did not create the replacement tab"
   assert_contains "$(cat "$log")" $'\x1f''tab'$'\x1f''close'$'\x1f''w1:t2' "create_task did not close the no-agent husk's tab"
-  pass "fm_backend_herdr_create_task: closes and replaces a same-labeled tab whose pane is alive but hosts no registered agent (a restored plain shell)"
+  pass "fm_herdr_create_task: closes and replaces a same-labeled tab whose pane is alive but hosts no registered agent (a restored plain shell)"
 }
 
 test_create_task_closes_all_duplicate_husks_after_replacement() {
@@ -676,7 +671,7 @@ test_create_task_closes_all_duplicate_husks_after_replacement() {
   printf '{"result":{"tabs":[{"tab_id":"w1:t4","label":"fm-husk-many","workspace_id":"w1"}]}}\n' > "$resp/11.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_create_task fmtest:w1 fm-husk-many /tmp/proj' "$ROOT" ) \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_create_task fmtest:w1 fm-husk-many /tmp/proj' "$ROOT" ) \
     || fail "create_task should close-and-replace all same-labeled husks after creating a replacement"
   read -r tab pane <<EOF
 $out
@@ -693,7 +688,7 @@ EOF
   if [ "$create_line" -ge "$close_p2_line" ] || [ "$create_line" -ge "$close_p3_line" ]; then
     fail "REGRESSION: duplicate husks were closed before the replacement tab was created"
   fi
-  pass "fm_backend_herdr_create_task: closes every confirmed same-labeled husk only after creating the replacement"
+  pass "fm_herdr_create_task: closes every confirmed same-labeled husk only after creating the replacement"
 }
 
 test_create_task_refuses_when_preexisting_husk_tab_remains() {
@@ -708,13 +703,13 @@ test_create_task_refuses_when_preexisting_husk_tab_remains() {
   printf '{"result":{"tabs":[{"tab_id":"w1:t2","label":"fm-stale-husk","workspace_id":"w1"},{"tab_id":"w1:t3","label":"fm-stale-husk","workspace_id":"w1"}]}}\n' > "$resp/7.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_create_task fmtest:w1 fm-stale-husk /tmp/proj' "$ROOT" 2>&1 )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_create_task fmtest:w1 fm-stale-husk /tmp/proj' "$ROOT" 2>&1 )
   status=$?
   [ "$status" -ne 0 ] || fail "create_task must fail when a preexisting same-labeled husk remains after close-and-replace"
   assert_contains "$out" "failed to remove preexisting herdr tab" "create_task did not report the stale preexisting husk tab"
   assert_contains "$(cat "$log")" $'\x1f''tab'$'\x1f''close'$'\x1f''w1:t2' "create_task did not close the stale husk by tab id"
   assert_not_contains "$(cat "$log")" $'\x1f''pane'$'\x1f''close'$'\x1f''w1:p2' "create_task should not rely on pane close for a preexisting husk"
-  pass "fm_backend_herdr_create_task: refuses success when a preexisting husk tab remains after replacement"
+  pass "fm_herdr_create_task: refuses success when a preexisting husk tab remains after replacement"
 }
 
 test_create_task_refuses_when_agent_state_ambiguous() {
@@ -730,13 +725,13 @@ test_create_task_refuses_when_agent_state_ambiguous() {
   printf '{"error":{"code":"internal_error","message":"transient failure"}}\n' > "$resp/4.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_create_task fmtest:w1 fm-ambig1 /tmp/proj' "$ROOT" 2>&1 )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_create_task fmtest:w1 fm-ambig1 /tmp/proj' "$ROOT" 2>&1 )
   status=$?
   [ "$status" -ne 0 ] || fail "create_task must refuse (fail-safe) when the agent state cannot be classified confidently, not treat it as a husk"
   assert_contains "$out" "already exists" "create_task did not report the duplicate label for an ambiguous state"
   assert_not_contains "$(cat "$log")" $'\x1f''tab'$'\x1f''create' "create_task must not create a replacement tab on an ambiguous read"
   assert_not_contains "$(cat "$log")" $'\x1f''pane'$'\x1f''close' "create_task must not close a pane whose state is ambiguous"
-  pass "fm_backend_herdr_create_task: refuses (fail-safe) rather than guessing when the duplicate's agent state cannot be classified confidently"
+  pass "fm_herdr_create_task: refuses (fail-safe) rather than guessing when the duplicate's agent state cannot be classified confidently"
 }
 
 test_create_task_husk_replacement_creates_before_closing() {
@@ -756,14 +751,14 @@ test_create_task_husk_replacement_creates_before_closing() {
   printf '{"result":{"tabs":[{"tab_id":"w1:t3","label":"fm-order1","workspace_id":"w1"}]}}\n' > "$resp/6.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_create_task fmtest:w1 fm-order1 /tmp/proj' "$ROOT" ) \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_create_task fmtest:w1 fm-order1 /tmp/proj' "$ROOT" ) \
     || fail "create_task should close-and-replace the dead-pane husk"
   create_line=$(grep -n $'\x1f''tab'$'\x1f''create' "$log" | head -1 | cut -d: -f1)
   close_line=$(grep -n $'\x1f''tab'$'\x1f''close' "$log" | head -1 | cut -d: -f1)
   [ -n "$create_line" ] || fail "expected a 'tab create' call in the log"
   [ -n "$close_line" ] || fail "expected a 'tab close' call in the log"
   [ "$create_line" -lt "$close_line" ] || fail "REGRESSION: the husk tab was closed (line $close_line) before (or at the same time as) the replacement tab was created (line $create_line) - risks deleting the whole workspace if the husk was its only tab"
-  pass "fm_backend_herdr_create_task: creates the replacement tab BEFORE closing the husk tab, never the reverse"
+  pass "fm_herdr_create_task: creates the replacement tab BEFORE closing the husk tab, never the reverse"
 }
 
 test_create_task_creates_and_parses_ids() {
@@ -773,13 +768,13 @@ test_create_task_creates_and_parses_ids() {
   printf '{"result":{"tab":{"tab_id":"w1:t2"},"root_pane":{"pane_id":"w1:p2"}}}\n' > "$resp/2.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_create_task fmtest:w1 fm-newtask /tmp/proj' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_create_task fmtest:w1 fm-newtask /tmp/proj' "$ROOT" )
   [ "$out" = "w1:t2 w1:p2" ] || fail "create_task should echo '<tab_id> <pane_id>', got '$out'"
   assert_contains "$(cat "$log")" $'\x1f''tab'$'\x1f''create'$'\x1f''--workspace'$'\x1f''w1'$'\x1f''--cwd'$'\x1f''/tmp/proj'$'\x1f''--label'$'\x1f''fm-newtask' \
     "create_task did not call tab create with workspace/cwd/label"
   assert_not_contains "$(cat "$log")" $'\x1f''pane'$'\x1f''close' \
     "create_task must never prune when called with no seeded default tab id (the 4th arg defaults to empty)"
-  pass "fm_backend_herdr_create_task: creates a tab and parses tab_id/pane_id from the JSON response, prunes nothing when no seeded tab id is given"
+  pass "fm_herdr_create_task: creates a tab and parses tab_id/pane_id from the JSON response, prunes nothing when no seeded tab id is given"
 }
 
 # --- container_ensure / create_task: --no-focus and per-home label ----------
@@ -793,11 +788,11 @@ test_container_ensure_creates_with_no_focus_flag() {
   printf '{"result":{"workspace":{"workspace_id":"w1","label":"firstmate"},"tab":{"tab_id":"w1:t1"},"root_pane":{"pane_id":"w1:p1"}}}\n' > "$resp/4.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SCRIPT_STATUS=1 HERDR_SESSION=fmtest \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_container_ensure /tmp' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_container_ensure /tmp' "$ROOT" )
   [ "$out" = $'fmtest:w1\tw1:t1' ] || fail "container_ensure should still echo '<session>:<workspace_id>\\t<seeded_default_tab_id>', got '$out'"
   assert_contains "$(cat "$log")" $'\x1f''workspace'$'\x1f''create'$'\x1f''--cwd'$'\x1f''/tmp'$'\x1f''--label'$'\x1f''firstmate'$'\x1f''--no-focus' \
     "container_ensure's workspace create did not pass --no-focus (focus-safety: never steal the captain's attention on spawn)"
-  pass "fm_backend_herdr_container_ensure: workspace create passes --no-focus"
+  pass "fm_herdr_container_ensure: workspace create passes --no-focus"
 }
 
 test_container_ensure_uses_secondmate_home_label() {
@@ -810,11 +805,11 @@ test_container_ensure_uses_secondmate_home_label() {
   printf '{"result":{"workspace":{"workspace_id":"w9","label":"2ndmate-sshhip-h7"},"tab":{"tab_id":"w9:t1"},"root_pane":{"pane_id":"w9:p1"}}}\n' > "$resp/4.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HOME="$home" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SCRIPT_STATUS=1 HERDR_SESSION=fmtest \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_container_ensure /tmp' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_container_ensure /tmp' "$ROOT" )
   [ "$out" = $'fmtest:w9\tw9:t1' ] || fail "container_ensure did not echo the expected session:workspace_id + seeded default tab id, got '$out'"
   assert_contains "$(cat "$log")" $'\x1f''workspace'$'\x1f''create'$'\x1f''--cwd'$'\x1f''/tmp'$'\x1f''--label'$'\x1f''2ndmate-sshhip-h7' \
     "container_ensure did not create the workspace under this secondmate home's own label"
-  pass "fm_backend_herdr_container_ensure: creates the workspace under the SECONDMATE home's own label, not 'firstmate'"
+  pass "fm_herdr_container_ensure: creates the workspace under the SECONDMATE home's own label, not 'firstmate'"
 }
 
 test_create_task_creates_with_no_focus_flag() {
@@ -824,11 +819,11 @@ test_create_task_creates_with_no_focus_flag() {
   printf '{"result":{"tab":{"tab_id":"w1:t2"},"root_pane":{"pane_id":"w1:p2"}}}\n' > "$resp/2.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_create_task fmtest:w1 fm-newtask /tmp/proj' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_create_task fmtest:w1 fm-newtask /tmp/proj' "$ROOT" )
   [ "$out" = "w1:t2 w1:p2" ] || fail "create_task should still echo '<tab_id> <pane_id>', got '$out'"
   assert_contains "$(cat "$log")" $'\x1f''tab'$'\x1f''create'$'\x1f''--workspace'$'\x1f''w1'$'\x1f''--cwd'$'\x1f''/tmp/proj'$'\x1f''--label'$'\x1f''fm-newtask'$'\x1f''--no-focus' \
     "create_task's tab create did not pass --no-focus"
-  pass "fm_backend_herdr_create_task: tab create passes --no-focus"
+  pass "fm_herdr_create_task: tab create passes --no-focus"
 }
 
 # --- default-on disposable presentation projection --------------------------
@@ -875,19 +870,19 @@ SH
   printf '%s\n' "$fb"
 }
 
-# fm_backend_herdr_presentation_enabled is the one gate bin/fm-spawn.sh consults
+# fm_herdr_presentation_enabled is the one gate bin/fm-spawn.sh consults
 # before projecting a crewmate or scout, so these cases pin the default-on
 # contract, its explicit opt-out, its explicit opt-in, and the version floor
 # that decides the unconfigured default at that interface.
 presentation_enabled_verdict() {  # <config-dir> <fakebin> [state-dir] [session] -> "on"/"off"
   HERDR_SESSION="${4:-}" PATH="$2:$PATH" bash -c '
-    . "$0/bin/backends/herdr.sh"
-    if fm_backend_herdr_presentation_enabled "$1" "$2"; then printf "on\n"; else printf "off\n"; fi
+    . "$0/bin/fm-herdr.sh"
+    if fm_herdr_presentation_enabled "$1" "$2"; then printf "on\n"; else printf "off\n"; fi
   ' "$ROOT" "$1" "${3:-}"
 }
 
 # The exact release identities measured against the real macOS aarch64 release
-# binaries on 2026-08-05 and recorded in docs/verification/runtime-backends.md.
+# binaries on 2026-08-05 and recorded in docs/verification/herdr-runtime.md.
 AT_FLOOR_PROTOCOL=19
 AT_FLOOR_VERSION=0.8.0
 BELOW_FLOOR_PROTOCOL=17
@@ -1096,9 +1091,9 @@ test_presentation_running_server_release_is_load_bearing() {
 # signal-divergence shapes that decide which signal carried a verdict.
 release_floor_verdict() {  # <protocol> <version> -> above|below|indeterminate
   bash -c '
-    . "$0/bin/backends/herdr.sh"
+    . "$0/bin/fm-herdr.sh"
     status=0
-    fm_backend_herdr_release_floor_verdict "$1" "$2" || status=$?
+    fm_herdr_release_floor_verdict "$1" "$2" || status=$?
     case "$status" in
       0) printf "above\n" ;;
       1) printf "below\n" ;;
@@ -1162,7 +1157,7 @@ test_presentation_preference_reports_three_distinct_states() {
   local dir config got
   dir="$TMP_ROOT/presentation-preference"; config="$dir/config"; mkdir -p "$config"
   preference() {
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_presentation_preference "$1"' "$ROOT" "$1" 2>/dev/null
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_presentation_preference "$1"' "$ROOT" "$1" 2>/dev/null
   }
   got=$(preference "$config")
   [ "$got" = default ] || fail "an absent file must report the default, got '$got'"
@@ -1182,11 +1177,11 @@ test_projection_journal_is_atomic_and_uses_128_bit_token() {
   local dir state out token parsed status
   dir="$TMP_ROOT/projection-journal"; state="$dir/state"; mkdir -p "$state"
   out=$(bash -c '
-    . "$0/bin/backends/herdr.sh"
-    token=$(fm_backend_herdr_projection_journal_create "$1" task-p1) || exit 1
-    parsed=$(fm_backend_herdr_projection_journal_token "$1/task-p1.herdr-presentation" task-p1) || exit 1
+    . "$0/bin/fm-herdr.sh"
+    token=$(fm_herdr_projection_journal_create "$1" task-p1) || exit 1
+    parsed=$(fm_herdr_projection_journal_token "$1/task-p1.herdr-presentation" task-p1) || exit 1
     printf "%s\n%s\n" "$token" "$parsed"
-    fm_backend_herdr_projection_journal_create "$1" task-p1 >/dev/null 2>&1
+    fm_herdr_projection_journal_create "$1" task-p1 >/dev/null 2>&1
   ' "$ROOT" "$state" 2>&1)
   status=$?
   [ "$status" -ne 0 ] || fail "a second presentation journal publication must fail instead of overwriting the first"
@@ -1206,26 +1201,26 @@ test_projection_journal_v2_binds_and_advances_exact_endpoint() {
   mkdir -p "$state" "$home"
   home_real=$(cd "$home" && pwd -P)
   out=$(bash -c '
-    . "$0/bin/backends/herdr.sh"
-    token=$(fm_backend_herdr_projection_journal_create "$1" fm-hibit-r1) || exit 1
+    . "$0/bin/fm-herdr.sh"
+    token=$(fm_herdr_projection_journal_create "$1" fm-hibit-r1) || exit 1
     journal="$1/fm-hibit-r1.herdr-presentation"
-    home=$(fm_backend_herdr_projection_home_identity "$2") || exit 1
-    label=$(fm_backend_herdr_projection_workspace_label fm-hibit-r1 "$token")
-    fm_backend_herdr_projection_journal_bind \
+    home=$(fm_herdr_projection_home_identity "$2") || exit 1
+    label=$(fm_herdr_projection_workspace_label fm-hibit-r1 "$token")
+    fm_herdr_projection_journal_bind \
       "$journal" fm-hibit-r1 "$home" lab-session w2 w2:t2 w2:p2 w1 firstmate "$label" fm-fm-hibit-r1 || exit 1
-    fm_backend_herdr_projection_journal_snapshot "$journal" fm-hibit-r1 || exit 1
+    fm_herdr_projection_journal_snapshot "$journal" fm-hibit-r1 || exit 1
     printf "%s|%s|%s|%s|%s|%s|%s\n" \
-      "$FM_BACKEND_HERDR_JOURNAL_VERSION" \
-      "$FM_BACKEND_HERDR_JOURNAL_HOME" \
-      "$FM_BACKEND_HERDR_JOURNAL_WORKSPACE_ID" \
-      "$FM_BACKEND_HERDR_JOURNAL_TAB_ID" \
-      "$FM_BACKEND_HERDR_JOURNAL_PANE_ID" \
-      "$FM_BACKEND_HERDR_JOURNAL_PARENT_WORKSPACE_ID" \
-      "$FM_BACKEND_HERDR_JOURNAL_WORKSPACE_LABEL"
-    fm_backend_herdr_projection_journal_replace_endpoint \
+      "$FM_HERDR_JOURNAL_VERSION" \
+      "$FM_HERDR_JOURNAL_HOME" \
+      "$FM_HERDR_JOURNAL_WORKSPACE_ID" \
+      "$FM_HERDR_JOURNAL_TAB_ID" \
+      "$FM_HERDR_JOURNAL_PANE_ID" \
+      "$FM_HERDR_JOURNAL_PARENT_WORKSPACE_ID" \
+      "$FM_HERDR_JOURNAL_WORKSPACE_LABEL"
+    fm_herdr_projection_journal_replace_endpoint \
       "$journal" fm-hibit-r1 w2:t2 w2:p2 w2:t3 w2:p3 || exit 1
-    fm_backend_herdr_projection_journal_snapshot "$journal" fm-hibit-r1 || exit 1
-    printf "%s|%s\n" "$FM_BACKEND_HERDR_JOURNAL_TAB_ID" "$FM_BACKEND_HERDR_JOURNAL_PANE_ID"
+    fm_herdr_projection_journal_snapshot "$journal" fm-hibit-r1 || exit 1
+    printf "%s|%s\n" "$FM_HERDR_JOURNAL_TAB_ID" "$FM_HERDR_JOURNAL_PANE_ID"
   ' "$ROOT" "$state" "$home") || fail "version 2 projection journal binding failed"
   token=$(sed -n 's/^projection_id=//p' "$state/fm-hibit-r1.herdr-presentation")
   [ "$(printf '%s\n' "$out" | sed -n '1p')" = "2|$home_real|w2|w2:t2|w2:p2|w1|└ hibit-r1 · p:$token" ] \
@@ -1235,7 +1230,7 @@ test_projection_journal_v2_binds_and_advances_exact_endpoint() {
   [ "$(wc -l < "$state/fm-hibit-r1.herdr-presentation" | tr -d '[:space:]')" = 12 ] \
     || fail "version 2 projection journal must have exactly 12 fields"
   printf 'pane_id=duplicate\n' >> "$state/fm-hibit-r1.herdr-presentation"
-  if bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_journal_snapshot "$1" fm-hibit-r1' \
+  if bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_journal_snapshot "$1" fm-hibit-r1' \
     "$ROOT" "$state/fm-hibit-r1.herdr-presentation"; then
     fail "duplicate version 2 journal fields must be ambiguous"
   fi
@@ -1261,22 +1256,22 @@ test_projection_create_uses_exact_response_ids_and_leaves_one_task_pane() {
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" HERDR_SESSION=fmtest \
     bash -c '
-      . "$0/bin/backends/herdr.sh"
-      fm_backend_herdr_projection_focus_snapshot() { printf "captain-ws\tcaptain-tab"; }
-      fm_backend_herdr_projection_focus_restore() { return 0; }
-      token=$(fm_backend_herdr_projection_journal_create "$1" task-p2) || exit 1
-      label=$(fm_backend_herdr_projection_workspace_label task-p2 "$token")
-      fm_backend_herdr_projection_create_task /tmp/proj "$label" fm-task-p2 || exit 1
+      . "$0/bin/fm-herdr.sh"
+      fm_herdr_projection_focus_snapshot() { printf "captain-ws\tcaptain-tab"; }
+      fm_herdr_projection_focus_restore() { return 0; }
+      token=$(fm_herdr_projection_journal_create "$1" task-p2) || exit 1
+      label=$(fm_herdr_projection_workspace_label task-p2 "$token")
+      fm_herdr_projection_create_task /tmp/proj "$label" fm-task-p2 || exit 1
       printf "%s %s %s %s %s\n" \
-        "$FM_BACKEND_HERDR_PROJECTION_WORKSPACE_ID" \
-        "$FM_BACKEND_HERDR_PROJECTION_SEEDED_TAB_ID" \
-        "$FM_BACKEND_HERDR_PROJECTION_SEEDED_PANE_ID" \
-        "$FM_BACKEND_HERDR_PROJECTION_TAB_ID" \
-        "$FM_BACKEND_HERDR_PROJECTION_PANE_ID"
+        "$FM_HERDR_PROJECTION_WORKSPACE_ID" \
+        "$FM_HERDR_PROJECTION_SEEDED_TAB_ID" \
+        "$FM_HERDR_PROJECTION_SEEDED_PANE_ID" \
+        "$FM_HERDR_PROJECTION_TAB_ID" \
+        "$FM_HERDR_PROJECTION_PANE_ID"
     ' "$ROOT" "$state") || fail "projection create should succeed from complete exact responses"
   [ "$out" = "w9 w9:t1 w9:p1 w9:t2 w9:p2" ] || fail "projection create did not retain exact response IDs: $out"
   journal="$state/task-p2.herdr-presentation"
-  token=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_journal_token "$1" task-p2' "$ROOT" "$journal") \
+  token=$(bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_journal_token "$1" task-p2' "$ROOT" "$journal") \
     || fail "projection journal was not readable"
   assert_contains "$(cat "$log")" $'workspace\x1fcreate\x1f--cwd\x1f/tmp/proj\x1f--label\x1f└ task-p2 · p:'"$token"$'\x1f--no-focus' \
     "projection workspace create did not use the corner label, full token, and --no-focus"
@@ -1305,7 +1300,7 @@ test_projection_create_never_closes_a_concurrent_same_label_tab() {
   printf '{"result":{"panes":[{"pane_id":"w9:p2","tab_id":"w9:t2"},{"pane_id":"w9:p3","tab_id":"w9:t3"}]}}\n' > "$resp/11.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" HERDR_SESSION=fmtest \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_focus_snapshot() { printf "captain-ws\tcaptain-tab"; }; fm_backend_herdr_projection_focus_restore() { return 0; }; fm_backend_herdr_projection_create_task /tmp/proj label fm-task-p2' "$ROOT" 2>&1)
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_focus_snapshot() { printf "captain-ws\tcaptain-tab"; }; fm_herdr_projection_focus_restore() { return 0; }; fm_herdr_projection_create_task /tmp/proj label fm-task-p2' "$ROOT" 2>&1)
   status=$?
   [ "$status" -ne 0 ] || fail "a concurrent tab should prevent exact one-pane projection convergence"
   assert_contains "$out" "did not converge to exactly one task pane" \
@@ -1325,7 +1320,7 @@ test_projection_focus_snapshot_requires_exact_workspace_and_tab() {
   printf '%s\n' '{"result":{"tabs":[{"tab_id":"w2:t1","focused":false},{"tab_id":"w2:t2","focused":true}]}}' > "$resp/2.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_focus_snapshot fmtest' "$ROOT") \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_focus_snapshot fmtest' "$ROOT") \
     || fail "an exact active workspace and tab should produce a focus snapshot"
   [ "$out" = $'w2\tw2:t2' ] || fail "focus snapshot did not preserve exact response IDs: $out"
   pass "herdr presentation focus: snapshot requires one exact active workspace and tab"
@@ -1350,7 +1345,7 @@ test_projection_close_restores_exact_prior_focus() {
   printf '%s\n' '{"result":{"tabs":[{"tab_id":"w2:t1","focused":false},{"tab_id":"w2:t2","focused":true}]}}' > "$resp/12.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_close_pane_focus_preserving fmtest w9:p2' "$ROOT" 2>&1)
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_close_pane_focus_preserving fmtest w9:p2' "$ROOT" 2>&1)
   status=$?
   [ "$status" -eq 0 ] || fail "an exact non-active projection close should succeed after restoring focus: $out"
   assert_contains "$(cat "$log")" $'pane\x1fclose\x1fw9:p2' \
@@ -1371,7 +1366,7 @@ test_projection_close_refuses_active_tab() {
   printf '%s\n' '{"result":{"pane":{"pane_id":"w9:p2","tab_id":"w9:t2","workspace_id":"w9"}}}' > "$resp/3.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_close_pane_focus_preserving fmtest w9:p2' "$ROOT" 2>&1)
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_close_pane_focus_preserving fmtest w9:p2' "$ROOT" 2>&1)
   status=$?
   [ "$status" -ne 0 ] || fail "cleanup must refuse when exact active-tab preservation is impossible"
   assert_contains "$out" "target is the captain's active tab" \
@@ -1399,7 +1394,7 @@ test_projection_close_reports_focus_restore_failure() {
   cp "$resp/8.out" "$resp/12.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_close_pane_focus_preserving fmtest w9:p2' "$ROOT" 2>&1)
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_close_pane_focus_preserving fmtest w9:p2' "$ROOT" 2>&1)
   status=$?
   [ "$status" -eq 2 ] || fail "cleanup did not distinguish post-close focus uncertainty: $status"
   assert_contains "$out" "did not restore the exact prior workspace and tab" \
@@ -1414,20 +1409,20 @@ test_projection_close_rechecks_required_agent_state_at_boundary() {
   dir="$TMP_ROOT/projection-close-agent-boundary"; mkdir -p "$dir"
   log="$dir/log"; : > "$log"
   out=$(ROOT="$ROOT" LOG="$log" bash -c '
-    . "$ROOT/bin/backends/herdr.sh"
-    fm_backend_herdr_projection_focus_snapshot() { printf "w1\tw1:t1"; }
-    fm_backend_herdr_pane_agent_state() { printf live; }
-    fm_backend_herdr_cli() {
+    . "$ROOT/bin/fm-herdr.sh"
+    fm_herdr_projection_focus_snapshot() { printf "w1\tw1:t1"; }
+    fm_herdr_pane_agent_state() { printf live; }
+    fm_herdr_cli() {
       printf "%s\n" "$*" >> "$LOG"
       case "$2 $3" in
         "pane get") printf "{\"result\":{\"pane\":{\"pane_id\":\"w9:p2\",\"tab_id\":\"w9:t2\"}}}\n" ;;
       esac
     }
     set +e
-    fm_backend_herdr_projection_close_pane_focus_preserving fmtest w9:p2 no-agent
+    fm_herdr_projection_close_pane_focus_preserving fmtest w9:p2 no-agent
     rc=$?
     set -e
-    printf "%s:%s" "$rc" "$FM_BACKEND_HERDR_PROJECTION_CLOSE_AGENT_STATE"
+    printf "%s:%s" "$rc" "$FM_HERDR_PROJECTION_CLOSE_AGENT_STATE"
   ')
   status=${out%%:*}
   [ "$status" -ne 0 ] && [ "$out" = "$status:live" ] \
@@ -1500,10 +1495,10 @@ test_projection_close_emptying_after_focus_uses_pane_death_without_move() {
   make_death_lab "$dir" "$bgpid"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    FM_HERDR_PS_BIN="$dir/ps" FM_BACKEND_HERDR_WORKSPACE_MOVER="$dir/mover" \
+    FM_HERDR_PS_BIN="$dir/ps" FM_HERDR_WORKSPACE_MOVER="$dir/mover" \
     FM_FAKE_MOVER_LOG="$dir/mover.log" FM_FAKE_MOVER_RESPONSE="$dir/no-response" \
-    FM_BACKEND_HERDR_DEATH_CLOSE_POLLS=2 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_close_pane_focus_preserving fmtest w2:p2' "$ROOT" 2>&1)
+    FM_HERDR_DEATH_CLOSE_POLLS=2 \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_close_pane_focus_preserving fmtest w2:p2' "$ROOT" 2>&1)
   status=$?
   kill "$bgpid" 2>/dev/null || true; wait "$bgpid" 2>/dev/null || true
   [ "$status" -eq 0 ] || fail "emptying close behind focus should succeed through the pane-death path: $out"
@@ -1539,10 +1534,10 @@ test_projection_close_emptying_before_focus_repositions_then_uses_pane_death() {
   printf '%s\n' '{"id":"fm-workspace-move","result":{"type":"workspace_list","workspaces":[{"workspace_id":"w2","focused":true},{"workspace_id":"w3","focused":false},{"workspace_id":"w1","focused":false}]}}' > "$dir/mover-response"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SCRIPT_STATUS=1 \
-    FM_HERDR_PS_BIN="$dir/ps" FM_BACKEND_HERDR_WORKSPACE_MOVER="$dir/mover" \
+    FM_HERDR_PS_BIN="$dir/ps" FM_HERDR_WORKSPACE_MOVER="$dir/mover" \
     FM_FAKE_MOVER_LOG="$dir/mover.log" FM_FAKE_MOVER_RESPONSE="$dir/mover-response" \
-    FM_BACKEND_HERDR_DEATH_CLOSE_POLLS=2 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_close_pane_focus_preserving fmtest w1:p1' "$ROOT" 2>&1)
+    FM_HERDR_DEATH_CLOSE_POLLS=2 \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_close_pane_focus_preserving fmtest w1:p1' "$ROOT" 2>&1)
   status=$?
   kill "$bgpid" 2>/dev/null || true; wait "$bgpid" 2>/dev/null || true
   [ "$status" -eq 0 ] || fail "repositioned emptying close should succeed through the pane-death path: $out"
@@ -1574,10 +1569,10 @@ test_projection_close_emptying_before_last_focus_needs_no_move() {
   make_death_lab "$dir" "$bgpid"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    FM_HERDR_PS_BIN="$dir/ps" FM_BACKEND_HERDR_WORKSPACE_MOVER="$dir/mover" \
+    FM_HERDR_PS_BIN="$dir/ps" FM_HERDR_WORKSPACE_MOVER="$dir/mover" \
     FM_FAKE_MOVER_LOG="$dir/mover.log" FM_FAKE_MOVER_RESPONSE="$dir/no-response" \
-    FM_BACKEND_HERDR_DEATH_CLOSE_POLLS=2 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_close_pane_focus_preserving fmtest w1:p1' "$ROOT" 2>&1)
+    FM_HERDR_DEATH_CLOSE_POLLS=2 \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_close_pane_focus_preserving fmtest w1:p1' "$ROOT" 2>&1)
   status=$?
   kill "$bgpid" 2>/dev/null || true; wait "$bgpid" 2>/dev/null || true
   [ "$status" -eq 0 ] || fail "emptying close with last focus should succeed through the pane-death path: $out"
@@ -1606,10 +1601,10 @@ test_projection_close_emptying_last_workspace_needs_no_move() {
   make_death_lab "$dir" "$bgpid"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    FM_HERDR_PS_BIN="$dir/ps" FM_BACKEND_HERDR_WORKSPACE_MOVER="$dir/mover" \
+    FM_HERDR_PS_BIN="$dir/ps" FM_HERDR_WORKSPACE_MOVER="$dir/mover" \
     FM_FAKE_MOVER_LOG="$dir/mover.log" FM_FAKE_MOVER_RESPONSE="$dir/no-response" \
-    FM_BACKEND_HERDR_DEATH_CLOSE_POLLS=2 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_close_pane_focus_preserving fmtest w3:p1' "$ROOT" 2>&1)
+    FM_HERDR_DEATH_CLOSE_POLLS=2 \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_close_pane_focus_preserving fmtest w3:p1' "$ROOT" 2>&1)
   status=$?
   kill "$bgpid" 2>/dev/null || true; wait "$bgpid" 2>/dev/null || true
   [ "$status" -eq 0 ] || fail "last-workspace emptying close should succeed through the pane-death path: $out"
@@ -1633,10 +1628,10 @@ test_projection_close_non_emptying_stays_plain_without_proof_or_move() {
   make_death_lab "$dir" "$bgpid"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    FM_HERDR_PS_BIN="$dir/ps" FM_BACKEND_HERDR_WORKSPACE_MOVER="$dir/mover" \
+    FM_HERDR_PS_BIN="$dir/ps" FM_HERDR_WORKSPACE_MOVER="$dir/mover" \
     FM_FAKE_MOVER_LOG="$dir/mover.log" FM_FAKE_MOVER_RESPONSE="$dir/no-response" \
-    FM_BACKEND_HERDR_DEATH_CLOSE_POLLS=2 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_close_pane_focus_preserving fmtest w2:p2' "$ROOT" 2>&1)
+    FM_HERDR_DEATH_CLOSE_POLLS=2 \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_close_pane_focus_preserving fmtest w2:p2' "$ROOT" 2>&1)
   status=$?
   [ "$status" -eq 0 ] || fail "non-emptying close should succeed through the plain close: $out"
   assert_contains "$(cat "$log")" $'pane\x1fclose\x1fw2:p2' "non-emptying close did not use the plain close"
@@ -1652,17 +1647,17 @@ test_projection_close_plain_without_move_requires_structured_removal() {
   dir="$TMP_ROOT/close-plain-unconfirmed"; mkdir -p "$dir"
   log="$dir/log"; : > "$log"
   out=$(ROOT="$ROOT" LOG="$log" bash -c '
-    . "$ROOT/bin/backends/herdr.sh"
-    fm_backend_herdr_projection_focus_snapshot() { printf "w1\tw1:t1"; }
-    fm_backend_herdr_emptying_close_plan() { printf "plain\n"; }
-    fm_backend_herdr_projection_focus_restore() { return 0; }
-    fm_backend_herdr_cli() {
+    . "$ROOT/bin/fm-herdr.sh"
+    fm_herdr_projection_focus_snapshot() { printf "w1\tw1:t1"; }
+    fm_herdr_emptying_close_plan() { printf "plain\n"; }
+    fm_herdr_projection_focus_restore() { return 0; }
+    fm_herdr_cli() {
       printf "%s\n" "$*" >> "$LOG"
       case "$2 $3" in
         "pane get") printf "{\"result\":{\"pane\":{\"pane_id\":\"w2:p2\",\"tab_id\":\"w2:t2\",\"workspace_id\":\"w2\"}}}\n" ;;
       esac
     }
-    fm_backend_herdr_projection_close_pane_focus_preserving fmtest w2:p2
+    fm_herdr_projection_close_pane_focus_preserving fmtest w2:p2
   ' 2>&1)
   status=$?
   [ "$status" -ne 0 ] || fail "a no-move plain close must fail while structured presence remains present: $out"
@@ -1689,10 +1684,10 @@ test_projection_close_ambiguous_positions_fall_back_to_plain_close() {
   make_death_lab "$dir" "$bgpid"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    FM_HERDR_PS_BIN="$dir/ps" FM_BACKEND_HERDR_WORKSPACE_MOVER="$dir/mover" \
+    FM_HERDR_PS_BIN="$dir/ps" FM_HERDR_WORKSPACE_MOVER="$dir/mover" \
     FM_FAKE_MOVER_LOG="$dir/mover.log" FM_FAKE_MOVER_RESPONSE="$dir/no-response" \
-    FM_BACKEND_HERDR_DEATH_CLOSE_POLLS=2 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_close_pane_focus_preserving fmtest w2:p2' "$ROOT" 2>&1)
+    FM_HERDR_DEATH_CLOSE_POLLS=2 \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_close_pane_focus_preserving fmtest w2:p2' "$ROOT" 2>&1)
   status=$?
   [ "$status" -eq 0 ] || fail "an ambiguous position snapshot should fall back to the plain close: $out"
   assert_contains "$(cat "$log")" $'pane\x1fclose\x1fw2:p2' "ambiguous positions did not use the plain close"
@@ -1725,10 +1720,10 @@ test_projection_close_move_failure_falls_back_to_plain_close() {
   make_death_lab "$dir" "$bgpid"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SCRIPT_STATUS=1 \
-    FM_HERDR_PS_BIN="$dir/ps" FM_BACKEND_HERDR_WORKSPACE_MOVER="$dir/mover" \
+    FM_HERDR_PS_BIN="$dir/ps" FM_HERDR_WORKSPACE_MOVER="$dir/mover" \
     FM_FAKE_MOVER_LOG="$dir/mover.log" FM_FAKE_MOVER_RESPONSE="$dir/no-response" \
-    FM_BACKEND_HERDR_DEATH_CLOSE_POLLS=2 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_close_pane_focus_preserving fmtest w1:p1' "$ROOT" 2>&1)
+    FM_HERDR_DEATH_CLOSE_POLLS=2 \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_close_pane_focus_preserving fmtest w1:p1' "$ROOT" 2>&1)
   status=$?
   [ "$status" -eq 0 ] || fail "a failed repositioning move should fall back to the plain close: $out"
   assert_contains "$out" "could not move the doomed workspace behind the focused one" \
@@ -1759,10 +1754,10 @@ test_projection_close_busy_pane_falls_back_to_plain_close() {
   make_death_lab "$dir" "$bgpid"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    FM_HERDR_PS_BIN="$dir/ps" FM_BACKEND_HERDR_WORKSPACE_MOVER="$dir/mover" \
+    FM_HERDR_PS_BIN="$dir/ps" FM_HERDR_WORKSPACE_MOVER="$dir/mover" \
     FM_FAKE_MOVER_LOG="$dir/mover.log" FM_FAKE_MOVER_RESPONSE="$dir/no-response" \
-    FM_BACKEND_HERDR_DEATH_CLOSE_POLLS=2 FM_BACKEND_HERDR_IDLE_SHELL_PROOF_POLLS=1 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_close_pane_focus_preserving fmtest w2:p2' "$ROOT" 2>&1)
+    FM_HERDR_DEATH_CLOSE_POLLS=2 FM_HERDR_IDLE_SHELL_PROOF_POLLS=1 \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_close_pane_focus_preserving fmtest w2:p2' "$ROOT" 2>&1)
   status=$?
   [ "$status" -eq 0 ] || fail "a busy pane should fall back to the plain close: $out"
   assert_contains "$(cat "$log")" $'pane\x1fclose\x1fw2:p2' "a busy pane did not use the plain close"
@@ -1793,10 +1788,10 @@ test_projection_close_transient_prompt_helper_settles_then_uses_pane_death() {
   make_death_lab "$dir" "$bgpid"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    FM_HERDR_PS_BIN="$dir/ps" FM_BACKEND_HERDR_WORKSPACE_MOVER="$dir/mover" \
+    FM_HERDR_PS_BIN="$dir/ps" FM_HERDR_WORKSPACE_MOVER="$dir/mover" \
     FM_FAKE_MOVER_LOG="$dir/mover.log" FM_FAKE_MOVER_RESPONSE="$dir/no-response" \
-    FM_BACKEND_HERDR_DEATH_CLOSE_POLLS=2 FM_BACKEND_HERDR_IDLE_SHELL_PROOF_POLLS=3 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_close_pane_focus_preserving fmtest w2:p2' "$ROOT" 2>&1)
+    FM_HERDR_DEATH_CLOSE_POLLS=2 FM_HERDR_IDLE_SHELL_PROOF_POLLS=3 \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_close_pane_focus_preserving fmtest w2:p2' "$ROOT" 2>&1)
   status=$?
   kill "$bgpid" 2>/dev/null || true; wait "$bgpid" 2>/dev/null || true
   [ "$status" -eq 0 ] || fail "a transient prompt helper should settle into the pane-death path: $out"
@@ -1828,10 +1823,10 @@ test_projection_close_death_escalates_sigkill_after_sighup_survival() {
   make_death_lab "$dir" "$bgpid"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    FM_HERDR_PS_BIN="$dir/ps" FM_BACKEND_HERDR_WORKSPACE_MOVER="$dir/mover" \
+    FM_HERDR_PS_BIN="$dir/ps" FM_HERDR_WORKSPACE_MOVER="$dir/mover" \
     FM_FAKE_MOVER_LOG="$dir/mover.log" FM_FAKE_MOVER_RESPONSE="$dir/no-response" \
-    FM_BACKEND_HERDR_DEATH_CLOSE_POLLS=2 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_close_pane_focus_preserving fmtest w2:p2' "$ROOT" 2>&1)
+    FM_HERDR_DEATH_CLOSE_POLLS=2 \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_close_pane_focus_preserving fmtest w2:p2' "$ROOT" 2>&1)
   status=$?
   [ "$status" -eq 0 ] || fail "a SIGHUP-surviving shell should be finished by the SIGKILL escalation: $out"
   assert_not_contains "$(cat "$log")" $'pane\x1fclose' "the SIGKILL escalation used the focus-unsafe explicit close"
@@ -1866,10 +1861,10 @@ test_projection_close_death_failure_falls_back_to_plain_close() {
   make_death_lab "$dir" "$bgpid"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    FM_HERDR_PS_BIN="$dir/ps" FM_BACKEND_HERDR_WORKSPACE_MOVER="$dir/mover" \
+    FM_HERDR_PS_BIN="$dir/ps" FM_HERDR_WORKSPACE_MOVER="$dir/mover" \
     FM_FAKE_MOVER_LOG="$dir/mover.log" FM_FAKE_MOVER_RESPONSE="$dir/no-response" \
-    FM_BACKEND_HERDR_DEATH_CLOSE_POLLS=2 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_close_pane_focus_preserving fmtest w2:p2' "$ROOT" 2>&1)
+    FM_HERDR_DEATH_CLOSE_POLLS=2 \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_close_pane_focus_preserving fmtest w2:p2' "$ROOT" 2>&1)
   status=$?
   [ "$status" -eq 0 ] || fail "an unkillable shell should fall back to the plain close: $out"
   assert_contains "$(cat "$log")" $'pane\x1fclose\x1fw2:p2' "a failed pane-death close did not use the plain close fallback"
@@ -1899,10 +1894,10 @@ test_projection_close_death_still_restores_a_stolen_focus() {
   make_death_lab "$dir" "$bgpid"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    FM_HERDR_PS_BIN="$dir/ps" FM_BACKEND_HERDR_WORKSPACE_MOVER="$dir/mover" \
+    FM_HERDR_PS_BIN="$dir/ps" FM_HERDR_WORKSPACE_MOVER="$dir/mover" \
     FM_FAKE_MOVER_LOG="$dir/mover.log" FM_FAKE_MOVER_RESPONSE="$dir/no-response" \
-    FM_BACKEND_HERDR_DEATH_CLOSE_POLLS=2 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_close_pane_focus_preserving fmtest w2:p2' "$ROOT" 2>&1)
+    FM_HERDR_DEATH_CLOSE_POLLS=2 \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_close_pane_focus_preserving fmtest w2:p2' "$ROOT" 2>&1)
   status=$?
   [ "$status" -eq 0 ] || fail "the pane-death close with a restored backstop should succeed: $out"
   assert_contains "$(cat "$log")" $'tab\x1ffocus\x1fw1:t1' "the backstop did not restore the exact prior tab"
@@ -1934,10 +1929,10 @@ test_projection_close_death_never_sigkills_a_reused_pid() {
   make_death_lab "$dir" "$bgpid"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    FM_HERDR_PS_BIN="$dir/ps" FM_BACKEND_HERDR_WORKSPACE_MOVER="$dir/mover" \
+    FM_HERDR_PS_BIN="$dir/ps" FM_HERDR_WORKSPACE_MOVER="$dir/mover" \
     FM_FAKE_MOVER_LOG="$dir/mover.log" FM_FAKE_MOVER_RESPONSE="$dir/no-response" \
-    FM_BACKEND_HERDR_DEATH_CLOSE_POLLS=2 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_close_pane_focus_preserving fmtest w2:p2' "$ROOT" 2>&1)
+    FM_HERDR_DEATH_CLOSE_POLLS=2 \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_close_pane_focus_preserving fmtest w2:p2' "$ROOT" 2>&1)
   status=$?
   if ! kill -0 "$bgpid" 2>/dev/null; then
     wait "$bgpid" 2>/dev/null || true
@@ -1995,11 +1990,11 @@ assert_projection_close_failed_removal_rolls_back_the_reposition() {
   printf '%s\n' '{"id":"fm-workspace-move","result":{"type":"workspace_list","workspaces":[{"workspace_id":"w1","focused":false},{"workspace_id":"w2","focused":true},{"workspace_id":"w3","focused":false}]}}' > "$dir/mover-response-2"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SCRIPT_STATUS=1 \
-    FM_HERDR_PS_BIN="$dir/ps" FM_BACKEND_HERDR_WORKSPACE_MOVER="$dir/mover" \
+    FM_HERDR_PS_BIN="$dir/ps" FM_HERDR_WORKSPACE_MOVER="$dir/mover" \
     FM_FAKE_MOVER_LOG="$dir/mover.log" FM_FAKE_MOVER_RESPONSE="$dir/mover-response" \
     FM_FAKE_MOVER_RESPONSE_2="$dir/mover-response-2" \
-    FM_BACKEND_HERDR_DEATH_CLOSE_POLLS=2 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_close_pane_focus_preserving fmtest w1:p1' "$ROOT" 2>&1)
+    FM_HERDR_DEATH_CLOSE_POLLS=2 \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_close_pane_focus_preserving fmtest w1:p1' "$ROOT" 2>&1)
   status=$?
   kill -KILL "$bgpid" 2>/dev/null || true; wait "$bgpid" 2>/dev/null || true
   [ "$status" -ne 0 ] || fail "an unconfirmed removal must report failure: $out"
@@ -2038,14 +2033,14 @@ test_kill_emptying_non_focused_uses_pane_death() {
   make_death_lab "$dir" "$bgpid"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    FM_HERDR_PS_BIN="$dir/ps" FM_BACKEND_HERDR_WORKSPACE_MOVER="$dir/mover" \
+    FM_HERDR_PS_BIN="$dir/ps" FM_HERDR_WORKSPACE_MOVER="$dir/mover" \
     FM_FAKE_MOVER_LOG="$dir/mover.log" FM_FAKE_MOVER_RESPONSE="$dir/no-response" \
-    FM_BACKEND_HERDR_DEATH_CLOSE_POLLS=2 FM_FAKE_LOCK_LOG="$lock_log" \
+    FM_HERDR_DEATH_CLOSE_POLLS=2 FM_FAKE_LOCK_LOG="$lock_log" \
     FM_FAKE_LOCK_HELD="$lock_held" \
     bash -c '
-      . "$0/bin/backends/herdr.sh"
-      fm_backend_herdr_target_ready() { fm_backend_herdr_parse_target "$1"; }
-      fm_backend_herdr_presentation_session_lock_path() { printf "%s" "$FM_FAKE_LOCK_HELD.lock"; }
+      . "$0/bin/fm-herdr.sh"
+      fm_herdr_target_ready() { fm_herdr_parse_target "$1"; }
+      fm_herdr_presentation_session_lock_path() { printf "%s" "$FM_FAKE_LOCK_HELD.lock"; }
       fm_lock_try_acquire() {
         printf "acquire\n" >> "$FM_FAKE_LOCK_LOG"
         : > "$FM_FAKE_LOCK_HELD"
@@ -2055,12 +2050,12 @@ test_kill_emptying_non_focused_uses_pane_death() {
         rm -f "$FM_FAKE_LOCK_HELD"
         printf "release\n" >> "$FM_FAKE_LOCK_LOG"
       }
-      eval "$(declare -f fm_backend_herdr_cli | sed "1s/fm_backend_herdr_cli/fm_backend_herdr_cli_locked/")"
-      fm_backend_herdr_cli() {
+      eval "$(declare -f fm_herdr_cli | sed "1s/fm_herdr_cli/fm_herdr_cli_locked/")"
+      fm_herdr_cli() {
         [ -e "$FM_FAKE_LOCK_HELD" ] || return 97
-        fm_backend_herdr_cli_locked "$@"
+        fm_herdr_cli_locked "$@"
       }
-      fm_backend_herdr_kill fmtest:w2:p2
+      fm_herdr_kill fmtest:w2:p2
     ' "$ROOT" 2>&1)
   status=$?
   [ "$status" -eq 0 ] || fail "an emptying non-focused kill should stay best-effort: $out"
@@ -2069,7 +2064,7 @@ test_kill_emptying_non_focused_uses_pane_death() {
   [ ! -e "$lock_held" ] || fail "the generic kill retained its presentation lock"
   assert_not_contains "$(cat "$log")" $'pane\x1fclose' "an emptying non-focused kill used the focus-unsafe explicit close"
   assert_not_contains "$(cat "$log")" $'tab\x1ffocus' "an emptying non-focused kill moved focus"
-  pass "fm_backend_herdr_kill: one session lock covers the focus-safe emptying removal"
+  pass "fm_herdr_kill: one session lock covers the focus-safe emptying removal"
 }
 
 test_kill_focused_workspace_stays_plain_close() {
@@ -2084,15 +2079,15 @@ test_kill_focused_workspace_stays_plain_close() {
   make_death_lab "$dir" "$bgpid"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    FM_HERDR_PS_BIN="$dir/ps" FM_BACKEND_HERDR_WORKSPACE_MOVER="$dir/mover" \
+    FM_HERDR_PS_BIN="$dir/ps" FM_HERDR_WORKSPACE_MOVER="$dir/mover" \
     FM_FAKE_MOVER_LOG="$dir/mover.log" FM_FAKE_MOVER_RESPONSE="$dir/no-response" \
-    FM_BACKEND_HERDR_DEATH_CLOSE_POLLS=2 \
+    FM_HERDR_DEATH_CLOSE_POLLS=2 \
     bash -c '
-      . "$0/bin/backends/herdr.sh"
-      fm_backend_herdr_presentation_session_lock_path() { printf "/tmp/fm-herdr-test-lock"; }
+      . "$0/bin/fm-herdr.sh"
+      fm_herdr_presentation_session_lock_path() { printf "/tmp/fm-herdr-test-lock"; }
       fm_lock_try_acquire() { return 0; }
       fm_lock_release() { return 0; }
-      fm_backend_herdr_kill fmtest:w2:p2
+      fm_herdr_kill fmtest:w2:p2
     ' "$ROOT" 2>&1)
   status=$?
   [ "$status" -eq 0 ] || fail "a focused-workspace kill should stay best-effort: $out"
@@ -2100,7 +2095,7 @@ test_kill_focused_workspace_stays_plain_close() {
   assert_not_contains "$(cat "$log")" $'pane\x1fprocess-info' "a focused-workspace kill ran the idle-shell proof"
   kill -0 "$bgpid" 2>/dev/null || fail "a focused-workspace kill signaled the pane's shell"
   kill "$bgpid" 2>/dev/null || true; wait "$bgpid" 2>/dev/null || true
-  pass "fm_backend_herdr_kill: killing the focused workspace's tab keeps the legitimate plain close"
+  pass "fm_herdr_kill: killing the focused workspace's tab keeps the legitimate plain close"
 }
 
 test_kill_refuses_when_presentation_lock_is_unavailable() {
@@ -2110,9 +2105,9 @@ test_kill_refuses_when_presentation_lock_is_unavailable() {
     : > "$dir/cli.log"
     : > "$dir/attempts"
     out=$(ROOT="$ROOT" MODE="$mode" CLI_LOG="$dir/cli.log" ATTEMPTS="$dir/attempts" bash -c '
-      . "$ROOT/bin/backends/herdr.sh"
-      fm_backend_herdr_target_ready() { fm_backend_herdr_parse_target "$1"; }
-      fm_backend_herdr_presentation_session_lock_path() {
+      . "$ROOT/bin/fm-herdr.sh"
+      fm_herdr_target_ready() { fm_herdr_parse_target "$1"; }
+      fm_herdr_presentation_session_lock_path() {
         [ "$MODE" = contended ] || return 1
         printf "/tmp/fm-herdr-contended-test-lock"
       }
@@ -2120,12 +2115,12 @@ test_kill_refuses_when_presentation_lock_is_unavailable() {
         printf "x\n" >> "$ATTEMPTS"
         return 1
       }
-      fm_backend_herdr_cli() {
+      fm_herdr_cli() {
         printf "%s\n" "$*" >> "$CLI_LOG"
         return 0
       }
       sleep() { :; }
-      fm_backend_herdr_kill fmtest:w2:p2
+      fm_herdr_kill fmtest:w2:p2
     ' 2>&1)
     status=$?
     [ "$status" -eq 0 ] || fail "$mode presentation lock refusal changed best-effort kill status: $status"
@@ -2139,18 +2134,18 @@ test_kill_refuses_when_presentation_lock_is_unavailable() {
       [ "$attempts" = 0 ] || fail "unresolved presentation lock path attempted acquisition: $attempts"
     fi
   done
-  pass "fm_backend_herdr_kill: unavailable session locks defer every pane close"
+  pass "fm_herdr_kill: unavailable session locks defer every pane close"
 }
 
 test_endpoint_confirmed_gone_gates_on_structured_presence() {
   local out
   out=$(bash -c '
-    . "$0/bin/backends/herdr.sh"
-    fm_backend_herdr_cli() { printf "%s\n" "$FM_FAKE_PRESENCE_RESPONSE"; return "${FM_FAKE_PRESENCE_STATUS:-0}"; }
+    . "$0/bin/fm-herdr.sh"
+    fm_herdr_cli() { printf "%s\n" "$FM_FAKE_PRESENCE_RESPONSE"; return "${FM_FAKE_PRESENCE_STATUS:-0}"; }
     check() {  # <label> <response> <status> <mode> <expected-rc>
       FM_FAKE_PRESENCE_RESPONSE=$2 FM_FAKE_PRESENCE_STATUS=$3
       rc=0
-      fm_backend_herdr_endpoint_confirmed_gone fmtest:w2:p2 "$4" || rc=$?
+      fm_herdr_endpoint_confirmed_gone fmtest:w2:p2 "$4" || rc=$?
       [ "$rc" = "$5" ] || printf "MISMATCH %s: rc=%s expected=%s\n" "$1" "$rc" "$5"
     }
     check present-default "{\"result\":{\"pane\":{\"pane_id\":\"w2:p2\"}}}" 0 "" 1
@@ -2164,10 +2159,10 @@ test_endpoint_confirmed_gone_gates_on_structured_presence() {
     # Missing or malformed endpoint identity is ambiguity, never proof of a
     # gone pane: it must refuse record removal.
     rc=0
-    fm_backend_herdr_endpoint_confirmed_gone malformed-target strict || rc=$?
+    fm_herdr_endpoint_confirmed_gone malformed-target strict || rc=$?
     [ "$rc" = 1 ] || printf "MISMATCH malformed-target: rc=%s expected=1\n" "$rc"
     rc=0
-    fm_backend_herdr_endpoint_confirmed_gone "" || rc=$?
+    fm_herdr_endpoint_confirmed_gone "" || rc=$?
     [ "$rc" = 1 ] || printf "MISMATCH empty-target: rc=%s expected=1\n" "$rc"
   ' "$ROOT" 2>&1)
   [ -z "$out" ] || fail "endpoint confirmed-gone gate matrix mismatch: $out"
@@ -2186,7 +2181,7 @@ test_projection_seeded_prune_refuses_active_tab() {
   printf '%s\n' '{"result":{"pane":{"pane_id":"w9:p1","tab_id":"w9:t1","workspace_id":"w9"}}}' > "$resp/6.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_workspace_prune_seeded_default_tab fmtest w9 w9:t1 focus-preserving' "$ROOT" 2>&1)
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_workspace_prune_seeded_default_tab fmtest w9 w9:t1 focus-preserving' "$ROOT" 2>&1)
   status=$?
   [ "$status" -ne 0 ] || fail "projected seeded pruning must refuse the active tab"
   assert_contains "$out" "target is the captain's active tab" \
@@ -2200,19 +2195,19 @@ test_projection_label_builder_uses_corner_and_strips_owner_prefixes() {
   local primary secondmate token
   token='AbCdEfGhIjKlMnOpQrStUv'
   [ "${#token}" -eq 22 ] || fail "fixture token must be 22 characters"
-  primary=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_workspace_label task-p2 '"$token" "$ROOT")
+  primary=$(bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_workspace_label task-p2 '"$token" "$ROOT")
   [ "$primary" = "└ task-p2 · p:$token" ] \
     || fail "primary child label was wrong: $primary"
-  secondmate=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_workspace_label secondmate-child-demo '"$token" "$ROOT")
+  secondmate=$(bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_workspace_label secondmate-child-demo '"$token" "$ROOT")
   [ "$secondmate" = "└ secondmate-child-demo · p:$token" ] \
     || fail "secondmate child label was wrong: $secondmate"
-  primary=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_workspace_label firstmate/task-p2 '"$token" "$ROOT")
+  primary=$(bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_workspace_label firstmate/task-p2 '"$token" "$ROOT")
   [ "$primary" = "└ task-p2 · p:$token" ] \
     || fail "firstmate/ owner prefix was not stripped: $primary"
-  secondmate=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_workspace_label 2ndmate-fmdev-f2/child '"$token" "$ROOT")
+  secondmate=$(bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_workspace_label 2ndmate-fmdev-f2/child '"$token" "$ROOT")
   [ "$secondmate" = "└ child · p:$token" ] \
     || fail "2ndmate owner prefix was not stripped: $secondmate"
-  primary=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_workspace_label fm-task-p2 '"$token" "$ROOT")
+  primary=$(bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_workspace_label fm-task-p2 '"$token" "$ROOT")
   [ "$primary" = "└ task-p2 · p:$token" ] \
     || fail "presentation fm- owner prefix was not stripped: $primary"
   case "$primary" in $'└ '*) ;; *) fail "label must start with U+2514 and one space" ;; esac
@@ -2237,8 +2232,8 @@ SH
   chmod +x "$mover"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SCRIPT_STATUS=1 \
-    FM_BACKEND_HERDR_WORKSPACE_MOVER="$mover" FM_FAKE_MOVER_LOG="$mover_log" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_focus_snapshot() { printf "w4\tw4:t2"; }; fm_backend_herdr_projection_focus_restore() { return 0; }; fm_backend_herdr_projection_order_best_effort fmtest w5 firstmate' "$ROOT" 2>&1)
+    FM_HERDR_WORKSPACE_MOVER="$mover" FM_FAKE_MOVER_LOG="$mover_log" \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_focus_snapshot() { printf "w4\tw4:t2"; }; fm_herdr_projection_focus_restore() { return 0; }; fm_herdr_projection_order_best_effort fmtest w5 firstmate' "$ROOT" 2>&1)
   status=$?
   [ "$status" -eq 0 ] || fail "best-effort projection ordering must not fail the spawn"
   [ -z "$out" ] || fail "successful projection ordering emitted a warning: $out"
@@ -2269,8 +2264,8 @@ SH
   chmod +x "$mover"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SCRIPT_STATUS=1 \
-    FM_BACKEND_HERDR_WORKSPACE_MOVER="$mover" FM_FAKE_MOVER_LOG="$mover_log" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_focus_snapshot() { printf "w5\tw5:t1"; }; fm_backend_herdr_projection_focus_restore() { return 0; }; fm_backend_herdr_projection_order_best_effort fmtest w6 2ndmate-alpha' "$ROOT" 2>&1)
+    FM_HERDR_WORKSPACE_MOVER="$mover" FM_FAKE_MOVER_LOG="$mover_log" \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_focus_snapshot() { printf "w5\tw5:t1"; }; fm_herdr_projection_focus_restore() { return 0; }; fm_herdr_projection_order_best_effort fmtest w6 2ndmate-alpha' "$ROOT" 2>&1)
   status=$?
   [ "$status" -eq 0 ] || fail "secondmate parent ordering must not fail the spawn: $out"
   [ -z "$out" ] || fail "successful secondmate ordering emitted a warning: $out"
@@ -2293,8 +2288,8 @@ SH
   chmod +x "$mover"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    FM_BACKEND_HERDR_WORKSPACE_MOVER="$mover" FM_FAKE_MOVER_CALLED="$dir/called" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_order_best_effort fmtest w4 2ndmate-alpha' "$ROOT" 2>&1)
+    FM_HERDR_WORKSPACE_MOVER="$mover" FM_FAKE_MOVER_CALLED="$dir/called" \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_order_best_effort fmtest w4 2ndmate-alpha' "$ROOT" 2>&1)
   status=$?
   [ "$status" -eq 0 ] || fail "foreign legacy ordering must not fail the spawn"
   assert_contains "$out" "ambiguous workspace layout" "foreign legacy child did not warn"
@@ -2323,8 +2318,8 @@ SH
   chmod +x "$mover"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SCRIPT_STATUS=1 \
-    FM_BACKEND_HERDR_WORKSPACE_MOVER="$mover" FM_FAKE_MOVER_LOG="$mover_log" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_focus_snapshot() { printf "w4\tw4:t1"; }; fm_backend_herdr_projection_focus_restore() { return 0; }; fm_backend_herdr_projection_order_best_effort fmtest w6 firstmate' "$ROOT" 2>&1)
+    FM_HERDR_WORKSPACE_MOVER="$mover" FM_FAKE_MOVER_LOG="$mover_log" \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_focus_snapshot() { printf "w4\tw4:t1"; }; fm_herdr_projection_focus_restore() { return 0; }; fm_herdr_projection_order_best_effort fmtest w6 firstmate' "$ROOT" 2>&1)
   status=$?
   [ "$status" -eq 0 ] || fail "intervening parent ordering must not fail the spawn: $out"
   [ -z "$out" ] || fail "legitimate intervening parent ordering emitted a warning: $out"
@@ -2351,8 +2346,8 @@ SH
   chmod +x "$mover"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SCRIPT_STATUS=1 \
-    FM_BACKEND_HERDR_WORKSPACE_MOVER="$mover" FM_FAKE_MOVER_LOG="$mover_log" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_focus_snapshot() { printf "w2\tw2:t1"; }; fm_backend_herdr_projection_focus_restore() { return 0; }; fm_backend_herdr_projection_order_best_effort fmtest w3 firstmate' "$ROOT" 2>&1)
+    FM_HERDR_WORKSPACE_MOVER="$mover" FM_FAKE_MOVER_LOG="$mover_log" \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_focus_snapshot() { printf "w2\tw2:t1"; }; fm_herdr_projection_focus_restore() { return 0; }; fm_herdr_projection_order_best_effort fmtest w3 firstmate' "$ROOT" 2>&1)
   status=$?
   [ "$status" -eq 0 ] || fail "human-interleaved ordering must not fail: $out"
   [ "$(cat "$mover_log")" = "$(cd /tmp && pwd -P)/fmtest.sock"$'\t'"w3"$'\t'"2" ] \
@@ -2376,8 +2371,8 @@ SH
   chmod +x "$mover"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SCRIPT_STATUS=1 \
-    FM_BACKEND_HERDR_WORKSPACE_MOVER="$mover" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_focus_snapshot() { printf "w1\tw1:t1"; }; fm_backend_herdr_projection_focus_restore() { return 0; }; fm_backend_herdr_projection_order_best_effort fmtest w3 firstmate' "$ROOT" 2>&1)
+    FM_HERDR_WORKSPACE_MOVER="$mover" \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_focus_snapshot() { printf "w1\tw1:t1"; }; fm_herdr_projection_focus_restore() { return 0; }; fm_herdr_projection_order_best_effort fmtest w3 firstmate' "$ROOT" 2>&1)
   status=$?
   [ "$status" -eq 0 ] || fail "a workspace.move failure must not fail the projected spawn"
   assert_contains "$out" "workspace move failed or had an ambiguous response" \
@@ -2402,8 +2397,8 @@ SH
   chmod +x "$mover"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    FM_BACKEND_HERDR_WORKSPACE_MOVER="$mover" FM_FAKE_MOVER_CALLED="$dir/called" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_order_best_effort fmtest w4 firstmate' "$ROOT" 2>&1)
+    FM_HERDR_WORKSPACE_MOVER="$mover" FM_FAKE_MOVER_CALLED="$dir/called" \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_order_best_effort fmtest w4 firstmate' "$ROOT" 2>&1)
   status=$?
   [ "$status" -eq 0 ] || fail "ambiguous projection ordering must not fail the spawn"
   assert_contains "$out" "ambiguous workspace layout" "ambiguous projection layout did not warn"
@@ -2430,8 +2425,8 @@ SH
   chmod +x "$mover"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    FM_BACKEND_HERDR_WORKSPACE_MOVER="$mover" FM_FAKE_MOVER_CALLED="$dir/called" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_order_best_effort fmtest w8 firstmate' "$ROOT" 2>&1)
+    FM_HERDR_WORKSPACE_MOVER="$mover" FM_FAKE_MOVER_CALLED="$dir/called" \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_order_best_effort fmtest w8 firstmate' "$ROOT" 2>&1)
   status=$?
   [ "$status" -eq 0 ] || fail "ambiguous projection ordering must not fail the spawn"
   assert_contains "$out" "ambiguous workspace layout" "a duplicated parent label should make label-anchored ordering step aside"
@@ -2451,8 +2446,8 @@ SH
   chmod +x "$mover"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    FM_BACKEND_HERDR_WORKSPACE_MOVER="$mover" FM_FAKE_MOVER_CALLED="$dir/called" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_order_best_effort fmtest w8 firstmate w7' "$ROOT" 2>&1)
+    FM_HERDR_WORKSPACE_MOVER="$mover" FM_FAKE_MOVER_CALLED="$dir/called" \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_order_best_effort fmtest w8 firstmate w7' "$ROOT" 2>&1)
   status=$?
   [ "$status" -eq 0 ] || fail "exact-parent projection ordering must not fail the spawn"
   assert_not_contains "$out" "ambiguous workspace layout" "the exact parent id should have resolved the duplicated label"
@@ -2474,8 +2469,8 @@ SH
   chmod +x "$mover"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    FM_BACKEND_HERDR_WORKSPACE_MOVER="$mover" FM_FAKE_MOVER_CALLED="$dir/called" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_order_best_effort fmtest w4 firstmate' "$ROOT" 2>&1)
+    FM_HERDR_WORKSPACE_MOVER="$mover" FM_FAKE_MOVER_CALLED="$dir/called" \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_order_best_effort fmtest w4 firstmate' "$ROOT" 2>&1)
   status=$?
   [ "$status" -eq 0 ] || fail "foreign new-child ordering must not fail the spawn"
   assert_contains "$out" "ambiguous workspace layout" "foreign new child before its parent did not warn"
@@ -2498,8 +2493,8 @@ SH
   chmod +x "$mover"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    FM_BACKEND_HERDR_WORKSPACE_MOVER="$mover" FM_FAKE_MOVER_CALLED="$dir/called" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_order_best_effort fmtest w2 2ndmate-missing' "$ROOT" 2>&1)
+    FM_HERDR_WORKSPACE_MOVER="$mover" FM_FAKE_MOVER_CALLED="$dir/called" \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_order_best_effort fmtest w2 2ndmate-missing' "$ROOT" 2>&1)
   status=$?
   [ "$status" -eq 0 ] || fail "missing parent must not fail the spawn"
   assert_contains "$out" "ambiguous workspace layout" "missing parent did not warn"
@@ -2508,22 +2503,28 @@ SH
 }
 
 test_presentation_session_lock_path_is_shared_across_homes() {
-  local dir log resp fb path_a path_b path_other path_tmp path_private
+  local dir log resp fb path_a path_b path_restarted path_other path_tmp path_private
   dir="$TMP_ROOT/presentation-session-lock"; mkdir -p "$dir/responses" "$dir/sockdir"
   log="$dir/log"; resp="$dir/responses"; : > "$log"
   : > "$dir/sockdir/fmtest.sock"
   printf '%s\n' "{\"sessions\":[{\"name\":\"fmtest\",\"running\":true,\"socket_path\":\"$dir/sockdir/fmtest.sock\"}]}" > "$resp/1.out"
   printf '%s\n' "{\"sessions\":[{\"name\":\"fmtest\",\"running\":true,\"socket_path\":\"$dir/sockdir/fmtest.sock\"}]}" > "$resp/2.out"
-  printf '%s\n' "{\"sessions\":[{\"name\":\"other\",\"running\":true,\"socket_path\":\"$dir/sockdir/other.sock\"}]}" > "$resp/3.out"
+  printf '%s\n' "{\"sessions\":[{\"name\":\"fmtest\",\"running\":true,\"socket_path\":\"$dir/sockdir/fmtest-restarted.sock\"}]}" > "$resp/3.out"
+  printf '%s\n' "{\"sessions\":[{\"name\":\"other\",\"running\":true,\"socket_path\":\"$dir/sockdir/other.sock\"}]}" > "$resp/4.out"
+  : > "$dir/sockdir/fmtest-restarted.sock"
   : > "$dir/sockdir/other.sock"
   fb=$(make_herdr_fakebin "$dir")
   path_a=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_presentation_session_lock_path fmtest' "$ROOT") \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_presentation_session_lock_path fmtest' "$ROOT") \
     || fail "session lock path resolution failed for home A"
   path_b=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_presentation_session_lock_path fmtest' "$ROOT") \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_presentation_session_lock_path fmtest' "$ROOT") \
     || fail "session lock path resolution failed for home B"
-  [ "$path_a" = "$path_b" ] || fail "same session/socket must resolve one shared lock path"
+  [ "$path_a" = "$path_b" ] || fail "same named session must resolve one shared lock path"
+  path_restarted=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_presentation_session_lock_path fmtest' "$ROOT") \
+    || fail "session lock path resolution failed after socket replacement"
+  [ "$path_restarted" = "$path_a" ] || fail "a named session restart split its shared lock path"
   case "$path_a" in
     /tmp/firstmate-herdr-presentation/order-*.lock) ;;
     *) fail "session lock path must use the shared machine namespace: $path_a" ;;
@@ -2532,25 +2533,25 @@ test_presentation_session_lock_path_is_shared_across_homes() {
     */state/*) fail "session lock path must not live under a home state directory: $path_a" ;;
   esac
   path_other=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_presentation_session_lock_path other' "$ROOT") \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_presentation_session_lock_path other' "$ROOT") \
     || fail "session lock path resolution failed for a different session"
   [ "$path_other" != "$path_a" ] || fail "different sessions must not share one lock path"
   # Symlink parents such as /tmp -> /private/tmp must not split the lock identity.
   if [ -L /tmp ] || [ "$(cd /tmp && pwd -P)" != /tmp ]; then
     : > /tmp/fm-herdr-lock-canon-$$.sock
-    printf '%s\n' '{"sessions":[{"name":"canon","running":true,"socket_path":"/tmp/fm-herdr-lock-canon-'"$$"'.sock"}]}' > "$resp/4.out"
-    printf '%s\n' "{\"sessions\":[{\"name\":\"canon\",\"running\":true,\"socket_path\":\"$(cd /tmp && pwd -P)/fm-herdr-lock-canon-$$.sock\"}]}" > "$resp/5.out"
+    printf '%s\n' '{"sessions":[{"name":"canon","running":true,"socket_path":"/tmp/fm-herdr-lock-canon-'"$$"'.sock"}]}' > "$resp/5.out"
+    printf '%s\n' "{\"sessions\":[{\"name\":\"canon\",\"running\":true,\"socket_path\":\"$(cd /tmp && pwd -P)/fm-herdr-lock-canon-$$.sock\"}]}" > "$resp/6.out"
     path_tmp=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-      bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_presentation_session_lock_path canon' "$ROOT") \
+      bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_presentation_session_lock_path canon' "$ROOT") \
       || fail "lock path with /tmp socket failed"
     path_private=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-      bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_presentation_session_lock_path canon' "$ROOT") \
+      bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_presentation_session_lock_path canon' "$ROOT") \
       || fail "lock path with canonical socket failed"
     rm -f /tmp/fm-herdr-lock-canon-$$.sock
     [ "$path_tmp" = "$path_private" ] \
       || fail "symlink parent socket paths must resolve one lock: $path_tmp vs $path_private"
   fi
-  pass "herdr presentation lock: one path per session/socket across homes"
+  pass "herdr presentation lock: one stable path per named session across homes"
 }
 
 test_presentation_session_lock_path_rejects_malformed_socket() {
@@ -2561,13 +2562,13 @@ test_presentation_session_lock_path_rejects_malformed_socket() {
   printf '%s\n' '{"sessions":[{"name":"fmtest","running":true}]}' > "$resp/2.out"
   fb=$(make_herdr_fakebin "$dir")
   path=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_presentation_session_lock_path fmtest' "$ROOT" 2>&1)
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_presentation_session_lock_path fmtest' "$ROOT" 2>&1)
   status=$?
   [ "$status" -ne 0 ] || fail "null socket_path must refuse the presentation lock path"
   [ -z "$path" ] || fail "null socket_path returned a lock path: $path"
   case "$path" in *null*) fail "null socket_path leaked into a lock path: $path" ;; esac
   path=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_presentation_session_lock_path fmtest' "$ROOT" 2>&1)
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_presentation_session_lock_path fmtest' "$ROOT" 2>&1)
   status=$?
   [ "$status" -ne 0 ] || fail "missing socket_path must refuse the presentation lock path"
   [ -z "$path" ] || fail "missing socket_path returned a lock path: $path"
@@ -2591,8 +2592,8 @@ SH
   chmod +x "$mover"
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SCRIPT_STATUS=1 \
-    FM_BACKEND_HERDR_WORKSPACE_MOVER="$mover" FM_FAKE_MOVER_CALLED="$dir/called" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_order_best_effort fmtest w2 firstmate' "$ROOT" 2>&1)
+    FM_HERDR_WORKSPACE_MOVER="$mover" FM_FAKE_MOVER_CALLED="$dir/called" \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_order_best_effort fmtest w2 firstmate' "$ROOT" 2>&1)
   status=$?
   [ "$status" -eq 0 ] || fail "malformed ordering socket must not fail the spawn"
   assert_contains "$out" "ambiguous named session socket" "malformed ordering socket did not warn"
@@ -2606,10 +2607,10 @@ test_projection_reclaim_refusal_matrix_is_non_mutating() {
   mkdir -p "$state" "$home" "$other_home"
   home_real=$(cd "$home" && pwd -P)
   token=$(bash -c '
-    . "$0/bin/backends/herdr.sh"
-    token=$(fm_backend_herdr_projection_journal_create "$1" refusal-r1) || exit 1
-    label=$(fm_backend_herdr_projection_workspace_label refusal-r1 "$token")
-    fm_backend_herdr_projection_journal_bind \
+    . "$0/bin/fm-herdr.sh"
+    token=$(fm_herdr_projection_journal_create "$1" refusal-r1) || exit 1
+    label=$(fm_herdr_projection_workspace_label refusal-r1 "$token")
+    fm_herdr_projection_journal_bind \
       "$1/refusal-r1.herdr-presentation" refusal-r1 "$2" fmtest \
       w2 w2:t2 w2:p2 w1 firstmate "$label" fm-refusal-r1 || exit 1
     printf "%s" "$token"
@@ -2617,32 +2618,32 @@ test_projection_reclaim_refusal_matrix_is_non_mutating() {
   journal="$state/refusal-r1.herdr-presentation"
   label="└ refusal-r1 · p:$token"
   mkdir -p "$state/legacy"
-  bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_journal_create "$1" refusal-r1 >/dev/null' \
+  bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_journal_create "$1" refusal-r1 >/dev/null' \
     "$ROOT" "$state/legacy" || fail "could not create legacy reclaim fixture"
   legacy="$state/legacy/refusal-r1.herdr-presentation"
   mutation_log="$dir/mutations.log"; : > "$mutation_log"
   out=$(ROOT="$ROOT" JOURNAL="$journal" LEGACY="$legacy" HOME_A="$home" HOME_B="$other_home" MUTATIONS="$mutation_log" \
     bash -c '
-      . "$ROOT/bin/backends/herdr.sh"
-      fm_backend_herdr_cli() { printf "%s\n" "$*" >> "$MUTATIONS"; return 1; }
+      . "$ROOT/bin/fm-herdr.sh"
+      fm_herdr_cli() { printf "%s\n" "$*" >> "$MUTATIONS"; return 1; }
       run_case() {
         mode=$1; journal=$2; home=$3
-        fm_backend_herdr_projection_live_binding_matches() {
+        fm_herdr_projection_live_binding_matches() {
           [ "$mode" != ambiguous ]
         }
-        fm_backend_herdr_pane_agent_state() {
+        fm_herdr_pane_agent_state() {
           case "$mode" in
             live) printf live ;;
             unknown) printf unknown ;;
             *) printf no-agent ;;
           esac
         }
-        fm_backend_herdr_projection_focus_snapshot() {
+        fm_herdr_projection_focus_snapshot() {
           [ "$mode" != focus-unknown ] || return 1
           printf "w1\tw1:t1"
         }
         set +e
-        fm_backend_herdr_projection_reclaim_task \
+        fm_herdr_projection_reclaim_task \
           fmtest "$journal" refusal-r1 "$home" w2 w2:t2 w2:p2 firstmate fm-refusal-r1 /tmp/project \
           >/dev/null 2>&1
         rc=$?
@@ -2672,10 +2673,10 @@ test_projection_reclaim_replaces_only_exact_husk_and_advances_binding() {
   home_real=$(cd "$home" && pwd -P)
   log="$dir/log"; resp="$dir/responses"; : > "$log"
   token=$(bash -c '
-    . "$0/bin/backends/herdr.sh"
-    token=$(fm_backend_herdr_projection_journal_create "$1" fm-hibit-r1) || exit 1
-    label=$(fm_backend_herdr_projection_workspace_label fm-hibit-r1 "$token")
-    fm_backend_herdr_projection_journal_bind \
+    . "$0/bin/fm-herdr.sh"
+    token=$(fm_herdr_projection_journal_create "$1" fm-hibit-r1) || exit 1
+    label=$(fm_herdr_projection_workspace_label fm-hibit-r1 "$token")
+    fm_herdr_projection_journal_bind \
       "$1/fm-hibit-r1.herdr-presentation" fm-hibit-r1 "$2" fmtest \
       w2 w2:t2 w2:p2 w1 firstmate "$label" fm-fm-hibit-r1 || exit 1
     printf "%s" "$token"
@@ -2715,10 +2716,10 @@ test_projection_reclaim_replaces_only_exact_husk_and_advances_binding() {
   fb=$(make_herdr_fakebin "$dir")
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     bash -c '
-      . "$0/bin/backends/herdr.sh"
-      fm_backend_herdr_projection_reclaim_task \
+      . "$0/bin/fm-herdr.sh"
+      fm_herdr_projection_reclaim_task \
         fmtest "$1" fm-hibit-r1 "$2" w2 w2:t2 w2:p2 firstmate fm-fm-hibit-r1 /tmp/project || exit 1
-      printf "%s %s" "$FM_BACKEND_HERDR_PROJECTION_TAB_ID" "$FM_BACKEND_HERDR_PROJECTION_PANE_ID"
+      printf "%s %s" "$FM_HERDR_PROJECTION_TAB_ID" "$FM_HERDR_PROJECTION_PANE_ID"
     ' "$ROOT" "$journal" "$home") || fail "exact agent-free projection reclaim failed"
   [ "$out" = "w2:t3 w2:p3" ] || fail "reclaim did not return exact replacement ids: $out"
   [ "$(sed -n 's/^tab_id=//p' "$journal")" = w2:t3 ] \
@@ -2747,7 +2748,7 @@ test_projection_recovery_is_read_only_and_refuses_live_duplicate_risk() {
   local dir state log resp fb token journal out status calls
   dir="$TMP_ROOT/projection-recovery"; state="$dir/state"; mkdir -p "$dir/responses" "$state"
   log="$dir/log"; resp="$dir/responses"; : > "$log"
-  token=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_journal_create "$1" task-p3' "$ROOT" "$state")
+  token=$(bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_journal_create "$1" task-p3' "$ROOT" "$state")
   journal="$state/task-p3.herdr-presentation"
   printf '{"result":{"workspaces":[{"workspace_id":"w1","label":"firstmate/task-p3 · p:%s"},{"workspace_id":"w2","label":"copy/task-p3 · p:%s"}]}}\n' "$token" "$token" > "$resp/1.out"
   printf '{"result":{"panes":[{"pane_id":"w1:p1","tab_id":"w1:t1"}]}}\n' > "$resp/2.out"
@@ -2758,7 +2759,7 @@ test_projection_recovery_is_read_only_and_refuses_live_duplicate_risk() {
   printf '{"error":{"code":"agent_not_found"}}\n' > "$resp/7.out"
   fb=$(make_herdr_fakebin "$dir")
   PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_recovery_allows_flat fmtest "$1" task-p3' "$ROOT" "$journal" \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_recovery_allows_flat fmtest "$1" task-p3' "$ROOT" "$journal" \
     >/dev/null || fail "agent-free duplicate token matches should allow flat fallback"
   calls=$(cat "$log")
   assert_not_contains "$calls" $'workspace\x1fcreate' "recovery inspection created a workspace"
@@ -2773,7 +2774,7 @@ test_projection_recovery_is_read_only_and_refuses_live_duplicate_risk() {
   printf '{"result":{"pane":{"pane_id":"w1:p1"}}}\n' > "$resp/3.out"
   printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/4.out"
   out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_recovery_allows_flat fmtest "$1" task-p3' "$ROOT" "$journal" 2>&1)
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_projection_recovery_allows_flat fmtest "$1" task-p3' "$ROOT" "$journal" 2>&1)
   status=$?
   [ "$status" -ne 0 ] || fail "a token match with a live registered agent must refuse duplicate launch"
   assert_contains "$out" "has a live pane" "live duplicate refusal did not explain the risk"
@@ -2794,9 +2795,9 @@ test_workspace_find_matches_only_this_homes_own_label() {
   printf '{"result":{"workspaces":[{"workspace_id":"w1","label":"firstmate"},{"workspace_id":"w2","label":"2ndmate-bravo-b2"},{"workspace_id":"w3","label":"2ndmate-alpha-a1"}]}}\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HOME="$home" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_workspace_find fmtest' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_workspace_find fmtest' "$ROOT" )
   [ "$out" = "w2" ] || fail "workspace_find should have matched this home's own label (2ndmate-bravo-b2 -> w2), got '$out'"
-  pass "fm_backend_herdr_workspace_find: matches only THIS home's own label among several coexisting workspaces"
+  pass "fm_herdr_workspace_find: matches only THIS home's own label among several coexisting workspaces"
 }
 
 # --- list_live: scoped to this home's own workspace only ---------------------
@@ -2813,34 +2814,34 @@ test_list_live_scoped_to_this_homes_workspace_only() {
   printf '{"result":{"panes":[{"pane_id":"w2:p1","tab_id":"w2:t1"}]}}\n' > "$resp/3.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HOME="$home" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_list_live fmtest' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_list_live fmtest' "$ROOT" )
   [ "$out" = $'fmtest:w2:p1\tfm-secondmatetask' ] || fail "list_live should report only this home's own tab, got '$out'"
   assert_contains "$(cat "$log")" $'\x1f''tab'$'\x1f''list'$'\x1f''--workspace'$'\x1f''w2' \
     "list_live did not scope the tab list call to this home's own workspace (w2)"
   assert_not_contains "$(cat "$log")" $'\x1f''tab'$'\x1f''list'$'\x1f''--workspace'$'\x1f''w1' \
     "list_live must never query the primary's (or a sibling secondmate's) workspace"
-  pass "fm_backend_herdr_list_live: scoped to this home's own workspace, never a sibling home's"
+  pass "fm_herdr_list_live: scoped to this home's own workspace, never a sibling home's"
 }
 
 # --- target parsing, key normalization ---------------------------------------
 
 test_parse_target() {
-  ( . "$ROOT/bin/backends/herdr.sh"
-    fm_backend_herdr_parse_target "default:w1:p2" || exit 1
-    [ "$FM_BACKEND_HERDR_SESSION" = default ] || { echo "session mismatch: $FM_BACKEND_HERDR_SESSION" >&2; exit 1; }
-    [ "$FM_BACKEND_HERDR_PANE" = "w1:p2" ] || { echo "pane mismatch: $FM_BACKEND_HERDR_PANE" >&2; exit 1; }
-  ) || fail "fm_backend_herdr_parse_target did not split session:pane on the first colon only"
-  pass "fm_backend_herdr_parse_target: splits '<session>:<pane_id>' on the FIRST colon (pane_id itself contains one)"
+  ( . "$ROOT/bin/fm-herdr.sh"
+    fm_herdr_parse_target "default:w1:p2" || exit 1
+    [ "$FM_HERDR_SESSION" = default ] || { echo "session mismatch: $FM_HERDR_SESSION" >&2; exit 1; }
+    [ "$FM_HERDR_PANE" = "w1:p2" ] || { echo "pane mismatch: $FM_HERDR_PANE" >&2; exit 1; }
+  ) || fail "fm_herdr_parse_target did not split session:pane on the first colon only"
+  pass "fm_herdr_parse_target: splits '<session>:<pane_id>' on the FIRST colon (pane_id itself contains one)"
 }
 
 test_normalize_key() {
-  ( . "$ROOT/bin/backends/herdr.sh"
-    [ "$(fm_backend_herdr_normalize_key Enter)" = enter ] || exit 1
-    [ "$(fm_backend_herdr_normalize_key Escape)" = escape ] || exit 1
-    [ "$(fm_backend_herdr_normalize_key C-c)" = ctrl+c ] || exit 1
-    [ "$(fm_backend_herdr_normalize_key ctrl+c)" = ctrl+c ] || exit 1
-  ) || fail "fm_backend_herdr_normalize_key did not map firstmate's key vocabulary to herdr's verified names"
-  pass "fm_backend_herdr_normalize_key: Enter/Escape/C-c map to herdr's verified enter/escape/ctrl+c"
+  ( . "$ROOT/bin/fm-herdr.sh"
+    [ "$(fm_herdr_normalize_key Enter)" = enter ] || exit 1
+    [ "$(fm_herdr_normalize_key Escape)" = escape ] || exit 1
+    [ "$(fm_herdr_normalize_key C-c)" = ctrl+c ] || exit 1
+    [ "$(fm_herdr_normalize_key ctrl+c)" = ctrl+c ] || exit 1
+  ) || fail "fm_herdr_normalize_key did not map firstmate's key vocabulary to herdr's verified names"
+  pass "fm_herdr_normalize_key: Enter/Escape/C-c map to herdr's verified enter/escape/ctrl+c"
 }
 
 # --- capture / send_key / kill / current_path --------------------------------
@@ -2854,11 +2855,11 @@ test_capture_calls_pane_read() {
   # fetch bound; the adapter then trims to the caller's requested 250 lines
   # locally, so all 3 fake lines survive.
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_capture default:w1:p2 250' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_capture default:w1:p2 250' "$ROOT" )
   [ "$out" = $'line one\nline two\nline three' ] || fail "capture did not pass through pane read output, got '$out'"
   assert_contains "$(cat "$log")" "HERDR_SESSION=default"$'\x1f''pane'$'\x1f''read'$'\x1f''w1:p2'$'\x1f''--source'$'\x1f''recent'$'\x1f''--lines'$'\x1f''250' \
     "capture did not call pane read with the right pane id and line bound"
-  pass "fm_backend_herdr_capture: calls 'pane read <pane> --source recent --lines N' with the session set"
+  pass "fm_herdr_capture: calls 'pane read <pane> --source recent --lines N' with the session set"
 }
 
 test_capture_works_around_small_lines_bug() {
@@ -2871,11 +2872,11 @@ test_capture_works_around_small_lines_bug() {
   printf 'a\nb\nc\nd\ne\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_capture default:w1:p2 2' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_capture default:w1:p2 2' "$ROOT" )
   [ "$out" = $'d\ne' ] || fail "a small --lines request should still return the last N lines (trimmed locally), got '$out'"
   assert_contains "$(cat "$log")" $'\x1f''--lines'$'\x1f''200' \
     "capture should request a generous fetch (>=200), never the caller's small N, from herdr's own --lines flag"
-  pass "fm_backend_herdr_capture: works around the verified small-N '--lines' bug by over-fetching and trimming locally"
+  pass "fm_herdr_capture: works around the verified small-N '--lines' bug by over-fetching and trimming locally"
 }
 
 test_capture_preserves_pane_read_failure() {
@@ -2884,14 +2885,14 @@ test_capture_preserves_pane_read_failure() {
   printf '1\n' > "$resp/1.exit"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_capture default:w1:p2 2' "$ROOT" 2>&1 )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_capture default:w1:p2 2' "$ROOT" 2>&1 )
   status=$?
   [ "$status" -ne 0 ] || fail "capture should fail when pane read fails, got output '$out'"
   assert_contains "$(cat "$log")" "HERDR_SESSION=default"$'\x1f''status'$'\x1f''--json' \
     "capture did not ensure the herdr server before reading the pane"
   assert_contains "$(cat "$log")" $'\x1f''pane'$'\x1f''read'$'\x1f''w1:p2' \
     "capture did not try to read the requested pane"
-  pass "fm_backend_herdr_capture: ensures the session and preserves pane read failure"
+  pass "fm_herdr_capture: ensures the session and preserves pane read failure"
 }
 
 test_send_key_normalizes_and_targets_pane() {
@@ -2899,10 +2900,10 @@ test_send_key_normalizes_and_targets_pane() {
   dir="$TMP_ROOT/sendkey"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
   fb=$(make_herdr_fakebin "$dir")
   PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_send_key default:w1:p2 Escape' "$ROOT"
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_send_key default:w1:p2 Escape' "$ROOT"
   expect_code 0 $? "send_key should succeed"
   assert_contains "$(cat "$log")" $'\x1f''pane'$'\x1f''send-keys'$'\x1f''w1:p2'$'\x1f''escape' "send_key did not normalize Escape to escape"
-  pass "fm_backend_herdr_send_key: normalizes the key and targets the right pane"
+  pass "fm_herdr_send_key: normalizes the key and targets the right pane"
 }
 
 test_kill_is_best_effort() {
@@ -2912,16 +2913,16 @@ test_kill_is_best_effort() {
   fb=$(make_herdr_fakebin "$dir")
   PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     bash -c '
-      . "$0/bin/backends/herdr.sh"
-      fm_backend_herdr_target_ready() { fm_backend_herdr_parse_target "$1"; }
-      fm_backend_herdr_presentation_session_lock_path() { printf "/tmp/fm-herdr-test-lock"; }
+      . "$0/bin/fm-herdr.sh"
+      fm_herdr_target_ready() { fm_herdr_parse_target "$1"; }
+      fm_herdr_presentation_session_lock_path() { printf "/tmp/fm-herdr-test-lock"; }
       fm_lock_try_acquire() { return 0; }
       fm_lock_release() { return 0; }
-      fm_backend_herdr_kill default:w1:p2
+      fm_herdr_kill default:w1:p2
     ' "$ROOT"
   expect_code 0 $? "kill must be best-effort (never fail even when the pane close call itself fails)"
   assert_contains "$(cat "$log")" $'\x1f''pane'$'\x1f''close'$'\x1f''w1:p2' "kill did not call pane close on the right pane"
-  pass "fm_backend_herdr_kill: calls pane close and stays best-effort on failure"
+  pass "fm_herdr_kill: calls pane close and stays best-effort on failure"
 }
 
 test_current_path_reads_cwd() {
@@ -2933,10 +2934,10 @@ test_current_path_reads_cwd() {
   printf '{"result":{"pane":{"cwd":"/tmp/pane-creation-dir","foreground_cwd":"/tmp/fake-worktree"}}}\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_current_path default:w1:p2' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_current_path default:w1:p2' "$ROOT" )
   [ "$out" = "/tmp/fake-worktree" ] || fail "current_path should read foreground_cwd (the live process), not the frozen creation-time cwd, got '$out'"
   assert_contains "$(cat "$log")" $'\x1f''pane'$'\x1f''get'$'\x1f''w1:p2' "current_path did not call pane get"
-  pass "fm_backend_herdr_current_path: reads pane foreground_cwd (the live running process), not the frozen creation-time cwd"
+  pass "fm_herdr_current_path: reads pane foreground_cwd (the live running process), not the frozen creation-time cwd"
 }
 
 # --- busy_state (semantic agent state) ---------------------------------------
@@ -2947,10 +2948,10 @@ test_busy_state_working_maps_to_busy() {
   printf '{"result":{"agent":{"agent_status":"working"}}}\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_busy_state default:w1:p2' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_busy_state default:w1:p2' "$ROOT" )
   [ "$out" = busy ] || fail "agent_status=working should map to busy, got '$out'"
   assert_contains "$(cat "$log")" $'\x1f''agent'$'\x1f''get'$'\x1f''w1:p2' "busy_state did not call agent get"
-  pass "fm_backend_herdr_busy_state: working -> busy"
+  pass "fm_herdr_busy_state: working -> busy"
 }
 
 test_busy_state_done_and_blocked_map_to_idle() {
@@ -2959,16 +2960,16 @@ test_busy_state_done_and_blocked_map_to_idle() {
   printf '{"result":{"agent":{"agent_status":"done"}}}\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_busy_state default:w1:p2' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_busy_state default:w1:p2' "$ROOT" )
   [ "$out" = idle ] || fail "agent_status=done should map to idle, got '$out'"
 
   dir="$TMP_ROOT/busy-blocked"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
   printf '{"result":{"agent":{"agent_status":"blocked"}}}\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_busy_state default:w1:p2' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_busy_state default:w1:p2' "$ROOT" )
   [ "$out" = idle ] || fail "agent_status=blocked should map to idle (stuck waiting on the human, not grinding), got '$out'"
-  pass "fm_backend_herdr_busy_state: done -> idle, blocked -> idle (surfaced like a stale pane, not suppressed as busy)"
+  pass "fm_herdr_busy_state: done -> idle, blocked -> idle (surfaced like a stale pane, not suppressed as busy)"
 }
 
 test_busy_state_unknown_on_no_agent() {
@@ -2977,9 +2978,9 @@ test_busy_state_unknown_on_no_agent() {
   printf '1\n' > "$resp/1.exit"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_busy_state default:w1:p2' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_busy_state default:w1:p2' "$ROOT" )
   [ "$out" = unknown ] || fail "a failed agent get should report unknown (the fallback-to-regex cue), got '$out'"
-  pass "fm_backend_herdr_busy_state: unparseable/absent agent state reports unknown, the regex-fallback cue"
+  pass "fm_herdr_busy_state: unparseable/absent agent state reports unknown, the regex-fallback cue"
 }
 
 # --- composer_state: structural border-row classification --------------------
@@ -2990,9 +2991,9 @@ test_composer_state_bordered_prompt_is_empty() {
   printf '  ╭────────────────────────╮\n  │ ❯                      │\n  ╰────────────────────────╯\n\n  Shift+Tab:mode\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_composer_state default:w1:p2' "$ROOT" )
   [ "$out" = empty ] || fail "a bordered prompt glyph should read as empty, got '$out'"
-  pass "fm_backend_herdr_composer_state: a bordered composer row reads empty"
+  pass "fm_herdr_composer_state: a bordered composer row reads empty"
 }
 
 test_composer_state_styled_placeholder_draft_is_pending() {
@@ -3001,9 +3002,9 @@ test_composer_state_styled_placeholder_draft_is_pending() {
   printf '  ╭────────────────────────╮\n  │ ❯ Type a message...    │\n  ╰────────────────────────╯\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_composer_state default:w1:p2' "$ROOT" )
   [ "$out" = pending ] || fail "bright placeholder-like text in a styled capture should remain pending, got '$out'"
-  pass "fm_backend_herdr_composer_state: bright placeholder-like text stays pending rather than being mistaken for an idle ghost"
+  pass "fm_herdr_composer_state: bright placeholder-like text stays pending rather than being mistaken for an idle ghost"
 }
 
 test_composer_state_real_text_is_pending() {
@@ -3012,9 +3013,9 @@ test_composer_state_real_text_is_pending() {
   printf '  ╭────────────────────────╮\n  │ ❯ hello captain        │\n  ╰────────────────────────╯\n\n  Enter:send\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_composer_state default:w1:p2' "$ROOT" )
   [ "$out" = pending ] || fail "real unsubmitted text should read as pending, got '$out'"
-  pass "fm_backend_herdr_composer_state: real composer text reads pending"
+  pass "fm_herdr_composer_state: real composer text reads pending"
 }
 
 # A slash completion popup can consume the first Enter, close, and expand the
@@ -3030,9 +3031,9 @@ test_composer_state_popup_placeholder_fill_is_pending() {
   printf '  ╭──────────────────────────────────────╮\n  │ ❯ /compact compaction instructions   │\n  ╰──────────────────────────────────────╯\n\n  Enter:send\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_composer_state default:w1:p2' "$ROOT" )
   [ "$out" = pending ] || fail "a popup-close-with-placeholder-fill must still read as pending (not yet submitted), got '$out'"
-  pass "fm_backend_herdr_composer_state: a slash-command popup's argument-hint placeholder still reads pending (the incident fix)"
+  pass "fm_herdr_composer_state: a slash-command popup's argument-hint placeholder still reads pending (the incident fix)"
 }
 
 test_composer_state_unknown_on_capture_failure() {
@@ -3041,11 +3042,11 @@ test_composer_state_unknown_on_capture_failure() {
   printf '1\n' > "$resp/1.exit"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_composer_state default:w1:p2' "$ROOT" )
   status=$?
   [ "$status" -eq 0 ] || fail "composer_state should not itself fail the caller"
   [ "$out" = unknown ] || fail "an unreadable pane should read as unknown, got '$out'"
-  pass "fm_backend_herdr_composer_state: reports unknown when the pane cannot be captured"
+  pass "fm_herdr_composer_state: reports unknown when the pane cannot be captured"
 }
 
 test_composer_state_unknown_when_no_composer_row_found() {
@@ -3058,10 +3059,10 @@ test_composer_state_unknown_when_no_composer_row_found() {
   fb=$(make_herdr_fakebin "$dir")
   for glyph in '>' '❯' '$' '%' '#'; do
     out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-      bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
+      bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_composer_state default:w1:p2' "$ROOT" )
     [ "$out" = unknown ] || fail "a bare shell prompt '$glyph' should read as unknown, got '$out'"
   done
-  pass "fm_backend_herdr_composer_state: reports unknown for bare shell prompts with no composer row"
+  pass "fm_herdr_composer_state: reports unknown for bare shell prompts with no composer row"
 }
 
 # Real Pi 0.80.7 on Herdr 0.7.3 renders no prompt glyph and no side border.
@@ -3075,11 +3076,11 @@ test_composer_state_pi_separator_idle_is_empty() {
   printf '{"result":{"agent":{"agent":"pi","agent_status":"idle"}}}\n' > "$resp/2.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state lab:w1:p2' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_composer_state lab:w1:p2' "$ROOT" )
   [ "$out" = empty ] || fail "an idle native Pi separator composer should read empty, got '$out'"
   calls=$(grep -c $'\x1f''agent'$'\x1f''get' "$log")
   [ "$calls" -eq 1 ] || fail "Pi separator recognition must corroborate identity exactly once, made $calls agent calls"
-  pass "fm_backend_herdr_composer_state: a native idle Pi separator composer reads empty"
+  pass "fm_herdr_composer_state: a native idle Pi separator composer reads empty"
 }
 
 test_composer_state_pi_separator_real_text_is_pending() {
@@ -3089,9 +3090,9 @@ test_composer_state_pi_separator_real_text_is_pending() {
   printf '{"result":{"agent":{"agent":"pi","agent_status":"done"}}}\n' > "$resp/2.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state lab:w1:p2' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_composer_state lab:w1:p2' "$ROOT" )
   [ "$out" = pending ] || fail "real text in a native Pi separator composer should read pending, got '$out'"
-  pass "fm_backend_herdr_composer_state: real Pi composer text remains pending"
+  pass "fm_herdr_composer_state: real Pi composer text remains pending"
 }
 
 test_composer_state_pi_incomplete_separator_below_stale_generic_is_unknown() {
@@ -3101,9 +3102,9 @@ test_composer_state_pi_incomplete_separator_below_stale_generic_is_unknown() {
   printf '{"result":{"agent":{"agent":"pi","agent_status":"idle"}}}\n' > "$resp/2.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state lab:w1:p2' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_composer_state lab:w1:p2' "$ROOT" )
   [ "$out" = unknown ] || fail "an incomplete Pi separator below a stale generic row should remain unknown, got '$out'"
-  pass "fm_backend_herdr_composer_state: an incomplete lower Pi separator cannot inherit a stale empty row"
+  pass "fm_herdr_composer_state: an incomplete lower Pi separator cannot inherit a stale empty row"
 }
 
 test_composer_state_pi_separator_requires_safe_native_identity() {
@@ -3127,15 +3128,15 @@ test_composer_state_pi_separator_requires_safe_native_identity() {
     esac
     fb=$(make_herdr_fakebin "$dir")
     out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-      bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state lab:w1:p2' "$ROOT" )
+      bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_composer_state lab:w1:p2' "$ROOT" )
     [ "$out" = unknown ] || fail "unsafe Pi separator case '$case_id' must remain unknown, got '$out'"
   done
-  pass "fm_backend_herdr_composer_state: Pi separators never authorize working, non-Pi, unreadable, or over-tall targets"
+  pass "fm_herdr_composer_state: Pi separators never authorize working, non-Pi, unreadable, or over-tall targets"
 }
 
 # --- wait_for_working: the native agent-state poll-and-classify primitive ---
-# Direct unit coverage for fm_backend_herdr_wait_for_working, the helper
-# fm_backend_herdr_send_text_submit now uses instead of composer scraping
+# Direct unit coverage for fm_herdr_wait_for_working, the helper
+# fm_herdr_send_text_submit now uses instead of composer scraping
 # (docs/herdr-backend.md "Native agent-state submit confirmation").
 
 test_wait_for_working_returns_busy_on_first_poll() {
@@ -3144,11 +3145,11 @@ test_wait_for_working_returns_busy_on_first_poll() {
   printf '{"result":{"agent":{"agent_status":"working"}}}\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_wait_for_working default w1:p2 1 5' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_wait_for_working default w1:p2 1 5' "$ROOT" )
   [ "$out" = busy ] || fail "wait_for_working should report busy once 'working' is observed, got '$out'"
   calls=$(grep -c $'\x1f''agent'$'\x1f''get' "$log")
   [ "$calls" -eq 1 ] || fail "wait_for_working should short-circuit on the FIRST busy poll instead of consuming the whole budget, made $calls call(s)"
-  pass "fm_backend_herdr_wait_for_working: reports 'busy' immediately on the first poll, without spending the rest of the budget"
+  pass "fm_herdr_wait_for_working: reports 'busy' immediately on the first poll, without spending the rest of the budget"
 }
 
 test_wait_for_working_catches_a_slow_transition_mid_window() {
@@ -3162,11 +3163,11 @@ test_wait_for_working_catches_a_slow_transition_mid_window() {
   printf '{"result":{"agent":{"agent_status":"working"}}}\n' > "$resp/3.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_wait_for_working default w1:p2 0.03 3' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_wait_for_working default w1:p2 0.03 3' "$ROOT" )
   [ "$out" = busy ] || fail "wait_for_working should catch a transition that lands on a later sample within the SAME window, got '$out'"
   calls=$(grep -c $'\x1f''agent'$'\x1f''get' "$log")
   [ "$calls" -eq 3 ] || fail "expected exactly 3 agent-get polls (idle, idle, working), got $calls"
-  pass "fm_backend_herdr_wait_for_working: a slow transition landing on a later sample within one window is still caught (robust against the 'slow transition' failure direction)"
+  pass "fm_herdr_wait_for_working: a slow transition landing on a later sample within one window is still caught (robust against the 'slow transition' failure direction)"
 }
 
 test_wait_for_working_samples_budget_endpoint_without_final_sleep() {
@@ -3180,11 +3181,11 @@ test_wait_for_working_samples_budget_endpoint_without_final_sleep() {
   printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/6.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_SLEEP_LOG="$sleep_log" \
-    bash -c '. "$0/bin/backends/herdr.sh"; sleep() { printf "sleep:%s\n" "$1" >> "$FM_SLEEP_LOG"; }; fm_backend_herdr_wait_for_working default w1:p2 0.5 6' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; sleep() { printf "sleep:%s\n" "$1" >> "$FM_SLEEP_LOG"; }; fm_herdr_wait_for_working default w1:p2 0.5 6' "$ROOT" )
   [ "$out" = idle ] || fail "wait_for_working should report idle when every endpoint-spread poll is readable-idle, got '$out'"
   sleeps=$(grep -c '^sleep:0.1000$' "$sleep_log")
   [ "$sleeps" -eq 5 ] || fail "six polls across a 0.5s budget should sleep five times at 0.1000s, got $sleeps matching sleeps; log: $(cat "$sleep_log")"
-  pass "fm_backend_herdr_wait_for_working: spreads six samples across the full budget endpoint without a final trailing sleep"
+  pass "fm_herdr_wait_for_working: spreads six samples across the full budget endpoint without a final trailing sleep"
 }
 
 test_send_text_submit_applies_herdr_minimum_confirm_budget() {
@@ -3198,13 +3199,13 @@ test_send_text_submit_applies_herdr_minimum_confirm_budget() {
   printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/8.out"
   printf '{"result":{"agent":{"agent_status":"working"}}}\n' > "$resp/9.out"
   fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_SLEEP_LOG="$sleep_log" FM_BACKEND_HERDR_SUBMIT_POLLS=6 FM_BACKEND_HERDR_SUBMIT_MIN_SLEEP=0.6 \
-    bash -c '. "$0/bin/backends/herdr.sh"; sleep() { printf "sleep:%s\n" "$1" >> "$FM_SLEEP_LOG"; }; fm_backend_herdr_send_text_submit default:w1:p2 "hello captain" 1 0.4 0' "$ROOT" )
+  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_SLEEP_LOG="$sleep_log" FM_HERDR_SUBMIT_POLLS=6 FM_HERDR_SUBMIT_MIN_SLEEP=0.6 \
+    bash -c '. "$0/bin/fm-herdr.sh"; sleep() { printf "sleep:%s\n" "$1" >> "$FM_SLEEP_LOG"; }; fm_herdr_send_text_submit default:w1:p2 "hello captain" 1 0.4 0' "$ROOT" )
   [ "$out" = empty ] || fail "send_text_submit should catch a slow-but-valid transition inside the herdr minimum budget, got '$out'"
   sleeps=$(grep -c '^sleep:0.1200$' "$sleep_log")
   [ "$sleeps" -eq 5 ] || fail "a 0.4s caller budget should be expanded to five 0.1200s sleeps across the 0.6s herdr floor, got $sleeps; log: $(cat "$sleep_log")"
   [ "$(grep -c '^sleep:0.0800$' "$sleep_log")" -eq 0 ] || fail "send_text_submit used the caller's too-short 0.4s budget instead of the herdr floor: $(cat "$sleep_log")"
-  pass "fm_backend_herdr_send_text_submit: applies the herdr minimum confirmation budget before polling agent-state"
+  pass "fm_herdr_send_text_submit: applies the herdr minimum confirmation budget before polling agent-state"
 }
 
 test_wait_for_working_returns_idle_when_never_busy_but_readable() {
@@ -3214,9 +3215,9 @@ test_wait_for_working_returns_idle_when_never_busy_but_readable() {
   printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/2.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_wait_for_working default w1:p2 0.02 2' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_wait_for_working default w1:p2 0.02 2' "$ROOT" )
   [ "$out" = idle ] || fail "wait_for_working should report idle when the target was legibly read but never busy, got '$out'"
-  pass "fm_backend_herdr_wait_for_working: reports 'idle' (readable, genuinely not yet working) when 'busy' never appears"
+  pass "fm_herdr_wait_for_working: reports 'idle' (readable, genuinely not yet working) when 'busy' never appears"
 }
 
 test_wait_for_working_returns_unknown_when_never_readable() {
@@ -3226,9 +3227,9 @@ test_wait_for_working_returns_unknown_when_never_readable() {
   printf '1\n' > "$resp/2.exit"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_wait_for_working default w1:p2 0.02 2' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_wait_for_working default w1:p2 0.02 2' "$ROOT" )
   [ "$out" = unknown ] || fail "wait_for_working should report unknown when every poll fails to read the target, got '$out'"
-  pass "fm_backend_herdr_wait_for_working: reports 'unknown' (a hard read failure, not a timing race) only when EVERY poll in the window fails"
+  pass "fm_herdr_wait_for_working: reports 'unknown' (a hard read failure, not a timing race) only when EVERY poll in the window fails"
 }
 
 test_wait_for_working_treats_blocked_as_submit_active() {
@@ -3237,15 +3238,15 @@ test_wait_for_working_treats_blocked_as_submit_active() {
   printf '{"result":{"agent":{"agent_status":"blocked"}}}\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_wait_for_working default w1:p2 0.01 1' "$ROOT" )
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_wait_for_working default w1:p2 0.01 1' "$ROOT" )
   [ "$out" = busy ] || fail "wait_for_working should treat a post-Enter blocked state as submit-active, got '$out'"
-  pass "fm_backend_herdr_wait_for_working: treats blocked as submit-active for confirmation without changing watcher busy-state semantics"
+  pass "fm_herdr_wait_for_working: treats blocked as submit-active for confirmation without changing watcher busy-state semantics"
 }
 
 # --- send_text_submit: native agent-state (agent get) verify-and-retry ------
 # Confirmation no longer reads composer content in the normal idle-baseline
 # path, so dynamic idle text cannot block or mis-confirm a send.
-# FM_BACKEND_HERDR_SUBMIT_POLLS=1 pins most tests
+# FM_HERDR_SUBMIT_POLLS=1 pins most tests
 # below to exactly one agent-get sample per Enter attempt for simple,
 # deterministic call-count assertions; the multi-sample behavior itself is
 # covered above by the wait_for_working tests and by
@@ -3261,14 +3262,14 @@ test_send_text_submit_detects_landed_send() {
   printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/2.out"
   printf '{"result":{"agent":{"agent_status":"working"}}}\n' > "$resp/4.out"
   fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_BACKEND_HERDR_SUBMIT_POLLS=1 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_send_text_submit default:w1:p2 "hello captain" 3 0.01 0.01' "$ROOT" )
+  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SUBMIT_POLLS=1 \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_send_text_submit default:w1:p2 "hello captain" 3 0.01 0.01' "$ROOT" )
   [ "$out" = empty ] || fail "send_text_submit should report empty (submitted) once agent_status reports working, got '$out'"
   assert_contains "$(cat "$log")" $'\x1f''pane'$'\x1f''send-text'$'\x1f''w1:p2'$'\x1f''hello captain' "send_text_submit did not type the literal text first"
   enter_count=$(grep -c $'\x1f''pane'$'\x1f''send-keys'$'\x1f''w1:p2'$'\x1f''enter' "$log")
   [ "$enter_count" -eq 1 ] || fail "send_text_submit should not need a second Enter for a plain message with no popup, sent $enter_count Enter(s)"
   [ "$(grep -c $'\x1f''pane'$'\x1f''read' "$log")" -eq 0 ] || fail "send_text_submit must never read the composer/pane content for confirmation anymore"
-  pass "fm_backend_herdr_send_text_submit: reports 'empty' once agent_status reports working after one Enter, without ever reading the composer"
+  pass "fm_herdr_send_text_submit: reports 'empty' once agent_status reports working after one Enter, without ever reading the composer"
 }
 
 test_send_text_submit_detects_swallowed_enter() {
@@ -3280,10 +3281,10 @@ test_send_text_submit_detects_swallowed_enter() {
   printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/4.out"
   printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/6.out"
   fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_BACKEND_HERDR_SUBMIT_POLLS=1 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_send_text_submit default:w1:p2 "hello captain" 2 0.01 0.01' "$ROOT" )
+  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SUBMIT_POLLS=1 \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_send_text_submit default:w1:p2 "hello captain" 2 0.01 0.01' "$ROOT" )
   [ "$out" = pending ] || fail "send_text_submit should report pending once retries are exhausted with agent_status never going busy, got '$out'"
-  pass "fm_backend_herdr_send_text_submit: reports 'pending' when agent_status never reports working after retried Enters (swallowed)"
+  pass "fm_herdr_send_text_submit: reports 'pending' when agent_status never reports working after retried Enters (swallowed)"
 }
 
 # Regression coverage for the 2026-07-03 incident using the NEW mechanism: a
@@ -3305,12 +3306,12 @@ test_send_text_submit_popup_autocomplete_requires_second_enter() {
   # 6: agent get -> working (submitted)
   printf '{"result":{"agent":{"agent_status":"working"}}}\n' > "$resp/6.out"
   fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_BACKEND_HERDR_SUBMIT_POLLS=1 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_send_text_submit default:w1:p2 "/compact" 3 0.01 1.2' "$ROOT" )
+  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SUBMIT_POLLS=1 \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_send_text_submit default:w1:p2 "/compact" 3 0.01 1.2' "$ROOT" )
   [ "$out" = empty ] || fail "send_text_submit should eventually report empty once the SECOND Enter actually starts a turn, got '$out'"
   enter_count=$(grep -c $'\x1f''pane'$'\x1f''send-keys'$'\x1f''w1:p2'$'\x1f''enter' "$log")
   [ "$enter_count" -eq 2 ] || fail "send_text_submit must send a SECOND Enter after the popup-placeholder fill's agent_status still reads idle, got $enter_count Enter(s)"
-  pass "fm_backend_herdr_send_text_submit: a slash-command popup's placeholder fill on Enter #1 never flips agent_status to working, so it does not short-circuit as submitted; Enter #2 is retried and lands it"
+  pass "fm_herdr_send_text_submit: a slash-command popup's placeholder fill on Enter #1 never flips agent_status to working, so it does not short-circuit as submitted; Enter #2 is retried and lands it"
 }
 
 test_send_text_submit_confirms_blocked_after_enter() {
@@ -3320,12 +3321,12 @@ test_send_text_submit_confirms_blocked_after_enter() {
   printf '{"result":{"agent":{"agent_status":"blocked"}}}\n' > "$resp/3.out"
   printf '{"result":{"agent":{"agent_status":"blocked"}}}\n' > "$resp/4.out"
   fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_BACKEND_HERDR_SUBMIT_POLLS=1 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_send_text_submit default:w1:p2 "needs approval" 3 0.01 0.01' "$ROOT" )
+  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SUBMIT_POLLS=1 \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_send_text_submit default:w1:p2 "needs approval" 3 0.01 0.01' "$ROOT" )
   [ "$out" = empty ] || fail "send_text_submit should treat a blocked state after Enter as a confirmed delivered prompt, got '$out'"
   enter_count=$(grep -c $'\x1f''pane'$'\x1f''send-keys'$'\x1f''w1:p2'$'\x1f''enter' "$log")
   [ "$enter_count" -eq 1 ] || fail "blocked after Enter must not provoke a retry into the prompt, sent $enter_count Enter(s)"
-  pass "fm_backend_herdr_send_text_submit: a post-Enter blocked state confirms delivery without retrying into the prompt"
+  pass "fm_herdr_send_text_submit: a post-Enter blocked state confirms delivery without retrying into the prompt"
 }
 
 # A slow transition landing partway through a single Enter attempt's own
@@ -3342,12 +3343,12 @@ test_send_text_submit_slow_transition_within_one_enter_needs_no_extra_enter() {
   printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/5.out"
   printf '{"result":{"agent":{"agent_status":"working"}}}\n' > "$resp/6.out"
   fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_BACKEND_HERDR_SUBMIT_POLLS=3 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_send_text_submit default:w1:p2 "hello captain" 3 0.03 0.01' "$ROOT" )
+  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SUBMIT_POLLS=3 \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_send_text_submit default:w1:p2 "hello captain" 3 0.03 0.01' "$ROOT" )
   [ "$out" = empty ] || fail "send_text_submit should confirm once a later sample within the SAME Enter attempt observes working, got '$out'"
   enter_count=$(grep -c $'\x1f''pane'$'\x1f''send-keys'$'\x1f''w1:p2'$'\x1f''enter' "$log")
   [ "$enter_count" -eq 1 ] || fail "a slow (but within-budget) transition must not provoke a needless extra Enter, sent $enter_count Enter(s)"
-  pass "fm_backend_herdr_send_text_submit: a slow transition landing on a later sample within one Enter's budget is confirmed WITHOUT sending a needless extra Enter"
+  pass "fm_herdr_send_text_submit: a slow transition landing on a later sample within one Enter's budget is confirmed WITHOUT sending a needless extra Enter"
 }
 
 test_send_text_submit_send_failed() {
@@ -3355,10 +3356,10 @@ test_send_text_submit_send_failed() {
   dir="$TMP_ROOT/submit-fail"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
   printf '1\n' > "$resp/1.exit"
   fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_BACKEND_HERDR_SUBMIT_POLLS=1 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_send_text_submit default:w1:p2 "x" 2 0.01 0.01' "$ROOT" )
+  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SUBMIT_POLLS=1 \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_send_text_submit default:w1:p2 "x" 2 0.01 0.01' "$ROOT" )
   [ "$out" = send-failed ] || fail "send_text_submit should report send-failed when the literal send itself fails, got '$out'"
-  pass "fm_backend_herdr_send_text_submit: reports 'send-failed' when the literal send-text call itself errors"
+  pass "fm_herdr_send_text_submit: reports 'send-failed' when the literal send-text call itself errors"
 }
 
 test_send_text_submit_unknown_on_capture_failure() {
@@ -3367,69 +3368,33 @@ test_send_text_submit_unknown_on_capture_failure() {
   printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/2.out"
   printf '1\n' > "$resp/4.exit"
   fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_BACKEND_HERDR_SUBMIT_POLLS=1 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_send_text_submit default:w1:p2 "x" 2 0.01 0.01' "$ROOT" )
+  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SUBMIT_POLLS=1 \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_send_text_submit default:w1:p2 "x" 2 0.01 0.01' "$ROOT" )
   [ "$out" = unknown ] || fail "send_text_submit should report unknown when the post-Enter agent-get read fails, got '$out'"
   enter_count=$(grep -c $'\x1f''pane'$'\x1f''send-keys'$'\x1f''w1:p2'$'\x1f''enter' "$log")
   [ "$enter_count" -eq 1 ] || fail "send_text_submit must never retry past an unreadable target (that is a hard I/O failure, not a timing race), sent $enter_count Enter(s)"
-  pass "fm_backend_herdr_send_text_submit: reports 'unknown' when the post-Enter agent-get read fails (never retries past an unreadable target)"
+  pass "fm_herdr_send_text_submit: reports 'unknown' when the post-Enter agent-get read fails (never retries past an unreadable target)"
 }
 
-# --- fm-backend.sh dispatch wiring -------------------------------------------
-
-test_dispatch_routes_herdr_backend() {
-  fm_backend_validate herdr 2>/dev/null || fail "fm_backend_validate should accept herdr (P2 adds it to FM_BACKEND_KNOWN)"
-  pass "fm_backend_validate: herdr is a known backend (P2)"
-}
-
-test_dispatch_busy_state_unknown_for_tmux() {
-  # shellcheck source=bin/fm-backend.sh
-  . "$ROOT/bin/fm-backend.sh"
-  [ "$(fm_backend_busy_state tmux 'sess:win')" = unknown ] \
-    || fail "fm_backend_busy_state should report unknown for tmux (no native agent-state primitive; watcher falls back to regex)"
-  pass "fm_backend_busy_state: tmux (no native primitive) always reports unknown, preserving the P1 regex-only path"
-}
-
-test_dispatch_composer_state_routes_by_backend() {
-  # fm_backend_composer_state (the generic per-backend composer/pending-input
-  # classifier the away-mode daemon dispatches through - bin/fm-supervise-daemon.sh's
-  # pane_input_pending) must route to each supported backend's named classifier
-  # with the target passed through unchanged; both are thin
-  # wrappers over the shared fm_composer_classify_screen - and report unknown
-  # for an unrecognized backend name.
-  # Sourced-guards are pre-set so fm_backend_source no-ops and these stubs are
-  # never clobbered by the real per-backend files trying (and failing) a live call.
-  (
-    # shellcheck source=bin/fm-backend.sh
-    . "$ROOT/bin/fm-backend.sh"
-    _FM_BACKEND_TMUX_SOURCED=1
-    _FM_BACKEND_HERDR_SOURCED=1
-    fm_tmux_composer_state() { [ "$1" = "sess:win" ] || fail "tmux composer_state got wrong target: $1"; printf 'pending'; }
-    fm_backend_herdr_composer_state() { [ "$1" = "default:w1:p2" ] || fail "herdr composer_state got wrong target: $1"; printf 'empty'; }
-    [ "$(fm_backend_composer_state tmux sess:win)" = pending ] || fail "composer_state did not dispatch to the tmux classifier"
-    [ "$(fm_backend_composer_state herdr default:w1:p2)" = empty ] || fail "composer_state did not dispatch to the herdr classifier"
-    [ "$(fm_backend_composer_state bogus x)" = unknown ] || fail "composer_state should report unknown for an unrecognized backend"
-  ) || fail "composer_state dispatch subshell failed"
-  pass "fm_backend_composer_state dispatches both supported backends to their named thin classifiers, unknown for unrecognized backends"
-}
-
-test_scripts_route_explicit_target_through_meta_backend() {
+test_scripts_route_explicit_target_through_herdr_meta() {
   local dir state log resp fb neutral out
   dir="$TMP_ROOT/script-explicit-target"; state="$dir/state"; mkdir -p "$state" "$dir/responses"
+  : > "$dir/herdr.sock"
   log="$dir/log"; resp="$dir/responses"; : > "$log"
   neutral="$dir/neutral-root"; mkdir -p "$neutral"
-  fm_write_meta "$state/herdr-stale.meta" "window=default:w1:p2" "backend=herdr"
+  fm_write_meta "$state/herdr-stale.meta" \
+    "backend=herdr" "window=default:w1:p2" "endpoint_task_id=herdr-stale" \
+    "herdr_session=default" "herdr_workspace_id=w1" "herdr_tab_id=w1:t1" \
+    "herdr_pane_id=w1:p2" "worktree=/tmp/herdr-stale" "project=/tmp/project"
   touch "$state/.last-watcher-beat"
-  printf 'captured herdr pane\n' > "$resp/1.out"
+  printf '{"sessions":[{"name":"default","running":true,"socket_path":"%s/herdr.sock"}]}\n' "$dir" > "$resp/1.out"
+  cp "$resp/1.out" "$resp/2.out"
+  cp "$resp/1.out" "$resp/3.out"
+  cp "$resp/1.out" "$resp/4.out"
+  printf '%s\n' '{"result":{"pane":{"pane_id":"w1:p2","tab_id":"w1:t1","workspace_id":"w1"}}}' > "$resp/5.out"
+  printf '%s\n' '{"result":{"tab":{"tab_id":"w1:t1","workspace_id":"w1"}}}' > "$resp/6.out"
+  printf 'captured herdr pane\n' > "$resp/7.out"
   fb=$(make_herdr_fakebin "$dir")
-  cat > "$fb/tmux" <<'SH'
-#!/usr/bin/env bash
-set -u
-printf 'tmux should not be used for a metadata-matched herdr target\n' >&2
-exit 42
-SH
-  chmod +x "$fb/tmux"
-
   out=$( PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$neutral" FM_STATE_OVERRIDE="$state" \
     FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     "$ROOT/bin/fm-peek.sh" default:w1:p2 5 2>/dev/null )
@@ -3438,6 +3403,15 @@ SH
     "fm-peek did not route the explicit stale target through herdr capture"
 
   : > "$log"
+  rm -f "$resp/.count" "$resp"/*.out
+  printf '%s\n' '{"result":{"pane":{"pane_id":"w1:p2","tab_id":"w1:t1","workspace_id":"w1"}}}' > "$resp/1.out"
+  printf '%s\n' '{"result":{"tab":{"tab_id":"w1:t1","workspace_id":"w1"}}}' > "$resp/2.out"
+  printf '{"sessions":[{"name":"default","running":true,"socket_path":"%s/herdr.sock"}]}\n' "$dir" > "$resp/3.out"
+  cp "$resp/3.out" "$resp/4.out"
+  cp "$resp/3.out" "$resp/5.out"
+  cp "$resp/3.out" "$resp/6.out"
+  printf '%s\n' '{"result":{"pane":{"pane_id":"w1:p2","tab_id":"w1:t1","workspace_id":"w1"}}}' > "$resp/7.out"
+  printf '%s\n' '{"result":{"tab":{"tab_id":"w1:t1","workspace_id":"w1"}}}' > "$resp/8.out"
   PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$neutral" FM_HOME="$neutral" FM_STATE_OVERRIDE="$state" \
     FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     "$ROOT/bin/fm-send.sh" default:w1:p2 --key Escape >/dev/null 2>&1
@@ -3455,7 +3429,7 @@ test_workspace_ensure_prunes_default_tab() {
   dir="$TMP_ROOT/prune-default"; mkdir -p "$dir"; log="$dir/log"; state="$dir/state.json"; : > "$log"
   fb=$(make_herdr_statefake "$dir")
   raw=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_FAKE_HERDR_STATE="$state" HERDR_SESSION=fmtest \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_container_ensure /proj' "$ROOT" ) \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_container_ensure /proj' "$ROOT" ) \
     || fail "container_ensure failed against the stateful fake"
   container=${raw%%$'\t'*}
   seeded=${raw#*$'\t'}
@@ -3468,7 +3442,7 @@ test_workspace_ensure_prunes_default_tab() {
   tabcount=$(jq -r --arg w "$wsid" '[.tabs[]|select(.workspace_id==$w)]|length' "$state")
   [ "$tabcount" = 1 ] || fail "expected the untouched default tab to remain after container_ensure alone, got $tabcount tab(s): $(jq -c '.tabs' "$state")"
   ids=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_FAKE_HERDR_STATE="$state" HERDR_SESSION=fmtest \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_create_task "$1" "$2" /proj "$3"' "$ROOT" "$container" "fm-prunetest" "$seeded" ) \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_create_task "$1" "$2" /proj "$3"' "$ROOT" "$container" "fm-prunetest" "$seeded" ) \
     || fail "create_task failed against the stateful fake"
   read -r _ pane <<EOF
 $ids
@@ -3481,7 +3455,7 @@ EOF
   jq -r --arg w "$wsid" '[.tabs[]|select(.workspace_id==$w)][0].label' "$state" | grep -qx 'fm-prunetest' \
     || fail "the surviving tab should be the real task tab, not the default: $(jq -c '.tabs' "$state")"
   assert_contains "$(cat "$log")" $'\x1f''pane'$'\x1f''close' "create_task did not close the default tab's pane"
-  pass "fm_backend_herdr_create_task: prunes exactly the seeded default tab container_ensure identified, once the first real task tab exists"
+  pass "fm_herdr_create_task: prunes exactly the seeded default tab container_ensure identified, once the first real task tab exists"
 }
 
 test_repeated_cycles_reuse_one_workspace_no_orphans() {
@@ -3490,7 +3464,7 @@ test_repeated_cycles_reuse_one_workspace_no_orphans() {
   fb=$(make_herdr_statefake "$dir")
   for i in 1 2 3; do
     raw=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_FAKE_HERDR_STATE="$state" HERDR_SESSION=fmtest \
-      bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_container_ensure /proj' "$ROOT" ) \
+      bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_container_ensure /proj' "$ROOT" ) \
       || fail "cycle $i: container_ensure failed"
     container=${raw%%$'\t'*}
     seeded=${raw#*$'\t'}
@@ -3504,7 +3478,7 @@ test_repeated_cycles_reuse_one_workspace_no_orphans() {
       [ -z "$seeded" ] || fail "cycle $i: a REUSED (adopted) workspace must never report a seeded default tab id, got '$seeded'"
     fi
     ids=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_FAKE_HERDR_STATE="$state" HERDR_SESSION=fmtest \
-      bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_create_task "$1" "$2" /proj "$3"' "$ROOT" "$container" "fm-cycle$i" "$seeded" ) \
+      bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_create_task "$1" "$2" /proj "$3"' "$ROOT" "$container" "fm-cycle$i" "$seeded" ) \
       || fail "cycle $i: create_task failed"
     read -r _ pane <<EOF
 $ids
@@ -3512,11 +3486,11 @@ EOF
     [ -n "$pane" ] || fail "cycle $i: create_task returned no pane id"
     PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_FAKE_HERDR_STATE="$state" HERDR_SESSION=fmtest \
       bash -c '
-        . "$0/bin/backends/herdr.sh"
-        fm_backend_herdr_presentation_session_lock_path() { printf "/tmp/fm-herdr-cycle-test-lock"; }
+        . "$0/bin/fm-herdr.sh"
+        fm_herdr_presentation_session_lock_path() { printf "/tmp/fm-herdr-cycle-test-lock"; }
         fm_lock_try_acquire() { return 0; }
         fm_lock_release() { return 0; }
-        fm_backend_herdr_kill "$1"
+        fm_herdr_kill "$1"
       ' "$ROOT" "fmtest:$pane" \
       || fail "cycle $i: kill failed"
   done
@@ -3538,7 +3512,7 @@ EOF
 # --- created-vs-adopted default-tab-prune safety (2026-07-02 self-kill fix) -
 #
 # Root cause and fix are documented at
-# fm_backend_herdr_workspace_prune_seeded_default_tab in bin/backends/herdr.sh
+# fm_herdr_workspace_prune_seeded_default_tab in bin/fm-herdr.sh
 # and docs/herdr-backend.md's "Default-tab prune" section. These three tests
 # cover the acceptance bar directly: an ADOPTED workspace's tab is never a
 # prune candidate (regardless of label or count), a freshly CREATED
@@ -3549,7 +3523,7 @@ EOF
 # leaves the live tab alone.
 
 test_adopted_workspace_never_prunes_default_tab() {
-  # An ADOPTED workspace (fm_backend_herdr_workspace_find matched a
+  # An ADOPTED workspace (fm_herdr_workspace_find matched a
   # pre-existing workspace by label) must never have any tab pruned by
   # create_task, regardless of that tab's label or count - the created-vs-
   # adopted gate is structural (an empty seeded_tab_id), never re-derived
@@ -3563,7 +3537,7 @@ test_adopted_workspace_never_prunes_default_tab() {
   # container_ensure never ran a `workspace create` call to produce it.
   jq -n '{next:2,workspaces:[{workspace_id:"w1",label:"firstmate"}],tabs:[{tab_id:"w1:t1",label:"1",workspace_id:"w1",pane_id:"w1:p1"}],agent_status:{}}' > "$state"
   raw=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_FAKE_HERDR_STATE="$state" HERDR_SESSION=fmtest \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_container_ensure /proj' "$ROOT" ) \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_container_ensure /proj' "$ROOT" ) \
     || fail "container_ensure failed against the stateful fake"
   container=${raw%%$'\t'*}
   seeded=${raw#*$'\t'}
@@ -3572,7 +3546,7 @@ test_adopted_workspace_never_prunes_default_tab() {
   assert_not_contains "$(cat "$log")" $'\x1f''workspace'$'\x1f''create' "container_ensure must not create a new workspace when one already exists to adopt"
 
   ids=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_FAKE_HERDR_STATE="$state" HERDR_SESSION=fmtest \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_create_task "$1" "$2" /proj "$3"' "$ROOT" "$container" "fm-adopttest" "$seeded" ) \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_create_task "$1" "$2" /proj "$3"' "$ROOT" "$container" "fm-adopttest" "$seeded" ) \
     || fail "create_task failed against the stateful fake"
   read -r _ pane <<EOF
 $ids
@@ -3584,7 +3558,7 @@ EOF
     || fail "the pre-existing (adopted) tab w1:t1 was removed - an adopted workspace's tab must never be pruned"
   assert_not_contains "$(cat "$log")" $'\x1f''pane'$'\x1f''close'$'\x1f''w1:p1' \
     "create_task must never close a tab belonging to an ADOPTED workspace, no matter its label or count"
-  pass "fm_backend_herdr_create_task: an ADOPTED workspace's pre-existing tab is never pruned (the created-vs-adopted gate)"
+  pass "fm_herdr_create_task: an ADOPTED workspace's pre-existing tab is never pruned (the created-vs-adopted gate)"
 }
 
 test_label_collision_startup_workspace_leaves_live_tab_alone() {
@@ -3605,7 +3579,7 @@ test_label_collision_startup_workspace_leaves_live_tab_alone() {
   # live agent (agent_status=working), exactly like the captain's own pane.
   jq -n '{next:2,workspaces:[{workspace_id:"w1",label:"firstmate"}],tabs:[{tab_id:"w1:t1",label:"1",workspace_id:"w1",pane_id:"w1:p1"}],agent_status:{"w1:p1":"working"}}' > "$state"
   raw=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_FAKE_HERDR_STATE="$state" HERDR_SESSION=fmtest \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_container_ensure /proj' "$ROOT" ) \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_container_ensure /proj' "$ROOT" ) \
     || fail "container_ensure failed against the stateful fake"
   container=${raw%%$'\t'*}
   seeded=${raw#*$'\t'}
@@ -3613,7 +3587,7 @@ test_label_collision_startup_workspace_leaves_live_tab_alone() {
   [ -z "$seeded" ] || fail "the coincidentally-labeled workspace was ADOPTED, not created, so seeded default tab id must be empty, got '$seeded'"
 
   ids=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_FAKE_HERDR_STATE="$state" HERDR_SESSION=fmtest \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_create_task "$1" "$2" /proj "$3"' "$ROOT" "$container" "fm-collisiontest" "$seeded" ) \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_create_task "$1" "$2" /proj "$3"' "$ROOT" "$container" "fm-collisiontest" "$seeded" ) \
     || fail "create_task failed against the stateful fake"
   read -r _ pane <<EOF
 $ids
@@ -3624,7 +3598,7 @@ EOF
     || fail "REGRESSION: the captain's live tab was closed - this is the exact 2026-07-02 self-kill incident"
   assert_not_contains "$(cat "$log")" $'\x1f''pane'$'\x1f''close'$'\x1f''w1:p1' \
     "REGRESSION: create_task closed the captain's live pane in the label-collision scenario"
-  pass "fm_backend_herdr_create_task: the label-collision startup-workspace scenario (2026-07-02 incident) leaves the captain's live tab untouched"
+  pass "fm_herdr_create_task: the label-collision startup-workspace scenario (2026-07-02 incident) leaves the captain's live tab untouched"
 }
 
 test_prune_refuses_a_working_agent_pane_defense_in_depth() {
@@ -3636,7 +3610,7 @@ test_prune_refuses_a_working_agent_pane_defense_in_depth() {
   dir="$TMP_ROOT/prune-busy-defense"; mkdir -p "$dir"; log="$dir/log"; state="$dir/state.json"; : > "$log"
   fb=$(make_herdr_statefake "$dir")
   raw=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_FAKE_HERDR_STATE="$state" HERDR_SESSION=fmtest \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_container_ensure /proj' "$ROOT" ) \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_container_ensure /proj' "$ROOT" ) \
     || fail "container_ensure failed against the stateful fake"
   container=${raw%%$'\t'*}
   seeded=${raw#*$'\t'}
@@ -3648,7 +3622,7 @@ test_prune_refuses_a_working_agent_pane_defense_in_depth() {
   fake_herdr_set_agent_status "$state" "$seeded_pane" working
 
   ids=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_FAKE_HERDR_STATE="$state" HERDR_SESSION=fmtest \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_create_task "$1" "$2" /proj "$3"' "$ROOT" "$container" "fm-busytest" "$seeded" ) \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_create_task "$1" "$2" /proj "$3"' "$ROOT" "$container" "fm-busytest" "$seeded" ) \
     || fail "create_task failed against the stateful fake"
   read -r _ pane <<EOF
 $ids
@@ -3659,17 +3633,17 @@ EOF
     || fail "the seeded default tab was closed despite its pane reporting a working agent (defense-in-depth failed)"
   assert_not_contains "$(cat "$log")" $'\x1f''pane'$'\x1f''close'$'\x1f'"$seeded_pane" \
     "create_task must refuse to close a seeded default tab whose pane hosts a working agent"
-  pass "fm_backend_herdr_workspace_prune_seeded_default_tab: refuses to close the seeded default tab when its pane reports a working agent (defense in depth)"
+  pass "fm_herdr_workspace_prune_seeded_default_tab: refuses to close the seeded default tab when its pane reports a working agent (defense in depth)"
 }
 
 # --- native event push: normalize / policy-routing / dedupe / wait ----------
 #
-# These exercise the herdr subscriber (fm_backend_herdr_wait_transition and its
+# These exercise the herdr subscriber (fm_herdr_wait_transition and its
 # helpers) with a FAKE socket reader and fake herdr CLI, so the policy routing,
 # per-pane dedupe marker, reconnect level-reconcile, and fail-closed return
 # codes are asserted without a real herdr server. The isolated real-herdr smoke
 # that drives a live idle->blocked transition lives in
-# tests/fm-backend-herdr-eventwait-smoke.test.sh.
+# tests/fm-herdr-eventwait-smoke.test.sh.
 
 # make_herdr_eventfake: a herdr stub answering exactly the calls the event path
 # makes - `session list --json` (echoes one session, name FM_FAKE_SESSION_NAME,
@@ -3711,7 +3685,7 @@ SH
   printf '%s\n' "$fb"
 }
 
-# make_fake_reader: a stand-in for bin/backends/herdr-eventwait.py. It ignores
+# make_fake_reader: a stand-in for bin/fm-herdr-eventwait.py. It ignores
 # the socket, streams the TAB-separated lines in $FM_FAKE_READER_LINES to stdout
 # (one projected event per line: pane_id\tworkspace_id\tagent_status\tagent),
 # then exits $FM_FAKE_READER_EXIT (default 0). A non-zero exit with no lines
@@ -3744,57 +3718,57 @@ set_fake_agent() {  # <agent-dir> <window-or-pane> <status>
 
 test_normalize_event_leaves_from_empty() {
   local rec
-  rec=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_normalize_event wG:pQ wG blocked pi' "$ROOT")
-  [ "$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_pane_id "$1"' "$ROOT" "$rec")" = "wG:pQ" ] \
+  rec=$(bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_normalize_event wG:pQ wG blocked pi' "$ROOT")
+  [ "$(bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_transition_pane_id "$1"' "$ROOT" "$rec")" = "wG:pQ" ] \
     || fail "normalize_event pane_id wrong: $rec"
-  [ "$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_from_status "$1"' "$ROOT" "$rec")" = "" ] \
+  [ "$(bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_transition_from_status "$1"' "$ROOT" "$rec")" = "" ] \
     || fail "normalize_event should leave from_status empty (herdr carries no previous status): $rec"
-  [ "$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_to_status "$1"' "$ROOT" "$rec")" = "blocked" ] \
+  [ "$(bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_transition_to_status "$1"' "$ROOT" "$rec")" = "blocked" ] \
     || fail "normalize_event to_status wrong: $rec"
-  pass "fm_backend_herdr_normalize_event routes through the shared record with an empty from_status"
+  pass "fm_herdr_normalize_event routes through the shared record with an empty from_status"
 }
 
 test_escalation_marker_keys_like_watcher() {
   local m
-  m=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_escalation_marker /st default:wG:pQ' "$ROOT")
+  m=$(bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_escalation_marker /st default:wG:pQ' "$ROOT")
   [ "$m" = "/st/.herdr-escalated-default_wG_pQ" ] \
     || fail "escalation marker key must match the watcher's tr ':/.' '___' scheme, got '$m'"
-  pass "fm_backend_herdr_escalation_marker keys the dedupe marker exactly like the watcher's .stale-<key>"
+  pass "fm_herdr_escalation_marker keys the dedupe marker exactly like the watcher's .stale-<key>"
 }
 
 test_apply_transition_blocked_requires_commit_to_dedupe() {
   local dir state rec out rc marker
   dir="$TMP_ROOT/apply-blocked"; state="$dir/state"; mkdir -p "$state"
-  rec=$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_record wG:pQ wG "" blocked pi' "$ROOT")
+  rec=$(bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_transition_record wG:pQ wG "" blocked pi' "$ROOT")
   marker="$state/.herdr-escalated-default_wG_pQ"
-  out=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_apply_transition "$1" "$2" "$3"' "$ROOT" "$state" default "$rec"); rc=$?
+  out=$(bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_apply_transition "$1" "$2" "$3"' "$ROOT" "$state" default "$rec"); rc=$?
   [ "$rc" = 0 ] || fail "a fresh blocked edge must return 0 (actionable), got $rc"
   case "$out" in *blocked*) : ;; *) fail "apply_transition should print the record on a fresh actionable edge, got '$out'" ;; esac
   [ ! -e "$marker" ] || fail "detecting a blocked edge must not commit its marker before durable handling"
-  bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_commit_transition "$1" "$2" "$3"' "$ROOT" "$state" default "$rec"
+  bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_commit_transition "$1" "$2" "$3"' "$ROOT" "$state" default "$rec"
   [ -e "$marker" ] || fail "commit_transition must set the marker after the caller handles the edge"
   # Second identical blocked edge (marker present) must NOT re-fire.
-  out=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_apply_transition "$1" "$2" "$3"' "$ROOT" "$state" default "$rec"); rc=$?
+  out=$(bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_apply_transition "$1" "$2" "$3"' "$ROOT" "$state" default "$rec"); rc=$?
   [ "$rc" = 1 ] || fail "an already-marked blocked pane must return 1 (deduped), got $rc"
   [ -z "$out" ] || fail "an already-marked blocked pane must print nothing, got '$out'"
-  pass "fm_backend_herdr_apply_transition: blocked dedupe starts only after explicit commit"
+  pass "fm_herdr_apply_transition: blocked dedupe starts only after explicit commit"
 }
 
 test_apply_transition_working_clears_marker() {
   local dir state blocked working marker rc
   dir="$TMP_ROOT/apply-working"; state="$dir/state"; mkdir -p "$state"
   marker="$state/.herdr-escalated-default_wG_pQ"
-  blocked=$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_record wG:pQ wG "" blocked pi' "$ROOT")
-  working=$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_record wG:pQ wG "" working pi' "$ROOT")
-  bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_commit_transition "$1" "$2" "$3"' "$ROOT" "$state" default "$blocked"
+  blocked=$(bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_transition_record wG:pQ wG "" blocked pi' "$ROOT")
+  working=$(bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_transition_record wG:pQ wG "" working pi' "$ROOT")
+  bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_commit_transition "$1" "$2" "$3"' "$ROOT" "$state" default "$blocked"
   [ -e "$marker" ] || fail "setup: committed blocked edge should have set the marker"
-  bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_apply_transition "$1" "$2" "$3"' "$ROOT" "$state" default "$working"; rc=$?
+  bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_apply_transition "$1" "$2" "$3"' "$ROOT" "$state" default "$working"; rc=$?
   [ "$rc" = 1 ] || fail "a working (absorb) edge must return 1 (no wake), got $rc"
   [ ! -e "$marker" ] || fail "a working edge must CLEAR the escalation marker so a later re-block re-fires"
   # A re-block after the clear must fire again.
-  bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_apply_transition "$1" "$2" "$3"' "$ROOT" "$state" default "$blocked" >/dev/null; rc=$?
+  bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_apply_transition "$1" "$2" "$3"' "$ROOT" "$state" default "$blocked" >/dev/null; rc=$?
   [ "$rc" = 0 ] || fail "a re-block after a working clear must re-fire (return 0), got $rc"
-  pass "fm_backend_herdr_apply_transition: a working edge clears the marker so the next ->blocked re-escalates"
+  pass "fm_herdr_apply_transition: a working edge clears the marker so the next ->blocked re-escalates"
 }
 
 test_clear_transition_removes_task_marker() {
@@ -3802,9 +3776,9 @@ test_clear_transition_removes_task_marker() {
   dir="$TMP_ROOT/clear-transition"; state="$dir/state"; mkdir -p "$state"
   marker="$state/.herdr-escalated-default_wG_pQ"
   : > "$marker"
-  bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_clear_transition "$1" "$2"' "$ROOT" "$state" default:wG:pQ
+  bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_clear_transition "$1" "$2"' "$ROOT" "$state" default:wG:pQ
   [ ! -e "$marker" ] || fail "clear_transition must remove the marker owned by a torn-down pane"
-  pass "fm_backend_herdr_clear_transition removes task-owned dedupe state"
+  pass "fm_herdr_clear_transition removes task-owned dedupe state"
 }
 
 test_apply_transition_defer_and_fallback_are_noops() {
@@ -3813,29 +3787,29 @@ test_apply_transition_defer_and_fallback_are_noops() {
   marker="$state/.herdr-escalated-default_wG_pQ"
   for s in idle "done" unknown ""; do
     local rec
-    rec=$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_record wG:pQ wG "" "$1" pi' "$ROOT" "$s")
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_apply_transition "$1" "$2" "$3"' "$ROOT" "$state" default "$rec"; rc=$?
+    rec=$(bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_transition_record wG:pQ wG "" "$1" pi' "$ROOT" "$s")
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_apply_transition "$1" "$2" "$3"' "$ROOT" "$state" default "$rec"; rc=$?
     [ "$rc" = 1 ] || fail "defer/fallback status '$s' must return 1 (no fast action), got $rc"
     [ ! -e "$marker" ] || fail "defer/fallback status '$s' must not touch the escalation marker"
   done
-  pass "fm_backend_herdr_apply_transition: idle/done (defer) and unknown/empty (fallback) take no fast action"
+  pass "fm_herdr_apply_transition: idle/done (defer) and unknown/empty (fallback) take no fast action"
 }
 
 test_wait_transition_no_panes_returns_2() {
   local rc
-  bash -c '. "$0/bin/backends/herdr.sh"; FM_BACKEND_HERDR_EVENTS_FORCE=1 fm_backend_herdr_wait_transition default 1 /tmp/st' "$ROOT"; rc=$?
+  bash -c '. "$0/bin/fm-herdr.sh"; FM_HERDR_EVENTS_FORCE=1 fm_herdr_wait_transition default 1 /tmp/st' "$ROOT"; rc=$?
   [ "$rc" = 2 ] || fail "wait_transition with no pane windows must return 2 (fall back to sleep), got $rc"
-  pass "fm_backend_herdr_wait_transition: a home with no herdr panes falls back to polling (rc 2)"
+  pass "fm_herdr_wait_transition: a home with no herdr panes falls back to polling (rc 2)"
 }
 
 test_wait_transition_not_capable_returns_2() {
   local dir state fb rc
   dir="$TMP_ROOT/wt-incapable"; state="$dir/state"; mkdir -p "$state"
   fb=$(make_herdr_eventfake "$dir")
-  rc=$(PATH="$fb:$PATH" FM_BACKEND_HERDR_EVENTS_FORCE=0 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_wait_transition sess 1 "$1" sess:wG:pQ; echo $?' "$ROOT" "$state" | tail -1)
+  rc=$(PATH="$fb:$PATH" FM_HERDR_EVENTS_FORCE=0 \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_wait_transition sess 1 "$1" sess:wG:pQ; echo $?' "$ROOT" "$state" | tail -1)
   [ "$rc" = 2 ] || fail "wait_transition must return 2 when events are below capability (fail closed to poll), got $rc"
-  pass "fm_backend_herdr_wait_transition: below-capability protocol/schema falls back to polling (rc 2)"
+  pass "fm_herdr_wait_transition: below-capability protocol/schema falls back to polling (rc 2)"
 }
 
 test_wait_transition_reconcile_blocked_returns_record() {
@@ -3845,14 +3819,14 @@ test_wait_transition_reconcile_blocked_returns_record() {
   set_fake_agent "$agent" "wG:pQ" blocked
   reader=$(make_fake_reader "$dir"); lines="$dir/lines"; : > "$lines"
   marker="$state/.herdr-escalated-sess_wG_pQ"
-  out=$(PATH="$fb:$PATH" TMPDIR="$temp" FM_BACKEND_HERDR_EVENTS_FORCE=1 FM_FAKE_SESSION_NAME=sess FM_FAKE_SOCKET="$dir/x.sock" FM_FAKE_AGENT_DIR="$agent" \
-    FM_BACKEND_HERDR_EVENT_READER="$reader" FM_FAKE_READER_LINES="$lines" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_wait_transition sess 1 "$1" sess:wG:pQ' "$ROOT" "$state"); rc=$?
+  out=$(PATH="$fb:$PATH" TMPDIR="$temp" FM_HERDR_EVENTS_FORCE=1 FM_FAKE_SESSION_NAME=sess FM_FAKE_SOCKET="$dir/x.sock" FM_FAKE_AGENT_DIR="$agent" \
+    FM_HERDR_EVENT_READER="$reader" FM_FAKE_READER_LINES="$lines" \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_wait_transition sess 1 "$1" sess:wG:pQ' "$ROOT" "$state"); rc=$?
   [ "$rc" = 0 ] || fail "reconcile of an already-blocked pane must return 0, got $rc"
   case "$out" in *blocked*) : ;; *) fail "reconcile must print the blocked record, got '$out'" ;; esac
   [ ! -e "$marker" ] || fail "reconcile must not mark a blocked pane before the caller durably handles it"
   [ -z "$(find "$temp" -mindepth 1 -print -quit)" ] || fail "actionable reconciliation must remove its private FIFO directory"
-  pass "fm_backend_herdr_wait_transition: reconnect level-reconcile returns an uncommitted blocked pane"
+  pass "fm_herdr_wait_transition: reconnect level-reconcile returns an uncommitted blocked pane"
 }
 
 test_wait_transition_subscribes_before_reconcile() {
@@ -3861,11 +3835,11 @@ test_wait_transition_subscribes_before_reconcile() {
   fb=$(make_herdr_eventfake "$dir")
   set_fake_agent "$agent" "wG:pQ" idle
   reader=$(make_fake_reader "$dir"); lines="$dir/lines"; ready="$dir/subscribed"; : > "$lines"
-  rc=$(PATH="$fb:$PATH" FM_BACKEND_HERDR_EVENTS_FORCE=1 FM_FAKE_SESSION_NAME=sess FM_FAKE_SOCKET="$dir/x.sock" FM_FAKE_AGENT_DIR="$agent" \
-    FM_BACKEND_HERDR_EVENT_READER="$reader" FM_FAKE_READER_LINES="$lines" FM_FAKE_READER_READY_FILE="$ready" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_wait_transition sess 1 "$1" sess:wG:pQ; echo $?' "$ROOT" "$state" | tail -1)
+  rc=$(PATH="$fb:$PATH" FM_HERDR_EVENTS_FORCE=1 FM_FAKE_SESSION_NAME=sess FM_FAKE_SOCKET="$dir/x.sock" FM_FAKE_AGENT_DIR="$agent" \
+    FM_HERDR_EVENT_READER="$reader" FM_FAKE_READER_LINES="$lines" FM_FAKE_READER_READY_FILE="$ready" \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_wait_transition sess 1 "$1" sess:wG:pQ; echo $?' "$ROOT" "$state" | tail -1)
   [ "$rc" = 1 ] || fail "subscription must be acknowledged before reconciliation begins, got $rc"
-  pass "fm_backend_herdr_wait_transition: subscribes before reconnect level-reconcile"
+  pass "fm_herdr_wait_transition: subscribes before reconnect level-reconcile"
 }
 
 test_wait_transition_reconcile_dedupes_when_marked() {
@@ -3878,11 +3852,11 @@ test_wait_transition_reconcile_dedupes_when_marked() {
   # No stream events, reader exits 0 -> a clean timeout (rc 1), NOT a re-fire.
   local reader lines
   reader=$(make_fake_reader "$dir"); lines="$dir/lines"; : > "$lines"
-  rc=$(PATH="$fb:$PATH" FM_BACKEND_HERDR_EVENTS_FORCE=1 FM_FAKE_SESSION_NAME=sess FM_FAKE_SOCKET="$dir/x.sock" FM_FAKE_AGENT_DIR="$agent" \
-    FM_BACKEND_HERDR_EVENT_READER="$reader" FM_FAKE_READER_LINES="$lines" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_wait_transition sess 1 "$1" sess:wG:pQ; echo $?' "$ROOT" "$state" | tail -1)
+  rc=$(PATH="$fb:$PATH" FM_HERDR_EVENTS_FORCE=1 FM_FAKE_SESSION_NAME=sess FM_FAKE_SOCKET="$dir/x.sock" FM_FAKE_AGENT_DIR="$agent" \
+    FM_HERDR_EVENT_READER="$reader" FM_FAKE_READER_LINES="$lines" \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_wait_transition sess 1 "$1" sess:wG:pQ; echo $?' "$ROOT" "$state" | tail -1)
   [ "$rc" = 1 ] || fail "an already-marked blocked pane must not re-fire on reconcile (expect clean timeout rc 1), got $rc"
-  pass "fm_backend_herdr_wait_transition: a still-blocked, already-escalated pane is not re-delivered on reconnect"
+  pass "fm_herdr_wait_transition: a still-blocked, already-escalated pane is not re-delivered on reconnect"
 }
 
 test_wait_transition_stream_blocked_returns_record() {
@@ -3893,33 +3867,31 @@ test_wait_transition_stream_blocked_returns_record() {
   reader=$(make_fake_reader "$dir"); lines="$dir/lines"
   printf 'wG:pQ\t\tblocked\tpi\n' > "$lines"
   marker="$state/.herdr-escalated-sess_wG_pQ"
-  out=$(PATH="$fb:$PATH" FM_BACKEND_HERDR_EVENTS_FORCE=1 FM_FAKE_SESSION_NAME=sess FM_FAKE_SOCKET="$dir/x.sock" FM_FAKE_AGENT_DIR="$agent" \
-    FM_BACKEND_HERDR_EVENT_READER="$reader" FM_FAKE_READER_LINES="$lines" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_wait_transition sess 2 "$1" sess:wG:pQ' "$ROOT" "$state"); rc=$?
+  out=$(PATH="$fb:$PATH" FM_HERDR_EVENTS_FORCE=1 FM_FAKE_SESSION_NAME=sess FM_FAKE_SOCKET="$dir/x.sock" FM_FAKE_AGENT_DIR="$agent" \
+    FM_HERDR_EVENT_READER="$reader" FM_FAKE_READER_LINES="$lines" \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_wait_transition sess 2 "$1" sess:wG:pQ' "$ROOT" "$state"); rc=$?
   [ "$rc" = 0 ] || fail "a streamed blocked edge must return 0, got $rc"
   case "$out" in *blocked*) : ;; *) fail "a streamed blocked edge must print the record, got '$out'" ;; esac
   [ ! -e "$marker" ] || fail "a streamed blocked edge must remain uncommitted until durable handling"
-  pass "fm_backend_herdr_wait_transition: a streamed ->blocked edge returns the record sub-poll"
+  pass "fm_herdr_wait_transition: a streamed ->blocked edge returns the record sub-poll"
 }
 
-test_wait_transition_stream_absorb_clears_then_timeout() {
-  local dir state agent fb reader lines rc marker
+test_wait_transition_stream_absorb_returns_uncommitted_record() {
+  local dir state agent fb reader lines out rc marker
   dir="$TMP_ROOT/wt-stream-absorb"; state="$dir/state"; agent="$dir/agents"; mkdir -p "$state" "$agent"
   fb=$(make_herdr_eventfake "$dir")
   set_fake_agent "$agent" "wG:pQ" idle
   : > "$state/.herdr-escalated-sess_wG_pQ"   # previously escalated
   reader=$(make_fake_reader "$dir"); lines="$dir/lines"
   marker="$state/.herdr-escalated-sess_wG_pQ"
-  # Stream a working edge (absorb) then an idle edge (defer). Neither is a fresh
-  # actionable edge, so the wait ends as a clean timeout (rc 1) and the marker
-  # is cleared by the working edge.
   printf 'wG:pQ\t\tworking\tpi\nwG:pQ\t\tidle\tpi\n' > "$lines"
-  rc=$(PATH="$fb:$PATH" FM_BACKEND_HERDR_EVENTS_FORCE=1 FM_FAKE_SESSION_NAME=sess FM_FAKE_SOCKET="$dir/x.sock" FM_FAKE_AGENT_DIR="$agent" \
-    FM_BACKEND_HERDR_EVENT_READER="$reader" FM_FAKE_READER_LINES="$lines" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_wait_transition sess 2 "$1" sess:wG:pQ; echo $?' "$ROOT" "$state" | tail -1)
-  [ "$rc" = 1 ] || fail "a stream of only working/idle edges must end as a clean timeout (rc 1), got $rc"
-  [ ! -e "$marker" ] || fail "a streamed working edge must clear the escalation marker"
-  pass "fm_backend_herdr_wait_transition: streamed working clears the marker, idle/done are deferred (clean timeout)"
+  out=$(PATH="$fb:$PATH" FM_HERDR_EVENTS_FORCE=1 FM_FAKE_SESSION_NAME=sess FM_FAKE_SOCKET="$dir/x.sock" FM_FAKE_AGENT_DIR="$agent" \
+    FM_HERDR_EVENT_READER="$reader" FM_FAKE_READER_LINES="$lines" \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_wait_transition sess 2 "$1" sess:wG:pQ' "$ROOT" "$state"); rc=$?
+  [ "$rc" = 0 ] || fail "a working edge with a marker must return for validated application, got $rc"
+  case "$out" in *working*) : ;; *) fail "a working edge must print its normalized record, got '$out'" ;; esac
+  [ -e "$marker" ] || fail "an unlocked transition wait cleared the escalation marker"
+  pass "fm_herdr_wait_transition: working dedupe changes remain uncommitted"
 }
 
 test_wait_transition_reader_failure_returns_2() {
@@ -3928,12 +3900,12 @@ test_wait_transition_reader_failure_returns_2() {
   fb=$(make_herdr_eventfake "$dir")
   set_fake_agent "$agent" "wG:pQ" idle
   reader=$(make_fake_reader "$dir"); lines="$dir/lines"; : > "$lines"
-  rc=$(PATH="$fb:$PATH" TMPDIR="$temp" FM_BACKEND_HERDR_EVENTS_FORCE=1 FM_FAKE_SESSION_NAME=sess FM_FAKE_SOCKET="$dir/x.sock" FM_FAKE_AGENT_DIR="$agent" \
-    FM_BACKEND_HERDR_EVENT_READER="$reader" FM_FAKE_READER_LINES="$lines" FM_FAKE_READER_EXIT=2 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_wait_transition sess 1 "$1" sess:wG:pQ; echo $?' "$ROOT" "$state" | tail -1)
+  rc=$(PATH="$fb:$PATH" TMPDIR="$temp" FM_HERDR_EVENTS_FORCE=1 FM_FAKE_SESSION_NAME=sess FM_FAKE_SOCKET="$dir/x.sock" FM_FAKE_AGENT_DIR="$agent" \
+    FM_HERDR_EVENT_READER="$reader" FM_FAKE_READER_LINES="$lines" FM_FAKE_READER_EXIT=2 \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_wait_transition sess 1 "$1" sess:wG:pQ; echo $?' "$ROOT" "$state" | tail -1)
   [ "$rc" = 2 ] || fail "a reader connect/subscribe failure must return 2 (fall back to poll), got $rc"
   [ -z "$(find "$temp" -mindepth 1 -print -quit)" ] || fail "reader failure must remove its private FIFO directory"
-  pass "fm_backend_herdr_wait_transition: a reader/subscribe failure falls back to polling (rc 2)"
+  pass "fm_herdr_wait_transition: a reader/subscribe failure falls back to polling (rc 2)"
 }
 
 test_wait_transition_bad_ack_returns_2_and_cleans_up() {
@@ -3942,14 +3914,14 @@ test_wait_transition_bad_ack_returns_2_and_cleans_up() {
   fb=$(make_herdr_eventfake "$dir")
   set_fake_agent "$agent" "wG:pQ" idle
   reader=$(make_fake_reader "$dir"); lines="$dir/lines"; : > "$lines"
-  result=$(PATH="$fb:$PATH" TMPDIR="$temp" FM_BACKEND_HERDR_EVENTS_FORCE=1 FM_FAKE_SESSION_NAME=sess FM_FAKE_SOCKET="$dir/x.sock" FM_FAKE_AGENT_DIR="$agent" \
-    FM_BACKEND_HERDR_EVENT_READER="$reader" FM_FAKE_READER_LINES="$lines" FM_FAKE_READER_ACK=invalid \
-    /bin/bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_wait_transition sess 1 "$1" sess:wG:pQ; rc=$?; [ -e /dev/fd/9 ] && fd_open=yes || fd_open=no; printf "%s %s\n" "$rc" "$fd_open"' "$ROOT" "$state")
+  result=$(PATH="$fb:$PATH" TMPDIR="$temp" FM_HERDR_EVENTS_FORCE=1 FM_FAKE_SESSION_NAME=sess FM_FAKE_SOCKET="$dir/x.sock" FM_FAKE_AGENT_DIR="$agent" \
+    FM_HERDR_EVENT_READER="$reader" FM_FAKE_READER_LINES="$lines" FM_FAKE_READER_ACK=invalid \
+    /bin/bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_wait_transition sess 1 "$1" sess:wG:pQ; rc=$?; [ -e /dev/fd/9 ] && fd_open=yes || fd_open=no; printf "%s %s\n" "$rc" "$fd_open"' "$ROOT" "$state")
   rc=${result%% *}; fd_open=${result#* }
   [ "$rc" = 2 ] || fail "an invalid subscription acknowledgement must return 2, got $rc"
   [ "$fd_open" = no ] || fail "an invalid subscription acknowledgement must close fixed fd 9"
   [ -z "$(find "$temp" -mindepth 1 -print -quit)" ] || fail "an invalid subscription acknowledgement must remove its private FIFO directory"
-  pass "fm_backend_herdr_wait_transition: Bash 3.2-safe bad-ack path closes fd 9 and removes its FIFO"
+  pass "fm_herdr_wait_transition: Bash 3.2-safe bad-ack path closes fd 9 and removes its FIFO"
 }
 
 test_wait_transition_clean_timeout_returns_1() {
@@ -3958,18 +3930,18 @@ test_wait_transition_clean_timeout_returns_1() {
   fb=$(make_herdr_eventfake "$dir")
   set_fake_agent "$agent" "wG:pQ" idle
   reader=$(make_fake_reader "$dir"); lines="$dir/lines"; : > "$lines"   # no events, reader exits 0
-  result=$(PATH="$fb:$PATH" TMPDIR="$temp" FM_BACKEND_HERDR_EVENTS_FORCE=1 FM_FAKE_SESSION_NAME=sess FM_FAKE_SOCKET="$dir/x.sock" FM_FAKE_AGENT_DIR="$agent" \
-    FM_BACKEND_HERDR_EVENT_READER="$reader" FM_FAKE_READER_LINES="$lines" \
-    /bin/bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_wait_transition sess 1 "$1" sess:wG:pQ; rc=$?; [ -e /dev/fd/9 ] && fd_open=yes || fd_open=no; printf "%s %s\n" "$rc" "$fd_open"' "$ROOT" "$state")
+  result=$(PATH="$fb:$PATH" TMPDIR="$temp" FM_HERDR_EVENTS_FORCE=1 FM_FAKE_SESSION_NAME=sess FM_FAKE_SOCKET="$dir/x.sock" FM_FAKE_AGENT_DIR="$agent" \
+    FM_HERDR_EVENT_READER="$reader" FM_FAKE_READER_LINES="$lines" \
+    /bin/bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_wait_transition sess 1 "$1" sess:wG:pQ; rc=$?; [ -e /dev/fd/9 ] && fd_open=yes || fd_open=no; printf "%s %s\n" "$rc" "$fd_open"' "$ROOT" "$state")
   rc=${result%% *}; fd_open=${result#* }
   [ "$rc" = 1 ] || fail "a clean full-budget wait with no actionable edge must return 1, got $rc"
   [ "$fd_open" = no ] || fail "a clean timeout must close fixed fd 9"
   [ -z "$(find "$temp" -mindepth 1 -print -quit)" ] || fail "a clean timeout must remove its private FIFO directory"
-  pass "fm_backend_herdr_wait_transition: stock macOS Bash clean timeout closes fd 9 and returns 1"
+  pass "fm_herdr_wait_transition: stock macOS Bash clean timeout closes fd 9 and returns 1"
 }
 
-# shellcheck source=bin/fm-backend.sh
-. "$ROOT/bin/fm-backend.sh"
+# shellcheck source=bin/fm-herdr.sh
+. "$ROOT/bin/fm-herdr.sh"
 
 test_version_check_accepts_current_protocol
 test_version_check_refuses_old_protocol
@@ -4108,10 +4080,7 @@ test_send_text_submit_confirms_blocked_after_enter
 test_send_text_submit_slow_transition_within_one_enter_needs_no_extra_enter
 test_send_text_submit_send_failed
 test_send_text_submit_unknown_on_capture_failure
-test_dispatch_routes_herdr_backend
-test_dispatch_busy_state_unknown_for_tmux
-test_dispatch_composer_state_routes_by_backend
-test_scripts_route_explicit_target_through_meta_backend
+test_scripts_route_explicit_target_through_herdr_meta
 test_normalize_event_leaves_from_empty
 test_escalation_marker_keys_like_watcher
 test_apply_transition_blocked_requires_commit_to_dedupe
@@ -4124,7 +4093,7 @@ test_wait_transition_reconcile_blocked_returns_record
 test_wait_transition_subscribes_before_reconcile
 test_wait_transition_reconcile_dedupes_when_marked
 test_wait_transition_stream_blocked_returns_record
-test_wait_transition_stream_absorb_clears_then_timeout
+test_wait_transition_stream_absorb_returns_uncommitted_record
 test_wait_transition_reader_failure_returns_2
 test_wait_transition_bad_ack_returns_2_and_cleans_up
 test_wait_transition_clean_timeout_returns_1

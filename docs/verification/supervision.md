@@ -19,18 +19,17 @@ pi -p -e .pi/extensions/fm-primary-turnend-guard.ts \
 
 Observed result: `PI_SMOKE_DONE`, with one session-start execution.
 The earlier `sendUserMessage` counterfactual raced the positional prompt; the current non-triggering `pi.sendMessage` custom message did not.
-[`runtime-backends.md`](runtime-backends.md#agent-liveness-name-sources) owns the current exact Pi process evidence.
 
-### Run-tier source vocabulary and context-reset injection
+### Pi source vocabulary and context-reset injection
 
-The run tier depends on three facts only the vendor can supply: the session-open source it reports, whether hook stdout reaches model context on a context-RESET open rather than only a cold one, and whether a worker the hook detaches survives the hook returning.
-The first two were measured on 2026-08-05 against a throwaway Firstmate-shaped lab carrying each harness's own tracked registration with a recorder standing in for `bin/fm-sessionstart-run.sh`.
+Pi session-start delivery depends on three observed facts: the session-open source Pi reports, whether hook stdout reaches model context on a context-RESET open rather than only a cold one, and whether a worker detached by the Pi hook survives the hook returning.
+The first two were measured on 2026-08-05 against a throwaway Firstmate-shaped lab carrying Pi's tracked registration with a recorder standing in for `bin/fm-sessionstart-run.sh`.
 Each open printed a source-stamped token, and the model was asked to quote that token back, so producing hook stdout could never be mistaken for delivering it.
 The third is recorded below.
 
-| Harness | Version verified | Cold open | Context reset | Context-preserving reopen |
-| --- | --- | --- | --- | --- |
-| Pi | 0.82.0 | `source=startup`, token quoted back in both `-p` and the TUI | `/new` raises `session_start` reason `new`, which the extension maps to `clear`; `/compact` raises `session_compact`, and both freshly injected source-stamped tokens were quoted back | `pi -c` reports reason `startup`, not `resume` |
+Pi 0.82.0 reported `source=startup` on cold open, and the token was quoted back in both `-p` and the TUI.
+`/new` raised `session_start` reason `new`, which the extension maps to `clear`; `/compact` raised `session_compact`, and both freshly injected source-stamped tokens were quoted back.
+`pi -c` reported reason `startup`, not `resume`.
 
 Pi compaction was verified on 2026-08-05 with Pi 0.82.0 in the same throwaway lab after setting `.pi/settings.json` `compaction.keepRecentTokens` to 200 and completing one substantial assistant-prose turn before issuing `/compact`.
 Pi reported `Compacted from 7,697 tokens`, the recorder observed `session_compact`, and the model quoted the freshly injected `source=compact` token back.
@@ -44,36 +43,17 @@ Compacted from 7,697 tokens
 compact
 ```
 
-The current adapter classification and baseline mechanics are owned by [`../sessionstart-nudge.md`](../sessionstart-nudge.md#harness-transports) and the `bin/fm-session-start.sh` header.
+Current Pi source classification and baseline mechanics are owned by [`../sessionstart-nudge.md`](../sessionstart-nudge.md#pi-transport) and the `bin/fm-session-start.sh` header.
 Their continuation classification is covered by portable tests, not claimed as live validation in this record.
 
 ### Post-start instruction refresh
 
-The isolated real-Pi instruction-refresh regression ran on 2026-08-11 with Pi 0.84.0.
-It used a scratch `FM_HOME`, a private tmux socket, and a disposable Firstmate checkout.
-The historical `origin/main` implementation first reproduced the stale original marker after a real compaction.
-The current implementation then recorded `source=startup`, changed and committed the lab's `AGENTS.md`, compacted the same real Pi session, and answered with the replacement marker.
-The fixed run also proved that the true-start baseline remained different from the updated file after compaction.
-
-```sh
-FM_SESSIONSTART_INSTRUCTION_REFRESH_LIVE_E2E=1 \
-FM_SESSIONSTART_INSTRUCTION_REFRESH_REF=origin/main \
-FM_SESSIONSTART_INSTRUCTION_REFRESH_EXPECT=stale \
-tests/fm-sessionstart-instruction-refresh-live-e2e.test.sh
-# ok - Pi 0.84.0 reproduces stale AGENTS.md after a real compact
-
-FM_SESSIONSTART_INSTRUCTION_REFRESH_LIVE_E2E=1 \
-tests/fm-sessionstart-instruction-refresh-live-e2e.test.sh
-# ok - Pi 0.84.0 re-injects updated AGENTS.md after a real compact in an isolated session
-```
-
-This is live coverage only for Pi compaction.
-The portable session-start tests cover continuation classification, baseline immutability, and source-routing behavior.
-Pi compaction is the only supported stale-cache refresh pair.
+Pi compaction and instruction refresh must be exercised in a guarded named Herdr session.
+The tracked worker-lifecycle proof below covers current Pi+Herdr lifecycle delivery; portable session-start tests cover continuation classification, baseline immutability, and source routing.
 
 ## Semantic busy state
 
-The tracked worker extension was live-verified on 2026-08-20 with Pi 0.84.2 and Herdr 0.8.0 in a guarded named session.
+The tracked worker extension was reverified on 2026-08-21 with Pi 0.84.2 and Herdr 0.8.0 in a guarded named session.
 A fresh disposable Git target explicitly loaded the extension outside auto-discovery with `--no-extensions -e <tracked-worker-extension>` and one canonical metadata path; no project-trust prompt appeared.
 Two controlled prompts exposed `state: working · source: pane · harness busy (pi-ext)` through `bin/fm-crew-state.sh`, then settled to `v1 ... state=idle source=pi-ext event=agent-settled`; `turn-ended` was touched without becoming current-state truth.
 Rearming between prompts changed the generation, and the first Pi process's late callbacks left the replacement seed unchanged before the replacement lifecycle took ownership.
@@ -81,18 +61,18 @@ Rearming between prompts changed the generation, and the first Pi process's late
 Exact recovered invocation:
 
 ```sh
-/bin/bash /Users/control/firstmate/data/pi-native-simplification-a1/live-proof-rerun.sh
+bash /Users/control/firstmate/data/pi-native-simplification-a1/live-proof-rerun.sh
 ```
 
 Exact recorded stdout:
 
 ```text
 PI_VERSION=0.84.2
-HERDR_STATUS={"status":"running","running":true,"version":"0.8.0","protocol":19,"capabilities":{"live_handoff":true,"detached_server_daemon":false},"compatible":true,"socket":"/Users/control/.config/herdr/sessions/fm-lab-pi-native-simpli-11092-19614/herdr.sock","session":"fm-lab-pi-native-simpli-11092-19614","restart_needed":false}
+HERDR_STATUS={"status":"running","running":true,"version":"0.8.0","protocol":19,"capabilities":{"live_handoff":true,"detached_server_daemon":false},"compatible":true,"socket":"/Users/control/.config/herdr/sessions/fm-lab-pi-native-simpli-10856-16772/herdr.sock","session":"fm-lab-pi-native-simpli-10856-16772","restart_needed":false}
 FIRST_STATE=state: working · source: pane · harness busy (pi-ext)
 SECOND_STATE=state: working · source: pane · harness busy (pi-ext)
-FINAL_RECORD=v1 gen=g1787271773.13142.18417 seq=3 state=idle source=pi-ext event=agent-settled ts=1787271800
-OLD_GENERATION_REJECTED=g1787271771.12687.23791->g1787271773.13142.18417
+FINAL_RECORD=v1 gen=g1787323619.20524.23545 seq=3 state=idle source=pi-ext event=agent-settled ts=1787323663
+OLD_GENERATION_REJECTED=g1787323609.12672.23501->g1787323619.20524.23545
 TRUST_PROMPT=absent
 EXTERNAL_EXTENSION=/Users/control/.treehouse/firstmate-af9cb2/2/firstmate/.pi/worker-extensions/fm-worker-lifecycle.ts
 ```
@@ -118,13 +98,11 @@ tests/fm-pi-primary-types.test.sh
 
 The bounded-follow-up mechanism was validated on the enabled integration path from 2026-07-08 through 2026-08-13.
 
-| Harness | Version verified | Mechanism | Observed result |
-| --- | --- | --- | --- |
-| Pi | 0.80.5 | Passive `agent_settled` callback | Exactly one guard follow-up ran for an unhealthy cycle, with no recursion across tool turns. |
+Pi 0.80.5 used the passive `agent_settled` callback to run exactly one guard follow-up for an unhealthy cycle, with no recursion across tool turns.
 
 `tests/fm-session-lock-ancestry.test.sh` pins exact Pi lock-owner ancestry and competitor isolation behind a deterministic process table.
 `tests/fm-watch-arm.test.sh` runs real watcher and arm cycles against durable on-disk state to verify that a delivered reason survives until post-handling acknowledgement and stops replaying after acknowledgement, while an unrelated queue append cannot make a watcher cycle that delivered nothing look successful.
-The same suite ingests a keyed remote-secondmate parent reply through the real adapter, establishes the incremental OPEN DECISIONS cursor, interrupts supervision, and proves re-arm replays every unacknowledged queue row plus the still-open decision through the ordinary drain path.
+The same suite ingests a keyed remote-secondmate parent reply through the real reply path, establishes the incremental OPEN DECISIONS cursor, interrupts supervision, and proves re-arm replays every unacknowledged queue row plus the still-open decision through the ordinary drain path.
 It also covers decision-only recovery, interrupted handling, handling-window generation reuse, non-fatal moved-generation acknowledgement with sequence-bounded consumption, and a persistent successor remaining live after recovery is acknowledged.
 
 Current entry points:
@@ -132,49 +110,56 @@ Current entry points:
 ```sh
 tests/fm-turnend-guard.test.sh
 tests/fm-supervision-instructions.test.sh
-FM_PI_LIVE_E2E=1 tests/fm-pi-primary-live-e2e.test.sh
+FM_AFK_PI_HERDR_E2E=1 tests/fm-afk-pi-herdr-return-e2e.test.sh
 ```
 
-The Pi extension-model pull-guard correction (`bin/fm-guard.sh` no longer reports a false watcher-down on a Pi primary during the extension's own watcher hand-off) was verified on 2026-08-13 with the installed ShellCheck 0.11.0 and isolated behavior suites.
-The guard verdict itself reads only state files and process liveness, so the portable suites are the enforcing evidence; `bin/fm-harness.sh`'s Pi marker detection, which selects the model, is exercised in the same suite through `PI_CODING_AGENT`.
+Pi-only session admission, live endpoint identity in snapshots, and paused watcher reconciliation were verified on 2026-08-22 with isolated behavior suites.
+The same run verifies that identity mismatches preserve supervision tracking and remain unknown rather than reporting a foreign endpoint as live.
 
 ```sh
-bin/fm-lint.sh
-bin/fm-doc-audience-check.sh
-bin/fm-test-run.sh tests/fm-guard-stale-banner.test.sh tests/fm-turnend-guard.test.sh tests/fm-session-start.test.sh tests/fm-pi-watch-extension.test.sh tests/fm-watch-arm.test.sh
+bin/fm-test-run.sh tests/fm-session-start.test.sh tests/fm-fleet-snapshot-view.test.sh tests/fm-bearings-snapshot.test.sh tests/fm-watch-triage.test.sh
 ```
 
 Observed output:
 
 ```text
-fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
-fm-doc-audience-check: ok surfaces=67 local_links=243
-FM_TEST_SUMMARY total=5 failed=0 skipped_gate=0 duration_ms=280160
+FM_TEST_SUMMARY total=4 failed=0 skipped_gate=0 duration_ms=294080
+FM_TEST_SUMMARY_FAMILY family=session-bootstrap count=1 duration_ms=207082 failed=0
+FM_TEST_SUMMARY_FAMILY family=snapshot-bearings count=2 duration_ms=7702 failed=0
+FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=79100 failed=0
 ```
 
-The same correction was verified against a live Pi primary's own supervision evidence on 2026-08-13.
-The hand-off was captured live at beacon age 63s, then the home's `state/.lock`, `state/.last-watcher-beat`, both `state/.pi-*-extension-loaded` markers, and both `.pi/extensions/*.ts` builds were copied into an isolated fixture with no watcher lock.
-The fixture's copied beacon was fresh at 0s in the output below; the deterministic stale-beacon case separately verifies the grace boundary.
+The final identity-reconciliation and Pi supervision wording pass used:
 
 ```sh
-FM_SUPERVISION_MODEL=persistent FM_GUARD_READ_ONLY=1 bin/fm-guard.sh
-FM_SUPERVISION_MODEL=extension FM_GUARD_READ_ONLY=1 bin/fm-guard.sh
+bin/fm-test-run.sh tests/fm-watch-triage.test.sh tests/fm-guard-stale-banner.test.sh
 ```
 
-Observed output, before and after the model correction, then with the recorded Pi session pid replaced by a dead one:
+Observed output:
 
 ```text
-●  WATCHER DOWN - SUPERVISION IS OFF
-●  1 task(s) in flight, but no live watcher process holds this home lock (last beat: 0s ago).
-(silent)
-●  WATCHER DOWN - SUPERVISION IS OFF
-●  1 task(s) in flight, but no live watcher process holds this home lock (last beat: 0s ago).
+FM_TEST_SUMMARY total=2 failed=0 skipped_gate=0 duration_ms=83376
+FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=2 duration_ms=83263 failed=0
+```
+
+The recovery-grade unreachable-endpoint pass used:
+
+```sh
+bin/fm-test-run.sh tests/fm-fleet-snapshot-view.test.sh tests/fm-watch-triage.test.sh
+```
+
+Observed output:
+
+```text
+FM_TEST_SUMMARY total=2 failed=0 skipped_gate=0 duration_ms=80105
+FM_TEST_SUMMARY_FAMILY family=snapshot-bearings count=1 duration_ms=4747 failed=0
+FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=75264 failed=0
 ```
 
 The broader relevant regression pass was rerun on 2026-08-02 without live-home or daemon mutation.
 
 ```sh
-bin/fm-test-run.sh tests/fm-watch-triage.test.sh tests/fm-watcher-lock.test.sh tests/fm-afk-inject-e2e.test.sh tests/fm-afk-return.test.sh tests/fm-relay.test.sh tests/fm-backend.test.sh tests/fm-backend-tmux-smoke.test.sh tests/fm-secondmate-safety.test.sh
+bin/fm-test-run.sh tests/fm-watch-triage.test.sh tests/fm-watcher-lock.test.sh tests/fm-afk-return.test.sh tests/fm-relay.test.sh tests/fm-herdr-selection.test.sh tests/fm-secondmate-safety.test.sh
 ```
 
 Observed output:
@@ -191,14 +176,12 @@ No credential material was copied into a fixture.
 Pi 0.80.10
 ```
 
-| Harness | Exact opt-in command | Observed guarantee |
-| --- | --- | --- |
-| Pi | `FM_PI_LIVE_E2E=1 tests/fm-pi-primary-live-e2e.test.sh` | One initial tool call led to extension-owned successors and clean child retirement on exit. |
+With Pi 0.80.10, `FM_AFK_PI_HERDR_E2E=1 tests/fm-afk-pi-herdr-return-e2e.test.sh` proved that one initial tool call led to extension-owned successors and clean child retirement on exit.
 
 Pi 0.84.1 repeated the isolated primary continuity regression on 2026-08-16.
 
 ```sh
-FM_PI_LIVE_E2E=1 bin/fm-test-run.sh tests/fm-pi-primary-live-e2e.test.sh
+FM_AFK_PI_HERDR_E2E=1 bin/fm-test-run.sh tests/fm-afk-pi-herdr-return-e2e.test.sh
 ```
 
 Observed bounded output:
@@ -217,7 +200,7 @@ tests/fm-pi-primary-types.test.sh
 
 Observed guarantee: after ordinary `session_shutdown` for `/new`, `/resume`, and `/fork`, plus same-instance shutdown-plus-start, the replacement generation armed again without a Pi restart and without the `watcher: not armed - Pi session is shutting down` refusal.
 Stale prior-generation tool callbacks could not mutate the active child, repeated transitions kept exactly one live arm cycle, and terminal `quit` still refused late rearm.
-Pi uses the tracked `.pi/extensions/fm-primary-pi-watch.ts` path and inherits the generation owner; other primary harnesses are not applicable because they do not use this Pi extension lifecycle.
+Pi uses the tracked `.pi/extensions/fm-primary-pi-watch.ts` path and inherits the generation owner.
 
 Deterministic entry points:
 

@@ -6,7 +6,7 @@
 # busy footer appears, so an immediate peek after fm-send returns would see the
 # stale idle pane. fm-send therefore pauses FM_SEND_SETTLE seconds (default 1, 0
 # disables) after a successful text submit, so the receiving turn has time to
-# visibly start. These tests pin that behavior hermetically (stubbed tmux + sleep,
+# visibly start. These tests pin that behavior hermetically (structured Herdr seam + sleep,
 # no real agent):
 #   1. A successful text send pauses for the FM_SEND_SETTLE value (default 1).
 #   2. FM_SEND_SETTLE=0 produces no pause at all (sleep is never invoked for it).
@@ -23,29 +23,31 @@ SEND="$ROOT/bin/fm-send.sh"
 
 TMP_ROOT=$(fm_test_tmproot fm-send-settle)
 
-# A fake tmux that lets fm-send's submit path reach a clean "empty" verdict, plus a
+# A fake Herdr CLI lets fm-send's submit path reach a clean "empty" verdict, plus a
 # fake sleep that records every requested duration (one per line) instead of
 # sleeping. send-keys always succeeds; display-message yields a numeric cursor_y;
-# capture-pane returns an empty bordered composer so fm_tmux_composer_state reads
-# "empty" (submit landed) on the first Enter. The sleep log path comes from
-# FM_SLEEP_LOG.
+# Herdr native agent state transitions from idle to working on Enter. The sleep
+# log path comes from FM_SLEEP_LOG.
 make_stubs() {  # <dir> -> echoes fakebin dir
   local dir=$1 fb="$1/fakebin"
   mkdir -p "$fb"
-  cat > "$fb/tmux" <<'SH'
+  cat > "$fb/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
-case "${1:-}" in
-  send-keys) exit 0 ;;
-  display-message)
-    for a in "$@"; do case "$a" in *cursor_y*) printf '1\n'; exit 0 ;; esac; done
-    printf 'fakepane\n'; exit 0 ;;
-  capture-pane) printf '╭────╮\n│    │\n╰────╯\n'; exit 0 ;;
-  list-windows) exit 0 ;;
+case "${1:-} ${2:-}" in
+  "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
+  "session list") printf '{"sessions":[{"name":"%s","running":true,"socket_path":"%s/herdr.sock"}]}\n' "${HERDR_SESSION:-lab}" "${FM_HOME:-/tmp}" ;;
+  "pane get") printf '{"result":{"pane":{"pane_id":"%s","tab_id":"w1:t1","workspace_id":"w1"}}}\n' "${3:-}" ;;
+  "tab get") printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"w1"}}}\n' "${3:-}" ;;
+  "pane send-text") : ;;
+  "pane send-keys") : > "$FM_HERDR_STATE" ;;
+  "agent get")
+    if [ -e "$FM_HERDR_STATE" ]; then status=working; else status=idle; fi
+    printf '{"result":{"agent":{"agent_status":"%s","provider":"pi"}}}\n' "$status"
+    ;;
 esac
-exit 0
 SH
-  chmod +x "$fb/tmux"
+  chmod +x "$fb/herdr"
   cat > "$fb/sleep" <<'SH'
 #!/usr/bin/env bash
 printf '%s\n' "${1:-}" >> "$FM_SLEEP_LOG"
@@ -63,10 +65,11 @@ SH
 run_send() {
   local fb=$1 log=$2 home; shift 2
   home="$TMP_ROOT/home-$RANDOM"; mkdir -p "$home/state"
+  : > "$home/herdr.sock"
   : > "$log"
   env "$@" PATH="$fb:$PATH" \
-    FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SLEEP_LOG="$log" \
-    "$SEND" "sess:win" "hello captain" 2>/dev/null
+    FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SLEEP_LOG="$log" FM_HERDR_STATE="$home/herdr.state" \
+    "$SEND" "sess:w1:p1" "hello captain" 2>/dev/null
 }
 
 test_default_send_pauses_one_second() {
@@ -110,9 +113,10 @@ test_key_path_never_pauses() {
   dir="$TMP_ROOT/key"; mkdir -p "$dir"
   fb=$(make_stubs "$dir"); log="$dir/sleep.log"
   home="$dir/home"; mkdir -p "$home/state"
+  : > "$home/herdr.sock"
   : > "$log"
-  env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SLEEP_LOG="$log" \
-    "$SEND" "sess:win" --key Escape 2>/dev/null; rc=$?
+  env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SLEEP_LOG="$log" FM_HERDR_STATE="$home/herdr.state" \
+    "$SEND" "sess:w1:p1" --key Escape 2>/dev/null; rc=$?
   expect_code 0 "$rc" "--key send should succeed"
   [ ! -s "$log" ] || fail "--key path paused but must not"$'\n'"--- sleeps ---"$'\n'"$(cat "$log")"
   pass "fm-send: the --key path never pauses (settle scoped to text submit)"

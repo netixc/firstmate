@@ -11,7 +11,7 @@ The proof ran 23 candidates with 4 workers and no failures.
 | duration_ms | script |
 |---:|---|
 | 67643 | `tests/fm-relay.test.sh` |
-| 61341 | `tests/fm-backend-herdr.test.sh` |
+| 61341 | `tests/fm-herdr.test.sh` |
 | 60961 | `tests/fm-decision-hold-lifecycle.test.sh` |
 | 60685 | `tests/fm-test-run.test.sh` |
 | 31997 | `tests/fm-crew-state.test.sh` |
@@ -23,7 +23,6 @@ The proof ran 23 candidates with 4 workers and no failures.
 | 12482 | `tests/fm-send-popup-settle.test.sh` |
 | 10295 | `tests/fm-review-diff.test.sh` |
 | 9029 | `tests/fm-composer-ghost.test.sh` |
-| 8544 | `tests/fm-tmux-submit-busy.test.sh` |
 | 8258 | `tests/fm-send-strict.test.sh` |
 | 6390 | `tests/fm-lint.test.sh` |
 | 3580 | `tests/fm-composer-lib.test.sh` |
@@ -31,7 +30,7 @@ The proof ran 23 candidates with 4 workers and no failures.
 | 2014 | `tests/fm-brief.test.sh` |
 | 750 | `tests/fm-supervision-instructions.test.sh` |
 | 432 | `tests/fm-ensure-agents-md.test.sh` |
-| 261 | `tests/fm-transition-lib.test.sh` |
+| 261 | `tests/fm-herdr-transition.test.sh` |
 | 38 | `tests/fm-pi-primary-types.test.sh` |
 
 
@@ -50,7 +49,7 @@ The two parallel lanes use longest-processing-time assignment from those measure
 ## Portable serial remainder
 
 `portable-serial` includes every `tests/*.test.sh` that is neither proven-isolated nor `real-herdr-gated`.
-It keeps watcher, lock, AFK, real tmux, daemon, secondmate lifecycle, bootstrap, live-harness opt-in, GUI-backend, and other unproven work serial.
+It keeps watcher, lock, AFK, daemon, Secondmate lifecycle, bootstrap, live-Pi opt-in, real Herdr, and other unproven work serial.
 Membership is derived rather than enumerated, so a newly added test lands here by default.
 
 ## Portable serial CI shards

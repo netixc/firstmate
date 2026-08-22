@@ -5,9 +5,9 @@
 # A remote second mate always launches on the Herdr backend
 # (docs/remote-secondmates.md), so a remote-route test needs a herdr CLI on the
 # remote code root's own bin directory. This fixture models the workspace, tab,
-# pane, and agent facts bin/backends/herdr.sh actually reads, backed by a JSON
+# pane, and agent facts bin/fm-herdr.sh actually reads, backed by a JSON
 # state file mutated with real jq, using the same verified herdr behaviors as
-# tests/fm-backend-herdr.test.sh's stateful fake: workspace create seeds one
+# tests/fm-herdr.test.sh's stateful fake: workspace create seeds one
 # default tab and returns its tab and root pane in the same response, closing a
 # tab's only pane closes the tab, and agent get reports agent_not_found for a
 # pane no agent has registered on.
@@ -29,6 +29,7 @@
 install_remote_herdr_fixture() { # <remote-root> <state> <log> <send-fail> <socket>
   local remote_root=$1 state=$2 log=$3 send_fail=$4 socket=$5 script="$1/bin/herdr"
   mkdir -p "$remote_root/bin"
+  : > "$socket"
   cat > "$script" <<SH
 #!/usr/bin/env bash
 set -u
@@ -39,8 +40,35 @@ SOCKET='$socket'
 SH
   cat >> "$script" <<'SH'
 printf '%s\n' "$*" >> "$LOG"
+HERDR_INVOCATION=$*
 jq_state() { jq "$@" "$STATE"; }
 save() { tmp="$STATE.tmp.$$"; cat > "$tmp" && mv "$tmp" "$STATE"; }
+require_delivery_lock() {
+  [ -z "${FM_FAKE_HERDR_EXPECTED_LOCK:-}" ] || [ -d "$FM_FAKE_HERDR_EXPECTED_LOCK" ] || {
+    printf 'expected delivery lock is not held: %s\n' "$FM_FAKE_HERDR_EXPECTED_LOCK" >&2
+    return 1
+  }
+  [ "${FM_FAKE_HERDR_REQUIRE_BOUND:-0}" != 1 ] || {
+    [ -n "${FM_HERDR_AUTHORIZED_SOCKET:-}" ] && [ -e "$FM_HERDR_AUTHORIZED_SOCKET" ] \
+      && [ "${HERDR_SOCKET_PATH:-}" = "$FM_HERDR_AUTHORIZED_SOCKET" ] \
+      && [ "$FM_HERDR_AUTHORIZED_SOCKET" -ef "$SOCKET" ] \
+      && [[ " $HERDR_INVOCATION " != *" --session "* ]] || {
+      printf 'delivery transport is not bound to the authorized Herdr socket\n' >&2
+      return 1
+    }
+  }
+}
+require_bound_read() {
+  [ "${FM_FAKE_HERDR_REQUIRE_BOUND_READ:-0}" != 1 ] || {
+    [ -n "${FM_HERDR_AUTHORIZED_SOCKET:-}" ] && [ -e "$FM_HERDR_AUTHORIZED_SOCKET" ] \
+      && [ "${HERDR_SOCKET_PATH:-}" = "$FM_HERDR_AUTHORIZED_SOCKET" ] \
+      && [ "$FM_HERDR_AUTHORIZED_SOCKET" -ef "$SOCKET" ] \
+      && [[ " $HERDR_INVOCATION " != *" --session "* ]] || {
+      printf 'read transport is not bound to the authorized Herdr socket\n' >&2
+      return 1
+    }
+  }
+}
 ws=""; label=""; cwd=""
 args=("$@")
 for ((i=0; i<${#args[@]}; i++)); do
@@ -75,27 +103,72 @@ case "${1:-} ${2:-}" in
     ;;
   "tab close")
     jq_state --arg t "${3:-}" '.tabs |= [.[]|select(.tab_id != $t)]' | save ;;
+  "tab get")
+    tab=${3:-}
+    jq_state --arg t "$tab" '{result:{tab:(.tabs[]|select(.tab_id==$t)|{tab_id:.tab_id, workspace_id:.workspace_id})}}' ;;
   "pane list")
     jq_state --arg w "$ws" '{result:{panes:[.tabs[]|select(.workspace_id==$w)|{pane_id:.pane_id, tab_id:.tab_id}]}}' ;;
   "pane get")
+    require_bound_read || exit 1
     pane=${3:-}
     if [ "$(jq_state -r --arg p "$pane" '[.tabs[]|select(.pane_id==$p)]|length')" = 0 ]; then
       printf '{"error":{"code":"pane_not_found","message":"%s"}}\n' "$pane"
+      exit 1
     else
-      printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "$pane"
+      pane_cwd=${FM_FAKE_HERDR_PANE_PATH:-}
+      if [ -n "${FM_FAKE_HERDR_PANE_COUNTFILE:-}" ]; then
+        pane_reads=$(cat "$FM_FAKE_HERDR_PANE_COUNTFILE" 2>/dev/null || printf 0)
+        pane_reads=$((pane_reads + 1))
+        printf '%s\n' "$pane_reads" > "$FM_FAKE_HERDR_PANE_COUNTFILE"
+        if [ "$pane_reads" -le "${FM_FAKE_HERDR_PANE_STALE_READS:-0}" ]; then
+          pane_cwd=${FM_FAKE_HERDR_PANE_STALE:-}
+        fi
+      fi
+      [ -n "$pane_cwd" ] || pane_cwd=$(jq_state -r --arg p "$pane" '.tabs[]|select(.pane_id==$p)|.cwd // empty')
+      pane_tab=$(jq_state -r --arg p "$pane" '.tabs[]|select(.pane_id==$p)|.tab_id')
+      pane_workspace=$(jq_state -r --arg p "$pane" '.tabs[]|select(.pane_id==$p)|.workspace_id')
+      printf '{"result":{"pane":{"pane_id":"%s","tab_id":"%s","workspace_id":"%s","foreground_cwd":"%s"}}}\n' \
+        "$pane" "$pane_tab" "$pane_workspace" "$pane_cwd"
     fi
     ;;
   "pane close")
+    require_bound_read || exit 1
     jq_state --arg p "${3:-}" \
       '.tabs |= [.[]|select(.pane_id != $p)]
        | .typed |= with_entries(select(.key != $p))
        | .working |= with_entries(select(.key != $p))' | save ;;
+  "pane run")
+    [ ! -f "$SEND_FAIL" ] || exit 1
+    case "${4:-}" in
+      "export GOTMPDIR="*|"export TRACEPARENT="*)
+        require_delivery_lock || exit 1
+        ;;
+    esac
+    case "${4:-}" in
+      "export TRACEPARENT="*)
+        [ "${FM_FAKE_TRACEPARENT_SEND_FAIL:-0}" != 1 ] || exit 1
+        [ "${FM_FAKE_TRACEPARENT_SEND_UNSAFE:-0}" != 1 ] || exit 2
+        if [ "${FM_FAKE_TRACE_METADATA_APPEND_FAIL:-0}" = 1 ] && [ -n "${FM_FAKE_META_PATH:-}" ]; then
+          chmod a-w "$FM_FAKE_META_PATH"
+        fi
+        ;;
+    esac
+    [ -z "${FM_FAKE_HERDR_LAUNCH_LOG:-}" ] || printf '%s\n' "${4:-}" >> "$FM_FAKE_HERDR_LAUNCH_LOG"
+    ;;
   "pane send-text")
     [ ! -f "$SEND_FAIL" ] || exit 1
+    require_delivery_lock || exit 1
+    [ -z "${FM_FAKE_HERDR_LAUNCH_LOG:-}" ] || printf '%s\n' "${4:-}" >> "$FM_FAKE_HERDR_LAUNCH_LOG"
     jq_state --arg p "${3:-}" '.typed[$p] = true' | save ;;
   "pane send-keys")
     [ ! -f "$SEND_FAIL" ] || exit 1
-    jq_state --arg p "${3:-}" '.typed[$p] = true | .working[$p] = true' | save ;;
+    require_delivery_lock || exit 1
+    jq_state --arg p "${3:-}" --arg cwd "${FM_FAKE_HERDR_PANE_PATH:-}" '
+      .typed[$p] = true | .working[$p] = true
+      | if ($cwd | length) > 0 then
+          .tabs |= map(if .pane_id == $p then .cwd = $cwd else . end)
+        else . end
+    ' | save ;;
   "pane read") printf '\n' ;;
   "pane process-info") printf '{"result":{"process":{"name":"pi"}}}\n' ;;
   "agent get")
@@ -110,7 +183,7 @@ case "${1:-} ${2:-}" in
     fi
     ;;
   "session list"*)
-    printf '{"sessions":[{"name":"default","running":true,"socket_path":"%s"},{"name":"fm-remote","running":true,"socket_path":"%s"}]}\n' "$SOCKET" "$SOCKET" ;;
+    printf '{"sessions":[{"name":"default","running":true,"socket_path":"%s"},{"name":"lab","running":true,"socket_path":"%s"},{"name":"fm-remote","running":true,"socket_path":"%s"}]}\n' "$SOCKET" "$SOCKET" "$SOCKET" ;;
 esac
 exit 0
 SH

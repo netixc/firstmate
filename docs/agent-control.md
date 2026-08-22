@@ -9,29 +9,28 @@ The **control plane** is [`bin/fm-control.sh`](../bin/fm-control.sh): allowliste
 
 The split exists because the data plane's marking is exactly right for a message and exactly wrong for a lifecycle command.
 A routing-marked `/quit` arrives as ordinary chat - `[fm-from-firstmate] /quit` - which the agent reasons about instead of executing.
-The failure repeated across harnesses and homes, and the workaround (remember to use an unmarked send for agent-control commands, and improvise the right key or command per harness) lived only in agent prose, so it failed again every time a session did not happen to recall it.
+The failure repeated across homes, and the workaround (remember to use an unmarked send for agent-control commands and improvise Pi's key or command) lived only in agent prose, so it failed again every time a session did not happen to recall it.
 
 ## What the control plane owns
 
-`bin/fm-control-lib.sh` is the single executable owner of three capability tables, with no side effects, so it can be read as a contract:
+`bin/fm-control-lib.sh` is the side-effect-free executable owner of the closed verb list and Pi lifecycle mechanics:
 
 - The **verb allowlist**: `interrupt`, `exit`, `relaunch`.
   There is no arbitrary-text and no generic raw-key entry point.
   A caller either names an allowlisted verb or is refused.
-- **Per-harness mechanics**: the key that cancels a running turn, how many times it must be delivered, and the command that exits the agent.
-  These were previously carried only in the [`harness-adapters`](../.agents/skills/harness-adapters/SKILL.md) skill's per-adapter tables, which now point here.
-- **Per-backend capability**: which named keys a runtime backend can deliver, and whether it has a recovery-grade agent-state classifier able to prove an agent stopped.
+- **Pi mechanics**: the key that cancels a running turn, how many times it must be delivered, and the command that exits the agent.
+  The [`pi-operations`](../.agents/skills/pi-operations/SKILL.md) skill carries the corresponding operator facts.
 
-A recorded `harness=` must resolve to the exact verified Pi adapter.
-An unrecognized value resolves to no adapter rather than being guessed into one.
+Current task records omit a worker-runtime selector because Pi is fixed.
+Historical `harness=pi` remains compatible; any other recorded value is preserved and refused rather than reinterpreted.
 
 ## Verbs
 
 | Verb | Effect | Postcondition |
 | --- | --- | --- |
-| `interrupt` | Deliver the harness's verified interrupt sequence while leaving the agent running. | Delivery succeeds while the endpoint still exists and the agent is still alive where the backend can classify that; cancellation is confirmed only from an adapter-owned acknowledgement and otherwise reports `cancel=unconfirmed`. |
-| `exit` | Stop the agent, preserving the endpoint, the worktree, and every uncommitted change. | The backend's recovery-grade classifier reports the agent gone. Already-stopped is idempotent success. |
-| `relaunch` | Replace the running Pi agent with a new one in the same endpoint and worktree, optionally changing model and effort. | The new agent is alive on the recorded endpoint, and the durable record names the Pi harness that is actually running. |
+| `interrupt` | Deliver Pi's verified interrupt sequence while leaving the agent running. | Delivery succeeds, the exact Herdr endpoint still exists, and native state still reports Pi alive; cancellation is confirmed only from Pi's acknowledgement and otherwise reports `cancel=unconfirmed`. |
+| `exit` | Stop the agent, preserving the endpoint, the worktree, and every uncommitted change. | Herdr's recovery-grade classifier reports the agent gone. Already-stopped is idempotent success. |
+| `relaunch` | Replace the running Pi agent with a new one in the same endpoint and worktree, optionally changing model and effort. | The new Pi agent is alive on the recorded endpoint. |
 
 An exit that delivers lifecycle input but cannot prove the agent stopped fails with `exit=unconfirmed`, reports the observed agent state and any interrupt cancellation claim, and never claims that nothing changed.
 Interrupt never rewrites busy state as proof of its own success.
@@ -48,11 +47,9 @@ Pi has no verified pane-resume contract.
 `relaunch` is the only verb that changes durable records, so it runs as a transaction with a journal at `state/<id>.control-relaunch`, the prior record preserved beside it, and a ship or scout's prior instructions preserved when a progress note is appended.
 
 1. **Resolve the profile.**
-   An explicit `--harness`, `--model`, or `--effort` wins.
-   Otherwise a `kind=secondmate` task re-resolves its durable `config/secondmate-harness` pin, including that file's optional model and effort tokens, exactly as every other respawn does - so setting the pin and relaunching is the ordinary way to move a secondmate's runtime.
-   A ship or scout keeps the harness already recorded for it, because that harness comes from firstmate's dispatch-profile judgment at intake and must not be silently re-read from configuration.
-   An unsupported recorded harness refuses before the checkpoint.
-   A same-Pi relaunch retains its recorded model and effort unless explicit values replace them.
+   Pi is fixed; an explicit `--model` or `--effort` replaces the matching recorded axis.
+   Historical runtime metadata must either name Pi or be absent; an explicit other runtime refuses before the checkpoint.
+   A relaunch retains its recorded model and effort unless explicit values replace them.
 2. **Safe checkpoint.**
    The recorded worktree must exist and be a worktree root; its head and dirty state are recorded.
    For a `kind=secondmate` task, the home's identity marker must match and its child records must be readable, so a relaunch can never strand child work behind an unreadable home.
@@ -67,8 +64,8 @@ Pi has no verified pane-resume contract.
 
 - A refusal **before** the agent is stopped leaves the durable record and the instructions byte-identical.
 - A launch failure **after** the agent is stopped restores the prior durable record, keeps the progress note so a later recovery still has it, marks the journal `failed:launching`, and reports plainly that no agent is running and where the work is preserved.
-- If the launch owner already published the new record but no running agent can be confirmed, the new record is kept: the task is recorded on the new harness with no agent confirmed, which is exactly what recovery reconciles.
-  Rewriting it back to the old harness would be a second, worse inaccuracy.
+- If the launch owner already published the new record but no running agent can be confirmed, the new Pi record is kept, which is exactly what recovery reconciles.
+  Rewriting it back to the prior record would be a second, worse inaccuracy.
 
 ## Fail-closed boundaries
 
@@ -76,30 +73,22 @@ Pi has no verified pane-resume contract.
   Only a bare task id with a `state/<id>.meta` record in this home is accepted, and that record must pass the shared endpoint-identity validation.
   A legacy `fm-<id>` window label, an explicit `session:window` endpoint, and a record whose `endpoint_task_id` names another task are all refused.
 - A remotely placed secondmate is refused by name.
-  Its agent runs on another host, so none of the postconditions this plane verifies could be read for it here; local endpoint validation would refuse the record regardless, because `window=remote:<id>` can never match a local backend's required shape.
+  Its agent runs on another host, so none of the postconditions this plane verifies could be read for it here; local exact-Herdr endpoint validation refuses the remote route record.
   Drive that lifecycle on its own host and reconcile it through the secondmate recovery path.
-- An unverified harness is refused rather than guessed at.
-- An unsupported recorded harness is refused before the agent or durable state is touched.
-- A backend that cannot deliver the harness's interrupt key is refused rather than sent a different key.
-- `exit` and `relaunch` require a backend with a recovery-grade agent-state classifier - tmux and herdr - because without one the "the agent stopped" postcondition cannot be proven.
+- A record carrying an explicit non-Pi runtime is refused before the agent or durable state is touched.
+- `exit` and `relaunch` require Herdr's recovery-grade agent-state classifier because without it the "the agent stopped" postcondition cannot be proven.
 - An ambiguous or unreadable endpoint state refuses.
   Only a positively classified state acts.
 - `fm-spawn --relaunch` independently refuses unless the recorded endpoint is positively agent-free and its shell is sitting in the recorded worktree, so a replacement can never join a live agent or start outside the copy holding the work.
 
-## Capability matrix
+## Verified mechanics
 
-Backend capability comes from each adapter's real surface, not from a policy choice.
-
-| Backend | Escape | Enter | Ctrl+C | Recovery-grade agent state |
-| --- | --- | --- | --- | --- |
-| tmux | yes | yes | yes | yes |
-| herdr | yes | yes | yes | yes |
-
-Per-harness interrupt keys, repeat counts, and exit commands live in `bin/fm-control-lib.sh` and are exercised for every verified harness by `tests/fm-control.test.sh`.
-The empirical basis for each adapter's value is the `harness-adapters` skill's verification record for that adapter.
+Pi interrupts with `Escape` and exits with `/quit`.
+Herdr delivers Pi's named keys and provides the recovery-grade native process state used for every postcondition.
+The executable facts live in `bin/fm-control-lib.sh`; empirical evidence lives in the `pi-operations` skill and [`verification/herdr-runtime.md`](verification/herdr-runtime.md).
 
 ## Verification
 
-- `tests/fm-control.test.sh` - the adapter contract for every verified harness, the backend capability matrix, exact-id scoping, the closed verb list, the busy, idle, dead, and idempotent lifecycle cases, and marker non-regression, all against a stubbed session provider.
+- `tests/fm-control.test.sh` - exact-id scoping, the closed verb list, busy, idle, dead, and idempotent lifecycle cases through the Herdr seam.
 - `tests/fm-control-relaunch.test.sh` - the Pi relaunch transaction: identity preservation, profile threading, the progress note, checkpoint refusals, and rollback after a failed launch.
-- `tests/fm-control-herdr-smoke.test.sh` - the second state-verified backend against the real herdr binary, on an isolated throwaway lab session.
+- `tests/fm-control-herdr-smoke.test.sh` - process control against the real Herdr binary in an isolated lab session.

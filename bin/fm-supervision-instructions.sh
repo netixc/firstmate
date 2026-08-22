@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Render the primary-harness supervision operating block for session start and
+# Render Pi's primary supervision operating block for session start and
 # the short repair line used by guards and turn-end hooks.
 set -eu
 
@@ -10,7 +10,6 @@ FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 DOC_DIR="$REPO_ROOT/docs/supervision-protocols"
 
-HARNESS=
 READ_ONLY=0
 AFK=0
 RELAY=0
@@ -19,9 +18,9 @@ QUEUE_PENDING=0
 
 usage() {
   cat <<'EOF'
-Usage: fm-supervision-instructions.sh [--harness <name>] [--read-only 0|1] [--afk 0|1] [--relay 0|1] [--repair-line] [--queue-pending 0|1]
+Usage: fm-supervision-instructions.sh [--read-only 0|1] [--afk 0|1] [--relay 0|1] [--repair-line] [--queue-pending 0|1]
 
-Print the current primary harness's supervision operating instructions.
+Print Pi's primary supervision operating instructions.
 With --repair-line, print one concise repair instruction for guard and hook messages.
 EOF
 }
@@ -35,11 +34,6 @@ bool_value() {
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --harness)
-      [ "$#" -gt 1 ] || { echo "error: --harness requires a value" >&2; exit 2; }
-      HARNESS=$2
-      shift 2
-      ;;
     --read-only)
       [ "$#" -gt 1 ] || { echo "error: --read-only requires 0 or 1" >&2; exit 2; }
       READ_ONLY=$(bool_value "$2")
@@ -76,15 +70,8 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-if [ -z "$HARNESS" ]; then
-  HARNESS=$("$SCRIPT_DIR/fm-harness.sh" 2>/dev/null || printf unknown)
-fi
-
-case "$HARNESS" in
-  pi) SNIPPET="$DOC_DIR/pi.md" ;;
-  *) HARNESS=unknown; SNIPPET="$DOC_DIR/unknown.md" ;;
-esac
-[ -f "$SNIPPET" ] || SNIPPET="$DOC_DIR/unknown.md"
+SNIPPET="$DOC_DIR/pi.md"
+[ -f "$SNIPPET" ] || { echo "error: Pi supervision protocol is missing: $SNIPPET" >&2; exit 1; }
 
 pi_ext="$FM_ROOT/.pi/extensions/fm-primary-pi-watch.ts"
 pi_turnend_ext="$FM_ROOT/.pi/extensions/fm-primary-turnend-guard.ts"
@@ -131,25 +118,11 @@ repair_line() {
     prefix="${prefix}source ${relay_env_sh} first, then "
   fi
 
-  case "$HARNESS" in
-    pi)
-      printf '%s%s%s%s%s%s\n' "$prefix" 'repair a missing or failed watcher cycle with the Pi tool fm_watch_arm_pi, or restart Pi with -e ' "$pi_turnend_ext" ' -e ' "$pi_ext" ' if the extensions are not loaded.'
-      ;;
-    *)
-      printf '%s%s\n' "$prefix" 'repair missing watcher supervision according to the session-start block for this harness; do not use shell &.'
-      ;;
-  esac
+  printf '%s%s%s%s%s%s\n' "$prefix" 'repair a missing or failed watcher cycle with the Pi tool fm_watch_arm_pi, or restart Pi with -e ' "$pi_turnend_ext" ' -e ' "$pi_ext" ' if the extensions are not loaded.'
 }
 
 ordinary_wake_line() {
-  case "$HARNESS" in
-    pi)
-      printf '%s\n' '- Ordinary wake: the Pi extension already owns watcher continuity; do not arm another cycle.'
-      ;;
-    *)
-      printf '%s\n' '- Ordinary wake: follow the continuation in the harness protocol below; do not use shell &.'
-      ;;
-  esac
+  printf '%s\n' '- Ordinary wake: the Pi extension already owns watcher continuity; do not arm another cycle.'
 }
 
 if [ "$REPAIR_LINE" -eq 1 ]; then
@@ -159,7 +132,7 @@ fi
 
 RULE='================================================================================'
 printf '%s\n' "$RULE"
-printf 'SUPERVISION OPERATING INSTRUCTIONS - primary harness: %s\n' "$HARNESS"
+printf 'SUPERVISION OPERATING INSTRUCTIONS - Pi primary\n'
 printf '%s\n' "$RULE"
 printf 'Current state:\n'
 if [ "$READ_ONLY" -eq 1 ]; then
@@ -168,7 +141,7 @@ else
   printf '%s\n' '- Lock: held by this session; this session owns normal supervision unless away mode says otherwise.'
 fi
 if [ "$AFK" -eq 1 ]; then
-  printf '%s\n' '- Away mode: active; load /afk and keep normal harness supervision paused while the daemon owns the watcher.'
+  printf '%s\n' '- Away mode: active; load /afk and keep normal Pi supervision paused while the daemon owns the watcher.'
 else
   printf '%s\n' '- Away mode: inactive.'
 fi

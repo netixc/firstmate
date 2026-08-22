@@ -11,10 +11,8 @@ FM_PUSH_TRANSITION_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$FM_PUSH_TRANSITION_LIB_DIR/fm-wake-lib.sh"
 # shellcheck source=bin/fm-classify-lib.sh
 . "$FM_PUSH_TRANSITION_LIB_DIR/fm-classify-lib.sh"
-# shellcheck source=bin/fm-backend.sh
-. "$FM_PUSH_TRANSITION_LIB_DIR/fm-backend.sh"
-# shellcheck source=bin/fm-transition-lib.sh
-. "$FM_PUSH_TRANSITION_LIB_DIR/fm-transition-lib.sh"
+# shellcheck source=bin/fm-herdr.sh
+. "$FM_PUSH_TRANSITION_LIB_DIR/fm-herdr.sh"
 
 TRIAGE_LOG="$STATE/.watch-triage.log"
 TRIAGE_LOG_MAX_BYTES=${FM_WATCH_TRIAGE_LOG_MAX_BYTES:-262144}
@@ -122,22 +120,22 @@ mark_surfaced() {  # <status-file>
   printf '%s' "$last" > "$(_hb_surfaced_path "$task")"
 }
 
-# Act on a fresh actionable transition from a push-capable backend.
-handle_push_transition() {  # <backend> <session> <record>
-  local backend=$1 session=$2 record=$3 pane_id to window task reason
-  pane_id=$(fm_transition_pane_id "$record")
-  to=$(fm_transition_to_status "$record")
+# Act on a fresh actionable Herdr transition.
+handle_push_transition() {  # <session> <record>
+  local session=$1 record=$2 pane_id to window task reason
+  pane_id=$(fm_herdr_transition_pane_id "$record")
+  to=$(fm_herdr_transition_to_status "$record")
   [ -n "$pane_id" ] || { sleep 1; return; }
   window="$session:$pane_id"
   task=$(window_to_task "$window" "$STATE")
   if status_is_paused "$(last_status_line "$STATE/$task.status")"; then
     triage_log "absorbed push $to (declared pause, awaiting external): $window"
-    fm_backend_commit_transition "$backend" "$STATE" "$session" "$record" || exit 1
+    fm_herdr_commit_transition "$STATE" "$session" "$record" || exit 1
     return
   fi
   reason="stale: $window (herdr: agent $to - waiting on human, escalated immediately, not via wedge timer)"
   fm_wake_append stale "$window" "$reason" || exit 1
-  fm_backend_commit_transition "$backend" "$STATE" "$session" "$record" || exit 1
+  fm_herdr_commit_transition "$STATE" "$session" "$record" || exit 1
   mark_surfaced "$STATE/$task.status"
   wake "$reason"
 }

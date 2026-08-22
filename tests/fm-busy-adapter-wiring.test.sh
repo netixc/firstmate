@@ -7,20 +7,20 @@ set -u
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-busy-lib.sh"
+# shellcheck source=tests/remote-herdr-fixture.sh
+. "$ROOT/tests/remote-herdr-fixture.sh"
 
 SPAWN="$ROOT/bin/fm-spawn.sh"
 EXTENSION="$ROOT/.pi/worker-extensions/fm-worker-lifecycle.ts"
 TMP_ROOT=$(fm_test_tmproot fm-busy-adapter-wiring)
 
 make_fakebin() {
-  local fakebin
-  fakebin=$(fm_fakebin "$1")
-  cat > "$fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-case "$*" in *"#{pane_current_path}"*) printf '%s\n' "${FM_FAKE_PANE_PATH:-}";; esac
-exit 0
-SH
-  chmod +x "$fakebin/tmux"
+  local root=$1 fakebin herdr_root
+  fakebin=$(fm_fakebin "$root")
+  herdr_root="$root/herdr-root"
+  install_remote_herdr_fixture "$herdr_root" "$root/herdr.state" "$root/herdr.log" \
+    "$root/herdr-send-fail" "$root/herdr.sock"
+  ln -s "$herdr_root/bin/herdr" "$fakebin/herdr"
   fm_fake_exit0 "$fakebin" treehouse pi
   printf '%s\n' "$fakebin"
 }
@@ -59,7 +59,7 @@ EOF
   )
 }
 
-classify() { fm_busy_classify tmux fake:w pi "$1" "$2"; }
+classify() { fm_busy_classify "lab:w-$1:p1" "$1" "$2"; }
 
 setup_case() { # <name> <id>
   local name=$1
@@ -70,14 +70,14 @@ setup_case() { # <name> <id>
   ID=$2
   FAKEBIN=$(make_fakebin "$CASE/fake")
   mkdir -p "$HOME_DIR/data/$ID" "$HOME_DIR/projects" "$HOME_DIR/state" "$HOME_DIR/config"
-  printf 'pi\n' > "$HOME_DIR/config/crew-harness"
   printf 'brief\n' > "$HOME_DIR/data/$ID/brief.md"
   fm_git_worktree "$PROJ" "$WT" "busy-$name"
   touch "$HOME_DIR/state/.last-watcher-beat"
-  out=$(FM_ROOT_OVERRIDE='' FM_HOME="$HOME_DIR" \
+  out=$(env -u HERDR_ENV -u HERDR_PANE_ID -u HERDR_WORKSPACE_ID -u HERDR_TAB_ID -u HERDR_SOCKET \
+    FM_ROOT_OVERRIDE='' FM_HOME="$HOME_DIR" \
     FM_STATE_OVERRIDE="$HOME_DIR/state" FM_DATA_OVERRIDE="$HOME_DIR/data" \
     FM_PROJECTS_OVERRIDE="$HOME_DIR/projects" FM_CONFIG_OVERRIDE="$HOME_DIR/config" \
-    FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$WT" TMUX='fake,1,0' \
+    FM_SPAWN_NO_GUARD=1 HERDR_SESSION=lab FM_FAKE_HERDR_PANE_PATH="$WT" \
     PATH="$FAKEBIN:$PATH" "$SPAWN" "$ID" "$PROJ" \
     --mode no-mistakes --yolo off 2>&1)
   expect_code 0 $? "Pi spawn should succeed: $out"
@@ -125,7 +125,8 @@ test_context_validation() {
   assert_inert "" absent
 
   dir="$CASE/invalid"
-  mkdir -p "$dir/malformed" "$dir/symlink" "$dir/nonregular" "$dir/inconsistent"
+  mkdir -p "$dir/malformed" "$dir/symlink" "$dir/nonregular" "$dir/inconsistent" \
+    "$dir/providerless" "$dir/retired-provider" "$dir/unsupported"
   meta="$dir/malformed/$ID.meta"
   printf 'not metadata\n' > "$meta"
   assert_inert "$meta" malformed
@@ -144,7 +145,23 @@ test_context_validation() {
   printf '%s\n' "$gen" > "$dir/inconsistent/$ID.busy-gen"
   perl -pi -e 's/^busy_gen=.*/busy_gen=wrong-generation/' "$meta"
   assert_inert "$meta" inconsistent
-  pass "worker lifecycle context is absent by default and rejects unsafe or inconsistent inputs"
+
+  meta="$dir/providerless/$ID.meta"
+  sed '/^backend=/d' "$CONTEXT" > "$meta"
+  printf '%s\n' "$gen" > "$dir/providerless/$ID.busy-gen"
+  assert_inert "$meta" providerless
+
+  meta="$dir/retired-provider/$ID.meta"
+  sed 's/^backend=herdr$/backend=tmux/' "$CONTEXT" > "$meta"
+  printf '%s\n' "$gen" > "$dir/retired-provider/$ID.busy-gen"
+  assert_inert "$meta" retired-provider
+
+  meta="$dir/unsupported/$ID.meta"
+  cp "$CONTEXT" "$meta"
+  printf '%s\n' "$gen" > "$dir/unsupported/$ID.busy-gen"
+  printf 'harness=legacy-agent\n' >> "$meta"
+  assert_inert "$meta" unsupported-runtime
+  pass "worker lifecycle context rejects unsafe, non-Herdr, and inconsistent inputs"
 }
 
 test_lifecycle_and_generation

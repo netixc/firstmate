@@ -2,8 +2,8 @@
 # fm-busy-lib.sh - the ONE owner of firstmate's semantic busy-state contract.
 #
 # Design source: the captain-approved semantic busy-state redesign
-# (2026-07-28): each harness adapter reports turn lifecycle through a
-# machine-readable semantic source it owns, classification always exposes
+# (2026-07-28): Pi reports turn lifecycle through a machine-readable semantic
+# source it owns, classification always exposes
 # which source produced it, and missing, malformed, stale, unsupported, or
 # unverified semantic data is UNKNOWN - never idle. Endpoint death is the only
 # process-level override and yields dead, never busy. Child processes, CPU,
@@ -24,17 +24,14 @@
 # under the writer's lock, so an out-of-order apply can never regress a
 # newer record.
 #
-# Semantic sources written by adapters (fm_busy_sources_for_harness owns the
-# per-harness trust table; a record whose source is not trusted for the
-# task's recorded harness classifies unknown, so one adapter's writer can
-# never classify another adapter):
+# Semantic source written by Pi:
 #   pi-ext           tracked Pi worker extension (agent_start/agent_settled)
-# Firstmate-owned sources accepted for every converted adapter:
+# Firstmate-owned sources:
 #   fm-spawn         the launch-brief turn seeded at spawn
 #   fm-recovery      a documented recovery reset after relaunch
 # Classifier-only sources (never written into a record):
 #   endpoint-gone, herdr-native, missing, malformed, gen-mismatch,
-#   source-mismatch, no-target
+#   source-mismatch, invalid-endpoint, no-target
 #
 # Classification (fm_busy_classify): busy | idle | unknown | dead, always
 # with the producing source as the second token. Precedence:
@@ -79,25 +76,11 @@ fm_busy_current_gen() {  # <state-dir> <id>
   printf '%s' "$gen"
 }
 
-# fm_busy_sources_for_harness: the semantic sources trusted to classify a
-# task recorded with <harness>. One line, space-separated, possibly empty.
-# The firstmate-owned sources are appended for every converted adapter.
-# Listing a source here without a writer that can clear it would seed a busy
-# record nothing could ever settle.
-fm_busy_sources_for_harness() {  # <harness>
-  local adapter=
+# fm_busy_source_trusted: the closed set of Pi and Firstmate sources whose
+# writers can settle or retire the record they create.
+fm_busy_source_trusted() {  # <source>
   case "${1:-}" in
-    pi) adapter=pi-ext ;;
-    *) printf ''; return 0 ;;
-  esac
-  printf '%s fm-spawn fm-recovery' "$adapter"
-}
-
-fm_busy_source_trusted() {  # <harness> <source>
-  local trusted
-  trusted=$(fm_busy_sources_for_harness "$1")
-  case " $trusted " in
-    *" $2 "*) return 0 ;;
+    pi-ext|fm-spawn|fm-recovery) return 0 ;;
   esac
   return 1
 }
@@ -161,15 +144,15 @@ fm_busy_record_read() {  # <state-dir> <id>
 # caller has already established as present. Prints "<verdict> <source>":
 # busy|idle|unknown plus the producing source (see header). Never probes
 # process state.
-fm_busy_classify() {  # <backend> <target> <harness> <id> <state-dir>
-  local backend=$1 target=$2 harness=$3 id=$4 state=$5
+fm_busy_classify() {  # <target> <id> <state-dir>
+  local target=$1 id=$2 state=$3
   local out rc r_state r_source native
   out=$(fm_busy_record_read "$state" "$id") && rc=0 || rc=$?
   if [ "$rc" = 0 ]; then
     r_state=${out%% *}
     out=${out#* }
     r_source=${out%% *}
-    if fm_busy_source_trusted "$harness" "$r_source"; then
+    if fm_busy_source_trusted "$r_source"; then
       printf '%s %s' "$r_state" "$r_source"
     else
       printf 'unknown source-mismatch'
@@ -182,12 +165,10 @@ fm_busy_classify() {  # <backend> <target> <harness> <id> <state-dir>
       return 0
       ;;
   esac
-  # No record at all. A native herdr busy verdict is semantic enough to trust
-  # for BUSY (streaming means a turn is running); native idle is narrower
-  # than turn state (a long foreground tool call reads idle) and stays
-  # unknown here.
-  if [ "$backend" = herdr ] && command -v fm_backend_busy_state >/dev/null 2>&1; then
-    native=$(fm_backend_busy_state "$backend" "$target" 2>/dev/null || true)
+  # No record at all. Native Herdr busy is sufficient positive activity
+  # evidence, while native idle is narrower than turn state and stays unknown.
+  if command -v fm_herdr_busy_state >/dev/null 2>&1; then
+    native=$(fm_herdr_busy_state "$target" 2>/dev/null || true)
     if [ "$native" = busy ]; then
       printf 'busy herdr-native'
       return 0
@@ -196,36 +177,40 @@ fm_busy_classify() {  # <backend> <target> <harness> <id> <state-dir>
   printf 'unknown missing'
 }
 
-# fm_busy_classify_live: fm_busy_classify behind the one process-level
-# override - a gone endpoint is dead, never busy. Requires fm-backend.sh to
-# be sourced for fm_backend_target_exists.
-fm_busy_classify_live() {  # <backend> <target> <harness> <id> <state-dir> [expected-label]
-  local backend=$1 target=$2 harness=$3 id=$4 state=$5 label=${6-}
+# fm_busy_classify_live adds the sole process-level override.
+# A gone Herdr endpoint is dead, never busy.
+fm_busy_classify_live() {  # <target> <id> <state-dir>
+  local target=$1 id=$2 state=$3
   if [ -z "$target" ]; then
     printf 'unknown no-target'
     return 0
   fi
-  if ! fm_backend_target_exists "$backend" "$target" "$label" 2>/dev/null; then
+  if ! fm_herdr_target_exists "$target" 2>/dev/null; then
     printf 'dead endpoint-gone'
     return 0
   fi
-  fm_busy_classify "$backend" "$target" "$harness" "$id" "$state"
+  fm_busy_classify "$target" "$id" "$state"
 }
 
-# fm_busy_classify_meta: classify a task from its recorded metadata, so every
-# consumer resolves backend, target, and harness the same way instead of
-# re-deriving them. Requires fm-backend.sh to be sourced.
+# fm_busy_classify_meta refuses to reinterpret retired or ambiguous endpoint
+# records as Herdr.
 fm_busy_classify_meta() {  # <meta-file> <id> <state-dir>
-  local meta=$1 id=$2 state=$3 backend target harness
+  local meta=$1 id=$2 state=$3 target classification
   [ -f "$meta" ] || { printf 'unknown missing'; return 0; }
-  backend=$(fm_backend_of_meta "$meta")
-  target=$(fm_backend_target_of_meta "$meta")
-  harness=$(fm_meta_get "$meta" harness)
+  classification=$(fm_herdr_meta_classify "$meta") || {
+    printf 'unknown %s' "$classification"
+    return 0
+  }
+  if ! fm_herdr_validate_task_endpoint "$meta" "$id" 2>/dev/null; then
+    printf 'unknown invalid-endpoint'
+    return 0
+  fi
+  target=$FM_HERDR_VALIDATED_TARGET
   if [ -z "$target" ]; then
     printf 'unknown no-target'
     return 0
   fi
-  fm_busy_classify "$backend" "$target" "$harness" "$id" "$state"
+  fm_busy_classify "$target" "$id" "$state"
 }
 
 # fm_busy_is_busy: boolean view for callers that only gate on provable
@@ -233,7 +218,7 @@ fm_busy_classify_meta() {  # <meta-file> <id> <state-dir>
 # and dead all return 1, so an unknown can never be silently promoted to
 # either boolean pole - callers that must distinguish idle from unknown read
 # the full classification instead.
-fm_busy_is_busy() {  # <backend> <target> <harness> <id> <state-dir>
+fm_busy_is_busy() {  # <target> <id> <state-dir>
   local verdict
   verdict=$(fm_busy_classify "$@")
   [ "${verdict%% *}" = busy ]

@@ -18,6 +18,7 @@ command -v tasks-axi >/dev/null 2>&1 || { echo "skip: tasks-axi not found"; exit
 make_home() {  # <name>
   local home="$TMP_ROOT/$1" fakebin
   mkdir -p "$home/data" "$home/state" "$home/config" "$home/projects"
+  : > "$home/herdr.sock"
   cp "$ROOT/.tasks.toml" "$home/.tasks.toml"
   cat > "$home/data/backlog.md" <<'EOF'
 ## In flight
@@ -27,7 +28,20 @@ make_home() {  # <name>
 ## Done
 EOF
   fakebin=$(fm_fakebin "$home")
-  fm_fake_exit0 "$fakebin" tmux treehouse no-mistakes gh gh-axi
+  fm_fake_exit0 "$fakebin" treehouse no-mistakes gh gh-axi
+  cat > "$fakebin/herdr" <<'SH'
+#!/usr/bin/env bash
+set -u
+case "${1:-} ${2:-}" in
+  "status --json")
+    printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19,"socket_path":"%s/herdr.sock"}}\n' "${FM_HOME:-/tmp}"
+    ;;
+  "session list") printf '{"sessions":[{"name":"lab","running":true,"socket_path":"%s/herdr.sock"}]}\n' "${FM_HOME:-/tmp}" ;;
+  "pane get") printf '{"error":{"code":"pane_not_found"}}\n' ;;
+  *) printf '{"result":{}}\n' ;;
+esac
+SH
+  chmod +x "$fakebin/herdr"
   printf '%s\n' "$home"
 }
 
@@ -83,12 +97,12 @@ test_uninventoried_report_decision_refuses_completion() {
 ## Done
 EOF
   fm_write_meta "$home/state/$id.meta" \
-    "window=firstmate:fm-$id" \
+    "backend=herdr" "window=lab:w-$id:p1" "endpoint_task_id=$id" \
+    "herdr_session=lab" "herdr_workspace_id=w-$id" "herdr_tab_id=w-$id:t-$id" \
+    "herdr_pane_id=w-$id:p1" \
     "worktree=$home/projects/missing-scratch" \
     "project=$home/projects/sample" \
-    "harness=pi" \
-    "kind=scout" \
-    "mode=scout"
+    "harness=pi" "kind=scout" "mode=scout"
   printf 'done: report and visual review complete\n' > "$home/state/$id.status"
   cat > "$home/data/$id/report.md" <<'EOF'
 # Sample route review
@@ -131,12 +145,12 @@ run_decisions() {  # <home> <command args...>
 write_origin_meta() {  # <home> <id> [kind]
   local home=$1 id=$2 kind=${3:-scout}
   fm_write_meta "$home/state/$id.meta" \
-    "window=firstmate:fm-$id" \
+    "backend=herdr" "window=lab:w-$id:p1" "endpoint_task_id=$id" \
+    "herdr_session=lab" "herdr_workspace_id=w-$id" "herdr_tab_id=w-$id:t-$id" \
+    "herdr_pane_id=w-$id:p1" \
     "worktree=$home/projects/missing-$id" \
     "project=$home/projects/sample" \
-    "harness=pi" \
-    "kind=$kind" \
-    "mode=$kind"
+    "harness=pi" "kind=$kind" "mode=$kind"
 }
 
 test_structured_holds_survive_teardown_and_route_resolution() {
@@ -457,7 +471,18 @@ test_secondmate_hold_stays_in_authoritative_home() {
 ## Done
 EOF
   fakebin=$(fm_fakebin "$mate")
-  fm_fake_exit0 "$fakebin" tmux treehouse no-mistakes gh gh-axi
+  fm_fake_exit0 "$fakebin" treehouse no-mistakes gh gh-axi
+  cat > "$fakebin/herdr" <<'SH'
+#!/usr/bin/env bash
+set -u
+case "${1:-} ${2:-}" in
+  "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
+  "session list") printf '{"sessions":[{"name":"lab","running":true,"socket_path":"%s/herdr.sock"}]}\n' "${FM_HOME:-/tmp}" ;;
+  "pane get") printf '{"error":{"code":"pane_not_found"}}\n' ;;
+  *) printf '{"result":{}}\n' ;;
+esac
+SH
+  chmod +x "$fakebin/herdr"
   origin=sample-mate-review
   mkdir -p "$mate/data/$origin"
   tasks_in "$mate" add "$origin" "Investigate secondmate sample" --kind scout --repo sample --start >/dev/null
@@ -1227,34 +1252,27 @@ test_chat_channel_feeds_the_same_keyed_answer_intake() {
     || fail "precondition: completion did not transfer the decision to its hold"
 
   fb="$home/fakebin"
-  cat > "$fb/tmux" <<'SH'
+  cat > "$fb/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
-case "${1:-}" in
-  send-keys)
-    [ "${FM_FAKE_TMUX_SEND_FAIL:-0}" = 1 ] && exit 1
-    shift
-    literal=0
-    while [ $# -gt 0 ]; do
-      case "$1" in
-        -t) shift 2 ;;
-        -l) literal=1; shift ;;
-        *) break ;;
-      esac
-    done
-    if [ "$literal" = 1 ]; then
-      printf '%s' "${1:-}" >> "$FM_SEND_LOG"
-    fi
-    exit 0 ;;
-  display-message)
-    for a in "$@"; do case "$a" in *cursor_y*) printf '1\n'; exit 0 ;; esac; done
-    printf 'fakepane\n'; exit 0 ;;
-  capture-pane) printf '╭────╮\n│    │\n╰────╯\n'; exit 0 ;;
-  list-windows) exit 0 ;;
+case "${1:-} ${2:-}" in
+  "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
+  "session list") printf '{"sessions":[{"name":"lab","running":true,"socket_path":"%s/herdr.sock"}]}\n' "$FM_HOME" ;;
+  "pane get")
+    pane=${3:-}; workspace=${pane%%:*}; task=${workspace#w-}
+    printf '{"result":{"pane":{"pane_id":"%s","tab_id":"%s:t-%s","workspace_id":"%s"}}}\n' \
+      "$pane" "$workspace" "$task" "$workspace"
+    ;;
+  "tab get") printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"%s"}}}\n' "${3:-}" "${3%%:*}" ;;
+  "pane send-text") printf '%s' "${4:-}" >> "$FM_SEND_LOG" ;;
+  "pane send-keys") : > "$FM_HERDR_STATE" ;;
+  "agent get")
+    if [ -e "$FM_HERDR_STATE" ]; then status=working; else status=idle; fi
+    printf '{"result":{"agent":{"agent_status":"%s","provider":"pi"}}}\n' "$status"
+    ;;
 esac
-exit 0
 SH
-  chmod +x "$fb/tmux"
+  chmod +x "$fb/herdr"
 
   answer=$(printf 'go with option A\nheld: yes\nhold_kind: captain\nstate: queued')
   : > "$home/send.log"
@@ -1266,7 +1284,7 @@ SH
     || fail "could not hold the non-captain identity collision"
   if env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$home" FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
-    FM_SEND_LOG="$home/send.log" FM_SEND_SETTLE=0 \
+    FM_SEND_LOG="$home/send.log" FM_HERDR_STATE="$home/herdr.state" FM_SEND_SETTLE=0 \
     "$ROOT/bin/fm-send.sh" "$id" --resolve-key wrong-kind "do not deliver" >/dev/null 2>&1; then
     fail "a non-captain identity collision passed the answer preflight"
   fi
@@ -1274,7 +1292,7 @@ SH
     || fail "an answer reached the worker for a non-captain identity collision"
   env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$home" FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
-    FM_SEND_LOG="$home/send.log" FM_SEND_SETTLE=0 \
+    FM_SEND_LOG="$home/send.log" FM_HERDR_STATE="$home/herdr.state" FM_SEND_SETTLE=0 \
     "$ROOT/bin/fm-send.sh" "$id" --resolve-key chat-choice "$answer" >/dev/null 2>&1 \
     || fail "an answer to a transferred decision was refused by the chat channel"
   assert_contains "$(cat "$home/send.log")" "go with option A" "the answer text never reached the worker"
@@ -1287,7 +1305,7 @@ SH
   sent=$(cat "$home/send.log")
   if env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$home" FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
-    FM_SEND_LOG="$home/send.log" FM_SEND_SETTLE=0 \
+    FM_SEND_LOG="$home/send.log" FM_HERDR_STATE="$home/herdr.state" FM_SEND_SETTLE=0 \
     "$ROOT/bin/fm-send.sh" "$id" --resolve-key chat-choice "$answer" >/dev/null 2>&1; then
     fail "a replay whose body resembled active hold fields was sent after closure"
   fi

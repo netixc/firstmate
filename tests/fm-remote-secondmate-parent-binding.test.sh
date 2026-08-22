@@ -142,8 +142,6 @@ git -C "$PARENT/projects/alpha" remote add origin "file://$TMP_ROOT/alpha.git"
 git -C "$PARENT/projects/alpha" push -q -u origin main
 git --git-dir="$TMP_ROOT/alpha.git" symbolic-ref HEAD refs/heads/main
 printf -- '- alpha [direct-PR] - alpha project (added 2026-08-04)\n' > "$PARENT/data/projects.md"
-printf 'pi\n' > "$PARENT/config/secondmate-harness"
-printf 'tmux\n' > "$PARENT/config/backend"
 
 # The primary home is the Relay / relay home: the captain's real activation.
 printf 'FMX_PAIRING_TOKEN=repro-token\n' > "$PARENT/.env"
@@ -224,15 +222,27 @@ CHILD_WT="$REMOTE_HOME/projects/alpha"
 mkdir -p "$REMOTE_HOME/state"
 write_child_meta() {
   fm_write_meta "$REMOTE_HOME/state/work-child.meta" \
-    "window=firstmate:fm-work-child" "endpoint_task_id=work-child" \
-    "worktree=$CHILD_WT" "project=$CHILD_WT" "harness=pi" "kind=ship" \
-    "mode=local-only" "yolo=off"
+    "backend=herdr" "window=lab:w-work-child:p1" "endpoint_task_id=work-child" \
+    "herdr_session=lab" "herdr_workspace_id=w-work-child" "herdr_tab_id=w-work-child:t-work-child" \
+    "herdr_pane_id=w-work-child:p1" "worktree=$CHILD_WT" "project=$CHILD_WT" \
+    "harness=pi" "kind=ship" "mode=local-only" "yolo=off"
 }
 mkdir -p "$TMP_ROOT/childfake"
-for t in tmux treehouse no-mistakes gh gh-axi tasks-axi; do
+for t in treehouse no-mistakes gh gh-axi tasks-axi; do
   printf '#!/usr/bin/env bash\nexit 0\n' > "$TMP_ROOT/childfake/$t"
   chmod +x "$TMP_ROOT/childfake/$t"
 done
+cat > "$TMP_ROOT/childfake/herdr" <<'SH'
+#!/usr/bin/env bash
+set -u
+case "${1:-} ${2:-}" in
+  "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
+  "session list") printf '{"sessions":[{"name":"lab","running":true,"socket_path":"%s/herdr.sock"}]}\n' "${FM_HOME:-/tmp}" ;;
+  "pane get") printf '{"error":{"code":"pane_not_found"}}\n' ;;
+  *) printf '{"result":{}}\n' ;;
+esac
+SH
+chmod +x "$TMP_ROOT/childfake/herdr"
 
 run_child_teardown() { # <extra env assignments...>
   local out rc=0

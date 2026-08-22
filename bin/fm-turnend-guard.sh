@@ -3,10 +3,10 @@
 # secondmate's own home. Child crew/scout worktrees are exempt.
 #
 # fm-guard.sh is pull-based. This push-based guard is invoked by verified
-# harness turn-end integrations and applies the shared supervision predicate.
-# Pi adapters force one bounded follow-up because their turn-end events are
+# Pi's turn-end extension applies the shared supervision predicate and forces
+# one bounded follow-up because its turn-end events are
 # passive. See docs/turnend-guard.md for the mechanics and evidence.
-# The adapter provides its own one-follow-up guard before calling this script.
+# The extension provides its own one-follow-up guard before calling this script.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -2,15 +2,14 @@
 # Send one line of literal text to a crewmate endpoint, then Enter.
 # Usage: fm-send.sh <target> [--resolve-key <key>]... <text...>
 #   <target> may be an exact task id, a legacy fm-<id> task label resolved
-#   through this home's state/<id>.meta, or an explicit well-formed backend
-#   target. fm-send refuses unresolved guesses rather than falling back to a
-#   tmux window search, because a "successful" send to the wrong endpoint is
+#   through this home's state/<id>.meta, or an explicit exact Herdr target.
+#   fm-send refuses unresolved guesses because a "successful" send to the wrong endpoint is
 #   worse than a loud failure.
 # Special keys instead of text: fm-send.sh <target> --key Enter
-# Both supported backends accept Escape, Enter, and C-c.
+# Herdr accepts the Pi lifecycle keys Escape, Enter, and C-c.
 #
 # Text submission is verified: the line is typed ONCE, then Enter is sent and
-# retried (Enter only, never retyped) until the target backend confirms a
+# retried (Enter only, never retyped) until Herdr confirms a
 # submit or reports an inconclusive send. If a swallowed Enter is positively
 # confirmed, fm-send exits NON-ZERO so the caller knows the steer did not land
 # instead of silently leaving an unsubmitted instruction.
@@ -21,8 +20,7 @@
 # never re-type blindly; a marked request's pending-reply expectation stays
 # armed because this outcome is not a proven failure); any other nonzero = the
 # send failed and nothing may be assumed delivered.
-# Submission dispatches through the target's recorded backend; the tmux adapter
-# shares its composer/submit core with the away-mode daemon via bin/fm-tmux-lib.sh.
+# Submission uses the same direct Herdr composer/submit core as away mode.
 # Tune with FM_SEND_RETRIES (default 3) / FM_SEND_SLEEP (0.4).
 # Slash commands get a longer pre-Enter settle so completion popups do not swallow Enter.
 #
@@ -31,7 +29,7 @@
 # from-firstmate carrier owned by bin/fm-operational-input.sh so the secondmate
 # routes its reply via its status file or a status-pointed doc instead of
 # stranding it in chat the main firstmate never reads. A crewmate/scout target,
-# an explicit backend-target escape-hatch target, and the --key path are never
+# an explicit Herdr-target escape hatch, and the --key path are never
 # marked - their behavior is unchanged.
 #
 # Parent-owned pending-reply expectation: every newly marked secondmate request
@@ -49,7 +47,7 @@
 # submit against the recorded remote Herdr pane and relays its exit status
 # unchanged. A leg that delivered the text into the live verified pane but
 # could not synchronously confirm the submit (exit 3 - typically a busy mate
-# whose harness queues the steer and keeps rendering it) is reported here as
+# whose Pi session queues the steer and keeps rendering it) is reported here as
 # DELIVERED with confirmation pending: fm-send prints a non-error notice,
 # exits 0, marks the pending-reply expectation delivered, and closes any
 # --resolve-key decisions. Empirically that pattern is a delivered steer, a
@@ -69,7 +67,7 @@
 # remote secondmate alike - because the open-decision ledger fm-wake-drain
 # folds lives in this home's own state dir (a remote mate's escalations reach
 # it through the parent-replies ingest); only the answer message crosses the
-# backend or remote transport.
+# Herdr or remote transport.
 #
 # Chat is also a channel that carries keyed captain answers, so the same flag
 # feeds bin/fm-decision-hold.sh's one keyed-answer intake for any key that names
@@ -91,12 +89,12 @@
 # manual close command, leaving the decision open to re-surface (the safe
 # direction). A send without the flag never closes anything: a routine steer,
 # working:, or done: event still cannot clear a captain decision. The flag is
-# refused with --key, with an explicit backend target (no task ledger in this
+# refused with --key, with an explicit Herdr target (no task ledger in this
 # home), and with an empty message.
 #
 # After a successful text submit fm-send pauses FM_SEND_SETTLE seconds (default 1,
 # 0 disables) before returning: submit confirmation only proves the text was
-# accepted, but the harness needs a beat to spin up the turn before its busy
+# accepted, but Pi needs a beat to spin up the turn before its busy
 # footer appears, so an immediate peek would otherwise see the stale idle pane.
 # The pause is fm-send-only; the shared submit core (used by the away-mode daemon,
 # which only needs "submitted") does not pay it, and the --key path is unaffected.
@@ -126,8 +124,8 @@ if [ ! -d "$STATE" ]; then
   exit 1
 fi
 
-# shellcheck source=bin/fm-backend.sh
-. "$SCRIPT_DIR/fm-backend.sh"
+# shellcheck source=bin/fm-herdr.sh
+. "$SCRIPT_DIR/fm-herdr.sh"
 # shellcheck source=bin/fm-marker-lib.sh
 . "$SCRIPT_DIR/fm-marker-lib.sh"
 # shellcheck source=bin/fm-pending-reply-lib.sh
@@ -138,6 +136,8 @@ fi
 . "$SCRIPT_DIR/fm-line-cap-lib.sh"
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
+
+fm_herdr_require_runtime || exit 1
 
 FM_GUARD_CONTINUE_LINE='This is a supervision warning only; the requested message WILL still be sent.' "$SCRIPT_DIR/fm-guard.sh" || true
 
@@ -159,60 +159,47 @@ fm_send_meta_for_key_value() {  # <state-dir> <key> <value>
   return 1
 }
 
-fm_send_count_colons() {  # <string>
-  local s=$1 no_colons
-  no_colons=${s//:/}
-  printf '%s' $(( ${#s} - ${#no_colons} ))
-}
-
 fm_send_resolve_target() {  # <raw-target>
-  local raw=$1 meta pane_meta target backend assumed colons id session hint
+  local raw=$1 meta pane_meta target id session hint meta_rc
 
   RESOLVED_TARGET=""
-  TARGET_BACKEND=""
-  EXPECTED_LABEL=""
+  TARGET_ROUTE=""
   TARGET_META=""
   TARGET_SELECTOR=""
   TARGET_REMOTE_ID=""
   RESOLUTION_TRIED=""
 
-  meta=$(fm_backend_meta_for_selector "$raw" "$STATE" 2>/dev/null || true)
+  meta=$(fm_meta_for_selector "$raw" "$STATE" 2>/dev/null || true)
   if [ -n "$meta" ]; then
     if [ -n "$(fm_meta_get "$meta" remote_host)" ]; then
       id=$(fm_send_id_from_meta "$meta")
+      if ! fm_herdr_validate_remote_route "$meta" "$id"; then
+        echo "REFUSED: remote secondmate $id has ambiguous or unsupported Herdr route metadata; preserving its records for manual reconciliation." >&2
+        return 1
+      fi
       RESOLVED_TARGET="remote:$id"
-      TARGET_BACKEND=remote
+      TARGET_ROUTE=remote
       TARGET_META=$meta
-      EXPECTED_LABEL="fm-$id"
       TARGET_SELECTOR=1
       TARGET_REMOTE_ID=$id
       RESOLUTION_TRIED="meta=$meta; placement=remote"
       return 0
     fi
-    RESOLUTION_TRIED="meta=$meta; backend=from-meta"
-    target=$(fm_backend_target_of_meta "$meta")
-    if [ -z "$target" ]; then
-      echo "error: no backend target recorded in $meta (tried $RESOLUTION_TRIED)" >&2
-      return 1
-    fi
-    backend=$(fm_backend_of_meta "$meta")
+    id=$(fm_send_id_from_meta "$meta")
+    fm_herdr_validate_live_task_endpoint "$meta" "$id" || return 1
+    target=$FM_HERDR_VALIDATED_TARGET
     RESOLVED_TARGET=$target
-    TARGET_BACKEND=$backend
+    TARGET_ROUTE=herdr
     TARGET_META=$meta
-    EXPECTED_LABEL=$(fm_backend_expected_label_of_selector "$raw" "$STATE")
     TARGET_SELECTOR=1
+    RESOLUTION_TRIED="meta=$meta; session=herdr"
     return 0
   fi
 
   case "$raw" in
-    fm-*:*)
-      # A named Herdr session may itself begin with "fm-". Keep that explicit
-      # session:pane target on the validated backend-target path below rather
-      # than mistaking it for an unresolved task selector.
-      ;;
+    fm-*:*:*) ;;
     fm-*)
-      RESOLUTION_TRIED="meta=$STATE/$raw.meta; legacy-meta=$STATE/${raw#fm-}.meta; backend=none"
-      echo "error: no metadata for $raw in $STATE (tried $RESOLUTION_TRIED); pass a well-formed explicit backend target only when targeting outside this firstmate home" >&2
+      echo "error: no metadata for $raw in $STATE; pass an exact Herdr <session>:<pane-id> only when targeting outside this home" >&2
       return 1
       ;;
   esac
@@ -222,44 +209,41 @@ fm_send_resolve_target() {  # <raw-target>
     session=$(fm_meta_get "$pane_meta" herdr_session)
     hint="${session:-<herdr-session>}:$raw"
     id=$(fm_send_id_from_meta "$pane_meta")
-    echo "error: target '$raw' matches herdr_pane_id in $pane_meta but is missing its herdr session prefix; expected <herdr-session>:<pane-id> such as '$hint' or use 'fm-$id' (tried meta=$STATE/$raw.meta; backend=herdr)" >&2
+    echo "error: target '$raw' is missing its Herdr session prefix; use '$hint' or 'fm-$id'" >&2
     return 1
   fi
 
-  meta=$(fm_backend_meta_for_window "$raw" "$STATE" 2>/dev/null || true)
+  meta_rc=0
+  meta=$(fm_endpoint_meta_for_target "$raw" "$STATE" 2>/dev/null) || meta_rc=$?
+  if [ "$meta_rc" -eq 2 ]; then
+    echo "error: explicit target '$raw' has ambiguous or invalid task ownership; preserving endpoint records for manual reconciliation" >&2
+    return 1
+  fi
   if [ -n "$meta" ]; then
-    target=$(fm_backend_target_of_meta "$meta")
-    if [ -z "$target" ]; then
-      echo "error: no backend target recorded in $meta (tried explicit target '$raw' via recorded window; backend=from-meta)" >&2
-      return 1
-    fi
+    id=$(fm_send_id_from_meta "$meta")
+    fm_herdr_validate_live_task_endpoint "$meta" "$id" || return 1
+    target=$FM_HERDR_VALIDATED_TARGET
     RESOLVED_TARGET=$target
-    TARGET_BACKEND=$(fm_backend_of_meta "$meta")
+    TARGET_ROUTE=herdr
     TARGET_META=$meta
-    RESOLUTION_TRIED="explicit target '$raw' matched $meta; backend=$TARGET_BACKEND"
+    RESOLUTION_TRIED="explicit target '$raw' matched $meta; session=herdr"
     return 0
   fi
 
   case "$raw" in
-    *:*)
-      colons=$(fm_send_count_colons "$raw")
-      if [ "$colons" -ge 2 ]; then
-        assumed=herdr
-      else
-        assumed=tmux
-      fi
-      if ! fm_backend_target_exists "$assumed" "$raw"; then
-        echo "error: explicit target '$raw' is not a live $assumed endpoint (tried meta=$STATE/$raw.meta; recorded-window lookup; backend=$assumed). Use fm-<id> for a recorded task/lane, or pass a target whose backend endpoint can be verified." >&2
-        return 1
-      fi
+    *:*:*)
       RESOLVED_TARGET=$raw
-      TARGET_BACKEND=$assumed
-      RESOLUTION_TRIED="meta=$STATE/$raw.meta; recorded-window lookup; backend=$assumed; endpoint=verified"
+      TARGET_ROUTE=herdr
+      RESOLUTION_TRIED="explicit Herdr endpoint"
       return 0
+      ;;
+    *:*)
+      echo "error: target '$raw' has the retired tmux target shape; Herdr targets require <session>:<pane-id>" >&2
+      return 1
       ;;
   esac
 
-  echo "error: target '$raw' is not resolvable (tried meta=$STATE/$raw.meta; recorded-window lookup; backend=none). Use fm-$raw for a recorded task/lane, or pass a well-formed explicit backend target such as session:window." >&2
+  echo "error: target '$raw' is not resolvable; use a recorded task id or exact Herdr <session>:<pane-id>" >&2
   return 1
 }
 
@@ -303,14 +287,10 @@ while :; do
   esac
 done
 
-if [ "$TARGET_BACKEND" != remote ]; then
-  fm_backend_validate "$TARGET_BACKEND" || exit 1
-fi
-
 # Classify a from-firstmate -> secondmate request. Only a task selector resolved
 # through this home's meta whose authoritative kind is secondmate is marked: the
 # secondmate then routes its reply via the status path (see fm-marker-lib.sh).
-# An explicit backend target (the escape hatch for endpoints outside this home)
+# An explicit Herdr target (the escape hatch for endpoints outside this home)
 # and any crewmate/scout target are left unmarked, and so is the --key path.
 MARK_FROM_FIRSTMATE=0
 PENDING_REPLY_CORR=
@@ -354,7 +334,7 @@ fm_send_hold_is_active() {  # <task-id> <decision-key>
 
 if [ -n "$RESOLVE_KEYS" ]; then
   if [ -z "$TARGET_SELECTOR" ] || [ -z "$TARGET_META" ]; then
-    echo "error: --resolve-key needs a task selector resolved through this home's metadata; an explicit backend target has no decision ledger here" >&2
+    echo "error: --resolve-key needs a task selector resolved through this home's metadata; an explicit Herdr target has no decision ledger here" >&2
     exit 1
   fi
   if [ "${1:-}" = "--key" ]; then
@@ -426,13 +406,10 @@ fm_send_feed_resolved_holds() {  # <answer-text>
   fi
 }
 
-# The target's BACKEND comes from selector meta, from matching an explicit target
-# back to recorded meta, or from strict explicit-target shape validation.
-# Do not add a separate passive liveness preflight here. Active send paths own
-# backend readiness: herdr, for example, must route through its session-aware
-# target_ready path before sending, while each adapter verifies its own
-# send implementation. A failed backend send is still surfaced below as a hard
-# error with the attempted resolution attached.
+# Target identity comes from authoritative metadata or strict explicit Herdr
+# target validation. Do not add a separate passive liveness preflight here;
+# Herdr's active send path owns readiness and session-aware delivery. A failed
+# send is surfaced below with the attempted resolution attached.
 
 if [ "${1:-}" = "--key" ]; then
   case "$*" in
@@ -442,13 +419,17 @@ if [ "${1:-}" = "--key" ]; then
       ;;
   esac
   key=$2
-  if [ "$TARGET_BACKEND" = remote ]; then
+  if [ "$TARGET_ROUTE" = remote ]; then
     if ! "$SCRIPT_DIR/fm-on.sh" "$TARGET_REMOTE_ID" fm-remote-secondmate-control.sh key "$TARGET_REMOTE_ID" "$key" < /dev/null; then
       echo "error: key '$key' not sent to remote secondmate $TARGET_REMOTE_ID; completion may be unknown" >&2
       exit 1
     fi
-  elif ! fm_backend_send_key "$TARGET_BACKEND" "$T" "$key" "$EXPECTED_LABEL"; then
-    echo "error: key '$key' not sent to $T ($TARGET_BACKEND send failed; tried $RESOLUTION_TRIED)" >&2
+  elif [ -n "$TARGET_META" ]; then
+    TARGET_TASK_ID=$(fm_send_id_from_meta "$TARGET_META")
+    fm_herdr_live_send_key_task_endpoint "$TARGET_META" "$TARGET_TASK_ID" "$key" \
+      || { echo "error: key '$key' not sent to $T (Herdr send failed; tried $RESOLUTION_TRIED)" >&2; exit 1; }
+  elif ! fm_herdr_live_send_key_target "$T" "$key"; then
+    echo "error: key '$key' not sent to $T (Herdr send failed; tried $RESOLUTION_TRIED)" >&2
     exit 1
   fi
 else
@@ -483,7 +464,7 @@ else
   fi
   # Slash commands open a completion popup in some TUIs. Submitting too fast
   # selects nothing, so give the popup time to settle before the retried Enter.
-  # The target backend's verified submit retry still backs the settle up.
+  # Herdr's verified submit retry still backs the settle up.
   case "$*" in
     /*) settle=1.2 ;;
     *) settle=0.3 ;;
@@ -494,7 +475,7 @@ else
   # verdict preserves the loud refusal boundary.
   send_rc=0
   REMOTE_DELIVERY_NOTICE=0
-  if [ "$TARGET_BACKEND" = remote ]; then
+  if [ "$TARGET_ROUTE" = remote ]; then
     # The remote leg is this same script running host-locally against the
     # recorded Herdr pane (cmd_send in fm-remote-secondmate-control.sh), so its
     # submit verification IS the local one, and fm-on/the remote worker relay
@@ -515,13 +496,20 @@ else
       verdict=send-failed
       [ -z "$remote_err" ] || printf '%s\n' "$remote_err" >&2
     fi
-  elif verdict=$(fm_backend_send_text_submit "$TARGET_BACKEND" "$T" "$MESSAGE" "$retries" "$sleep_s" "$settle" "$EXPECTED_LABEL"); then
+  elif [ -n "$TARGET_META" ]; then
+    TARGET_TASK_ID=$(fm_send_id_from_meta "$TARGET_META")
+    if verdict=$(fm_herdr_live_send_text_task_endpoint "$TARGET_META" "$TARGET_TASK_ID" "$MESSAGE" "$retries" "$sleep_s" "$settle"); then
+      :
+    else
+      send_rc=$?
+    fi
+  elif verdict=$(fm_herdr_live_send_text_target "$T" "$MESSAGE" "$retries" "$sleep_s" "$settle"); then
     :
   else
     send_rc=$?
   fi
   if [ "$send_rc" -ne 0 ]; then
-    if [ "$TARGET_BACKEND" = remote ] && [ "$send_rc" -eq 255 ] && [ -n "$PENDING_REPLY_CORR" ]; then
+    if [ "$TARGET_ROUTE" = remote ] && [ "$send_rc" -eq 255 ] && [ -n "$PENDING_REPLY_CORR" ]; then
       fm_pending_reply_mark_delivery_unknown "$STATE" "$PENDING_REPLY_CORR" || true
       echo "error: text delivery to remote secondmate $TARGET_REMOTE_ID is unknown; do not resend - same-host reconciliation is required" >&2
       exit 1
@@ -529,7 +517,7 @@ else
     if [ "$PENDING_REPLY_CREATED" = 1 ] && [ -n "$PENDING_REPLY_CORR" ]; then
       fm_pending_reply_discard_undelivered "$STATE" "$PENDING_REPLY_CORR" || true
     fi
-    echo "error: text not sent to $T ($TARGET_BACKEND send failed; tried $RESOLUTION_TRIED)" >&2
+    echo "error: text not sent to $T ($TARGET_ROUTE send failed; tried $RESOLUTION_TRIED)" >&2
     exit 1
   fi
   case "$verdict" in
@@ -539,12 +527,12 @@ else
       if [ "$PENDING_REPLY_CREATED" = 1 ] && [ -n "$PENDING_REPLY_CORR" ]; then
         fm_pending_reply_discard_undelivered "$STATE" "$PENDING_REPLY_CORR" || true
       fi
-      echo "error: text not sent to $T ($TARGET_BACKEND send failed; tried $RESOLUTION_TRIED)" >&2
+      echo "error: text not sent to $T ($TARGET_ROUTE send failed; tried $RESOLUTION_TRIED)" >&2
       exit 1
       ;;
     pending)
       # The text was typed into the live target and Enter was sent; only the
-      # submit read-back stayed unconfirmed (e.g. a busy harness queues the
+      # submit read-back stayed unconfirmed (e.g. busy Pi queues the
       # steer and keeps rendering it). That is not a proven failure, so never
       # re-type the message: verify the pane instead. Exit 3 is the documented
       # delivered-unconfirmed status, and the remote send leg above depends on
@@ -595,7 +583,7 @@ else
     echo "fm-send: delivered to remote secondmate $TARGET_REMOTE_ID; the remote pane accepted the text and Enter, and only the synchronous submit confirmation is still pending. This is not a failure - do not resend; the pending-reply expectation stays armed." >&2
   fi
   # Submit landed with exact empty. Confirmation only proves the text was
-  # accepted; the harness still needs a beat to spin up the
+  # accepted; Pi still needs a beat to spin up the
   # turn before its busy footer shows. Pause so an immediate peek catches the
   # crewmate actually working instead of the stale idle pane. FM_SEND_SETTLE=0
   # disables it. Scoped to this path only, never the shared submit core.

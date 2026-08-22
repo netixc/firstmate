@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Enter away mode and run the sub-supervisor daemon in a harness-tracked
-# foreground process when one is not already alive.
+# Enter away mode and run the sub-supervisor daemon in its dedicated Herdr
+# terminal when one is not already alive.
 #
 # Usage: fm-afk-start.sh
 #   Sets state/.afk unless FM_AFK_STATE_PREPARED=1, checks
@@ -17,15 +17,9 @@
 # enables nounset and errexit; callers that need different shell options must
 # restore them explicitly.
 #
-# This is the COMMON daemon entry for every backend. HOW it becomes a tracked
-# background process differs by harness/backend and is owned elsewhere:
-#   - Harnesses with a native in-pane tracked-background tool run this directly
-#     via that tool, so the daemon inherits the captain pane's env and auto-discovers it.
-#   - Harnesses with NO native background mechanism (e.g. pi) run this THROUGH
-#     bin/fm-afk-launch.sh, which creates a non-visible tracked terminal per
-#     backend (herdr tab/workspace, tmux detached session) and passes the
-#     captain pane in as FM_SUPERVISOR_TARGET so injection targets it, not the
-#     daemon's own new pane.
+# Pi enters through bin/fm-afk-launch.sh, which creates a dedicated unfocused
+# Herdr workspace, runs this daemon in its terminal, and passes the captain pane
+# as FM_SUPERVISOR_TARGET so injection targets it instead of the daemon pane.
 # Do not wrap this in `nohup ... &`: Herdr can reap fire-and-forget shell children
 # after the tool call returns, while a tracked background terminal stays
 # attached and has a real lifecycle.
@@ -40,6 +34,8 @@ FM_AFK_DAEMON="$FM_AFK_START_DIR/fm-supervise-daemon.sh"
 
 # shellcheck source=bin/fm-wake-lib.sh
 . "$FM_AFK_START_DIR/fm-wake-lib.sh"
+# shellcheck source=bin/fm-herdr.sh
+. "$FM_AFK_START_DIR/fm-herdr.sh"
 
 fm_afk_start_usage() {
   sed -n '2,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
@@ -124,6 +120,8 @@ fm_afk_start_main() {
     -h|--help) fm_afk_start_usage; return 0 ;;
     * ) echo "usage: $(basename "${BASH_SOURCE[1]:-fm-afk-start.sh}")" >&2; return 2 ;;
   esac
+
+  fm_herdr_require_runtime || return 1
 
   mkdir -p "$FM_AFK_STATE"
   if [ "${FM_AFK_STATE_PREPARED:-0}" = 1 ]; then

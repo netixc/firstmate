@@ -19,7 +19,7 @@ HERDR_TEST_SAFETY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 #
 # Herdr injects HERDR_ENV, HERDR_PANE_ID, HERDR_TAB_ID, HERDR_WORKSPACE_ID,
 # HERDR_SOCKET_PATH, and HERDR_SESSION into every process it manages a pane for
-# (verified 0.7.5 - docs/verification/runtime-backends.md), and a test run from
+# (verified 0.7.5 - docs/verification/herdr-runtime.md), and a test run from
 # inside a Herdr pane inherits all of them. Spawn now treats that pane as the
 # authoritative parent to place workers next to, so a leaked identity from the
 # developer's own session would follow the test into its isolated lab session
@@ -39,4 +39,22 @@ herdr_refuse_if_default() { # <session>
 
 herdr_safe_stop_and_delete() { # <session>
   fm_herdr_lab_teardown "$1"
+}
+
+herdr_test_install_pi() { # <directory>
+  local directory=$1
+  mkdir -p "$directory"
+  cat > "$directory/pi" <<'SH'
+#!/usr/bin/env bash
+set -u
+if [ "${1:-}" = --help ]; then
+  printf '%s\n' 'Pi test executable' 'Options: --help'
+  exit 0
+fi
+payload=
+for payload in "$@"; do :; done
+[ -z "$payload" ] || printf '%s\n' "$payload"
+sleep "${FM_TEST_PI_SLEEP:-120}"
+SH
+  chmod +x "$directory/pi"
 }

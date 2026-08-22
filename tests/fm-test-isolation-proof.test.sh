@@ -36,12 +36,9 @@ test_candidates_exclude_serial_classes() {
   listed=$("$PROOF" --list)
   for banned in \
     tests/fm-test-isolation-proof.test.sh \
-    tests/fm-backend-tmux-smoke.test.sh \
     tests/fm-watcher-lock.test.sh \
     tests/fm-wake-queue.test.sh \
-    tests/fm-backend-herdr-smoke.test.sh \
-    tests/fm-afk-inject-e2e.test.sh \
-    tests/fm-pi-primary-live-e2e.test.sh \
+    tests/fm-herdr-smoke.test.sh \
     tests/fm-pr-check-security.test.sh; do
     printf '%s\n' "$listed" | grep -Fxq "$banned" \
       && fail "serial-class script must not be a parallel candidate: $banned"
@@ -53,7 +50,7 @@ test_extra_hermetic_candidates_present() {
   local listed
   listed=$("$PROOF" --list)
   for want in \
-    tests/fm-backend-herdr.test.sh \
+    tests/fm-herdr.test.sh \
     tests/fm-send-strict.test.sh \
     tests/fm-spawn-batch.test.sh \
     tests/fm-pr-merge.test.sh \
@@ -62,7 +59,7 @@ test_extra_hermetic_candidates_present() {
     printf '%s\n' "$listed" | grep -Fxq "$want" \
       || fail "extra hermetic candidate missing: $want"
   done
-  pass "audited fake-backend and stub-network extras are candidates"
+  pass "audited Herdr-seam and stub-network extras are candidates"
 }
 
 test_list_exclusions_documents_reasons() {
@@ -71,7 +68,7 @@ test_list_exclusions_documents_reasons() {
   [ -n "$out" ] || fail "--list-exclusions printed nothing"
   printf '%s\n' "$out" | grep -Fq 'fm-watcher-lock.test.sh' \
     || fail "exclusions must document watcher-lock serial reason"
-  printf '%s\n' "$out" | grep -Fq 'fm-backend-herdr-smoke.test.sh' \
+  printf '%s\n' "$out" | grep -Fq 'fm-herdr-smoke.test.sh' \
     || fail "exclusions must document real-herdr serial reason"
   pass "exclusion list documents serial reasons"
 }

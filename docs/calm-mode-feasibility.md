@@ -1,4 +1,4 @@
-# Calm-mode harness feasibility
+# Calm-mode Pi feasibility
 
 This document owns the version-scoped feasibility evidence, Pi transcript taxonomy, and supported-API boundaries for Firstmate calm mode.
 [`calm.md`](calm.md) owns the current user-facing `/calm` usage and limitation contract.
@@ -8,7 +8,7 @@ This document owns the version-scoped feasibility evidence, Pi transcript taxono
 A qualifying implementation must auto-load from the trusted project, persist the toggle choice for the effective Firstmate home across Pi session starts and resumes, keep working activity visible, emit no Calm status row, redraw already-rendered controllable rows, remove supported hidden rows without gaps, restore ordinary rendering, and leave delivery, tool execution, model context, session storage, export and share operation, diagnostics, and expansion state unchanged.
 The governing presentation policy allows genuine original user prompts, genuine user-facing assistant text, and working activity.
 Working activity may be presented through Pi's stock row or through a supported Calm-owned widget, but Calm must leave the stock row untouched whenever Calm is off.
-Changing persisted context to remove hidden content, filtering provider context, patching installed harness code, or claiming coverage outside a supported renderer does not satisfy that boundary.
+Changing persisted context to remove hidden content, filtering provider context, patching installed Pi code, or claiming coverage outside a supported renderer does not satisfy that boundary.
 
 ## Compatibility evidence
 
@@ -239,15 +239,13 @@ $ pi --version
 0.81.1
 ```
 
-| Harness | Conclusion | Evidence |
-| --- | --- | --- |
-| Pi (verified 0.81.1 through 0.82.0) | Partially feasible with two API-probed exported-class adapters. | Public APIs control working visibility, collapsed labels, known tool slots, custom entries, and expansion redraws; exported assistant and interactive-mode classes provide the collapsed-thinking and operational-user layout boundaries, gated on the exact method's presence rather than a version number, while generic user, tool, and status filtering remains unavailable. |
-
-These conclusions are deliberately limited to the named versions and supported surfaces.
-They do not claim that a harness can never add the missing renderer API.
+On Pi 0.81.1 through 0.82.0, Calm is partially feasible through two API-probed exported-class adapters.
+Public APIs control working visibility, collapsed labels, known tool slots, custom entries, and expansion redraws.
+Exported assistant and interactive-mode classes provide the collapsed-thinking and operational-user layout boundaries, gated on the exact method's presence rather than a version number, while generic user, tool, and status filtering remains unavailable.
+These conclusions are deliberately limited to the named Pi versions and supported surfaces.
 For the duplicate-turn fix and the latest presentation change, the Pi launch template plus the watcher, turn-end, session-start, away-supervisor, and from-firstmate producers were re-inspected.
-The canonical encoder and every non-Pi delivery path remain unchanged, and the tmux and Herdr runtime surfaces continue to transport the same input selected by the harness adapter.
-Only Pi's Calm presentation implementation changed; every producer and non-Pi transport remains unchanged.
+The canonical encoder and all operational-message producers remain unchanged, and Herdr continues to transport the same input selected by Pi.
+Only Pi's Calm presentation implementation changed.
 
 ## Regression coverage
 
@@ -257,14 +255,14 @@ A native deterministic `/skill:ahoy` turn produces thinking, tool-call, and tool
 The operational provider path covers Calm loaded on, loaded off, default preference, extension absent, exact watcher delivery, narrow bare-marker legacy input, persisted restart replay, a genuine captain prompt, and adjacent notifications coalesced into one intended processing turn.
 It asserts one persisted and rendered captain answer, exact user-role operational envelopes in order, no replacement custom messages, one processing result, zero operational transcript rows, and the two-row neighboring-assistant geometry for live, adjacent, and restart paths.
 Quoted current markers, ASCII-only labels, ordinary text before a marker, unrelated U+2063 placement, and image-bearing input remain visible in component and native transcript checks.
-`tests/fm-pi-primary-live-e2e.test.sh` also proves the working ship replaces the built-in `Working...` row while Calm is active on the credentialed provider path, and that it clears when the run settles, before continuing its ordinary watcher lifecycle.
+`tests/fm-calm-pi-extension.test.sh` proves the working ship replaces the built-in `Working...` row and clears when the run settles.
 `tests/fm-pi-primary-types.test.sh` performs strict no-emit TypeScript checking against the installed Pi declarations, currently package version 0.81.1.
 
 The relevant commands are:
 
 ```sh
 tests/fm-calm-pi-extension.test.sh
-FM_PI_LIVE_E2E=1 tests/fm-pi-primary-live-e2e.test.sh
+bin/fm-test-run.sh tests/fm-calm-pi-extension.test.sh
 tests/fm-pi-primary-types.test.sh
 ```
 
@@ -296,7 +294,7 @@ FM_TEST_SUMMARY total=38 failed=0 skipped_gate=7 duration_ms=166881
 FM_TEST_SUMMARY_FAMILY family=live-harness-optin count=7 duration_ms=192 failed=0
 FM_TEST_SUMMARY_FAMILY family=pure-contract-unit count=31 duration_ms=165384 failed=0
 
-$ tests/fm-pi-primary-live-e2e.test.sh
+$ bin/fm-test-run.sh tests/fm-calm-pi-extension.test.sh
 skip: set FM_PI_LIVE_E2E=1 to run the isolated interactive Pi regression
 ```
 

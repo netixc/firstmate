@@ -63,6 +63,7 @@ fi
 exit "${FM_FAKE_BOOTSTRAP_RC:-0}"
 SH
   chmod +x "$root/bin/fm-bootstrap.sh"
+  fm_fake_exit0 "$root/bin" pi
   cat > "$root/bin/ps" <<'SH'
 #!/usr/bin/env bash
 pid=
@@ -73,8 +74,8 @@ for argument in "$@"; do
 done
 if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then
   case "$*" in
-    *comm=*) printf '/usr/local/bin/pi\n' ;;
-    *args=*) printf 'pi\n' ;;
+    *comm=*) printf '/bin/bash\n' ;;
+    *args=*) command -v pi ;;
     *ppid=*) /bin/ps -o ppid= -p "$pid" ;;
   esac
 else
@@ -461,7 +462,7 @@ EOF
     FM_HOME="$home" FM_ROOT_OVERRIDE="$root" "$root/bin/fm-lock.sh" 2>&1) \
     || fail "lock takeover still failed after the sweep released its lease"
   new_owner=$(cat "$home/state/.lock")
-  assert_contains "$out" "lock acquired: harness pid $new_owner" \
+  assert_contains "$out" "lock acquired: Pi pid $new_owner" \
     "the fleet lock did not record the harness owner reported by acquisition"
   [ "$new_owner" != "$$" ] || fail "the prior harness still owned the lock after takeover"
   pass "fm-startup-network: fleet-lock takeover cannot overlap a mutating sweep"

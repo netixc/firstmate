@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Spawn a direct report: a crewmate in a treehouse worktree, or a
 # secondmate in its isolated firstmate home.
-# Usage: fm-spawn.sh <task-id> <project-dir> --mode <no-mistakes|direct-PR|local-only> --yolo <on|off> [--harness pi] [--model <name>] [--effort <level>] [--backend <name>]
-#        fm-spawn.sh <task-id> <project-dir> --scout [--harness pi] [--model <name>] [--effort <level>] [--backend <name>]
-#        fm-spawn.sh <task-id> [<firstmate-home>] [--harness pi] [--model <name>] [--effort <level>] [--backend <name>] --secondmate
+# Usage: fm-spawn.sh <task-id> <project-dir> --mode <no-mistakes|direct-PR|local-only> --yolo <on|off> [--model <name>] [--effort <level>]
+#        fm-spawn.sh <task-id> <project-dir> --scout [--model <name>] [--effort <level>]
+#        fm-spawn.sh <task-id> [<firstmate-home>] [--model <name>] [--effort <level>] --secondmate
 #   --mode and --yolo are this task's delivery contract, REQUIRED for every ship
 #   spawn and refused on --scout and --secondmate spawns. Firstmate resolves both
 #   per task at intake (AGENTS.md section 7); data/projects.md holds the captain's
@@ -16,34 +16,25 @@
 #   loud one-line deviation notice is printed and the spawn continues.
 #   no-mistakes-prod-only is a registry policy rather than a task mode and is
 #   refused as a flag value.
-#        fm-spawn.sh <task-id> --relaunch [--harness <name>] [--model <name>] [--effort <level>]
+#        fm-spawn.sh <task-id> --relaunch [--model <name>] [--effort <level>]
 #   --relaunch launches a replacement agent for an EXISTING task into that
 #   task's own recorded endpoint and worktree instead of creating either. It is
 #   the launch half of the control plane (bin/fm-control.sh relaunch), which
 #   owns the checkpoint, the progress note, stopping the previous agent, and the
 #   transaction; call fm-control rather than this flag directly unless you are
-#   deliberately re-launching an already-stopped task. Every identity axis -
-#   backend, kind, project or home, worktree, endpoint - comes from the task's
-#   validated state/<id>.meta, so --backend, --scout, --secondmate, a project
-#   positional, and batch pairs are all refused alongside it; only an explicit
-#   Pi harness, model, and effort may change. It refuses unless the recorded endpoint is positively
-#   agent-free on a backend with a recovery-grade agent-state classifier (tmux
-#   or herdr), and refuses unless the endpoint's shell is sitting in the
+#   deliberately re-launching an already-stopped task. Kind, project or home,
+#   worktree, and exact Herdr endpoint come from validated state/<id>.meta, so
+#   --scout, --secondmate, a project positional, and batch pairs are all
+#   refused alongside it; only an explicit Pi model and effort may change. It
+#   refuses unless Herdr proves the endpoint agent-free and its shell is in the
 #   recorded worktree before arming the new incarnation.
-#   --harness <name> is the explicit per-spawn harness/profile adapter. The old
-#   positional harness arg still works for back-compat.
+#   Pi is the sole worker runtime. The retired --harness option is recognized
+#   only to refuse runtime selection; it never changes the Pi launch.
 #   --model <name> and --effort <low|medium|high|xhigh|max> are concrete profile
-#   axes chosen by firstmate at intake. They are only threaded into harnesses whose
-#   installed CLIs were verified to support that axis; unsupported axes are omitted
-#   from that harness's launch rather than guessed.
-#   --backend <name> is the explicit runtime session-provider backend for this
-#   exact task only (docs/configuration.md "Runtime backend" owns when that flag
-#   is authorized). Without it, the script resolves FM_BACKEND, then
-#   config/backend, then runtime auto-detection from $TMUX or HERDR_ENV=1, then
-#   tmux. The supported backends are tmux and Herdr.
-#   Default tmux spawns do not write backend= to meta; absent backend= means tmux.
-#   A backend spawn refusal is terminal for that selected backend; callers must
-#   surface it instead of silently retrying another backend.
+#   axes chosen by firstmate at intake and use Pi's validated CLI semantics.
+#   Herdr is the only session path. The retired --backend option is recognized
+#   only to refuse explicit legacy or unsupported selection; it never changes
+#   or falls back from the Herdr path.
 #   A herdr crewmate or scout is placed in the exact workspace of the firstmate
 #   or secondmate process launching it, resolved from that process's own herdr
 #   pane rather than from a workspace label (herdr enforces no label uniqueness,
@@ -68,8 +59,8 @@
 #   duplicate-agent risk is independently absent. Treehouse allocation and task
 #   metadata are unchanged.
 #   A clean projected create or exact resume makes one bounded attempt to hold
-#   the one session-scoped presentation-order lock (keyed by named session plus
-#   canonical socket, outside any home's state/) through launch handoff. Lock
+#   the one named-session presentation-order lock (outside any home's state/)
+#   through launch handoff. Lock
 #   contention warns and falls back to the ordinary flat layout before any
 #   projection mutation. The exact response-derived new workspace is inserted
 #   immediately after its owning parent (firstmate or 2ndmate-<id>) contiguous
@@ -79,36 +70,17 @@
 #   session's exact active workspace and tab. A detected focus change restores
 #   only that exact tab id; an ambiguous pre-operation snapshot refuses the
 #   focus-sensitive presentation mutation.
-#   Every single-task invocation holds one task-id-scoped lock across backend
-#   creation through metadata publication, so concurrent same-id spawns serialize
-#   even when they select different backends. A fresh spawn first takes the
+#   Every single-task invocation holds one task-id-scoped lock across Herdr
+#   creation through metadata publication, so concurrent same-id spawns
+#   serialize. A fresh spawn first takes the
 #   per-home task-set lock and refuses rather than waits when forced teardown owns
 #   it; relaunch is exempt because the existing task's control lock covers it.
-#   With no harness arg, a crewmate/scout spawn resolves the CREW harness only when
-#   config/crew-dispatch.json is absent. When that file exists, crewmate/scout
-#   spawns require an explicit harness so firstmate cannot silently skip dispatch
-#   profile consultation. A --secondmate spawn is exempt and resolves the SECONDMATE
-#   harness (config/secondmate-harness -> config/crew-harness -> own), so the
-#   secondmate-vs-crewmate split is DURABLE across every respawn (recovery,
-#   /updatefirstmate, restart). A bare verified adapter name overrides it for
-#   this spawn (either kind). Production launches accept only Pi. A narrow
-#   FM_SPAWN_TEST_RAW_LAUNCH=1 seam remains for backend integration tests that
-#   also set FM_SPAWN_NO_GUARD=1 and need a deterministic marker command; it is
-#   never a production adapter path.
+#   Dispatch profiles choose only Pi-supported model and effort axes.
 #   For Pi, fm-spawn resolves the executable name from PATH once, probes that
 #   concrete path with --help, and launches the same path. It adds --tui-mode
 #   regular only when that help advertises the flag; a failed or inconclusive
 #   probe omits it so older Pi versions remain launchable. A missing Pi
 #   executable refuses before endpoint creation.
-#   config/secondmate-harness may also carry an optional model and effort as extra
-#   whitespace-separated tokens ("<harness> [<model>] [<effort>]"). For a
-#   --secondmate spawn, those tokens apply only when this spawn also resolves its
-#   harness from config/secondmate-harness. An explicit per-spawn --harness or
-#   positional harness arg starts with clean model/effort
-#   defaults unless the caller also passes explicit --model/--effort flags. When
-#   the file governs the spawn, its model/effort tokens are re-resolved on every
-#   respawn exactly like the harness axis, and explicit --model/--effort flags
-#   still win over the file's tokens.
 #   A --secondmate spawn also propagates the primary's declared inherited local
 #   material, so the secondmate's OWN crewmates inherit primary config and the
 #   secondmate receives the primary's read-only shared captain-preference file
@@ -128,14 +100,13 @@
 # Batch dispatch: pass one or more `id=repo` pairs instead of a single <id> <project>, e.g.
 #     fm-spawn.sh fix-a-k3=projects/foo add-b-q7=projects/bar [--scout]
 #   Each pair re-execs this script in single-task mode, so the single path stays the only
-#   source of truth; shared --scout/--harness/--model/--effort/--backend/--mode/--yolo
+#   source of truth; shared --scout/--model/--effort/--mode/--yolo
 #   applies to every pair. A ship batch therefore carries one delivery contract, and each
 #   pair still checks it against its own brief; a batch spanning modes is two invocations.
-#   If config/crew-dispatch.json exists, shared --harness is required for crewmate
-#   and scout batches. The loop lives here, in bash, so callers never hand-write a
+#   The loop lives here, in bash, so callers never hand-write a
 #   multi-task shell loop (the tool shell is zsh, which does not word-split unquoted
 #   $vars and silently breaks ad-hoc `for ... in $pairs` loops).
-#   Launch templates live in launch_template() below; placeholders replaced before launch:
+#   The Pi launch command uses these placeholders before launch:
 #     __BRIEF__    absolute path to data/<task-id>/brief.md
 #     __PIBIN__    quoted concrete Pi executable path resolved from PATH
 #     __PITUIMODE__ optional --tui-mode regular when that executable advertises it
@@ -145,8 +116,8 @@
 #     __PIWATCH__   absolute path to .pi/extensions/fm-primary-pi-watch.ts in a pi secondmate home
 #     __OPINPUT__   absolute path to the canonical operational-input encoder
 #     __WORKTREE__  absolute path to the task worktree
-# Verified per-harness turn-end hooks are installed automatically where enabled; some live outside the worktree.
-# On success prints: spawned <id> harness=<name> kind=<ship|scout|secondmate> [mode=<mode> yolo=<on|off>] window=<backend-target> worktree=<path>
+# Verified Pi turn-end hooks are installed automatically where enabled; some live outside the worktree.
+# On success prints: spawned <id> kind=<ship|scout|secondmate> [mode=<mode> yolo=<on|off>] window=<Herdr-target> worktree=<path>
 # A ship task records the explicit mode/yolo it was passed; a secondmate spawn records
 # mode=secondmate, yolo=off, home=, and projects=; a scout records neither, and both the
 # success line and state/<id>.meta omit them.
@@ -214,8 +185,8 @@ SUB_HOME_MARKER=".fm-secondmate-home"
 . "$SCRIPT_DIR/fm-secondmate-nudge-lib.sh"
 # shellcheck source=bin/fm-config-inherit-lib.sh
 . "$SCRIPT_DIR/fm-config-inherit-lib.sh"
-# shellcheck source=bin/fm-backend.sh
-. "$SCRIPT_DIR/fm-backend.sh"
+# shellcheck source=bin/fm-herdr.sh
+. "$SCRIPT_DIR/fm-herdr.sh"
 # shellcheck source=bin/fm-control-lib.sh
 . "$SCRIPT_DIR/fm-control-lib.sh"
 # shellcheck source=bin/fm-gate-refuse-lib.sh
@@ -236,14 +207,12 @@ fm_refuse_if_gate_agent
 [ -n "${FM_SPAWN_NO_GUARD:-}" ] || "$FM_ROOT/bin/fm-guard.sh" || true
 KIND=ship
 KIND_SET=0
-HARNESS_ARG=
 MODEL=
 EFFORT=
 BACKEND_ARG=
 MODE=
 YOLO=
 TRACEPARENT_ARG=
-HARNESS_SET=0
 MODEL_SET=0
 EFFORT_SET=0
 BACKEND_SET=0
@@ -259,7 +228,7 @@ for a in "$@"; do
       --*) echo "error: --$want_value requires a value" >&2; exit 1 ;;
     esac
     case "$want_value" in
-      harness) HARNESS_ARG=$a; HARNESS_SET=1 ;;
+      harness) echo "error: --harness is retired because Pi is the sole worker runtime; remove the option" >&2; exit 1 ;;
       model) MODEL=$a; MODEL_SET=1 ;;
       effort) EFFORT=$a; EFFORT_SET=1 ;;
       backend) BACKEND_ARG=$a; BACKEND_SET=1 ;;
@@ -276,7 +245,7 @@ for a in "$@"; do
     --secondmate) KIND=secondmate; KIND_SET=1 ;;
     --relaunch) RELAUNCH=1 ;;
     --harness) want_value=harness ;;
-    --harness=*) HARNESS_ARG=${a#--harness=}; HARNESS_SET=1 ;;
+    --harness=*) echo "error: --harness is retired because Pi is the sole worker runtime; remove the option" >&2; exit 1 ;;
     --model) want_value=model ;;
     --model=*) MODEL=${a#--model=}; MODEL_SET=1 ;;
     --effort) want_value=effort ;;
@@ -293,13 +262,26 @@ for a in "$@"; do
   esac
 done
 [ -z "$want_value" ] || { echo "error: --$want_value requires a value" >&2; exit 1; }
-[ "$HARNESS_SET" -eq 0 ] || [ -n "$HARNESS_ARG" ] || { echo "error: --harness requires a non-empty value" >&2; exit 1; }
 [ "$MODEL_SET" -eq 0 ] || [ -n "$MODEL" ] || { echo "error: --model requires a non-empty value" >&2; exit 1; }
 [ "$EFFORT_SET" -eq 0 ] || [ -n "$EFFORT" ] || { echo "error: --effort requires a non-empty value" >&2; exit 1; }
 [ "$BACKEND_SET" -eq 0 ] || [ -n "$BACKEND_ARG" ] || { echo "error: --backend requires a non-empty value" >&2; exit 1; }
+if [ "$BACKEND_SET" -eq 1 ]; then
+  if [ "$BACKEND_ARG" = tmux ]; then
+    echo "error: tmux session support is retired; --backend tmux is unsupported. Run Pi on Herdr and remove the option." >&2
+  else
+    echo "error: --backend is retired because Herdr is the sole session path; remove '--backend $BACKEND_ARG'." >&2
+  fi
+  exit 1
+fi
 [ "$MODE_SET" -eq 0 ] || [ -n "$MODE" ] || { echo "error: --mode requires a non-empty value" >&2; exit 1; }
 [ "$YOLO_SET" -eq 0 ] || [ -n "$YOLO" ] || { echo "error: --yolo requires a non-empty value" >&2; exit 1; }
 [ "$TRACEPARENT_SET" -eq 0 ] || [ -n "$TRACEPARENT_ARG" ] || { echo "error: --traceparent requires a non-empty value" >&2; exit 1; }
+for retired_worker_config in "$CONFIG/crew-harness" "$CONFIG/secondmate-harness"; do
+  if [ -e "$retired_worker_config" ] || [ -L "$retired_worker_config" ]; then
+    echo "error: $(basename "$retired_worker_config") is retired because Pi is the sole worker runtime; remove the file" >&2
+    exit 1
+  fi
+done
 # A parent-delivered carrier replaces this home's own resolution, so it is
 # refused unless it is a secondmate spawn carrying a strictly valid W3C value.
 # Nothing else may reach the pane's TRACEPARENT export.
@@ -323,7 +305,6 @@ esac
 # task's own durable record below. Contradicting it on the command line is a
 # refusal rather than a silently-ignored flag.
 if [ "$RELAUNCH" -eq 1 ]; then
-  [ "$BACKEND_SET" -eq 0 ] || { echo "error: --relaunch reuses the task's recorded backend; --backend cannot override it" >&2; exit 1; }
   [ "$KIND_SET" -eq 0 ] || { echo "error: --relaunch reuses the task's recorded kind; --scout/--secondmate cannot override it" >&2; exit 1; }
   [ "$MODE_SET" -eq 0 ] || { echo "error: --relaunch reuses the task's recorded delivery mode; --mode cannot override it" >&2; exit 1; }
   [ "$YOLO_SET" -eq 0 ] || { echo "error: --relaunch reuses the task's recorded yolo posture; --yolo cannot override it" >&2; exit 1; }
@@ -365,8 +346,8 @@ else
 fi
 
 spawn_remote_secondmate() {
-  local id=$1 remote host root home harness positional model effort backend out rc meta tmp
-  local remote_backend remote_target remote_harness remote_herdr_session registry_lock remote_lock remote_generation
+  local id=$1 remote host root home positional model effort out rc meta tmp
+  local remote_target remote_herdr_session registry_lock remote_lock remote_generation
   local remote_traceparent remote_recorded_traceparent
   local -a launch_args
   id=${POS[0]:-}
@@ -399,47 +380,15 @@ spawn_remote_secondmate() {
     echo "error: remote secondmate spawn accepts no local home positional argument" >&2
     return 2
   fi
-  if [ -n "$HARNESS_ARG" ]; then
-    harness=$HARNESS_ARG
-  elif [ -n "$positional" ]; then
-    harness=$positional
-  else
-    harness=$("$FM_ROOT/bin/fm-harness.sh" secondmate)
+  if [ -n "$positional" ]; then
+    fm_lock_release "$registry_lock" || true
+    fm_lock_release "$SPAWN_TASK_LOCK" || true
+    echo "error: remote secondmate spawn accepts no worker-runtime positional; Pi is always used" >&2
+    return 2
   fi
-  case "$harness" in
-    pi) ;;
-    *)
-      fm_lock_release "$registry_lock" || true
-      fm_lock_release "$SPAWN_TASK_LOCK" || true
-      echo "error: remote secondmate spawn requires Pi, not '$harness'" >&2
-      return 1
-      ;;
-  esac
   model=${MODEL:--}
   effort=${EFFORT:--}
-  if [ -z "$HARNESS_ARG" ] && [ -z "$positional" ]; then
-    if [ "$MODEL_SET" -eq 0 ]; then
-      model=$("$SCRIPT_DIR/fm-harness.sh" secondmate-model)
-      [ -n "$model" ] || model=-
-    fi
-    if [ "$EFFORT_SET" -eq 0 ]; then
-      effort=$("$SCRIPT_DIR/fm-harness.sh" secondmate-effort)
-      [ -n "$effort" ] || effort=-
-    fi
-  fi
-  # A remote second mate always runs on Herdr: its server belongs to the host's
-  # own GUI login session, so the endpoint outlives every SSH connection that
-  # supervises it. bin/fm-remote-doctor.sh gates that host on the same
-  # requirement, and the remote home's config/backend never overrides it.
-  case "${BACKEND_ARG:--}" in
-    -|herdr) backend=herdr ;;
-    *)
-      fm_lock_release "$registry_lock" || true
-      fm_lock_release "$SPAWN_TASK_LOCK" || true
-      echo "error: a remote secondmate runs only on the herdr backend, not '$BACKEND_ARG'" >&2
-      return 1
-      ;;
-  esac
+  # A remote second mate always runs in the host's dedicated Herdr session.
   case "$effort" in
     -|low|medium|high|xhigh|max) ;;
     *)
@@ -523,7 +472,7 @@ spawn_remote_secondmate() {
   if [ "$(fm_trace_context_session_effective "$STATE/.trace-context-effective")" = on ]; then
     remote_traceparent=$(FM_TRACE_CONTEXT=on fm_trace_context_resolve "$CONFIG" "$meta" || true)
   fi
-  launch_args=("$id" "$harness" "$model" "$effort" "$backend")
+  launch_args=("$id" "$model" "$effort")
   [ -z "$remote_traceparent" ] || launch_args+=("$remote_traceparent")
   if out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh launch \
     "${launch_args[@]}" < /dev/null 2>&1); then
@@ -541,18 +490,9 @@ spawn_remote_secondmate() {
     fi
     return "$rc"
   fi
-  remote_backend=$(printf '%s\n' "$out" | sed -n 's/^backend=//p' | tail -1)
   remote_target=$(printf '%s\n' "$out" | sed -n 's/^target=//p' | tail -1)
-  remote_harness=$(printf '%s\n' "$out" | sed -n 's/^harness=//p' | tail -1)
   remote_herdr_session=$(printf '%s\n' "$out" | sed -n 's/^herdr_session=//p' | tail -1)
-  if [ "$remote_backend" != herdr ]; then
-    fm_lock_release "$remote_lock" || true
-    fm_lock_release "$registry_lock" || true
-    fm_lock_release "$SPAWN_TASK_LOCK" || true
-    echo "error: remote launch returned backend '${remote_backend:-missing}', expected herdr; preserving the remote route for reconciliation" >&2
-    return 1
-  fi
-  [ -n "$remote_target" ] && [ "$remote_harness" = "$harness" ] || {
+  [ -n "$remote_target" ] || {
     fm_lock_release "$remote_lock" || true
     fm_lock_release "$registry_lock" || true
     fm_lock_release "$SPAWN_TASK_LOCK" || true
@@ -576,11 +516,11 @@ spawn_remote_secondmate() {
   fm_trace_context_valid "$remote_recorded_traceparent" || remote_recorded_traceparent=
   tmp="$meta.tmp.$$"
   {
+    echo "backend=herdr"
     echo "window=remote:$id"
     echo "endpoint_task_id=$id"
     echo "worktree=$home"
     echo "project=$root"
-    echo "harness=$harness"
     echo "kind=secondmate"
     echo "mode=secondmate"
     echo "yolo=off"
@@ -591,7 +531,6 @@ spawn_remote_secondmate() {
     echo "projects=$(secondmate_registry_field "$DATA/secondmates.md" "$id" projects)"
     echo "remote_host=$host"
     echo "remote_root=$root"
-    echo "remote_backend=$remote_backend"
     echo "remote_herdr_session=$remote_herdr_session"
     echo "remote_target=$remote_target"
     [ -z "$remote_recorded_traceparent" ] || echo "traceparent=$remote_recorded_traceparent"
@@ -608,11 +547,10 @@ spawn_remote_secondmate() {
     echo "error: remote secondmate $id launched, but its reply source could not be armed; endpoint metadata is preserved" >&2
     return 1
   fi
-  echo "spawned $id harness=$harness kind=secondmate mode=secondmate yolo=off window=remote:$id worktree=$home remote=$host backend=$remote_backend"
+  echo "spawned $id kind=secondmate mode=secondmate yolo=off window=remote:$id worktree=$home remote=$host herdr_session=$remote_herdr_session"
   return 0
 }
 
-BACKEND=
 HERDR_PROJECTION_ABORT_CLEANUP=0
 HERDR_PROJECTION_ABORT_SESSION=
 HERDR_PROJECTION_ABORT_TASK_PANE=
@@ -664,7 +602,7 @@ spawn_abort_cleanup() {
   fi
   if [ "$HERDR_PROJECTION_ABORT_CLEANUP" = 1 ]; then
     HERDR_PROJECTION_ABORT_CLEANUP=0
-    fm_backend_herdr_projection_cleanup_exact \
+    fm_herdr_projection_cleanup_exact \
       "$HERDR_PROJECTION_ABORT_SESSION" \
       "$HERDR_PROJECTION_ABORT_TASK_PANE" \
       "$HERDR_PROJECTION_ABORT_SEEDED_PANE" || true
@@ -698,13 +636,13 @@ spawn_abort_cleanup() {
 }
 trap spawn_abort_cleanup EXIT
 
-# One bounded lock per live Herdr session/socket, shared across all homes.
+# One bounded lock per named Herdr session, shared across all homes.
 # <session> is required so secondmate and primary spawns serialize against the
 # same session without writing any other home's state directory.
 spawn_herdr_presentation_order_lock_acquire() {
   local session=${1:-} attempt lock_path
-  [ -n "$session" ] || session=$(fm_backend_herdr_session)
-  lock_path=$(fm_backend_herdr_presentation_session_lock_path "$session") || return 1
+  [ -n "$session" ] || session=$(fm_herdr_session)
+  lock_path=$(fm_herdr_presentation_session_lock_path "$session") || return 1
   HERDR_PRESENTATION_ORDER_LOCK="$lock_path"
   attempt=0
   while [ "$attempt" -lt 50 ]; do
@@ -737,18 +675,12 @@ if [ "$RELAUNCH" -eq 1 ] && [ "${#POS[@]}" -gt 0 ] && [ "${POS[0]}" != "$idpart"
   exit 1
 fi
 if [ "${#POS[@]}" -gt 0 ] && [ "${POS[0]}" != "$idpart" ] && case "$idpart" in */*) false ;; *) true ;; esac; then
-  if [ "$KIND" != secondmate ] && [ -z "$HARNESS_ARG" ] && [ -f "$CONFIG/crew-dispatch.json" ]; then
-    echo "error: config/crew-dispatch.json is active - pass an explicit harness resolved from the dispatch rules (the consultation backstop, so the rules are never silently skipped)." >&2
-    exit 1
-  fi
   rc=0
   shared_args=()
-  [ -z "$HARNESS_ARG" ] || shared_args+=(--harness "$HARNESS_ARG")
   [ -z "$MODEL" ] || shared_args+=(--model "$MODEL")
   [ -z "$EFFORT" ] || shared_args+=(--effort "$EFFORT")
-  [ -z "$BACKEND_ARG" ] || shared_args+=(--backend "$BACKEND_ARG")
   # One delivery contract applies to every pair in a batch, exactly like the shared
-  # harness. Each pair still re-validates it against its own brief, so a batch
+  # profile. Each pair still re-validates it against its own brief, so a batch
   # spanning several modes is two invocations rather than a silent mixed dispatch.
   [ "$MODE_SET" -eq 0 ] || shared_args+=(--mode "$MODE")
   [ "$YOLO_SET" -eq 0 ] || shared_args+=(--yolo "$YOLO")
@@ -771,6 +703,22 @@ if [ "${#POS[@]}" -gt 0 ] && [ "${POS[0]}" != "$idpart" ] && case "$idpart" in *
 fi
 ID=${POS[0]}
 fm_task_id_creation_valid "$ID" || { echo "error: invalid task id" >&2; exit 2; }
+if [ "$RELAUNCH" -eq 1 ]; then
+  [ "${#POS[@]}" -eq 1 ] || {
+    echo "error: --relaunch takes the task id only; its project or home comes from the task's own record" >&2
+    exit 1
+  }
+elif [ "$KIND" = secondmate ]; then
+  [ "${#POS[@]}" -le 2 ] || {
+    echo "error: worker-runtime positional arguments are retired; Pi is always used" >&2
+    exit 1
+  }
+else
+  [ "${#POS[@]}" -eq 2 ] || {
+    echo "error: worker-runtime positional arguments are retired; Pi is always used" >&2
+    exit 1
+  }
+fi
 if [ "$RELAUNCH" -eq 1 ]; then
   SPAWN_CONTROL_LOCK="$STATE/.control-$ID.lock"
   control_owner=$(cat "$SPAWN_CONTROL_LOCK/pid" 2>/dev/null || true)
@@ -813,6 +761,9 @@ if [ "$RELAUNCH" -eq 0 ]; then
   fi
   SPAWN_TASK_SET_LOCK_HELD=1
 fi
+# Herdr is the sole session path. Retired settings and tmux-nested execution
+# refuse before local or remote endpoint creation and before relaunch control.
+fm_herdr_require_runtime || exit 1
 if [ "$KIND" = secondmate ]; then
   if spawn_remote_secondmate "$ID"; then
     exit 0
@@ -821,22 +772,6 @@ if [ "$KIND" = secondmate ]; then
   fi
   [ "$remote_spawn_rc" -eq 3 ] || exit "$remote_spawn_rc"
 fi
-# Backend selection (data/fm-backend-design-d7): explicit --backend, else
-# FM_BACKEND env, else config/backend, else runtime auto-detection, else
-# default tmux (fm_backend_name). fm_backend_validate_spawn refuses unknown or
-# non-spawn-capable backends. The resolved value is
-# recorded in meta only when it is NOT tmux (fm-teardown.sh and fm-watch.sh's
-# window_backend/fm_backend_of_meta already treat an absent backend= as tmux),
-# so the default path's meta stays byte-identical.
-if [ "$RELAUNCH" -eq 0 ]; then
-  if [ "$BACKEND_SET" -eq 1 ]; then
-    BACKEND=$BACKEND_ARG
-  else
-    BACKEND=$(fm_backend_name)
-  fi
-  fm_backend_validate_spawn "$BACKEND" || exit 1
-  fm_backend_source "$BACKEND" || exit 1
-fi
 SPAWN_TASK_LOCK="$STATE/.spawn-$ID.lock"
 if ! fm_lock_try_acquire "$SPAWN_TASK_LOCK"; then
   echo "error: another spawn is already creating task $ID" >&2
@@ -844,7 +779,6 @@ if ! fm_lock_try_acquire "$SPAWN_TASK_LOCK"; then
 fi
 SPAWN_TASK_LOCK_HELD=1
 PROJ=
-ARG3=
 FIRSTMATE_HOME=
 
 # --relaunch adoption: every identity axis comes from the task's own validated
@@ -852,35 +786,24 @@ FIRSTMATE_HOME=
 # re-launch the task it names. The endpoint identity check is the same shared
 # validation teardown uses, so a malformed, ambiguous, or foreign record
 # refuses here exactly as it refuses there.
-RELAUNCH_PRIOR_HARNESS=
 if [ "$RELAUNCH" -eq 1 ]; then
-  [ "${#POS[@]}" -eq 1 ] || {
-    echo "error: --relaunch takes the task id only; its project or home comes from the task's own record" >&2
-    exit 1
-  }
   RELAUNCH_META="$STATE/$ID.meta"
   [ -f "$RELAUNCH_META" ] || {
     echo "error: --relaunch needs an existing task record; no $RELAUNCH_META" >&2
     exit 1
   }
-  fm_backend_validate_task_endpoint "$RELAUNCH_META" "$ID" || exit 1
-  BACKEND=$FM_BACKEND_VALIDATED_BACKEND
-  RELAUNCH_TARGET=$FM_BACKEND_VALIDATED_TARGET
-  fm_backend_validate_spawn "$BACKEND" || exit 1
-  fm_backend_source "$BACKEND" || exit 1
-  # A relaunch must PROVE the previous agent is gone before it launches another
-  # one into the same endpoint, and only tmux and herdr have a recovery-grade
-  # classifier that can (bin/fm-control-lib.sh owns that capability table).
-  fm_control_backend_state_verified "$BACKEND" || {
-    echo "error: backend '$BACKEND' has no recovery-grade agent-state classifier, so a relaunch cannot prove the previous agent exited; refusing rather than risking two agents in one endpoint" >&2
-    exit 1
-  }
-  RELAUNCH_STATE=$(fm_backend_agent_state "$BACKEND" "$RELAUNCH_TARGET")
+  fm_herdr_validate_task_endpoint "$RELAUNCH_META" "$ID" || exit 1
+  RELAUNCH_TARGET=$FM_HERDR_VALIDATED_TARGET
+  # Relaunch requires Herdr's recovery-grade classifier to prove the old agent gone.
+  RELAUNCH_STATE=$(fm_herdr_agent_state "$RELAUNCH_TARGET")
   [ "$RELAUNCH_STATE" = dead ] || {
     echo "error: task $ID's endpoint reads '$RELAUNCH_STATE'; a relaunch requires a positively agent-free endpoint (stop the agent first with bin/fm-control.sh $ID exit)" >&2
     exit 1
   }
-  RELAUNCH_PRIOR_HARNESS=$(fm_meta_get "$RELAUNCH_META" harness)
+  if fm_herdr_parse_target "$RELAUNCH_TARGET" \
+    && [ "$(fm_herdr_pane_presence_state "$FM_HERDR_SESSION" "$FM_HERDR_PANE")" = present ]; then
+    fm_herdr_validate_live_task_endpoint "$RELAUNCH_META" "$ID" || exit 1
+  fi
   KIND=$(fm_meta_get "$RELAUNCH_META" kind)
   [ -n "$KIND" ] || KIND=ship
   MODE=$(fm_meta_get "$RELAUNCH_META" mode)
@@ -900,46 +823,15 @@ if [ "$RELAUNCH" -eq 1 ]; then
       exit 1
     }
   fi
-  if [ "$BACKEND" = herdr ]; then
-    HERDR_SES=$(fm_meta_get "$RELAUNCH_META" herdr_session)
-    HERDR_WORKSPACE_ID=$(fm_meta_get "$RELAUNCH_META" herdr_workspace_id)
-    HERDR_TAB_ID=$(fm_meta_get "$RELAUNCH_META" herdr_tab_id)
-    HERDR_PANE_ID=$(fm_meta_get "$RELAUNCH_META" herdr_pane_id)
-  fi
-  # With no explicit harness, a relaunch reuses the harness already recorded
-  # for this task. It must NOT fall through to the fresh-spawn config
-  # resolution, which would silently move an existing task onto whatever the
-  # crew or secondmate default currently says. Choosing a different harness is
-  # the caller's explicit decision, made with --harness (bin/fm-control.sh
-  # resolves that decision, including a secondmate's durable pin).
-  ARG3=${HARNESS_ARG:-$RELAUNCH_PRIOR_HARNESS}
-  [ -n "$ARG3" ] || {
-    echo "error: task $ID has no recorded harness; pass --harness to relaunch it" >&2
-    exit 1
-  }
+  HERDR_SES=$(fm_meta_get "$RELAUNCH_META" herdr_session)
+  HERDR_WORKSPACE_ID=$(fm_meta_get "$RELAUNCH_META" herdr_workspace_id)
+  HERDR_TAB_ID=$(fm_meta_get "$RELAUNCH_META" herdr_tab_id)
+  HERDR_PANE_ID=$(fm_meta_get "$RELAUNCH_META" herdr_pane_id)
 elif [ "$KIND" = secondmate ]; then
-  case "${POS[1]:-}" in
-    ''|pi)
-      ARG3=${POS[1]:-}
-      ;;
-    *' '*)
-      if [ "${#POS[@]}" -gt 2 ] || [ -d "${POS[1]}" ]; then
-        FIRSTMATE_HOME=${POS[1]}
-        ARG3=${POS[2]:-}
-      else
-        ARG3=${POS[1]}
-      fi
-      ;;
-    *)
-      FIRSTMATE_HOME=${POS[1]}
-      ARG3=${POS[2]:-}
-      ;;
-  esac
+  FIRSTMATE_HOME=${POS[1]:-}
 else
   PROJ=${POS[1]}
-  ARG3=${POS[2]:-}
 fi
-[ -z "$HARNESS_ARG" ] || ARG3=$HARNESS_ARG
 
 shell_quote() {
   printf "'"
@@ -969,132 +861,49 @@ pi_supports_tui_mode() {
   printf '%s\n' "$help" | grep -Eq -- '(^|[[:space:]])--tui-mode([[:space:]=]|$)'
 }
 
-# The verified launch command per adapter. The knowledge half of each adapter
-# (busy-state source, exit command, dialogs, quirks) lives in the harness-adapters skill.
-launch_template() {
-  local harness=$1 kind=${2:-ship}
+pi_launch_command() {
+  local kind=${1:-ship}
   # shellcheck disable=SC2016  # single quotes are deliberate: $(cat ...) expands in the crewmate pane, not here
-  case "$harness" in
-    pi)
-      if [ "$kind" = secondmate ]; then
-        printf '%s' '__PIBIN____PITUIMODE__ __MODELFLAG____EFFORTFLAG__-e __PITURNEND__ -e __PIWATCH__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
-      else
-        printf '%s' 'FM_WORKER_LIFECYCLE_CONTEXT=__PIWORKERCTX__ __PIBIN____PITUIMODE__ __MODELFLAG____EFFORTFLAG__-e __PIWORKEREXT__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
-      fi
-      ;;
-    *) return 1 ;;
-  esac
+  if [ "$kind" = secondmate ]; then
+    printf '%s' '__PIBIN____PITUIMODE__ __MODELFLAG____EFFORTFLAG__-e __PITURNEND__ -e __PIWATCH__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
+  else
+    printf '%s' 'FM_WORKER_LIFECYCLE_CONTEXT=__PIWORKERCTX__ __PIBIN____PITUIMODE__ __MODELFLAG____EFFORTFLAG__-e __PIWORKEREXT__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
+  fi
 }
 
-case "$ARG3" in
-  *' '*)
-    if [ "${FM_SPAWN_TEST_RAW_LAUNCH:-0}" != 1 ] \
-      || [ "${FM_SPAWN_NO_GUARD:-0}" != 1 ]; then
-      echo "error: production spawn accepts only the verified Pi harness" >&2
-      exit 1
-    fi
-    LAUNCH=$ARG3
-    HARNESS=""
-    for word in $LAUNCH; do
-      case "$word" in [A-Za-z_]*=*) continue ;; *) HARNESS=$(basename "$word"); break ;; esac
-    done
-    ;;
-  '')
-    # No explicit harness: resolve from config. A secondmate AGENT launches on the
-    # secondmate harness (config/secondmate-harness -> config/crew-harness -> own);
-    # every other kind uses the crew harness only when no dispatch profile file is
-    # active. Resolving here on every spawn is what makes the split DURABLE - a
-    # respawn (recovery, /updatefirstmate, restart) re-resolves, so
-    # config/secondmate-harness keeps governing secondmate launches across restarts.
-    # The launch_template lookup below is the verified-adapter guard for both
-    # kinds: a harness with no template aborts the spawn.
-    if [ "$KIND" = secondmate ]; then
-      HARNESS=$("$FM_ROOT/bin/fm-harness.sh" secondmate)
-      harness_src='config/secondmate-harness (falling back to config/crew-harness)'
-    else
-      if [ -f "$CONFIG/crew-dispatch.json" ]; then
-        echo "error: config/crew-dispatch.json is active - pass an explicit harness resolved from the dispatch rules (the consultation backstop, so the rules are never silently skipped)." >&2
-        exit 1
-      fi
-      HARNESS=$("$FM_ROOT/bin/fm-harness.sh" crew)
-      harness_src='config/crew-harness'
-    fi
-    LAUNCH=$(launch_template "$HARNESS" "$KIND") || { echo "error: no launch template for harness '$HARNESS' (from $harness_src or detection); only Pi is supported" >&2; exit 1; }
-    ;;
-  *)
-    HARNESS=$ARG3
-    LAUNCH=$(launch_template "$HARNESS" "$KIND") || { echo "error: unknown harness '$HARNESS'; only Pi is supported" >&2; exit 1; }
-    ;;
-esac
-
-case "$HARNESS" in
-  pi)
-    PI_BIN=$(resolve_pi_executable "$HARNESS") || {
-      echo "error: pi executable not found on PATH; install Pi before spawning a worker" >&2
-      exit 1
-    }
-    PI_TUI_MODE=
-    if pi_supports_tui_mode "$PI_BIN"; then
-      PI_TUI_MODE=' --tui-mode regular'
-    fi
-    LAUNCH=${LAUNCH//__PITUIMODE__/$PI_TUI_MODE}
-    if [ "$KIND" != secondmate ]; then
-      PI_WORKER_EXTENSION="$FM_ROOT/.pi/worker-extensions/fm-worker-lifecycle.ts"
-      [ -f "$PI_WORKER_EXTENSION" ] && [ ! -L "$PI_WORKER_EXTENSION" ] || {
-        echo "error: tracked Pi worker-lifecycle extension is missing or unsafe: $PI_WORKER_EXTENSION" >&2
-        exit 1
-      }
-    fi
-    ;;
-esac
-
-# config/secondmate-harness may carry optional model/effort tokens alongside the
-# harness ("<harness> [<model>] [<effort>]"). They apply only when this is a
-# --secondmate spawn and no explicit per-spawn harness was supplied, so
-# the harness itself came from the secondmate config fallback chain. Resolving
-# here on every spawn makes the pin durable across respawns. Precedence: explicit
-# --model/--effort flags still win over the file's tokens.
-if [ "$KIND" = secondmate ] && [ -z "$ARG3" ]; then
-  if [ "$MODEL_SET" -eq 0 ]; then
-    SM_MODEL=$("$SCRIPT_DIR/fm-harness.sh" secondmate-model)
-    [ -z "$SM_MODEL" ] || MODEL=$SM_MODEL
-  fi
-  if [ "$EFFORT_SET" -eq 0 ]; then
-    SM_EFFORT=$("$SCRIPT_DIR/fm-harness.sh" secondmate-effort)
-    if [ -n "$SM_EFFORT" ]; then
-      case "$SM_EFFORT" in
-        low|medium|high|xhigh|max) EFFORT=$SM_EFFORT ;;
-        *) echo "warning: config/secondmate-harness effort token '$SM_EFFORT' is not one of low, medium, high, xhigh, max; ignoring" >&2 ;;
-      esac
-    fi
-  fi
+LAUNCH=$(pi_launch_command "$KIND")
+PI_BIN=$(resolve_pi_executable pi) || {
+  echo "error: pi executable not found on PATH; install Pi before spawning a worker" >&2
+  exit 1
+}
+PI_TUI_MODE=
+if pi_supports_tui_mode "$PI_BIN"; then
+  PI_TUI_MODE=' --tui-mode regular'
+fi
+LAUNCH=${LAUNCH//__PITUIMODE__/$PI_TUI_MODE}
+if [ "$KIND" != secondmate ]; then
+  PI_WORKER_EXTENSION="$FM_ROOT/.pi/worker-extensions/fm-worker-lifecycle.ts"
+  [ -f "$PI_WORKER_EXTENSION" ] && [ ! -L "$PI_WORKER_EXTENSION" ] || {
+    echo "error: tracked Pi worker-lifecycle extension is missing or unsafe: $PI_WORKER_EXTENSION" >&2
+    exit 1
+  }
 fi
 
 secondmate_registry_value() {
   secondmate_registry_field "$DATA/secondmates.md" "$1" "$2"
 }
 
-model_flag_for_harness() {
-  local harness=$1 model=$2
+pi_model_flag() {
+  local model=$1
   [ -n "$model" ] && [ "$model" != default ] || return 0
-  case "$harness" in
-    pi)
-      printf -- '--model %s ' "$(shell_quote "$model")"
-      ;;
-  esac
+  printf -- '--model %s ' "$(shell_quote "$model")"
 }
 
-effort_flag_for_harness() {
-  local harness=$1 effort=$2
+pi_effort_flag() {
+  local effort=$1
   [ -n "$effort" ] && [ "$effort" != default ] || return 0
-  case "$harness" in
-    pi)
-      # Pi 0.80.6 accepts the full shared effort vocabulary, including max, through
-      # its --thinking flag.
-      case "$effort" in
-        low|medium|high|xhigh|max) printf -- '--thinking %s ' "$(shell_quote "$effort")" ;;
-      esac
-      ;;
+  case "$effort" in
+    low|medium|high|xhigh|max) printf -- '--thinking %s ' "$(shell_quote "$effort")" ;;
   esac
 }
 
@@ -1320,8 +1129,7 @@ fi
 
 # PROJ_ABS can still carry a symlinked path component (e.g. macOS's /tmp ->
 # /private/tmp) when it came from the ship/scout branch's logical `pwd` above.
-# Every backend's own current-path read (tmux's pane_current_path, herdr's
-# foreground_cwd or Herdr active path probe against the live shell) can
+# Herdr's foreground_cwd or active path probe against the live shell can
 # report the OS-level, physically-resolved cwd, so comparing it against a
 # still-symlinked PROJ_ABS can misfire both ways: false-negative (the poll
 # below never notices the pane left the project) or false-positive (the
@@ -1339,14 +1147,9 @@ real_path_or_raw() {  # <path>
   fi
 }
 
-# Session-provider container-ensure + task creation. tmux stays exactly as P1
-# left it (same session-name / new-window sequence, see bin/backends/tmux.sh);
-# a herdr spawn goes through the version-gated, workspace-per-HOME,
-# tab-per-task sequence in bin/backends/herdr.sh instead (D4/D5 as refined by
-# docs/herdr-backend.md's "workspace-per-home" pass, AGENTS.md task
-# herdr-sm-spaces-k4). Both branches converge on the same $T ("target") string
-# that every downstream operation (send/capture/kill) already treats as opaque
-# per-backend routing (fm_backend_resolve_selector).
+# Herdr container ensure and task creation use the version-gated,
+# workspace-per-home, tab-per-task sequence in bin/fm-herdr.sh. Downstream
+# send/capture/kill operations retain the exact $T endpoint identity.
 validate_spawn_worktree() {  # <source> <inspect-target>
   local source=$1 inspect_target=$2 wt_real proj_real wt_top wt_top_real
   wt_real=
@@ -1420,64 +1223,57 @@ herdr_projection_meta_field_exact() {  # <meta> <key>
 # dead or agent-free endpoint before token inspection may allow flat fallback.
 # Exact Herdr fields are retained for the narrower version 2 reclaim path.
 herdr_projection_existing_meta_allows_flat() {  # <meta>
-  local meta=$1 old_backend old_target old_session old_pane old_state target_session target_pane
-  HERDR_RECOVERY_BACKEND=""
+  local meta=$1 endpoint_class old_target old_session old_pane old_state target_session target_pane
+  HERDR_RECOVERY_COMPATIBLE=0
   HERDR_RECOVERY_WORKSPACE_ID=""
   HERDR_RECOVERY_TAB_ID=""
   HERDR_RECOVERY_PANE_ID=""
-  old_backend=$(fm_backend_of_meta "$meta")
-  old_target=$(fm_backend_target_of_meta "$meta")
+  endpoint_class=$(fm_herdr_meta_kind "$meta")
+  if [ "$endpoint_class" != herdr ]; then
+    echo "error: existing metadata for $ID is $endpoint_class evidence; preserving it for manual reconciliation and refusing duplicate launch" >&2
+    return 1
+  fi
+  old_target=$(fm_endpoint_target_of_meta "$meta")
   [ -n "$old_target" ] || {
-    echo "error: existing metadata for $ID has no endpoint; refusing duplicate launch while its herdr presentation journal is quarantined" >&2
+    echo "error: existing metadata for $ID has no Herdr endpoint; refusing duplicate launch while its presentation journal is quarantined" >&2
     return 1
   }
-  HERDR_RECOVERY_BACKEND=$old_backend
-  if [ "$old_backend" = herdr ]; then
-    fm_backend_herdr_parse_target "$old_target" || {
-      echo "error: existing herdr endpoint for $ID is malformed; refusing duplicate launch" >&2
-      return 1
-    }
-    target_session=$FM_BACKEND_HERDR_SESSION
-    target_pane=$FM_BACKEND_HERDR_PANE
-    old_session=$(herdr_projection_meta_field_exact "$meta" herdr_session) || {
-      echo "error: existing herdr metadata for $ID has an ambiguous session; refusing duplicate launch" >&2
-      return 1
-    }
-    HERDR_RECOVERY_WORKSPACE_ID=$(herdr_projection_meta_field_exact "$meta" herdr_workspace_id) || {
-      echo "error: existing herdr metadata for $ID has an ambiguous workspace; refusing duplicate launch" >&2
-      return 1
-    }
-    HERDR_RECOVERY_TAB_ID=$(herdr_projection_meta_field_exact "$meta" herdr_tab_id) || {
-      echo "error: existing herdr metadata for $ID has an ambiguous tab; refusing duplicate launch" >&2
-      return 1
-    }
-    old_pane=$(herdr_projection_meta_field_exact "$meta" herdr_pane_id) || {
-      echo "error: existing herdr metadata for $ID has an ambiguous pane; refusing duplicate launch" >&2
-      return 1
-    }
-    [ "$target_session" = "$old_session" ] && [ "$target_pane" = "$old_pane" ] || {
-      echo "error: existing herdr metadata for $ID has inconsistent endpoint identities; refusing duplicate launch" >&2
-      return 1
-    }
-    HERDR_RECOVERY_PANE_ID=$old_pane
-    fm_backend_herdr_server_ensure "$old_session" || {
-      echo "error: existing herdr endpoint for $ID could not be inspected; refusing duplicate launch" >&2
-      return 1
-    }
-    old_state=$(fm_backend_herdr_pane_agent_state "$old_session" "$old_pane")
-    case "$old_state" in
-      dead|no-agent) return 0 ;;
-      live|unknown)
-        echo "error: existing herdr endpoint for $ID is $old_state; refusing duplicate launch" >&2
-        return 1
-        ;;
-    esac
-  fi
-  old_state=$(fm_backend_agent_alive "$old_backend" "$old_target")
+  fm_herdr_parse_target "$old_target" || {
+    echo "error: existing Herdr endpoint for $ID is malformed; refusing duplicate launch" >&2
+    return 1
+  }
+  target_session=$FM_HERDR_SESSION
+  target_pane=$FM_HERDR_PANE
+  old_session=$(herdr_projection_meta_field_exact "$meta" herdr_session) || {
+    echo "error: existing Herdr metadata for $ID has an ambiguous session; refusing duplicate launch" >&2
+    return 1
+  }
+  HERDR_RECOVERY_WORKSPACE_ID=$(herdr_projection_meta_field_exact "$meta" herdr_workspace_id) || {
+    echo "error: existing Herdr metadata for $ID has an ambiguous workspace; refusing duplicate launch" >&2
+    return 1
+  }
+  HERDR_RECOVERY_TAB_ID=$(herdr_projection_meta_field_exact "$meta" herdr_tab_id) || {
+    echo "error: existing Herdr metadata for $ID has an ambiguous tab; refusing duplicate launch" >&2
+    return 1
+  }
+  old_pane=$(herdr_projection_meta_field_exact "$meta" herdr_pane_id) || {
+    echo "error: existing Herdr metadata for $ID has an ambiguous pane; refusing duplicate launch" >&2
+    return 1
+  }
+  [ "$target_session" = "$old_session" ] && [ "$target_pane" = "$old_pane" ] || {
+    echo "error: existing Herdr metadata for $ID has inconsistent endpoint identities; refusing duplicate launch" >&2
+    return 1
+  }
+  HERDR_RECOVERY_PANE_ID=$old_pane
+  fm_herdr_server_ensure "$old_session" || {
+    echo "error: existing Herdr endpoint for $ID could not be inspected; refusing duplicate launch" >&2
+    return 1
+  }
+  old_state=$(fm_herdr_pane_agent_state "$old_session" "$old_pane")
   case "$old_state" in
-    dead) return 0 ;;
-    alive|unknown)
-      echo "error: existing $old_backend endpoint for $ID is $old_state; refusing duplicate launch" >&2
+    dead|no-agent) HERDR_RECOVERY_COMPATIBLE=1; return 0 ;;
+    live|unknown)
+      echo "error: existing Herdr endpoint for $ID is $old_state; refusing duplicate launch" >&2
       return 1
       ;;
   esac
@@ -1494,23 +1290,8 @@ if [ "$RELAUNCH" -eq 1 ]; then
   # fresh secondmate spawn uses; every other kind takes the recorded worktree.
   [ "$KIND" = secondmate ] || WT=$RELAUNCH_WT
   WT_TARGET=$T
-  SES=${T%%:*}
 else
-case "$BACKEND" in
-  tmux)
-    SES=$(fm_backend_tmux_container_ensure)
-    T="$SES:$W"
-    # #134 robustness (tmux): fm_backend_tmux_create_task captures a stable window
-    # id and pins the window name (automatic-rename/allow-rename off) so a captain's
-    # non-default tmux config cannot rename the window away from fm-<id> once
-    # treehouse cd's into the worktree. WT_TARGET carries that stable id for the
-    # rename-critical worktree-detection steps below; the persisted window= handle
-    # stays $T (the name form), which is safe now that rename is disabled.
-    WID=$(fm_backend_tmux_create_task "$SES" "$W" "$PROJ_ABS") || exit 1
-    WT_TARGET="$WID"
-    ;;
-  herdr)
-    # fm_backend_herdr_workspace_label resolves the target workspace from
+    # fm_herdr_workspace_label resolves the target workspace from
     # FM_HOME. For every KIND except secondmate, this process's own FM_HOME is
     # already the right home (the primary spawning its own crewmate/scout, or
     # a secondmate spawning ITS OWN crewmate/scout from its own process's
@@ -1532,15 +1313,15 @@ case "$BACKEND" in
     HERDR_LAUNCHER_RELATIONSHIP=launcher-home
     if [ "$KIND" = secondmate ]; then
       HERDR_LABEL_HOME=$PROJ_ABS
-      HERDR_LAUNCHER_RELATIONSHIP=other-home
+      HERDR_LAUNCHER_RELATIONSHIP='other-home'
     fi
-    HERDR_PRESENTATION_JOURNAL=$(fm_backend_herdr_projection_journal_path "$STATE" "$ID")
+    HERDR_PRESENTATION_JOURNAL=$(fm_herdr_projection_journal_path "$STATE" "$ID")
     HERDR_PROJECTED=0
-    if [ "$KIND" != secondmate ] && fm_backend_herdr_presentation_enabled "$CONFIG" "$STATE"; then
-      HERDR_SES=$(fm_backend_herdr_session)
-      HERDR_PARENT_LABEL=$(FM_HOME="$HERDR_LABEL_HOME" fm_backend_herdr_workspace_label)
+    if [ "$KIND" != secondmate ] && fm_herdr_presentation_enabled "$CONFIG" "$STATE"; then
+      HERDR_SES=$(fm_herdr_session)
+      HERDR_PARENT_LABEL=$(FM_HOME="$HERDR_LABEL_HOME" fm_herdr_workspace_label)
       if [ -e "$HERDR_PRESENTATION_JOURNAL" ] || [ -L "$HERDR_PRESENTATION_JOURNAL" ]; then
-        fm_backend_herdr_server_ensure "$HERDR_SES" || {
+        fm_herdr_server_ensure "$HERDR_SES" || {
           echo "error: herdr presentation recovery could not ensure its exact named session" >&2
           exit 1
         }
@@ -1551,11 +1332,11 @@ case "$BACKEND" in
         if [ -e "$STATE/$ID.meta" ] || [ -L "$STATE/$ID.meta" ]; then
           herdr_projection_existing_meta_allows_flat "$STATE/$ID.meta" || exit 1
         fi
-        fm_backend_herdr_projection_recovery_allows_flat \
+        fm_herdr_projection_recovery_allows_flat \
           "$HERDR_SES" "$HERDR_PRESENTATION_JOURNAL" "$ID" || exit 1
-        if [ "${HERDR_RECOVERY_BACKEND:-}" = herdr ]; then
+        if [ "${HERDR_RECOVERY_COMPATIBLE:-0}" = 1 ]; then
           set +e
-          FM_HOME="$HERDR_LABEL_HOME" fm_backend_herdr_projection_reclaim_task \
+          FM_HOME="$HERDR_LABEL_HOME" fm_herdr_projection_reclaim_task \
             "$HERDR_SES" "$HERDR_PRESENTATION_JOURNAL" "$ID" "$HERDR_LABEL_HOME" \
             "$HERDR_RECOVERY_WORKSPACE_ID" "$HERDR_RECOVERY_TAB_ID" "$HERDR_RECOVERY_PANE_ID" \
             "$HERDR_PARENT_LABEL" "$W" "$PROJ_ABS"
@@ -1566,8 +1347,8 @@ case "$BACKEND" in
               HERDR_PROJECTED=1
               HERDR_WORKSPACE_ID=$HERDR_RECOVERY_WORKSPACE_ID
               HERDR_SEEDED_DEFAULT_TAB_ID=""
-              HERDR_TAB_ID=$FM_BACKEND_HERDR_PROJECTION_TAB_ID
-              HERDR_PANE_ID=$FM_BACKEND_HERDR_PROJECTION_PANE_ID
+              HERDR_TAB_ID=$FM_HERDR_PROJECTION_TAB_ID
+              HERDR_PANE_ID=$FM_HERDR_PROJECTION_PANE_ID
               HERDR_PROJECTION_ABORT_CLEANUP=1
               HERDR_PROJECTION_ABORT_SESSION=$HERDR_SES
               HERDR_PROJECTION_ABORT_TASK_PANE=$HERDR_PANE_ID
@@ -1584,10 +1365,10 @@ case "$BACKEND" in
       elif [ ! -e "$STATE/$ID.meta" ] && [ ! -L "$STATE/$ID.meta" ]; then
         # Session lock path resolution and exact parent binding both need a
         # live named-session socket before journal publication.
-        if ! fm_backend_herdr_server_ensure "$HERDR_SES"; then
+        if ! fm_herdr_server_ensure "$HERDR_SES"; then
           echo "warning: herdr presentation could not ensure its session server; using the ordinary flat layout without projection" >&2
-        elif [ "${FM_BACKEND_HERDR_PRESENTATION_PREFERENCE:-default}" = default ] \
-          && ! fm_backend_herdr_presentation_default_supported "$STATE" "$HERDR_SES"; then
+        elif [ "${FM_HERDR_PRESENTATION_PREFERENCE:-default}" = default ] \
+          && ! fm_herdr_presentation_default_supported "$STATE" "$HERDR_SES"; then
           :
         elif spawn_herdr_presentation_order_lock_acquire "$HERDR_SES"; then
           # The projected child is placed and bound UNDER this launcher's exact
@@ -1596,12 +1377,12 @@ case "$BACKEND" in
           # no herdr ancestry at all. A claimed-but-broken identity refuses here
           # rather than projecting under a guessed parent.
           set +e
-          fm_backend_herdr_launcher_identity "$HERDR_SES"
+          fm_herdr_launcher_identity "$HERDR_SES"
           HERDR_LAUNCHER_STATUS=$?
           set -e
           case "$HERDR_LAUNCHER_STATUS" in
-            0) HERDR_PARENT_WORKSPACE_ID=$FM_BACKEND_HERDR_LAUNCHER_WORKSPACE_ID ;;
-            2) HERDR_PARENT_WORKSPACE_ID=$(fm_backend_herdr_projection_parent_workspace_exact \
+            0) HERDR_PARENT_WORKSPACE_ID=$FM_HERDR_LAUNCHER_WORKSPACE_ID ;;
+            2) HERDR_PARENT_WORKSPACE_ID=$(fm_herdr_projection_parent_workspace_exact \
                  "$HERDR_SES" "$HERDR_PARENT_LABEL" 2>/dev/null || true) ;;
             *) spawn_herdr_presentation_order_lock_release; exit 1 ;;
           esac
@@ -1609,37 +1390,37 @@ case "$BACKEND" in
             echo "warning: herdr presentation parent is absent or ambiguous; using the ordinary flat layout without projection" >&2
             spawn_herdr_presentation_order_lock_release
           else
-            HERDR_PROJECTION_ID=$(fm_backend_herdr_projection_journal_create "$STATE" "$ID") || exit 1
-            HERDR_PROJECTION_LABEL=$(fm_backend_herdr_projection_workspace_label "$ID" "$HERDR_PROJECTION_ID")
-            if ! FM_HOME="$HERDR_LABEL_HOME" fm_backend_herdr_projection_create_task \
+            HERDR_PROJECTION_ID=$(fm_herdr_projection_journal_create "$STATE" "$ID") || exit 1
+            HERDR_PROJECTION_LABEL=$(fm_herdr_projection_workspace_label "$ID" "$HERDR_PROJECTION_ID")
+            if ! FM_HOME="$HERDR_LABEL_HOME" fm_herdr_projection_create_task \
               "$PROJ_ABS" "$HERDR_PROJECTION_LABEL" "$W"; then
-              if [ "${FM_BACKEND_HERDR_PROJECTION_CLEANUP_SAFE:-0}" = 1 ]; then
+              if [ "${FM_HERDR_PROJECTION_CLEANUP_SAFE:-0}" = 1 ]; then
                 HERDR_PROJECTION_ABORT_CLEANUP=1
-                HERDR_PROJECTION_ABORT_SESSION=$FM_BACKEND_HERDR_PROJECTION_SESSION
-                HERDR_PROJECTION_ABORT_TASK_PANE=$FM_BACKEND_HERDR_PROJECTION_PANE_ID
-                HERDR_PROJECTION_ABORT_SEEDED_PANE=$FM_BACKEND_HERDR_PROJECTION_SEEDED_PANE_ID
+                HERDR_PROJECTION_ABORT_SESSION=$FM_HERDR_PROJECTION_SESSION
+                HERDR_PROJECTION_ABORT_TASK_PANE=$FM_HERDR_PROJECTION_PANE_ID
+                HERDR_PROJECTION_ABORT_SEEDED_PANE=$FM_HERDR_PROJECTION_SEEDED_PANE_ID
               fi
               exit 1
             fi
             HERDR_PROJECTED=1
-            HERDR_SES=$FM_BACKEND_HERDR_PROJECTION_SESSION
-            HERDR_WORKSPACE_ID=$FM_BACKEND_HERDR_PROJECTION_WORKSPACE_ID
-            HERDR_SEEDED_DEFAULT_TAB_ID=$FM_BACKEND_HERDR_PROJECTION_SEEDED_TAB_ID
-            HERDR_TAB_ID=$FM_BACKEND_HERDR_PROJECTION_TAB_ID
-            HERDR_PANE_ID=$FM_BACKEND_HERDR_PROJECTION_PANE_ID
+            HERDR_SES=$FM_HERDR_PROJECTION_SESSION
+            HERDR_WORKSPACE_ID=$FM_HERDR_PROJECTION_WORKSPACE_ID
+            HERDR_SEEDED_DEFAULT_TAB_ID=$FM_HERDR_PROJECTION_SEEDED_TAB_ID
+            HERDR_TAB_ID=$FM_HERDR_PROJECTION_TAB_ID
+            HERDR_PANE_ID=$FM_HERDR_PROJECTION_PANE_ID
             HERDR_PROJECTION_ABORT_CLEANUP=1
             HERDR_PROJECTION_ABORT_SESSION=$HERDR_SES
             HERDR_PROJECTION_ABORT_TASK_PANE=$HERDR_PANE_ID
-            HERDR_PROJECTION_ABORT_SEEDED_PANE=$FM_BACKEND_HERDR_PROJECTION_SEEDED_PANE_ID
-            fm_backend_herdr_projection_order_best_effort \
+            HERDR_PROJECTION_ABORT_SEEDED_PANE=$FM_HERDR_PROJECTION_SEEDED_PANE_ID
+            fm_herdr_projection_order_best_effort \
               "$HERDR_SES" "$HERDR_WORKSPACE_ID" "$HERDR_PARENT_LABEL" "$HERDR_PARENT_WORKSPACE_ID"
-            HERDR_HOME_ID=$(fm_backend_herdr_projection_home_identity "$HERDR_LABEL_HOME" 2>/dev/null || true)
+            HERDR_HOME_ID=$(fm_herdr_projection_home_identity "$HERDR_LABEL_HOME" 2>/dev/null || true)
             if [ -n "$HERDR_HOME_ID" ] \
-               && fm_backend_herdr_projection_live_binding_matches \
+               && fm_herdr_projection_live_binding_matches \
                  "$HERDR_SES" "$HERDR_PROJECTION_ID" "$HERDR_WORKSPACE_ID" \
                  "$HERDR_TAB_ID" "$HERDR_PANE_ID" "$HERDR_PARENT_WORKSPACE_ID" \
                  "$HERDR_PARENT_LABEL" "$HERDR_PROJECTION_LABEL" "$W" \
-               && fm_backend_herdr_projection_journal_bind \
+               && fm_herdr_projection_journal_bind \
                  "$HERDR_PRESENTATION_JOURNAL" "$ID" "$HERDR_HOME_ID" "$HERDR_SES" \
                  "$HERDR_WORKSPACE_ID" "$HERDR_TAB_ID" "$HERDR_PANE_ID" \
                  "$HERDR_PARENT_WORKSPACE_ID" "$HERDR_PARENT_LABEL" "$HERDR_PROJECTION_LABEL" "$W"; then
@@ -1654,8 +1435,8 @@ case "$BACKEND" in
       fi
     fi
     if [ "$HERDR_PROJECTED" -ne 1 ]; then
-      HERDR_CONTAINER_RAW=$(FM_HOME="$HERDR_LABEL_HOME" fm_backend_herdr_container_ensure "$PROJ_ABS" "$HERDR_LAUNCHER_RELATIONSHIP") || exit 1
-      # fm_backend_herdr_container_ensure echoes "<session>:<workspace_id>\t<seeded_default_tab_id>"
+      HERDR_CONTAINER_RAW=$(FM_HOME="$HERDR_LABEL_HOME" fm_herdr_container_ensure "$PROJ_ABS" "$HERDR_LAUNCHER_RELATIONSHIP") || exit 1
+      # fm_herdr_container_ensure echoes "<session>:<workspace_id>\t<seeded_default_tab_id>"
       # (the second field empty when this call ADOPTED a pre-existing workspace
       # rather than creating a fresh one). Split on the guaranteed single tab
       # character; the seeded tab id is threaded through to create_task
@@ -1665,7 +1446,7 @@ case "$BACKEND" in
       HERDR_SEEDED_DEFAULT_TAB_ID=${HERDR_CONTAINER_RAW#*$'\t'}
       HERDR_SES=${CONTAINER%%:*}
       HERDR_WORKSPACE_ID=${CONTAINER#*:}
-      HERDR_TASK_IDS=$(FM_HOME="$HERDR_LABEL_HOME" fm_backend_herdr_create_task "$CONTAINER" "$W" "$PROJ_ABS" "$HERDR_SEEDED_DEFAULT_TAB_ID") || exit 1
+      HERDR_TASK_IDS=$(FM_HOME="$HERDR_LABEL_HOME" fm_herdr_create_task "$CONTAINER" "$W" "$PROJ_ABS" "$HERDR_SEEDED_DEFAULT_TAB_ID") || exit 1
       read -r HERDR_TAB_ID HERDR_PANE_ID <<EOF
 $HERDR_TASK_IDS
 EOF
@@ -1675,44 +1456,17 @@ EOF
       exit 1
     fi
     T="$HERDR_SES:$HERDR_PANE_ID"
-    ;;
-esac
 fi
 if [ "$KIND" = secondmate ]; then
   FM_INHERITABLE_CONFIG=trace-context \
     propagate_inheritable_config "$CONFIG" "$PROJ_ABS/config" \
     || echo "warning: secondmate $ID trace-context inheritance failed for $PROJ_ABS" >&2
 fi
-# #134 robustness: only tmux needs a worktree-detection target distinct from $T -
-# its rename-safe stable window id, set as WT_TARGET=$WID in the tmux branch above.
-# Herdr addresses its pane by the id already in $T, so default WT_TARGET to $T.
-# The shared treehouse-get and
-# worktree-detection steps below must never reference an unbound WT_TARGET under set -u.
-: "${WT_TARGET:=$T}"
-spawn_send_text_line() {  # <target> <text>
-  case "$BACKEND" in
-    tmux) fm_backend_tmux_send_text_line "$1" "$2" ;;
-    herdr) fm_backend_herdr_send_text_line "$1" "$2" ;;
-  esac
-}
-spawn_current_path() {  # <target>
-  case "$BACKEND" in
-    tmux) fm_backend_tmux_current_path "$1" ;;
-    herdr) fm_backend_herdr_current_path "$1" ;;
-  esac
-}
-spawn_send_literal() {  # <target> <text>
-  case "$BACKEND" in
-    tmux) fm_backend_tmux_send_literal "$1" "$2" ;;
-    herdr) fm_backend_herdr_send_literal "$1" "$2" ;;
-  esac
-}
-spawn_send_key() {  # <target> <key>
-  case "$BACKEND" in
-    tmux) fm_backend_tmux_send_key "$1" "$2" ;;
-    herdr) fm_backend_herdr_send_key "$1" "$2" ;;
-  esac
-}
+WT_TARGET=$T
+spawn_send_text_line() { fm_herdr_send_text_line "$1" "$2"; }
+spawn_current_path() { fm_herdr_current_path "$1"; }
+spawn_send_literal() { fm_herdr_send_literal "$1" "$2"; }
+spawn_send_key() { fm_herdr_send_key "$1" "$2"; }
 
 if [ "$RELAUNCH" -eq 1 ]; then
   # No worktree is acquired: the recorded one is reused as-is. What must be
@@ -1744,7 +1498,7 @@ elif [ "$KIND" != secondmate ]; then
   # PROJ_ABS on the very first poll, before the pane has actually moved.
   #
   # A single read that already differs from PROJ_ABS_REAL is not proof the pane
-  # settled there: on some tmux/WSL setups a brand-new window's pane_current_path
+  # settled there: a brand-new Herdr pane's current path
   # transiently reports an unrelated stale path (seen live as another real git
   # checkout entirely) before the shell catches up with treehouse get's cd. That
   # stale path still passes the PROJ_ABS_REAL comparison and validate_spawn_worktree
@@ -1801,21 +1555,15 @@ if [ "$RELAUNCH" -eq 1 ]; then
   RELAUNCH_REPLACEMENT_STATE=$STATE_REAL
 fi
 if [ "$KIND" != secondmate ]; then
-  # Arm the semantic busy-state contract (bin/fm-busy-lib.sh) for every
-  # adapter with a verified semantic source. The launch brief sent below IS a
+  # Arm the semantic busy-state contract (bin/fm-busy-lib.sh). The launch brief sent below IS a
   # submitted turn, so the seed record is busy/fm-spawn. The tracked Pi
   # extension captures this exact generation from validated task metadata, and
   # the writer rejects callbacks from a superseded incarnation as stale.
-  BUSY_GEN=
-  case "$HARNESS" in
-    pi)
-      BUSY_GEN=$("$FM_ROOT/bin/fm-busy-event.sh" arm "$STATE_REAL" "$ID") || {
-        echo "error: failed to arm the busy-state contract for $ID" >&2
-        exit 1
-      }
-      [ "$RELAUNCH" -ne 1 ] || RELAUNCH_REPLACEMENT_BUSY_GEN=$BUSY_GEN
-      ;;
-  esac
+  BUSY_GEN=$("$FM_ROOT/bin/fm-busy-event.sh" arm "$STATE_REAL" "$ID") || {
+    echo "error: failed to arm the busy-state contract for $ID" >&2
+    exit 1
+  }
+  [ "$RELAUNCH" -ne 1 ] || RELAUNCH_REPLACEMENT_BUSY_GEN=$BUSY_GEN
 fi
 
 # Delivery posture recorded in meta so fm-teardown's safety check and the
@@ -1862,6 +1610,12 @@ else
   fi
 fi
 
+if [ "$HERDR_PRESENTATION_ORDER_LOCK_HELD" != 1 ]; then
+  spawn_herdr_presentation_order_lock_acquire "$HERDR_SES" || {
+    echo "error: herdr launch could not acquire its session lock" >&2
+    exit 1
+  }
+fi
 META_WINDOW=$T
 SPAWN_GEN="s$(date +%s).${BASHPID:-$$}.$RANDOM"
 SPAWN_META_PATH="$STATE/$ID.meta"
@@ -1886,7 +1640,6 @@ preserve_relaunch_meta() {
   echo "endpoint_task_id=$ID"
   echo "worktree=$WT"
   echo "project=$PROJ_ABS"
-  echo "harness=$HARNESS"
   echo "kind=$KIND"
   [ -z "$MODE" ] || echo "mode=$MODE"
   [ -z "$YOLO" ] || echo "yolo=$YOLO"
@@ -1896,16 +1649,13 @@ preserve_relaunch_meta() {
   [ -z "${BUSY_GEN:-}" ] || echo "busy_gen=$BUSY_GEN"
   echo "spawn_gen=$SPAWN_GEN"
   # Default-off writes no traceparent= line.
-  # backend= is written only for a non-default (non-tmux) backend, so the
-  # default path's meta stays byte-identical (absent backend= means tmux;
-  # data/fm-backend-design-d7's P1 compatibility contract).
-  [ "$BACKEND" = tmux ] || echo "backend=$BACKEND"
-  if [ "$BACKEND" = herdr ]; then
-    echo "herdr_session=$HERDR_SES"
-    echo "herdr_workspace_id=$HERDR_WORKSPACE_ID"
-    echo "herdr_tab_id=$HERDR_TAB_ID"
-    echo "herdr_pane_id=$HERDR_PANE_ID"
-  fi
+  # Keep the explicit marker: fieldless records are retired tmux evidence and
+  # must never be reinterpreted as Herdr.
+  echo "backend=herdr"
+  echo "herdr_session=$HERDR_SES"
+  echo "herdr_workspace_id=$HERDR_WORKSPACE_ID"
+  echo "herdr_tab_id=$HERDR_TAB_ID"
+  echo "herdr_pane_id=$HERDR_PANE_ID"
   if [ "$KIND" = secondmate ]; then
     echo "home=$PROJ_ABS"
     echo "projects=$SECONDMATE_PROJECTS"
@@ -1933,6 +1683,11 @@ if [ "$SPAWN_TASK_SET_LOCK_HELD" = 1 ]; then
   SPAWN_TASK_SET_LOCK_HELD=0
   fm_lock_release "$SPAWN_TASK_SET_LOCK"
 fi
+fm_herdr_validate_live_task_endpoint "$STATE/$ID.meta" "$ID" || exit 1
+[ "$FM_HERDR_VALIDATED_TARGET" = "$T" ] || {
+  echo "error: herdr launch endpoint changed before delivery" >&2
+  exit 1
+}
 
 sq_brief=$(shell_quote "$BRIEF")
 sq_piworkerctx=$(shell_quote "$STATE_REAL/$ID.meta")
@@ -1941,8 +1696,8 @@ sq_piturnend=$(shell_quote "$PROJ_ABS/.pi/extensions/fm-primary-turnend-guard.ts
 sq_piwatch=$(shell_quote "$PROJ_ABS/.pi/extensions/fm-primary-pi-watch.ts")
 sq_opinput=$(shell_quote "$FM_ROOT/bin/fm-operational-input.sh")
 sq_worktree=$(shell_quote "$WT")
-MODELFLAG=$(model_flag_for_harness "$HARNESS" "$MODEL")
-EFFORTFLAG=$(effort_flag_for_harness "$HARNESS" "$EFFORT")
+MODELFLAG=$(pi_model_flag "$MODEL")
+EFFORTFLAG=$(pi_effort_flag "$EFFORT")
 LAUNCH=${LAUNCH//__MODELFLAG__/$MODELFLAG}
 LAUNCH=${LAUNCH//__EFFORTFLAG__/$EFFORTFLAG}
 LAUNCH=${LAUNCH//__BRIEF__/$sq_brief}
@@ -1951,14 +1706,11 @@ LAUNCH=${LAUNCH//__PIWORKEREXT__/$sq_piworkerext}
 LAUNCH=${LAUNCH//__PITURNEND__/$sq_piturnend}
 LAUNCH=${LAUNCH//__PIWATCH__/$sq_piwatch}
 LAUNCH=${LAUNCH//__OPINPUT__/$sq_opinput}
-case "$HARNESS" in
-  pi) LAUNCH=${LAUNCH//__PIBIN__/"$(shell_quote "$PI_BIN")"} ;;
-esac
+LAUNCH=${LAUNCH//__PIBIN__/"$(shell_quote "$PI_BIN")"}
 LAUNCH=${LAUNCH//__WORKTREE__/$sq_worktree}
 if [ "$KIND" = secondmate ]; then
   sq_home=$(shell_quote "$PROJ_ABS")
   sq_primary_home=$(shell_quote "$FM_HOME")
-  supervision_model=persistent
   # Deliver the primary's EFFECTIVE trace-context decision as a normalized on/off
   # literal (never the raw FM_TRACE_CONTEXT string) so a FM_TRACE_CONTEXT override
   # on the primary reaches the secondmate's OWN workers, not just the copied
@@ -1966,7 +1718,7 @@ if [ "$KIND" = secondmate ]; then
   # not enable them across the launch boundary (bin/fm-trace-context-lib.sh header).
   # Reuse the single frozen decision from the carrier resolution above so the
   # injected carrier and this on/off snapshot are guaranteed to agree.
-  LAUNCH="FM_ROOT_OVERRIDE= FM_STATE_OVERRIDE= FM_DATA_OVERRIDE= FM_PROJECTS_OVERRIDE= FM_CONFIG_OVERRIDE= FM_PUBLIC_FOLLOWUP_PRIMARY_HOME=$sq_primary_home FM_HOME=$sq_home FM_TRACE_CONTEXT=$SPAWN_TRACE_EFFECTIVE FM_SUPERVISION_MODEL=$supervision_model $LAUNCH"
+  LAUNCH="FM_ROOT_OVERRIDE= FM_STATE_OVERRIDE= FM_DATA_OVERRIDE= FM_PROJECTS_OVERRIDE= FM_CONFIG_OVERRIDE= FM_PUBLIC_FOLLOWUP_PRIMARY_HOME=$sq_primary_home FM_HOME=$sq_home FM_TRACE_CONTEXT=$SPAWN_TRACE_EFFECTIVE $LAUNCH"
 fi
 if [ -z "$SPAWN_TRACEPARENT" ] && [ "$RELAUNCH" -eq 1 ]; then
   LAUNCH="unset TRACEPARENT; $LAUNCH"
@@ -1991,35 +1743,36 @@ spawn_record_traceparent() {
   return "$status"
 }
 
-# Export GOTMPDIR into the crewmate's pane shell so the agent and every child
-# process (go build, go test, ...) inherit it. Sent before the launch command so
-# the env is set when the agent starts; the brief sleep lets the export land.
-spawn_send_text_line "$T" "export GOTMPDIR=$TASK_TMP/gotmp"
-# Send through the exact channel that already ships GOTMPDIR, so every backend
-# and harness - ship, scout, and secondmate - gets it before launch. Skipped
-# entirely when trace context is off.
-if [ -n "$SPAWN_TRACEPARENT" ]; then
-  if spawn_send_text_line "$T" "export TRACEPARENT=$SPAWN_TRACEPARENT"; then
-    if ! spawn_record_traceparent; then
-      LAUNCH="unset TRACEPARENT; $LAUNCH"
+spawn_deliver_launch_bound() {
+  local target=$1 launch=$2 trace_send_status
+  spawn_send_text_line "$target" "export GOTMPDIR=$TASK_TMP/gotmp" || return $?
+  if [ -n "$SPAWN_TRACEPARENT" ]; then
+    if spawn_send_text_line "$target" "export TRACEPARENT=$SPAWN_TRACEPARENT"; then
+      if ! spawn_record_traceparent; then
+        launch="unset TRACEPARENT; $launch"
+      fi
+    else
+      trace_send_status=$?
+      if [ "$trace_send_status" -eq 2 ]; then
+        echo "error: trace-context input could not be cleared for $W; refusing to append the launch command" >&2
+        return 2
+      fi
+      launch="unset TRACEPARENT; $launch"
     fi
-  else
-    TRACE_SEND_STATUS=$?
-    if [ "$TRACE_SEND_STATUS" -eq 2 ]; then
-      echo "error: trace-context input could not be cleared for $W; refusing to append the launch command" >&2
-      exit 1
-    fi
-    LAUNCH="unset TRACEPARENT; $LAUNCH"
   fi
+  sleep 0.3
+  spawn_send_literal "$target" "$launch" || return $?
+  sleep 0.3
+  spawn_send_key "$target" Enter
+}
+
+spawn_herdr_presentation_order_lock_release
+if ! fm_herdr_with_live_task_endpoint "$STATE/$ID.meta" "$ID" \
+  spawn_deliver_launch_bound "$LAUNCH"; then
+  echo "error: herdr launch delivery lost its exact endpoint authorization" >&2
+  exit 1
 fi
-sleep 0.3
-spawn_send_literal "$T" "$LAUNCH"
-sleep 0.3
-if [ "${HERDR_PROJECTED:-0}" -eq 1 ]; then
-  HERDR_PROJECTION_ABORT_CLEANUP=0
-  spawn_herdr_presentation_order_lock_release
-fi
-spawn_send_key "$T" Enter
+HERDR_PROJECTION_ABORT_CLEANUP=0
 if [ "$KIND" = secondmate ] && [ "${FM_SKIP_SECONDMATE_INHERIT:-0}" != 1 ]; then
   if ! fm_config_reread_discard_pending "$PROJ_ABS" "$ID" "$FM_HOME"; then
     if fm_config_reread_quarantine_pending "$PROJ_ABS" "$ID" "$FM_HOME"; then
@@ -2032,4 +1785,4 @@ fi
 
 SPAWN_DELIVERY=
 [ -z "$MODE" ] || SPAWN_DELIVERY=" mode=$MODE yolo=$YOLO"
-echo "spawned $ID harness=$HARNESS kind=$KIND$SPAWN_DELIVERY window=$META_WINDOW worktree=$WT"
+echo "spawned $ID kind=$KIND$SPAWN_DELIVERY window=$META_WINDOW worktree=$WT"

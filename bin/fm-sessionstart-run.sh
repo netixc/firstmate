@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
-# Session-open entry point for harnesses that RUN the digest instead of asking
-# the agent to. It is the one command those harnesses' session-open adapters
-# invoke, and it decides, from the session-open source, whether this open needs
-# the full digest, a context re-emit, or nothing at all.
+# Pi session-open entry point that RUNS the digest instead of asking the agent
+# to. Pi's session-open hook invokes this command, which decides from Pi's
+# source whether this open needs the full digest, a context re-emit, or nothing
+# at all.
 #
 # Why running beats nudging: bin/fm-sessionstart-nudge.sh can only ASK the agent
 # to take the helm, and an agent can defer that, including when a first-command
-# skill has its own read-only path. When the harness injects hook stdout into
+# skill has its own read-only path. When Pi injects hook stdout into
 # model context, running the digest here removes that discretion - the helm is
 # taken before the model's first turn, whatever the first turn is.
 #
 # Usage: fm-sessionstart-run.sh [--source <source>]
-#   --source  The harness's own session-open source. An omitted or unrecognized
+#   --source  Pi's session-open source. An omitted or unrecognized
 #             source is treated as `startup`, because taking the helm redundantly
 #             is cheap and idempotent while not taking it is the whole bug.
 #
-# Source routing (see docs/sessionstart-nudge.md for the per-harness names):
+# Source routing (see docs/sessionstart-nudge.md for the Pi source names):
 #   startup, new            full digest - this process has not taken the helm
 #   clear, compact          `--reemit` digest only when this lock owner recorded
 #                           a completed full startup; otherwise a full digest,

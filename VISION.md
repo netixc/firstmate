@@ -55,11 +55,11 @@ A new task shape earns its way in only when existing primitives genuinely cannot
 ## The fleet outlives any vendor
 
 The first mate is not another harness and not another orchestrator app.
-The experience it creates is a new way of working, orthogonal to which agent harness or session manager the captain already uses.
-It is an agent distro, not an app: instructions, skills, scripts, and state conventions that Pi can inhabit and that run across session managers such as tmux and Herdr.
+The experience it creates is a new way of working built on one verified execution contract: Pi on Herdr.
+It is an agent distro, not an app: instructions, skills, scripts, and state conventions that Pi inhabits through Herdr.
 The first mate can read, understand, and evolve every part of itself: plain instructions, scripts, and text records keep the whole system introspectable, hot-modifiable, and self-evolving by the very agent that runs it.
 When something is not working well, the captain can ask the first mate and it figures it out; captains using their own firstmate to improve the shared surface is how the fleet evolves in the open.
-Harness adapters earn trust through verification.
+The Pi-on-Herdr execution path earns trust through verification.
 Contracts bind to semantics a vendor actually exposes, never to the pixels of today's UI.
 Quota, model, and effort choices stay inspectable and captain-owned; the first mate never downgrades the intelligence doing the work without the captain's standing, explicit permission.
 
@@ -72,4 +72,4 @@ The shared surface is generic and captain-agnostic; everything personal - prefer
 This repository ships through its own discipline: firstmate work is validated like any other project's, and field incidents become regression coverage.
 
 A change aligns when it deepens the captain's peace of mind, confidence, and ease of looking away, gives more shipped outcomes per unit of attention and tokens, makes delegation safer or more legible, strengthens a refusal path, keeps the system introspectable, hot-modifiable, and self-evolving, or lets the fleet survive another failure mode.
-A change should be resisted when it trades that experience for more noise or more context-switching, lets the fleet act beyond adjudicable intent, assumes consent instead of asking for it, adds a layer between intent and action, mixes scripted mechanics with agent judgment, spends tokens where a script would do, serves anyone but the captain, couples the distro to one vendor or session manager, buries an outcome in mechanics, or grows the command layer into the workshop it commands.
+A change should be resisted when it trades that experience for more noise or more context-switching, lets the fleet act beyond adjudicable intent, assumes consent instead of asking for it, adds a layer between intent and action, mixes scripted mechanics with agent judgment, spends tokens where a script would do, serves anyone but the captain, weakens the verified Pi-on-Herdr execution contract, buries an outcome in mechanics, or grows the command layer into the workshop it commands.

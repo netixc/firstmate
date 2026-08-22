@@ -39,8 +39,7 @@
 #   3. inactive outcomes + wake-drain - runs the local bounded inactive-outcome
 #                       reconciliation before presenting durable wakes and advancing
 #                       recovery handling state, so both only run when locked.
-#   4. supervision-instructions - the one emitted operating block for the
-#                       detected primary harness.
+#   4. supervision-instructions - the Pi operating block.
 #   5. read-once contract - the do-not-re-read contract covering every source
 #                       represented by the two digests below.
 #   6. fleet digest   - a compact data/backlog.md identity/metadata listing,
@@ -53,7 +52,7 @@
 #                       data/captain-shared.md, data/learnings.md: read-only,
 #                       always safe, always runs.
 #   9. closing reminder - prints the context-specific watcher next step; this
-#                       script points back to the emitted harness supervision
+#                       script points back to the emitted Pi supervision
 #                       block and deliberately never arms the watcher itself.
 #
 # Those nine names are also the runtime-bound stage list below, so a truncated
@@ -79,7 +78,7 @@
 # waiting for them. It never reports an unconfirmed check as passed.
 #
 # ORDERING, and why FLEET STATE now runs before CONTEXT: this digest is
-# delivered through a harness that truncates an oversized payload from the TAIL,
+# delivered through Pi, which truncates an oversized payload from the TAIL,
 # and it has really been truncated in practice - a 70KB digest arrived as lines
 # 1-435 of 578, cutting off eight lines before the live-task inventory. What a
 # truncated tail drops must therefore be the CHEAPEST thing to lose. Curated
@@ -111,7 +110,7 @@
 # The tradeoff this ordering accepts: a refused (read-only) session must not
 # go dark. So on refusal, bootstrap still runs (in FM_BOOTSTRAP_DETECT_ONLY=1
 # mode) for its local read-only detect lines - missing tools, the worktree-tangle
-# check, the harness override, crew-dispatch validation, tasks-axi and quota-axi
+# check, Pi admission, crew-dispatch validation, tasks-axi and quota-axi
 # tool checks, and tasks-axi availability - none of which mutate shared state
 # and all of which are safe to compute without verified lock ownership.
 # It deliberately skips the network-only GitHub-auth probe because a read-only
@@ -195,7 +194,7 @@
 #             and a session that owns the lock is exactly the session that must
 #             handle and acknowledge them. Lock acquisition still runs, because
 #             ownership must be re-verified rather than assumed: fm-lock.sh already treats a lock
-#             this session's own harness holds as its own, so the re-emit
+#             this session's own Pi process holds as its own, so the re-emit
 #             proceeds, while a lock another live session took meanwhile still
 #             produces the ordinary read-only path.
 #
@@ -203,10 +202,10 @@
 #             fm-sessionstart-run.sh. A genuine `startup` that owns the active
 #             session lock records AGENTS.md's SHA-256 baseline only after the
 #             digest completion record is published, keyed to that lock's
-#             harness pid. No resume, clear, reset, compact, or other rebuild
+#             Pi pid. No resume, clear, reset, compact, or other rebuild
 #             creates or replaces it. Pi compaction is the only
 #             supported stale-cache rebuild pair: a missing baseline, a baseline
-#             for another harness pid, or a changed hash causes the complete
+#             for another Pi pid, or a changed hash causes the complete
 #             current AGENTS.md to print before the bulky digest. The baseline
 #             remains immutable so every later drifted compaction refreshes
 #             again, while an equal baseline emits no instruction refresh.
@@ -265,6 +264,15 @@ stage() {  # <stage-name>: breadcrumb for the parent's truncation banner
 # shellcheck source=bin/fm-session-lock-lib.sh
 . "$SCRIPT_DIR/fm-session-lock-lib.sh"
 
+if [ "${PI_CODING_AGENT:-}" != true ] && ! fm_pi_ancestry_pid >/dev/null 2>&1; then
+  printf 'error: Pi is required as the primary runtime\n' >&2
+  exit 1
+fi
+
+# shellcheck source=bin/fm-herdr.sh
+. "$SCRIPT_DIR/fm-herdr.sh"
+fm_herdr_require_runtime || exit 1
+
 if [ -z "${FM_SESSION_START_STAGE_FILE:-}" ]; then
   SESSION_START_BUDGET=${FM_SESSION_START_TIMEOUT:-120}
   # A non-positive or non-numeric budget is not a budget (`timeout 0` disables
@@ -321,10 +329,6 @@ if [ -z "${FM_SESSION_START_STAGE_FILE:-}" ]; then
   exit 0
 fi
 
-PRIMARY_HARNESS=$("$SCRIPT_DIR/fm-harness.sh" 2>/dev/null || printf unknown)
-
-# shellcheck source=bin/fm-backend.sh
-. "$SCRIPT_DIR/fm-backend.sh"
 # shellcheck source=bin/fm-tasks-axi-lib.sh
 . "$SCRIPT_DIR/fm-tasks-axi-lib.sh"
 # shellcheck source=bin/fm-public-followup-lib.sh
@@ -576,10 +580,7 @@ agents_baseline_drifted() {  # <rebuilding-session-pid>
 # working Firstmate delivery path arrive here. Other adapters fresh-read on reset.
 agents_refresh_required() {  # <rebuilding-session-pid>
   local lock_pid=$1
-  case "$PRIMARY_HARNESS:$SESSION_SOURCE" in
-    pi:compact) ;;
-    *) return 1 ;;
-  esac
+  [ "$SESSION_SOURCE" = compact ] || return 1
   agents_baseline_drifted "$lock_pid"
 }
 
@@ -638,7 +639,7 @@ if [ "$LOCK_RC" -ne 0 ]; then
     printf '%s\n' "$BAR"
   }
 fi
-REBUILDING_SESSION_PID=$(fm_harness_ancestry_pid 2>/dev/null || true)
+REBUILDING_SESSION_PID=$(fm_pi_ancestry_pid 2>/dev/null || true)
 print_agents_refresh_if_required "$REBUILDING_SESSION_PID"
 
 if [ "$READ_ONLY" -eq 0 ]; then
@@ -727,22 +728,19 @@ AFK_PRESENT=0
 RELAY_PRESENT=0
 [ -f "$CONFIG/relay.env" ] && RELAY_PRESENT=1
 
-if [ "$PRIMARY_HARNESS" = pi ]; then
-  PI_EXT="$FM_ROOT/.pi/extensions/fm-primary-pi-watch.ts"
-  PI_TURNEND_EXT="$FM_ROOT/.pi/extensions/fm-primary-turnend-guard.ts"
-  PI_WATCH_MARKER="$STATE/.pi-watch-extension-loaded"
-  PI_TURNEND_MARKER="$STATE/.pi-turnend-extension-loaded"
-  PI_LOCK="$STATE/.lock"
-  PI_RESTART_COMMAND=pi
-  PI_WATCH_VERSION=$(fm_pi_extension_version "$PI_EXT" || printf '')
-  PI_TURNEND_VERSION=$(fm_pi_extension_version "$PI_TURNEND_EXT" || printf '')
-  if ! fm_pi_extension_loaded "$PI_WATCH_MARKER" "$PI_WATCH_VERSION" "$PI_LOCK" \
-    || ! fm_pi_extension_loaded "$PI_TURNEND_MARKER" "$PI_TURNEND_VERSION" "$PI_LOCK"; then
-    printf 'PI_WATCH_EXTENSION: not loaded - approve Pi project trust once per clone, then restart %s so %s and %s auto-load for turn-end guard and background wake coverage; use -e %s -e %s only if project hooks are not trusted\n' "$PI_RESTART_COMMAND" "$PI_TURNEND_EXT" "$PI_EXT" "$PI_TURNEND_EXT" "$PI_EXT"
-  fi
+PI_EXT="$FM_ROOT/.pi/extensions/fm-primary-pi-watch.ts"
+PI_TURNEND_EXT="$FM_ROOT/.pi/extensions/fm-primary-turnend-guard.ts"
+PI_WATCH_MARKER="$STATE/.pi-watch-extension-loaded"
+PI_TURNEND_MARKER="$STATE/.pi-turnend-extension-loaded"
+PI_LOCK="$STATE/.lock"
+PI_RESTART_COMMAND=pi
+PI_WATCH_VERSION=$(fm_pi_extension_version "$PI_EXT" || printf '')
+PI_TURNEND_VERSION=$(fm_pi_extension_version "$PI_TURNEND_EXT" || printf '')
+if ! fm_pi_extension_loaded "$PI_WATCH_MARKER" "$PI_WATCH_VERSION" "$PI_LOCK" \
+  || ! fm_pi_extension_loaded "$PI_TURNEND_MARKER" "$PI_TURNEND_VERSION" "$PI_LOCK"; then
+  printf 'PI_WATCH_EXTENSION: not loaded - approve Pi project trust once per clone, then restart %s so %s and %s auto-load for turn-end guard and background wake coverage; use -e %s -e %s only if project hooks are not trusted\n' "$PI_RESTART_COMMAND" "$PI_TURNEND_EXT" "$PI_EXT" "$PI_TURNEND_EXT" "$PI_EXT"
 fi
 "$SCRIPT_DIR/fm-supervision-instructions.sh" \
-  --harness "$PRIMARY_HARNESS" \
   --read-only "$READ_ONLY" \
   --afk "$AFK_PRESENT" \
   --relay "$RELAY_PRESENT"
@@ -795,13 +793,49 @@ for meta in "$STATE"/*.meta; do
   cat "$meta"
 
   window=$(fm_meta_get "$meta" window)
-  target=$(fm_backend_target_of_meta "$meta")
+  remote_host=$(fm_meta_get "$meta" remote_host)
+  remote_route=0
+  if [ -n "$remote_host" ] && fm_herdr_validate_remote_route "$meta" "$id" >/dev/null 2>&1; then
+    target=$FM_HERDR_VALIDATED_REMOTE_TARGET
+    remote_route=1
+  else
+    target=$(fm_endpoint_target_of_meta "$meta")
+  fi
   if [ -n "$window" ]; then
-    backend=$(fm_backend_of_meta "$meta")
-    if fm_backend_target_exists "$backend" "${target:-$window}" "fm-$id"; then
-      printf 'endpoint: alive (backend=%s window=%s)\n' "$backend" "$window"
+    if [ "$remote_route" -eq 1 ]; then
+      backend=herdr
     else
-      printf 'endpoint: dead (backend=%s window=%s)\n' "$backend" "$window"
+      backend=$(fm_herdr_meta_kind "$meta")
+    fi
+    if [ "$backend" != herdr ]; then
+      printf 'endpoint: unknown (%s record preserved for manual reconciliation; window=%s)\n' "$backend" "$window"
+    elif [ -n "$remote_host" ] && [ "$remote_route" -ne 1 ]; then
+      printf 'endpoint: unknown (invalid remote Herdr route preserved for manual reconciliation; window=%s)\n' "$window"
+    elif [ "$remote_route" -eq 1 ]; then
+      printf 'endpoint: remote (Herdr route=%s host=%s)\n' "$target" "$remote_host"
+    elif [ -z "$target" ]; then
+      printf 'endpoint: unknown (invalid Herdr record preserved for manual reconciliation; window=%s)\n' "$window"
+    else
+      endpoint_state=$(fm_herdr_agent_state "$target" 2>/dev/null || printf unreadable)
+      case "$endpoint_state" in
+        missing)
+          printf 'endpoint: dead (Herdr window=%s)\n' "$window"
+          ;;
+        alive|dead)
+          if live_state=$(fm_herdr_live_agent_state_task_endpoint "$meta" "$id" 2>/dev/null); then
+            case "$live_state" in
+              alive) printf 'endpoint: alive (Herdr window=%s)\n' "$window" ;;
+              dead) printf 'endpoint: dead (Herdr window=%s)\n' "$window" ;;
+              *) printf 'endpoint: unknown (Herdr liveness unreadable; window=%s)\n' "$window" ;;
+            esac
+          else
+            printf 'endpoint: unknown (Herdr component identity mismatch; window=%s)\n' "$window"
+          fi
+          ;;
+        *)
+          printf 'endpoint: unknown (Herdr unreachable or unreadable; window=%s)\n' "$window"
+          ;;
+      esac
     fi
   else
     printf 'endpoint: unknown (no window recorded)\n'
@@ -903,14 +937,14 @@ supervision.
 EOF
 elif [ -f "$CONFIG/relay.env" ]; then
   cat <<EOF
-Follow the supervision operating instructions block above for harness '$PRIMARY_HARNESS'.
+Follow the Pi supervision operating instructions block above.
 Relay is active, so the emitted block's cadence instruction applies.
 This script never starts supervision itself.
 
 EOF
 else
 cat <<EOF
-Follow the supervision operating instructions block above for harness '$PRIMARY_HARNESS'.
+Follow the Pi supervision operating instructions block above.
 This script never starts supervision itself.
 
 EOF

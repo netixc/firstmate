@@ -2,7 +2,7 @@
 # Host-local lifecycle control for the remote secondmate home selected by fm-on.
 #
 # Usage:
-#   fm-remote-secondmate-control.sh launch <id> <harness> <model|-> <effort|-> herdr [traceparent]
+#   fm-remote-secondmate-control.sh launch <id> <model|-> <effort|-> [traceparent]
 #   fm-remote-secondmate-control.sh state <id>
 #   fm-remote-secondmate-control.sh route <id>
 #   fm-remote-secondmate-control.sh send <id> <message>
@@ -14,11 +14,9 @@
 #   fm-remote-secondmate-control.sh retire <id> [--force]
 #
 # Remote placement ends here, but the second-mate agent always runs on the
-# Herdr backend in the dedicated fm-remote session, so launch refuses any other
-# selection rather than reading this home's config/backend. The interactive
-# default session remains for the user's work.
-# fm-spawn/fm-send/fm-teardown keep owning the local endpoint mechanics.
-# The home's own workers keep their ordinary backend selection.
+# dedicated fm-remote Herdr session. The interactive default session remains
+# for the user's work. fm-spawn/fm-send/fm-teardown keep owning the local
+# endpoint mechanics; the home's own workers also run on Herdr.
 # bin/fm-remote-doctor.sh owns that host's readiness for Herdr.
 # docs/remote-secondmates.md owns why.
 # A private parent-route state directory stores only the remote secondmate
@@ -42,10 +40,25 @@ CONTROL_STATE="$TARGET_HOME/state/parent-route"
 CONTROL_DATA="$TARGET_HOME/data/.parent-route"
 REMOTE_HERDR_SESSION=fm-remote
 
-# shellcheck source=bin/fm-backend.sh
-. "$SCRIPT_DIR/fm-backend.sh"
+# shellcheck source=bin/fm-herdr.sh
+. "$SCRIPT_DIR/fm-herdr.sh"
 # shellcheck source=bin/fm-pending-reply-lib.sh
 . "$SCRIPT_DIR/fm-pending-reply-lib.sh"
+
+fm_herdr_require_runtime || exit 1
+
+EXPECTED_REMOTE_TARGET=
+REMOTE_CONTROL_ARGS=("$@")
+if [ "${#REMOTE_CONTROL_ARGS[@]}" -gt 0 ]; then
+  REMOTE_CONTROL_LAST=$((${#REMOTE_CONTROL_ARGS[@]} - 1))
+  case "${REMOTE_CONTROL_ARGS[$REMOTE_CONTROL_LAST]}" in
+    --expected-target=*)
+      EXPECTED_REMOTE_TARGET=${REMOTE_CONTROL_ARGS[$REMOTE_CONTROL_LAST]#*=}
+      unset 'REMOTE_CONTROL_ARGS[REMOTE_CONTROL_LAST]'
+      set -- "${REMOTE_CONTROL_ARGS[@]}"
+      ;;
+  esac
+fi
 
 die() { printf 'error: %s\n' "$1" >&2; exit 1; }
 usage() { sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
@@ -65,20 +78,33 @@ validate_home() { # <id> [allow-absent]
 meta_path() { printf '%s/%s.meta\n' "$CONTROL_STATE" "$1"; }
 
 remote_endpoint_load() {
-  local id=$1 herdr_session
+  local id=$1 herdr_session endpoint_class recorded_target
   REMOTE_ENDPOINT_ERROR=
   REMOTE_ENDPOINT_META=$(meta_path "$id")
-  if ! fm_backend_validate_task_endpoint "$REMOTE_ENDPOINT_META" "$id" 2>/dev/null; then
-    REMOTE_ENDPOINT_ERROR="remote secondmate $id endpoint metadata is invalid; refusing access until it is explicitly migrated"
+  endpoint_class=$(fm_herdr_meta_kind "$REMOTE_ENDPOINT_META")
+  if [ "$endpoint_class" != herdr ]; then
+    if [ "$endpoint_class" = retired-tmux ]; then
+      REMOTE_ENDPOINT_ERROR="remote secondmate $id carries retired legacy tmux metadata; preserving its exact record for manual reconciliation"
+    else
+      REMOTE_ENDPOINT_ERROR="remote secondmate $id endpoint metadata is unsupported or ambiguous; preserving its exact record for manual reconciliation"
+    fi
     return 1
   fi
-  REMOTE_ENDPOINT_BACKEND=$FM_BACKEND_VALIDATED_BACKEND
-  REMOTE_ENDPOINT_TARGET=$FM_BACKEND_VALIDATED_TARGET
-  if [ "$REMOTE_ENDPOINT_BACKEND" != herdr ]; then
-    REMOTE_ENDPOINT_ERROR="remote secondmate $id endpoint is recorded on backend '$REMOTE_ENDPOINT_BACKEND', expected 'herdr'; refusing access until it is explicitly migrated"
+  if [ -z "$EXPECTED_REMOTE_TARGET" ]; then
+    REMOTE_ENDPOINT_ERROR="remote secondmate $id endpoint access lacks the parent's exact expected Herdr target; preserving its record"
     return 1
   fi
-  herdr_session=$(fm_backend_meta_exact_value "$REMOTE_ENDPOINT_META" herdr_session 2>/dev/null || true)
+  recorded_target=$(fm_meta_exact_value "$REMOTE_ENDPOINT_META" window 2>/dev/null || true)
+  if [ "$recorded_target" != "$EXPECTED_REMOTE_TARGET" ]; then
+    REMOTE_ENDPOINT_ERROR="remote secondmate $id endpoint '$recorded_target' does not match the parent's expected target '$EXPECTED_REMOTE_TARGET'; preserving both records"
+    return 1
+  fi
+  if ! fm_herdr_validate_task_endpoint "$REMOTE_ENDPOINT_META" "$id" 2>/dev/null; then
+    REMOTE_ENDPOINT_ERROR="remote secondmate $id Herdr endpoint metadata is invalid; preserving its exact record for manual reconciliation"
+    return 1
+  fi
+  REMOTE_ENDPOINT_TARGET=$FM_HERDR_VALIDATED_TARGET
+  herdr_session=$(fm_meta_exact_value "$REMOTE_ENDPOINT_META" herdr_session 2>/dev/null || true)
   if [ "$herdr_session" != "$REMOTE_HERDR_SESSION" ]; then
     REMOTE_ENDPOINT_ERROR="remote secondmate $id endpoint is recorded in Herdr session '${herdr_session:-missing}', expected '$REMOTE_HERDR_SESSION'; refusing access until it is explicitly migrated"
     return 1
@@ -96,8 +122,24 @@ remote_endpoint_require() {
   remote_endpoint_load "$1" || die "$REMOTE_ENDPOINT_ERROR"
 }
 
+remote_endpoint_require_live() {
+  local id=$1
+  remote_endpoint_require "$id"
+  fm_herdr_validate_live_task_endpoint "$REMOTE_ENDPOINT_META" "$id" \
+    || die "remote secondmate $id live Herdr component identity does not match its durable endpoint record"
+}
+
+remote_endpoint_live_operation() {
+  local id=$1 callback=$2 rc=0
+  shift 2
+  fm_herdr_with_live_task_endpoint "$REMOTE_ENDPOINT_META" "$id" "$callback" "$@" || rc=$?
+  [ "$rc" -ne 2 ] \
+    || die "remote secondmate $id live Herdr component identity does not match its durable endpoint record"
+  return "$rc"
+}
+
 state_value() { # <id>; prints recovery-grade state
-  local id=$1 meta
+  local id=$1 meta state
   meta=$(meta_path "$id")
   [ -f "$meta" ] && [ ! -L "$meta" ] || { printf 'missing\n'; return 0; }
   if ! remote_endpoint_load "$id"; then
@@ -105,19 +147,22 @@ state_value() { # <id>; prints recovery-grade state
     printf 'unverified\n'
     return 0
   fi
-  fm_backend_agent_state "$REMOTE_ENDPOINT_BACKEND" "$REMOTE_ENDPOINT_TARGET" 2>/dev/null || printf 'unreadable\n'
+  state=$(fm_herdr_agent_state "$REMOTE_ENDPOINT_TARGET" 2>/dev/null || printf 'unreadable')
+  if [ "$state" = alive ] \
+    && ! fm_herdr_validate_live_task_endpoint "$REMOTE_ENDPOINT_META" "$id" >/dev/null 2>&1; then
+    printf 'unverified\n'
+    return 0
+  fi
+  printf '%s\n' "$state"
 }
 
 print_route() { # <id>
-  local id=$1 harness traceparent
+  local id=$1 traceparent
   remote_endpoint_require "$id"
-  harness=$(fm_meta_get "$REMOTE_ENDPOINT_META" harness)
   traceparent=$(fm_meta_get "$REMOTE_ENDPOINT_META" traceparent)
   printf 'schema=fm-remote-secondmate-control.v1\n'
-  printf 'backend=%s\n' "$REMOTE_ENDPOINT_BACKEND"
   printf 'target=%s\n' "$REMOTE_ENDPOINT_TARGET"
   printf 'herdr_session=%s\n' "$REMOTE_HERDR_SESSION"
-  printf 'harness=%s\n' "$harness"
   [ -z "$traceparent" ] || printf 'traceparent=%s\n' "$traceparent"
 }
 
@@ -133,39 +178,40 @@ cmd_route() {
 }
 
 cmd_launch() {
-  local id=$1 harness=$2 model=$3 effort=$4 selected_backend=$5 traceparent=${6:-}
+  local id=$1 model=$2 effort=$3 traceparent=${4:-}
   local current meta out herdr_session
 
   validate_id "$id"
   validate_home "$id"
-  case "$harness" in
-    pi) ;;
-    *) die "unverified remote secondmate harness: $harness" ;;
-  esac
   case "$effort" in -|low|medium|high|xhigh|max) ;; *) die "invalid remote secondmate effort: $effort" ;; esac
-  # Herdr is required on this host, not merely preferred: its server belongs to
-  # the GUI login session, so the endpoint survives every SSH disconnection that
-  # a remote route depends on. bin/fm-remote-doctor.sh is the readiness owner.
-  case "$selected_backend" in herdr) ;; *) die "a remote secondmate runs only on the herdr backend, not '$selected_backend'" ;; esac
+  # Herdr is required on this host: its server belongs to the GUI login session,
+  # so the endpoint survives every SSH disconnection that a remote route depends
+  # on. bin/fm-remote-doctor.sh is the readiness owner.
   mkdir -p "$CONTROL_STATE" "$CONTROL_DATA"
   meta=$(meta_path "$id")
   if [ -f "$meta" ]; then
     remote_endpoint_require "$id"
-    current=$(fm_backend_agent_state "$REMOTE_ENDPOINT_BACKEND" "$REMOTE_ENDPOINT_TARGET" 2>/dev/null || printf 'unreadable\n')
+    current=$(fm_herdr_agent_state "$REMOTE_ENDPOINT_TARGET" 2>/dev/null || printf 'unreadable\n')
     case "$current" in
       alive)
+        remote_endpoint_require_live "$id"
         print_route "$id"
         return 0
         ;;
       dead)
-        fm_backend_kill "$REMOTE_ENDPOINT_BACKEND" "$REMOTE_ENDPOINT_TARGET" 2>/dev/null \
+        if fm_herdr_parse_target "$REMOTE_ENDPOINT_TARGET" \
+          && [ "$(fm_herdr_pane_presence_state "$FM_HERDR_SESSION" "$FM_HERDR_PANE")" = present ]; then
+          fm_herdr_validate_live_task_endpoint "$REMOTE_ENDPOINT_META" "$id" \
+            || die "remote secondmate $id live Herdr component identity does not match its durable endpoint record"
+        fi
+        fm_herdr_kill_task_endpoint "$REMOTE_ENDPOINT_META" "$id" 2>/dev/null \
           || die "could not remove the confirmed agent-less endpoint"
         ;;
       missing) ;;
       *) die "remote endpoint state is $current; refusing duplicate launch" ;;
     esac
   fi
-  ARGS=("$id" "$TARGET_HOME" --secondmate --harness "$harness" --backend "$selected_backend")
+  ARGS=("$id" "$TARGET_HOME" --secondmate)
   [ "$model" = - ] || ARGS+=(--model "$model")
   [ "$effort" = - ] || ARGS+=(--effort "$effort")
   [ -z "$traceparent" ] || ARGS+=(--traceparent "$traceparent")
@@ -180,6 +226,8 @@ cmd_launch() {
   herdr_session=$(fm_meta_get "$meta" herdr_session)
   [ "$herdr_session" = "$REMOTE_HERDR_SESSION" ] \
     || die "remote launch recorded Herdr session '${herdr_session:-missing}', expected '$REMOTE_HERDR_SESSION'"
+  EXPECTED_REMOTE_TARGET=$(fm_meta_exact_value "$meta" window 2>/dev/null) \
+    || die "remote launch recorded no exact Herdr endpoint target"
   print_route "$id"
 }
 
@@ -188,8 +236,13 @@ cmd_send() {
   validate_id "$id"
   validate_home "$id"
   remote_endpoint_require "$id"
+  remote_endpoint_live_operation "$id" remote_endpoint_send "$message"
+}
+
+remote_endpoint_send() {
+  local target=$1 message=$2
   FM_HOME="$TARGET_HOME" FM_ROOT_OVERRIDE="$FM_ROOT" FM_STATE_OVERRIDE="$TARGET_HOME/state" \
-    "$SCRIPT_DIR/fm-send.sh" "$REMOTE_ENDPOINT_TARGET" "$message"
+    "$SCRIPT_DIR/fm-send.sh" "$target" "$message"
 }
 
 cmd_key() {
@@ -197,8 +250,13 @@ cmd_key() {
   validate_id "$id"
   validate_home "$id"
   remote_endpoint_require "$id"
+  remote_endpoint_live_operation "$id" remote_endpoint_key "$key"
+}
+
+remote_endpoint_key() {
+  local target=$1 key=$2
   FM_HOME="$TARGET_HOME" FM_ROOT_OVERRIDE="$FM_ROOT" FM_STATE_OVERRIDE="$TARGET_HOME/state" \
-    "$SCRIPT_DIR/fm-send.sh" "$REMOTE_ENDPOINT_TARGET" --key "$key"
+    "$SCRIPT_DIR/fm-send.sh" "$target" --key "$key"
 }
 
 cmd_capture() {
@@ -208,16 +266,16 @@ cmd_capture() {
   case "$lines" in ''|*[!0-9]*|0) die "capture line count must be positive" ;; esac
   [ "$lines" -le 100 ] || die "capture line count exceeds 100"
   remote_endpoint_require "$id"
-  fm_backend_capture "$REMOTE_ENDPOINT_BACKEND" "$REMOTE_ENDPOINT_TARGET" "$lines" "fm-$id" | head -c 65536
+  remote_endpoint_live_operation "$id" _fm_herdr_live_capture "$lines" | head -c 65536
 }
 
 cmd_observe() {
-  local id=$1 harness
+  local id=$1
   validate_id "$id"
   validate_home "$id"
   remote_endpoint_require "$id"
-  harness=$(fm_meta_get "$REMOTE_ENDPOINT_META" harness)
-  fm_pending_reply_backend_observation "$REMOTE_ENDPOINT_BACKEND" "$REMOTE_ENDPOINT_TARGET" "fm-$id" "$harness"
+  remote_endpoint_live_operation "$id" \
+    fm_pending_reply_herdr_observation
   printf '\n'
 }
 
@@ -290,7 +348,12 @@ cmd_retire() {
 }
 
 case "${1:-}" in
-  launch) shift; [ "$#" -ge 5 ] && [ "$#" -le 6 ] || usage; cmd_launch "$@" ;;
+  launch)
+    shift
+    [ "$#" -ne 5 ] || die "worker-runtime positional arguments are retired; Pi on Herdr is always used"
+    [ "$#" -ge 3 ] && [ "$#" -le 4 ] || usage
+    cmd_launch "$@"
+    ;;
   state) shift; [ "$#" -eq 1 ] || usage; validate_id "$1"; validate_home "$1"; state_value "$1" ;;
   route) shift; [ "$#" -eq 1 ] || usage; cmd_route "$1" ;;
   send) shift; [ "$#" -eq 2 ] || usage; cmd_send "$@" ;;

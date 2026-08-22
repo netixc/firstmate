@@ -50,29 +50,51 @@ esac
 SH
 chmod +x "$FAKEBIN/fake-ssh"
 
-# A tmux whose pane reports a running agent, so the local endpoint probe has a
-# real backend read to classify rather than a stubbed verdict.
-cat > "$FAKEBIN/tmux" <<'SH'
+# Structured Herdr responses provide recovery-grade local Pi liveness.
+cat > "$FAKEBIN/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
-case "$*" in
-  *list-windows*) printf '%s\n' "${FM_FAKE_TMUX_WINDOW:-}" ;;
-  *list-panes*) printf '%s\n' "${FM_FAKE_TMUX_PANE:-}" ;;
-  *display-message*'#{pane_current_command}'*) printf '%s\n' "${FM_FAKE_TMUX_COMMAND:-pi}" ;;
-  *display-message*'#{pane_pid}'*) printf '%s\n' "$$" ;;
-  *display-message*'#{pane_id}'*) printf '%s\n' '%1' ;;
-  *display-message*'#{cursor_y}'*) printf '%s\n' 1 ;;
-  *capture-pane*) printf '╭────╮\n│ >  │\n╰────╯\n' ;;
+[ -z "${FM_HERDR_LOG:-}" ] || printf '%s\n' "$*" >> "$FM_HERDR_LOG"
+case "${1:-} ${2:-}" in
+  "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
+  "session list") printf '{"sessions":[{"name":"%s","running":true,"socket_path":"%s/herdr.sock"}]}\n' "${HERDR_SESSION:-lab}" "${FM_HOME:-/tmp}" ;;
+  "pane get")
+    workspace=${3%%:*}; task=${workspace#w-}
+    printf '{"result":{"pane":{"pane_id":"%s","tab_id":"%s:t-%s","workspace_id":"%s"}}}\n' "${3:-}" "$workspace" "$task" "$workspace"
+    ;;
+  "tab get") printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"%s"}}}\n' "${3:-}" "${3%%:*}" ;;
+  "agent get") printf '{"result":{"agent":{"agent_status":"idle","provider":"pi"}}}\n' ;;
 esac
-exit 0
 SH
-chmod +x "$FAKEBIN/tmux"
+chmod +x "$FAKEBIN/herdr"
+
+write_secondmate_meta() { # <meta> <home> [target] [parent] [harness]
+  local meta=$1 home=$2 target=${3:-} parent=${4:-main} harness=${5:-pi} id rest
+  id=$(basename "$meta" .meta)
+  [ -n "$target" ] || target="lab:w-$id:p1"
+  case "$target" in *:*:*) ;; *) target="lab:w-$id:p1" ;; esac
+  rest=${target#*:}
+  fm_write_meta "$meta" "backend=herdr" "window=$target" "endpoint_task_id=$id" \
+    "herdr_session=${target%%:*}" "herdr_workspace_id=${rest%%:*}" \
+    "herdr_tab_id=${rest%%:*}:t-$id" "herdr_pane_id=$rest" "worktree=$home" \
+    "project=$home" "home=$home" "kind=secondmate" "harness=$harness" "parent=$parent"
+}
+
+write_remote_secondmate_meta() { # <meta> <host> <root> <home>
+  local meta=$1 host=$2 root=$3 home=$4 id
+  id=$(basename "$meta" .meta)
+  fm_write_meta "$meta" "backend=herdr" "window=remote:$id" "endpoint_task_id=$id" \
+    "worktree=$home" "project=$root" "home=$home" "kind=secondmate" "harness=pi" \
+    "remote_backend=herdr" "remote_host=$host" "remote_root=$root" \
+    "remote_herdr_session=fm-remote" "remote_target=fm-remote:w-$id:p1"
+}
 
 # new_home <name> [budget] -> path to a seeded local secondmate home.
 new_home() {
   local name=$1 budget=${2:-10} home
   home="$TMP_ROOT/homes/$name"
   mkdir -p "$home/config" "$home/data" "$home/state" "$home/bin" "$home/projects"
+  : > "$home/herdr.sock"
   printf '%s\n' "$name" > "$home/.fm-secondmate-home"
   printf '%s\n' '# secondmate instructions' > "$home/AGENTS.md"
   printf '%s\n' "$budget" > "$home/config/startup-memory-budget"
@@ -83,6 +105,7 @@ new_primary() {
   local name=$1 home
   home="$TMP_ROOT/primaries/$name"
   mkdir -p "$home/config" "$home/data" "$home/state"
+  : > "$home/herdr.sock"
   printf '%s\n' "$home"
 }
 
@@ -173,8 +196,8 @@ test_every_registered_home_is_enumerated_exactly_once() {
   } > "$primary/data/secondmates.md"
   # Two live endpoint records naming the same home must not multiply its stanza:
   # the registry, not the endpoint inventory, is the enumeration source.
-  fm_write_secondmate_meta "$primary/state/enum-a.meta" "$a"
-  fm_write_secondmate_meta "$primary/state/enum-a-stale.meta" "$a"
+  write_secondmate_meta "$primary/state/enum-a.meta" "$a"
+  write_secondmate_meta "$primary/state/enum-a-stale.meta" "$a"
 
   set +e
   out=$(run_cascade "$primary")
@@ -212,14 +235,13 @@ test_transport_routes_by_placement_and_liveness() {
     local_record idle-local "$idle"
     remote_record remote-live remote-mac "$TMP_ROOT/remote-root" "$remote"
   } > "$primary/data/secondmates.md"
-  fm_write_secondmate_meta "$primary/state/live-local.meta" "$live" 'firstmate:fm-live-local' alpha pi
-  fm_write_secondmate_meta "$primary/state/remote-live.meta" "$remote" 'fm-remote:fm-remote-live' alpha pi
+  write_secondmate_meta "$primary/state/live-local.meta" "$live" 'firstmate:fm-live-local' alpha pi
+  write_remote_secondmate_meta "$primary/state/remote-live.meta" remote-mac "$TMP_ROOT/remote-root" "$remote"
   printf 'role=secondmate\neffective_budget_tokens=7500\ntotal_estimated_tokens=100\nbudget_status=within-budget\n' \
     > "$TMP_ROOT/remote-budget.txt"
 
   set +e
   out=$(run_cascade "$primary" \
-    FM_FAKE_TMUX_WINDOW='fm-live-local' \
     FM_FAKE_REMOTE_BUDGET="$TMP_ROOT/remote-budget.txt" \
     FM_FAKE_REMOTE_AGENT_STATE=alive)
   set -e
@@ -239,7 +261,6 @@ test_transport_routes_by_placement_and_liveness() {
 
   set +e
   out=$(run_cascade "$primary" \
-    FM_FAKE_TMUX_WINDOW='fm-live-local' \
     FM_FAKE_REMOTE_BUDGET="$TMP_ROOT/remote-budget.txt" \
     FM_FAKE_REMOTE_AGENT_STATE=dead)
   set -e
@@ -249,6 +270,29 @@ test_transport_routes_by_placement_and_liveness() {
   assert_contains "$s" 'no remote memory write path' \
     "the deferred remote home did not state why it cannot be curated in place"
   pass "transport follows placement and live-agent state, and a remote home without an agent defers"
+}
+
+test_ambiguous_local_endpoint_is_deferred_without_probe() {
+  local primary home out s log rc
+  primary=$(new_primary ambiguous-endpoint)
+  home=$(new_home ambiguous-local)
+  local_record ambiguous-local "$home" > "$primary/data/secondmates.md"
+  write_secondmate_meta "$primary/state/ambiguous-local.meta" "$home"
+  printf 'window=lab:w-foreign:p1\n' >> "$primary/state/ambiguous-local.meta"
+  log=$primary/herdr.log
+
+  set +e
+  out=$(run_cascade "$primary" FM_HERDR_LOG="$log")
+  rc=$?
+  set -e
+  s=$(stanza "$out" ambiguous-local)
+  [ "$(value_in "$s" transport)" = deferred ] \
+    || fail "an ambiguous local endpoint did not defer curation"
+  assert_contains "$s" 'record preserved for manual reconciliation' \
+    "ambiguous local endpoint preservation was not actionable"
+  [ ! -s "$log" ] || fail "stow cascade probed an ambiguous endpoint identity"
+  expect_code 3 "$rc" "an ambiguous endpoint should remain an explicit exception"
+  pass "stow cascade preserves ambiguous local endpoints without probing"
 }
 
 test_receipt_facts_are_complete_and_show_before_and_after() {
@@ -299,7 +343,7 @@ test_a_slow_remote_is_bounded_and_the_rest_still_report() {
     remote_record bounded-remote remote-mac "$TMP_ROOT/remote-root" "$remote"
     local_record bounded-local "$home"
   } > "$primary/data/secondmates.md"
-  fm_write_secondmate_meta "$primary/state/bounded-remote.meta" "$remote" 'fm-remote:fm-bounded-remote'
+  write_remote_secondmate_meta "$primary/state/bounded-remote.meta" remote-mac "$TMP_ROOT/remote-root" "$remote"
   printf 'role=secondmate\n' > "$TMP_ROOT/remote-budget.txt"
 
   started=$(date +%s)
@@ -365,6 +409,7 @@ test_no_cascade_without_secondmates_or_from_a_secondmate_home() {
 test_budget_is_enforced_per_home_and_never_summed
 test_every_registered_home_is_enumerated_exactly_once
 test_transport_routes_by_placement_and_liveness
+test_ambiguous_local_endpoint_is_deferred_without_probe
 test_receipt_facts_are_complete_and_show_before_and_after
 test_a_slow_remote_is_bounded_and_the_rest_still_report
 test_no_cascade_without_secondmates_or_from_a_secondmate_home

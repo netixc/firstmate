@@ -77,7 +77,10 @@ function loadContext(): WorkerContext | undefined {
 	const id = fields.get("endpoint_task_id") ?? "";
 	const generation = fields.get("busy_gen") ?? "";
 	const worktree = fields.get("worktree") ?? "";
-	if (!TOKEN.test(id) || !TOKEN.test(generation) || fields.get("harness") !== "pi") return;
+	const recordedRuntime = fields.get("harness");
+	if (!TOKEN.test(id) || !TOKEN.test(generation)) return;
+	if (fields.get("backend") !== "herdr") return;
+	if (recordedRuntime !== undefined && recordedRuntime !== "pi") return;
 	if (!new Set(["ship", "scout"]).has(fields.get("kind") ?? "")) return;
 	const stateDir = dirname(path);
 	if (path !== resolve(stateDir, `${id}.meta`)) return;

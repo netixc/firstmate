@@ -7,7 +7,7 @@
 #          Silent = all good.
 #          Lines: "MISSING: <tool> (install: <command>)",
 #                 "MISSING_MANUAL: <tool> (instructions: <url>)", "NEEDS_GH_AUTH",
-#                 "BACKEND_INVALID: <name> (known: <names>)",
+#                 "SESSION_INVALID: <retired or unsupported selection>",
 #                 "STARTUP_MEMORY_BUDGET: invalid config/startup-memory-budget - <reason>",
 #                 "CREW_DISPATCH: invalid config/crew-dispatch.json - <reason>",
 #                 "FLEET_SYNC: <repo>: skipped|recovered|STUCK: <detail>",
@@ -39,10 +39,10 @@
 #          quarantine diagnostics for divergent shared captain-preference
 #          copies; no-op/current and successful updates stay quiet.
 #          SECONDMATE_LIVENESS lines report only actionable failures from the
-#          recovery-grade state owned by bin/fm-backend.sh's
-#          fm_backend_agent_state: skipped distinguishes an existing ambiguous
-#          process, an unreadable target, and an unverified backend; respawn
-#          failed names whether the endpoint was missing or agent-less.
+#          recovery-grade state owned by bin/fm-herdr.sh's
+#          fm_herdr_agent_state: skipped distinguishes an existing ambiguous
+#          process, an unreadable target, a preserved retired record, and an
+#          incompatible historical runtime metadata; respawn failed names missing versus agent-less.
 #          Already-live and successfully relaunched secondmates are silent
 #          unless FM_BOOTSTRAP_VERBOSE_FACTS=1 requests BOOTSTRAP_INFO facts.
 #          A TANGLE line means the firstmate primary checkout (FM_ROOT) is stranded
@@ -146,8 +146,8 @@ DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 . "$SCRIPT_DIR/fm-startup-memory-budget-lib.sh"
 # shellcheck source=bin/fm-relay-lib.sh disable=SC1091
 . "$SCRIPT_DIR/fm-relay-lib.sh"
-# shellcheck source=bin/fm-backend.sh disable=SC1091
-. "$SCRIPT_DIR/fm-backend.sh"
+# shellcheck source=bin/fm-herdr.sh disable=SC1091
+. "$SCRIPT_DIR/fm-herdr.sh"
 # shellcheck source=bin/fm-remote-readiness-lib.sh disable=SC1091
 . "$SCRIPT_DIR/fm-remote-readiness-lib.sh"
 # fm-timing-lib.sh is inert unless FM_TIMING_LOG names a file, which only the
@@ -554,6 +554,11 @@ secondmate_sync() {
   while IFS='|' read -r id _home _window meta; do
     remote_host=$(fm_meta_get "$meta" remote_host)
     [ -n "$remote_host" ] || continue
+    if ! fm_herdr_validate_remote_route "$meta" "$id" >/dev/null 2>&1; then
+      echo "SECONDMATE_SYNC: secondmate $id: skipped: invalid or ambiguous remote Herdr route preserved for manual reconciliation"
+      continue
+    fi
+    remote_host=$FM_HERDR_VALIDATED_REMOTE_HOST
     __fm_timing_stamp=$(fm_timing_now_ms)
     secondmate_sync_remote_one "$id" "$_home" "$remote_host"
     fm_timing_record secondmate convergence "$__fm_timing_stamp" "$id@$remote_host"
@@ -574,11 +579,8 @@ report_relaunch() {  # <id> <cause> <where>
 secondmate_liveness_sweep() {
   # Idempotent secondmate liveness guarantee - SESSION START ONLY. The detailed
   # state machine and its only recovery-authorizing states are owned by
-  # fm_backend_agent_state. A missing tmux pane is not enough: tmux must prove
-  # the window or session absent. This preserves duplicate prevention for
-  # existing ambiguous processes and every transiently unreadable target while
-  # adding the missing-session path the original bare-shell and Herdr-husk sweep
-  # lacked.
+  # fm_herdr_agent_state. Structured missing, dead, ambiguous, and unreadable
+  # outcomes preserve duplicate prevention and recovery-grade liveness.
   # A meta with no window remains owned by secondmate-provisioning recovery.
   # Secondmate homes never contain kind=secondmate meta, so this is naturally a
   # primary-only no-op there. Mid-session liveness remains explicitly out of
@@ -609,12 +611,16 @@ secondmate_liveness_sweep() {
 # unchanged.
 secondmate_liveness_one() {  # <meta> <id>
   local meta=$1 id=$2
-  local window harness backend target agent_state out cause remote_host remote_rc readiness_reason route_out remote_backend
+  local window endpoint_class target agent_state out cause remote_host remote_rc readiness_reason
   window=$(fm_meta_get "$meta" window)
   [ -n "$window" ] || return 0
-  harness=$(fm_meta_get "$meta" harness)
   remote_host=$(fm_meta_get "$meta" remote_host)
   if [ -n "$remote_host" ]; then
+    if ! fm_herdr_validate_remote_route "$meta" "$id" >/dev/null 2>&1; then
+      echo "SECONDMATE_LIVENESS: secondmate $id: skipped: invalid or ambiguous remote Herdr route preserved for manual reconciliation"
+      return 0
+    fi
+    remote_host=$FM_HERDR_VALIDATED_REMOTE_HOST
     remote_rc=0
     fm_remote_readiness_ensure "$SCRIPT_DIR" "$id" || remote_rc=$?
     if [ "$remote_rc" -eq 255 ]; then
@@ -645,7 +651,7 @@ secondmate_liveness_one() {  # <meta> <id>
     agent_state=$(printf '%s\n' "$out" | tail -1)
     case "$agent_state" in
       alive)
-        if route_out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh route "$id" < /dev/null 2>/dev/null); then
+        if "$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh route "$id" < /dev/null >/dev/null 2>&1; then
           remote_rc=0
         else
           remote_rc=$?
@@ -656,11 +662,6 @@ secondmate_liveness_one() {  # <meta> <id>
         fi
         if [ "$remote_rc" -ne 0 ]; then
           echo "SECONDMATE_LIVENESS: secondmate $id: skipped: alive remote endpoint route is unreadable on $remote_host; inspect and migrate or retire it explicitly"
-          return 0
-        fi
-        remote_backend=$(printf '%s\n' "$route_out" | sed -n 's/^backend=//p' | tail -1)
-        if [ "$remote_backend" != herdr ]; then
-          echo "SECONDMATE_LIVENESS: secondmate $id: skipped: alive remote endpoint is recorded on backend '${remote_backend:-missing}'; migrate or retire it explicitly"
           return 0
         fi
         [ "${FM_BOOTSTRAP_VERBOSE_FACTS:-0}" != 1 ] || echo "BOOTSTRAP_INFO: remote secondmate $id already live (host=$remote_host)"
@@ -681,46 +682,55 @@ secondmate_liveness_one() {  # <meta> <id>
     esac
     return 0
   fi
-  backend=$(fm_backend_of_meta "$meta")
-  target=$(fm_backend_target_of_meta "$meta")
-  [ -n "$target" ] || target="$window"
-  agent_state=$(fm_backend_agent_state "$backend" "$target" 2>/dev/null) || agent_state=unreadable
-  case "$harness" in
-    pi) ;;    *)
-      case "$agent_state" in dead|missing) agent_state=unverified-harness ;; esac
-      ;;
-  esac
+  endpoint_class=$(fm_herdr_meta_kind "$meta")
+  if [ "$endpoint_class" != herdr ]; then
+    echo "SECONDMATE_LIVENESS: secondmate $id: skipped: $endpoint_class endpoint record preserved for manual reconciliation"
+    return 0
+  fi
+  if ! fm_herdr_validate_task_endpoint "$meta" "$id" >/dev/null 2>&1; then
+    echo "SECONDMATE_LIVENESS: secondmate $id: skipped: invalid or ambiguous Herdr endpoint record preserved for manual reconciliation"
+    return 0
+  fi
+  target=$FM_HERDR_VALIDATED_TARGET
+  agent_state=$(fm_herdr_agent_state "$target" 2>/dev/null) || agent_state=unreadable
   case "$agent_state" in
     alive)
+      if ! fm_herdr_validate_live_task_endpoint "$meta" "$id" >/dev/null 2>&1; then
+        echo "SECONDMATE_LIVENESS: secondmate $id: skipped: live Herdr component identity does not match its durable endpoint record"
+        return 0
+      fi
       if [ "${FM_BOOTSTRAP_VERBOSE_FACTS:-0}" = 1 ]; then
-        echo "BOOTSTRAP_INFO: secondmate $id already live (backend=$backend)"
+        echo "BOOTSTRAP_INFO: secondmate $id already live (Herdr endpoint=$target)"
       fi
       ;;
     dead|missing)
       if [ "$agent_state" = dead ]; then
+        if fm_herdr_parse_target "$target" \
+          && [ "$(fm_herdr_pane_presence_state "$FM_HERDR_SESSION" "$FM_HERDR_PANE")" = present ] \
+          && ! fm_herdr_validate_live_task_endpoint "$meta" "$id" >/dev/null 2>&1; then
+          echo "SECONDMATE_LIVENESS: secondmate $id: skipped: agent-less Herdr component identity does not match its durable endpoint record"
+          return 0
+        fi
         cause="confirmed agent absence on existing endpoint"
-        fm_backend_kill "$backend" "$target" 2>/dev/null || true
+        fm_herdr_kill_task_endpoint "$meta" "$id" 2>/dev/null || true
       else
         cause="recorded endpoint confidently missing"
       fi
       if out=$(FM_SPAWN_NO_GUARD=1 "$FM_ROOT/bin/fm-spawn.sh" "$id" --secondmate 2>&1); then
         SECONDMATE_RESPAWNED_IDS="$SECONDMATE_RESPAWNED_IDS $id"
-        report_relaunch "$id" "$cause" "backend=$backend"
+        report_relaunch "$id" "$cause" "Herdr endpoint=$target"
       else
         echo "SECONDMATE_LIVENESS: secondmate $id: respawn failed after $cause: $(first_line "$out")"
       fi
       ;;
     ambiguous)
-      echo "SECONDMATE_LIVENESS: secondmate $id: skipped: existing endpoint has ambiguous agent process (backend=$backend)"
+      echo "SECONDMATE_LIVENESS: secondmate $id: skipped: existing Herdr endpoint has ambiguous agent process"
       ;;
     unreadable)
-      echo "SECONDMATE_LIVENESS: secondmate $id: skipped: endpoint probe unreadable (backend=$backend)"
-      ;;
-    unverified-harness)
-      echo "SECONDMATE_LIVENESS: secondmate $id: skipped: recorded harness '$harness' is unverified for recovery (backend=$backend)"
+      echo "SECONDMATE_LIVENESS: secondmate $id: skipped: Herdr endpoint probe unreadable"
       ;;
     *)
-      echo "SECONDMATE_LIVENESS: secondmate $id: skipped: agent recovery classifier unverified (backend=$backend)"
+      echo "SECONDMATE_LIVENESS: secondmate $id: skipped: Herdr agent recovery classifier unverified"
       ;;
   esac
   return 0
@@ -749,7 +759,7 @@ secondmate_handoff_detect() {
 
 install_cmd() {
   case "$1" in
-    tmux|node|git|gh|curl|jq) echo "brew install $1  # or the platform's package manager" ;;
+    node|git|gh|curl|jq) echo "brew install $1  # or the platform's package manager" ;;
     treehouse) echo "curl -fsSL https://kunchenguid.github.io/treehouse/install.sh | sh" ;;
     no-mistakes) echo "curl -fsSL https://raw.githubusercontent.com/kunchenguid/no-mistakes/main/docs/install.sh | sh" ;;
     gh-axi|lavish-axi) echo "npm install -g $1 && $1 setup hooks" ;;
@@ -775,19 +785,15 @@ missing_tool_diagnostic() {
   echo "MISSING: $tool (install: $(install_cmd "$tool"))"
 }
 
-# Required-tool detection follows the RESOLVED backend, not a one-size default:
-# a universal toolchain every home needs plus the backend-specific delta owned by
-# fm_backend_required_tools (bin/fm-backend.sh). A Herdr home is never told
-# tmux is missing. A backend value with
-# no verified dependency set is reported before the universal checks continue.
+# Every home uses Pi in Herdr. Keep universal tools separate from the direct
+# session requirements so diagnostics remain actionable.
 COMMON_TOOLS="node git gh no-mistakes gh-axi ego-browser lavish-axi tasks-axi quota-axi"
-BACKEND=$(fm_backend_name)
-BACKEND_VALID=1
-if ! BACKEND_TOOLS=$(fm_backend_required_tools "$BACKEND"); then
-  BACKEND_VALID=0
-  BACKEND_TOOLS=""
+HERDR_TOOLS=$(fm_herdr_required_tools)
+SESSION_SELECTION_VALID=1
+SESSION_SELECTION_ERROR=
+if ! SESSION_SELECTION_ERROR=$(fm_herdr_require_runtime 2>&1); then
+  SESSION_SELECTION_VALID=0
 fi
-TOOLS="$BACKEND_TOOLS $COMMON_TOOLS"
 NO_MISTAKES_MIN=1.31.2
 # AXI-FAMILY FLOOR POLICY. Every axi-family floor is the CURRENT LATEST published
 # version of that tool, captain-bumped periodically to keep the whole fleet on the
@@ -893,7 +899,7 @@ relay_remove_artifact() {
 # non-Relay user sees zero change. Prints one confirmation line on opt-in, and one on opt-out
 # only when it actually removed artifacts. It never touches the watcher itself;
 # applying a cadence transition to a running watcher is the caller's job via
-# the emitted harness-aware supervision repair instruction.
+# the emitted Pi supervision repair instruction.
 relay_setup() {
   local env_file token shim cadence shim_body cadence_body tool missing shim_home
   [ "${FM_RELAY_LOCAL_MIGRATION_OK:-0}" = 1 ] || return 0
@@ -973,7 +979,7 @@ relay_setup() {
 
   cadence_body=$(cat <<'EOF'
 # Auto-generated by fm-bootstrap.sh - Relay watcher cadence.
-# Source this before the active harness protocol starts a watcher process so
+# Source this before the Pi supervision protocol starts a watcher process so
 # fm-watch.sh polls the Relay check every 30s. Non-Relay instances have no such file and
 # keep the default 300s cadence.
 export FM_CHECK_INTERVAL=30
@@ -997,12 +1003,10 @@ crew_dispatch_validate() {
     return 0
   fi
   err=$(jq -r '
-    def verified($h): ["pi"] | index($h);
-    def effort_ok($h; $e):
+    def effort_ok($e):
       if $e == null then true
       elif ($e | type) != "string" then false
-      elif $h == "pi" then (["low","medium","high","xhigh","max"] | index($e))
-      else true
+      else (["low","medium","high","xhigh","max"] | index($e))
       end;
     def profiles($value):
       if ($value | type) == "array" then $value
@@ -1017,11 +1021,10 @@ crew_dispatch_validate() {
       or ($items | any(has("effort") and (((.effort | type) != "string") or (.effort | length) == 0)));
     def bad_efforts:
       configured_profiles
-      | map({h: .harness, e: .effort})
-      | map(select(.e != null))
-      | map(select((.h | type) == "string" and verified(.h)))
-      | map(select(. as $p | effort_ok($p.h; $p.e) | not))
-      | map("\(.h):\(.e)")
+      | map(.effort)
+      | map(select(. != null))
+      | map(select(effort_ok(.) | not))
+      | map(tostring)
       | unique;
     if type != "object" then "top-level value must be an object"
     elif has("rules") and (.rules | type) != "array" then "rules must be an array"
@@ -1030,7 +1033,7 @@ crew_dispatch_validate() {
     elif [(.rules // [])[]? | select((.use? | type) != "object" and (.use? | type) != "array")] | length > 0 then "each rule needs use"
     elif [(.rules // [])[]? | select((.use? | type) == "array" and (.use | length) == 0)] | length > 0 then "each rule needs at least one use profile"
     elif [(.rules // [])[]? | profiles(.use?)[]? | select(type != "object")] | length > 0 then "each use profile must be an object"
-    elif [(.rules // [])[]? | profiles(.use?)[]? | select((.harness? | type) != "string" or (.harness | length) == 0)] | length > 0 then "each use profile needs harness"
+    elif [(.rules // [])[]? | profiles(.use?)[]? | select(has("harness"))] | length > 0 then "use profile harness is retired; Pi is fixed"
     elif malformed_optional_fields([(.rules // [])[]? | profiles(.use?)[]?]) then "use profile model and effort must be non-empty strings when present"
     elif [(.rules // [])[]? | select(has("select") and ((.select? | type) != "string" or (.select | length) == 0))] | length > 0 then "select must be a non-empty string"
     elif [(.rules // [])[]? | .select? // empty | select(. != "quota-balanced")] | length > 0 then
@@ -1038,18 +1041,12 @@ crew_dispatch_validate() {
     elif has("default") and ((.default | type) != "object" and (.default | type) != "array") then "default must be a profile object or non-empty profile array"
     elif has("default") and ((.default | type) == "array" and (.default | length) == 0) then "default needs at least one profile"
     elif has("default") and ([profiles(.default)[]? | select(type != "object")] | length) > 0 then "each default profile must be an object"
-    elif has("default") and ([profiles(.default)[]? | select((.harness? | type) != "string" or (.harness | length) == 0)] | length) > 0 then "each default profile needs harness"
+    elif has("default") and ([profiles(.default)[]? | select(has("harness"))] | length) > 0 then "default profile harness is retired; Pi is fixed"
     elif has("default") and malformed_optional_fields([profiles(.default)[]?]) then "default profile model and effort must be non-empty strings when present"
     else
-      (configured_profiles
-        | map(.harness)
-        | map(select(. != null))
-        | map(select(. as $h | verified($h) | not))
-        | unique) as $bad_harnesses
-      | if ($bad_harnesses | length) > 0 then "unverified harness: " + ($bad_harnesses | join(", "))
-        elif (bad_efforts | length) > 0 then "invalid effort: " + (bad_efforts | join(", "))
+      if (bad_efforts | length) > 0 then "invalid Pi effort: " + (bad_efforts | join(", "))
         else empty
-        end
+      end
     end
   ' "$file" 2>/dev/null || true)
   if [ -n "$err" ]; then
@@ -1059,7 +1056,7 @@ crew_dispatch_validate() {
   if [ "${FM_BOOTSTRAP_VERBOSE_FACTS:-0}" = 1 ]; then
     jq -r '
     def profile($p):
-      ($p.harness | tostring)
+      "pi"
       + (if ($p.model? != null) then "/" + ($p.model | tostring)
          elif ($p.effort? != null) then "/default"
          else "" end)
@@ -1105,6 +1102,11 @@ if [ "${1:-}" = "install" ]; then
   exit 0
 fi
 
+if [ "${FM_BOOTSTRAP_DETECT_ONLY:-0}" != 1 ] && [ "$SESSION_SELECTION_VALID" -eq 0 ]; then
+  echo "SESSION_INVALID: $SESSION_SELECTION_ERROR"
+  exit 1
+fi
+
 # This is the first mutating sweep at a locked session boundary. It migrates
 # legacy Relay task metadata before PR-check authentication, then pauses an
 # identity-matched watcher, holds its lock, and neutralizes legacy PR checks
@@ -1129,12 +1131,11 @@ fi
 # leaves this machine, so it stays on the session-start critical path.
 detect_local_tools() {
   local t ego_browser_skill
-  if [ "$BACKEND_VALID" -eq 0 ]; then
-    echo "BACKEND_INVALID: $BACKEND (known: $FM_BACKEND_KNOWN)"
+  if [ "$SESSION_SELECTION_VALID" -eq 0 ]; then
+    echo "SESSION_INVALID: $SESSION_SELECTION_ERROR"
   fi
-  for t in $BACKEND_TOOLS; do
-    fm_backend_required_tool_available "$BACKEND" "$t" \
-      || missing_tool_diagnostic "$t"
+  for t in $HERDR_TOOLS; do
+    command -v "$t" >/dev/null 2>&1 || missing_tool_diagnostic "$t"
   done
   for t in $COMMON_TOOLS; do
     command -v "$t" >/dev/null || missing_tool_diagnostic "$t"
@@ -1145,9 +1146,8 @@ detect_local_tools() {
   fi
   [ -f "$ego_browser_skill" ] && [ -r "$ego_browser_skill" ] \
     || missing_tool_diagnostic ego-browser-skill
-  # Both supported backends use treehouse, whose durable lease support is required.
-  if fm_backend_list_contains "$TOOLS" treehouse \
-    && command -v treehouse >/dev/null 2>&1 && ! treehouse_supports_lease; then
+  # Treehouse's durable lease support is required for isolated work allocation.
+  if command -v treehouse >/dev/null 2>&1 && ! treehouse_supports_lease; then
     echo "MISSING: treehouse (install: $(install_cmd treehouse))"
   fi
   if command -v no-mistakes >/dev/null 2>&1 && ! tool_version_at_least no-mistakes "$NO_MISTAKES_MIN"; then
@@ -1180,11 +1180,11 @@ detect_local_config() {
       echo "TANGLE: primary checkout on feature branch '$tangle_branch' (expected '$tangle_default'); the work is safe on that ref - restore the primary with: git -C $FM_ROOT checkout $tangle_default, then re-validate the branch in a proper worktree"
     fi
   fi
-  crew=
-  [ -f "$CONFIG/crew-harness" ] && crew=$(tr -d '[:space:]' < "$CONFIG/crew-harness" || true)
-  if [ "${FM_BOOTSTRAP_VERBOSE_FACTS:-0}" = 1 ] && [ -n "$crew" ] && [ "$crew" != "default" ]; then
-    echo "BOOTSTRAP_INFO: crew harness override active: $crew"
-  fi
+  for retired_worker_config in "$CONFIG/crew-harness" "$CONFIG/secondmate-harness"; do
+    if [ -e "$retired_worker_config" ] || [ -L "$retired_worker_config" ]; then
+      echo "CREW_DISPATCH: invalid config/$(basename "$retired_worker_config") - worker-runtime selection is retired; Pi is fixed"
+    fi
+  done
   crew_dispatch_validate
   if [ "${FM_BOOTSTRAP_VERBOSE_FACTS:-0}" = 1 ] \
     && ! fm_backlog_backend_manual "$CONFIG" && fm_tasks_axi_compatible; then

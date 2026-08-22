@@ -34,7 +34,6 @@ BASE_PATH=${FM_TEST_BASE_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
 fm_git_identity fmtest fmtest@example.com
 
 TMP_ROOT=$(fm_test_tmproot fm-secondmate-sync)
-export FM_BACKEND=tmux
 
 # --- world builders --------------------------------------------------------
 
@@ -45,6 +44,7 @@ new_world() {
   local name=$1 w
   w="$TMP_ROOT/$name"
   mkdir -p "$w/home/state" "$w/home/data"
+  : > "$w/home/herdr.sock"
   # Fresh watcher beacon keeps fm-guard quiet for the spawn path.
   touch "$w/home/state/.last-watcher-beat"
 
@@ -70,7 +70,15 @@ add_sm_worktree() {
   git -C "$w/main" worktree add -q --detach "$w/$id" "$commit"
   printf '%s\n' "$id" > "$w/$id/.fm-secondmate-home"
   {
-    printf 'window=firstmate:fm-%s\n' "$id"
+    printf 'backend=herdr\n'
+    printf 'window=lab:w-%s:p1\n' "$id"
+    printf 'endpoint_task_id=%s\n' "$id"
+    printf 'herdr_session=lab\n'
+    printf 'herdr_workspace_id=w-%s\n' "$id"
+    printf 'herdr_tab_id=w-%s:t-%s\n' "$id" "$id"
+    printf 'herdr_pane_id=w-%s:p1\n' "$id"
+    printf 'worktree=%s/%s\n' "$w" "$id"
+    printf 'project=%s/main\n' "$w"
     printf 'kind=secondmate\n'
     printf 'harness=pi\n'
     printf 'home=%s/%s\n' "$w" "$id"
@@ -302,28 +310,28 @@ fi
 exit 0
 SH
   chmod +x "$fakebin/gh-axi"
-  cat > "$fakebin/tmux" <<'SH'
+  cat > "$fakebin/herdr" <<'SH'
 #!/usr/bin/env bash
-if [ -n "${FM_FAKE_TMUX_LOG:-}" ]; then
-  printf '%s\n' "$*" >> "$FM_FAKE_TMUX_LOG"
-fi
-case "$*" in
-  list-windows*)
-    sed -n 's/^window=[^:]*://p' "${FM_HOME:?}"/state/*.meta
-    exit 0
+set -u
+[ -z "${FM_FAKE_HERDR_LOG:-}" ] || printf '%s\n' "$*" >> "$FM_FAKE_HERDR_LOG"
+pane=${3:-}; marker="${FM_HOME:?}/state/.fake-herdr-${pane//:/_}"
+case "${1:-} ${2:-}" in
+  "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
+  "session list") printf '{"sessions":[{"name":"lab","running":true,"socket_path":"%s/herdr.sock"}]}\n' "$FM_HOME" ;;
+  "pane get")
+    workspace=${pane%%:*}; task=${workspace#w-}
+    printf '{"result":{"pane":{"pane_id":"%s","tab_id":"%s:t-%s","workspace_id":"%s"}}}\n' "$pane" "$workspace" "$task" "$workspace"
     ;;
-  *display-message*'#{pane_current_command}'*) printf '%s\n' pi; exit 0 ;;
-  *display-message*'#{pane_id}'*) printf '%s\n' '%1'; exit 0 ;;
-  *display-message*'#{cursor_y}'*) printf '%s\n' 1; exit 0 ;;
-  *capture-pane*) printf '╭────╮\n│ >  │\n╰────╯\n'; exit 0 ;;
-  *'send-keys'*' -l '*)
-    [ "${FM_FAKE_TMUX_FAIL_LITERAL:-0}" = 1 ] && exit 1
-    exit 0
+  "tab get") printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"%s"}}}\n' "${3:-}" "${3%%:*}" ;;
+  "pane send-text") [ "${FM_FAKE_HERDR_FAIL_LITERAL:-0}" != 1 ] ;;
+  "pane send-keys") : > "$marker" ;;
+  "agent get")
+    if [ -e "$marker" ]; then status=working; else status=idle; fi
+    printf '{"result":{"agent":{"agent_status":"%s","provider":"pi"}}}\n' "$status"
     ;;
 esac
-exit 0
 SH
-  chmod +x "$fakebin/tmux"
+  chmod +x "$fakebin/herdr"
   cat > "$fakebin/gh" <<'SH'
 #!/usr/bin/env bash
 exit 0
@@ -393,9 +401,9 @@ test_bootstrap_sweep_nudges_only_instruction_change() {
   printf 'sm-nonlive\n' > "$w/sm-nonlive/.fm-secondmate-home"
 
   fakebin=$(make_fake_toolchain "$w")
-  log="$w/tmux.log"
+  log="$w/herdr.log"
   out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
-    FM_SEND_SETTLE=0 FM_FAKE_TMUX_LOG="$log" \
+    FM_SEND_SETTLE=0 FM_FAKE_HERDR_LOG="$log" \
     "$ROOT/bin/fm-bootstrap.sh" 2>/dev/null)
 
   info_line=$(printf '%s\n' "$out" | grep '^BOOTSTRAP_INFO: nudged fm-sm-instr ' || true)
@@ -431,10 +439,10 @@ test_bootstrap_nudge_send_uses_state_override() {
   mv "$w/home/state/sm-instr.meta" "$override_state/sm-instr.meta"
   touch "$override_state/.last-watcher-beat"
   fakebin=$(make_fake_toolchain "$w")
-  log="$w/tmux.log"
+  log="$w/herdr.log"
 
   out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
-    FM_STATE_OVERRIDE="$override_state" FM_SEND_SETTLE=0 FM_FAKE_TMUX_LOG="$log" \
+    FM_STATE_OVERRIDE="$override_state" FM_SEND_SETTLE=0 FM_FAKE_HERDR_LOG="$log" \
     "$ROOT/bin/fm-bootstrap.sh" 2>/dev/null)
 
   assert_contains "$out" "BOOTSTRAP_INFO: nudged fm-sm-instr with" \
@@ -471,10 +479,10 @@ test_bootstrap_nudge_retry_rejects_malformed_marker_id() {
     printf 'home=%s\n' "$evil"
   } > "$w/home/escape.meta"
   fakebin=$(make_fake_toolchain "$w")
-  log="$w/tmux.log"
+  log="$w/herdr.log"
 
   out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
-    FM_SEND_SETTLE=0 FM_FAKE_TMUX_LOG="$log" \
+    FM_SEND_SETTLE=0 FM_FAKE_HERDR_LOG="$log" \
     "$ROOT/bin/fm-bootstrap.sh" 2>/dev/null)
 
   assert_contains "$out" "NUDGE_SECONDMATES: secondmate ../escape: send failed: retry marker has unsafe id" \
@@ -495,7 +503,7 @@ test_bootstrap_nudge_failure_records_retry_marker() {
   fakebin=$(make_fake_toolchain "$w")
 
   out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
-    FM_SEND_SETTLE=0 FM_FAKE_TMUX_FAIL_LITERAL=1 \
+    FM_SEND_SETTLE=0 FM_FAKE_HERDR_FAIL_LITERAL=1 \
     "$ROOT/bin/fm-bootstrap.sh" 2>/dev/null)
 
   assert_contains "$out" "NUDGE_SECONDMATES: secondmate sm-instr: send failed:" \
@@ -517,7 +525,7 @@ test_bootstrap_nudge_retry_is_idempotent() {
   fakebin=$(make_fake_toolchain "$w")
 
   out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
-    FM_SEND_SETTLE=0 FM_FAKE_TMUX_FAIL_LITERAL=1 \
+    FM_SEND_SETTLE=0 FM_FAKE_HERDR_FAIL_LITERAL=1 \
     "$ROOT/bin/fm-bootstrap.sh" 2>/dev/null)
   assert_contains "$out" "NUDGE_SECONDMATES: secondmate sm-instr: send failed:" \
     "precondition: first nudge should fail"
@@ -545,7 +553,7 @@ test_bootstrap_nudge_retry_refuses_changed_home() {
   fakebin=$(make_fake_toolchain "$w")
 
   out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
-    FM_SEND_SETTLE=0 FM_FAKE_TMUX_FAIL_LITERAL=1 \
+    FM_SEND_SETTLE=0 FM_FAKE_HERDR_FAIL_LITERAL=1 \
     "$ROOT/bin/fm-bootstrap.sh" 2>/dev/null)
   assert_contains "$out" "NUDGE_SECONDMATES: secondmate sm-instr: send failed:" \
     "precondition: first nudge should fail"
@@ -570,8 +578,8 @@ test_bootstrap_nudge_retry_refuses_changed_home() {
 # --- T8b: stale herdr nudge failures retry through current fm-<id> metadata ---
 # Reproduces the 2026-07-07 session-start bug: secondmate_sync used to print raw
 # backend targets (default:w9:pY) that liveness respawn immediately replaced
-# (default:wA:p2), so fm-send with the printed target fell back to tmux and failed
-# while fm-<id> resolved through current meta.
+# (default:wA:p2), so fm-send with the printed stale target failed while
+# fm-<id> resolved through current metadata.
 make_nudge_herdr_fake() {
   local dir=$1 stale=$2 fresh=$3 fakebin
   fakebin=$(fm_fakebin "$dir")
@@ -583,15 +591,21 @@ case "\$cmd \$sub" in
   "status --json")
     printf '{"client":{"version":"0.7.1","protocol":14},"server":{"running":true}}\n'
     ;;
+  "session list")
+    printf '{"sessions":[{"name":"default","running":true,"socket_path":"%s/herdr.sock"}]}\n' "$FM_HOME"
+    ;;
   "pane get")
     if [ "\$arg" = "${stale#*:}" ]; then
-      printf '{"result":{"pane":{"pane_id":"${stale#*:}"}}}\n'
+      printf '{"error":{"code":"pane_not_found","message":"missing"}}\n'
     elif [ "\$arg" = "${fresh#*:}" ]; then
-      printf '{"result":{"pane":{"pane_id":"${fresh#*:}"}}}\n'
+      printf '{"result":{"pane":{"pane_id":"${fresh#*:}","tab_id":"wA:t-sm-instr","workspace_id":"wA"}}}\n'
     else
       printf '{"error":{"code":"pane_not_found","message":"missing"}}\n' >&2
       exit 0
     fi
+    ;;
+  "tab get")
+    printf '{"result":{"tab":{"tab_id":"wA:t-sm-instr","workspace_id":"wA"}}}\n'
     ;;
   "agent get")
     if [ "\$arg" = "${stale#*:}" ]; then
@@ -628,8 +642,15 @@ test_nudge_retry_uses_fresh_herdr_endpoint_after_respawn() {
   {
     printf 'window=%s\n' "$stale"
     printf 'backend=herdr\n'
+    printf 'endpoint_task_id=sm-instr\n'
+    printf 'herdr_session=default\n'
+    printf 'herdr_workspace_id=w9\n'
+    printf 'herdr_tab_id=w9:t-sm-instr\n'
+    printf 'herdr_pane_id=w9:pY\n'
     printf 'kind=secondmate\n'
     printf 'harness=pi\n'
+    printf 'worktree=%s/sm-instr\n' "$w"
+    printf 'project=%s/main\n' "$w"
     printf 'home=%s/sm-instr\n' "$w"
   } > "$meta"
 
@@ -640,8 +661,17 @@ set -u
 id=\${1:-}
 meta="\$FM_HOME/state/\$id.meta"
 [ -f "\$meta" ] || exit 1
-sed -i.bak "s/^window=.*/window=$fresh/" "\$meta" 2>/dev/null || \
-  sed -i "s/^window=.*/window=$fresh/" "\$meta"
+sed -i.bak \
+  -e 's/^window=.*/window=$fresh/' \
+  -e 's/^herdr_workspace_id=.*/herdr_workspace_id=wA/' \
+  -e 's/^herdr_tab_id=.*/herdr_tab_id=wA:t-sm-instr/' \
+  -e 's/^herdr_pane_id=.*/herdr_pane_id=wA:p2/' \
+  "\$meta" 2>/dev/null || sed -i \
+  -e 's/^window=.*/window=$fresh/' \
+  -e 's/^herdr_workspace_id=.*/herdr_workspace_id=wA/' \
+  -e 's/^herdr_tab_id=.*/herdr_tab_id=wA:t-sm-instr/' \
+  -e 's/^herdr_pane_id=.*/herdr_pane_id=wA:p2/' \
+  "\$meta"
 rm -f "\$meta.bak"
 exit 0
 SH
@@ -654,7 +684,7 @@ SH
     pass "T8b nudge selector herdr respawn skipped without jq"
     return
   fi
-  out=$(PATH="$herdrfb:$toolchain:$BASE_PATH" HERDR_ENV=1 FM_BACKEND=herdr \
+  out=$(PATH="$herdrfb:$toolchain:$BASE_PATH" HERDR_ENV=1 \
     FM_SEND_SETTLE=0 \
     FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
     "$ROOT/bin/fm-bootstrap.sh" 2>/dev/null)
@@ -668,17 +698,19 @@ SH
   assert_present "$marker" "failed stale herdr nudge should leave a retry marker"
 
   # shellcheck disable=SC2016  # $0/$1 belong to the inner bash -c process.
-  resolved=$(bash -c '. "$0/bin/fm-backend.sh"; fm_backend_resolve_selector fm-sm-instr "$1"' "$ROOT" "$w/home/state")
+  resolved=$(PATH="$herdrfb:$toolchain:$BASE_PATH" \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_resolve_selector fm-sm-instr "$1"' \
+      "$ROOT" "$w/home/state")
   [ "$resolved" = "$fresh" ] || fail "fm-<id> should resolve through post-respawn meta, got '$resolved'"
 
   # shellcheck disable=SC2016  # $0/$1 belong to the inner bash -c process.
   stale_send=$(PATH="$herdrfb:$toolchain:$BASE_PATH" bash -c \
-    '. "$0/bin/fm-backend.sh"; fm_backend_source herdr; fm_backend_herdr_send_literal "$1" "nudge"' "$ROOT" "$stale" 2>/dev/null; printf '%s' "$?")
+    '. "$0/bin/fm-herdr.sh"; fm_herdr_send_literal "$1" "nudge"' "$ROOT" "$stale" 2>/dev/null; printf '%s' "$?")
   [ "$stale_send" != 0 ] || fail "explicit stale herdr endpoint send should fail"
 
   # shellcheck disable=SC2016  # $0/$1 belong to the inner bash -c process.
   fresh_send=$(PATH="$herdrfb:$toolchain:$BASE_PATH" bash -c \
-    '. "$0/bin/fm-backend.sh"; fm_backend_source herdr; fm_backend_herdr_send_literal "$1" "nudge"' "$ROOT" "$fresh" 2>/dev/null; printf '%s' "$?")
+    '. "$0/bin/fm-herdr.sh"; fm_herdr_send_literal "$1" "nudge"' "$ROOT" "$fresh" 2>/dev/null; printf '%s' "$?")
   [ "$fresh_send" = 0 ] || fail "send through fm-<id>-resolved fresh endpoint should succeed"
 
   pass "T8b stale herdr nudge failures leave a retry marker after respawn rotates fm-<id> metadata"
@@ -721,22 +753,16 @@ test_spawn_fast_forwards_before_launch() {
   c2=$(head_of "$w/main")
   [ "$(head_of "$w/sm")" = "$c1" ] || fail "precondition: home should start behind the primary"
 
-  # tmux stub: accept every subcommand, print nothing (so no window pre-exists).
   fakebin="$w/fakebin"
   mkdir -p "$fakebin"
-  cat > "$fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-exit 0
-SH
-  chmod +x "$fakebin/tmux"
   fm_fake_exit0 "$fakebin" pi
 
-  PATH="$fakebin:$BASE_PATH" TMUX='' \
+  PATH="$fakebin:$BASE_PATH" \
     FM_ROOT_OVERRIDE="$w/main" FM_HOME="$w/home" \
     FM_STATE_OVERRIDE="$w/home/state" FM_DATA_OVERRIDE="$w/home/data" \
     FM_PROJECTS_OVERRIDE="$w/home/projects" FM_CONFIG_OVERRIDE="$w/home/config" \
     FM_SPAWN_NO_GUARD=1 \
-    "$ROOT/bin/fm-spawn.sh" sm "$w/sm" pi --secondmate >/dev/null 2>&1 || true
+    "$ROOT/bin/fm-spawn.sh" sm "$w/sm" --secondmate >/dev/null 2>&1 || true
 
   [ "$(head_of "$w/sm")" = "$c2" ] \
     || fail "spawn did not fast-forward the secondmate worktree to the primary's HEAD"
@@ -759,19 +785,14 @@ test_spawn_warns_when_sync_skipped_before_launch() {
   fakebin="$w/fakebin"
   err="$w/spawn.err"
   mkdir -p "$fakebin"
-  cat > "$fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-exit 0
-SH
-  chmod +x "$fakebin/tmux"
   fm_fake_exit0 "$fakebin" pi
 
-  PATH="$fakebin:$BASE_PATH" TMUX='' \
+  PATH="$fakebin:$BASE_PATH" \
     FM_ROOT_OVERRIDE="$w/main" FM_HOME="$w/home" \
     FM_STATE_OVERRIDE="$w/home/state" FM_DATA_OVERRIDE="$w/home/data" \
     FM_PROJECTS_OVERRIDE="$w/home/projects" FM_CONFIG_OVERRIDE="$w/home/config" \
     FM_SPAWN_NO_GUARD=1 \
-    "$ROOT/bin/fm-spawn.sh" sm "$w/sm" pi --secondmate >/dev/null 2>"$err" || true
+    "$ROOT/bin/fm-spawn.sh" sm "$w/sm" --secondmate >/dev/null 2>"$err" || true
 
   assert_contains "$(cat "$err")" \
     "warning: secondmate sm sync skipped before launch: dirty working tree" \

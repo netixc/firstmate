@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest import mock
 
 
-READER_PATH = Path(__file__).parents[1] / "bin" / "backends" / "herdr-eventwait.py"
+READER_PATH = Path(__file__).parents[1] / "bin" / "fm-herdr-eventwait.py"
 SPEC = importlib.util.spec_from_file_location("herdr_eventwait", READER_PATH)
 READER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(READER)

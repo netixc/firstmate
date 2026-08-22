@@ -5,10 +5,10 @@
 #
 # Directives:
 #   off              position-independent kill switch: disable every active
-#                    alert (the durable marker and tmux status-line flash remain)
+#                    alert (the durable marker remains)
 #   auto | default   platform default: macOS -> osascript; other platforms have
 #                    no built-in OS channel (configure a command: line instead)
-#   osascript        macOS Notification Center banner (backend-independent)
+#   osascript        macOS Notification Center banner (pane-independent)
 #   herdr            herdr UI notification (herdr notification show)
 #   command:<cmd>    run <cmd> via `sh -c`; the alarm summary is passed as $1 and
 #                    on stdin, so it can reach a phone/pager while you are away

@@ -8,15 +8,12 @@
 # Then, if a task is in flight (a state/<id>.meta exists) or Relay
 # polling is active (state/relay-watch.check.sh exists) and supervision is not
 # healthy, prints a loud, clearly delimited banner so the agent cannot skim past
-# it in the tool output of whatever it was doing - the one channel every harness
-# has. Supervision health is MODEL-AWARE (fm_watcher_supervision_verdict in
-# bin/fm-wake-lib.sh): under the Pi extension model the extension tears the
+# it in the tool output of whatever it was doing. Supervision health is Pi-aware
+# (fm_watcher_supervision_verdict in bin/fm-wake-lib.sh): the extension tears the
 # watcher down and respawns it on every actionable wake, so a fresh beacon with
 # a genuinely unheld lock is healthy
 # while that live Pi session provably owns continuity; any held but unhealthy
-# lock is down; under every
-# persistent-watcher harness a live identity-matched watcher with a fresh beacon
-# is required. The banner names the true failing condition (a missing live
+# lock is down. The banner names the true failing condition (a missing live
 # watcher process vs a genuinely stale beacon). The full banner is emitted once
 # per distinct down-episode in this FM_HOME (keyed to the failing condition, not
 # the beacon mtime, which a healthy between-turns watcher advances every poll);
@@ -25,7 +22,7 @@
 # bounded). Independent alarms (queued wakes, worktree tangle) are never
 # suppressed by that dedup. Normal wake handling (watcher briefly down between a
 # wake and the next supervision resume) stays inside the grace window and stays
-# silent. Always exits 0: the guard warns, it never blocks.
+# silent. Runtime-selection refusal exits nonzero; supervision warnings do not block.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -39,6 +36,11 @@ queue_pending=false
 READ_ONLY=${FM_GUARD_READ_ONLY:-0}
 case "$READ_ONLY" in 1|true|TRUE|yes|YES) READ_ONLY=1 ;; *) READ_ONLY=0 ;; esac
 CONTINUE_LINE=${FM_GUARD_CONTINUE_LINE:-This is a supervision warning only; the guarded operation WILL still run.}
+
+if [ -n "${FM_SUPERVISION_MODEL:-}" ]; then
+  printf 'error: FM_SUPERVISION_MODEL is retired because Pi owns supervision; remove the override\n' >&2
+  exit 2
+fi
 
 # Volatile, home-scoped episode marker: one line = the current stale-episode key.
 # Cleared when the home leaves the unhealthy state so a later episode re-arms.
@@ -211,7 +213,7 @@ if [ "$watcher_healthy" = false ]; then
       if [ "$READ_ONLY" -eq 1 ]; then
         printf '●  This read-only session should report the lapse, not repair it.\n'
       else
-        printf '●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.\n'
+        printf '●  Trust the emitted Pi supervision protocol; do not use shell & for watcher repair.\n'
       fi
       printf '●  %s\n' "$CONTINUE_LINE"
       printf '●  %s\n' "$fix"
