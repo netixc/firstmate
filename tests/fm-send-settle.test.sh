@@ -65,6 +65,7 @@ SH
 run_send() {
   local fb=$1 log=$2 home; shift 2
   home="$TMP_ROOT/home-$RANDOM"; mkdir -p "$home/state"
+  : > "$home/herdr.sock"
   : > "$log"
   env "$@" PATH="$fb:$PATH" \
     FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SLEEP_LOG="$log" FM_HERDR_STATE="$home/herdr.state" \
@@ -112,6 +113,7 @@ test_key_path_never_pauses() {
   dir="$TMP_ROOT/key"; mkdir -p "$dir"
   fb=$(make_stubs "$dir"); log="$dir/sleep.log"
   home="$dir/home"; mkdir -p "$home/state"
+  : > "$home/herdr.sock"
   : > "$log"
   env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SLEEP_LOG="$log" FM_HERDR_STATE="$home/herdr.state" \
     "$SEND" "sess:w1:p1" --key Escape 2>/dev/null; rc=$?

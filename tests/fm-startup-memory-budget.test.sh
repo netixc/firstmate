@@ -60,7 +60,9 @@ SH
 set -u
 case "${1:-} ${2:-}" in
   "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
-  "pane get") printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "${3:-}" ;;
+  "session list") printf '{"sessions":[{"name":"lab","running":true,"socket_path":"%s/herdr.sock"}]}\n' "$FM_HOME" ;;
+  "pane get") printf '{"result":{"pane":{"pane_id":"%s","tab_id":"w-sm:t-sm","workspace_id":"w-sm"}}}\n' "${3:-}" ;;
+  "tab get") printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"w-sm"}}}\n' "${3:-}" ;;
   "pane send-text") [ -z "${FM_FAKE_HERDR_LOG:-}" ] || printf '%s\n' "${4:-}" >> "$FM_FAKE_HERDR_LOG" ;;
   "pane send-keys") : > "${FM_FAKE_HERDR_STATE:?}" ;;
   "agent get")
@@ -79,6 +81,7 @@ new_bootstrap_world() {
   root="$world/root"
   home="$world/home"
   mkdir -p "$home/config" "$home/data" "$home/state" "$root/bin"
+  : > "$home/herdr.sock"
   git init -q -b main "$root"
   printf '%s\n' 'config/' > "$root/.gitignore"
   printf '%s\n' '# Firstmate test root' > "$root/AGENTS.md"
@@ -210,6 +213,7 @@ test_budget_accounting_reports_all_three_files_and_safe_failure() {
 new_propagation_world() {
   local world=$1 root="$1/root" home="$1/home" sm="$1/sm" head
   mkdir -p "$home/config" "$home/data" "$home/state" "$root/bin"
+  : > "$home/herdr.sock"
   touch "$home/state/.last-watcher-beat"
   git init -q -b main "$root"
   printf '%s\n' 'config/' > "$root/.gitignore"

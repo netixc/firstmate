@@ -94,6 +94,7 @@ new_home() {
   local name=$1 budget=${2:-10} home
   home="$TMP_ROOT/homes/$name"
   mkdir -p "$home/config" "$home/data" "$home/state" "$home/bin" "$home/projects"
+  : > "$home/herdr.sock"
   printf '%s\n' "$name" > "$home/.fm-secondmate-home"
   printf '%s\n' '# secondmate instructions' > "$home/AGENTS.md"
   printf '%s\n' "$budget" > "$home/config/startup-memory-budget"

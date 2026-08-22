@@ -3379,6 +3379,7 @@ test_send_text_submit_unknown_on_capture_failure() {
 test_scripts_route_explicit_target_through_herdr_meta() {
   local dir state log resp fb neutral out
   dir="$TMP_ROOT/script-explicit-target"; state="$dir/state"; mkdir -p "$state" "$dir/responses"
+  : > "$dir/herdr.sock"
   log="$dir/log"; resp="$dir/responses"; : > "$log"
   neutral="$dir/neutral-root"; mkdir -p "$neutral"
   fm_write_meta "$state/herdr-stale.meta" \

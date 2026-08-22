@@ -304,7 +304,7 @@ cat > "$INTEGRATION_ROOT/bin/fm-lock.sh" <<'SH'
 printf '%s\n' 'lock acquired'
 SH
 chmod +x "$INTEGRATION_ROOT/bin/fm-lock.sh"
-FM_HOME="$INTEGRATION_ROOT/home" FM_ROOT_OVERRIDE="$INTEGRATION_ROOT" \
+PI_CODING_AGENT=true FM_HOME="$INTEGRATION_ROOT/home" FM_ROOT_OVERRIDE="$INTEGRATION_ROOT" \
   FM_HERDR_CLEANUP_TRACE="$TRACE" \
   "$INTEGRATION_ROOT/bin/fm-session-start.sh" >/dev/null 2>&1 \
   || fail "lock-owning session start failed"
@@ -318,7 +318,7 @@ printf '%s\n' 'error: another live firstmate session holds the lock' >&2
 exit 1
 SH
 chmod +x "$INTEGRATION_ROOT/bin/fm-lock.sh"
-FM_HOME="$INTEGRATION_ROOT/home" FM_ROOT_OVERRIDE="$INTEGRATION_ROOT" \
+PI_CODING_AGENT=true FM_HOME="$INTEGRATION_ROOT/home" FM_ROOT_OVERRIDE="$INTEGRATION_ROOT" \
   FM_HERDR_CLEANUP_TRACE="$TRACE" \
   "$INTEGRATION_ROOT/bin/fm-session-start.sh" >/dev/null 2>&1 \
   || fail "read-only session start failed"

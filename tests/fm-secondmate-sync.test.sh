@@ -44,6 +44,7 @@ new_world() {
   local name=$1 w
   w="$TMP_ROOT/$name"
   mkdir -p "$w/home/state" "$w/home/data"
+  : > "$w/home/herdr.sock"
   # Fresh watcher beacon keeps fm-guard quiet for the spawn path.
   touch "$w/home/state/.last-watcher-beat"
 
@@ -316,7 +317,12 @@ set -u
 pane=${3:-}; marker="${FM_HOME:?}/state/.fake-herdr-${pane//:/_}"
 case "${1:-} ${2:-}" in
   "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
-  "pane get") printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "$pane" ;;
+  "session list") printf '{"sessions":[{"name":"lab","running":true,"socket_path":"%s/herdr.sock"}]}\n' "$FM_HOME" ;;
+  "pane get")
+    workspace=${pane%%:*}; task=${workspace#w-}
+    printf '{"result":{"pane":{"pane_id":"%s","tab_id":"%s:t-%s","workspace_id":"%s"}}}\n' "$pane" "$workspace" "$task" "$workspace"
+    ;;
+  "tab get") printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"%s"}}}\n' "${3:-}" "${3%%:*}" ;;
   "pane send-text") [ "${FM_FAKE_HERDR_FAIL_LITERAL:-0}" != 1 ] ;;
   "pane send-keys") : > "$marker" ;;
   "agent get")

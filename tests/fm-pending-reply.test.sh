@@ -53,7 +53,17 @@ case "${1:-} ${2:-}" in
   "tab get") printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"%s"}}}\n' "${3:-}" "${3%%:*}" ;;
   "pane send-text") printf '%s' "${4:-}" >> "$FM_SEND_LOG" ;;
   "pane send-keys") : > "$FM_HERDR_STATE" ;;
+  "pane read") printf '%s' "${FM_PENDING_TEST_CAPTURE:-}" ;;
   "agent get")
+    [ -z "${FM_PENDING_TEST_PROBE_LOG:-}" ] || printf '%s\n' "${3:-}" >> "$FM_PENDING_TEST_PROBE_LOG"
+    if [ "${FM_PENDING_TEST_NATIVE_STATE:-}" = unknown ]; then
+      printf '%s\n' '{"error":{"code":"internal_error"}}'
+      exit 1
+    fi
+    if [ "${FM_PENDING_TEST_NATIVE_STATE:-}" = busy ]; then
+      printf '%s\n' '{"result":{"agent":{"agent_status":"working","provider":"pi"}}}'
+      exit 0
+    fi
     if [ -e "$FM_HERDR_STATE" ]; then status=working; else status=idle; fi
     printf '{"result":{"agent":{"agent_status":"%s","provider":"pi"}}}\n' "$status"
     ;;
@@ -71,6 +81,7 @@ SH
 setup_parent() {  # <name> -> home
   local home="$TMP_ROOT/$1-$RANDOM"
   mkdir -p "$home/state"
+  : > "$home/herdr.sock"
   printf '%s\n' "$home"
 }
 
@@ -560,8 +571,6 @@ test_undelivered_records_are_scan_immutable() {
       || fail "undelivered wrong-home check should be inert"
     fm_pending_reply_tick_one "$state" "$corr" busy "$sm_home" \
       || fail "undelivered direct tick should be inert"
-    fm_herdr_busy_state() { fail "undelivered watcher tick must not probe the backend"; }
-    fm_herdr_capture() { fail "undelivered watcher tick must not capture the backend"; }
     fm_pending_reply_tick "$state" || fail "undelivered watcher tick should succeed"
     after=$(cat "$rec")
     [ "$after" = "$before" ] || fail "scan paths must not mutate an undelivered record"
@@ -853,27 +862,30 @@ test_busy_idle_observation_via_herdr() {
 
 test_unknown_herdr_state_uses_capture_fallback() {
   (
-    local home state corr rec sm_home fb
+    local home state corr rec sm_home fb observation
     home=$(setup_parent fallback-herdr)
     state="$home/state"
     sm_home="$home/sm"
     mkdir -p "$sm_home/state"
     fb=$(make_stubs "$home")
     # shellcheck disable=SC2030 # Fixture path is intentionally subshell-local.
-    export PATH="$fb:$PATH"
+    export PATH="$fb:$PATH" FM_HOME="$home" FM_STATE_OVERRIDE="$state"
     export FM_PENDING_REPLY_GRACE_SECS=10
     # shellcheck disable=SC2030 # fixture clock is intentionally subshell-local
     export FM_PENDING_REPLY_NOW=10000
     corr=$(fm_pending_reply_create "$home" "$state" hibit "Herdr fallback")
     fm_pending_reply_mark_delivered "$state" "$corr"
     write_secondmate_meta "$state/hibit.meta" "$sm_home" "lab:w-hibit:p1" alpha pi
-    fm_herdr_busy_state() { printf unknown; }
-    fm_herdr_capture() { printf '%s' "$FM_PENDING_TEST_CAPTURE"; }
     # shellcheck disable=SC2329 # invoked indirectly through the send hook
     recovery_hook() { :; }
     # shellcheck disable=SC2030 # hook override is intentionally subshell-local
     export FM_PENDING_REPLY_SEND_HOOK=recovery_hook
-    export FM_PENDING_TEST_CAPTURE='idle footer'
+    export FM_PENDING_TEST_NATIVE_STATE=unknown FM_PENDING_TEST_CAPTURE='idle footer'
+    observation=$(fm_herdr_with_live_task_endpoint "$state/hibit.meta" hibit \
+      fm_pending_reply_herdr_observation 2>&1) \
+      || fail "Herdr observation seam refused the fixture: $observation"
+    [ "$observation" = fallback-idle ] \
+      || fail "Herdr observation seam did not classify the idle fallback: $observation"
     fm_pending_reply_tick "$state"
     rec=$(fm_pending_reply_path "$state" "$corr")
     [ -z "$(fm_pending_reply_get "$rec" request_turn_completed_epoch)" ] \
@@ -901,7 +913,8 @@ test_tick_skips_terminal_and_reuses_target_observation() {
     scan_log="$home/status-scans.log"
     fb=$(make_stubs "$home")
     # shellcheck disable=SC2031 # Fixture path is intentionally subshell-local.
-    export PATH="$fb:$PATH"
+    export PATH="$fb:$PATH" FM_HOME="$home" FM_STATE_OVERRIDE="$state" \
+      FM_PENDING_TEST_NATIVE_STATE=busy FM_PENDING_TEST_PROBE_LOG="$probe_log"
     : > "$probe_log"
     : > "$scan_log"
     # This fixture clock is intentionally scoped to the isolated subshell.
@@ -924,14 +937,6 @@ test_tick_skips_terminal_and_reuses_target_observation() {
     write_secondmate_meta "$state/hibit.meta" "$home/hibit" "sess:fm-hibit"
     write_secondmate_meta "$state/resolved.meta" "$home/resolved" "sess:fm-resolved"
     write_secondmate_meta "$state/escalated.meta" "$home/escalated" "sess:fm-escalated"
-    # Runtime overrides called indirectly by the pending-reply tick.
-    # shellcheck disable=SC2329
-    fm_herdr_busy_state() {
-      printf '%s\n' "$1" >> "$probe_log"
-      printf 'busy'
-    }
-    # shellcheck disable=SC2329
-    fm_herdr_capture() { fail "native busy observations should not capture"; }
     # shellcheck disable=SC2329
     fm_pending_reply_find_resolve_line() {
       local status_file=$1 corr=$2 line

@@ -70,7 +70,7 @@ new_world() {
 # test deliberately breaks one. Mirrors fm-bootstrap.test.sh's fixture.
 make_fake_toolchain() {
   local fakebin=$1
-  fm_fake_exit0 "$fakebin" herdr node ego-browser
+  fm_fake_exit0 "$fakebin" herdr node ego-browser pi
   fm_fake_version_tool "$fakebin" lavish-axi FM_FAKE_LAVISH_AXI_VERSION 0.1.46
   cat > "$fakebin/gh-axi" <<'SH'
 #!/usr/bin/env bash
@@ -228,7 +228,8 @@ case "$*" in
   *"comm="*)
     if [ -z "${FM_FAKE_HARNESS_PID:-}" ] || [ "$pid" = "$FM_FAKE_HARNESS_PID" ] \
       || [ "$pid" = "${FM_FAKE_LIVE_HOLDER_PID:-}" ]; then
-      printf '/usr/local/bin/%s\n' "$harness"
+      resolved=$(command -v "$harness" 2>/dev/null || true)
+      printf '%s\n' "${resolved:-/usr/local/bin/$harness}"
     else
       printf '/bin/bash\n'
     fi

@@ -63,6 +63,7 @@ fi
 exit "${FM_FAKE_BOOTSTRAP_RC:-0}"
 SH
   chmod +x "$root/bin/fm-bootstrap.sh"
+  fm_fake_exit0 "$root/bin" pi
   cat > "$root/bin/ps" <<'SH'
 #!/usr/bin/env bash
 pid=
@@ -73,7 +74,7 @@ for argument in "$@"; do
 done
 if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then
   case "$*" in
-    *comm=*) printf '/usr/local/bin/pi\n' ;;
+    *comm=*) command -v pi ;;
     *args=*) printf 'pi\n' ;;
     *ppid=*) /bin/ps -o ppid= -p "$pid" ;;
   esac

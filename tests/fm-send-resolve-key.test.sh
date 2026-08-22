@@ -94,6 +94,7 @@ run_send() {
 setup_home() {  # <name> -> echoes a fresh home dir with an empty state/
   local home="$TMP_ROOT/$1-$RANDOM"
   mkdir -p "$home/state"
+  : > "$home/herdr.sock"
   printf '%s\n' "$home"
 }
 

@@ -348,7 +348,12 @@ cmd_retire() {
 }
 
 case "${1:-}" in
-  launch) shift; [ "$#" -ge 3 ] && [ "$#" -le 4 ] || usage; cmd_launch "$@" ;;
+  launch)
+    shift
+    [ "$#" -ne 5 ] || die "worker-runtime positional arguments are retired; Pi on Herdr is always used"
+    [ "$#" -ge 3 ] && [ "$#" -le 4 ] || usage
+    cmd_launch "$@"
+    ;;
   state) shift; [ "$#" -eq 1 ] || usage; validate_id "$1"; validate_home "$1"; state_value "$1" ;;
   route) shift; [ "$#" -eq 1 ] || usage; cmd_route "$1" ;;
   send) shift; [ "$#" -eq 2 ] || usage; cmd_send "$@" ;;

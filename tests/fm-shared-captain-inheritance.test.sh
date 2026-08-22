@@ -376,7 +376,7 @@ EOF
   add_bootstrap_compatible_tools "$fakebin"
   fm_fake_exit0 "$fakebin" pgrep
 
-  out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$root" \
+  out=$(PATH="$fakebin:$BASE_PATH" PI_CODING_AGENT=true FM_HOME="$home" FM_ROOT_OVERRIDE="$root" \
     "$ROOT/bin/fm-session-start.sh")
 
   assert_contains "$out" "data/captain-shared.md (shared, main-authoritative, read-only in secondmate homes)" \

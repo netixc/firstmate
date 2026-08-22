@@ -13,6 +13,7 @@ make_world() { # <name> <id> <kind>
   local name=$1 id=$2 kind=$3 world home fb
   world=$TMP_ROOT/$name; home=$world/home; fb=$world/fakebin
   mkdir -p "$home/state" "$fb"
+  : > "$home/herdr.sock"
   cat > "$fb/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u

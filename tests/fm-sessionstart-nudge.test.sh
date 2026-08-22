@@ -16,7 +16,8 @@ if [ "${FM_SESSIONSTART_TEST_HARNESS:-0}" != 1 ]; then
   HARNESS_FIXTURE=$(mktemp -d "${TMPDIR:-/tmp}/fm-sessionstart-harness.XXXXXX") || exit 1
   ln -s /bin/bash "$HARNESS_FIXTURE/pi" || exit 1
   # shellcheck disable=SC2016 # Expand in the fixture shell, not this parent.
-  FM_SESSIONSTART_TEST_HARNESS=1 PI_CODING_AGENT=true "$HARNESS_FIXTURE/pi" \
+  FM_SESSIONSTART_TEST_HARNESS=1 FM_SESSIONSTART_TEST_PI_PATH="$HARNESS_FIXTURE" \
+    PI_CODING_AGENT=true "$HARNESS_FIXTURE/pi" \
     -c '"$@"; rc=$?; :; exit "$rc"' _ "$0" "$@"
   HARNESS_STATUS=$?
   rm -rf "$HARNESS_FIXTURE"
@@ -138,7 +139,7 @@ test_owned_lock_is_silent() {
 # behaves, plus the home directories the digest reads. The deliberately bare
 # PATH keeps every bootstrap probe fast and hermetic - it reports missing tools
 # instead of reaching the host's real gh/Herdr/tasks-axi.
-RUN_PATH=${FM_TEST_BASE_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
+RUN_PATH="${FM_SESSIONSTART_TEST_PI_PATH:+$FM_SESSIONSTART_TEST_PI_PATH:}${FM_TEST_BASE_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}"
 
 make_run_primary() {
   local dir=$1

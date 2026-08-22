@@ -28,6 +28,25 @@ fm_pi_canonical_path() {  # <path>
   printf '%s/%s\n' "$dir" "$(basename "$path")"
 }
 
+# Preserve the final launcher pathname while normalizing its directory.
+# Shell-script and symlink launchers share an interpreter executable with many
+# unrelated processes, so resolving the final component would erase the exact
+# Pi identity that distinguishes the launcher from an ordinary shell.
+fm_pi_invocation_path() {  # <path>
+  local path=$1 dir
+  [ -n "$path" ] || return 1
+  case "$path" in
+    */*) ;;
+    *) path=$(command -v -- "$path" 2>/dev/null) || return 1 ;;
+  esac
+  case "$path" in
+    /*) ;;
+    *) path="$PWD/$path" ;;
+  esac
+  dir=$(CDPATH='' cd -P -- "$(dirname "$path")" 2>/dev/null && pwd) || return 1
+  printf '%s/%s\n' "$dir" "$(basename "$path")"
+}
+
 fm_pi_process_executable() {  # <pid> <comm>
   local pid=$1 comm=$2 path
   path=$(readlink "/proc/$pid/exe" 2>/dev/null || true)
@@ -59,6 +78,14 @@ fm_pi_process_matches() {  # <pid> <comm> <args>
     return
   fi
   case "$base" in
+    sh|bash|dash|zsh)
+      script=${args%% *}
+      pi_path=$(command -v pi 2>/dev/null) || return 1
+      pi_path=$(fm_pi_invocation_path "$pi_path") || return 1
+      candidate=$(fm_pi_invocation_path "$script") || return 1
+      [ "$candidate" = "$pi_path" ]
+      return
+      ;;
     node|nodejs|python|python[0-9]|python[0-9].[0-9])
       script=${args#* }
       [ "$script" != "$args" ] || return 1

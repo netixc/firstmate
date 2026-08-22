@@ -73,6 +73,7 @@ first_settle() {  # <expected> <label> <harness|--explicit> <message> [selector-
   local selector_form=${5:-legacy}
   local dir fb log herdr_log herdr_state err home target rc first meta_id
   dir="$TMP_ROOT/case-$RANDOM"; mkdir -p "$dir/state"
+  : > "$dir/herdr.sock"
   fb=$(make_stubs "$dir"); log="$dir/sleep.log"; herdr_log="$dir/herdr.log"; herdr_state="$dir/herdr.state"; err="$dir/send.err"; home="$dir"
   if [ "$harness" = --explicit ]; then
     target="sess:w1:p1"

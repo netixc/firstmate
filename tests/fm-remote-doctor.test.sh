@@ -621,7 +621,7 @@ assert_contains "$DOCTOR_OUT" 'check entrypoint-link=human:' "an operator-owned 
 unset FM_ROOT_OVERRIDE
 pass "the entrypoint symlink is recreated when absent and never overwritten when operator-owned"
 
-# --- remote lifecycle rejects an unsupported harness ------------------------
+# --- remote lifecycle rejects a retired runtime selection -------------------
 
 REMOTE_REJECT_HOME="$TMP_ROOT/remote-reject-home"
 mkdir -p "$REMOTE_REJECT_HOME/bin" "$REMOTE_REJECT_HOME/state" "$REMOTE_REJECT_HOME/data"
@@ -632,7 +632,7 @@ REMOTE_REJECT_OUT=$(FM_HOME="$REMOTE_REJECT_HOME" \
   "$ROOT/bin/fm-remote-secondmate-control.sh" launch remote-reject legacy-agent - - herdr 2>&1)
 REMOTE_REJECT_RC=$?
 set -e
-expect_code 1 "$REMOTE_REJECT_RC" "an unsupported harness must be rejected on the remote launch path"
-assert_contains "$REMOTE_REJECT_OUT" "unverified remote secondmate harness: legacy-agent" \
-  "remote launch did not use the generic unsupported-harness rejection"
-pass "remote secondmate launch rejects an unsupported harness generically"
+expect_code 1 "$REMOTE_REJECT_RC" "a retired worker-runtime argument must be rejected on the remote launch path"
+assert_contains "$REMOTE_REJECT_OUT" "worker-runtime positional arguments are retired; Pi on Herdr is always used" \
+  "remote launch did not reject the retired worker-runtime argument"
+pass "remote secondmate launch rejects a retired worker-runtime argument"
