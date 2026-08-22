@@ -1,0 +1,20 @@
+registered fm_send tools: 1
+schema required: ["target","message"]
+schema fields: ["message","resolveKeys","target"]
+additional properties: false
+confirmed result: {"content":[{"type":"text","text":"fm_send: delivery confirmed"}],"details":{"schema":"fm-send-result.v1","status":"confirmed","exitCode":0}}
+absolute tracked script: true
+project cwd preserved: true
+signal preserved: true
+literal argv: ["worker-7","--resolve-key","decision.one","--resolve-key","key_two","literal \"quote\" $HOME 🚢\nsecond line"]
+confirmed executions (no retry): 1
+exit 3 result: {"content":[{"type":"text","text":"receipt unavailable\n\nfm_send: delivery is unconfirmed. Inspect the endpoint before any retry; do not retype or blindly resend."}],"details":{"schema":"fm-send-result.v1","status":"unconfirmed","exitCode":3,"diagnostic":"receipt unavailable","instruction":"Inspect the endpoint before any retry; do not retype or blindly resend."}}
+exit 3 executions (no retry): 1
+exit 7 error marks delivery unconfirmed: true
+exit 7 error bounded: true
+exit 7 error instructs inspect-before-retry: true
+exit 7 executions (no retry): 1
+missing FM_HOME refusal: fm_send requires an explicit inherited FM_HOME and refuses to derive one from the code root
+missing FM_HOME executions: 0
+pre-cancel refusal: fm_send was cancelled before execution; delivery is unconfirmed. Inspect the endpoint before any retry; do not retype or blindly resend.
+pre-cancel executions: 0
