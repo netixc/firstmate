@@ -235,8 +235,8 @@ test_daemon_preserves_unreadable_recheck_markers() {
   printf 'paused: external wait\n' > "$state/paused.status"
   printf '0\n' > "$state/.subsuper-stale-stale"
   printf '0\n' > "$state/.subsuper-paused-paused"
-  printf '0\n' > "$state/.subsuper-stale-ambiguous-stale"
-  printf '0\n' > "$state/.subsuper-paused-ambiguous-paused"
+  : > "$state/.subsuper-stale-ambiguous-stale"
+  printf 'torn\nmarker\n' > "$state/.subsuper-paused-ambiguous-paused"
   cat > "$fakebin/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
@@ -268,6 +268,7 @@ SH
     sleep 0.1
   done
   sleep 2
+  kill -0 "$daemon_pid" 2>/dev/null || fail "daemon exited while reconciling malformed endpoint markers"
   kill -TERM "$daemon_pid" 2>/dev/null || true
   wait "$daemon_pid" 2>/dev/null || true
   [ -e "$state/.subsuper-stale-stale" ] || fail "daemon discarded an unreadable stale endpoint marker"

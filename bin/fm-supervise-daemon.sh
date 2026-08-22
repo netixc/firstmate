@@ -201,6 +201,19 @@ else
   _stat_file_mtime() { stat -c %Y "$1" 2>/dev/null; }
 fi
 _now() { date +%s; }
+_durable_epoch_age() {
+  local f=$1 now=${2:-$(_now)} epoch
+  epoch=$(cat "$f" 2>/dev/null || true)
+  case "$epoch" in
+    0) ;;
+    ''|*[!0-9]*|0*) echo "$now"; return ;;
+  esac
+  if [ "$epoch" -le "$now" ] 2>/dev/null; then
+    echo $(( now - epoch ))
+  else
+    echo "$now"
+  fi
+}
 _file_age() {  # seconds since mtime; very large if missing
   local f=$1 m
   m=$(_stat_file_mtime "$f") || { echo 999999; return; }
@@ -870,7 +883,7 @@ _oldest_line_age() {  # <buf> -> seconds since the oldest buffered item first ar
   [ -s "$f" ] || { echo 999999; return; }
   since="${f}.since"
   if [ -r "$since" ]; then
-    echo $(( $(_now) - $(cat "$since" 2>/dev/null || echo 0) ))
+    _durable_epoch_age "$since"
   else
     echo 999999
   fi
@@ -929,7 +942,7 @@ housekeeping() {  # <state>
   for marker in "$state"/.subsuper-stale-*; do
     [ -e "$marker" ] || continue
     key="${marker##*.subsuper-stale-}"
-    age=$(( now - $(cat "$marker" 2>/dev/null || echo "$now") ))
+    age=$(_durable_epoch_age "$marker" "$now")
     # Reconstruct the exact Herdr target from durable metadata.
     win_rc=0
     win=$(window_for_task "$key" "$state" 2>/dev/null) || win_rc=$?
@@ -970,7 +983,7 @@ housekeeping() {  # <state>
   for marker in "$state"/.subsuper-paused-*; do
     [ -e "$marker" ] || continue
     key="${marker##*.subsuper-paused-}"
-    age=$(( now - $(cat "$marker" 2>/dev/null || echo "$now") ))
+    age=$(_durable_epoch_age "$marker" "$now")
     win_rc=0
     win=$(window_for_task "$key" "$state" 2>/dev/null) || win_rc=$?
     case "$win_rc" in

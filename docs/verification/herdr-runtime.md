@@ -801,6 +801,23 @@ fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
 fm-doc-audience-check: ok surfaces=51 local_links=166
 ```
 
+The final malformed-marker and ambiguous-endpoint cadence rerun used:
+
+```sh
+set -o pipefail && \
+  daemon=$(tests/fm-daemon.test.sh) && \
+  printf '%s\n' "$daemon" | grep -F 'ok - daemon preserves and surfaces unreadable endpoint rechecks' && \
+  bin/fm-lint.sh bin/fm-supervise-daemon.sh tests/fm-daemon.test.sh && \
+  bin/fm-doc-audience-check.sh && \
+  git diff --check
+```
+
+```text
+ok - daemon preserves and surfaces unreadable endpoint rechecks
+fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
+fm-doc-audience-check: ok surfaces=51 local_links=166
+```
+
 Tracked physical line counts were measured with deleted paths excluded:
 
 ```sh
@@ -814,12 +831,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 132413 313
-bin 54413 126
-tests 57453 117
+all 132444 313
+bin 54426 126
+tests 57454 117
 pi 2048 9
 agents 559
-added=9352 deleted=34143 net=-24791
+added=9384 deleted=34144 net=-24760
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 24,791 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 24,760 lines smaller.
