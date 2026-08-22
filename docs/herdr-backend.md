@@ -195,8 +195,8 @@ Workspace and tab ids support verification and cleanup but are not inferred from
 ## Current transport behavior
 
 Firstmate starts and polls a named server before workspace, tab, pane, or agent calls.
-Every Herdr invocation goes through `fm_herdr_cli`, which sets the environment and passes an explicit trailing `--session <name>`.
-An environment variable alone is not reliable when another Herdr server is running.
+Ordinary Herdr invocations go through `fm_herdr_cli`, which sets the environment and passes an explicit trailing `--session <name>` because an environment variable alone is not reliable when another server is running.
+Generation-bound endpoint operations instead hard-link the authorized Unix socket, set `HERDR_SOCKET_PATH` to that immutable alias, and omit `--session` so a restarted named session cannot retarget the operation.
 
 Literal text and Enter are separate operations for ordinary steers.
 Spawn-time fixed commands may use Herdr's atomic run primitive.

@@ -891,7 +891,7 @@ _oldest_line_age() {  # <buf> -> seconds since the oldest buffered item first ar
 #  3) heartbeat scan: every HEARTBEAT_SCAN_SECS, grep state/*.status for a
 #     captain-relevant line the per-wake classifier missed and escalate it.
 housekeeping() {  # <state>
-  local state=$1 now due f key task win marker age last max_defer oldest pause_secs
+  local state=$1 now due f key task win marker age last max_defer oldest pause_secs win_rc
   now=$(_now)
   migrate_watcher_pause_markers "$state"
 
@@ -930,11 +930,17 @@ housekeeping() {  # <state>
     [ -e "$marker" ] || continue
     key="${marker##*.subsuper-stale-}"
     # Reconstruct the exact Herdr target from durable metadata.
-    win=$(window_for_task "$key" "$state" 2>/dev/null || true)
-    if [ -z "$win" ]; then
-      # Window gone (task torn down): drop the marker, nothing to escalate.
-      rm -f "$marker"; continue
-    fi
+    win_rc=0
+    win=$(window_for_task "$key" "$state" 2>/dev/null) || win_rc=$?
+    case "$win_rc" in
+      0) ;;
+      1) rm -f "$marker"; continue ;;
+      *)
+        escalate_add "$state" "stale endpoint metadata is ambiguous or unreadable; marker preserved for manual reconciliation: $key"
+        _now > "$marker"
+        continue
+        ;;
+    esac
     task=$(window_to_task "$win" "$state")
     last=$(last_status_line "$state/$task.status")
     if [ -n "$last" ] && status_is_paused "$last"; then
@@ -946,7 +952,8 @@ housekeeping() {  # <state>
     stale_window_is_busy "$win" "$state"
     case "$?" in
       0) rm -f "$marker" ;;
-      2) rm -f "$marker" ;;
+      2) escalate_add "$state" "stale endpoint is unreadable or identity-mismatched; marker preserved for manual reconciliation: $win"
+         _now > "$marker" ;;
       *) escalate_add "$state" "stale persisted ${age}s (possible wedge): $win"
          stale_marker_remove "$win" "$state" ;;
     esac
@@ -962,10 +969,17 @@ housekeeping() {  # <state>
   for marker in "$state"/.subsuper-paused-*; do
     [ -e "$marker" ] || continue
     key="${marker##*.subsuper-paused-}"
-    win=$(window_for_task "$key" "$state" 2>/dev/null || true)
-    if [ -z "$win" ]; then
-      rm -f "$marker"; continue
-    fi
+    win_rc=0
+    win=$(window_for_task "$key" "$state" 2>/dev/null) || win_rc=$?
+    case "$win_rc" in
+      0) ;;
+      1) rm -f "$marker"; continue ;;
+      *)
+        escalate_add "$state" "paused endpoint metadata is ambiguous or unreadable; marker preserved for manual reconciliation: $key"
+        _now > "$marker"
+        continue
+        ;;
+    esac
     task=$(window_to_task "$win" "$state")
     last=$(last_status_line "$state/$task.status")
     if [ -z "$last" ] || ! status_is_paused "$last"; then
@@ -977,7 +991,8 @@ housekeeping() {  # <state>
     stale_window_is_busy "$win" "$state"
     case "$?" in
       0) rm -f "$marker" ;;
-      2) rm -f "$marker" ;;
+      2) escalate_add "$state" "paused endpoint is unreadable or identity-mismatched; marker preserved for manual reconciliation: $win"
+         _now > "$marker" ;;
       *)
         last=$(last_status_line "$state/$task.status")
         if [ -n "$last" ] && status_is_paused "$last"; then
@@ -1009,14 +1024,18 @@ housekeeping() {  # <state>
 
 # Find a recorded or live window target whose task id matches the marker key.
 window_for_task() {  # <task-key> [state]
-  local key=$1 state=${2:-$(_state_root)} meta task w
+  local key=$1 state=${2:-$(_state_root)} meta task w found=0
   for meta in "$state"/*.meta; do
     [ -e "$meta" ] || continue
     task=$(basename "$meta"); task=${task%.meta}
     [ "$(_stale_key "$task")" = "$key" ] || continue
-    w=$(fm_endpoint_target_of_meta "$meta")
-    [ -n "$w" ] && { printf '%s' "$w"; return 0; }
+    found=1
+    w=$(fm_endpoint_target_of_meta "$meta") || return 2
+    [ -n "$w" ] || return 2
+    printf '%s' "$w"
+    return 0
   done
+  [ "$found" -eq 0 ] || return 2
   return 1
 }
 

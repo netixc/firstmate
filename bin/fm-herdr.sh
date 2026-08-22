@@ -1268,12 +1268,39 @@ fm_herdr_with_live_task_endpoint() {  # <meta-file> <task-id> <callback> [args..
     _fm_herdr_with_live_task_endpoint_bound "$meta" "$id" "$target" "$callback" "$@"
 }
 
+_fm_herdr_with_live_target_bound() {
+  local target=$1 callback=$2
+  shift 2
+  fm_herdr_target_exists "$target" || {
+    echo "REFUSED: explicit Herdr endpoint '$target' is not live on its authorized session generation; nothing was changed." >&2
+    return 2
+  }
+  "$callback" "$target" "$@"
+}
+
+fm_herdr_with_live_target() {  # <target> <callback> [args...]
+  local target=$1 callback=$2 session generation
+  shift 2
+  fm_herdr_parse_target "$target" || return 2
+  session=$FM_HERDR_SESSION
+  generation=$(fm_herdr_presentation_session_generation "$session") || {
+    echo "REFUSED: Herdr session generation is unavailable for explicit endpoint '$target'; nothing was changed." >&2
+    return 2
+  }
+  fm_herdr_with_session_generation "$session" "$generation" "explicit endpoint $target" \
+    _fm_herdr_with_live_target_bound "$target" "$callback" "$@"
+}
+
 _fm_herdr_live_capture() {
   fm_herdr_capture "$1" "$2"
 }
 
 fm_herdr_live_capture_task_endpoint() {  # <meta-file> <task-id> <lines>
   fm_herdr_with_live_task_endpoint "$1" "$2" _fm_herdr_live_capture "$3"
+}
+
+fm_herdr_live_capture_target() {  # <target> <lines>
+  fm_herdr_with_live_target "$1" _fm_herdr_live_capture "$2"
 }
 
 _fm_herdr_live_agent_state() {
@@ -1300,12 +1327,20 @@ fm_herdr_live_send_key_task_endpoint() {  # <meta-file> <task-id> <key>
   fm_herdr_with_live_task_endpoint "$1" "$2" _fm_herdr_live_send_key "$3"
 }
 
+fm_herdr_live_send_key_target() {  # <target> <key>
+  fm_herdr_with_live_target "$1" _fm_herdr_live_send_key "$2"
+}
+
 _fm_herdr_live_send_text_submit() {
   fm_herdr_send_text_submit "$1" "$2" "$3" "$4" "$5"
 }
 
 fm_herdr_live_send_text_task_endpoint() {  # <meta-file> <task-id> <text> <retries> <sleep> <settle>
   fm_herdr_with_live_task_endpoint "$1" "$2" _fm_herdr_live_send_text_submit "$3" "$4" "$5" "$6"
+}
+
+fm_herdr_live_send_text_target() {  # <target> <text> <retries> <sleep> <settle>
+  fm_herdr_with_live_target "$1" _fm_herdr_live_send_text_submit "$2" "$3" "$4" "$5"
 }
 
 _fm_herdr_live_kill() {

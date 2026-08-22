@@ -34,5 +34,5 @@ if [ -n "$META" ]; then
   fm_herdr_live_capture_task_endpoint "$META" "$ID" "$N"
 else
   T=$(fm_herdr_resolve_selector "$RAW_TARGET" "$STATE")
-  fm_herdr_capture "$T" "$N"
+  fm_herdr_live_capture_target "$T" "$N"
 fi

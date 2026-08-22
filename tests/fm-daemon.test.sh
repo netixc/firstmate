@@ -203,6 +203,65 @@ test_stale_observation_refuses_moved_live_endpoint() {
   pass "daemon stale observation refuses a moved live endpoint"
 }
 
+test_daemon_preserves_unreadable_recheck_markers() {
+  local state home fakebin out daemon_pid attempt
+  state=$(new_state unreadable-rechecks)
+  home=${state%/state}
+  fakebin=$home/fakebin
+  out=$home/daemon.out
+  mkdir -p "$fakebin"
+  : > "$state/herdr.sock"
+  fm_write_meta "$state/stale.meta" \
+    "backend=herdr" "window=lab:w-stale:p1" "endpoint_task_id=stale" \
+    "herdr_session=lab" "herdr_workspace_id=w-stale" "herdr_tab_id=w-stale:t1" \
+    "herdr_pane_id=w-stale:p1" "worktree=/tmp/stale" "project=/tmp/project" "harness=pi"
+  fm_write_meta "$state/paused.meta" \
+    "backend=herdr" "window=lab:w-paused:p1" "endpoint_task_id=paused" \
+    "herdr_session=lab" "herdr_workspace_id=w-paused" "herdr_tab_id=w-paused:t1" \
+    "herdr_pane_id=w-paused:p1" "worktree=/tmp/paused" "project=/tmp/project" "harness=pi"
+  printf 'working: overdue\n' > "$state/stale.status"
+  printf 'paused: external wait\n' > "$state/paused.status"
+  printf '0\n' > "$state/.subsuper-stale-stale"
+  printf '0\n' > "$state/.subsuper-paused-paused"
+  cat > "$fakebin/herdr" <<'SH'
+#!/usr/bin/env bash
+set -u
+case "${1:-} ${2:-}" in
+  "status --json") printf '%s\n' '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}' ;;
+  "session list") printf '{"sessions":[{"name":"lab","running":true,"socket_path":"%s/herdr.sock"}]}\n' "$FM_STATE_OVERRIDE" ;;
+  "pane get")
+    case "${3:-}" in
+      w-primary:p1) printf '%s\n' '{"result":{"pane":{"pane_id":"w-primary:p1"}}}' ;;
+      *) printf '{"result":{"pane":{"pane_id":"%s","tab_id":"wrong:t1","workspace_id":"wrong"}}}\n' "${3:-}" ;;
+    esac
+    ;;
+  "agent get") printf '%s\n' '{"result":{"agent":{"agent_status":"idle"}}}' ;;
+esac
+SH
+  chmod +x "$fakebin/herdr"
+  FM_STATE_OVERRIDE="$state" FM_HOME="$home" FM_SUPERVISOR_TARGET=lab:w-primary:p1 \
+    FM_HOUSEKEEPING_TICK=0 FM_STALE_ESCALATE_SECS=0 FM_PAUSE_RESURFACE_SECS=0 \
+    FM_ESCALATE_BATCH_SECS=999 FM_HEARTBEAT_SCAN_SECS=999999 PATH="$fakebin:$PATH" \
+    "$ROOT/bin/fm-supervise-daemon.sh" >"$out" 2>&1 &
+  daemon_pid=$!
+  for attempt in $(seq 1 50); do
+    grep -F 'stale endpoint is unreadable or identity-mismatched' "$state/.subsuper-escalations" >/dev/null 2>&1 \
+      && grep -F 'paused endpoint is unreadable or identity-mismatched' "$state/.subsuper-escalations" >/dev/null 2>&1 \
+      && break
+    kill -0 "$daemon_pid" 2>/dev/null || break
+    sleep 0.1
+  done
+  kill -TERM "$daemon_pid" 2>/dev/null || true
+  wait "$daemon_pid" 2>/dev/null || true
+  [ -e "$state/.subsuper-stale-stale" ] || fail "daemon discarded an unreadable stale endpoint marker"
+  [ -e "$state/.subsuper-paused-paused" ] || fail "daemon discarded an unreadable paused endpoint marker"
+  assert_contains "$(cat "$state/.subsuper-escalations")" 'stale endpoint is unreadable or identity-mismatched' \
+    "daemon did not surface an unreadable stale endpoint"
+  assert_contains "$(cat "$state/.subsuper-escalations")" 'paused endpoint is unreadable or identity-mismatched' \
+    "daemon did not surface an unreadable paused endpoint"
+  pass "daemon preserves and surfaces unreadable endpoint rechecks"
+}
+
 test_daemon_stops_when_herdr_is_not_live() {
   local verdict state fakebin counter out rc
   for verdict in startup-dead runtime-dead runtime-unreadable runtime-replaced; do
@@ -316,5 +375,6 @@ test_injection_types_once_through_herdr
 test_wedge_alarm_preserves_buffer
 test_supervisor_target_is_herdr_only
 test_stale_observation_refuses_moved_live_endpoint
+test_daemon_preserves_unreadable_recheck_markers
 test_daemon_stops_when_herdr_is_not_live
 test_daemon_liveness_ignores_presentation_lock_contention

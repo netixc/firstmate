@@ -770,30 +770,33 @@ fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
 fm-doc-audience-check: ok surfaces=52 local_links=168
 ```
 
-The final authorized-socket generation-bound away-terminal, supervisor, and real Pi/Herdr lifecycle rerun used:
+The final exact-target, unreadable-recheck, authorized-socket, and real Pi/Herdr lifecycle rerun used:
 
 ```sh
 set -o pipefail && \
+  send=$(tests/fm-send-strict.test.sh) && \
+  printf '%s\n' "$send" | grep -F 'ok - fm-send strict: explicit targets stay on their authorized Herdr generation' && \
+  daemon=$(tests/fm-daemon.test.sh) && \
+  printf '%s\n' "$daemon" | grep -E '^ok - daemon (preserves and surfaces unreadable endpoint rechecks|read-only liveness ignores unrelated presentation lock contention)$' && \
   lifecycle=$(FM_SEND_MARKER_HERDR_E2E=1 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
     bash tests/fm-send-secondmate-marker-herdr-e2e.test.sh) && \
   printf '%s\n' "$lifecycle" | grep -E '^ok - real Pi/Herdr:' && \
   printf 'versions: ' && herdr --version && printf 'Pi ' && pi --version && \
-  tests/fm-afk-launch.test.sh | tail -1 && \
-  tests/fm-daemon.test.sh | tail -1 && \
-  bin/fm-lint.sh bin/fm-herdr.sh bin/fm-afk-launch.sh bin/fm-supervise-daemon.sh tests/remote-herdr-fixture.sh tests/fm-afk-launch.test.sh tests/fm-daemon.test.sh tests/fm-afk-pi-herdr-return-e2e.test.sh tests/fm-send-strict.test.sh tests/fm-trace-context-spawn.test.sh && \
+  bin/fm-lint.sh bin/fm-herdr.sh bin/fm-peek.sh bin/fm-send.sh bin/fm-supervise-daemon.sh tests/fm-daemon.test.sh tests/fm-send-strict.test.sh && \
   bin/fm-doc-audience-check.sh && \
   git diff --check
 ```
 
 ```text
+ok - fm-send strict: explicit targets stay on their authorized Herdr generation
+ok - daemon preserves and surfaces unreadable endpoint rechecks
+ok - daemon read-only liveness ignores unrelated presentation lock contention
 ok - real Pi/Herdr: exact-id FM_HOME send delivers exactly one from-firstmate marker
 ok - real Pi/Herdr: direct captain terminal input stays unmarked
 ok - real Pi/Herdr: lifecycle control preserves the live exact endpoint
 ok - real Pi/Herdr: teardown removes the endpoint, home, and metadata
 versions: herdr 0.8.0
 Pi 0.84.2
-ok - away launcher lock binds and releases exact process identity
-ok - daemon read-only liveness ignores unrelated presentation lock contention
 fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
 fm-doc-audience-check: ok surfaces=51 local_links=166
 ```
@@ -811,12 +814,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 132251 313
-bin 54361 126
-tests 57346 117
+all 132388 313
+bin 54411 126
+tests 57430 117
 pi 2048 9
 agents 559
-added=9174 deleted=34127 net=-24953
+added=9325 deleted=34141 net=-24816
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 24,953 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 24,816 lines smaller.

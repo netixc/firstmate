@@ -29,6 +29,11 @@ case "${1:-} ${2:-}" in
       [ -z "${FM_HERDR_PANE_GET_COUNT:-}" ] || printf '%s' "$count" > "$FM_HERDR_PANE_GET_COUNT"
       if [ "${FM_HERDR_MOVE_AFTER_FIRST:-0}" = 1 ] && [ "$count" -gt 1 ]; then tab="$workspace:t2"; else tab="$workspace:t1"; fi
       printf '{"result":{"pane":{"pane_id":"%s","tab_id":"%s","workspace_id":"%s"}}}\n' "${3:-}" "$tab" "$workspace"
+      if [ "${FM_HERDR_REPLACE_AFTER_TARGET_CHECK:-0}" = 1 ] && [ ! -e "$FM_HOME/session-replaced" ]; then
+        mv "$FM_HOME/herdr.sock" "$FM_HOME/herdr-prior.sock"
+        : > "$FM_HOME/herdr.sock"
+        : > "$FM_HOME/session-replaced"
+      fi
     fi ;;
   "tab get")
     workspace=${3%%:*}
@@ -44,7 +49,7 @@ case "${1:-} ${2:-}" in
     ;;
   "pane send-text")
     [ -z "${FM_EXPECTED_LOCK:-}" ] || [ -e "$FM_EXPECTED_LOCK" ] || exit 1
-    if [ "${FM_HERDR_REPLACE_AFTER_VALIDATION:-0}" = 1 ]; then
+    if [ "${FM_HERDR_REPLACE_AFTER_VALIDATION:-0}" = 1 ] || [ "${FM_HERDR_REPLACE_AFTER_TARGET_CHECK:-0}" = 1 ]; then
       [ -n "${FM_HERDR_AUTHORIZED_SOCKET:-}" ] || exit 1
       [ "${HERDR_SOCKET_PATH:-}" = "$FM_HERDR_AUTHORIZED_SOCKET" ] || exit 1
       [ "${FM_HERDR_AUTHORIZED_SOCKET%/*}" -ef "$FM_HOME" ] || exit 1
@@ -80,6 +85,7 @@ run_send() { # <home> <fakebin> <log> <args...>
   PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" \
     FM_HERDR_LOG="$log" FM_HERDR_STATE="$home/herdr.state" FM_SEND_SETTLE=0 \
     FM_HERDR_REPLACE_AFTER_VALIDATION="${FM_HERDR_REPLACE_AFTER_VALIDATION:-0}" \
+    FM_HERDR_REPLACE_AFTER_TARGET_CHECK="${FM_HERDR_REPLACE_AFTER_TARGET_CHECK:-0}" \
     "$SEND" "$@"
 }
 
@@ -249,6 +255,23 @@ test_explicit_exact_target_and_key() {
   pass "fm-send strict: explicit exact targets and Pi keys use Herdr"
 }
 
+test_explicit_target_uses_bound_transport() {
+  local home=$TMP_ROOT/explicit-restart fb log expected_lock
+  mkdir -p "$home/state"; fb=$(make_stubs "$home"); log=$home/herdr.log; : > "$log"
+  expected_lock=$(PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" HERDR_SESSION=lab \
+    FM_HERDR_LOG="$log" FM_HERDR_STATE="$home/herdr.state" \
+    bash -c '. "$1/bin/fm-herdr.sh"; fm_herdr_presentation_session_lock_path lab' _ "$ROOT") \
+    || fail "could not resolve the explicit-target presentation lock"
+  export FM_EXPECTED_LOCK="$expected_lock"
+  FM_HERDR_REPLACE_AFTER_TARGET_CHECK=1 \
+    run_send "$home" "$fb" "$log" lab:w9:p7 'deliver to explicit generation' >/dev/null 2>&1 \
+    || fail "explicit target lost its bound Herdr transport during session replacement"
+  [ -e "$home/bound-generation-used" ] \
+    || fail "explicit target resolved the replacement session instead of its authorized socket generation"
+  unset FM_EXPECTED_LOCK
+  pass "fm-send strict: explicit targets stay on their authorized Herdr generation"
+}
+
 test_exact_id_send
 test_live_identity_is_rechecked_under_send_lock
 test_session_replacement_uses_bound_transport
@@ -260,3 +283,4 @@ test_live_tab_workspace_owner_refuses
 test_unset_home_and_unresolved_refuse
 test_legacy_shapes_and_prefixless_panes_refuse
 test_explicit_exact_target_and_key
+test_explicit_target_uses_bound_transport

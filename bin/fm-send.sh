@@ -232,13 +232,9 @@ fm_send_resolve_target() {  # <raw-target>
 
   case "$raw" in
     *:*:*)
-      if ! fm_herdr_target_exists "$raw"; then
-        echo "error: explicit target '$raw' is not a live Herdr endpoint" >&2
-        return 1
-      fi
       RESOLVED_TARGET=$raw
       TARGET_ROUTE=herdr
-      RESOLUTION_TRIED="explicit Herdr endpoint verified"
+      RESOLUTION_TRIED="explicit Herdr endpoint"
       return 0
       ;;
     *:*)
@@ -432,7 +428,7 @@ if [ "${1:-}" = "--key" ]; then
     TARGET_TASK_ID=$(fm_send_id_from_meta "$TARGET_META")
     fm_herdr_live_send_key_task_endpoint "$TARGET_META" "$TARGET_TASK_ID" "$key" \
       || { echo "error: key '$key' not sent to $T (Herdr send failed; tried $RESOLUTION_TRIED)" >&2; exit 1; }
-  elif ! fm_herdr_send_key "$T" "$key"; then
+  elif ! fm_herdr_live_send_key_target "$T" "$key"; then
     echo "error: key '$key' not sent to $T (Herdr send failed; tried $RESOLUTION_TRIED)" >&2
     exit 1
   fi
@@ -507,7 +503,7 @@ else
     else
       send_rc=$?
     fi
-  elif verdict=$(fm_herdr_send_text_submit "$T" "$MESSAGE" "$retries" "$sleep_s" "$settle"); then
+  elif verdict=$(fm_herdr_live_send_text_target "$T" "$MESSAGE" "$retries" "$sleep_s" "$settle"); then
     :
   else
     send_rc=$?
