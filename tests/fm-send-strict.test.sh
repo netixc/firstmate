@@ -46,6 +46,7 @@ case "${1:-} ${2:-}" in
     [ -z "${FM_EXPECTED_LOCK:-}" ] || [ -e "$FM_EXPECTED_LOCK" ] || exit 1
     if [ "${FM_HERDR_REPLACE_AFTER_VALIDATION:-0}" = 1 ]; then
       [ -n "${HERDR_SOCKET_PATH:-}" ] || exit 1
+      [ "${HERDR_SOCKET_PATH%/*}" -ef "$FM_HOME" ] || exit 1
       [ "$HERDR_SOCKET_PATH" -ef "$FM_HOME/herdr-prior.sock" ] || exit 1
       [ ! "$HERDR_SOCKET_PATH" -ef "$FM_HOME/herdr.sock" ] || exit 1
       : > "$FM_HOME/bound-generation-used"

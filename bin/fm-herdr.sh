@@ -1095,10 +1095,10 @@ fm_herdr_bound_socket_create() {  # <session-generation>
   source=${generation%%$'\t'*}
   expected=${generation#*$'\t'}
   [ -n "$source" ] && [ -n "$expected" ] && [ "$source" != "$expected" ] || return 1
-  dir=$(fm_herdr_presentation_lock_namespace) || return 1
-  fm_herdr_presentation_lock_namespace_valid "$dir" || return 1
+  dir=$(dirname "$source") || return 1
+  [ -d "$dir" ] || return 1
   while [ "$attempt" -lt 10 ]; do
-    alias="$dir/socket-$$-${RANDOM:-0}-$attempt.sock"
+    alias="$dir/.fm-${RANDOM:-0}-$attempt"
     if ln "$source" "$alias" 2>/dev/null; then
       identity=$(fm_herdr_socket_identity "$alias") || identity=
       if [ "$identity" = "$expected" ]; then
