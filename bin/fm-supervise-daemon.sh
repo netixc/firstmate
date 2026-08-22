@@ -929,6 +929,7 @@ housekeeping() {  # <state>
   for marker in "$state"/.subsuper-stale-*; do
     [ -e "$marker" ] || continue
     key="${marker##*.subsuper-stale-}"
+    age=$(( now - $(cat "$marker" 2>/dev/null || echo "$now") ))
     # Reconstruct the exact Herdr target from durable metadata.
     win_rc=0
     win=$(window_for_task "$key" "$state" 2>/dev/null) || win_rc=$?
@@ -936,6 +937,7 @@ housekeeping() {  # <state>
       0) ;;
       1) rm -f "$marker"; continue ;;
       *)
+        [ "$age" -ge "${FM_STALE_ESCALATE_SECS:-$STALE_ESCALATE_SECS_DEFAULT}" ] || continue
         escalate_add "$state" "stale endpoint metadata is ambiguous or unreadable; marker preserved for manual reconciliation: $key"
         _now > "$marker"
         continue
@@ -947,7 +949,6 @@ housekeeping() {  # <state>
       reconcile_pause_tracking "$win" "$state" "$last"
       continue
     fi
-    age=$(( now - $(cat "$marker" 2>/dev/null || echo "$now") ))
     [ "$age" -ge "${FM_STALE_ESCALATE_SECS:-$STALE_ESCALATE_SECS_DEFAULT}" ] || continue
     stale_window_is_busy "$win" "$state"
     case "$?" in
@@ -969,12 +970,14 @@ housekeeping() {  # <state>
   for marker in "$state"/.subsuper-paused-*; do
     [ -e "$marker" ] || continue
     key="${marker##*.subsuper-paused-}"
+    age=$(( now - $(cat "$marker" 2>/dev/null || echo "$now") ))
     win_rc=0
     win=$(window_for_task "$key" "$state" 2>/dev/null) || win_rc=$?
     case "$win_rc" in
       0) ;;
       1) rm -f "$marker"; continue ;;
       *)
+        [ "$age" -ge "$pause_secs" ] || continue
         escalate_add "$state" "paused endpoint metadata is ambiguous or unreadable; marker preserved for manual reconciliation: $key"
         _now > "$marker"
         continue
@@ -986,7 +989,6 @@ housekeeping() {  # <state>
       reconcile_pause_tracking "$win" "$state" "$last"
       continue
     fi
-    age=$(( now - $(cat "$marker" 2>/dev/null || echo "$now") ))
     [ "$age" -ge "$pause_secs" ] || continue
     stale_window_is_busy "$win" "$state"
     case "$?" in

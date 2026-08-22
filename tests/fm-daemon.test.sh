@@ -219,10 +219,24 @@ test_daemon_preserves_unreadable_recheck_markers() {
     "backend=herdr" "window=lab:w-paused:p1" "endpoint_task_id=paused" \
     "herdr_session=lab" "herdr_workspace_id=w-paused" "herdr_tab_id=w-paused:t1" \
     "herdr_pane_id=w-paused:p1" "worktree=/tmp/paused" "project=/tmp/project" "harness=pi"
+  fm_write_meta "$state/ambiguous-stale.meta" \
+    "backend=herdr" "window=lab:w-ambiguous-stale:p1" "window=lab:w-other:p1" \
+    "endpoint_task_id=ambiguous-stale" "herdr_session=lab" \
+    "herdr_workspace_id=w-ambiguous-stale" "herdr_tab_id=w-ambiguous-stale:t1" \
+    "herdr_pane_id=w-ambiguous-stale:p1" "worktree=/tmp/ambiguous-stale" \
+    "project=/tmp/project" "harness=pi"
+  fm_write_meta "$state/ambiguous-paused.meta" \
+    "backend=herdr" "window=lab:w-ambiguous-paused:p1" "window=lab:w-other:p1" \
+    "endpoint_task_id=ambiguous-paused" "herdr_session=lab" \
+    "herdr_workspace_id=w-ambiguous-paused" "herdr_tab_id=w-ambiguous-paused:t1" \
+    "herdr_pane_id=w-ambiguous-paused:p1" "worktree=/tmp/ambiguous-paused" \
+    "project=/tmp/project" "harness=pi"
   printf 'working: overdue\n' > "$state/stale.status"
   printf 'paused: external wait\n' > "$state/paused.status"
   printf '0\n' > "$state/.subsuper-stale-stale"
   printf '0\n' > "$state/.subsuper-paused-paused"
+  printf '0\n' > "$state/.subsuper-stale-ambiguous-stale"
+  printf '0\n' > "$state/.subsuper-paused-ambiguous-paused"
   cat > "$fakebin/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
@@ -240,25 +254,34 @@ esac
 SH
   chmod +x "$fakebin/herdr"
   FM_STATE_OVERRIDE="$state" FM_HOME="$home" FM_SUPERVISOR_TARGET=lab:w-primary:p1 \
-    FM_HOUSEKEEPING_TICK=0 FM_STALE_ESCALATE_SECS=0 FM_PAUSE_RESURFACE_SECS=0 \
+    FM_HOUSEKEEPING_TICK=0 FM_STALE_ESCALATE_SECS=4 FM_PAUSE_RESURFACE_SECS=4 \
     FM_ESCALATE_BATCH_SECS=999 FM_HEARTBEAT_SCAN_SECS=999999 PATH="$fakebin:$PATH" \
     "$ROOT/bin/fm-supervise-daemon.sh" >"$out" 2>&1 &
   daemon_pid=$!
   for attempt in $(seq 1 50); do
     grep -F 'stale endpoint is unreadable or identity-mismatched' "$state/.subsuper-escalations" >/dev/null 2>&1 \
       && grep -F 'paused endpoint is unreadable or identity-mismatched' "$state/.subsuper-escalations" >/dev/null 2>&1 \
+      && grep -F 'stale endpoint metadata is ambiguous or unreadable' "$state/.subsuper-escalations" >/dev/null 2>&1 \
+      && grep -F 'paused endpoint metadata is ambiguous or unreadable' "$state/.subsuper-escalations" >/dev/null 2>&1 \
       && break
     kill -0 "$daemon_pid" 2>/dev/null || break
     sleep 0.1
   done
+  sleep 2
   kill -TERM "$daemon_pid" 2>/dev/null || true
   wait "$daemon_pid" 2>/dev/null || true
   [ -e "$state/.subsuper-stale-stale" ] || fail "daemon discarded an unreadable stale endpoint marker"
   [ -e "$state/.subsuper-paused-paused" ] || fail "daemon discarded an unreadable paused endpoint marker"
+  [ -e "$state/.subsuper-stale-ambiguous-stale" ] || fail "daemon discarded an ambiguous stale endpoint marker"
+  [ -e "$state/.subsuper-paused-ambiguous-paused" ] || fail "daemon discarded an ambiguous paused endpoint marker"
   assert_contains "$(cat "$state/.subsuper-escalations")" 'stale endpoint is unreadable or identity-mismatched' \
     "daemon did not surface an unreadable stale endpoint"
   assert_contains "$(cat "$state/.subsuper-escalations")" 'paused endpoint is unreadable or identity-mismatched' \
     "daemon did not surface an unreadable paused endpoint"
+  [ "$(grep -Fc 'stale endpoint metadata is ambiguous or unreadable' "$state/.subsuper-escalations")" -eq 1 ] \
+    || fail "daemon repeated an ambiguous stale endpoint alert before its recheck cadence"
+  [ "$(grep -Fc 'paused endpoint metadata is ambiguous or unreadable' "$state/.subsuper-escalations")" -eq 1 ] \
+    || fail "daemon repeated an ambiguous paused endpoint alert before its recheck cadence"
   pass "daemon preserves and surfaces unreadable endpoint rechecks"
 }
 
