@@ -653,6 +653,29 @@ ok - tracked Pi extensions pass strict no-emit typecheck against Pi 0.84.2
 fm-doc-audience-check: ok surfaces=51 local_links=166
 ```
 
+The final direct Herdr away-lifecycle rerun used:
+
+```sh
+bash -n bin/fm-afk-launch.sh tests/fm-afk-launch.test.sh tests/fm-afk-return.test.sh && tests/fm-afk-launch.test.sh && tests/fm-afk-return.test.sh && bin/fm-lint.sh bin/fm-afk-launch.sh tests/fm-afk-launch.test.sh tests/fm-afk-return.test.sh && bin/fm-doc-audience-check.sh && git diff --check
+```
+
+```text
+ok - away launcher round-trips exact Herdr terminal identity
+ok - retired away-terminal records stay intact for manual reconciliation
+fm-afk-launch: terminal close command failed, but exact absence was confirmed
+ok - exact confirmed absence is the only terminal-record retirement authority
+ok - unconfirmed Herdr close preserves exact reconciliation identity
+ok - away launcher lock binds and releases exact process identity
+ok - return catch-up precedes Bearings, owns live blocker remediation, preserves evidence once, and clears idempotently
+ok - Herdr blockers require an explicit durable reclassification before ordinary work
+ok - needs-decision remains reportable without masquerading as a firstmate-actionable blocker
+ok - AFK return re-drains published wakes until handling acknowledges
+ok - away-mode re-entry fails closed while the prior return catch-up is pending
+ok - check retries recorded terminal teardown and keeps catch-up gated until success
+fm-lint.sh: ShellCheck 0.11.0 (pinned 0.11.0)
+fm-doc-audience-check: ok surfaces=51 local_links=166
+```
+
 Review-phase changed-source lint and the documentation check used:
 
 ```sh
@@ -679,12 +702,12 @@ git diff 5f5fa0980aacf5c89f5ac1c47f6d52eedf911457 --numstat | awk '{a+=$1;d+=$2}
 ```
 
 ```text
-all 131829 313
-bin 54275 126
-tests 57140 117
+all 131790 313
+bin 54223 126
+tests 57130 117
 pi 2048 9
 agents 559
-added=8181 deleted=33556 net=-25375
+added=8193 deleted=33607 net=-25414
 ```
 
-The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,375 lines smaller.
+The baseline was 157,204 tracked lines, including 55,808 in `bin/`, 80,837 in `tests/`, 2,044 in Pi extensions, and 563 in `AGENTS.md`; the final tree is 25,414 lines smaller.

@@ -32,15 +32,6 @@ test_legacy_record_is_preserved() {
   pass "retired away-terminal records stay intact for manual reconciliation"
 }
 
-test_native_record_has_no_terminal() {
-  reset_record
-  fm_afk_launch_record_write native - native || fail "native record write failed"
-  fm_afk_launch_record_read || fail "native record read failed"
-  fm_afk_launch_close_recorded || fail "native record cleanup failed"
-  [ ! -e "$FM_AFK_LAUNCH_RECORD" ] || fail "native no-terminal record survived cleanup"
-  pass "native tracked background mode records and cleans up no terminal"
-}
-
 test_confirmed_absence_retires_exact_record() {
   reset_record
   fm_afk_launch_record_write herdr lab:w1:p1 ws1 || fail "record write failed"
@@ -74,7 +65,6 @@ test_launcher_lock_identity() {
 
 test_record_round_trip
 test_legacy_record_is_preserved
-test_native_record_has_no_terminal
 test_confirmed_absence_retires_exact_record
 test_unconfirmed_close_preserves_record
 test_launcher_lock_identity

@@ -5,8 +5,8 @@
 #
 # Why this exists (docs/herdr-backend.md "Away-mode daemon terminal launch"):
 # bin/fm-afk-start.sh execs the supervise daemon in the FOREGROUND of whatever
-# terminal it is already in. A harness with no native background mechanism
-# (such as Pi) has to manufacture a terminal, and doing that
+# terminal it is already in. Pi launches it in a dedicated Herdr terminal, and
+# doing that
 # by SPLITTING the captain's active pane visibly shrinks it - the regression this
 # script fixes. Instead this creates a non-visible tracked terminal (a herdr tab/
 # workspace with --no-focus) that never touches Firstmate's active tab, and
@@ -24,9 +24,6 @@
 #                              Idempotent: an already-running daemon
 #                              just refreshes state/.afk; a recorded-but-dead
 #                              terminal is reconciled (closed by id) first.
-#   fm-afk-launch.sh start-native
-#                              Prepare lifecycle state for a harness-native
-#                              background job and record that no terminal exists.
 #   fm-afk-launch.sh stop      Correct-ordered exit: SIGTERM the daemon so its
 #                              cleanup flushes WHILE state/.afk is still present,
 #                              wait for it, close the recorded terminal by exact
@@ -179,7 +176,6 @@ fm_afk_launch_record_read() {
   fi
   case "$FM_AFK_REC_KIND" in
     herdr) [ -n "$extra" ] ;;
-    native) [ "$FM_AFK_REC_TARGET" = - ] && [ "$extra" = native ] ;;
     tmux)
       fm_afk_launch_log "recorded daemon terminal uses retired tmux support; preserving its exact id for manual reconciliation"
       return 2
@@ -216,10 +212,6 @@ fm_afk_launch_terminal_absent() {  # <target>
 
 fm_afk_launch_close_recorded() {
   local close_result=0
-  if [ "$FM_AFK_REC_KIND" = native ]; then
-    rm -f "$FM_AFK_LAUNCH_RECORD"
-    return
-  fi
   fm_afk_launch_close_terminal "$FM_AFK_REC_TARGET" || close_result=$?
   if fm_afk_launch_terminal_absent "$FM_AFK_REC_TARGET"; then
     rm -f "$FM_AFK_LAUNCH_RECORD" || return 1
@@ -450,49 +442,6 @@ fm_afk_launch_start() {
   return "$result"
 }
 
-fm_afk_launch_start_native() {
-  local backup artifact had_afk=0 result=0
-  mkdir -p "$FM_AFK_LAUNCH_STATE" || return 1
-  if [ -e "$FM_AFK_LAUNCH_STATE/.afk-return-catchup" ]; then
-    fm_afk_launch_log "return catch-up is still pending; run bin/fm-afk-return.sh check before re-entering away mode"
-    return 1
-  fi
-  if daemon_lock_held_by_live_daemon; then
-    fm_afk_launch_record_validate_if_present || return 1
-    fm_afk_launch_flag_write || return 1
-    fm_afk_launch_log "daemon already running; refreshed away-mode flag"
-    return 0
-  fi
-  backup=$(mktemp -d "$FM_AFK_LAUNCH_STATE/.afk-launch-backup.XXXXXX") || return 1
-  if [ -f "$FM_AFK_LAUNCH_STATE/.afk" ]; then
-    had_afk=1
-    cp "$FM_AFK_LAUNCH_STATE/.afk" "$backup/.afk" || { rm -rf "$backup"; return 1; }
-  fi
-  for artifact in .subsuper-escalations .subsuper-escalations.since .subsuper-inject-wedged; do
-    if [ -e "$FM_AFK_LAUNCH_STATE/$artifact" ]; then
-      cp -p "$FM_AFK_LAUNCH_STATE/$artifact" "$backup/$artifact" || { rm -rf "$backup"; return 1; }
-    fi
-  done
-  fm_afk_launch_reconcile || result=1
-  if [ "$result" -eq 0 ]; then
-    if ! fm_afk_clear_stale_artifacts "$FM_AFK_LAUNCH_STATE"; then
-      fm_afk_launch_log "failed to clear stale away-mode artifacts"
-      result=1
-    elif ! fm_afk_launch_flag_write; then
-      result=1
-    fi
-  fi
-  if [ "$result" -eq 0 ]; then
-    fm_afk_launch_record_write native - native || result=1
-  fi
-  if [ "$result" -ne 0 ]; then
-    fm_afk_launch_restore_backup "$backup" "$had_afk" || result=1
-  else
-    rm -rf "$backup" || result=1
-  fi
-  return "$result"
-}
-
 fm_afk_launch_stop() {
   local pid pid_identity current_identity result=0 read_result
   fm_afk_launch_record_read
@@ -561,7 +510,6 @@ fm_afk_launch_main() {
   fm_afk_launch_lock_acquire || return 1
   case "${1:-start}" in
     start) fm_afk_launch_start ;;
-    start-native) fm_afk_launch_start_native ;;
     stop) fm_afk_launch_stop ;;
     reconcile) fm_afk_launch_reconcile ;;
     -h|--help|help) fm_afk_launch_usage ;;
