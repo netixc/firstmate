@@ -53,14 +53,23 @@ case "${1:-} ${2:-}" in
   "tab get") printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"%s"}}}\n' "${3:-}" "${3%%:*}" ;;
   "pane send-text") printf '%s' "${4:-}" >> "$FM_SEND_LOG" ;;
   "pane send-keys") : > "$FM_HERDR_STATE" ;;
-  "pane read") printf '%s' "${FM_PENDING_TEST_CAPTURE:-}" ;;
+  "pane read")
+    if [ -n "${FM_PENDING_TEST_CAPTURE_FILE:-}" ]; then
+      cat "$FM_PENDING_TEST_CAPTURE_FILE"
+    else
+      printf '%s' "${FM_PENDING_TEST_CAPTURE:-}"
+    fi
+    ;;
   "agent get")
     [ -z "${FM_PENDING_TEST_PROBE_LOG:-}" ] || printf '%s\n' "${3:-}" >> "$FM_PENDING_TEST_PROBE_LOG"
-    if [ "${FM_PENDING_TEST_NATIVE_STATE:-}" = unknown ]; then
+    native_state=${FM_PENDING_TEST_NATIVE_STATE:-}
+    [ -z "${FM_PENDING_TEST_NATIVE_STATE_FILE:-}" ] \
+      || native_state=$(cat "$FM_PENDING_TEST_NATIVE_STATE_FILE")
+    if [ "$native_state" = unknown ]; then
       printf '%s\n' '{"error":{"code":"internal_error"}}'
       exit 1
     fi
-    if [ "${FM_PENDING_TEST_NATIVE_STATE:-}" = busy ]; then
+    if [ "$native_state" = busy ]; then
       printf '%s\n' '{"result":{"agent":{"agent_status":"working","provider":"pi"}}}'
       exit 0
     fi
@@ -862,7 +871,7 @@ test_busy_idle_observation_via_herdr() {
 
 test_unknown_herdr_state_uses_capture_fallback() {
   (
-    local home state corr rec sm_home fb observation
+    local home state corr rec sm_home fb observation capture_file native_state_file
     home=$(setup_parent fallback-herdr)
     state="$home/state"
     sm_home="$home/sm"
@@ -880,7 +889,12 @@ test_unknown_herdr_state_uses_capture_fallback() {
     recovery_hook() { :; }
     # shellcheck disable=SC2030 # hook override is intentionally subshell-local
     export FM_PENDING_REPLY_SEND_HOOK=recovery_hook
-    export FM_PENDING_TEST_NATIVE_STATE=unknown FM_PENDING_TEST_CAPTURE='idle footer'
+    capture_file="$home/capture.out"
+    native_state_file="$home/native-state"
+    printf '%s' 'idle footer' > "$capture_file"
+    printf '%s' unknown > "$native_state_file"
+    export FM_PENDING_TEST_CAPTURE_FILE="$capture_file" \
+      FM_PENDING_TEST_NATIVE_STATE_FILE="$native_state_file"
     observation=$(fm_herdr_with_live_task_endpoint "$state/hibit.meta" hibit \
       fm_pending_reply_herdr_observation 2>&1) \
       || fail "Herdr observation seam refused the fixture: $observation"
@@ -894,12 +908,16 @@ test_unknown_herdr_state_uses_capture_fallback() {
     fm_pending_reply_tick "$state"
     [ "$(phase_of "$state" "$corr")" = recovery_sent ] \
       || fail "fallback idle should trigger recovery after grace"
-    export FM_PENDING_REPLY_NOW=10011 FM_PENDING_TEST_CAPTURE='Working...'
+    export FM_PENDING_REPLY_NOW=10011
+    printf '%s' 'Working...' > "$capture_file"
     fm_pending_reply_tick "$state"
-    export FM_PENDING_REPLY_NOW=10012 FM_PENDING_TEST_CAPTURE='idle footer'
+    [ "$(fm_pending_reply_get "$rec" recovery_turn_seen_busy)" = 1 ] \
+      || fail "capture fallback did not observe the recovery turn becoming busy: $(cat "$rec")"
+    export FM_PENDING_REPLY_NOW=10012
+    printf '%s' 'idle footer' > "$capture_file"
     fm_pending_reply_tick "$state"
     [ "$(phase_of "$state" "$corr")" = escalated ] \
-      || fail "capture busy-to-idle should complete recovery turn"
+      || fail "capture busy-to-idle should complete recovery turn: $(cat "$rec")"
   ) || fail "Herdr unknown-state capture fallback failed"
   pass "Herdr uses bounded capture fallback when native state is unknown"
 }

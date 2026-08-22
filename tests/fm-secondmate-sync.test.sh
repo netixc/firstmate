@@ -591,15 +591,21 @@ case "\$cmd \$sub" in
   "status --json")
     printf '{"client":{"version":"0.7.1","protocol":14},"server":{"running":true}}\n'
     ;;
+  "session list")
+    printf '{"sessions":[{"name":"default","running":true,"socket_path":"%s/herdr.sock"}]}\n' "$FM_HOME"
+    ;;
   "pane get")
     if [ "\$arg" = "${stale#*:}" ]; then
-      printf '{"result":{"pane":{"pane_id":"${stale#*:}"}}}\n'
+      printf '{"error":{"code":"pane_not_found","message":"missing"}}\n'
     elif [ "\$arg" = "${fresh#*:}" ]; then
-      printf '{"result":{"pane":{"pane_id":"${fresh#*:}"}}}\n'
+      printf '{"result":{"pane":{"pane_id":"${fresh#*:}","tab_id":"wA:t-sm-instr","workspace_id":"wA"}}}\n'
     else
       printf '{"error":{"code":"pane_not_found","message":"missing"}}\n' >&2
       exit 0
     fi
+    ;;
+  "tab get")
+    printf '{"result":{"tab":{"tab_id":"wA:t-sm-instr","workspace_id":"wA"}}}\n'
     ;;
   "agent get")
     if [ "\$arg" = "${stale#*:}" ]; then
@@ -636,8 +642,15 @@ test_nudge_retry_uses_fresh_herdr_endpoint_after_respawn() {
   {
     printf 'window=%s\n' "$stale"
     printf 'backend=herdr\n'
+    printf 'endpoint_task_id=sm-instr\n'
+    printf 'herdr_session=default\n'
+    printf 'herdr_workspace_id=w9\n'
+    printf 'herdr_tab_id=w9:t-sm-instr\n'
+    printf 'herdr_pane_id=w9:pY\n'
     printf 'kind=secondmate\n'
     printf 'harness=pi\n'
+    printf 'worktree=%s/sm-instr\n' "$w"
+    printf 'project=%s/main\n' "$w"
     printf 'home=%s/sm-instr\n' "$w"
   } > "$meta"
 
@@ -648,8 +661,17 @@ set -u
 id=\${1:-}
 meta="\$FM_HOME/state/\$id.meta"
 [ -f "\$meta" ] || exit 1
-sed -i.bak "s/^window=.*/window=$fresh/" "\$meta" 2>/dev/null || \
-  sed -i "s/^window=.*/window=$fresh/" "\$meta"
+sed -i.bak \
+  -e 's/^window=.*/window=$fresh/' \
+  -e 's/^herdr_workspace_id=.*/herdr_workspace_id=wA/' \
+  -e 's/^herdr_tab_id=.*/herdr_tab_id=wA:t-sm-instr/' \
+  -e 's/^herdr_pane_id=.*/herdr_pane_id=wA:p2/' \
+  "\$meta" 2>/dev/null || sed -i \
+  -e 's/^window=.*/window=$fresh/' \
+  -e 's/^herdr_workspace_id=.*/herdr_workspace_id=wA/' \
+  -e 's/^herdr_tab_id=.*/herdr_tab_id=wA:t-sm-instr/' \
+  -e 's/^herdr_pane_id=.*/herdr_pane_id=wA:p2/' \
+  "\$meta"
 rm -f "\$meta.bak"
 exit 0
 SH
@@ -676,7 +698,9 @@ SH
   assert_present "$marker" "failed stale herdr nudge should leave a retry marker"
 
   # shellcheck disable=SC2016  # $0/$1 belong to the inner bash -c process.
-  resolved=$(bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_resolve_selector fm-sm-instr "$1"' "$ROOT" "$w/home/state")
+  resolved=$(PATH="$herdrfb:$toolchain:$BASE_PATH" \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_resolve_selector fm-sm-instr "$1"' \
+      "$ROOT" "$w/home/state")
   [ "$resolved" = "$fresh" ] || fail "fm-<id> should resolve through post-respawn meta, got '$resolved'"
 
   # shellcheck disable=SC2016  # $0/$1 belong to the inner bash -c process.

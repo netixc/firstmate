@@ -228,8 +228,7 @@ case "$*" in
   *"comm="*)
     if [ -z "${FM_FAKE_HARNESS_PID:-}" ] || [ "$pid" = "$FM_FAKE_HARNESS_PID" ] \
       || [ "$pid" = "${FM_FAKE_LIVE_HOLDER_PID:-}" ]; then
-      resolved=$(command -v "$harness" 2>/dev/null || true)
-      printf '%s\n' "${resolved:-/usr/local/bin/$harness}"
+      printf '/bin/bash\n'
     else
       printf '/bin/bash\n'
     fi
@@ -238,7 +237,8 @@ case "$*" in
   *"args="*)
     if [ -z "${FM_FAKE_HARNESS_PID:-}" ] || [ "$pid" = "$FM_FAKE_HARNESS_PID" ] \
       || [ "$pid" = "${FM_FAKE_LIVE_HOLDER_PID:-}" ]; then
-      printf '%s\n' "$harness"
+      resolved=$(command -v "$harness" 2>/dev/null || true)
+      printf '%s\n' "${resolved:-/usr/local/bin/$harness}"
     else
       printf 'bash\n'
     fi
@@ -269,7 +269,7 @@ done
 case "\$*" in
   *"comm="*)
     if [ "\$pid" = "$holder_pid" ]; then
-      printf '/usr/local/bin/pi\n'
+      printf '/bin/bash\n'
     else
       printf '/bin/zsh\n'
     fi
@@ -277,7 +277,7 @@ case "\$*" in
     ;;
   *"args="*)
     if [ "\$pid" = "$holder_pid" ]; then
-      printf 'pi\n'
+      command -v pi
     else
       printf 'zsh\n'
     fi
@@ -288,6 +288,18 @@ esac
 exit 1
 SH
   chmod +x "$fakebin/ps"
+}
+
+start_fake_pi_holder() {  # <fakebin>
+  local fakebin=$1
+  cat > "$fakebin/pi" <<'SH'
+#!/usr/bin/env bash
+trap 'exit 0' TERM INT
+while :; do sleep 300; done
+SH
+  chmod +x "$fakebin/pi"
+  "$fakebin/pi" >/dev/null 2>&1 &
+  printf '%s\n' "$!"
 }
 
 make_fake_herdr() {
@@ -533,8 +545,7 @@ EOF
   append_wake "$home/state" signal sm-x "done: surfaced before refusal" || fail "seed wake failed"
   git -C "$root" checkout -q -B fm/read-only-tangle
 
-  sleep 300 &
-  holder_pid=$!
+  holder_pid=$(start_fake_pi_holder "$fakebin")
   printf '%s\n' "$holder_pid" > "$home/state/.lock"
 
   status=0
@@ -621,8 +632,7 @@ EOF
     || fail "a new session start must freeze an env-on override over an absent config flag"
   frozen=$(cat "$home/state/.trace-context-effective")
 
-  sleep 300 &
-  holder_pid=$!
+  holder_pid=$(start_fake_pi_holder "$fakebin")
   printf '%s\n' "$holder_pid" > "$home/state/.lock"
   out=$(FM_TRACE_CONTEXT=off run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
   kill "$holder_pid" 2>/dev/null || true
@@ -640,6 +650,7 @@ test_session_lock_concurrent_single_winner() {
   IFS='|' read -r root home fakebin <<EOF
 $rec
 EOF
+  make_fake_toolchain "$fakebin"
   ready="$home/ready"
   completed="$home/done"
   winners="$home/winners"
@@ -657,14 +668,14 @@ done
 case "$*" in
   *"comm="*)
     if [ -f "$FM_FAKE_LOCK_STATE/harness-$pid" ]; then
-      printf '%s\n' /usr/local/bin/pi
+      printf '%s\n' /bin/bash
     else
       printf '%s\n' /bin/bash
     fi
     ;;
   *"args="*)
     if [ -f "$FM_FAKE_LOCK_STATE/harness-$pid" ]; then
-      printf '%s\n' pi
+      command -v pi
     else
       printf '%s\n' bash
     fi
@@ -1586,11 +1597,11 @@ for argument in "$@"; do
 done
 case "$*" in
   *"comm="*)
-    if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then printf '%s\n' /usr/local/bin/pi
+    if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then printf '%s\n' /bin/bash
     else printf '%s\n' /bin/bash; fi
     ;;
   *"args="*)
-    if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then printf '%s\n' pi
+    if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then command -v pi
     else printf '%s\n' bash; fi
     ;;
   *"ppid="*) /bin/ps -o ppid= -p "$pid" ;;
@@ -1769,8 +1780,7 @@ EOF
   printf '%s\n' 'READ_ONLY_AGENTS=current' > "$root/AGENTS.md"
   FM_FAKE_HARNESS=pi run_pi_session_start "$home" "$root" "$fakebin:$BASE_PATH" --source startup >/dev/null
 
-  sleep 300 &
-  holder_pid=$!
+  holder_pid=$(start_fake_pi_holder "$fakebin")
   printf '%s\n%s\n' "$holder_pid" "$(hash_file_for_test "$root/AGENTS.md")" \
     > "$home/state/.session-start-agents-baseline"
   printf '%s\n' "$holder_pid" > "$home/state/.lock"
@@ -1854,8 +1864,7 @@ EOF
     "--reemit misreported itself as an unlocked read-only session"
 
   rm -f "$home/state/.lock"
-  sleep 300 &
-  holder_pid=$!
+  holder_pid=$(start_fake_pi_holder "$fakebin")
   printf '%s\n' "$holder_pid" > "$home/state/.lock"
   readonly_out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$root" PATH="$fakebin:$BASE_PATH" \
     env -u PI_CODING_AGENT \

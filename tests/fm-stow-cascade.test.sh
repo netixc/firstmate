@@ -105,6 +105,7 @@ new_primary() {
   local name=$1 home
   home="$TMP_ROOT/primaries/$name"
   mkdir -p "$home/config" "$home/data" "$home/state"
+  : > "$home/herdr.sock"
   printf '%s\n' "$home"
 }
 

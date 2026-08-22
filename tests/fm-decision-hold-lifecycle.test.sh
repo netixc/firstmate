@@ -1257,7 +1257,13 @@ test_chat_channel_feeds_the_same_keyed_answer_intake() {
 set -u
 case "${1:-} ${2:-}" in
   "status --json") printf '{"client":{"version":"0.8.0","protocol":19},"server":{"running":true,"protocol":19}}\n' ;;
-  "pane get") printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "${3:-}" ;;
+  "session list") printf '{"sessions":[{"name":"lab","running":true,"socket_path":"%s/herdr.sock"}]}\n' "$FM_HOME" ;;
+  "pane get")
+    pane=${3:-}; workspace=${pane%%:*}; task=${workspace#w-}
+    printf '{"result":{"pane":{"pane_id":"%s","tab_id":"%s:t-%s","workspace_id":"%s"}}}\n' \
+      "$pane" "$workspace" "$task" "$workspace"
+    ;;
+  "tab get") printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"%s"}}}\n' "${3:-}" "${3%%:*}" ;;
   "pane send-text") printf '%s' "${4:-}" >> "$FM_SEND_LOG" ;;
   "pane send-keys") : > "$FM_HERDR_STATE" ;;
   "agent get")
