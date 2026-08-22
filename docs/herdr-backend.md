@@ -207,6 +207,10 @@ Text is typed once; only Enter is retried.
 On an idle or done native baseline, submit confirmation waits for `working` or `blocked` across a bounded polling window.
 On an already active or unreadable baseline, it falls back to conservative composer clearance.
 A fully unreadable target stops retrying and reports unknown.
+When literal injection and Enter both succeeded but that read-back remains pending or unknown, `fm-send` reports `submission unconfirmed`, exits 3, and instructs the operator not to retype or blindly resend.
+That result is neither confirmed queue acceptance nor proof of non-submission.
+Pi 0.84.2's `input` event occurs before later input transforms and handled-input decisions, and Pi exposes no supported post-transform, post-queue event, so Firstmate does not promote that earlier event to success.
+Stronger busy-steer confirmation remains unsupported until a generation-bound mechanism can prove a newer exact receipt for the intended endpoint, unique send identity, payload digest, and UTF-8 length without accepting transformed, handled, failed, stale, or mismatched input.
 
 `pane read --lines N` can return empty output when N is below the viewport height.
 The capture owner requests at least 200 lines from Herdr and trims locally to the caller's bound.

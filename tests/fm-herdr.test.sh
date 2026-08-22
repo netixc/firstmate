@@ -18,6 +18,11 @@ command -v jq >/dev/null 2>&1 || { echo "skip: jq not found (required by the her
 herdr_forget_inherited_pane
 
 TMP_ROOT=$(fm_test_tmproot fm-herdr-tests)
+# The suite's default per-home label assertions model a primary home. Bind
+# them to scratch state so a developer's ignored .fm-secondmate-home marker
+# cannot silently change canned response labels and fail before the subject.
+export FM_HOME="$TMP_ROOT/home"
+mkdir -p "$FM_HOME"
 export FM_HERDR_SUBMIT_MIN_SLEEP=0
 
 # make_herdr_fakebin: a `herdr` stub that logs every invocation (one line,
@@ -3362,6 +3367,20 @@ test_send_text_submit_send_failed() {
   pass "fm_herdr_send_text_submit: reports 'send-failed' when the literal send-text call itself errors"
 }
 
+test_send_text_submit_enter_failure_is_send_failed() {
+  local dir log resp fb out enter_count
+  dir="$TMP_ROOT/submit-enter-fail"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
+  printf '{"result":{"agent":{"agent_status":"working"}}}\n' > "$resp/2.out"
+  printf '1\n' > "$resp/3.exit"
+  fb=$(make_herdr_fakebin "$dir")
+  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SUBMIT_POLLS=1 \
+    bash -c '. "$0/bin/fm-herdr.sh"; fm_herdr_send_text_submit default:w1:p2 "x" 2 0.01 0.01' "$ROOT" )
+  [ "$out" = send-failed ] || fail "send_text_submit should report send-failed when Enter transport fails, got '$out'"
+  enter_count=$(grep -c $'\x1f''pane'$'\x1f''send-keys'$'\x1f''w1:p2'$'\x1f''enter' "$log")
+  [ "$enter_count" -eq 1 ] || fail "send_text_submit retried after Enter transport failed, sent $enter_count Enter(s)"
+  pass "fm_herdr_send_text_submit: Enter transport failure is never promoted to confirmation uncertainty"
+}
+
 test_send_text_submit_unknown_on_capture_failure() {
   local dir log resp fb out enter_count
   dir="$TMP_ROOT/submit-read-fail"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
@@ -4079,6 +4098,7 @@ test_send_text_submit_popup_autocomplete_requires_second_enter
 test_send_text_submit_confirms_blocked_after_enter
 test_send_text_submit_slow_transition_within_one_enter_needs_no_extra_enter
 test_send_text_submit_send_failed
+test_send_text_submit_enter_failure_is_send_failed
 test_send_text_submit_unknown_on_capture_failure
 test_scripts_route_explicit_target_through_herdr_meta
 test_normalize_event_leaves_from_empty
