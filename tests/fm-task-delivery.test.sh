@@ -329,6 +329,10 @@ STUB
     "promoted no-mistakes worker did not receive the --yes prohibition"
   assert_grep "It is banned fleet-wide" "$payload" \
     "promoted no-mistakes worker did not receive the fleet-wide ban wording"
+  assert_grep "Immediately before every \`no-mistakes axi run\`" "$payload" \
+    "promoted no-mistakes worker did not receive the canonical-owner preflight"
+  assert_grep '/bin/fm-github-owner-policy.sh' "$payload" \
+    "promoted no-mistakes worker did not receive the shared owner policy path"
 
   payload="$TMP_ROOT/promote-dod/payload-promote-dod-direct-pr"
   assert_grep "supersede the scout delivery rules and report-based Definition of done" "$payload" \
@@ -339,6 +343,10 @@ STUB
   # The faster paths keep their own contracts rather than inheriting the pipeline's.
   assert_grep "Do NOT run /no-mistakes" "$payload" \
     "promoted direct-PR worker lost its no-pipeline contract"
+  assert_grep "immediately before \`gh-axi pr create\`" "$payload" \
+    "promoted direct-PR worker did not receive the canonical-owner preflight"
+  assert_grep '/bin/fm-github-owner-policy.sh' "$payload" \
+    "promoted direct-PR worker did not receive the shared owner policy path"
   assert_grep "Do NOT push, do NOT open a PR, do NOT merge" "$TMP_ROOT/promote-dod/payload-promote-dod-local-only" \
     "promoted local-only worker lost its no-remote contract"
   assert_no_grep "no-mistakes axi respond" "$TMP_ROOT/promote-dod/payload-promote-dod-direct-pr" \
