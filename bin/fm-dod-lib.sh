@@ -24,8 +24,8 @@ fm_dod_block() {  # <mode> <task-id> <firstmate-root>
 Delivery contract: mode=direct-PR
 This task ships **direct-PR**: you raise the PR yourself, without the no-mistakes pipeline.
 The task is complete only when committed on your branch.
-When it is implemented and committed, push your branch, then immediately before \`gh-axi pr create\` run \`"$fm_root/bin/fm-github-owner-policy.sh" .\`; proceed only when it reports the canonical repository is allowed.
-Open the PR with \`gh-axi\`, then append \`done: PR {url}\` to the status file and stop.
+When it is implemented and committed, run \`"$fm_root/bin/fm-github-owner-policy.sh" .\` before any push; proceed only when it reports the canonical repository is allowed.
+Push your branch, rerun that policy immediately before \`gh-axi pr create\`, then open the PR with \`gh-axi\`, append \`done: PR {url}\` to the status file, and stop.
 Do NOT run /no-mistakes. The configured merge authority decides whether to merge the PR; firstmate relays the outcome.
 EOF
       ;;
@@ -51,7 +51,8 @@ Firstmate will then instruct you to run /no-mistakes to validate and ship a PR.
 You drive no-mistakes by responding to its gates, not by implementing fixes.
 Follow the guidance no-mistakes itself provides for the mechanics: it loads when you invoke /no-mistakes, and \`no-mistakes axi run --help\` plus the \`help\` lines in each \`axi\` response are authoritative and version-matched to the installed binary.
 When starting no-mistakes, make \`--intent\` preserve all relevant content from this brief's \`# Task\` section plus every later accepted Firstmate requirement, clarification, constraint, exclusion, and supersession, carrying only each requirement's current accepted form; retain direct requirements instead of substituting a diff summary, and exclude generic operational, status, delivery, and other scaffold boilerplate unless it is task-specific.
-Immediately before every \`no-mistakes axi run\`, run \`"$fm_root/bin/fm-github-owner-policy.sh" .\`; proceed only when it reports the canonical repository is allowed.
+Once no-mistakes identifies the delivery path as GitHub, run \`"$fm_root/bin/fm-github-owner-policy.sh" .\` before any outward mutation and again immediately before every subsequent \`no-mistakes axi run\`; proceed only when it reports the canonical repository is allowed.
+GitLab delivery continues through no-mistakes unchanged and does not run the GitHub owner policy.
 Do not hand-edit, commit, or fix findings yourself while a run is active - the pipeline applies every fix.
 
 Two firstmate-specific rules layer on top of that guidance:

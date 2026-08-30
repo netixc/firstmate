@@ -269,7 +269,7 @@ test_promote_requires_and_records_the_delivery_contract() {
 # prints against a capturing fm-send.sh, and asserts on the message the worker would
 # actually receive - for every supported mode.
 test_promotion_delivers_the_real_definition_of_done() {
-  local home meta out sendroot payload mode id brief_dod delivered_dod
+  local home meta out sendroot payload mode id brief_dod delivered_dod guard_line push_line create_line
   home="$TMP_ROOT/promote-dod/home"
   sendroot="$TMP_ROOT/promote-dod/sendroot"
   mkdir -p "$home/state" "$sendroot/bin"
@@ -329,8 +329,12 @@ STUB
     "promoted no-mistakes worker did not receive the --yes prohibition"
   assert_grep "It is banned fleet-wide" "$payload" \
     "promoted no-mistakes worker did not receive the fleet-wide ban wording"
-  assert_grep "Immediately before every \`no-mistakes axi run\`" "$payload" \
-    "promoted no-mistakes worker did not receive the canonical-owner preflight"
+  assert_grep "Once no-mistakes identifies the delivery path as GitHub" "$payload" \
+    "promoted no-mistakes worker did not scope the canonical-owner preflight to GitHub"
+  assert_grep "before any outward mutation and again immediately before every subsequent \`no-mistakes axi run\`" "$payload" \
+    "promoted no-mistakes worker did not receive the pre-mutation canonical-owner preflight"
+  assert_grep "GitLab delivery continues through no-mistakes unchanged" "$payload" \
+    "promoted no-mistakes worker no longer preserves GitLab delivery"
   assert_grep '/bin/fm-github-owner-policy.sh' "$payload" \
     "promoted no-mistakes worker did not receive the shared owner policy path"
 
@@ -343,10 +347,19 @@ STUB
   # The faster paths keep their own contracts rather than inheriting the pipeline's.
   assert_grep "Do NOT run /no-mistakes" "$payload" \
     "promoted direct-PR worker lost its no-pipeline contract"
-  assert_grep "immediately before \`gh-axi pr create\`" "$payload" \
-    "promoted direct-PR worker did not receive the canonical-owner preflight"
+  assert_grep "before any push" "$payload" \
+    "promoted direct-PR worker did not receive the pre-push canonical-owner preflight"
+  assert_grep "rerun that policy immediately before \`gh-axi pr create\`" "$payload" \
+    "promoted direct-PR worker did not receive the fresh pre-create canonical-owner preflight"
   assert_grep '/bin/fm-github-owner-policy.sh' "$payload" \
     "promoted direct-PR worker did not receive the shared owner policy path"
+  guard_line=$(grep -n -m1 '/bin/fm-github-owner-policy.sh' "$payload" | cut -d: -f1)
+  push_line=$(grep -n -m1 '^Push your branch' "$payload" | cut -d: -f1)
+  create_line=$(grep -n -m1 'gh-axi pr create' "$payload" | cut -d: -f1)
+  [ "$guard_line" -lt "$push_line" ] \
+    || fail "promoted direct-PR worker was told to push before the owner policy"
+  [ "$push_line" -le "$create_line" ] \
+    || fail "promoted direct-PR worker received an invalid delivery sequence"
   assert_grep "Do NOT push, do NOT open a PR, do NOT merge" "$TMP_ROOT/promote-dod/payload-promote-dod-local-only" \
     "promoted local-only worker lost its no-remote contract"
   assert_no_grep "no-mistakes axi respond" "$TMP_ROOT/promote-dod/payload-promote-dod-direct-pr" \
