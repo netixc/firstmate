@@ -1,0 +1,2 @@
+ok - live GitHub API allows canonical netixc/firstmate
+ok - live GitHub API refuses canonical octocat/Hello-World before mutation

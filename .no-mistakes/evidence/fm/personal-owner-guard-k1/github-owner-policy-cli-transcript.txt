@@ -1,0 +1,5 @@
+$ git init + origin https://github.com/netixc/firstmate.git; fm-github-owner-policy.sh
+netixc/firstmate
+$ set origin push URL to octocat/Hello-World; fm-github-owner-policy.sh
+REFUSED: origin push destination 'octocat/Hello-World' differs from fetch repository 'netixc/firstmate'
+mutation branch not reached
