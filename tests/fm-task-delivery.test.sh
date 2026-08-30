@@ -353,7 +353,7 @@ STUB
     "promoted direct-PR worker did not receive the pre-push canonical-owner preflight"
   assert_grep "rerunning that policy immediately before creation" "$payload" \
     "promoted direct-PR worker did not receive the fresh pre-create canonical-owner preflight"
-  assert_grep 'GH_HOST=github.com GH_REPO="$FM_GITHUB_REPOSITORY" gh-axi pr create' "$payload" \
+  assert_grep "GH_HOST=github.com GH_REPO=\"\$FM_GITHUB_REPOSITORY\" gh-axi pr create" "$payload" \
     "promoted direct-PR worker did not bind creation to the verified repository"
   assert_grep "with no \`-R\`, \`--repo\`, or \`--hostname\` override" "$payload" \
     "promoted direct-PR worker was not told to refuse target overrides"
