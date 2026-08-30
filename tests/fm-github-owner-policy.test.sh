@@ -78,6 +78,20 @@ assert_contains "$(cat "$TMP_ROOT/ambiguous.err")" 'origin fetch destination is 
   "ambiguous-origin refusal was not explicit"
 pass "owner policy refuses absent and ambiguous remote evidence"
 
+non_github_repo="$TMP_ROOT/non-github"
+make_repo "$non_github_repo" https://gitlab.com/netixc/firstmate.git
+rc=0
+FM_TEST_GH_ARGS="$TMP_ROOT/non-github-api.args" \
+  run_policy "$non_github_repo" "$allowed_bin" "$TMP_ROOT/non-github.out" \
+  "$TMP_ROOT/non-github.err" || rc=$?
+expect_code 1 "$rc" "a non-GitHub origin must be refused"
+assert_contains "$(cat "$TMP_ROOT/non-github.err")" \
+  'origin fetch destination is not an exact github.com repository URL' \
+  "non-GitHub refusal did not identify the invalid fetch destination"
+assert_absent "$TMP_ROOT/non-github-api.args" \
+  "owner policy queried GitHub after resolving a non-GitHub origin"
+pass "owner policy refuses non-GitHub identity before an API call or mutation"
+
 push_override_repo="$TMP_ROOT/push-override"
 make_repo "$push_override_repo" https://github.com/netixc/firstmate.git
 git -C "$push_override_repo" remote set-url --push origin git@github.com:octocat/Hello-World.git
