@@ -90,6 +90,19 @@ assert_contains "$(cat "$TMP_ROOT/push-override.err")" \
   "push-destination refusal did not identify both repositories"
 pass "owner policy refuses a divergent push destination before caller mutation"
 
+rewritten_push_repo="$TMP_ROOT/rewritten-push"
+make_repo "$rewritten_push_repo" https://github.com/netixc/firstmate.git
+git -C "$rewritten_push_repo" config \
+  url.git@github.com:octocat/.pushInsteadOf https://github.com/netixc/
+rc=0
+run_policy "$rewritten_push_repo" "$allowed_bin" "$TMP_ROOT/rewritten-push.out" \
+  "$TMP_ROOT/rewritten-push.err" || rc=$?
+expect_code 1 "$rc" "an effective push destination rewritten by pushInsteadOf must be refused"
+assert_contains "$(cat "$TMP_ROOT/rewritten-push.err")" \
+  "origin push destination 'octocat/firstmate' differs from fetch repository 'netixc/firstmate'" \
+  "effective rewritten push-destination refusal did not identify both repositories"
+pass "owner policy verifies and refuses an effective pushInsteadOf destination"
+
 incomplete_repo="$TMP_ROOT/incomplete"
 incomplete_bin="$TMP_ROOT/incomplete-bin"
 make_repo "$incomplete_repo" https://github.com/netixc/firstmate.git
