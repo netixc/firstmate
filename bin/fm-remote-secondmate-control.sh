@@ -140,10 +140,7 @@ cmd_launch() {
 
   validate_id "$id"
   validate_home "$id"
-  case "$harness" in
-    claude|codex|opencode|pi|pi-signed|grok|kimi|cursor) ;;
-    *) die "unverified remote secondmate harness: $harness" ;;
-  esac
+  [ "$harness" = pi ] || die "unsupported remote secondmate harness '$harness'; migrate the record explicitly to plain pi"
   case "$effort" in -|low|medium|high|xhigh|max) ;; *) die "invalid remote secondmate effort: $effort" ;; esac
   # Herdr is required on this host, not merely preferred: its server belongs to
   # the GUI login session, so the endpoint survives every SSH disconnection that

@@ -22,12 +22,9 @@
 # EXPERIMENTAL and spawn-capable, behind `--backend cmux`/`FM_BACKEND=cmux`/
 # `config/backend`, and behind runtime auto-detection when firstmate itself is
 # running inside a cmux-spawned terminal (primary CMUX_WORKSPACE_ID marker, or
-# the documented macOS fallback signals when cmux's claude wrapper strips that
 # marker) with no explicit backend setting - unlike Orca, which stays
 # never-auto-detected because it also owns the task worktree; see
 # docs/cmux-backend.md for its empirical basis.
-# Codex App is intentionally not in the known set yet.
-# docs/codex-app-backend.md owns that blocked backend contract.
 #
 # Compatibility contract: a task's meta may omit `backend=`; every reader here
 # treats that as `tmux` (fm_backend_of_meta), and fm-spawn.sh does not write
@@ -65,7 +62,6 @@ FM_BACKEND_CONFIG_DIR="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 # spawn-capable; unlike tmux/herdr/zellij it is also the worktree provider.
 # cmux is EXPERIMENTAL and spawn-capable, session-provider-only like
 # herdr/zellij - verified against the real 0.64.17 binary (docs/cmux-backend.md).
-# codex-app remains deliberately absent; see docs/codex-app-backend.md.
 FM_BACKEND_KNOWN="tmux herdr zellij orca cmux"
 FM_BACKEND_SPAWN="tmux herdr zellij orca cmux"
 
@@ -115,14 +111,10 @@ fm_backend_is_known() {  # <name>
 # innermost, currently-executing layer and must win.
 #
 # cmux FALLBACK signals (docs/cmux-backend.md "Runtime auto-detection" owns
-# the empirical record): cmux's bundled `claude` PATH shim routes through
-# cmux-claude-wrapper, whose passthrough path unsets every CMUX_* variable
-# before exec'ing the real binary - so a claude-harness firstmate launched in
 # a cmux tab can have NO CMUX_WORKSPACE_ID at all. When that primary marker is
 # absent (and only then), two macOS-only fallback signals are consulted:
 #   1. __CFBundleIdentifier == com.cmuxterm.app - LaunchServices' app-identity
 #      env var, inherited by every process a cmux tab spawns and NOT stripped
-#      by the wrapper (it only unsets CMUX_*, TERMINFO, and CLAUDECODE).
 #      Authoritative in the common wrapper-strip case, but also inherited into
 #      every pane of a tmux server started from a cmux tab - the $TMUX check
 #      winning FIRST is what keeps that false positive absorbed.
@@ -238,7 +230,6 @@ fm_backend_detect_cmux_app_is_ancestor() {
 # notice (both are experimental); auto-detecting tmux stays silent - it is
 # today's default-path behavior and callers must see zero change. The cmux
 # notice names the winning signal, so a fallback-detected cmux (bundle id or
-# ancestry, after the claude wrapper stripped CMUX_WORKSPACE_ID) is visibly
 # distinct from the primary-marker case.
 fm_backend_name() {
   local line v detected marker
@@ -264,8 +255,8 @@ fm_backend_name() {
     fi
     if [ "$detected" = cmux ]; then
       case "$FM_BACKEND_DETECT_SIGNAL" in
-        bundle-id) marker="FALLBACK signal __CFBundleIdentifier=$FM_BACKEND_CMUX_BUNDLE_ID; CMUX_WORKSPACE_ID absent, stripped by cmux's bundled claude wrapper" ;;
-        ancestry) marker="FALLBACK signal process-ancestry reaching the running cmux app; CMUX_WORKSPACE_ID absent, stripped by cmux's bundled claude wrapper" ;;
+        bundle-id) marker="FALLBACK signal __CFBundleIdentifier=$FM_BACKEND_CMUX_BUNDLE_ID; CMUX_WORKSPACE_ID absent" ;;
+        ancestry) marker="FALLBACK signal process-ancestry reaching the running cmux app; CMUX_WORKSPACE_ID absent" ;;
         *) marker="CMUX_WORKSPACE_ID" ;;
       esac
       echo "NOTICE: auto-detected cmux runtime ($marker) - spawning into the EXPERIMENTAL cmux backend. Set config/backend or pass --backend tmux to opt out." >&2
@@ -798,7 +789,6 @@ fm_backend_busy_state() {  # <backend> <target>
 # input guard, a submit acknowledgement, or a launch-readiness check. It is
 # exposed so a caller other than the send path (the away-mode daemon's
 # supervisor-pane pending-input guard in bin/fm-supervise-daemon.sh, and
-# fm-spawn.sh's kimi readiness/delivery checks) can ask the same question
 # without duplicating per-backend composer reading. Every adapter's named
 # classifier is a THIN wrapper - capture plus a capability descriptor fed to
 # the one shared shape owner (bin/fm-composer-lib.sh,

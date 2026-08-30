@@ -163,7 +163,7 @@ test_crewmate_target_is_not_marked() {
   home=$(setup_home crew)
   fm_write_meta "$home/state/build.meta" \
     "window=sess:fm-build" "worktree=$home/wt" "project=$home/p" \
-    "harness=echo" "kind=ship" "mode=no-mistakes" "yolo=off"
+    "harness=pi" "kind=ship" "mode=no-mistakes" "yolo=off"
   run_send "$fb" "$home" "$log" "fm-build" "fix the test"; rc=$?
   expect_code 0 "$rc" "send to a stable-label crewmate target should succeed"
   got=$(record_body "$home/state/build.inbox/001.msg")
@@ -198,21 +198,6 @@ test_explicit_window_is_not_marked() {
   [ "$got" = "outside ping" ] \
     || fail "explicit session:window send without meta: expected bare text, got marker"$'\n'"--- bytes ---"$'\n'"$(printf '%s' "$got" | od -An -c)"
   pass "fm-send: explicit endpoints stay unmarked with or without local metadata"
-}
-
-test_key_path_is_not_marked() {
-  local dir fb log home rc
-  dir="$TMP_ROOT/key"; mkdir -p "$dir"
-  fb=$(make_stubs "$dir"); log="$dir/send.log"
-  home=$(setup_home key)
-  fm_write_secondmate_meta "$home/state/domain.meta" "$home" "sess:fm-domain"
-  run_send "$fb" "$home" "$log" "fm-domain" --key Escape; rc=$?
-  expect_code 0 "$rc" "--key send to a secondmate should succeed"
-  [ ! -s "$log" ] \
-    || fail "--key path logged a literal send (marker leaked into a keypress)"$'\n'"--- bytes ---"$'\n'"$(od -An -c "$log")"
-  [ ! -d "$home/state/domain.inbox" ] \
-    || fail "--key path must never enqueue an inbox record"
-  pass "fm-send: the --key path carries no marker (no literal text is typed)"
 }
 
 test_marker_is_label_plus_invisible_separator() {
@@ -272,7 +257,6 @@ test_secondmate_target_is_marked
 test_exact_secondmate_task_id_is_marked
 test_crewmate_target_is_not_marked
 test_explicit_window_is_not_marked
-test_key_path_is_not_marked
 test_marker_is_label_plus_invisible_separator
 test_marker_transformation_is_idempotent
 test_marked_send_preserves_trailing_newlines

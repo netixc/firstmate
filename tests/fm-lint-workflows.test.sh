@@ -155,13 +155,10 @@ jobs:
   x:
     runs-on: ubuntu-latest
     steps:
-      - name: Compatibility pointers must stay intact
+      - name: Repository instructions must stay present
         run: |
           set -eu
-          cmp -s CLAUDE.md - <<'EOF' || exit 1
-<!-- Points Claude at AGENTS.md via import; edit AGENTS.md, not this file. -->
-@AGENTS.md
-EOF
+          test -s AGENTS.md
           echo ok
 YAML
 }

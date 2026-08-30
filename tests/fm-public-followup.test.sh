@@ -1145,7 +1145,7 @@ test_cleanup_refuses_while_a_public_reply_is_owed() {
     "window=firstmate:fm-ship-task" \
     "worktree=$home/projects/gone" \
     "project=$home/projects/sample" \
-    "harness=codex" \
+    "harness=pi" \
     "kind=ship" \
     "mode=no-mistakes"
 
@@ -1970,7 +1970,7 @@ test_retention_creates_no_false_teardown_refusal() {
     "window=firstmate:fm-ship-retain" \
     "worktree=$home/projects/gone" \
     "project=$home/projects/sample" \
-    "harness=codex" \
+    "harness=pi" \
     "kind=ship" \
     "mode=no-mistakes"
   emit_terminal "$home" "$home" pf-retain main ship-retain >/dev/null || fail "emit failed"

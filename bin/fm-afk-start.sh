@@ -19,7 +19,6 @@
 #
 # This is the COMMON daemon entry for every backend. HOW it becomes a tracked
 # background process differs by harness/backend and is owned elsewhere:
-#   - Harnesses with a native in-pane tracked-background tool (e.g. claude, grok)
 #     run this directly via that tool, so the daemon inherits the captain pane's
 #     env and auto-discovers it.
 #   - Harnesses with NO native background mechanism (e.g. pi) run this THROUGH
@@ -27,7 +26,6 @@
 #     backend (herdr tab/workspace, tmux detached session) and passes the
 #     captain pane in as FM_SUPERVISOR_TARGET so injection targets it, not the
 #     daemon's own new pane.
-# Do not wrap this in `nohup ... &`: Codex/herdr can reap fire-and-forget shell
 # children after the tool call returns, while a tracked background terminal stays
 # attached and has a real lifecycle.
 set -eu
@@ -111,23 +109,12 @@ daemon_lock_held_by_live_daemon() {
 }
 
 fm_afk_flag_write() {  # <state-dir>
-  local state=$1 lock="$1/.cursor-park-owner.lock" pending attempt=0 status=1
+  local state=$1 pending
   mkdir -p "$state" || return 1
   [ ! -d "$state/.afk" ] || return 1
   pending=$(mktemp "$state/.afk.pending.XXXXXX") || return 1
   date '+%s' > "$pending" || { rm -f "$pending"; return 1; }
-  while [ "$attempt" -lt 50 ]; do
-    attempt=$((attempt + 1))
-    if fm_lock_try_acquire "$lock"; then
-      mv "$pending" "$state/.afk" && status=0
-      fm_lock_release "$lock"
-      rm -f "$pending" 2>/dev/null || true
-      return "$status"
-    fi
-    [ "$attempt" -lt 50 ] && sleep 0.1
-  done
-  rm -f "$pending" 2>/dev/null || true
-  return 1
+  mv "$pending" "$state/.afk"
 }
 
 fm_afk_start_main() {

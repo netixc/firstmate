@@ -218,7 +218,7 @@ make_fake_ps_harness() {
   cat > "$fakebin/ps" <<'SH'
 #!/usr/bin/env bash
 set -u
-harness=${FM_FAKE_HARNESS:-claude}
+harness=${FM_FAKE_HARNESS:-pi}
 pid=
 previous=
 for argument in "$@"; do
@@ -887,14 +887,14 @@ done
 case "$*" in
   *"comm="*)
     if [ -f "$FM_FAKE_LOCK_STATE/harness-$pid" ]; then
-      printf '%s\n' /usr/local/bin/claude
+      printf '%s\n' /usr/local/bin/pi
     else
       printf '%s\n' /bin/bash
     fi
     ;;
   *"args="*)
     if [ -f "$FM_FAKE_LOCK_STATE/harness-$pid" ]; then
-      printf '%s\n' claude
+      printf '%s\n' pi
     else
       printf '%s\n' bash
     fi
@@ -1528,7 +1528,7 @@ EOF
 #!/usr/bin/env bash
 set -u
 case "$*" in
-  *"-p 999999"*) printf 'claude\n'; exit 0 ;;
+  *"-p 999999"*) printf 'pi\n'; exit 0 ;;
   *"comm="*|*"args="*) printf 'bash\n'; exit 0 ;;
 esac
 exit 0
@@ -1936,11 +1936,11 @@ for argument in "$@"; do
 done
 case "$*" in
   *"comm="*)
-    if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then printf '%s\n' /usr/local/bin/claude
+    if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then printf '%s\n' /usr/local/bin/pi
     else printf '%s\n' /bin/bash; fi
     ;;
   *"args="*)
-    if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then printf '%s\n' claude
+    if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then printf '%s\n' pi
     else printf '%s\n' bash; fi
     ;;
   *"ppid="*) /bin/ps -o ppid= -p "$pid" ;;

@@ -86,7 +86,7 @@ SH
 }
 
 setup_case() {  # <name> [harness] -> echoes case dir with home/state + t1 meta
-  local name=$1 harness=${2:-claude} dir
+  local name=$1 harness=${2:-pi} dir
   dir="$TMP_ROOT/$name"
   mkdir -p "$dir/home/state"
   make_stubs "$dir" >/dev/null
@@ -195,19 +195,14 @@ test_harness_invocations_stay_typed() {
   typed=$(cat "$dir/send.log")
   assert_contains "$typed" "/no-mistakes" "the slash command should be typed literally"
   [ ! -d "$dir/home/state/t1.inbox" ] || fail "a slash command must not be routed to the inbox"
-  # A codex `$<skill>` invocation likewise stays typed.
-  dir=$(setup_case codexskill codex); err="$dir/send.err"
-  run_send "$dir" "$err" -- t1 '$no-mistakes' || fail "a codex \$skill send should succeed"
-  assert_contains "$(cat "$dir/send.log")" '$no-mistakes' "the codex \$skill should be typed literally"
-  [ ! -d "$dir/home/state/t1.inbox" ] || fail "a codex \$skill must not be routed to the inbox"
-  # The same `$` message to a non-codex harness is plain text: inbox plane.
-  dir=$(setup_case dollartext claude); err="$dir/send.err"
-  run_send "$dir" "$err" -- t1 '$5/month is cheap' || fail "a claude \$-text send should succeed"
-  [ -f "$dir/home/state/t1.inbox/001.msg" ] || fail "a non-codex \$-message should ride the inbox"
+  # Dollar-prefixed Pi text is an ordinary durable-inbox steer.
+  dir=$(setup_case dollartext pi); err="$dir/send.err"
+  run_send "$dir" "$err" -- t1 '$5/month is cheap' || fail "a Pi dollar-text send should succeed"
+  [ -f "$dir/home/state/t1.inbox/001.msg" ] || fail "Pi dollar-text should ride the inbox"
   case "$(cat "$dir/send.log")" in
-    *'$5/month'*) fail "a non-codex \$-message payload was typed" ;;
+    *'$5/month'*) fail "the Pi dollar-text payload was typed" ;;
   esac
-  pass "fm-send planes: slash and codex \$skill invocations stay typed; plain \$-text rides the inbox"
+  pass "fm-send planes: Pi slash invocations stay typed; ordinary dollar-text rides the inbox"
 }
 
 test_explicit_target_stays_typed() {

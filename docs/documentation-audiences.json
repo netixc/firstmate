@@ -99,10 +99,6 @@
       "target": "docs/verification/runtime-backends.md"
     },
     {
-      "source": "docs/codex-app-backend.md",
-      "target": "docs/verification/runtime-backends.md"
-    },
-    {
       "source": "docs/trace-context.md",
       "target": "docs/verification/trace-context.md"
     }
@@ -141,10 +137,6 @@
       "audience": "agent-runtime"
     },
     {
-      "path": ".agents/skills/firstmate-codexapp/SKILL.md",
-      "audience": "agent-runtime"
-    },
-    {
       "path": ".agents/skills/firstmate-coding-guidelines/SKILL.md",
       "audience": "agent-runtime"
     },
@@ -174,34 +166,6 @@
     },
     {
       "path": ".agents/skills/harness-adapters/references/common/primary-hooks.md",
-      "audience": "agent-runtime"
-    },
-    {
-      "path": ".agents/skills/harness-adapters/references/harness/claude.md",
-      "audience": "agent-runtime"
-    },
-    {
-      "path": ".agents/skills/harness-adapters/references/harness/codex.md",
-      "audience": "agent-runtime"
-    },
-    {
-      "path": ".agents/skills/harness-adapters/references/harness/cursor.md",
-      "audience": "agent-runtime"
-    },
-    {
-      "path": ".agents/skills/harness-adapters/references/harness/grok.md",
-      "audience": "agent-runtime"
-    },
-    {
-      "path": ".agents/skills/harness-adapters/references/harness/kimi.md",
-      "audience": "agent-runtime"
-    },
-    {
-      "path": ".agents/skills/harness-adapters/references/harness/muse.md",
-      "audience": "agent-runtime"
-    },
-    {
-      "path": ".agents/skills/harness-adapters/references/harness/opencode.md",
       "audience": "agent-runtime"
     },
     {
@@ -245,16 +209,8 @@
       "audience": "agent-runtime"
     },
     {
-      "path": "CLAUDE.md",
-      "audience": "agent-runtime"
-    },
-    {
       "path": "CONTRIBUTING.md",
       "audience": "maintainer-architecture"
-    },
-    {
-      "path": "GROK_BOT.md",
-      "audience": "public-product"
     },
     {
       "path": "README.md",
@@ -290,10 +246,6 @@
     },
     {
       "path": "docs/cmux-backend.md",
-      "audience": "operator-current"
-    },
-    {
-      "path": "docs/codex-app-backend.md",
       "audience": "operator-current"
     },
     {
@@ -369,30 +321,6 @@
       "audience": "operator-current"
     },
     {
-      "path": "docs/subagent-guard.md",
-      "audience": "maintainer-architecture"
-    },
-    {
-      "path": "docs/supervision-protocols/claude.md",
-      "audience": "agent-runtime"
-    },
-    {
-      "path": "docs/supervision-protocols/codex.md",
-      "audience": "agent-runtime"
-    },
-    {
-      "path": "docs/supervision-protocols/cursor.md",
-      "audience": "agent-runtime"
-    },
-    {
-      "path": "docs/supervision-protocols/grok.md",
-      "audience": "agent-runtime"
-    },
-    {
-      "path": "docs/supervision-protocols/opencode.md",
-      "audience": "agent-runtime"
-    },
-    {
       "path": "docs/supervision-protocols/pi.md",
       "audience": "agent-runtime"
     },
@@ -413,14 +341,6 @@
       "audience": "operator-current"
     },
     {
-      "path": "docs/verification/dispatch-auth.md",
-      "audience": "maintainer-verification"
-    },
-    {
-      "path": "docs/verification/muse.md",
-      "audience": "maintainer-verification"
-    },
-    {
       "path": "docs/verification/process-event-sources.md",
       "audience": "maintainer-verification"
     },
@@ -430,10 +350,6 @@
     },
     {
       "path": "docs/verification/runtime-backends.md",
-      "audience": "maintainer-verification"
-    },
-    {
-      "path": "docs/verification/stow-memory.md",
       "audience": "maintainer-verification"
     },
     {

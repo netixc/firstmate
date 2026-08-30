@@ -109,7 +109,7 @@ Roughly 0.02 ms per session start, from a single `[ -f "$FM_HOME/.env" ]` test t
 
 ## Compatibility axes reviewed
 
-Primary harnesses (`claude`, `codex`, `opencode`, `pi`, `pi-signed`, `grok`, `kimi`): not applicable after inspection.
+The plain Pi primary harness is unaffected by this transport-only behavior.
 Nothing here reads or renders harness-specific state.
 The only supervision surfaces touched are the session-start digest, which `bin/fm-supervision-instructions.sh` already renders per harness without knowing this section exists, and the wake payload produced by the existing relay poll, which every harness protocol consumes identically.
 

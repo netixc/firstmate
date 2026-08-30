@@ -53,7 +53,7 @@
 # delivery proof on this plane, and a failed ring never fails the send.
 #
 # TYPED - the LOCAL text that must reach the terminal itself: a harness-native
-# invocation (a leading "/", or a leading "$" to a codex target) must reach
+# invocation (a leading "/") must reach
 # the harness's own parser, and an explicit backend target names an endpoint,
 # not a task, so it stays typed even when local metadata happens to match it
 # (the same boundary that keeps it unmarked and outside --resolve-key). These
@@ -69,7 +69,7 @@
 # delivered. Submission dispatches through the target's recorded backend; the
 # tmux adapter shares its composer/submit core with the away-mode daemon via
 # bin/fm-tmux-lib.sh. Tune with FM_SEND_RETRIES (default 3) / FM_SEND_SLEEP
-# (0.4). Slash commands, and codex `$...` skill invocations resolved through
+# (0.4). Slash commands resolved through
 # harness meta, get a longer pre-Enter settle so completion popups do not
 # swallow Enter. A remote secondmate target has no typed text plane at all:
 # every remote text steer rides the inbox (a marked secondmate request already
@@ -243,30 +243,6 @@ fm_send_id_from_meta() {  # <meta-file>
   printf '%s' "${base%.meta}"
 }
 
-# fm_send_clear_after_interrupt: muse RESTORES the interrupted prompt back into
-# the composer when Escape cancels a turn, as real bright text (verified: fg
-# 38;2;204;211;219, luminance ~210, muse 0.1.0-R708.1), not de-emphasised ghost
-# text. Classifying that as pending input is correct - the text really is
-# unsubmitted - but leaving it there means the NEXT steer types onto the end of
-# it and submits both as one garbled message. Ctrl-U clears the composer
-# (verified), so the interrupt is not complete until it has been sent. A failed
-# clear is loud rather than silent, because the alternative is a corrupted steer.
-# WHICH adapters need that clear, and which key clears them, comes from the one
-# control-plane capability table (bin/fm-control-lib.sh) rather than a second
-# copy here - the same table bin/fm-control.sh's interrupt verb reads.
-fm_send_clear_after_interrupt() {  # <key>
-  local key=$1 family clear
-  [ "$key" = Escape ] || return 0
-  family=$(fm_control_harness_family "$TARGET_HARNESS") || return 0
-  clear=$(fm_control_interrupt_clear_key "$family") || return 0
-  [ -n "$clear" ] || return 0
-  [ "$TARGET_BACKEND" != remote ] || return 0
-  if ! fm_backend_send_key "$TARGET_BACKEND" "$T" "$clear" "$EXPECTED_LABEL"; then
-    echo "error: Escape reached $T, but the $TARGET_HARNESS composer could not be cleared; it still holds the restored prompt. Clear it before sending the next message." >&2
-    return 1
-  fi
-}
-
 fm_send_normalize_key() {  # <key>
   case "$1" in
     Escape|escape|Esc|esc) printf '%s' Escape ;;
@@ -274,25 +250,10 @@ fm_send_normalize_key() {  # <key>
   esac
 }
 
-fm_send_record_interrupt() {  # <key>
-  local key=$1 id gen
-  [ "$key" = Escape ] || return 0
-  case "$TARGET_HARNESS" in claude*) : ;; *) return 0 ;; esac
-  [ -n "$TARGET_META" ] || return 0
-  id=$(fm_send_id_from_meta "$TARGET_META")
-  [ -f "$STATE/$id.busy-gen" ] || return 0
-  gen=$(fm_meta_get "$TARGET_META" busy_gen)
-  if [ -n "$gen" ]; then
-    "$FM_ROOT/bin/fm-busy-event.sh" apply "$STATE" "$id" idle \
-      --gen "$gen" --source fm-interrupt --event interrupt
-  else
-    "$FM_ROOT/bin/fm-busy-event.sh" apply "$STATE" "$id" idle \
-      --current-gen --source fm-interrupt --event interrupt
-  fi || {
-    echo "error: key '$key' reached $T, but the Claude interrupt state could not be recorded for $id" >&2
-    return 1
-  }
+fm_send_record_interrupt() {
+  return 0
 }
+
 
 fm_send_meta_for_key_value() {  # <state-dir> <key> <value>
   local state=$1 key=$2 value=$3 meta got
@@ -482,6 +443,10 @@ while :; do
   esac
 done
 
+if [ -n "$TARGET_META" ] && [ "$TARGET_HARNESS" != pi ]; then
+  echo "error: task metadata records unsupported harness '${TARGET_HARNESS:-missing}'; migrate it explicitly before steering" >&2
+  exit 1
+fi
 if [ "$TARGET_BACKEND" != remote ]; then
   fm_backend_validate "$TARGET_BACKEND" || exit 1
 fi
@@ -630,10 +595,7 @@ fm_send_feed_resolved_holds() {  # <answer-text>
   fi
 }
 
-# Resolve the target's harness from its meta (recorded by fm-spawn), used only to
-# scope the codex `$<skill>` popup-settle below. A task selector carries
-# meta; an explicit backend-target escape hatch has none, so its harness is
-# unknown and treated as non-codex (the safe default that keeps the fast path).
+# Resolve the target's exact plain Pi harness from metadata.
 # The target's BACKEND comes from selector meta, from matching an explicit target
 # back to recorded meta, or from strict explicit-target shape validation.
 # Do not add a separate passive liveness preflight here. Active send paths own
@@ -739,9 +701,8 @@ else
   fi
   # Data-plane selection (see the header): text addressed to a task selector
   # resolved through this home's metadata rides the inbox plane, unless it is
-  # a LOCAL harness-native invocation that must reach the harness's own parser
-  # - a leading "/" (slash command), or a leading "$" to a codex target (skill
-  # invocation). A remote secondmate selector always rides the inbox: its
+  # a LOCAL Pi slash command that must reach Pi's own parser.
+  # A remote secondmate selector always rides the inbox: its
   # requests are marked, and a marked request reaches the harness as
   # marker-prefixed chat rather than a parser command anyway, so no remote
   # text has a typed plane to lose. An explicit backend target stays typed
@@ -758,7 +719,7 @@ else
     else
       case "$RESOLVE_ANSWER_TEXT" in
         /*) ;;
-        \$*) [ "$TARGET_HARNESS" = codex ] || INBOX_PLANE=1 ;;
+        \$*) INBOX_PLANE=1 ;;
         *) INBOX_PLANE=1 ;;
       esac
     fi
@@ -964,18 +925,11 @@ else
     esac
     exit 0
   fi
-  # Slash commands open a completion popup in some TUIs (verified on codex);
-  # submitting too fast selects nothing, so give the popup time to settle before
-  # the (retried) Enter. Codex opens the same kind of popup for a `$<skill>`
-  # invocation, so a `$...` message to a codex target gets the same settle. That
-  # `$` case is scoped to codex on purpose: unlike `/`, a leading `$` commonly
-  # starts ordinary text ("$5/month", "$HOME"), so a universal `$` rule would
-  # needlessly slow plain text to claude/opencode/pi. The target backend's
-  # verified submit retry still backs the settle up either way.
+  # Give Pi slash-command completion time to settle before the retried Enter.
   case "$*" in
     /*) settle=1.2 ;;
     \$*)
-      if [ "$TARGET_HARNESS" = codex ]; then settle=1.2; else settle=0.3; fi
+      settle=0.3
       ;;
     *) settle=0.3 ;;
   esac

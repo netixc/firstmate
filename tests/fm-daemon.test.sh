@@ -1273,11 +1273,11 @@ test_housekeeping_herdr_idle_busy_record_clears_stale() {
   local dir state key gen
   dir=$(make_supercase stale-herdr-idle-busy-record)
   state="$dir/state"
-  fm_write_meta "$state/herdr-footer.meta" "window=default:w1:p4" "backend=herdr" "harness=claude"
+  fm_write_meta "$state/herdr-footer.meta" "window=default:w1:p4" "backend=herdr" "harness=pi"
   printf 'working\n' > "$state/herdr-footer.status"
   gen=$("$ROOT/bin/fm-busy-event.sh" arm "$state" herdr-footer)
   "$ROOT/bin/fm-busy-event.sh" apply "$state" herdr-footer busy --gen "$gen" \
-    --source claude-hook --event user-prompt-submit
+    --source pi-ext --event user-prompt-submit
   key=$(printf '%s' "herdr-footer" | tr ':/.' '___')
   echo $(( $(date +%s) - 500 )) > "$state/.subsuper-stale-$key"
   (
@@ -1301,11 +1301,13 @@ test_housekeeping_herdr_idle_busy_record_clears_stale() {
 }
 
 test_housekeeping_herdr_resumed_stale_cleared() {
-  local dir state key
+  local dir state key gen
   dir=$(make_supercase stale-herdr-resumed)
   state="$dir/state"
-  fm_write_meta "$state/herdr-busy.meta" "window=default:w1:p3" "backend=herdr"
+  fm_write_meta "$state/herdr-busy.meta" "window=default:w1:p3" "backend=herdr" "harness=pi"
   printf 'working\n' > "$state/herdr-busy.status"
+  gen=$("$ROOT/bin/fm-busy-event.sh" arm "$state" herdr-busy)
+  "$ROOT/bin/fm-busy-event.sh" apply "$state" herdr-busy busy --gen "$gen" --source pi-ext --event tool-call
   key=$(printf '%s' "herdr-busy" | tr ':/.' '___')
   echo $(( $(date +%s) - 500 )) > "$state/.subsuper-stale-$key"
   (

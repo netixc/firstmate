@@ -10,7 +10,7 @@ For a profile array, load `quota-array-dispatch` after establishing harness and 
 
 `../secondmate-provisioning/SKILL.md` owns inherited local material.
 Its harness consequence is that a secondmate's workers receive literal `config/crew-harness` and `config/crew-dispatch.json`, while the primary-only `config/secondmate-harness` is never inherited because secondmates do not spawn secondmates.
-A concrete crew value such as `codex` carries that runtime into the secondmate home.
+Only a concrete `pi` crew value is supported and inherited into a secondmate home.
 Unset or `default` carries no concrete value, so its workers use that home's own or detected harness rather than the primary's effective crew harness.
 The inherited dispatch file applies the same best-fit profiles there.
 
