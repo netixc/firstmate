@@ -1,0 +1,8 @@
+$ bin/fm-github-owner-policy.sh <repo with origin https://github.com/netixc/firstmate.git>
+netixc/firstmate
+exit=0; mutation boundary may proceed, bound to emitted repository
+
+$ bin/fm-github-owner-policy.sh <repo with origin https://github.com/octocat/Hello-World.git>
+REFUSED: canonical GitHub owner 'octocat' is not allowed (expected 'netixc')
+exit=1; mutation boundary refused
+mutation_probe=absent (no PR/issue/push command invoked)

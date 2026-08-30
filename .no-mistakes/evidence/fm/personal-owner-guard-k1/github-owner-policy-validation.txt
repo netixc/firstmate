@@ -1,0 +1,45 @@
+$ tests/fm-github-owner-policy.test.sh
+ok - owner policy allows and emits canonical netixc identity through its executable interface
+ok - owner policy refuses a non-netixc canonical identity before caller mutation
+ok - owner policy refuses absent and ambiguous remote evidence
+ok - owner policy refuses a divergent push destination before caller mutation
+ok - owner policy refuses incomplete authoritative GitHub identity
+
+$ FM_GITHUB_OWNER_POLICY_LIVE=1 tests/fm-github-owner-policy-live.test.sh
+ok - live GitHub API allows canonical netixc/firstmate
+ok - live GitHub API refuses canonical octocat/Hello-World before mutation
+
+$ tests/fm-task-delivery.test.sh
+ok - fm-spawn: a ship spawn requires a valid explicit mode and yolo before anything is created
+ok - fm-spawn: scout and secondmate spawns refuse ship delivery flags
+ok - fm-spawn: the brief's recorded mode and the spawn's explicit mode must agree
+ok - fm-spawn: a rigor downgrade against the registered posture is announced, never blocked
+ok - fm-spawn: a scout spawn resolves no delivery posture from the registry
+ok - fm-promote: promotion requires the delivery contract and records it exactly once
+ok - fm-promote: a promoted worker receives the same mode-specific delivery contract a briefed one does
+ok - fm-project-mode: the conditional policy is accepted, mapped for mechanical callers, and readable raw
+# all fm-task-delivery tests passed
+
+$ tests/fm-brief.test.sh
+ok - fm-brief.sh: bash -n succeeds
+/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-brief.qGjPny/heredoc-in-substitution.sh:2
+ok - fm-brief.sh: no heredoc is nested inside a command substitution (Bash 3.2 parse-safe)
+ok - fm-brief.sh: --help renders the complete header
+ok - fm-brief.sh: no-mistakes/direct-PR/local-only briefs generate cleanly
+ok - fm-brief.sh: ship --mode is required and closed-set validated
+ok - fm-brief.sh: the explicit ship mode wins over the registered posture
+ok - fm-brief.sh: --yolo and scout/secondmate --mode are refused, never silently dropped
+ok - fm-brief.sh: faster paths use configured authority without stacked review
+ok - fm-brief.sh: no-mistakes DOD keeps its apostrophe prose and bans --yes outright
+ok - fm-brief.sh: ship project-memory wording carries the AGENTS.md authoring bar
+ok - fm-brief.sh: --herdr-lab emits the complete hard safety contract
+ok - fm-brief.sh: --herdr-lab uses its quoted Firstmate-owned helper path
+ok - fm-brief.sh: ship and scout scaffolds make omitted Herdr intent fail-visible
+ok - fm-brief.sh: the documented {TASK} fill cannot corrupt the Herdr safety gate
+ok - fm-brief.sh: Herdr lab contract covers scouts and rejects secondmate misuse
+ok - fm-brief.sh: --no-projects scaffolds a project-less charter and guards misuse
+ok - fm-brief.sh: marked requests avoid generic acknowledgements and preserve material reporting
+ok - fm-brief.sh: relative directory inputs ignore CDPATH, render stable absolute charter paths, or fail loudly
+ok - fm-brief.sh: custom pause verb renders in every scaffold
+ok - fm-brief.sh: investigation and visual-review completions load the shared decision policy
+ok - fm-brief: scout and secondmate code paths still scaffold well-formed briefs
