@@ -90,6 +90,21 @@ assert_contains "$(cat "$TMP_ROOT/push-override.err")" \
   "push-destination refusal did not identify both repositories"
 pass "owner policy refuses a divergent push destination before caller mutation"
 
+ambiguous_push_repo="$TMP_ROOT/ambiguous-push"
+make_repo "$ambiguous_push_repo" https://github.com/netixc/firstmate.git
+git -C "$ambiguous_push_repo" remote set-url --push origin \
+  https://github.com/netixc/firstmate.git
+git -C "$ambiguous_push_repo" remote set-url --add --push origin \
+  git@github.com:netixc/firstmate.git
+rc=0
+run_policy "$ambiguous_push_repo" "$allowed_bin" "$TMP_ROOT/ambiguous-push.out" \
+  "$TMP_ROOT/ambiguous-push.err" || rc=$?
+expect_code 1 "$rc" "multiple effective push destinations must be refused"
+assert_contains "$(cat "$TMP_ROOT/ambiguous-push.err")" \
+  'origin push destination is absent or ambiguous (2 URLs)' \
+  "ambiguous push-destination refusal was not explicit"
+pass "owner policy refuses ambiguous effective push destinations before caller mutation"
+
 rewritten_push_repo="$TMP_ROOT/rewritten-push"
 make_repo "$rewritten_push_repo" https://github.com/netixc/firstmate.git
 git -C "$rewritten_push_repo" config \
