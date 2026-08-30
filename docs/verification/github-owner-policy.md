@@ -27,5 +27,5 @@ ok - live GitHub API refuses canonical octocat/Hello-World before mutation
 The test initializes two temporary local repositories whose sole `origin` fetch and effective push URLs identify `netixc/firstmate` and `octocat/Hello-World`, then invokes the tracked policy through its public executable interface.
 Each invocation binds its read-only API request to github.com and resolves fresh canonical owner, full-name, and repository-URL evidence through `gh-axi api`.
 A successful invocation emits the canonical owner and repository for native creation commands to bind through `GH_REPO`.
-The portable regression also proves that multiple push destinations, divergent explicit `remote.origin.pushurl`, and effective `url.*.pushInsteadOf` rewrites are refused before a caller can mutate them.
+The portable regression also proves that multiple push destinations, divergent explicit `remote.origin.pushurl` destinations, and divergent effective `url.*.pushInsteadOf` destinations are refused before a caller can mutate them, while an effective rewrite to the same verified repository remains allowed.
 The test performs no pull-request or issue mutation.

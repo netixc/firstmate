@@ -118,6 +118,17 @@ assert_contains "$(cat "$TMP_ROOT/rewritten-push.err")" \
   "effective rewritten push-destination refusal did not identify both repositories"
 pass "owner policy verifies and refuses an effective pushInsteadOf destination"
 
+same_rewritten_push_repo="$TMP_ROOT/same-rewritten-push"
+make_repo "$same_rewritten_push_repo" https://github.com/netixc/firstmate.git
+git -C "$same_rewritten_push_repo" config \
+  url.git@github.com:netixc/.pushInsteadOf https://github.com/netixc/
+run_policy "$same_rewritten_push_repo" "$allowed_bin" "$TMP_ROOT/same-rewritten-push.out" \
+  "$TMP_ROOT/same-rewritten-push.err" \
+  || fail "equivalent effective push rewrite was refused: $(cat "$TMP_ROOT/same-rewritten-push.err")"
+[ "$(cat "$TMP_ROOT/same-rewritten-push.out")" = 'netixc/firstmate' ] \
+  || fail "equivalent effective push rewrite did not emit the canonical identity"
+pass "owner policy preserves an effective pushInsteadOf destination for the verified repository"
+
 incomplete_repo="$TMP_ROOT/incomplete"
 incomplete_bin="$TMP_ROOT/incomplete-bin"
 make_repo "$incomplete_repo" https://github.com/netixc/firstmate.git
