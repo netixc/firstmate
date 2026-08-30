@@ -9,11 +9,13 @@
 # `gh-axi issue create` operations. It is a verifier, not a forge wrapper:
 # successful callers continue with their existing mutation path.
 #
-# Identity is resolved fresh on every call. The project's one exact origin URL
-# supplies the repository candidate, then GitHub's authenticated repository API
-# supplies canonical owner, full name, and URL. Missing or multiple origin URLs,
-# non-GitHub remotes, incomplete or inconsistent API evidence, and every
-# canonical owner other than the literal `netixc` refuse.
+# Identity is resolved fresh on every call. The project's one exact origin fetch
+# URL and effective push URL must identify the same repository, then GitHub's
+# authenticated github.com API supplies canonical owner, full name, and URL.
+# Missing or multiple URLs, divergent push destinations, non-GitHub remotes,
+# incomplete or inconsistent API evidence, and every canonical owner other than
+# the literal `netixc` refuse. Success prints the canonical OWNER/REPOSITORY so a
+# native creation command can bind GH_REPO to the identity that was verified.
 
 set -u
 
@@ -27,42 +29,52 @@ fail() {
 
 ROOT=$(git -C "$PROJECT_DIR" rev-parse --show-toplevel 2>/dev/null) \
   || fail "cannot resolve a Git repository from $PROJECT_DIR"
-ORIGINS=$(git -C "$ROOT" remote get-url --all origin 2>/dev/null) \
+FETCH_URLS=$(git -C "$ROOT" remote get-url --all origin 2>/dev/null) \
   || fail "repository has no readable origin remote"
-ORIGIN_COUNT=$(printf '%s\n' "$ORIGINS" | awk 'NF { count++ } END { print count + 0 }')
-[ "$ORIGIN_COUNT" -eq 1 ] \
-  || fail "repository origin is absent or ambiguous ($ORIGIN_COUNT URLs)"
-ORIGIN=$(printf '%s\n' "$ORIGINS" | awk 'NF { print; exit }')
+FETCH_COUNT=$(printf '%s\n' "$FETCH_URLS" | awk 'NF { count++ } END { print count + 0 }')
+[ "$FETCH_COUNT" -eq 1 ] \
+  || fail "repository origin fetch destination is absent or ambiguous ($FETCH_COUNT URLs)"
+FETCH_URL=$(printf '%s\n' "$FETCH_URLS" | awk 'NF { print; exit }')
 
-case "$ORIGIN" in
-  https://github.com/*)
-    REPOSITORY=${ORIGIN#https://github.com/}
-    ;;
-  git@github.com:*)
-    REPOSITORY=${ORIGIN#git@github.com:}
-    ;;
-  ssh://git@github.com/*)
-    REPOSITORY=${ORIGIN#ssh://git@github.com/}
-    ;;
-  *)
-    fail "origin is not an exact github.com repository URL"
-    ;;
-esac
-REPOSITORY=${REPOSITORY%.git}
-case "$REPOSITORY" in
-  */*) ;;
-  *) fail "origin does not identify owner/repository" ;;
-esac
-REMOTE_OWNER=${REPOSITORY%%/*}
-REMOTE_REPO=${REPOSITORY#*/}
-case "$REMOTE_OWNER" in
-  ''|*/*|*[!A-Za-z0-9-]*) fail "origin has an invalid GitHub owner" ;;
-esac
-case "$REMOTE_REPO" in
-  ''|*/*|.|..|*[!A-Za-z0-9._-]*) fail "origin has an invalid GitHub repository" ;;
-esac
+PUSH_URLS=$(git -C "$ROOT" remote get-url --push --all origin 2>/dev/null) \
+  || fail "repository has no readable origin push destination"
+PUSH_COUNT=$(printf '%s\n' "$PUSH_URLS" | awk 'NF { count++ } END { print count + 0 }')
+[ "$PUSH_COUNT" -eq 1 ] \
+  || fail "repository origin push destination is absent or ambiguous ($PUSH_COUNT URLs)"
+PUSH_URL=$(printf '%s\n' "$PUSH_URLS" | awk 'NF { print; exit }')
 
-API_OUTPUT=$(gh-axi api "/repos/$REMOTE_OWNER/$REMOTE_REPO" \
+parse_github_repository() {
+  local label=$1 url=$2 repository owner repo
+  case "$url" in
+    https://github.com/*) repository=${url#https://github.com/} ;;
+    git@github.com:*) repository=${url#git@github.com:} ;;
+    ssh://git@github.com/*) repository=${url#ssh://git@github.com/} ;;
+    *) fail "$label is not an exact github.com repository URL" ;;
+  esac
+  repository=${repository%.git}
+  case "$repository" in
+    */*) ;;
+    *) fail "$label does not identify owner/repository" ;;
+  esac
+  owner=${repository%%/*}
+  repo=${repository#*/}
+  case "$owner" in
+    ''|*/*|*[!A-Za-z0-9-]*) fail "$label has an invalid GitHub owner" ;;
+  esac
+  case "$repo" in
+    ''|*/*|.|..|*[!A-Za-z0-9._-]*) fail "$label has an invalid GitHub repository" ;;
+  esac
+  printf '%s/%s\n' "$owner" "$repo"
+}
+
+FETCH_REPOSITORY=$(parse_github_repository "origin fetch destination" "$FETCH_URL") || exit 1
+PUSH_REPOSITORY=$(parse_github_repository "origin push destination" "$PUSH_URL") || exit 1
+[ "$FETCH_REPOSITORY" = "$PUSH_REPOSITORY" ] \
+  || fail "origin push destination '$PUSH_REPOSITORY' differs from fetch repository '$FETCH_REPOSITORY'"
+REMOTE_OWNER=${PUSH_REPOSITORY%%/*}
+REMOTE_REPO=${PUSH_REPOSITORY#*/}
+
+API_OUTPUT=$(gh-axi api "/repos/$REMOTE_OWNER/$REMOTE_REPO" --hostname github.com \
   --jq '{owner:.owner.login,full_name:.full_name,html_url:.html_url}' 2>/dev/null) \
   || fail "GitHub did not return authoritative repository identity"
 CANONICAL_OWNER=$(printf '%s\n' "$API_OUTPUT" | sed -n 's/^owner: \"\{0,1\}\([^\"]*\)\"\{0,1\}$/\1/p')
@@ -87,4 +99,4 @@ esac
 [ "$CANONICAL_OWNER" = "$ALLOWED_OWNER" ] \
   || fail "canonical GitHub owner '$CANONICAL_OWNER' is not allowed (expected '$ALLOWED_OWNER')"
 
-printf 'allowed: %s\n' "$CANONICAL_FULL_NAME"
+printf '%s\n' "$CANONICAL_FULL_NAME"

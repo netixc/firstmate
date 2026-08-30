@@ -333,6 +333,8 @@ STUB
     "promoted no-mistakes worker did not scope the canonical-owner preflight to GitHub"
   assert_grep "before any outward mutation and again immediately before every subsequent \`no-mistakes axi run\`" "$payload" \
     "promoted no-mistakes worker did not receive the pre-mutation canonical-owner preflight"
+  assert_grep "unset \`GH_HOST\` and \`GH_REPO\`" "$payload" \
+    "promoted no-mistakes worker retained an unverified GitHub target override"
   assert_grep "GitLab delivery continues through no-mistakes unchanged" "$payload" \
     "promoted no-mistakes worker no longer preserves GitLab delivery"
   assert_grep '/bin/fm-github-owner-policy.sh' "$payload" \
@@ -349,12 +351,16 @@ STUB
     "promoted direct-PR worker lost its no-pipeline contract"
   assert_grep "before any push" "$payload" \
     "promoted direct-PR worker did not receive the pre-push canonical-owner preflight"
-  assert_grep "rerun that policy immediately before \`gh-axi pr create\`" "$payload" \
+  assert_grep "rerunning that policy immediately before creation" "$payload" \
     "promoted direct-PR worker did not receive the fresh pre-create canonical-owner preflight"
+  assert_grep 'GH_HOST=github.com GH_REPO="$FM_GITHUB_REPOSITORY" gh-axi pr create' "$payload" \
+    "promoted direct-PR worker did not bind creation to the verified repository"
+  assert_grep "with no \`-R\`, \`--repo\`, or \`--hostname\` override" "$payload" \
+    "promoted direct-PR worker was not told to refuse target overrides"
   assert_grep '/bin/fm-github-owner-policy.sh' "$payload" \
     "promoted direct-PR worker did not receive the shared owner policy path"
   guard_line=$(grep -n -m1 '/bin/fm-github-owner-policy.sh' "$payload" | cut -d: -f1)
-  push_line=$(grep -n -m1 '^Push your branch' "$payload" | cut -d: -f1)
+  push_line=$(grep -n -m1 '^Push with' "$payload" | cut -d: -f1)
   create_line=$(grep -n -m1 'gh-axi pr create' "$payload" | cut -d: -f1)
   [ "$guard_line" -lt "$push_line" ] \
     || fail "promoted direct-PR worker was told to push before the owner policy"

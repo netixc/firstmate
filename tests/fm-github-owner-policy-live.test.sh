@@ -25,7 +25,7 @@ make_repo() {
 make_repo "$TMP_ROOT/netixc" https://github.com/netixc/firstmate.git
 out=$("$POLICY" "$TMP_ROOT/netixc") \
   || fail "live GitHub evidence refused netixc/firstmate"
-[ "$out" = 'allowed: netixc/firstmate' ] \
+[ "$out" = 'netixc/firstmate' ] \
   || fail "live GitHub evidence returned unexpected netixc identity: $out"
 pass "live GitHub API allows canonical netixc/firstmate"
 

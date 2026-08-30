@@ -25,6 +25,7 @@ make_fake_gh_axi() {
   mkdir -p "$dir"
   cat > "$dir/gh-axi" <<EOF
 #!/usr/bin/env bash
+printf '%s\n' "\$*" > "\${FM_TEST_GH_ARGS:-/dev/null}"
 printf '%s\n' 'full_name: $name' 'html_url: "$url"' 'owner: $owner'
 EOF
   chmod +x "$dir/gh-axi"
@@ -39,11 +40,14 @@ allowed_repo="$TMP_ROOT/allowed"
 allowed_bin="$TMP_ROOT/allowed-bin"
 make_repo "$allowed_repo" https://github.com/netixc/firstmate.git
 make_fake_gh_axi "$allowed_bin" netixc netixc/firstmate https://github.com/netixc/firstmate
-run_policy "$allowed_repo" "$allowed_bin" "$TMP_ROOT/allowed.out" "$TMP_ROOT/allowed.err" \
+FM_TEST_GH_ARGS="$TMP_ROOT/allowed-api.args" \
+  run_policy "$allowed_repo" "$allowed_bin" "$TMP_ROOT/allowed.out" "$TMP_ROOT/allowed.err" \
   || fail "canonical netixc repository was refused: $(cat "$TMP_ROOT/allowed.err")"
-assert_contains "$(cat "$TMP_ROOT/allowed.out")" 'allowed: netixc/firstmate' \
-  "allowed canonical identity was not reported"
-pass "owner policy allows canonical netixc identity through its executable interface"
+[ "$(cat "$TMP_ROOT/allowed.out")" = 'netixc/firstmate' ] \
+  || fail "allowed canonical identity was not emitted for native command binding"
+assert_contains "$(cat "$TMP_ROOT/allowed-api.args")" '--hostname github.com' \
+  "authoritative API lookup was not bound to github.com"
+pass "owner policy allows and emits canonical netixc identity through its executable interface"
 
 other_repo="$TMP_ROOT/other"
 other_bin="$TMP_ROOT/other-bin"
@@ -70,9 +74,21 @@ git -C "$ambiguous_repo" remote set-url --add origin git@github.com:netixc/first
 rc=0
 run_policy "$ambiguous_repo" "$allowed_bin" "$TMP_ROOT/ambiguous.out" "$TMP_ROOT/ambiguous.err" || rc=$?
 expect_code 1 "$rc" "multiple origin URLs must be refused"
-assert_contains "$(cat "$TMP_ROOT/ambiguous.err")" 'origin is absent or ambiguous (2 URLs)' \
+assert_contains "$(cat "$TMP_ROOT/ambiguous.err")" 'origin fetch destination is absent or ambiguous (2 URLs)' \
   "ambiguous-origin refusal was not explicit"
 pass "owner policy refuses absent and ambiguous remote evidence"
+
+push_override_repo="$TMP_ROOT/push-override"
+make_repo "$push_override_repo" https://github.com/netixc/firstmate.git
+git -C "$push_override_repo" remote set-url --push origin git@github.com:octocat/Hello-World.git
+rc=0
+run_policy "$push_override_repo" "$allowed_bin" "$TMP_ROOT/push-override.out" \
+  "$TMP_ROOT/push-override.err" || rc=$?
+expect_code 1 "$rc" "a divergent non-netixc push destination must be refused"
+assert_contains "$(cat "$TMP_ROOT/push-override.err")" \
+  "origin push destination 'octocat/Hello-World' differs from fetch repository 'netixc/firstmate'" \
+  "push-destination refusal did not identify both repositories"
+pass "owner policy refuses a divergent push destination before caller mutation"
 
 incomplete_repo="$TMP_ROOT/incomplete"
 incomplete_bin="$TMP_ROOT/incomplete-bin"
