@@ -4,10 +4,14 @@
 # Usage: fm-github-owner-policy.sh [project-dir]
 #
 # This is the single owner of the personal edition's GitHub PR/issue creation
-# policy. Firstmate calls it immediately before each Firstmate-managed
-# no-mistakes run and immediately before native `gh-axi pr create` or
-# `gh-axi issue create` operations. It is a verifier, not a forge wrapper:
-# successful callers continue with their existing mutation path.
+# policy. Generated no-mistakes contracts require it after the delivery path is
+# identified as GitHub, before outward mutation, and immediately before each
+# later `no-mistakes axi run`. Generated direct-PR contracts require it before
+# push and again immediately before native `gh-axi pr create`. Firstmate's
+# runtime contract applies the same fresh check immediately before native
+# `gh-axi issue create`. GitLab delivery bypasses this GitHub-only policy. It is
+# a verifier, not a forge wrapper: successful callers continue with their
+# existing mutation path.
 #
 # Identity is resolved fresh on every call. The project's one exact origin fetch
 # URL and effective push URL must identify the same repository, then GitHub's
