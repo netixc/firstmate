@@ -1926,13 +1926,27 @@ fm_backend_herdr_tab_is_husk() {  # <session> <pane_id>
 # creating a second Herdr state machine: a structurally gone pane is `missing`,
 # a confirmed agent-less pane is `dead`, a registered agent is `alive`, and an
 # unexpected or failed API read is `unreadable`.
+fm_backend_herdr_registered_pi_identity() {  # <session> <pane_id>
+  local out
+  out=$(fm_backend_herdr_cli "$1" agent get "$2" 2>/dev/null) || return 1
+  [ "$(printf '%s' "$out" | jq -r '.result.agent.agent // empty' 2>/dev/null)" = pi ]
+}
+
 fm_backend_herdr_agent_state() {  # <target>
-  local target=$1
+  local target=$1 state
   fm_backend_herdr_parse_target "$target" || { printf 'unreadable'; return 0; }
-  case "$(fm_backend_herdr_pane_agent_state "$FM_BACKEND_HERDR_SESSION" "$FM_BACKEND_HERDR_PANE")" in
+  state=$(fm_backend_herdr_pane_agent_state "$FM_BACKEND_HERDR_SESSION" "$FM_BACKEND_HERDR_PANE")
+  case "$state" in
     dead) printf 'missing' ;;
     no-agent) printf 'dead' ;;
-    live) printf 'alive' ;;
+    live)
+      if [ -n "${FM_HARNESS_IDENTITY_HOME:-}" ]; then
+        fm_backend_herdr_registered_pi_identity "$FM_BACKEND_HERDR_SESSION" "$FM_BACKEND_HERDR_PANE" \
+          && printf 'alive' || printf 'ambiguous'
+      else
+        printf 'alive'
+      fi
+      ;;
     *) printf 'unreadable' ;;
   esac
 }

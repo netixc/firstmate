@@ -93,6 +93,12 @@ set -e
 assert_eq 2 "$rc" "spaced excluded shell entrypoint is rejected"
 assert_contains "$out" "unsupported harness" "spaced excluded shell entrypoint reports migration"
 set +e
+out=$(env PI_CODING_AGENT=true FAKE_COMM=bash FAKE_ARGS='bash --rcfile /tmp/bashrc /opt/bin/pi-signed' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
+rc=$?
+set -e
+assert_eq 2 "$rc" "excluded shell entrypoint after option value is rejected"
+assert_contains "$out" "unsupported harness" "option-bearing shell entrypoint reports migration"
+set +e
 out=$(env PI_CODING_AGENT=true FAKE_COMM=node FAKE_ARGS='node /opt/opencode/bin/opencode.js' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
 rc=$?
 set -e
@@ -163,6 +169,13 @@ for old in pi-signed claude codex opencode grok kimi cursor muse; do
 done
 printf 'pi\n' > "$TMP/config/crew-harness"
 assert_eq pi "$(FM_HOME="$TMP" "$HARNESS" crew)" "explicit plain Pi resolves"
+printf 'default openai-codex/gpt-5.6-sol high\n' > "$TMP/config/secondmate-harness"
+set +e
+out=$(FM_HOME="$TMP" "$HARNESS" secondmate 2>&1)
+rc=$?
+set -e
+assert_eq 2 "$rc" "default secondmate configuration rejects profile fields"
+assert_contains "$out" '"default" does not accept model or effort fields' "invalid default profile reports its grammar"
 
 printf 'claude\n' > "$TMP/config/secondmate-harness"
 printf 'window=control:fm-mate\nworktree=%s\nproject=%s\nkind=secondmate\nharness=pi\n' "$TMP" "$TMP" > "$TMP/state/mate.meta"

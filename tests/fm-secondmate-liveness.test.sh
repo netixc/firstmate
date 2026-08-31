@@ -188,6 +188,11 @@ test_agent_state_dispatcher_and_compatibility() {
   out=$(bash -c '. "$0/bin/fm-backend.sh"; fm_backend_source herdr; fm_backend_herdr_pane_agent_state() { printf "live"; }; fm_backend_agent_state herdr sess:p1' "$ROOT")
   [ "$out" = alive ] || fail "detailed dispatcher should route Herdr, got '$out'"
 
+  out=$(FM_HARNESS_IDENTITY_HOME=/secondmate bash -c '. "$0/bin/fm-backend.sh"; fm_backend_source herdr; fm_backend_herdr_pane_agent_state() { printf "live"; }; fm_backend_herdr_registered_pi_identity() { return 1; }; fm_backend_agent_state herdr sess:p1' "$ROOT")
+  [ "$out" = ambiguous ] || fail "a live Herdr registration without canonical Pi identity should be ambiguous, got '$out'"
+  out=$(FM_HARNESS_IDENTITY_HOME=/secondmate bash -c '. "$0/bin/fm-backend.sh"; fm_backend_source herdr; fm_backend_herdr_pane_agent_state() { printf "live"; }; fm_backend_herdr_registered_pi_identity() { return 0; }; fm_backend_agent_state herdr sess:p1' "$ROOT")
+  [ "$out" = alive ] || fail "a live Herdr registration with canonical Pi identity should be alive, got '$out'"
+
   out=$(bash -c '. "$0/bin/fm-backend.sh"; fm_backend_agent_state zellij sess:7' "$ROOT")
   [ "$out" = unverified ] || fail "Zellij should remain unverified, got '$out'"
   out=$(bash -c '. "$0/bin/fm-backend.sh"; fm_backend_agent_alive zellij sess:7' "$ROOT")

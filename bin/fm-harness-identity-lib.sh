@@ -62,9 +62,13 @@ else:
 args = words[1:]
 takes_value = {
     "node": set(), "nodejs": set(),
-    "bash": {"-c", "-O", "-o"}, "sh": {"-c", "-o"}, "zsh": {"-c", "-o"}, "dash": {"-c", "-o"},
-    "python": {"-c", "-m", "-W", "-X"}, "ruby": {"-e", "-I", "-r"}, "perl": {"-e", "-I", "-M", "-m"},
-    "bun": {"-e", "--eval", "-p", "--print"}, "deno": {"-e", "--eval"},
+    "bash": {"-c", "-O", "-o", "--init-file", "--rcfile"},
+    "sh": {"-c", "-o"}, "zsh": {"-c", "-o"}, "dash": {"-c", "-o"},
+    "python": {"-c", "-m", "-W", "-X", "--check-hash-based-pycs"},
+    "ruby": {"-e", "-C", "-E", "-F", "-I", "-K", "-r", "-T", "-W", "--disable", "--dump", "--enable", "--encoding", "--external-encoding", "--internal-encoding"},
+    "perl": {"-e", "-E", "-F", "-I", "-M", "-m"},
+    "bun": {"-e", "--eval", "-p", "--print", "--cwd", "--config"},
+    "deno": {"-e", "--eval", "--config", "--import-map", "--location"},
 }
 if name.startswith("python"):
     name = "python"
@@ -82,9 +86,15 @@ if name in {"node", "nodejs"}:
 no_script = {
     "node": {"-e", "--eval", "-p", "--print"}, "nodejs": {"-e", "--eval", "-p", "--print"},
     "bash": {"-c"}, "sh": {"-c"}, "zsh": {"-c"}, "dash": {"-c"},
-    "python": {"-c", "-m"}, "ruby": {"-e"}, "perl": {"-e"}, "bun": {"-e", "--eval", "-p", "--print"},
+    "python": {"-c", "-m"}, "ruby": {"-e"}, "perl": {"-e", "-E", "-V"}, "bun": {"-e", "--eval", "-p", "--print"},
     "deno": {"-e", "--eval"},
 }
+attached_value = {
+    "bash": {"-O", "-o"}, "sh": {"-o"}, "zsh": {"-o"}, "dash": {"-o"},
+    "python": {"-W", "-X"}, "ruby": {"-C", "-E", "-F", "-I", "-K", "-r", "-T", "-W", "-x"},
+    "perl": {"-F", "-I", "-M", "-m", "-V", "-x"},
+}
+subcommands = {"bun": {"run"}, "deno": {"run"}}
 skip = False
 for word in args:
     if skip:
@@ -92,12 +102,17 @@ for word in args:
         continue
     if word == "--":
         continue
-    if word in no_script.get(name, set()):
+    option = word.split("=", 1)[0]
+    if option in no_script.get(name, set()):
         break
-    if word in takes_value.get(name, set()):
-        skip = True
+    if option in takes_value.get(name, set()):
+        skip = "=" not in word
+        continue
+    if any(word.startswith(prefix) and word != prefix for prefix in attached_value.get(name, set())):
         continue
     if word.startswith("-"):
+        continue
+    if word in subcommands.get(name, set()):
         continue
     print(word)
     break

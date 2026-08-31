@@ -99,7 +99,7 @@ remote_endpoint_require() {
 }
 
 state_value() { # <id>; prints recovery-grade state
-  local id=$1 meta
+  local id=$1 meta harness
   meta=$(meta_path "$id")
   [ -f "$meta" ] && [ ! -L "$meta" ] || { printf 'missing\n'; return 0; }
   if ! remote_endpoint_load "$id"; then
@@ -107,7 +107,14 @@ state_value() { # <id>; prints recovery-grade state
     printf 'unverified\n'
     return 0
   fi
-  fm_backend_agent_state "$REMOTE_ENDPOINT_BACKEND" "$REMOTE_ENDPOINT_TARGET" 2>/dev/null || printf 'unreadable\n'
+  harness=$(fm_meta_get "$meta" harness)
+  if [ "$harness" != pi ]; then
+    printf "error: remote secondmate %s has unsupported harness '%s'; migrate or retire it explicitly\n" "$id" "${harness:-missing}" >&2
+    printf 'unverified\n'
+    return 0
+  fi
+  FM_HARNESS_IDENTITY_HOME="$TARGET_HOME" \
+    fm_backend_agent_state "$REMOTE_ENDPOINT_BACKEND" "$REMOTE_ENDPOINT_TARGET" 2>/dev/null || printf 'unreadable\n'
 }
 
 print_route() { # <id>
@@ -136,7 +143,7 @@ cmd_route() {
 
 cmd_launch() {
   local id=$1 harness=$2 model=$3 effort=$4 selected_backend=$5 traceparent=${6:-}
-  local current meta out herdr_session
+  local current meta out herdr_session recorded_harness
 
   validate_id "$id"
   validate_home "$id"
@@ -150,7 +157,11 @@ cmd_launch() {
   meta=$(meta_path "$id")
   if [ -f "$meta" ]; then
     remote_endpoint_require "$id"
-    current=$(fm_backend_agent_state "$REMOTE_ENDPOINT_BACKEND" "$REMOTE_ENDPOINT_TARGET" 2>/dev/null || printf 'unreadable\n')
+    recorded_harness=$(fm_meta_get "$meta" harness)
+    [ "$recorded_harness" = pi ] \
+      || die "existing remote secondmate endpoint has unsupported harness '${recorded_harness:-missing}'; migrate or retire it explicitly"
+    current=$(FM_HARNESS_IDENTITY_HOME="$TARGET_HOME" \
+      fm_backend_agent_state "$REMOTE_ENDPOINT_BACKEND" "$REMOTE_ENDPOINT_TARGET" 2>/dev/null || printf 'unreadable\n')
     case "$current" in
       alive)
         print_route "$id"

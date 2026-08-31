@@ -73,7 +73,11 @@ secondmate_field() {
   [ -n "$line" ] || return 0
   # shellcheck disable=SC2086 # intentional whitespace tokenization
   set -- $line
-  [ "$#" -le 3 ] || { printf 'error: invalid secondmate harness configuration: expected "pi [model] [effort]"\n' >&2; return 2; }
+  [ "$#" -le 3 ] || { printf 'error: invalid secondmate harness configuration: expected "pi [model] [effort]" or bare "default"\n' >&2; return 2; }
+  if [ "${1:-}" = default ] && [ "$#" -ne 1 ]; then
+    printf 'error: invalid secondmate harness configuration: "default" does not accept model or effort fields\n' >&2
+    return 2
+  fi
   case "$idx" in 1) printf '%s\n' "${1:-}" ;; 2) printf '%s\n' "${2:-}" ;; 3) printf '%s\n' "${3:-}" ;; esac
 }
 
