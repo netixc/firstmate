@@ -55,6 +55,10 @@ ff_target "$FM_ROOT" "firstmate" origin no no
 if [ "$FF_STATUS" = "updated" ] && [ -n "$FF_INSTR" ]; then
   reread_firstmate="yes"
 fi
+# shellcheck source=bin/fm-harness-identity-lib.sh
+. "$SCRIPT_DIR/fm-harness-identity-lib.sh"
+fm_harness_pi_launch_migration_cutover "$STATE" "$FM_ROOT/.pi/extensions/fm-pi-process-registration.ts" \
+  || { printf 'firstmate: skipped Pi launch migration cutover\n' >&2; exit 1; }
 
 # --- secondmates -----------------------------------------------------------
 # An updated live secondmate is nudged whenever it advanced (nudge_requires_instr

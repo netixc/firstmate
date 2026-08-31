@@ -6,7 +6,9 @@ set -eu
 TMP=$(fm_test_tmproot fm-pi-only-harness)
 mkdir -p "$TMP"
 rolling_pid=
-trap '[ -z "$rolling_pid" ] || kill "$rolling_pid" 2>/dev/null || true; rm -rf "$TMP"' EXIT
+legacy_pid=
+post_cutover_pid=
+trap '[ -z "$rolling_pid" ] || kill "$rolling_pid" 2>/dev/null || true; [ -z "$legacy_pid" ] || kill "$legacy_pid" 2>/dev/null || true; [ -z "$post_cutover_pid" ] || kill "$post_cutover_pid" 2>/dev/null || true; rm -rf "$TMP"' EXIT
 assert_eq() { [ "$1" = "$2" ] || fail "$3 (expected '$1', got '$2')"; pass "$3"; }
 mkdir -p "$TMP/config" "$TMP/state"
 HARNESS="$ROOT/bin/fm-harness.sh"
@@ -278,6 +280,35 @@ pass "mutable process marker cannot replace parent launch evidence"
 kill "$rolling_pid" 2>/dev/null || true
 wait "$rolling_pid" 2>/dev/null || true
 rolling_pid=
+
+cutover_home="$TMP/cutover-home"
+mkdir -p "$cutover_home/state"
+cutover_home=$(cd "$cutover_home" && pwd -P)
+sleep 300 &
+legacy_pid=$!
+fm_test_register_pi_process "$cutover_home" "$cutover_home/state" "$legacy_pid" || fail "could not publish legacy Pi registration fixture"
+rm -rf "$cutover_home/state/.pi-launches"
+if FM_HARNESS_IDENTITY_HOME="$cutover_home" bash -c '. "$1"; fm_harness_pid_pi_registration "$2"' _ "$ROOT/bin/fm-harness-identity-lib.sh" "$legacy_pid"; then
+  fail "ordinary identity verification migrated claimant registration"
+fi
+pass "ordinary identity verification refuses claimant-only registration"
+FM_HARNESS_IDENTITY_HOME="$cutover_home" bash -c '. "$1"; fm_harness_pi_launch_migration_cutover "$2/state" "$2/.pi/extensions/fm-pi-process-registration.ts"' _ "$ROOT/bin/fm-harness-identity-lib.sh" "$cutover_home" || fail "explicit Pi migration cutover failed"
+FM_HARNESS_IDENTITY_HOME="$cutover_home" bash -c '. "$1"; fm_harness_pid_pi_registration "$2"' _ "$ROOT/bin/fm-harness-identity-lib.sh" "$legacy_pid" || fail "cutover did not preserve the preexisting Pi registration"
+pass "explicit cutover migrates only snapshotted Pi registrations"
+sleep 300 &
+post_cutover_pid=$!
+fm_test_register_pi_process "$cutover_home" "$cutover_home/state" "$post_cutover_pid" || fail "could not publish post-cutover Pi registration fixture"
+rm -f "$cutover_home/state/.pi-launches/$post_cutover_pid-"*
+FM_HARNESS_IDENTITY_HOME="$cutover_home" bash -c '. "$1"; fm_harness_pi_launch_migration_cutover "$2/state" "$2/.pi/extensions/fm-pi-process-registration.ts"' _ "$ROOT/bin/fm-harness-identity-lib.sh" "$cutover_home" || fail "completed cutover was not idempotent"
+if FM_HARNESS_IDENTITY_HOME="$cutover_home" bash -c '. "$1"; fm_harness_pid_pi_registration "$2"' _ "$ROOT/bin/fm-harness-identity-lib.sh" "$post_cutover_pid"; then
+  fail "post-cutover claimant registration gained migration evidence"
+fi
+pass "completed cutover refuses new claimant-only Pi registrations"
+kill "$legacy_pid" "$post_cutover_pid" 2>/dev/null || true
+wait "$legacy_pid" 2>/dev/null || true
+wait "$post_cutover_pid" 2>/dev/null || true
+legacy_pid=
+post_cutover_pid=
 
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-busy-lib.sh"

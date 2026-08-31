@@ -286,6 +286,66 @@ fm_harness_pi_launch_record_migrate() {  # <state-dir> <pid> <version> <start> <
   return 1
 }
 
+fm_harness_pi_launch_migration_cutover() {  # <state-dir> <expected-extension>
+  local state_dir=$1 expected_extension=$2 registrations launch_dir snapshot snapshot_tmp complete complete_tmp marker pid marker_pid marker_start marker_extension marker_cli current_start digest version start extension cli
+  registrations="$state_dir/.pi-processes"
+  launch_dir="$state_dir/.pi-launches"
+  snapshot="$launch_dir/.migration-v1-eligible"
+  complete="$launch_dir/.migration-v1-complete"
+  mkdir -p "$launch_dir" || return 1
+  if [ ! -f "$snapshot" ]; then
+    snapshot_tmp="$snapshot.parent.$$"
+    : > "$snapshot_tmp" || return 1
+    if [ -d "$registrations" ]; then
+      for marker in "$registrations"/*; do
+        [ -f "$marker" ] && [ ! -L "$marker" ] || continue
+        pid=${marker##*/}
+        case "$pid" in ''|*[!0-9]*) continue ;; esac
+        [ "$(wc -l < "$marker" | tr -d '[:space:]')" = 5 ] || continue
+        marker_pid=$(sed -n '2p' "$marker" 2>/dev/null)
+        marker_start=$(sed -n '3p' "$marker" 2>/dev/null)
+        marker_extension=$(sed -n '4p' "$marker" 2>/dev/null)
+        marker_cli=$(sed -n '5p' "$marker" 2>/dev/null)
+        [ "$marker_pid" = "$pid" ] && [ "$marker_extension" = "$expected_extension" ] || continue
+        fm_harness_pi_cli_canonical "$marker_cli" || continue
+        current_start=$(ps -o lstart= -p "$pid" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        [ -n "$marker_start" ] && [ "$current_start" = "$marker_start" ] || continue
+        digest=$(fm_harness_file_sha256 "$marker") || { rm -f "$snapshot_tmp"; return 1; }
+        printf '%s %s\n' "$pid" "$digest" >> "$snapshot_tmp" || { rm -f "$snapshot_tmp"; return 1; }
+      done
+    fi
+    chmod 444 "$snapshot_tmp" || { rm -f "$snapshot_tmp"; return 1; }
+    if ! ln "$snapshot_tmp" "$snapshot" 2>/dev/null && [ ! -f "$snapshot" ]; then
+      rm -f "$snapshot_tmp"
+      return 1
+    fi
+    rm -f "$snapshot_tmp"
+  fi
+  [ -f "$snapshot" ] && [ ! -L "$snapshot" ] || return 1
+  [ -f "$complete" ] && return 0
+  while read -r pid digest; do
+    [ -n "$pid" ] && [ -n "$digest" ] || continue
+    marker="$registrations/$pid"
+    [ -f "$marker" ] && [ ! -L "$marker" ] || continue
+    [ "$(fm_harness_file_sha256 "$marker")" = "$digest" ] || continue
+    version=$(sed -n '1p' "$marker" 2>/dev/null)
+    start=$(sed -n '3p' "$marker" 2>/dev/null)
+    extension=$(sed -n '4p' "$marker" 2>/dev/null)
+    cli=$(sed -n '5p' "$marker" 2>/dev/null)
+    current_start=$(ps -o lstart= -p "$pid" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    [ -n "$start" ] && [ "$current_start" = "$start" ] || continue
+    fm_harness_pi_launch_record_migrate "$state_dir" "$pid" "$version" "$start" "$extension" "$cli" || return 1
+  done < "$snapshot"
+  complete_tmp="$complete.parent.$$"
+  printf 'migration-v1-complete\n' > "$complete_tmp" || return 1
+  chmod 444 "$complete_tmp" || { rm -f "$complete_tmp"; return 1; }
+  if ! ln "$complete_tmp" "$complete" 2>/dev/null && [ ! -f "$complete" ]; then
+    rm -f "$complete_tmp"
+    return 1
+  fi
+  rm -f "$complete_tmp"
+}
+
 fm_harness_pid_pi_registration() {
   local pid=$1 root state_dir expected_extension marker marker_version marker_pid marker_start marker_extension marker_cli marker_launch current_start launch_id launch_version launch_pid launch_start launch_image launch_cli launch_extension launch_owner launch_parent launch_parent_start current_parent current_parent_start parent_args
   root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -311,10 +371,8 @@ fm_harness_pid_pi_registration() {
   [ "$current_start" = "$marker_start" ] || return 1
   launch_id=$(printf '%s' "$marker_start" | fm_harness_file_sha256 /dev/stdin) || return 1
   marker_launch="$state_dir/.pi-launches/$pid-$launch_id"
-  if [ ! -f "$marker_launch" ] || ! grep -Eq '^(parent|migration)-v1$' < <(sed -n '7p' "$marker_launch" 2>/dev/null); then
-    fm_harness_pi_launch_record_migrate "$state_dir" "$pid" "$marker_version" "$marker_start" "$marker_extension" "$marker_cli" || return 1
-  fi
   [ -f "$marker_launch" ] && [ ! -L "$marker_launch" ] || return 1
+  grep -Eq '^(parent|migration)-v1$' < <(sed -n '7p' "$marker_launch" 2>/dev/null) || return 1
   launch_version=$(sed -n '1p' "$marker_launch" 2>/dev/null)
   launch_pid=$(sed -n '2p' "$marker_launch" 2>/dev/null)
   launch_start=$(sed -n '3p' "$marker_launch" 2>/dev/null)

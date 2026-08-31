@@ -324,6 +324,10 @@ if [ -z "${FM_SESSION_START_STAGE_FILE:-}" ]; then
   exit 0
 fi
 
+if ! fm_harness_pi_launch_migration_cutover "$STATE" "$FM_ROOT/.pi/extensions/fm-pi-process-registration.ts"; then
+  printf 'error: could not complete the parent-owned Pi launch migration cutover\n' >&2
+  exit 2
+fi
 PRIMARY_HARNESS=$("$SCRIPT_DIR/fm-harness.sh") || exit $?
 if [ "$PRIMARY_HARNESS" != pi ]; then
   printf 'error: unsupported primary harness identity %q; exact plain pi 0.84.4 with canonical process registration is required\n' "$PRIMARY_HARNESS" >&2
