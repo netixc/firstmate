@@ -45,13 +45,13 @@ for _ in $(seq 1 50); do
   sleep 0.1
 done
 [ "${interrupted:-0}" = 1 ] || { echo "not ok - real Pi interrupt control failed" >&2; exit 1; }
-FM_HOME="$TMP" "$ROOT/bin/fm-control.sh" control exit >/dev/null
-printf 'ok - real Pi interrupt and exit lifecycle control succeed (Pi %s)\n' "$PI_VERSION"
+printf 'ok - real Pi interrupt lifecycle control succeeds (Pi %s)\n' "$PI_VERSION"
 FM_HOME="$TMP" FM_SPAWN_NO_GUARD=1 \
   "$ROOT/bin/fm-control.sh" control relaunch --harness pi \
   --model openai-codex/gpt-5.6-sol --effort low --note 'Verify Pi transactional relaunch.' >/dev/null
 [ "$(sed -n 's/^harness=//p' "$TMP/state/control.meta" | tail -1)" = pi ] || { echo "not ok - Pi relaunch lost harness metadata" >&2; exit 1; }
 [ "$(sed -n 's/^model=//p' "$TMP/state/control.meta" | tail -1)" = openai-codex/gpt-5.6-sol ] || { echo "not ok - Pi relaunch lost model metadata" >&2; exit 1; }
 [ "$(sed -n 's/^effort=//p' "$TMP/state/control.meta" | tail -1)" = low ] || { echo "not ok - Pi relaunch lost effort metadata" >&2; exit 1; }
-FM_HOME="$TMP" "$ROOT/bin/fm-control.sh" control exit >/dev/null
 printf 'ok - real Pi transactional relaunch preserves profile metadata (Pi %s)\n' "$PI_VERSION"
+FM_HOME="$TMP" "$ROOT/bin/fm-control.sh" control exit >/dev/null
+printf 'ok - real Pi replacement exit lifecycle control succeeds (Pi %s)\n' "$PI_VERSION"
