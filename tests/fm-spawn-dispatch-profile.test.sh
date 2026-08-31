@@ -15,17 +15,8 @@ TMP_ROOT=$(fm_test_tmproot fm-spawn-dispatch-profile)
 
 make_spawn_pi_probe() {
   local fakebin=$1 tool=$2
-  cat > "$fakebin/$tool" <<'SH'
-#!/usr/bin/env bash
-set -u
-if [ "${1:-}" = --version ]; then
-  printf '%s\n' "${FM_FAKE_PI_VERSION:-0.84.4}"
-elif [ "${1:-}" = --help ]; then
-  printf '%s\n' "Pi ${FM_FAKE_PI_VERSION:-0.84.4}" 'Options: --help --tui-mode <mode>'
-fi
-exit 0
-SH
-  chmod +x "$fakebin/$tool"
+  rm -f "$fakebin/$tool"
+  ln -s "$(command -v pi)" "$fakebin/$tool"
 }
 
 make_spawn_fakebin() {
@@ -76,7 +67,7 @@ run_spawn() {
   local home=$1 wt=$2 fakebin=$3 launchlog=$4
   shift 4
   : > "$launchlog"
-  FM_FAKE_LAUNCH_LOG="$launchlog" FM_FAKE_PI_VERSION="${FM_TEST_PI_VERSION:-0.84.4}" \
+  FM_FAKE_LAUNCH_LOG="$launchlog" \
     fm_test_run_spawn "$home" "$wt" "$fakebin" "$@"
 }
 
@@ -371,12 +362,17 @@ test_pi_version_is_validated_before_launch() {
   rec=$(make_spawn_case profile-pi-version pi "$id")
   read_case_record "$rec"
 
-  out=$(FM_TEST_PI_VERSION=0.84.0 \
-    run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
+  rm -f "$FAKEBIN_DIR/pi"
+  cat > "$FAKEBIN_DIR/pi" <<'SH'
+#!/usr/bin/env bash
+[ "${1:-}" != --version ] || printf '0.84.4\n'
+SH
+  chmod +x "$FAKEBIN_DIR/pi"
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
     "$id" "$PROJ_DIR")
   status=$?
   expect_code 1 "$status" "unsupported Pi version must be rejected"
-  assert_contains "$out" "plain Pi 0.84.4 is required" "Pi version refusal must name the supported release"
+  assert_contains "$out" "canonical plain Pi 0.84.4 is required" "Pi version refusal must name the supported release"
   [ ! -s "$LAUNCH_LOG" ] || fail "unsupported Pi version reached the endpoint"
   pass "Pi 0.84.4 is validated before endpoint publication"
 }

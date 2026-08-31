@@ -22,8 +22,10 @@ out=$(cd "$ROOT" && FM_HOME="$TMP" pi --print --approve --no-session --no-contex
 printf 'ok - real Pi extensions register lifecycle identity (Pi %s)\n' "$PI_VERSION"
 command -v tmux >/dev/null 2>&1 || { echo "not ok - tmux unavailable for real Pi lifecycle control" >&2; exit 1; }
 PI_BIN=$(command -v pi)
-tmux new-session -d -s "$SESSION" -n fm-control \
+tmux new-session -d -c "$ROOT" -s "$SESSION" -n fm-control
+tmux send-keys -l -t "$SESSION:fm-control" \
   "FM_HOME='$TMP' '$PI_BIN' --no-session --no-extensions -e '$ROOT/.pi/extensions/fm-primary-pi-watch.ts' -e '$ROOT/.pi/extensions/fm-primary-turnend-guard.ts'"
+tmux send-keys -t "$SESSION:fm-control" Enter
 mkdir -p "$TMP/data/control"
 printf 'Real Pi lifecycle control validation.\n' > "$TMP/data/control/brief.md"
 printf 'window=%s:fm-control\nworktree=%s\nproject=%s\nkind=ship\nharness=pi\nmodel=%s\neffort=low\n' "$SESSION" "$ROOT" "$ROOT" 'openai-codex/gpt-5.6-sol' > "$TMP/state/control.meta"

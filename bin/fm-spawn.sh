@@ -1080,8 +1080,10 @@ PI_BIN=$(resolve_pi_executable pi) || {
   echo "error: pi executable not found on PATH" >&2
   exit 1
 }
-[ "$("$PI_BIN" --version 2>/dev/null || true)" = 0.84.4 ] || {
-  echo "error: plain Pi 0.84.4 is required" >&2
+# shellcheck source=bin/fm-harness-identity-lib.sh
+. "$SCRIPT_DIR/fm-harness-identity-lib.sh"
+fm_harness_pi_cli_canonical "$PI_BIN" || {
+  echo "error: canonical plain Pi 0.84.4 is required" >&2
   exit 1
 }
 PI_TUI_MODE=
