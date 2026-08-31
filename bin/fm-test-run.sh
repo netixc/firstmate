@@ -206,7 +206,6 @@ family_for_basename() {
     fm-herdr-lab.test.sh|fm-lint.test.sh|\
     fm-lint-workflows.test.sh|\
     fm-operational-input.test.sh|fm-pi-only-harness.test.sh|fm-pi-primary-types.test.sh|\
-    fm-harness-adapter-references.test.sh|\
     fm-send-popup-settle.test.sh|fm-send-settle.test.sh|\
     fm-supervision-instructions.test.sh|fm-task-delivery.test.sh|\
     fm-tmux-submit-busy.test.sh|fm-trace-context-lib.test.sh|\
@@ -250,15 +249,13 @@ family_for_basename() {
     fm-tangle-guard.test.sh|fm-update.test.sh)
       printf '%s\n' session-bootstrap
       ;;
-    fm-afk-pi-herdr-return-e2e.test.sh|fm-composer-matrix-live-e2e.test.sh|\
-    \
+    fm-afk-pi-herdr-return-e2e.test.sh|\
     fm-herdr-version-floor-live-e2e.test.sh|\
     fm-pi-branch-live-e2e.test.sh|\
     fm-pi-only-live-e2e.test.sh|fm-pi-primary-live-e2e.test.sh|\
     fm-sessionstart-instruction-refresh-live-e2e.test.sh|\
     fm-quota-array-dispatch-live-e2e.test.sh|fm-send-secondmate-marker-herdr-e2e.test.sh|\
-    fm-send-inbox-doorbell-live-e2e.test.sh|\
-    fm-herdr-submit-confirm-live-e2e.test.sh)
+    fm-send-inbox-doorbell-live-e2e.test.sh)
       printf '%s\n' live-harness-optin
       ;;
     fm-backend-herdr.test.sh|fm-backend-tmux-smoke.test.sh|fm-backend.test.sh|\
@@ -508,7 +505,6 @@ tests/fm-busy-adapter-wiring.test.sh 14880
 tests/fm-busy-state.test.sh 714
 tests/fm-calm-pi-extension.test.sh 464
 tests/fm-classify-decision-key.test.sh 928
-tests/fm-composer-matrix-live-e2e.test.sh 21
 tests/fm-daemon.test.sh 25834
 tests/fm-documentation-audiences.test.sh 642
 tests/fm-fleet-snapshot-view.test.sh 6995
@@ -517,10 +513,8 @@ tests/fm-extension-binding.test.sh 35000
 tests/fm-gate-refuse.test.sh 4071
 tests/fm-gitignore-config.test.sh 63
 tests/fm-gotmp.test.sh 762
-tests/fm-harness-adapter-references.test.sh 2
 tests/fm-guard-stale-banner.test.sh 11280
 tests/fm-herdr-session-cleanup.test.sh 14120
-tests/fm-herdr-submit-confirm-live-e2e.test.sh 20
 tests/fm-herdr-version-floor-live-e2e.test.sh 20
 tests/fm-inactive-reconcile.test.sh 41671
 tests/fm-lint-workflows.test.sh 744
@@ -1149,12 +1143,8 @@ families_for_changed_path() {
       printf '%s\n' pr-forge
       ;;
     bin/fm-composer-lib.sh)
-      # The shared shape catalogue is vendor-rendered signal; a change to it
-      # re-selects the live guard (fm-composer-matrix-live-e2e) alongside the
-      # portable families.
       printf '%s\n' backend-dispatch
       printf '%s\n' pure-contract-unit
-      printf '%s\n' live-harness-optin
       ;;
     bin/fm-spawn.sh|bin/fm-send.sh|bin/fm-harness.sh|\
     bin/fm-peek.sh|bin/fm-composer*)

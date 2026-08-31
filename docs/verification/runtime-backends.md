@@ -90,25 +90,9 @@ Observed bounded output:
 0.82.0
 ```
 
-### Harness-adapter instruction routing
+### Worker harness identity
 
-Two checks keep the evidence boundaries separate.
-`tests/fm-harness-adapter-references.test.sh` parses the router's declared JSON contract as normalized data and proves every selected reference is readable, which is structural evidence only.
-
-```sh
-```
-
-That local evaluation demonstrates instruction-driven scenario selection, but it does not claim that a native harness loaded the selected files.
-The guard prints the exact installed version or unavailable status for every native harness so absent tools and unexercised provider transports remain explicit rather than becoming passes.
-
-Bounded output from the 2026-08-29 local run:
-
-```text
-ok - local model ambient-router-gemma4:e4b selected every operation scenario and all nine harness identities
-# native loader not claimed: pi 0.84.0 is installed, but this harness-neutral evaluation does not exercise its provider transport
-# unverified native loader: cursor is not installed on this machine
-# installed native tools recorded without overstating loader coverage: 4
-```
+`tests/fm-pi-only-harness.test.sh` exercises the public harness resolver and lifecycle classifiers, proving exact plain Pi acceptance and explicit refusal of every retired harness identity.
 
 The isolated process and endpoint checks used:
 
@@ -157,24 +141,8 @@ The metadata-only validation covers tmux, Herdr, Zellij, Orca, and cmux before b
 
 ## Composer classification matrix
 
-The shared composer classifier (`bin/fm-composer-lib.sh`, `fm_composer_classify_screen`) owns every composer shape fleet-wide; each backend contributes only a capture and a capability descriptor.
-The live half of that guarantee was verified on 2026-08-10 from an already-trusted checkout at the branch's final validated head, against every installed harness then covered by the empty-composer matrix on tmux 3.6a, macOS arm64, on an isolated private socket, with no prompt submitted to any harness.
-
-```sh
-FM_COMPOSER_MATRIX_LIVE=1 tests/fm-composer-matrix-live-e2e.test.sh
-```
-
-Observed output:
-
-```text
-ok - pi (0.84.0): real idle composer classifies empty
-ok - strict posture live: a blank shell row classifies unknown and injection defers
-ok - zellij (zellij 0.44.0): unrelated pane change never confirms delivery (verdict: unknown)
-ok - live composer-matrix guard verified 8 live surface(s)
-```
-
-The strict blank-row posture held live (a blank shell row deferred injection), and a zellij pane changing for reasons unrelated to submission never confirmed a delivery, replacing the retired content-diff heuristic's false positive.
-This guard is the refresh command after an upgrade to any matrix-covered harness; rerun it and update the versions above rather than trusting this table across releases.
+The shared composer classifier (`bin/fm-composer-lib.sh`, `fm_composer_classify_screen`) owns Pi's composer shapes fleet-wide; each backend contributes only a capture and a capability descriptor.
+Portable behavior is covered by `tests/fm-composer-lib.test.sh` and `tests/fm-composer-ghost.test.sh`.
 
 
 ## Steering-inbox doorbell
@@ -236,15 +204,6 @@ No ambient `herdr server stop` command is a supported test operation.
 `herdr agent get` reported `agent_status=idle` on every sample across a landed one-word turn and an 8-second `sleep` tool call, while the pane rendered `Pontificating…` then `Sock-hopping… (11s · ↓ 234 tokens)`.
 `fm_backend_herdr_send_text_submit` therefore cannot treat native idle as proof of a swallow.
 The portable regressions in `tests/fm-backend-herdr.test.sh` and `tests/fm-composer-lib.test.sh` pin the verdicts: native idle plus a cleared composer is delivery, proven pending plus idle is a swallow, and proven pending plus a generating busy signal is a queued Enter.
-
-```sh
-FM_HERDR_SUBMIT_CONFIRM_LIVE=1 tests/fm-herdr-submit-confirm-live-e2e.test.sh
-```
-
-Observed 2026-08-19:
-
-```text
-```
 
 ### Prune and respawn
 
