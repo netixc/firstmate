@@ -1,35 +1,29 @@
 #!/usr/bin/env bash
 # Plain Pi process identity and per-home session-lock ownership.
 
-fm_harness_path_name() {
-  local path=${1:-}
-  [ -n "$path" ] || return 1
-  [ "$(basename -- "$path")" = pi ] || return 1
-  printf 'pi'
-}
+FM_HARNESS_IDENTITY_LIB_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=bin/fm-harness-identity-lib.sh
+. "$FM_HARNESS_IDENTITY_LIB_DIR/fm-harness-identity-lib.sh"
 
 fm_harness_process_matches() {
-  local comm=$1 args=${2:-} base argv0
-  base=$(basename -- "$comm")
-  [ "$base" = pi ] && return 0
-  argv0=${args%% *}
-  fm_harness_path_name "$comm" >/dev/null || fm_harness_path_name "$argv0" >/dev/null
+  [ "$(fm_harness_process_identity "$1" "${2:-}" || true)" = pi ]
 }
 
 fm_harness_ancestry_pids() {
-  local pid=$$ comm args printed=0
+  local pid=$$ comm args identity pi_pid=
   for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
     comm=$(ps -o comm= -p "$pid" 2>/dev/null) || break
     args=$(ps -o args= -p "$pid" 2>/dev/null || true)
-    if fm_harness_process_matches "$comm" "$args"; then
-      printf '%s\n' "$pid"
-      printed=1
-      break
+    identity=$(fm_harness_process_identity "$comm" "$args" || true)
+    fm_harness_identity_excluded "$identity" && return 1
+    if [ "$identity" = pi ] && [ -z "$pi_pid" ]; then
+      pi_pid=$pid
     fi
     pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
     [ -n "$pid" ] && [ "$pid" -gt 1 ] || break
   done
-  [ "$printed" -eq 1 ]
+  [ -n "$pi_pid" ] || return 1
+  printf '%s\n' "$pi_pid"
 }
 
 fm_harness_ancestry_pid() {

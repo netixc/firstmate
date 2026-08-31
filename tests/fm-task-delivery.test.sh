@@ -73,7 +73,7 @@ EOF
     n=$((n + 1))
     write_brief "$home" "delivery-required-$n" no-mistakes
     # shellcheck disable=SC2086  # flags is an intentional word-split arg list
-    out=$(run_spawn "$home" "$fakebin" "delivery-required-$n" "$proj" claude $flags)
+    out=$(run_spawn "$home" "$fakebin" "delivery-required-$n" "$proj" pi $flags)
     status=$?
     [ "$status" -ne 0 ] || fail "$label: expected a non-zero exit"
     assert_contains "$out" "$expect" "$label: refusal did not explain the contract"

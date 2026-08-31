@@ -14,11 +14,26 @@ assert_eq pi "$(PI_CODING_AGENT=true FM_HOME="$TMP" "$HARNESS")" "Pi marker reso
 mkdir -p "$TMP/fakebin"
 cat > "$TMP/fakebin/ps" <<'SH'
 #!/usr/bin/env bash
-case "$*" in
-  *comm=*) printf '%s\n' "$FAKE_COMM" ;;
-  *args=*) printf '%s\n' "$FAKE_ARGS" ;;
-  *ppid=*) printf '1\n' ;;
-esac
+pid=${!#}
+if [ "${FAKE_CHAIN:-}" = signed-wrapper ]; then
+  case "$pid:$*" in
+    200:*comm=*) printf 'pi\n' ;;
+    200:*args=*) printf 'pi\n' ;;
+    200:*ppid=*) printf '300\n' ;;
+    300:*comm=*) printf 'pi-signed\n' ;;
+    300:*args=*) printf 'pi-signed\n' ;;
+    300:*ppid=*) printf '1\n' ;;
+    *:*comm=*) printf 'bash\n' ;;
+    *:*args=*) printf 'bash\n' ;;
+    *:*ppid=*) printf '200\n' ;;
+  esac
+else
+  case "$*" in
+    *comm=*) printf '%s\n' "$FAKE_COMM" ;;
+    *args=*) printf '%s\n' "$FAKE_ARGS" ;;
+    *ppid=*) printf '1\n' ;;
+  esac
+fi
 SH
 chmod +x "$TMP/fakebin/ps"
 for old in pi-signed claude codex opencode grok kimi cursor muse; do
@@ -35,6 +50,12 @@ rc=$?
 set -e
 assert_eq 2 "$rc" "version-named excluded primary process is rejected"
 assert_contains "$out" "unsupported harness" "version-named excluded primary reports migration"
+set +e
+out=$(env PI_CODING_AGENT=true FAKE_CHAIN=signed-wrapper PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
+rc=$?
+set -e
+assert_eq 2 "$rc" "excluded wrapper above an inner Pi process is rejected"
+assert_contains "$out" "unsupported harness" "excluded wrapper above Pi reports migration"
 assert_eq pi "$(env PI_CODING_AGENT=true FAKE_COMM=bash FAKE_ARGS='bash anthropic/claude' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "provider-qualified model text remains valid under Pi"
 for old in pi-signed claude codex opencode grok kimi cursor muse; do
   printf '%s\n' "$old" > "$TMP/config/crew-harness"

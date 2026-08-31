@@ -15,64 +15,29 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
+# shellcheck source=bin/fm-harness-identity-lib.sh
+. "$SCRIPT_DIR/fm-harness-identity-lib.sh"
 
 unsupported() {
   printf 'error: unsupported harness %q; migrate this configuration or task metadata to an explicitly selected plain pi harness\n' "$1" >&2
   return 2
 }
 
-process_identity() {
-  local comm=$1 args=${2:-} argv0 arg1 rest candidate base
-  argv0=${args%% *}
-  rest=${args#* }
-  [ "$rest" != "$args" ] || rest=
-  arg1=${rest%% *}
-  for candidate in "$comm" "$argv0"; do
-    [ -n "$candidate" ] || continue
-    base=$(basename -- "$candidate")
-    case "$base" in
-      pi) printf 'pi\n'; return 0 ;;
-      pi-signed|claude|codex|opencode|grok|kimi|cursor|muse)
-        printf '%s\n' "$base"
-        return 0
-        ;;
-    esac
-    case "$candidate" in
-      */claude/versions/*) printf 'claude\n'; return 0 ;;
-    esac
-  done
-  case "$(basename -- "$argv0")" in
-    node*|python*) candidate=$arg1 ;;
-    *) candidate= ;;
-  esac
-  base=$(basename -- "${candidate:-.}")
-  case "$base" in
-    pi) printf 'pi\n'; return 0 ;;
-    pi-signed|claude|codex|opencode|grok|kimi|cursor|muse) printf '%s\n' "$base"; return 0 ;;
-  esac
-  case "$candidate" in
-    */claude/versions/*) printf 'claude\n'; return 0 ;;
-  esac
-  return 1
-}
-
 detect_own() {
-  local pid=$$ comm args identity
+  local pid=$$ comm args identity pi_seen=0
   for _ in 1 2 3 4 5 6 7 8; do
     comm=$(ps -o comm= -p "$pid" 2>/dev/null) || break
     args=$(ps -o args= -p "$pid" 2>/dev/null || true)
-    identity=$(process_identity "$comm" "$args" || true)
-    case "$identity" in
-      pi) printf 'pi\n'; return ;;
-      pi-signed|claude|codex|opencode|grok|kimi|cursor|muse)
-        unsupported "$identity"
-        return
-        ;;
-    esac
+    identity=$(fm_harness_process_identity "$comm" "$args" || true)
+    if fm_harness_identity_excluded "$identity"; then
+      unsupported "$identity"
+      return
+    fi
+    [ "$identity" != pi ] || pi_seen=1
     pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
     [ -n "$pid" ] && [ "$pid" -gt 1 ] || break
   done
-  if [ "${PI_CODING_AGENT:-}" = true ]; then
+  if [ "$pi_seen" -eq 1 ] || [ "${PI_CODING_AGENT:-}" = true ]; then
     printf 'pi\n'
   else
     printf 'unknown\n'
