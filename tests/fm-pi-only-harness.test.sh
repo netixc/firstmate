@@ -45,6 +45,12 @@ for old in pi-signed claude codex opencode grok kimi cursor muse; do
   assert_contains "$out" "unsupported harness" "$old primary process reports migration"
 done
 set +e
+out=$(env PI_CODING_AGENT=true FAKE_COMM=cursor-agent FAKE_ARGS=cursor-agent PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
+rc=$?
+set -e
+assert_eq 2 "$rc" "Cursor agent process is rejected"
+assert_contains "$out" "unsupported harness" "Cursor agent process reports migration"
+set +e
 out=$(env PI_CODING_AGENT=true FAKE_COMM=2.1.220 FAKE_ARGS=/opt/claude/versions/2.1.220 PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
 rc=$?
 set -e
@@ -68,6 +74,8 @@ rc=$?
 set -e
 assert_eq 2 "$rc" "excluded wrapper above an inner Pi process is rejected"
 assert_contains "$out" "unsupported harness" "excluded wrapper above Pi reports migration"
+assert_eq pi "$(env PI_CODING_AGENT=true FAKE_COMM=bash FAKE_ARGS='bash ./claude.sh' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "ordinary similarly named shell script remains under Pi"
+assert_eq pi "$(env PI_CODING_AGENT=true FAKE_COMM=python FAKE_ARGS='python muse.py' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "ordinary similarly named Python script remains under Pi"
 assert_eq pi "$(env PI_CODING_AGENT=true FAKE_COMM=bash FAKE_ARGS='bash anthropic/claude' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "provider-qualified model text remains valid under Pi"
 for old in pi-signed claude codex opencode grok kimi cursor muse; do
   printf '%s\n' "$old" > "$TMP/config/crew-harness"
