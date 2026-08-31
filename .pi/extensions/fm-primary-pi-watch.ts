@@ -10,7 +10,7 @@
 // callbacks from a prior generation are no-ops against the active replacement.
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
@@ -158,7 +158,7 @@ function processStartIdentity(): string {
 
 function markLoaded(): void {
   mkdirSync(processMarkerDir, { recursive: true });
-  writeFileSync(processMarkerTemp, `${extensionVersion}\n${process.pid}\n${processStartIdentity()}\n${extensionFile}\n`);
+  writeFileSync(processMarkerTemp, `${extensionVersion}\n${process.pid}\n${processStartIdentity()}\n${extensionFile}\n${process.argv[1] ? realpathSync(process.argv[1]) : ""}\n`);
   renameSync(processMarkerTemp, processMarker);
   if (lockOwnership() === "other") return;
   mkdirSync(state, { recursive: true });

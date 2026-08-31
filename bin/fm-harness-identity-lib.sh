@@ -40,10 +40,12 @@ fm_harness_interpreter() {
 }
 
 fm_harness_command_entrypoint() {
-  local comm=$1 args=${2:-} pid=${3:-}
+  local comm=$1 args=${2:-} pid=${3:-} executable=${4:-}
   fm_harness_interpreter "$comm" || return 1
-  python3 - "$comm" "$args" "$pid" <<'PY'
+  python3 - "$comm" "$args" "$pid" "$executable" <<'PY'
+import re
 import shlex
+import subprocess
 import sys
 from pathlib import Path
 
@@ -59,14 +61,24 @@ else:
 
 args = words[1:]
 takes_value = {
-    "node": {"-r", "--require", "--import", "--loader", "--experimental-loader", "-C", "--conditions", "--title", "--icu-data-dir", "--openssl-config", "--redirect-warnings", "--report-directory", "--report-filename", "--secure-heap", "--secure-heap-min", "--snapshot-blob", "--test-reporter", "--test-reporter-destination", "--test-shard", "--watch-path", "-e", "--eval", "-p", "--print"},
-    "nodejs": {"-r", "--require", "--import", "--loader", "--experimental-loader", "-C", "--conditions", "--title", "--icu-data-dir", "--openssl-config", "--redirect-warnings", "--report-directory", "--report-filename", "--secure-heap", "--secure-heap-min", "--snapshot-blob", "--test-reporter", "--test-reporter-destination", "--test-shard", "--watch-path", "-e", "--eval", "-p", "--print"},
+    "node": set(), "nodejs": set(),
     "bash": {"-c", "-O", "-o"}, "sh": {"-c", "-o"}, "zsh": {"-c", "-o"}, "dash": {"-c", "-o"},
     "python": {"-c", "-m", "-W", "-X"}, "ruby": {"-e", "-I", "-r"}, "perl": {"-e", "-I", "-M", "-m"},
     "bun": {"-e", "--eval", "-p", "--print"}, "deno": {"-e", "--eval"},
 }
 if name.startswith("python"):
     name = "python"
+if name in {"node", "nodejs"}:
+    node = sys.argv[4] or name
+    try:
+        help_text = subprocess.run([node, "--help"], check=True, capture_output=True, text=True).stdout
+    except (OSError, subprocess.SubprocessError):
+        help_text = ""
+    for line in help_text.splitlines():
+        declaration = line.strip().split("  ", 1)[0]
+        options = re.findall(r"(?<![\w-])(--?[A-Za-z0-9-]+)(=\.\.\.)?", declaration)
+        if any(value for _, value in options):
+            takes_value[name].update(option for option, _ in options)
 no_script = {
     "node": {"-e", "--eval", "-p", "--print"}, "nodejs": {"-e", "--eval", "-p", "--print"},
     "bash": {"-c"}, "sh": {"-c"}, "zsh": {"-c"}, "dash": {"-c"},
@@ -92,51 +104,26 @@ for word in args:
 PY
 }
 
-fm_harness_node_excluded_argv() {
-  local comm=$1 args=${2:-} pid=${3:-} arg identity
-  case "$(basename -- "$comm")" in node|nodejs) ;; *) return 1 ;; esac
-  while IFS= read -r arg; do
-    identity=$(fm_harness_excluded_install_path "$arg" || true)
-    [ -z "$identity" ] || { printf '%s\n' "$identity"; return 0; }
-  done < <(python3 - "$args" "$pid" <<'PY'
-import shlex
-import sys
-from pathlib import Path
-if sys.argv[2] and Path(f"/proc/{sys.argv[2]}/cmdline").is_file():
-    words = Path(f"/proc/{sys.argv[2]}/cmdline").read_bytes().split(b"\0")
-    words = [word.decode(errors="surrogateescape") for word in words if word]
-else:
-    try:
-        words = shlex.split(sys.argv[1])
-    except ValueError:
-        raise SystemExit(1)
-for word in words[1:]:
-    print(word)
-PY
-)
-  return 1
-}
-
 fm_harness_process_identity() {
-  local comm=$1 args=${2:-} executable=${3:-} argv0 identity entrypoint
+  local comm=$1 args=${2:-} executable=${3:-} argv0 identity entrypoint parser
   argv0=${args%% *}
   for entrypoint in "$comm" "$argv0" "$executable"; do
     identity=$(fm_harness_excluded_entrypoint "$entrypoint" || true)
     [ -z "$identity" ] || { printf '%s\n' "$identity"; return 0; }
   done
-  identity=$(fm_harness_node_excluded_argv "$comm" "$args" || true)
-  [ -z "$identity" ] || { printf '%s\n' "$identity"; return 0; }
-  entrypoint=$(fm_harness_command_entrypoint "$comm" "$args" || true)
+  parser=$comm
+  case "$(basename -- "$executable")" in node|nodejs) parser=$executable ;; esac
+  entrypoint=$(fm_harness_command_entrypoint "$parser" "$args" "" "$executable" || true)
   identity=$(fm_harness_excluded_install_path "$entrypoint" || true)
   [ -z "$identity" ] || { printf '%s\n' "$identity"; return 0; }
   return 1
 }
 
 fm_harness_pid_excluded_argv() {
-  local pid=$1 comm=$2 fallback=${3:-} entrypoint identity
-  identity=$(fm_harness_node_excluded_argv "$comm" "$fallback" "$pid" || true)
-  [ -z "$identity" ] || { printf '%s\n' "$identity"; return 0; }
-  entrypoint=$(fm_harness_command_entrypoint "$comm" "$fallback" "$pid" || true)
+  local pid=$1 comm=$2 fallback=${3:-} executable=${4:-} parser entrypoint identity
+  parser=$comm
+  case "$(basename -- "$executable")" in node|nodejs) parser=$executable ;; esac
+  entrypoint=$(fm_harness_command_entrypoint "$parser" "$fallback" "$pid" "$executable" || true)
   identity=$(fm_harness_excluded_install_path "$entrypoint" || true)
   [ -z "$identity" ] || printf '%s\n' "$identity"
   [ -n "$identity" ]
@@ -153,7 +140,7 @@ fm_harness_file_sha256() {
 }
 
 fm_harness_pid_pi_registration() {
-  local pid=$1 root state_dir expected_extension marker marker_version marker_pid marker_start marker_extension current_start actual_version
+  local pid=$1 root state_dir expected_extension marker marker_version marker_pid marker_start marker_extension marker_cli current_start actual_version
   root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
   if [ -n "${FM_HARNESS_IDENTITY_HOME:-}" ]; then
     state_dir="$FM_HARNESS_IDENTITY_HOME/state"
@@ -168,8 +155,10 @@ fm_harness_pid_pi_registration() {
   marker_pid=$(sed -n '2p' "$marker" 2>/dev/null)
   marker_start=$(sed -n '3p' "$marker" 2>/dev/null)
   marker_extension=$(sed -n '4p' "$marker" 2>/dev/null)
+  marker_cli=$(sed -n '5p' "$marker" 2>/dev/null)
   [ "$marker_pid" = "$pid" ] && [ -n "$marker_start" ] || return 1
   [ "$marker_extension" = "$expected_extension" ] || return 1
+  case "$marker_cli" in */pi-coding-agent/dist/bundle/cli.js) ;; *) return 1 ;; esac
   [ -f "$marker_extension" ] && [ ! -L "$marker_extension" ] || return 1
   actual_version="sha256:$(fm_harness_file_sha256 "$root/.pi/extensions/fm-primary-pi-watch.ts")" || return 1
   [ "$marker_version" = "$actual_version" ] || return 1
@@ -192,7 +181,7 @@ fm_harness_pid_executable() {
 fm_harness_pid_identity() {
   local pid=$1 comm=$2 args=${3:-} identity executable
   executable=$(fm_harness_pid_executable "$pid" || true)
-  identity=$(fm_harness_pid_excluded_argv "$pid" "$comm" "$args" || true)
+  identity=$(fm_harness_pid_excluded_argv "$pid" "$comm" "$args" "$executable" || true)
   if fm_harness_identity_excluded "$identity"; then
     printf '%s\n' "$identity"
     return 0
