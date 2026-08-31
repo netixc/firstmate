@@ -59,8 +59,8 @@ else:
 
 args = words[1:]
 takes_value = {
-    "node": {"-r", "--require", "--import", "--loader", "--experimental-loader", "-e", "--eval", "-p", "--print"},
-    "nodejs": {"-r", "--require", "--import", "--loader", "--experimental-loader", "-e", "--eval", "-p", "--print"},
+    "node": {"-r", "--require", "--import", "--loader", "--experimental-loader", "-C", "--conditions", "-e", "--eval", "-p", "--print"},
+    "nodejs": {"-r", "--require", "--import", "--loader", "--experimental-loader", "-C", "--conditions", "-e", "--eval", "-p", "--print"},
     "bash": {"-c", "-O", "-o"}, "sh": {"-c", "-o"}, "zsh": {"-c", "-o"}, "dash": {"-c", "-o"},
     "python": {"-c", "-m", "-W", "-X"}, "ruby": {"-e", "-I", "-r"}, "perl": {"-e", "-I", "-M", "-m"},
     "bun": {"-e", "--eval", "-p", "--print"}, "deno": {"-e", "--eval"},
@@ -126,7 +126,11 @@ fm_harness_file_sha256() {
 fm_harness_pid_pi_registration() {
   local pid=$1 root state_dir marker marker_version marker_pid marker_start marker_extension current_start actual_version
   root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-  state_dir=${FM_STATE_OVERRIDE:-${FM_HOME:-${FM_ROOT_OVERRIDE:-$root}}/state}
+  if [ -n "${FM_HARNESS_IDENTITY_HOME:-}" ]; then
+    state_dir="$FM_HARNESS_IDENTITY_HOME/state"
+  else
+    state_dir=${FM_STATE_OVERRIDE:-${FM_HOME:-${FM_ROOT_OVERRIDE:-$root}}/state}
+  fi
   marker="$state_dir/.pi-processes/$pid"
   [ -f "$marker" ] && [ ! -L "$marker" ] || return 1
   marker_version=$(sed -n '1p' "$marker" 2>/dev/null)
@@ -135,12 +139,13 @@ fm_harness_pid_pi_registration() {
   marker_extension=$(sed -n '4p' "$marker" 2>/dev/null)
   [ "$marker_pid" = "$pid" ] && [ -n "$marker_start" ] || return 1
   case "$marker_extension" in
-    "$root/.pi/extensions/fm-primary-pi-watch.ts"|"$state_dir"/*.pi-ext.ts) ;;
+    */.pi/extensions/fm-primary-pi-watch.ts) ;;
     *) return 1 ;;
   esac
   [ -f "$marker_extension" ] && [ ! -L "$marker_extension" ] || return 1
-  actual_version="sha256:$(fm_harness_file_sha256 "$marker_extension")" || return 1
+  actual_version="sha256:$(fm_harness_file_sha256 "$root/.pi/extensions/fm-primary-pi-watch.ts")" || return 1
   [ "$marker_version" = "$actual_version" ] || return 1
+  [ "$(fm_harness_file_sha256 "$marker_extension")" = "${actual_version#sha256:}" ] || return 1
   current_start=$(ps -o lstart= -p "$pid" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
   [ "$current_start" = "$marker_start" ]
 }

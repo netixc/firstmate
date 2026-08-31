@@ -653,7 +653,7 @@ secondmate_liveness_sweep() {
   # primary-only no-op there. Mid-session liveness remains explicitly out of
   # scope and requires a separate periodic signal.
   [ -d "$STATE" ] || return 0
-  local meta id remote_host label __fm_timing_stamp parallel=0
+  local meta id remote_host label secondmate_home __fm_timing_stamp parallel=0
   SECONDMATE_RESPAWNED_IDS=""
   if bootstrap_parallel_begin; then
     parallel=1
@@ -765,7 +765,13 @@ secondmate_liveness_one() {  # <meta> <id>
   backend=$(fm_backend_of_meta "$meta")
   target=$(fm_backend_target_of_meta "$meta")
   [ -n "$target" ] || target="$window"
-  agent_state=$(fm_backend_agent_state "$backend" "$target" 2>/dev/null) || agent_state=unreadable
+  secondmate_home=$(fm_meta_get "$meta" worktree)
+  [ -n "$secondmate_home" ] || secondmate_home=$(fm_meta_get "$meta" home)
+  if [ -n "$secondmate_home" ]; then
+    agent_state=$(FM_HARNESS_IDENTITY_HOME="$secondmate_home" fm_backend_agent_state "$backend" "$target" 2>/dev/null) || agent_state=unreadable
+  else
+    agent_state=$(fm_backend_agent_state "$backend" "$target" 2>/dev/null) || agent_state=unreadable
+  fi
   case "$harness" in
     pi) ;;
     *)

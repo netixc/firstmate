@@ -301,6 +301,7 @@ LABEL="fm-$ID"
 RECORDED_HARNESS=$(fm_meta_get "$META" harness)
 KIND=$(fm_meta_get "$META" kind)
 WT=$(fm_meta_get "$META" worktree)
+[ -n "$WT" ] || WT=$(fm_meta_get "$META" home)
 [ -n "$KIND" ] || KIND=ship
 
 HARNESS=$(fm_control_harness_family "$RECORDED_HARNESS") \
@@ -313,7 +314,11 @@ fm_backend_validate "$BACKEND" || exit 1
 # --- shared helpers ---------------------------------------------------------
 
 agent_state() {
-  fm_backend_agent_state "$BACKEND" "$T"
+  if [ "$KIND" = secondmate ] && [ -n "$WT" ]; then
+    FM_HARNESS_IDENTITY_HOME="$WT" fm_backend_agent_state "$BACKEND" "$T"
+  else
+    fm_backend_agent_state "$BACKEND" "$T"
+  fi
 }
 
 busy_verdict() {

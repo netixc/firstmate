@@ -571,9 +571,9 @@ test_extension_handoff_keeps_queued_wake_warning() {
   pass "fm-guard stale banner: queued-wake warning survives the extension hand-off tolerance"
 }
 
-# The tolerance is scoped to the extension model alone. Every persistent-watcher
-# primary (codex, opencode, grok, kimi, tmux, unknown) must keep alarming on the
-# same state, even when Pi extension markers happen to be present on disk.
+# The tolerance is scoped to the Pi extension model alone. Other watcher models
+# must keep alarming on the same state even when Pi extension markers happen to
+# be present on disk.
 test_persistent_model_ignores_pi_extension_evidence() {
   local dir home out pid
   dir=$(make_guard_case persistent-ignores-pi-evidence)
