@@ -150,20 +150,21 @@ fm_harness_file_sha256() {
 }
 
 fm_harness_pi_cli_canonical() {
-  python3 - "$1" <<'PY'
-import json
+  local marker_cli=$1 authorized authorized_cli version
+  authorized=${FM_PI_AUTHORIZED_BIN:-$(command -v pi 2>/dev/null || true)}
+  [ -n "$authorized" ] || return 1
+  authorized_cli=$(python3 - "$authorized" <<'PY'
 import sys
 from pathlib import Path
 try:
-    cli = Path(sys.argv[1]).resolve(strict=True)
-    root = cli.parents[2]
-    package = json.loads((root / "package.json").read_text())
-    target = (root / package["bin"]["pi"]).resolve(strict=True)
-except (OSError, KeyError, IndexError, json.JSONDecodeError):
-    raise SystemExit(1)
-if package.get("name") != "@earendil-works/pi-coding-agent" or package.get("version") != "0.84.4" or target != cli:
+    print(Path(sys.argv[1]).resolve(strict=True))
+except OSError:
     raise SystemExit(1)
 PY
+) || return 1
+  [ "$marker_cli" = "$authorized_cli" ] || return 1
+  version=$("$authorized" --version 2>/dev/null || true)
+  [ "$version" = 0.84.4 ]
 }
 
 fm_harness_pid_pi_registration() {

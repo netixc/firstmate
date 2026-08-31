@@ -23,6 +23,7 @@ EOF
 chmod +x "$TMP/bin/tmux"
 PATH="$TMP/bin:$PATH"
 FM_HOME="$TMP/home"; export FM_HOME
+FM_PI_AUTHORIZED_BIN="$REAL_PI"; export FM_PI_AUTHORIZED_BIN
 FM_BACKEND_LIB_DIR="$ROOT/bin"; export FM_BACKEND_LIB_DIR
 # shellcheck source=/dev/null
 . "$ROOT/bin/backends/tmux.sh"
