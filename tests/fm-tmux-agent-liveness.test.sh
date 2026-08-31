@@ -26,7 +26,7 @@ for _ in $(seq 1 20); do
 done
 [ "${state:-}" = alive ] || fail "real plain Pi process did not classify alive: ${state:-missing}"
 pass "real plain Pi process classifies alive"
-for old in claude codex opencode pi-signed grok kimi cursor-agent muse; do
+for old in pi-launcher Pi claude codex opencode pi-signed grok kimi cursor-agent muse; do
  ln -sf "$(command -v sleep)" "$TMP/bin/$old"
  tmux -L "$SOCK" new-window -d -t live -n old "$TMP/bin/$old 60"
  sleep 0.1

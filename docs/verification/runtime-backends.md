@@ -119,22 +119,12 @@ ps -o comm= -p "$engine_pid"
 FM_HOME="$fixture_home" bin/fm-crew-state.sh "$task_id"
 ```
 
-Observed bounded shapes:
+The personal edition now treats only the exact `pi` process name as a live worker identity.
+`tests/fm-tmux-agent-liveness.test.sh` launches real foreground processes in tmux and proves that `pi` is alive while legacy identities and aliases, including the former launcher name, remain unsupported.
+Provider-qualified model names do not participate in this process-name decision.
 
-```text
-pi-launcher
-.../Pi Launcher.app/Contents/Resources/pi/pi
-state: done ...
-```
-
-Both launches executed a submitted tool instruction and touched the generated `turn_end` marker.
-That shared plain-Pi path is retained as disconfirming evidence against using ancestry as runtime-selection authority.
-Firstmate therefore sets the exact `FM_PI_HARNESS` selection marker on both worker launch paths, while an unmarked Pi-family process remains `pi`.
-Both recorded runtime identities now classify the exact `pi-launcher` foreground command as `alive`.
-
-Backend applicability was reviewed across every spawn adapter.
-Herdr uses native registered-agent state and needs no process-name branch.
-Zellij has no verified recovery-grade agent process probe, while Orca and cmux do not support secondmate spawns, so those three retain their existing generic ordinary-launch semantics without a new liveness matcher.
+Herdr continues to use native registered-agent state rather than process-name matching.
+Zellij has no verified recovery-grade agent process probe, while Orca and cmux do not support secondmate spawns, so those backends retain their existing generic launch semantics without widening worker identity.
 
 The current classifier matrix and its refresh guard are recorded in [Composer classification matrix](#composer-classification-matrix), with portable shape coverage in `tests/fm-composer-lib.test.sh` and `tests/fm-composer-ghost.test.sh`.
 

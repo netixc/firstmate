@@ -160,7 +160,7 @@ fm_backend_tmux_classify_process_name() {  # <path> [argv0] -> agent|shell|other
   base=${path##*/}
   base=${base#-}
   case "$base" in
-    pi|pi-launcher|Pi) printf 'agent' ;;
+    pi) printf 'agent' ;;
     zsh|bash|sh|dash|ash|ksh|mksh|tcsh|csh|fish) printf 'shell' ;;
     *) printf 'other' ;;
   esac
@@ -171,19 +171,15 @@ fm_backend_tmux_classify_process_name() {  # <path> [argv0] -> agent|shell|other
 # Empty on any failure.
 #
 # This is the foreground-process-group half of the liveness probe, and it exists
-# because `#{pane_current_command}` and `ps -o comm=` expose different name
-# fields whose roles vary by platform. On macOS the tmux field can carry a
-# retains executable identity; the portable Linux regression observes the
-# reverse for its version-named executable. Reading both `comm` and argv[0]
-# preserves an identifying install path without making either platform's field
+# because `#{pane_current_command}` and `ps -o comm=` expose different process
+# name fields whose roles vary by platform. Reading both `comm` and argv[0]
+# preserves exact executable identity without making either platform's field
 # assignment load-bearing.
 #
 # Scoping to the foreground process group rather than to the pane's descendants
 # is what keeps the probe honest in the other direction: a harness-named process
 # left running in the background of an otherwise idle pane is deliberately NOT
-# reported, so a genuinely agent-free pane still classifies `dead`. It also
-# reports every member of a multi-process launcher (the Pi Launcher path runs a
-# own special case here.
+# reported, so a genuinely agent-free pane still classifies `dead`.
 #
 # Like fm_backend_tmux_current_command this is a RAW pane read: tmux answers an
 # absent target from the client's active window rather than failing, so callers

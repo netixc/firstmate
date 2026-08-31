@@ -16,7 +16,7 @@ fm_harness_path_name() {
 fm_harness_process_matches() {
   local comm=$1 args=${2:-} base argv0
   base=$(basename -- "$comm")
-  case "$base" in pi|pi-launcher|Pi) return 0 ;; esac
+  [ "$base" = pi ] && return 0
   argv0=${args%% *}
   fm_harness_path_name "$comm" >/dev/null || fm_harness_path_name "$argv0" >/dev/null
 }

@@ -83,8 +83,8 @@ fm_tmux_composer_caps() {
 # separated (pi) composer shape, tmux's analogue of herdr's native
 # `agent get`. It answers only for pi, from two live signals:
 #   - identity: the pane tty's FOREGROUND process group (pgid = tpgid, the
-#     same scoping as fm_backend_tmux_foreground_comms) contains a pi-family
-#     runtime-backends.md "Agent liveness name sources"), falling back to
+#     same scoping as fm_backend_tmux_foreground_comms) contains the exact `pi`
+#     process name, falling back to
 #     tmux's own foreground-derived #{pane_current_command}. A pane whose
 #     agent died to a shell has no pi foreground process and gets NO identity,
 #     which is exactly what keeps the strict blank-row rule honest: a blank
@@ -101,9 +101,7 @@ fm_tmux_composer_identity() {  # <target>
       while read -r _ pgid tpgid comm; do
         [ -n "$comm" ] || continue
         [ "$pgid" = "$tpgid" ] || continue
-        case "${comm##*/}" in
-          pi|pi-launcher|Pi) found=1 ;;
-        esac
+        [ "${comm##*/}" = pi ] && found=1
       done <<EOF
 $(LC_ALL=C ps -t "${tty#/dev/}" -o pid=,pgid=,tpgid=,comm= 2>/dev/null)
 EOF
@@ -111,9 +109,7 @@ EOF
   esac
   if [ "$found" -ne 1 ]; then
     comm=$(tmux display-message -p -t "$target" '#{pane_current_command}' 2>/dev/null) || comm=
-    case "${comm##*/}" in
-      pi|pi-launcher) found=1 ;;
-    esac
+    [ "${comm##*/}" = pi ] && found=1
   fi
   [ "$found" -eq 1 ] || return 1
   status=$(fm_pane_busy_state "$target" pi)

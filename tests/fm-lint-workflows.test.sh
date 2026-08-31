@@ -155,10 +155,12 @@ jobs:
   x:
     runs-on: ubuntu-latest
     steps:
-      - name: Repository instructions must stay present
+      - name: Broken heredoc fixture
         run: |
           set -eu
-          test -s AGENTS.md
+          cat <<'EOF'
+broken body
+EOF
           echo ok
 YAML
 }
