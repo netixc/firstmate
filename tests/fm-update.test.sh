@@ -45,6 +45,7 @@ new_world() {
 
   printf 'v1\n' > "$w/seed/AGENTS.md"
   printf 'r1\n' > "$w/seed/README.md"
+  printf 'state/\n' > "$w/seed/.gitignore"
   mkdir -p "$w/seed/bin" "$w/seed/.agents/skills"
   printf 'echo a\n' > "$w/seed/bin/tool.sh"
   printf 's1\n' > "$w/seed/.agents/skills/note.md"
@@ -108,6 +109,8 @@ test_updates_main_and_secondmate() {
   assert_contains "$out" "secondmate sm1: updated " "secondmate fast-forwarded"
   assert_contains "$out" "reread-firstmate: yes" "instruction change triggers reread"
   assert_contains "$out" "nudge-secondmates: fm-sm1" "updated secondmate is nudged"
+  [ -f "$w/sm1/state/.pi-launches/.migration-v1-complete" ] \
+    || fail "secondmate Pi launch migration cutover was not completed"
 
   # Fast-forward landed: HEAD == origin/main on both targets.
   [ "$(git -C "$w/main" rev-parse HEAD)" = "$(git -C "$w/main" rev-parse origin/main)" ] \

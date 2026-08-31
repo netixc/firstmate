@@ -20,7 +20,8 @@ cleanup() {
 trap cleanup EXIT
 git -C "$ROOT" worktree add --detach "$WORKTREE" HEAD >/dev/null
 mkdir -p "$TMP/state" "$TMP/pi-agent"
-out=$(cd "$ROOT" && FM_HOME="$TMP" pi --print --approve --no-session --no-context-files --no-extensions \
+out=$(cd "$ROOT" && FM_HOME="$TMP" "$ROOT/bin/fm-pi-launch.sh" -- pi \
+  --print --approve --no-session --no-context-files --no-extensions \
   -e "$ROOT/.pi/extensions/fm-primary-pi-watch.ts" \
   -e "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" \
   --model openai-codex/gpt-5.6-sol --thinking low \
@@ -31,7 +32,7 @@ command -v tmux >/dev/null 2>&1 || { echo "not ok - tmux unavailable for real Pi
 PI_BIN=$(command -v pi)
 tmux new-session -d -c "$WORKTREE" -s "$SESSION" -n fm-control
 tmux send-keys -l -t "$SESSION:fm-control" \
-  "export FM_HOME='$TMP' PI_CODING_AGENT_DIR='$TMP/pi-agent'; '$PI_BIN' --no-session --no-extensions -e '$ROOT/.pi/extensions/fm-primary-pi-watch.ts' -e '$ROOT/.pi/extensions/fm-primary-turnend-guard.ts'"
+  "export FM_HOME='$TMP' PI_CODING_AGENT_DIR='$TMP/pi-agent'; '$ROOT/bin/fm-pi-launch.sh' -- '$PI_BIN' --no-session --no-extensions -e '$ROOT/.pi/extensions/fm-primary-pi-watch.ts' -e '$ROOT/.pi/extensions/fm-primary-turnend-guard.ts'"
 tmux send-keys -t "$SESSION:fm-control" Enter
 mkdir -p "$TMP/data/control"
 printf 'Real Pi lifecycle control validation.\n' > "$TMP/data/control/brief.md"

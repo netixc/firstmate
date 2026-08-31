@@ -305,6 +305,11 @@ cmd_update() {
       ;;
   esac
   cmd_sync "$id"
+  # shellcheck source=bin/fm-harness-identity-lib.sh
+  . "$SCRIPT_DIR/fm-harness-identity-lib.sh"
+  fm_harness_pi_launch_migration_cutover "$TARGET_HOME/state" \
+    "$TARGET_HOME/.pi/extensions/fm-pi-process-registration.ts" \
+    || die "remote secondmate Pi launch migration cutover failed"
 }
 
 cmd_retire() {

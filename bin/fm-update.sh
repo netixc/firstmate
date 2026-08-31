@@ -60,6 +60,12 @@ fi
 fm_harness_pi_launch_migration_cutover "$STATE" "$FM_ROOT/.pi/extensions/fm-pi-process-registration.ts" \
   || { printf 'firstmate: skipped Pi launch migration cutover\n' >&2; exit 1; }
 
+fm_ff_after_secondmate_update_boundary() {
+  local id=$1 home=$2
+  fm_harness_pi_launch_migration_cutover "$home/state" "$home/.pi/extensions/fm-pi-process-registration.ts" \
+    || { printf 'secondmate %s: skipped Pi launch migration cutover\n' "$id" >&2; return 1; }
+}
+
 # --- secondmates -----------------------------------------------------------
 # An updated live secondmate is nudged whenever it advanced (nudge_requires_instr
 # is "no" here): /updatefirstmate's nudge is a gentle re-read steer, kept on the

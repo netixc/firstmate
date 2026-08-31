@@ -392,6 +392,9 @@ process_secondmate() {
   FF_SEEN_HOMES="$FF_SEEN_HOMES $home_real"
 
   ff_target "$home_real" "secondmate $id" "$base_mode" yes yes
+  if type fm_ff_after_secondmate_update_boundary >/dev/null 2>&1; then
+    fm_ff_after_secondmate_update_boundary "$id" "$home_real"
+  fi
   if [ "$FF_STATUS" = "updated" ] && [ -n "$window" ]; then
     if [ "$nudge_requires_instr" = yes ] && [ -z "$FF_INSTR" ]; then
       return 0
