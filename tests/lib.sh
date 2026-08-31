@@ -111,7 +111,7 @@ fm_test_tmproot() {
 # but only for a live fixture pid and a fixture state directory. The canonical
 # installed package is read for identity and is never mutated.
 fm_test_register_pi_process() {  # <code-root> <state-dir> <pid>
-  local code_root=$1 state_dir=$2 pid=$3 extension source cli start version digest launch_id launch_dir image launch marker
+  local code_root=$1 state_dir=$2 pid=$3 extension source cli start version marker launch_id launch
   code_root=$(cd "$code_root" && pwd) || return 1
   source="$ROOT/.pi/extensions/fm-pi-process-registration.ts"
   extension="$code_root/.pi/extensions/fm-pi-process-registration.ts"
@@ -133,22 +133,14 @@ PY
   else
     version="sha256:$(sha256sum "$extension" | awk '{print $1}')"
   fi
-  digest=${version#sha256:}
-  if command -v shasum >/dev/null 2>&1; then
-    launch_id=$(printf '%s' "$start" | shasum -a 256 | awk '{print $1}')
-  else
-    launch_id=$(printf '%s' "$start" | sha256sum | awk '{print $1}')
-  fi
-  launch_dir="$state_dir/.pi-launches"
-  image="$launch_dir/images/$digest.ts"
-  launch="$launch_dir/$pid-$launch_id"
-  mkdir -p "$launch_dir/images"
-  cp "$extension" "$image"
-  chmod 444 "$image"
-  printf '%s\n%s\n%s\n%s\n%s\n%s\n' "$version" "$pid" "$start" "$image" "$cli" "$extension" > "$launch"
-  chmod 444 "$launch"
+  # shellcheck source=/dev/null
+  . "$ROOT/bin/fm-harness-identity-lib.sh"
+  fm_harness_pi_launch_record_publish "$state_dir" "$pid" "$extension" "$cli" "$start" || return 1
+  launch_id=$(printf '%s' "$start" | fm_harness_file_sha256 /dev/stdin) || return 1
+  launch="$state_dir/.pi-launches/$pid-$launch_id"
+  sed '7s/parent-v1/migration-v1/;8,9d' "$launch" > "$launch.migration" && mv "$launch.migration" "$launch" || return 1
   marker="$state_dir/.pi-processes/$pid"
-  printf '%s\n%s\n%s\n%s\n%s\n%s\n' "$version" "$pid" "$start" "$extension" "$cli" "$launch" > "$marker"
+  printf '%s\n%s\n%s\n%s\n%s\n' "$version" "$pid" "$start" "$extension" "$cli" > "$marker"
 }
 
 trap fm_test_cleanup EXIT

@@ -1038,7 +1038,7 @@ pi_supports_tui_mode() {
 launch_template() {
   local harness=$1 kind=${2:-ship}
   [ "$harness" = pi ] || return 1
-  printf '%s' '__PIBIN____PITUIMODE__'
+  printf '%s' '__PILAUNCH__ --state __REGSTATE__ --extension __REGEXT__ -- __PIBIN____PITUIMODE__'
   # shellcheck disable=SC2016 # expansion belongs in the worker pane
   if [ "$kind" = secondmate ]; then
     printf '%s' ' __MODELFLAG____EFFORTFLAG__-e __PITURNEND__ -e __PIWATCH__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
@@ -2133,7 +2133,14 @@ sq_piext=$(shell_quote "$STATE/$ID.pi-ext.ts")
 sq_piturnend=$(shell_quote "$PROJ_ABS/.pi/extensions/fm-primary-turnend-guard.ts")
 sq_piwatch=$(shell_quote "$PROJ_ABS/.pi/extensions/fm-primary-pi-watch.ts")
 sq_piregister=$(shell_quote "$FM_ROOT/.pi/extensions/fm-pi-process-registration.ts")
-sq_registration_state=$(shell_quote "$STATE")
+sq_pi_launcher=$(shell_quote "$FM_ROOT/bin/fm-pi-launch.sh")
+if [ "$KIND" = secondmate ]; then
+  sq_registration_state=$(shell_quote "$PROJ_ABS/state")
+  sq_registration_extension=$(shell_quote "$PROJ_ABS/.pi/extensions/fm-pi-process-registration.ts")
+else
+  sq_registration_state=$(shell_quote "$STATE")
+  sq_registration_extension=$sq_piregister
+fi
 sq_opinput=$(shell_quote "$FM_ROOT/bin/fm-operational-input.sh")
 sq_worktree=$(shell_quote "$WT")
 MODELFLAG=$(model_flag_for_harness "$HARNESS" "$MODEL")
@@ -2146,6 +2153,9 @@ LAUNCH=${LAUNCH//__PIEXT__/$sq_piext}
 LAUNCH=${LAUNCH//__PITURNEND__/$sq_piturnend}
 LAUNCH=${LAUNCH//__PIWATCH__/$sq_piwatch}
 LAUNCH=${LAUNCH//__PIREGISTER__/$sq_piregister}
+LAUNCH=${LAUNCH//__PILAUNCH__/$sq_pi_launcher}
+LAUNCH=${LAUNCH//__REGSTATE__/$sq_registration_state}
+LAUNCH=${LAUNCH//__REGEXT__/$sq_registration_extension}
 LAUNCH=${LAUNCH//__OPINPUT__/$sq_opinput}
 LAUNCH=${LAUNCH//__PIBIN__/"$(shell_quote "$PI_BIN")"}
 LAUNCH=${LAUNCH//__WORKTREE__/$sq_worktree}

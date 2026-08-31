@@ -78,12 +78,13 @@ git clone https://github.com/kunchenguid/firstmate
 cd firstmate
 ```
 
-Launch plain Pi; AGENTS.md takes over from there:
+Launch plain Pi through Firstmate's parent launcher; AGENTS.md takes over from there:
 
 ```sh
-pi
+bin/fm-pi-launch.sh
 ```
 
+The launcher verifies Pi 0.84.4 and publishes the parent-owned process evidence used by startup and supervision.
 For Pi, approve the project trust prompt once per clone on first launch so the tracked `.pi/extensions/*.ts` files auto-load.
 Pi's `/calm` toggle hides supported transcript chrome, including canonically classified Firstmate operational user rows, and uses a Calm-only animated working boat during active runs while preserving all model context and session data.
 Those Calm-hidden operational inputs remain ordinary user-role messages with unchanged delivery, ordering, authority, persistence, and exports.

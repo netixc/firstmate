@@ -268,7 +268,7 @@ fm_test_register_pi_process "$rolling_home" "$rolling_home/state" "$rolling_pid"
 printf 'updated checkout image\n' > "$rolling_home/.pi/extensions/fm-pi-process-registration.ts"
 FM_HARNESS_IDENTITY_HOME="$rolling_home" bash -c '. "$1"; fm_harness_pid_pi_registration "$2"' _ "$ROOT/bin/fm-harness-identity-lib.sh" "$rolling_pid" || fail "immutable Pi launch evidence should survive a checkout update"
 pass "immutable Pi launch evidence survives a checkout update"
-rolling_launch=$(sed -n '6p' "$rolling_home/state/.pi-processes/$rolling_pid")
+rolling_launch=$(find "$rolling_home/state/.pi-launches" -maxdepth 1 -type f | head -1)
 chmod 644 "$rolling_launch"
 rm -f "$rolling_launch"
 if FM_HARNESS_IDENTITY_HOME="$rolling_home" bash -c '. "$1"; fm_harness_pid_pi_registration "$2"' _ "$ROOT/bin/fm-harness-identity-lib.sh" "$rolling_pid"; then
