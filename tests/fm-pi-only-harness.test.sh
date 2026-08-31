@@ -141,6 +141,12 @@ set -e
 assert_eq 2 "$rc" "excluded Node entrypoint after conditions value is rejected"
 assert_contains "$out" "unsupported harness" "conditions-bearing excluded Node entrypoint reports migration"
 set +e
+out=$(env PI_CODING_AGENT=true FAKE_COMM=node FAKE_ARGS='node --inspect-port 9229 /opt/opencode/bin/opencode.js' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
+rc=$?
+set -e
+assert_eq 2 "$rc" "Node options with unproven arity fail explicitly"
+assert_contains "$out" "unsupported harness" "unproven Node option arity reports migration"
+set +e
 out=$(env PI_CODING_AGENT=true FAKE_COMM=node FAKE_ARGS='node --title worker /opt/opencode/bin/opencode.js' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
 rc=$?
 set -e

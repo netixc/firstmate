@@ -87,7 +87,7 @@ if name in {"node", "nodejs"}:
         help_text = ""
     for line in help_text.splitlines():
         declaration = line.strip().split("  ", 1)[0]
-        options = re.findall(r"(?<![\w-])(--?[A-Za-z0-9-]+)(=\.\.\.)?", declaration)
+        options = re.findall(r"(?<![\w-])(--?[A-Za-z0-9-]+)(=\.\.\.)?(?=[,\s]|$)", declaration)
         known_options[name].update(option for option, _ in options)
         if any(value for _, value in options):
             takes_value[name].update(option for option, _ in options)
