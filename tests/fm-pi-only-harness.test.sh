@@ -92,6 +92,12 @@ set -e
 assert_eq 2 "$rc" "excluded Node script entrypoint is rejected"
 assert_contains "$out" "unsupported harness" "excluded Node script entrypoint reports migration"
 set +e
+out=$(env PI_CODING_AGENT=true FAKE_COMM=node FAKE_ARGS='node --require /tmp/helper /opt/opencode/bin/opencode.js' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
+rc=$?
+set -e
+assert_eq 2 "$rc" "excluded Node entrypoint after option value is rejected"
+assert_contains "$out" "unsupported harness" "option-bearing excluded Node entrypoint reports migration"
+set +e
 out=$(env PI_CODING_AGENT=true FAKE_CHAIN=signed-wrapper PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
 rc=$?
 set -e

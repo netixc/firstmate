@@ -29,65 +29,34 @@ zsh
 
 A persistent parent shell waiting for a child remained reported as the parent process, while a shell that directly execed a simple command changed identity with the process itself.
 
-### Agent liveness name sources
+### Pi liveness identity
 
-The earlier record that every harness is observed under its own `#{pane_current_command}` no longer holds and has been replaced by the per-harness evidence below.
-In this macOS run that reading reflected a rewritable process title rather than stable executable identity, so it is now one of two independent name sources rather than the sole basis of a verdict.
+Pi rewrites its visible process title, so neither `#{pane_current_command}` nor `ps -o comm=` is sufficient identity evidence by itself.
+Firstmate combines the foreground PID, immutable Node package image, and a lifecycle registration emitted by a loaded Firstmate Pi extension.
+The generated worker extension and the primary watcher extension both publish that registration, preserving liveness for primary, ship, scout, and secondmate sessions.
 
-The seven primary-capable adapters were relaunched on 2026-08-03 with tmux 3.6a on macOS 26.5.2 arm64, each on a private socket in an isolated lab.
-
-```sh
-tmux -L "$socket" new-window -d -t "$session:" -n "$harness" -c "$wt" -- "$bin"
-tmux -L "$socket" display-message -p -t "$session:$harness" '#{pane_current_command}'
-ps -t "${tty#/dev/}" -o pgid=,tpgid=,comm=      # rows where pgid = tpgid
-```
-
-Observed identities, and the resulting verdict:
-
-| Harness | Version | `#{pane_current_command}` | Foreground `comm` | Verdict |
-| --- | --- | --- | --- | --- |
-
-That is the evidence for treating any single process name as a surface under vendor control rather than a stable contract.
-
-
-Bounded observed output:
-
-```text
-foreground comms:
-  zsh
-classify each:
-  zsh                            -> shell
-alive
-```
-
-`#{pane_current_command}` and foreground `ps -o comm=` read different name fields, but which one preserves executable identity is platform-dependent.
-On macOS the pane command reflected the rewritable title while the full install path could survive in `ps -o comm=`; in the Linux portable regression those roles reversed for the version-named native executable, with the identifying path retained in argv[0].
-The classifier therefore accepts a harness basename first, then an exact harness path component in the full executable path, then the same component in argv[0], without depending on which field carries it on a given platform.
-
-The portable regression is CI-enforced, while the real-harness drift guard is opt-in under the policy in `.agents/skills/firstmate-coding-guidelines/SKILL.md`.
-Run the live guard after any harness upgrade and before trusting or refreshing the table above:
+The portable tmux regression rejects an unrelated native executable renamed to `pi` and requires a real Pi process with its extension loaded to classify alive:
 
 ```sh
-FM_HARNESS_LIVENESS_DRIFT=1 bin/fm-test-run.sh tests/fm-harness-liveness-drift-live-e2e.test.sh
+tests/fm-tmux-agent-liveness.test.sh
 ```
 
-Bounded output from the run that produced the table:
+The real model integration pins the supported Pi release and exercises harness resolution from a natural Pi tool subprocess:
 
-```text
-# checked 7 installed harness(es)
+```sh
+tests/fm-pi-only-live-e2e.test.sh
 ```
 
-Installed-wrapper checks:
+Installed version check:
 
 ```sh
 pi --version
 ```
 
-Observed bounded output:
+Expected output:
 
 ```text
-0.82.0
-0.82.0
+0.84.4
 ```
 
 ### Worker harness identity

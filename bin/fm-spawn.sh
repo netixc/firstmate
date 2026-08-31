@@ -1970,7 +1970,21 @@ if [ "$KIND" != secondmate ]; then
 // "turn_end" fires at every inner turn boundary (one LLM response plus its
 // tool calls) and stays a wake NOTIFICATION touch for the watcher, never
 // current-state truth.
-import { execFile } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+const extensionFile = fileURLToPath(import.meta.url);
+const extensionVersion = "sha256:" + createHash("sha256").update(readFileSync(extensionFile)).digest("hex");
+const processMarkerDir = "$STATE_REAL/.pi-processes";
+const processMarker = processMarkerDir + "/" + process.pid;
+const registerPiProcess = () => {
+  const started = spawnSync("ps", ["-o", "lstart=", "-p", String(process.pid)], { encoding: "utf8" });
+  const temp = processMarker + "." + process.pid + ".tmp";
+  mkdirSync(processMarkerDir, { recursive: true });
+  writeFileSync(temp, extensionVersion + "\\n" + process.pid + "\\n" + (started.status === 0 ? started.stdout.trim() : "") + "\\n" + extensionFile + "\\n");
+  renameSync(temp, processMarker);
+};
 const busyEvent = (state: string, event: string) =>
   new Promise<void>((resolve) => {
     execFile("$FM_ROOT/bin/fm-busy-event.sh", [
@@ -1979,6 +1993,7 @@ const busyEvent = (state: string, event: string) =>
     ], () => resolve());
   });
 export default function (pi: any) {
+  registerPiProcess();
   pi.on("agent_start", () => busyEvent("busy", "agent-start"));
   pi.on("agent_settled", (_event: any, ctx: any) => {
     if (ctx && typeof ctx.isIdle === "function" && !ctx.isIdle()) return;

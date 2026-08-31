@@ -158,7 +158,7 @@ function processStartIdentity(): string {
 
 function markLoaded(): void {
   mkdirSync(processMarkerDir, { recursive: true });
-  writeFileSync(processMarkerTemp, `${extensionVersion}\n${process.pid}\n${processStartIdentity()}\n`);
+  writeFileSync(processMarkerTemp, `${extensionVersion}\n${process.pid}\n${processStartIdentity()}\n${extensionFile}\n`);
   renameSync(processMarkerTemp, processMarker);
   if (lockOwnership() === "other") return;
   mkdirSync(state, { recursive: true });
