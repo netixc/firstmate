@@ -232,9 +232,9 @@ test_backend_detect_precedence() {
 }
 
 # fm_backend_detect's cmux FALLBACK signals (docs/cmux-backend.md "Runtime
-# auto-detection"): cmux's bundled claude wrapper strips every CMUX_* env var
-# on its passthrough path, so a claude-under-cmux firstmate has no
-# CMUX_WORKSPACE_ID; detection then falls back to __CFBundleIdentifier and,
+# auto-detection"): a wrapper-provided cmux shell can omit the CMUX_* env vars,
+# so a Pi session launched through that path can lack CMUX_WORKSPACE_ID;
+# detection then falls back to __CFBundleIdentifier and,
 # after that, a process-ancestry walk - macOS-only, and never outranking the
 # $TMUX/HERDR_ENV innermost-first checks.
 test_backend_detect_cmux_fallback_bundle_id() {
@@ -348,7 +348,7 @@ test_backend_detect_cmux_fallback_ancestry_stops_at_launchd() {
 }
 
 # The auto-detect NOTICE must say when cmux was selected via a fallback
-# signal, so a captain can tell a wrapper-stripped claude-under-cmux spawn
+# signal, so a captain can tell a wrapper-provided Pi-under-cmux spawn
 # apart from the primary-marker case.
 test_backend_name_cmux_fallback_notice() {
   local dir cfg fb out errfile

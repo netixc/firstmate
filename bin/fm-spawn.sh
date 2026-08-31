@@ -1043,7 +1043,7 @@ launch_template() {
   if [ "$kind" = secondmate ]; then
     printf '%s' ' __MODELFLAG____EFFORTFLAG__-e __PITURNEND__ -e __PIWATCH__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
   else
-    printf '%s' ' __MODELFLAG____EFFORTFLAG__-e __PIEXT__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
+    printf '%s' ' __MODELFLAG____EFFORTFLAG__-e __PIEXT__ -e __PIREGISTER__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
   fi
 }
 
@@ -2126,6 +2126,7 @@ sq_turnend=$(shell_quote "$TURNEND")
 sq_piext=$(shell_quote "$STATE/$ID.pi-ext.ts")
 sq_piturnend=$(shell_quote "$PROJ_ABS/.pi/extensions/fm-primary-turnend-guard.ts")
 sq_piwatch=$(shell_quote "$PROJ_ABS/.pi/extensions/fm-primary-pi-watch.ts")
+sq_piregister=$(shell_quote "$FM_ROOT/.pi/extensions/fm-primary-pi-watch.ts")
 sq_opinput=$(shell_quote "$FM_ROOT/bin/fm-operational-input.sh")
 sq_worktree=$(shell_quote "$WT")
 MODELFLAG=$(model_flag_for_harness "$HARNESS" "$MODEL")
@@ -2137,6 +2138,7 @@ LAUNCH=${LAUNCH//__TURNEND__/$sq_turnend}
 LAUNCH=${LAUNCH//__PIEXT__/$sq_piext}
 LAUNCH=${LAUNCH//__PITURNEND__/$sq_piturnend}
 LAUNCH=${LAUNCH//__PIWATCH__/$sq_piwatch}
+LAUNCH=${LAUNCH//__PIREGISTER__/$sq_piregister}
 LAUNCH=${LAUNCH//__OPINPUT__/$sq_opinput}
 LAUNCH=${LAUNCH//__PIBIN__/"$(shell_quote "$PI_BIN")"}
 LAUNCH=${LAUNCH//__WORKTREE__/$sq_worktree}
