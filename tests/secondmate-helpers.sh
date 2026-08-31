@@ -97,7 +97,8 @@ exit 0
 SH
   chmod +x "$fakebin/tmux"
   chmod +x "$fakebin/treehouse"
-  fm_fake_exit0 "$fakebin" pi
+  command -v pi >/dev/null 2>&1 || fail "plain Pi 0.84.4 is required for secondmate spawn fixtures"
+  ln -sf "$(command -v pi)" "$fakebin/pi"
   : > "$dir/tmux.log"
   printf '%s\n' "$fakebin"
 }

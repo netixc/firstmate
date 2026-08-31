@@ -10,9 +10,16 @@ command -v pi >/dev/null 2>&1 || { echo "not ok - pi unavailable" >&2; exit 1; }
 PI_VERSION=$(pi --version 2>/dev/null || true)
 [ "$PI_VERSION" = 0.84.4 ] || { printf 'not ok - real Pi 0.84.4 required, found %s\n' "${PI_VERSION:-unknown}" >&2; exit 1; }
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/fm-pi-only-live.XXXXXX")
+WORKTREE="$TMP/worktree"
 SESSION="fm-pi-control-$$"
-trap 'tmux kill-session -t "$SESSION" 2>/dev/null || true; rm -rf "$TMP"' EXIT
-mkdir -p "$TMP/state"
+cleanup() {
+  tmux kill-session -t "$SESSION" 2>/dev/null || true
+  git -C "$ROOT" worktree remove --force "$WORKTREE" 2>/dev/null || true
+  rm -rf "$TMP"
+}
+trap cleanup EXIT
+git -C "$ROOT" worktree add --detach "$WORKTREE" HEAD >/dev/null
+mkdir -p "$TMP/state" "$TMP/pi-agent"
 out=$(cd "$ROOT" && FM_HOME="$TMP" pi --print --approve --no-session --no-context-files --no-extensions \
   -e "$ROOT/.pi/extensions/fm-primary-pi-watch.ts" \
   -e "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" \
@@ -22,13 +29,13 @@ out=$(cd "$ROOT" && FM_HOME="$TMP" pi --print --approve --no-session --no-contex
 printf 'ok - real Pi extensions register lifecycle identity (Pi %s)\n' "$PI_VERSION"
 command -v tmux >/dev/null 2>&1 || { echo "not ok - tmux unavailable for real Pi lifecycle control" >&2; exit 1; }
 PI_BIN=$(command -v pi)
-tmux new-session -d -c "$ROOT" -s "$SESSION" -n fm-control
+tmux new-session -d -c "$WORKTREE" -s "$SESSION" -n fm-control
 tmux send-keys -l -t "$SESSION:fm-control" \
-  "FM_HOME='$TMP' '$PI_BIN' --no-session --no-extensions -e '$ROOT/.pi/extensions/fm-primary-pi-watch.ts' -e '$ROOT/.pi/extensions/fm-primary-turnend-guard.ts'"
+  "export FM_HOME='$TMP' PI_CODING_AGENT_DIR='$TMP/pi-agent'; '$PI_BIN' --no-session --no-extensions -e '$ROOT/.pi/extensions/fm-primary-pi-watch.ts' -e '$ROOT/.pi/extensions/fm-primary-turnend-guard.ts'"
 tmux send-keys -t "$SESSION:fm-control" Enter
 mkdir -p "$TMP/data/control"
 printf 'Real Pi lifecycle control validation.\n' > "$TMP/data/control/brief.md"
-printf 'window=%s:fm-control\nworktree=%s\nproject=%s\nkind=ship\nharness=pi\nmodel=%s\neffort=low\n' "$SESSION" "$ROOT" "$ROOT" 'openai-codex/gpt-5.6-sol' > "$TMP/state/control.meta"
+printf 'window=%s:fm-control\nworktree=%s\nproject=%s\nkind=ship\nharness=pi\nmodel=%s\neffort=low\n' "$SESSION" "$WORKTREE" "$ROOT" 'openai-codex/gpt-5.6-sol' > "$TMP/state/control.meta"
 for _ in $(seq 1 50); do
   if FM_HOME="$TMP" "$ROOT/bin/fm-control.sh" control interrupt >/dev/null 2>&1; then
     interrupted=1
