@@ -11,6 +11,6 @@ PI_VERSION=$(pi --version 2>/dev/null || true)
 [ "$PI_VERSION" = 0.84.4 ] || { printf 'not ok - real Pi 0.84.4 required, found %s\n' "${PI_VERSION:-unknown}" >&2; exit 1; }
 out=$(cd "$ROOT" && pi --print --approve --no-session --no-context-files --no-extensions \
   --model openai-codex/gpt-5.6-sol --thinking low \
-  "Use the bash tool to run PI_CODING_AGENT=true bin/fm-harness.sh. Reply with exactly the command's one-word stdout and nothing else.")
+  "Use the bash tool to run bin/fm-harness.sh directly. Reply with exactly the command's one-word stdout and nothing else.")
 [ "$out" = pi ] || { printf 'not ok - real Pi returned %q\n' "$out" >&2; exit 1; }
 printf 'ok - real Pi model and child-process identity resolve exact plain pi (Pi %s)\n' "$PI_VERSION"

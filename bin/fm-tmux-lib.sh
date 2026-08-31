@@ -42,6 +42,8 @@
 
 # shellcheck source=bin/fm-composer-lib.sh
 . "$(dirname -- "${BASH_SOURCE[0]}")/fm-composer-lib.sh"
+# shellcheck source=bin/fm-harness-identity-lib.sh
+. "$(dirname -- "${BASH_SOURCE[0]}")/fm-harness-identity-lib.sh"
 
 
 # fm_tmux_strip_ghost: thin adapter over the shared, fleet-wide ghost extractor
@@ -82,36 +84,36 @@ fm_tmux_composer_caps() {
 # fm_tmux_composer_identity: the tmux agent-identity probe backing the
 # separated (pi) composer shape, tmux's analogue of herdr's native
 # `agent get`. It answers only for pi, from two live signals:
-#   - identity: the pane tty's FOREGROUND process group (pgid = tpgid, the
-#     same scoping as fm_backend_tmux_foreground_comms) contains the exact `pi`
-#     process name, falling back to
-#     tmux's own foreground-derived #{pane_current_command}. A pane whose
-#     agent died to a shell has no pi foreground process and gets NO identity,
-#     which is exactly what keeps the strict blank-row rule honest: a blank
-#     row between two stale rules stays unknown.
+#   - identity: the pane tty's FOREGROUND process group (pgid = tpgid) contains
+#     a PID accepted by the shared immutable executable/package-image boundary.
+#     A pane whose agent died to a shell gets no identity, which keeps a blank
+#     row between two stale rules unknown.
 #   - status: pi's verified busy footer via fm_pane_is_busy, mapped onto the
 #     idle/working vocabulary herdr's probe reports natively.
 # Prints "pi<TAB>idle" or "pi<TAB>working"; exits 1 when the pane is not a
 # live pi.
-fm_tmux_composer_identity() {  # <target>
-  local target=$1 tty pgid tpgid comm found=0 status
-  tty=$(tmux display-message -p -t "$target" '#{pane_tty}' 2>/dev/null) || tty=
-  case "$tty" in
-    /dev/*)
-      while read -r _ pgid tpgid comm; do
-        [ -n "$comm" ] || continue
-        [ "$pgid" = "$tpgid" ] || continue
-        [ "${comm##*/}" = pi ] && found=1
-      done <<EOF
+fm_tmux_foreground_pi_pid() {  # <target>
+  local target=$1 tty pid pgid tpgid comm args identity
+  tty=$(tmux display-message -p -t "$target" '#{pane_tty}' 2>/dev/null) || return 1
+  case "$tty" in /dev/*) ;; *) return 1 ;; esac
+  while read -r pid pgid tpgid comm; do
+    [ -n "$comm" ] || continue
+    [ "$pgid" = "$tpgid" ] || continue
+    args=$(LC_ALL=C ps -p "$pid" -o args= 2>/dev/null) || continue
+    identity=$(fm_harness_pid_identity "$pid" "$comm" "$args" || true)
+    if [ "$identity" = pi ]; then
+      printf '%s\n' "$pid"
+      return 0
+    fi
+  done <<EOF
 $(LC_ALL=C ps -t "${tty#/dev/}" -o pid=,pgid=,tpgid=,comm= 2>/dev/null)
 EOF
-      ;;
-  esac
-  if [ "$found" -ne 1 ]; then
-    comm=$(tmux display-message -p -t "$target" '#{pane_current_command}' 2>/dev/null) || comm=
-    [ "${comm##*/}" = pi ] && found=1
-  fi
-  [ "$found" -eq 1 ] || return 1
+  return 1
+}
+
+fm_tmux_composer_identity() {  # <target>
+  local target=$1 status
+  fm_tmux_foreground_pi_pid "$target" >/dev/null || return 1
   status=$(fm_pane_busy_state "$target" pi)
   case "$status" in
     busy) printf 'pi\tworking' ;;
