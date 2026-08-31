@@ -27,6 +27,16 @@ if [ "${FAKE_CHAIN:-}" = signed-wrapper ]; then
     *:*args=*) printf 'bash\n' ;;
     *:*ppid=*) printf '200\n' ;;
   esac
+elif [ "${FAKE_CHAIN:-}" = deep-excluded ]; then
+  case "$pid:$*" in
+    200:*comm=*|200:*args=*) printf 'pi\n' ;;
+    220:*comm=*|220:*args=*) printf 'claude\n' ;;
+    *:*comm=*|*:*args=*) printf 'bash\n' ;;
+    220:*ppid=*) printf '1\n' ;;
+    *:*ppid=*)
+      if [ "$pid" -ge 200 ] 2>/dev/null && [ "$pid" -lt 220 ]; then printf '%s\n' "$((pid + 1))"; else printf '200\n'; fi
+      ;;
+  esac
 else
   case "$*" in
     *comm=*) printf '%s\n' "$FAKE_COMM" ;;
@@ -176,6 +186,12 @@ rc=$?
 set -e
 assert_eq 2 "$rc" "excluded wrapper above an inner Pi process is rejected"
 assert_contains "$out" "unsupported harness" "excluded wrapper above Pi reports migration"
+set +e
+out=$(env PI_CODING_AGENT=true FAKE_CHAIN=deep-excluded PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
+rc=$?
+set -e
+assert_eq 2 "$rc" "deep excluded ancestry is rejected"
+assert_contains "$out" "unsupported harness" "deep excluded ancestry reports migration"
 set +e
 out=$(env PI_CODING_AGENT=true FAKE_COMM=bash FAKE_ARGS='bash ./claude' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
 rc=$?

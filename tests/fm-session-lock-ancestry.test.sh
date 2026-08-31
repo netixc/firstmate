@@ -60,3 +60,25 @@ if (
   fail "excluded wrapper ancestry authorized an inner Pi process"
 fi
 pass "excluded wrapper ancestry cannot authorize an inner Pi process"
+
+if (
+  ps() {
+    local pid=${!#}
+    case "$pid:$*" in
+      200:*comm=*|200:*args=*) printf 'pi\n' ;;
+      220:*comm=*|220:*args=*) printf 'claude\n' ;;
+      *:*comm=*|*:*args=*) printf 'bash\n' ;;
+      220:*ppid=*) printf '1\n' ;;
+      *:*ppid=*)
+        if [ "$pid" -ge 200 ] 2>/dev/null && [ "$pid" -lt 220 ]; then printf '%s\n' "$((pid + 1))"; else printf '200\n'; fi
+        ;;
+    esac
+  }
+  fm_harness_pid_identity() {
+    case "$1" in 200) printf 'pi\n' ;; 220) printf 'claude\n' ;; esac
+  }
+  fm_harness_ancestry_pids >/dev/null
+); then
+  fail "deep excluded ancestry authorized an inner Pi process"
+fi
+pass "deep excluded ancestry cannot authorize an inner Pi process"

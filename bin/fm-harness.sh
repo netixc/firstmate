@@ -24,18 +24,22 @@ unsupported() {
 }
 
 detect_own() {
-  local pid=$$ comm args identity pi_seen=0
-  for _ in 1 2 3 4 5 6 7 8; do
-    comm=$(ps -o comm= -p "$pid" 2>/dev/null) || break
-    args=$(ps -o args= -p "$pid" 2>/dev/null || true)
+  local pid=$$ parent comm args identity pi_seen=0 seen=
+  while :; do
+    case "$seen" in *" $pid "*) unsupported unresolved-process-ancestry; return ;; esac
+    seen="$seen $pid "
+    comm=$(ps -o comm= -p "$pid" 2>/dev/null) || { unsupported unresolved-process-ancestry; return; }
+    args=$(ps -o args= -p "$pid" 2>/dev/null) || { unsupported unresolved-process-ancestry; return; }
     identity=$(fm_harness_pid_identity "$pid" "$comm" "$args" || true)
     if fm_harness_identity_excluded "$identity"; then
       unsupported "$identity"
       return
     fi
     [ "$identity" != pi ] || pi_seen=1
-    pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
-    [ -n "$pid" ] && [ "$pid" -gt 1 ] || break
+    parent=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ') || { unsupported unresolved-process-ancestry; return; }
+    case "$parent" in ''|*[!0-9]*) unsupported unresolved-process-ancestry; return ;; esac
+    [ "$parent" -gt 1 ] || break
+    pid=$parent
   done
   if [ "$pi_seen" -eq 1 ]; then
     printf 'pi\n'

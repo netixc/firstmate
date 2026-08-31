@@ -10,17 +10,21 @@ fm_harness_process_matches() {
 }
 
 fm_harness_ancestry_pids() {
-  local pid=$$ comm args identity pi_pid=
-  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
-    comm=$(ps -o comm= -p "$pid" 2>/dev/null) || break
-    args=$(ps -o args= -p "$pid" 2>/dev/null || true)
+  local pid=$$ parent comm args identity pi_pid='' seen=''
+  while :; do
+    case "$seen" in *" $pid "*) return 1 ;; esac
+    seen="$seen $pid "
+    comm=$(ps -o comm= -p "$pid" 2>/dev/null) || return 1
+    args=$(ps -o args= -p "$pid" 2>/dev/null) || return 1
     identity=$(fm_harness_pid_identity "$pid" "$comm" "$args" || true)
     fm_harness_identity_excluded "$identity" && return 1
     if [ "$identity" = pi ] && [ -z "$pi_pid" ]; then
       pi_pid=$pid
     fi
-    pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
-    [ -n "$pid" ] && [ "$pid" -gt 1 ] || break
+    parent=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ') || return 1
+    case "$parent" in ''|*[!0-9]*) return 1 ;; esac
+    [ "$parent" -gt 1 ] || break
+    pid=$parent
   done
   [ -n "$pi_pid" ] || return 1
   printf '%s\n' "$pi_pid"
