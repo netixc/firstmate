@@ -68,6 +68,31 @@ exit 0
 SH
 chmod +x "$FAKEBIN/tmux"
 
+cat > "$FAKEBIN/herdr" <<'SH'
+#!/usr/bin/env bash
+set -u
+case "${1:-} ${2:-}" in
+  "agent get") printf '%s\n' '{"result":{"agent":{"agent":"pi","agent_status":"idle"}}}' ;;
+  "pane get") printf '%s\n' '{"result":{"pane":{"pane_id":"p1"}}}' ;;
+  "pane process-info") printf '%s\n' '{"result":{"type":"pane_process_info","process_info":{"pane_id":"p1","foreground_processes":[{"pid":4242,"name":"pi"}]}}}' ;;
+  *) exit 1 ;;
+esac
+SH
+chmod +x "$FAKEBIN/herdr"
+
+cat > "$FAKEBIN/ps" <<'SH'
+#!/usr/bin/env bash
+set -u
+[ -n "${FM_FAKE_PS_LOG:-}" ] || exec /bin/ps "$@"
+printf '%s\n' "${FM_HARNESS_IDENTITY_HOME:-unset}" >> "$FM_FAKE_PS_LOG"
+case "$*" in
+  *'comm='*) printf 'pi\n' ;;
+  *'args='*) printf 'pi\n' ;;
+  *) exit 1 ;;
+esac
+SH
+chmod +x "$FAKEBIN/ps"
+
 # new_home <name> [budget] -> path to a seeded local secondmate home.
 new_home() {
   local name=$1 budget=${2:-10} home
@@ -251,6 +276,26 @@ test_transport_routes_by_placement_and_liveness() {
   pass "transport follows placement and live-agent state, and a remote home without an agent defers"
 }
 
+test_local_herdr_probe_uses_the_secondmate_registration_home() {
+  local primary home log out
+  primary=$(new_primary herdr-registration-home)
+  home=$(new_home herdr-live)
+  log="$TMP_ROOT/herdr-registration-home.log"
+  local_record herdr-live "$home" > "$primary/data/secondmates.md"
+  fm_write_secondmate_meta "$primary/state/herdr-live.meta" "$home" 'sess:p1'
+  printf 'backend=herdr\n' >> "$primary/state/herdr-live.meta"
+
+  set +e
+  out=$(run_cascade "$primary" FM_FAKE_PS_LOG="$log")
+  set -e
+  [ -s "$log" ] || fail "the local Herdr endpoint did not inspect its registered process"
+  [ "$(sort -u "$log")" = "$home" ] \
+    || fail "the local Herdr endpoint used the wrong registration home: $(sort -u "$log")"
+  [ "$(value_in "$(stanza "$out" herdr-live)" transport)" = direct ] \
+    || fail "an unregistered Herdr process was trusted after its registration home was selected"
+  pass "local Herdr probes validate identity against the secondmate registration home"
+}
+
 test_receipt_facts_are_complete_and_show_before_and_after() {
   local primary home before after s
   primary=$(new_primary receipt)
@@ -365,6 +410,7 @@ test_no_cascade_without_secondmates_or_from_a_secondmate_home() {
 test_budget_is_enforced_per_home_and_never_summed
 test_every_registered_home_is_enumerated_exactly_once
 test_transport_routes_by_placement_and_liveness
+test_local_herdr_probe_uses_the_secondmate_registration_home
 test_receipt_facts_are_complete_and_show_before_and_after
 test_a_slow_remote_is_bounded_and_the_rest_still_report
 test_no_cascade_without_secondmates_or_from_a_secondmate_home
