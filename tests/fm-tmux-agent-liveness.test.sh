@@ -6,7 +6,7 @@ set -eu
 command -v tmux >/dev/null 2>&1 || { echo 'skip: tmux unavailable'; exit 0; }
 command -v pi >/dev/null 2>&1 || { echo 'skip: plain Pi unavailable'; exit 0; }
 TMP=$(fm_test_tmproot tmux-pi-live)
-mkdir -p "$TMP/bin"
+mkdir -p "$TMP/bin" "$TMP/home/state"
 REAL_PI=$(command -v pi)
 cp "$(command -v sleep)" "$TMP/bin/pi"
 if [ "$(uname -s)" = Darwin ]; then
@@ -14,7 +14,7 @@ if [ "$(uname -s)" = Darwin ]; then
 fi
 SOCK="fm-pi-live-$$"; trap 'tmux -L "$SOCK" kill-server 2>/dev/null || true; rm -rf "$TMP"' EXIT
 tmux -L "$SOCK" -f /dev/null new-session -d -s live -n fake "$TMP/bin/pi 60"
-tmux -L "$SOCK" new-window -d -t live -n pi "$REAL_PI --no-session --no-extensions"
+tmux -L "$SOCK" new-window -d -t live -n pi "FM_HOME='$TMP/home' $REAL_PI --no-session --no-extensions -e '$ROOT/.pi/extensions/fm-primary-pi-watch.ts'"
 # Backend commands call tmux directly, so expose a socket-bound shim.
 cat > "$TMP/bin/tmux" <<EOF
 #!/usr/bin/env bash
@@ -22,6 +22,7 @@ exec "$(command -v tmux)" -L "$SOCK" "\$@"
 EOF
 chmod +x "$TMP/bin/tmux"
 PATH="$TMP/bin:$PATH"
+FM_HOME="$TMP/home"; export FM_HOME
 FM_BACKEND_LIB_DIR="$ROOT/bin"; export FM_BACKEND_LIB_DIR
 # shellcheck source=/dev/null
 . "$ROOT/bin/backends/tmux.sh"

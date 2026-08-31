@@ -1142,7 +1142,7 @@ test_send_text_submit_rejects_stale_composer_above_live_shell() {
   fb=$(make_zellij_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_ZELLIJ_LOG="$dir/log" FM_ZELLIJ_RESPONSES="$dir/responses" \
     FM_ZELLIJ_SESSION_LIST="firstmate" \
-    bash -c '. "$0/bin/backends/zellij.sh"; fm_backend_zellij_send_text_submit firstmate:7 "claude" 2 0.01 0.01' "$ROOT" )
+    bash -c '. "$0/bin/backends/zellij.sh"; fm_backend_zellij_send_text_submit firstmate:7 "pi" 2 0.01 0.01' "$ROOT" )
   [ "$out" = send-failed ] || fail "a stale composer above a live shell should report send-failed, got '$out'"
   assert_not_contains "$(cat "$dir/log")" $'\x1f''paste' \
     "send_text_submit must not paste into a live shell below a stale composer"
@@ -1153,16 +1153,16 @@ test_composer_state_reads_styled_dump() {
   local dir fb out
   dir="$TMP_ROOT/composer-styled"; mkdir -p "$dir/responses"
   zellij_pane_response "$dir" 1 7 3
-  # Real claude-in-zellij capture shape (audit section 3.5): ESC[m ❯ U+00A0.
+  # Real Pi-in-Zellij capture shape: ESC[m ❯ U+00A0.
   printf 'transcript line\n\033[m\342\235\257\302\240' > "$dir/responses/2.out"
   fb=$(make_zellij_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_ZELLIJ_LOG="$dir/log" FM_ZELLIJ_RESPONSES="$dir/responses" \
     FM_ZELLIJ_SESSION_LIST="firstmate" \
     bash -c '. "$0/bin/backends/zellij.sh"; fm_backend_zellij_composer_state firstmate:7' "$ROOT" )
-  [ "$out" = empty ] || fail "the real claude-in-zellij ANSI dump should classify empty, got '$out'"
+  [ "$out" = empty ] || fail "the real Pi-in-Zellij ANSI dump should classify empty, got '$out'"
   assert_contains "$(cat "$dir/log")" $'\x1f''dump-screen'$'\x1f''--pane-id'$'\x1f''7'$'\x1f''--ansi' \
     "composer_state did not request the styled dump"
-  pass "fm_backend_zellij_composer_state: classifies the real claude-in-zellij --ansi dump as empty"
+  pass "fm_backend_zellij_composer_state: classifies the real Pi-in-Zellij --ansi dump as empty"
 }
 
 test_composer_state_dead_pane_is_unknown() {

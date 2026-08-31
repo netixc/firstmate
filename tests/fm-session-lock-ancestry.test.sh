@@ -17,9 +17,10 @@ if fm_harness_process_matches pi 'pi' /usr/bin/node; then
   fail "mutable Node process title authorized a non-Pi process"
 fi
 pass "mutable Node process title cannot authorize a non-Pi process"
-fm_harness_process_matches pi pi /usr/bin/node /opt/pi-coding-agent/addon.node \
-  || fail "Pi's Node process lacked immutable package-image recognition"
-pass "Pi's Node process requires immutable package-image evidence"
+if fm_harness_process_matches pi pi /usr/bin/node /opt/pi-coding-agent/addon.node; then
+  fail "a mapped Pi addon authorized an unregistered Node process"
+fi
+pass "a mapped Pi addon cannot replace Pi lifecycle registration"
 
 for path in \
   /usr/local/bin/pi-launcher \
