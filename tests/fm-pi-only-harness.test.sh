@@ -110,6 +110,12 @@ set -e
 assert_eq 2 "$rc" "excluded Node entrypoint after title value is rejected"
 assert_contains "$out" "unsupported harness" "title-bearing excluded Node entrypoint reports migration"
 set +e
+out=$(env PI_CODING_AGENT=true FAKE_COMM=node FAKE_ARGS='node --env-file .env /opt/opencode/bin/opencode.js' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
+rc=$?
+set -e
+assert_eq 2 "$rc" "excluded Node entrypoint after env-file value is rejected"
+assert_contains "$out" "unsupported harness" "env-file-bearing excluded Node entrypoint reports migration"
+set +e
 out=$(env PI_CODING_AGENT=true FAKE_CHAIN=signed-wrapper PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
 rc=$?
 set -e

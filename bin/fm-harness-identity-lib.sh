@@ -92,6 +92,31 @@ for word in args:
 PY
 }
 
+fm_harness_node_excluded_argv() {
+  local comm=$1 args=${2:-} pid=${3:-} arg identity
+  case "$(basename -- "$comm")" in node|nodejs) ;; *) return 1 ;; esac
+  while IFS= read -r arg; do
+    identity=$(fm_harness_excluded_install_path "$arg" || true)
+    [ -z "$identity" ] || { printf '%s\n' "$identity"; return 0; }
+  done < <(python3 - "$args" "$pid" <<'PY'
+import shlex
+import sys
+from pathlib import Path
+if sys.argv[2] and Path(f"/proc/{sys.argv[2]}/cmdline").is_file():
+    words = Path(f"/proc/{sys.argv[2]}/cmdline").read_bytes().split(b"\0")
+    words = [word.decode(errors="surrogateescape") for word in words if word]
+else:
+    try:
+        words = shlex.split(sys.argv[1])
+    except ValueError:
+        raise SystemExit(1)
+for word in words[1:]:
+    print(word)
+PY
+)
+  return 1
+}
+
 fm_harness_process_identity() {
   local comm=$1 args=${2:-} executable=${3:-} argv0 identity entrypoint
   argv0=${args%% *}
@@ -99,6 +124,8 @@ fm_harness_process_identity() {
     identity=$(fm_harness_excluded_entrypoint "$entrypoint" || true)
     [ -z "$identity" ] || { printf '%s\n' "$identity"; return 0; }
   done
+  identity=$(fm_harness_node_excluded_argv "$comm" "$args" || true)
+  [ -z "$identity" ] || { printf '%s\n' "$identity"; return 0; }
   entrypoint=$(fm_harness_command_entrypoint "$comm" "$args" || true)
   identity=$(fm_harness_excluded_install_path "$entrypoint" || true)
   [ -z "$identity" ] || { printf '%s\n' "$identity"; return 0; }
@@ -107,6 +134,8 @@ fm_harness_process_identity() {
 
 fm_harness_pid_excluded_argv() {
   local pid=$1 comm=$2 fallback=${3:-} entrypoint identity
+  identity=$(fm_harness_node_excluded_argv "$comm" "$fallback" "$pid" || true)
+  [ -z "$identity" ] || { printf '%s\n' "$identity"; return 0; }
   entrypoint=$(fm_harness_command_entrypoint "$comm" "$fallback" "$pid" || true)
   identity=$(fm_harness_excluded_install_path "$entrypoint" || true)
   [ -z "$identity" ] || printf '%s\n' "$identity"
@@ -160,17 +189,8 @@ fm_harness_pid_executable() {
   printf '%s\n' "$path"
 }
 
-fm_harness_pid_pi_image() {
-  local pid=$1
-  if [ -r "/proc/$pid/maps" ]; then
-    grep -m1 '/pi-coding-agent/' "/proc/$pid/maps"
-    return
-  fi
-  lsof -p "$pid" -Fn 2>/dev/null | sed -n 's/^n//p' | grep -m1 '/pi-coding-agent/'
-}
-
 fm_harness_pid_identity() {
-  local pid=$1 comm=$2 args=${3:-} identity executable image
+  local pid=$1 comm=$2 args=${3:-} identity executable
   executable=$(fm_harness_pid_executable "$pid" || true)
   identity=$(fm_harness_pid_excluded_argv "$pid" "$comm" "$args" || true)
   if fm_harness_identity_excluded "$identity"; then
@@ -184,9 +204,8 @@ fm_harness_pid_identity() {
   fi
   [ "$(basename -- "$comm")" = pi ] || return 1
   fm_harness_pid_pi_registration "$pid" || return 1
-  image=$(fm_harness_pid_pi_image "$pid" || true)
-  case "$(basename -- "$executable"):$image" in
-    node:*'/pi-coding-agent/'*|nodejs:*'/pi-coding-agent/'*) printf 'pi\n' ;;
+  case "$(basename -- "$executable")" in
+    node|nodejs) printf 'pi\n' ;;
     *) return 1 ;;
   esac
 }
