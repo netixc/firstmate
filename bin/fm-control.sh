@@ -311,9 +311,9 @@ fm_backend_validate "$BACKEND" || exit 1
 
 agent_state() {
   if [ "$KIND" = secondmate ] && [ -n "$WT" ]; then
-    FM_HARNESS_IDENTITY_HOME="$WT" fm_backend_agent_state "$BACKEND" "$T"
+    FM_HARNESS_IDENTITY_HOME="$WT" fm_control_agent_state "$BACKEND" "$T" "$HARNESS"
   else
-    fm_backend_agent_state "$BACKEND" "$T"
+    fm_control_agent_state "$BACKEND" "$T" "$HARNESS"
   fi
 }
 

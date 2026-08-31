@@ -105,6 +105,8 @@ test_no_profile_keeps_pi_profile_defaults() {
   launch=$(cat "$LAUNCH_LOG")
   assert_contains "$launch" "'$FAKEBIN_DIR/pi'" "plain Pi launch did not pin the resolved executable"
   assert_contains "$launch" "-e '$HOME_DIR/state/$id.pi-ext.ts'" "plain Pi launch omitted its lifecycle extension"
+  assert_contains "$launch" "FM_PI_PROCESS_REGISTRATION_STATE='$HOME_DIR/state'" "plain Pi launch did not bind identity registration to the owning state directory"
+  assert_not_contains "$launch" "FM_STATE_OVERRIDE=" "plain Pi worker launch changed its operational state override"
   assert_contains "$launch" "encode launch-brief" "plain Pi launch omitted the canonical instructions"
   pass "no --model/--effort records defaults and types the pi launch instructions"
 }

@@ -115,14 +115,26 @@ pass "real herdr: interrupt refuses when herdr's own agent registry reports no a
 
 # --- a registered agent: classification flips, and the verbs follow ---------
 
-herdr pane report-agent "$PANE_ID" --source fm-control-smoke --agent fm-control-smoke-agent \
+herdr pane report-agent "$PANE_ID" --source fm-control-smoke --agent claude \
   --state idle --session "$SESSION" >/dev/null 2>&1 \
-  || fail "could not register a live agent on the task pane"
+  || fail "could not register an excluded agent identity on the task pane"
 
 STATE=$(fm_backend_agent_state herdr "$SESSION:$PANE_ID")
-[ "$STATE" = alive ] || fail "herdr should classify a registered agent as alive, got '$STATE'"
+[ "$STATE" = alive ] || fail "the conservative Herdr recovery classifier should preserve a registered agent, got '$STATE'"
+if OUT=$(run_control hsmoke interrupt 2>&1); then
+  fail "interrupt should refuse a registered excluded harness: $OUT"
+fi
+case "$OUT" in
+  *"unsupported-harness"*) : ;;
+  *) fail "the lifecycle refusal should name the unsupported harness state, got: $OUT" ;;
+esac
+pass "real herdr: lifecycle control refuses an excluded registered harness without weakening husk protection"
 
-OUT=$(run_control hsmoke interrupt) || fail "interrupt against a registered agent should succeed: $OUT"
+herdr pane report-agent "$PANE_ID" --source fm-control-smoke --agent pi \
+  --state idle --session "$SESSION" >/dev/null 2>&1 \
+  || fail "could not register a live Pi agent on the task pane"
+
+OUT=$(run_control hsmoke interrupt) || fail "interrupt against a registered Pi agent should succeed: $OUT"
 case "$OUT" in
   *"interrupt-delivered hsmoke harness=pi backend=herdr verified=agent-alive cancel=unconfirmed"*) : ;;
   *) fail "interrupt should report the agent-alive proof on herdr, got: $OUT" ;;

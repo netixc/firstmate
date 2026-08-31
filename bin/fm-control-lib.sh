@@ -64,6 +64,33 @@ fm_control_backend_state_verified() {
   return 1
 }
 
+fm_control_agent_state() {
+  local backend=${1-} target=${2-} harness=${3-} state identity out
+  fm_backend_source "$backend" >/dev/null 2>&1 || {
+    printf 'unverified'
+    return 0
+  }
+  state=$(fm_backend_agent_state "$backend" "$target")
+  if [ "$backend" != herdr ] || [ "$state" != alive ]; then
+    printf '%s' "$state"
+    return 0
+  fi
+  fm_backend_herdr_parse_target "$target" || {
+    printf 'unreadable'
+    return 0
+  }
+  out=$(fm_backend_herdr_cli "$FM_BACKEND_HERDR_SESSION" agent get "$FM_BACKEND_HERDR_PANE" 2>&1) || true
+  identity=$(printf '%s' "$out" | jq -r '[.result.agent.agent // "", .result.agent.agent_status // ""] | @tsv' 2>/dev/null) || {
+    printf 'unreadable'
+    return 0
+  }
+  case "$identity" in
+    "$harness"$'\t'working|"$harness"$'\t'idle|"$harness"$'\t'done|"$harness"$'\t'blocked) printf 'alive' ;;
+    *$'\t'working|*$'\t'idle|*$'\t'done|*$'\t'blocked) printf 'unsupported-harness' ;;
+    *) printf 'unreadable' ;;
+  esac
+}
+
 fm_control_harness_wiring_paths() {
   local harness=${1-} state=${3-} id=${4-}
   [ "$harness" = pi ] && [ -n "$state" ] && [ -n "$id" ] || return 1

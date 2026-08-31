@@ -35,5 +35,5 @@ export function installPiProcessRegistration(pi: ExtensionAPI, state: string): v
 }
 
 export default function (pi: ExtensionAPI): void {
-  installPiProcessRegistration(pi, process.env.FM_STATE_OVERRIDE || `${process.env.FM_HOME || process.cwd()}/state`);
+  installPiProcessRegistration(pi, process.env.FM_PI_PROCESS_REGISTRATION_STATE || process.env.FM_STATE_OVERRIDE || `${process.env.FM_HOME || process.cwd()}/state`);
 }
