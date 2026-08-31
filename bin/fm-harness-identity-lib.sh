@@ -150,10 +150,8 @@ fm_harness_file_sha256() {
 }
 
 fm_harness_pi_cli_canonical() {
-  local marker_cli=$1 authorized authorized_cli version
-  authorized=${FM_PI_AUTHORIZED_BIN:-$(command -v pi 2>/dev/null || true)}
-  [ -n "$authorized" ] || return 1
-  authorized_cli=$(python3 - "$authorized" <<'PY'
+  local cli digest version
+  cli=$(python3 - "$1" <<'PY'
 import sys
 from pathlib import Path
 try:
@@ -162,8 +160,10 @@ except OSError:
     raise SystemExit(1)
 PY
 ) || return 1
-  [ "$marker_cli" = "$authorized_cli" ] || return 1
-  version=$("$authorized" --version 2>/dev/null || true)
+  [ -f "$cli" ] && [ ! -L "$cli" ] || return 1
+  digest=$(fm_harness_file_sha256 "$cli") || return 1
+  [ "$digest" = 5406c369954516fb56879d685e082ff9095cd6e06e41af406f394942377fd4bf ] || return 1
+  version=$("$cli" --version 2>/dev/null || true)
   [ "$version" = 0.84.4 ]
 }
 

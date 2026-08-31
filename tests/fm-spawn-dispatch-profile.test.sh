@@ -18,12 +18,10 @@ make_spawn_pi_probe() {
   cat > "$fakebin/$tool" <<'SH'
 #!/usr/bin/env bash
 set -u
-if [ "${1:-}" = --help ]; then
-  if [ "${FM_FAKE_PI_VERSION:-0.84.0}" = 0.82.0 ]; then
-    printf '%s\n' 'Pi 0.82.0' 'Options: --help'
-  else
-    printf '%s\n' "Pi ${FM_FAKE_PI_VERSION:-0.84.0}" 'Options: --help --tui-mode <mode>'
-  fi
+if [ "${1:-}" = --version ]; then
+  printf '%s\n' "${FM_FAKE_PI_VERSION:-0.84.4}"
+elif [ "${1:-}" = --help ]; then
+  printf '%s\n' "Pi ${FM_FAKE_PI_VERSION:-0.84.4}" 'Options: --help --tui-mode <mode>'
 fi
 exit 0
 SH
@@ -78,7 +76,7 @@ run_spawn() {
   local home=$1 wt=$2 fakebin=$3 launchlog=$4
   shift 4
   : > "$launchlog"
-  FM_FAKE_LAUNCH_LOG="$launchlog" FM_FAKE_PI_VERSION="${FM_TEST_PI_VERSION:-0.84.0}" \
+  FM_FAKE_LAUNCH_LOG="$launchlog" FM_FAKE_PI_VERSION="${FM_TEST_PI_VERSION:-0.84.4}" \
     fm_test_run_spawn "$home" "$wt" "$fakebin" "$@"
 }
 
@@ -367,31 +365,20 @@ test_pi_threads_model_and_max_effort() {
   pass "pi receives --model and --thinking max profile flags"
 }
 
-test_pi_tui_mode_probe_is_safe_for_old_and_new_pi() {
-  local harness version rec id out status launch
-  harness=pi
-  for version in 0.82.0 0.84.0; do
-      id="profile-${harness}-tui-${version//./}-z8d"
-      rec=$(make_spawn_case "profile-__MODELFLAG__-${harness}-tui-${version//./}" "$harness" "$id")
-      read_case_record "$rec"
+test_pi_version_is_validated_before_launch() {
+  local rec id out status
+  id=profile-pi-version-z8d
+  rec=$(make_spawn_case profile-pi-version pi "$id")
+  read_case_record "$rec"
 
-      out=$(FM_TEST_PI_VERSION="$version" \
-        run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-        "$id" "$PROJ_DIR")
-      status=$?
-      expect_code 0 "$status" "$harness $version spawn should succeed"
-      launch=$(cat "$LAUNCH_LOG")
-      assert_contains "$launch" "'$FAKEBIN_DIR/$harness'" \
-        "$harness $version launch must use the executable selected for probing"
-      if [ "$version" = 0.82.0 ]; then
-        assert_not_contains "$launch" "--tui-mode" \
-          "$harness $version launch must omit unsupported --tui-mode"
-      else
-        assert_contains "$launch" "'$FAKEBIN_DIR/$harness' --tui-mode regular" \
-          "$harness $version launch must preserve the regular TUI"
-      fi
-  done
-  pass "Pi launch probing omits --tui-mode on older Pi and preserves it on supporting Pi"
+  out=$(FM_TEST_PI_VERSION=0.84.0 \
+    run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
+    "$id" "$PROJ_DIR")
+  status=$?
+  expect_code 1 "$status" "unsupported Pi version must be rejected"
+  assert_contains "$out" "plain Pi 0.84.4 is required" "Pi version refusal must name the supported release"
+  [ ! -s "$LAUNCH_LOG" ] || fail "unsupported Pi version reached the endpoint"
+  pass "Pi 0.84.4 is validated before endpoint publication"
 }
 
 test_batch_forwards_shared_profile_flags() {
@@ -443,6 +430,6 @@ test_active_dispatch_profile_allows_explicit_harness
 test_active_dispatch_profile_allows_positional_harness
 test_active_dispatch_profile_rejects_raw_launch_command
 test_pi_threads_model_and_max_effort
-test_pi_tui_mode_probe_is_safe_for_old_and_new_pi
+test_pi_version_is_validated_before_launch
 test_batch_forwards_shared_profile_flags
 test_active_dispatch_profile_does_not_block_secondmate_launch

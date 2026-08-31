@@ -1080,6 +1080,10 @@ PI_BIN=$(resolve_pi_executable pi) || {
   echo "error: pi executable not found on PATH" >&2
   exit 1
 }
+[ "$("$PI_BIN" --version 2>/dev/null || true)" = 0.84.4 ] || {
+  echo "error: plain Pi 0.84.4 is required" >&2
+  exit 1
+}
 PI_TUI_MODE=
 if pi_supports_tui_mode "$PI_BIN"; then PI_TUI_MODE=' --tui-mode regular'; fi
 LAUNCH=${LAUNCH//__PITUIMODE__/$PI_TUI_MODE}

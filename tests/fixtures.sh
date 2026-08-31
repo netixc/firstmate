@@ -252,6 +252,15 @@ fm_test_make_spawn_fakebin() {
   fakebin=$(fm_fakebin "$dir")
   fm_test_fake_tmux_spawn "$fakebin"
   fm_fake_exit0 "$fakebin" treehouse "$@"
+  for tool in "$@"; do
+    [ "$tool" = pi ] || continue
+    cat > "$fakebin/pi" <<'SH'
+#!/usr/bin/env bash
+[ "${1:-}" != --version ] || { printf '0.84.4\n'; exit 0; }
+exit 0
+SH
+    chmod +x "$fakebin/pi"
+  done
   printf '%s\n' "$fakebin"
 }
 
