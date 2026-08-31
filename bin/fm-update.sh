@@ -18,11 +18,14 @@
 #
 # The fast-forward mechanics live in bin/fm-ff-lib.sh (base_mode "origin" here);
 # the same library drives the local-HEAD secondmate sync used by fm-spawn.sh and
-# fm-bootstrap.sh, so there is one ff implementation, not several.
+# fm-bootstrap.sh, so there is one ff implementation, not several. At each
+# authoritative home update boundary this script also performs the explicit
+# one-time cutover for compatible Pi registrations that predate parent-owned
+# launch evidence; ordinary identity verification never performs that migration.
 #
 # It does NOT re-read AGENTS.md or nudge secondmates itself - those are LLM /
-# tmux actions the skill performs. The script's job is the safe git mechanics
-# plus a parseable summary telling the caller what to do next:
+# tmux actions the skill performs. The script's job is the safe update and
+# migration mechanics plus a parseable summary telling the caller what to do next:
 #   - one status line per target (updated/already current/skipped)
 #   - reread-firstmate: yes|no    (did the running firstmate's instructions change)
 #   - nudge-secondmates: fm-<id>...|none   (updated live secondmates to nudge)

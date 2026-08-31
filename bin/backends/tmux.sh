@@ -198,7 +198,7 @@ fm_backend_tmux_foreground_comms() {  # <target>
 # transient tmux problem never licenses a duplicate.
 #
 # A positive `alive` verdict requires a foreground PID validated by the shared
-# immutable executable and package-image identity boundary.
+# canonical package, lifecycle registration, and parent-owned launch boundary.
 # The foreground process group - when it is readable - is authoritative for
 # negative verdicts because it distinguishes an idle pane from a rewritten
 # process title.

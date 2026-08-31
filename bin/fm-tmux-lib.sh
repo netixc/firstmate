@@ -85,7 +85,8 @@ fm_tmux_composer_caps() {
 # separated (pi) composer shape, tmux's analogue of herdr's native
 # `agent get`. It answers only for pi, from two live signals:
 #   - identity: the pane tty's FOREGROUND process group (pgid = tpgid) contains
-#     a PID accepted by the shared immutable executable/package-image boundary.
+#     a PID accepted by the shared canonical package, lifecycle registration,
+#     and parent-owned launch-evidence boundary.
 #     A pane whose agent died to a shell gets no identity, which keeps a blank
 #     row between two stale rules unknown.
 #   - status: pi's verified busy footer via fm_pane_is_busy, mapped onto the

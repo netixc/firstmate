@@ -31,11 +31,12 @@ A persistent parent shell waiting for a child remained reported as the parent pr
 
 ### Pi liveness identity
 
-Pi rewrites its visible process title, so neither `#{pane_current_command}` nor `ps -o comm=` is sufficient identity evidence by itself.
-Firstmate combines the foreground PID, immutable Node package image, and a lifecycle registration emitted by a loaded Firstmate Pi extension.
-The generated worker extension and the primary watcher extension both publish that registration, preserving liveness for primary, ship, scout, and secondmate sessions.
+Pi rewrites its visible process title, so neither `#{pane_current_command}` nor `ps -o comm=` is identity evidence.
+Firstmate combines a foreground PID, the canonical Pi 0.84.4 package image, a lifecycle registration emitted by a loaded Firstmate Pi extension, and parent-owned launch evidence bound to that process start.
+The generated worker extension and the primary watcher extension publish only the loaded lifecycle registration; `bin/fm-pi-launch.sh` publishes the parent evidence and immutable extension image used to verify primary, ship, scout, and secondmate sessions.
+A one-time startup or update cutover snapshots only already-running five-line registrations before migration and then records completion, so ordinary identity verification cannot manufacture launch evidence for a new direct Pi process.
 
-The portable tmux regression rejects an unrelated native executable renamed to `pi` and requires a real Pi process with its extension loaded to classify alive:
+The portable tmux regression rejects an unrelated native executable renamed to `pi` and requires parent-launched canonical Pi with its extension loaded to classify alive:
 
 ```sh
 tests/fm-tmux-agent-liveness.test.sh
@@ -72,11 +73,11 @@ ps -o comm= -p "$engine_pid"
 FM_HOME="$fixture_home" bin/fm-crew-state.sh "$task_id"
 ```
 
-The personal edition accepts a tmux worker as Pi only when its foreground ancestry carries the canonical Pi 0.84.4 package image and a matching Firstmate extension lifecycle registration.
-`tests/fm-tmux-agent-liveness.test.sh` launches real foreground processes in tmux and proves that registered canonical Pi is alive while a renamed native executable, legacy identities, and aliases remain unsupported.
+The personal edition accepts a tmux worker as Pi only when its foreground process group contains a PID with the canonical Pi 0.84.4 package, a matching Firstmate extension lifecycle registration, and matching parent-owned launch evidence.
+`tests/fm-tmux-agent-liveness.test.sh` launches real foreground processes in tmux and proves that registered, parent-launched canonical Pi is alive while a renamed native executable, legacy identities, aliases, and claimant-only registrations remain unsupported.
 Provider-qualified model names do not participate in this process-identity decision.
 
-Herdr continues to use native registered-agent state rather than tmux process-identity matching.
+Herdr first requires native live-agent state, then applies the same endpoint-bound canonical process and parent-launch validation to a foreground PID; an unverified native agent is `ambiguous`, not `alive`.
 Zellij has no verified recovery-grade agent process probe, while Orca and cmux do not support secondmate spawns, so those backends retain their existing plain Pi launch semantics without widening worker identity.
 
 The current classifier matrix and its refresh guard are recorded in [Composer classification matrix](#composer-classification-matrix), with portable shape coverage in `tests/fm-composer-lib.test.sh` and `tests/fm-composer-ghost.test.sh`.

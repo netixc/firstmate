@@ -129,6 +129,15 @@ Text for a worker to read and commands that drive a worker's process are separat
 `bin/fm-control.sh` is the control plane: an allowlisted `interrupt`, `exit`, and transactional `relaunch` addressed to an exact task id, with plain Pi mechanics owned by `bin/fm-control-lib.sh`, a verified postcondition per verb, and no arbitrary-text or raw-key entry point.
 [`docs/agent-control.md`](agent-control.md) owns the verb contract, the capability matrix, the relaunch transaction, and the fail-closed boundaries.
 
+## Plain Pi process identity is parent-owned
+
+`bin/fm-harness-identity-lib.sh` owns the shared identity boundary used by primary detection and recovery-grade tmux and Herdr liveness.
+A positive Pi identity requires the canonical 0.84.4 package and executable, a process-start-bound lifecycle registration naming the exact extension image loaded by that process, and a matching launch record created by Firstmate's parent launcher.
+The Pi extension publishes only its claimant lifecycle registration; it cannot create or upgrade the authoritative launch record.
+The parent launcher retains the loaded extension image by digest, so a tracked-file fast-forward does not invalidate an already-running process.
+For the transition to this boundary, session start and each local or remote update boundary perform one idempotent cutover: they snapshot only compatible five-line registrations that were already live before that home's cutover, migrate only that snapshot, and persist completion.
+Ordinary identity verification never creates migration evidence, and a direct Pi process started after cutover remains unsupported.
+
 ## Busy state is semantic for plain Pi
 
 `bin/fm-busy-lib.sh` is the single owner of what "this worker is busy" means, and `bin/fm-busy-event.sh` is the only writer of the per-task records it reads.

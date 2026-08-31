@@ -1926,8 +1926,9 @@ fm_backend_herdr_tab_is_husk() {  # <session> <pane_id>
 # fm_backend_herdr_agent_state: recovery-grade state for the same session-start
 # sweep as the tmux classifier. It reuses the husk classifier rather than
 # creating a second Herdr state machine: a structurally gone pane is `missing`,
-# a confirmed agent-less pane is `dead`, a registered agent is `alive`, and an
-# unexpected or failed API read is `unreadable`.
+# a confirmed agent-less pane is `dead`, a registered agent with a foreground
+# PID passing canonical parent-owned Pi identity is `alive`, an unverified live
+# registration is `ambiguous`, and an unexpected API read is `unreadable`.
 fm_backend_herdr_registered_pi_identity() {  # <session> <pane_id>
   local session=$1 pane_id=$2 agent_out process_out pid comm args identity
   agent_out=$(fm_backend_herdr_cli "$session" agent get "$pane_id" 2>/dev/null) || return 1

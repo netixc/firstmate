@@ -1,7 +1,7 @@
 # Plain Pi agent control
 
 `bin/fm-control.sh <task-id> interrupt|exit|relaunch` is the only lifecycle control interface.
-`bin/fm-control-lib.sh` owns Pi's exact mechanics: one Escape interrupts, `/quit` exits, and relaunch starts fresh plain Pi from durable instructions in the same isolated copy.
+`bin/fm-control-lib.sh` owns Pi's exact mechanics: one Escape interrupts, `/quit` exits, and relaunch starts fresh plain Pi from durable instructions in the same isolated copy through the parent launcher.
 Resume is unsupported because Pi has no deterministic pane-resume contract.
 
 Control requires metadata recording exact `harness=pi`.

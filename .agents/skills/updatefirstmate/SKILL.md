@@ -29,6 +29,8 @@ This touches only the firstmate repo and its own worktrees, never anything under
    bin/fm-update.sh
    ```
    It fast-forwards this firstmate repo's default branch from origin, then updates every registered local or remote secondmate home through its placement-specific guarded path.
+   At each authoritative home update boundary it also completes the one-time Pi launch-evidence cutover, migrating only a snapshot of compatible registrations that were already live before that home's cutover and refusing if the migration cannot be completed safely.
+   This cutover preserves already-running Pi sessions across the tracked-file fast-forward; it never grants launch evidence during an ordinary identity check.
    It prints one status line per target (`updated <old>..<new>` / `already current` / `skipped: <reason>`), followed by two action lines that tell you exactly what to do next:
    - `reread-firstmate: yes|no`
    - `nudge-secondmates: fm-<id>...|none`
@@ -60,5 +62,5 @@ This touches only the firstmate repo and its own worktrees, never anything under
 - **Only the firstmate repo and its worktrees** are touched, never `projects/`.
   It is the same sanctioned self-write as the fleet sync.
 - **Secondmates are never disrupted.**
-  A local or remote secondmate gets a tracked-files fast-forward only when its own checkout is safe to advance, plus a gentle re-read nudge when it changed.
+  A local or remote secondmate gets a tracked-files fast-forward only when its own checkout is safe to advance, a one-time parent-owned launch-evidence migration for an already-running compatible Pi registration, plus a gentle re-read nudge when tracked instructions changed.
   It is never torn down, interrupted, or forced.
