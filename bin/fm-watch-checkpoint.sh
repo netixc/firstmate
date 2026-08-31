@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-# Run one bounded foreground watcher checkpoint for harnesses that should not
-# rely on background-task completion to wake the model.
+# Run one bounded foreground watcher checkpoint for plain Pi.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SECONDS_ARG=${FM_CODEX_WATCH_CHECKPOINT:-180}
+SECONDS_ARG=${FM_PI_WATCH_CHECKPOINT:-180}
 
 usage() {
   cat <<'EOF'

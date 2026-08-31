@@ -21,26 +21,62 @@ unsupported() {
   return 2
 }
 
+process_identity() {
+  local comm=$1 args=${2:-} argv0 arg1 rest candidate base
+  argv0=${args%% *}
+  rest=${args#* }
+  [ "$rest" != "$args" ] || rest=
+  arg1=${rest%% *}
+  for candidate in "$comm" "$argv0"; do
+    [ -n "$candidate" ] || continue
+    base=$(basename -- "$candidate")
+    case "$base" in
+      pi) printf 'pi\n'; return 0 ;;
+      pi-signed|claude|codex|opencode|grok|kimi|cursor|muse)
+        printf '%s\n' "$base"
+        return 0
+        ;;
+    esac
+    case "$candidate" in
+      */claude/versions/*) printf 'claude\n'; return 0 ;;
+    esac
+  done
+  case "$(basename -- "$argv0")" in
+    node*|python*) candidate=$arg1 ;;
+    *) candidate= ;;
+  esac
+  base=$(basename -- "${candidate:-.}")
+  case "$base" in
+    pi) printf 'pi\n'; return 0 ;;
+    pi-signed|claude|codex|opencode|grok|kimi|cursor|muse) printf '%s\n' "$base"; return 0 ;;
+  esac
+  case "$candidate" in
+    */claude/versions/*) printf 'claude\n'; return 0 ;;
+  esac
+  return 1
+}
+
 detect_own() {
-  local pid=$$ comm args
-  [ "${PI_CODING_AGENT:-}" = true ] && { printf 'pi\n'; return; }
+  local pid=$$ comm args identity
   for _ in 1 2 3 4 5 6 7 8; do
     comm=$(ps -o comm= -p "$pid" 2>/dev/null) || break
-    case "$(basename -- "$comm")" in
+    args=$(ps -o args= -p "$pid" 2>/dev/null || true)
+    identity=$(process_identity "$comm" "$args" || true)
+    case "$identity" in
       pi) printf 'pi\n'; return ;;
       pi-signed|claude|codex|opencode|grok|kimi|cursor|muse)
-        unsupported "$(basename -- "$comm")"
+        unsupported "$identity"
         return
-        ;;
-      node*|python*)
-        args=$(ps -o args= -p "$pid" 2>/dev/null || true)
-        case "$args" in *" pi "*|*/pi) printf 'pi\n'; return ;; esac
         ;;
     esac
     pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
     [ -n "$pid" ] && [ "$pid" -gt 1 ] || break
   done
-  printf 'unknown\n'
+  if [ "${PI_CODING_AGENT:-}" = true ]; then
+    printf 'pi\n'
+  else
+    printf 'unknown\n'
+  fi
 }
 
 crew_value() {

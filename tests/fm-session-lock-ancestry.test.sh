@@ -10,6 +10,7 @@ pass "exact plain Pi process is recognized"
 
 for path in \
   /usr/local/bin/pi-launcher \
+  /tmp/pi/bash \
   /Applications/Pi \
   /usr/bin/claude \
   /usr/bin/codex \

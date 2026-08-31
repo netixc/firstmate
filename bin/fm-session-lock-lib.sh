@@ -2,15 +2,10 @@
 # Plain Pi process identity and per-home session-lock ownership.
 
 fm_harness_path_name() {
-  local path=${1:-} component
+  local path=${1:-}
   [ -n "$path" ] || return 1
-  while [ -n "$path" ]; do
-    component=${path%%/*}
-    [ "$component" = pi ] && { printf 'pi'; return 0; }
-    [ "$path" != "${path#*/}" ] || break
-    path=${path#*/}
-  done
-  return 1
+  [ "$(basename -- "$path")" = pi ] || return 1
+  printf 'pi'
 }
 
 fm_harness_process_matches() {
