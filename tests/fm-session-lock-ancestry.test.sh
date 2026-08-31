@@ -8,6 +8,11 @@ fm_harness_process_matches /opt/homebrew/bin/pi /opt/homebrew/bin/pi \
   || fail "plain Pi process not recognized"
 pass "exact plain Pi process is recognized"
 
+if fm_harness_process_matches sleep 'pi 60'; then
+  fail "mutable argv0 authorized a non-Pi process"
+fi
+pass "mutable argv0 cannot authorize a non-Pi process"
+
 for path in \
   /usr/local/bin/pi-launcher \
   /tmp/pi/bash \

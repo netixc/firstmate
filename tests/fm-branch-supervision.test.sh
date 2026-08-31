@@ -289,21 +289,21 @@ test_home_without_branch_is_untouched() {
     || fail "guard layer created branch state in a home that never ran the branch"
 
   # A stale Pi marker and recycled-but-live lease pid cannot activate leases in
-  # a no-lock Claude home; the guard removes the leftover and passes silently.
-  printf 'harness=claude\n' > "$home/state/fake.meta"
+  # a no-lock unsupported home; the guard removes the leftover and passes silently.
+  printf 'harness=unsupported\n' > "$home/state/fake.meta"
   printf '%s\n' "$PPID" > "$home/state/.pi-branch-extension-loaded"
   printf 'branch\t%s\t123\n' "$PPID" > "$home/state/.lease-task-reused"
   out=$(STATE="$home/state" bash -c '. "$1"; fm_lease_guard task-reused "probe"; fm_lease_forbid_branch "probe"; echo silent-pass' _ "$ROOT/bin/fm-lease-lib.sh" 2>&1)
-  [ "$out" = "silent-pass" ] || fail "guard helpers honored a leftover Pi lease in a no-lock Claude home: $out"
+  [ "$out" = "silent-pass" ] || fail "guard helpers honored a leftover Pi lease in a no-lock unsupported home: $out"
   [ ! -e "$home/state/.lease-task-reused" ] || fail "guard kept a leftover Pi lease without a session lock"
 
   printf '%s\n' "$PPID" > "$home/state/.lock"
   printf 'branch\t%s\t123\n' "$PPID" > "$home/state/.lease-task-reused"
   # The positional parameter belongs to the nested shell.
   # shellcheck disable=SC2016
-  out=$(env -u PI_CODING_AGENT -u FM_SUPERVISION_ACTOR CLAUDECODE=1 STATE="$home/state" bash -c '. "$1"; fm_lease_guard task-reused "probe"; echo silent-pass' _ "$ROOT/bin/fm-lease-lib.sh" 2>&1)
-  [ "$out" = "silent-pass" ] || fail "guard helpers honored a reused-pid Pi lease in a Claude context: $out"
-  [ ! -e "$home/state/.lease-task-reused" ] || fail "Claude context kept a Pi lease whose old pid matched its current lock"
+  out=$(env -u PI_CODING_AGENT -u FM_SUPERVISION_ACTOR STATE="$home/state" bash -c '. "$1"; fm_lease_guard task-reused "probe"; echo silent-pass' _ "$ROOT/bin/fm-lease-lib.sh" 2>&1)
+  [ "$out" = "silent-pass" ] || fail "guard helpers honored a reused-pid Pi lease in an unsupported context: $out"
+  [ ! -e "$home/state/.lease-task-reused" ] || fail "unsupported context kept a Pi lease whose old pid matched its current lock"
   pass "a non-Pi home ignores stale Pi leases even when the recycled pid owns its lock"
 }
 

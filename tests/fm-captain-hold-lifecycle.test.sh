@@ -88,7 +88,7 @@ write_origin_meta() {  # <home> <id> [kind]
     "window=firstmate:fm-$id" \
     "worktree=$home/projects/missing-$id" \
     "project=$home/projects/sample" \
-    "harness=codex" \
+    "harness=pi" \
     "kind=$kind" \
     "mode=$kind"
 }

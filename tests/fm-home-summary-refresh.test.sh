@@ -227,7 +227,7 @@ cat > "$PARENT_HOME/data/backlog.md" <<'EOF'
 ## Done
 EOF
 fm_write_secondmate_meta "$PARENT_HOME/state/mate.meta" "$HOME_DIR" \
-  "fmtest:fm-mate" firstmate claude
+  "fmtest:fm-mate" firstmate pi
 PATH="$FAKEBIN:$PATH" \
   FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$PARENT_HOME" \
   FM_SNAPSHOT_NOW="$NOW_TWO" FM_SNAPSHOT_NOW_EPOCH="$EPOCH_TWO" \
