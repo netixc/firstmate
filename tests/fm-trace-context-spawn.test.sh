@@ -356,6 +356,7 @@ test_duplicate_secondmate_spawn_does_not_converge_trace_context() {
   id=sm-duplicate
   log="$base/launch.log"
   mkdir -p "$prim/config" "$prim/data/$id" "$prim/state" "$prim/projects"
+  printf 'pi\n' > "$prim/config/secondmate-harness"
   : > "$prim/config/trace-context"
   printf 'charter brief\n' > "$prim/data/$id/brief.md"
   touch "$prim/state/.last-watcher-beat"

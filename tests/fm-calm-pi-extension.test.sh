@@ -51,7 +51,7 @@ wait_for_text() {
 }
 
 find_chrome() {
-  local candidate
+  local candidate cache_root
   if [ -n "${FM_CHROME_BIN:-}" ] && [ -x "$FM_CHROME_BIN" ]; then
     printf '%s\n' "$FM_CHROME_BIN"
     return 0
@@ -65,6 +65,23 @@ find_chrome() {
   do
     if command -v "$candidate" >/dev/null 2>&1; then
       command -v "$candidate"
+      return 0
+    fi
+  done
+  for cache_root in \
+    "$HOME/Library/Caches/ms-playwright" \
+    "$HOME/.cache/ms-playwright" \
+    "$HOME/.cache/puppeteer"
+  do
+    [ -d "$cache_root" ] || continue
+    candidate=$(find "$cache_root" -type f -name chrome-headless-shell -perm -111 2>/dev/null | head -1)
+    if [ -z "$candidate" ]; then
+      candidate=$(find "$cache_root" -type f \
+        \( -name chrome -o -name headless_shell -o -name 'Google Chrome for Testing' \) \
+        -perm -111 2>/dev/null | head -1)
+    fi
+    if [ -n "$candidate" ]; then
+      printf '%s\n' "$candidate"
       return 0
     fi
   done
@@ -679,6 +696,7 @@ test_rendering_and_session_lifecycle() {
   cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$fixture/lib/fm-operational-input.ts"
   cp "$ROOT/.pi/extensions/lib/fm-branch-dispatch.ts" "$fixture/lib/fm-branch-dispatch.ts"
   cp "$WATCH_EXT" "$fixture/fm-primary-pi-watch.ts"
+  cp "$ROOT/.pi/extensions/fm-pi-process-registration.ts" "$fixture/fm-pi-process-registration.ts"
   ln -s "$PI_PACKAGE_DIR" "$fixture/node_modules/@earendil-works/pi-coding-agent"
   ln -s "$PI_PACKAGE_DIR/node_modules/@earendil-works/pi-tui" "$fixture/node_modules/@earendil-works/pi-tui"
   ln -s "$PI_PACKAGE_DIR/node_modules/typebox" "$fixture/node_modules/typebox"
@@ -3127,6 +3145,7 @@ test_interactive_terminal_e2e() {
   cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$project/.pi/extensions/lib/fm-operational-input.ts"
   cp "$ROOT/.pi/extensions/lib/fm-branch-dispatch.ts" "$project/.pi/extensions/lib/fm-branch-dispatch.ts"
   cp "$WATCH_EXT" "$project/.pi/extensions/fm-primary-pi-watch.ts"
+  cp "$ROOT/.pi/extensions/fm-pi-process-registration.ts" "$project/.pi/extensions/fm-pi-process-registration.ts"
   cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$project/.pi/extensions/fm-primary-turnend-guard.ts"
   cp \
     "$ROOT/bin/fm-sessionstart-run.sh" \

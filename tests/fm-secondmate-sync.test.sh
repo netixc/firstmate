@@ -422,8 +422,10 @@ test_bootstrap_sweep_nudges_only_instruction_change() {
   assert_contains "$info_line" "firstmate was updated to the latest - please re-read your AGENTS.md to pick up the new instructions." \
     "successful nudge report should include the exact message sent"
   assert_not_contains "$out" "NUDGE_SECONDMATES:" "successful nudge must not leave a firstmate action item"
-  assert_not_contains "$out" "sm-readme" "readme-only advance is not nudged"
-  assert_not_contains "$out" "sm-current" "already-current secondmate is not nudged"
+  assert_not_contains "$out" "BOOTSTRAP_INFO: nudged fm-sm-readme" "readme-only advance is not nudged"
+  assert_not_contains "$out" "BOOTSTRAP_INFO: nudged fm-sm-current" "already-current secondmate is not nudged"
+  [ ! -e "$w/home/state/sm-readme.inbox" ] || fail "readme-only advance created a steering inbox"
+  [ ! -e "$w/home/state/sm-current.inbox" ] || fail "already-current secondmate created a steering inbox"
   # The nudge rides fm-send's durable inbox plane: the marked message lands in
   # the secondmate task's steering-inbox record while only the doorbell is typed.
   assert_contains "$(cat "$w/home/state/sm-instr.inbox/001.msg")" "[fm-from-firstmate]" \
@@ -536,7 +538,7 @@ test_bootstrap_nudge_failure_records_retry_marker() {
 }
 
 test_bootstrap_nudge_retry_is_idempotent() {
-  local w c1 fakebin out marker out2
+  local w c1 fakebin out marker out2 actionable
   w=$(new_world nudge-retry)
   c1=$(head_of "$w/main")
   add_sm_worktree "$w" sm-instr "$c1"
@@ -561,7 +563,10 @@ test_bootstrap_nudge_retry_is_idempotent() {
 
   out2=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
     FM_SEND_SETTLE=0 "$ROOT/bin/fm-bootstrap.sh" 2>/dev/null)
-  [ -z "$out2" ] || fail "idempotent retry should converge to silence, got: $out2"
+  actionable=$(printf '%s\n' "$out2" | grep -v '^SECONDMATE_LIVENESS:' || true)
+  [ -z "$actionable" ] || fail "idempotent retry should emit no further nudge result, got: $out2"
+  [ ! -e "$w/home/state/sm-instr.inbox/002.msg" ] \
+    || fail "idempotent retry enqueued the instruction more than once"
   pass "T8d bootstrap nudge retry is idempotent after success"
 }
 
@@ -766,7 +771,8 @@ test_spawn_fast_forwards_before_launch() {
 exit 0
 SH
   chmod +x "$fakebin/tmux"
-  fm_fake_exit0 "$fakebin" pi
+  ln -s "$(command -v pi)" "$fakebin/pi"
+  ln -s "$(command -v node)" "$fakebin/node"
 
   PATH="$fakebin:$BASE_PATH" TMUX='' \
     FM_ROOT_OVERRIDE="$w/main" FM_HOME="$w/home" \
@@ -801,7 +807,8 @@ test_spawn_warns_when_sync_skipped_before_launch() {
 exit 0
 SH
   chmod +x "$fakebin/tmux"
-  fm_fake_exit0 "$fakebin" pi
+  ln -s "$(command -v pi)" "$fakebin/pi"
+  ln -s "$(command -v node)" "$fakebin/node"
 
   PATH="$fakebin:$BASE_PATH" TMUX='' \
     FM_ROOT_OVERRIDE="$w/main" FM_HOME="$w/home" \

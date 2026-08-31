@@ -977,20 +977,37 @@ pass "config push and bootstrap serialize remote inheritance convergence"
 
 printf 'pi\n' > "$PARENT/config/crew-harness"
 # A failed reread nudge now means the durable remote inbox RECORD could not be
-# written (a swallowed doorbell alone no longer fails a recorded steer), so
-# the failure is induced by making the remote steering inbox unwritable.
-chmod 555 "$REMOTE_HOME/state/parent-route/ios.inbox"
+# written (a swallowed doorbell alone no longer fails a recorded steer). A
+# regular file at the inbox path is a deterministic publication failure even
+# for privileged CI users; permission-bit fixtures are not. Seed the pending
+# reread record so an otherwise unchanged push must retry delivery.
+mkdir -p "${NUDGE_MARKER%/*}"
+cat > "$NUDGE_MARKER" <<EOF
+id=ios
+selector=fm-ios
+home=$REMOTE_HOME
+commit=
+instructions=remote
+message=Firstmate instructions or inherited config changed on this host. Re-read AGENTS.md and the inherited config files before further work.
+remote=1
+EOF
+chmod 600 "$NUDGE_MARKER"
+mv "$REMOTE_HOME/state/parent-route/ios.inbox" "$REMOTE_HOME/state/parent-route/ios.inbox.saved"
+: > "$REMOTE_HOME/state/parent-route/ios.inbox"
 if remote_env "$ROOT/bin/fm-config-push.sh" > "$TMP_ROOT/config-push-fail.out" 2>&1; then
-  chmod 755 "$REMOTE_HOME/state/parent-route/ios.inbox"
+  rm -f "$REMOTE_HOME/state/parent-route/ios.inbox"
+  mv "$REMOTE_HOME/state/parent-route/ios.inbox.saved" "$REMOTE_HOME/state/parent-route/ios.inbox"
   fail "remote config push claimed success after its reread record could not be written"
 fi
 if [ ! -f "$NUDGE_MARKER" ]; then
-  chmod 755 "$REMOTE_HOME/state/parent-route/ios.inbox"
+  rm -f "$REMOTE_HOME/state/parent-route/ios.inbox"
+  mv "$REMOTE_HOME/state/parent-route/ios.inbox.saved" "$REMOTE_HOME/state/parent-route/ios.inbox"
   printf 'config push failure output:\n%s\n' "$(cat "$TMP_ROOT/config-push-fail.out")" >&2
   fail "failed remote config reread did not retain a retry marker"
 fi
 assert_grep 'remote=1' "$NUDGE_MARKER" "remote config reread marker lost its placement"
-chmod 755 "$REMOTE_HOME/state/parent-route/ios.inbox"
+rm -f "$REMOTE_HOME/state/parent-route/ios.inbox"
+mv "$REMOTE_HOME/state/parent-route/ios.inbox.saved" "$REMOTE_HOME/state/parent-route/ios.inbox"
 remote_env "$ROOT/bin/fm-config-push.sh" > "$TMP_ROOT/config-push-retry.out" \
   || fail "unchanged remote config push did not retry its pending reread"
 assert_absent "$NUDGE_MARKER" "successful remote config reread left its retry marker"

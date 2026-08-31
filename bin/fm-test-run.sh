@@ -1894,6 +1894,27 @@ record_script_result() {
   TOTAL=$((TOTAL + 1))
 }
 
+pi_integrity_snapshot() {
+  local pi cli digest
+  pi=$(command -v pi 2>/dev/null || true)
+  [ -n "$pi" ] && [ "$("$pi" --version 2>/dev/null || true)" = 0.84.4 ] || return 0
+  cli=$(python3 - "$pi" <<'PY'
+import sys
+from pathlib import Path
+try:
+    print(Path(sys.argv[1]).resolve(strict=True))
+except OSError:
+    raise SystemExit(1)
+PY
+) || return 1
+  if command -v shasum >/dev/null 2>&1; then
+    digest=$(shasum -a 256 "$cli" | awk '{print $1}') || return 1
+  else
+    digest=$(sha256sum "$cli" | awk '{print $1}') || return 1
+  fi
+  printf '%s\t%s\n' "$cli" "$digest"
+}
+
 # Run <script>, capturing output to <out>. <stream> 1 also echoes it live.
 # <id> only has to be unique within this run. When PER_SCRIPT_TIMEOUT_SECS is
 # positive, a script that outruns it is terminated and reported as exit 124: a
@@ -1901,8 +1922,9 @@ record_script_result() {
 # because an unbounded suite is what silently outruns its caller's budget.
 run_script_bounded() {  # <script> <out> <stream> <id>
   local script=$1 out=$2 stream=$3 id=$4
-  local rc
+  local rc pi_before pi_after
   : "$id"
+  pi_before=$(pi_integrity_snapshot) || pi_before=unreadable
   set +e
   if [ "$stream" -eq 1 ]; then
     if [ "$PER_SCRIPT_TIMEOUT_SECS" -gt 0 ]; then
@@ -1926,6 +1948,13 @@ run_script_bounded() {  # <script> <out> <stream> <id>
     printf 'not ok - %s exceeded the per-script bound of %ss and was terminated\n' \
       "$script" "$PER_SCRIPT_TIMEOUT_SECS" >>"$out"
     [ "$stream" -eq 1 ] && tail -1 "$out"
+  fi
+  pi_after=$(pi_integrity_snapshot) || pi_after=unreadable
+  if [ "$pi_before" != "$pi_after" ]; then
+    printf 'not ok - %s mutated the installed plain Pi executable (before=%s after=%s)\n' \
+      "$script" "$pi_before" "$pi_after" >>"$out"
+    [ "$stream" -eq 1 ] && tail -1 "$out"
+    rc=97
   fi
   return "$rc"
 }

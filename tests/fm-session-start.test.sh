@@ -60,7 +60,7 @@ new_world() {
   root="$w/root"
   home="$w/home"
   fakebin="$w/fakebin"
-  mkdir -p "$home/state" "$home/data" "$home/config" "$fakebin"
+  mkdir -p "$home/state" "$home/data" "$home/config" "$home/projects" "$fakebin"
   git init -q -b main "$root"
   git -C "$root" commit -q --allow-empty -m init
   printf '%s|%s|%s\n' "$root" "$home" "$fakebin"
@@ -71,7 +71,8 @@ new_world() {
 # test deliberately breaks one. Mirrors fm-bootstrap.test.sh's fixture.
 make_fake_toolchain() {
   local fakebin=$1
-  fm_fake_exit0 "$fakebin" tmux node chrome-devtools-axi
+  fm_fake_exit0 "$fakebin" tmux chrome-devtools-axi
+  ln -s "$(command -v node)" "$fakebin/node"
   fm_fake_version_tool "$fakebin" lavish-axi FM_FAKE_LAVISH_AXI_VERSION 0.1.46
   cat > "$fakebin/gh-axi" <<'SH'
 #!/usr/bin/env bash
@@ -226,6 +227,7 @@ for argument in "$@"; do
   previous=$argument
 done
 case "$*" in
+  *"lstart="*) /bin/ps -o lstart= -p "$pid"; exit $? ;;
   *"comm="*)
     if [ -z "${FM_FAKE_HARNESS_PID:-}" ] || [ "$pid" = "$FM_FAKE_HARNESS_PID" ] \
       || [ "$pid" = "${FM_FAKE_LIVE_HOLDER_PID:-}" ]; then
@@ -246,12 +248,26 @@ case "$*" in
     ;;
   *"ppid="*)
     [ -n "${FM_FAKE_HARNESS_PID:-}" ] || exit 1
-    /bin/ps -o ppid= -p "$pid"
+    [ "$pid" = "$FM_FAKE_HARNESS_PID" ] && exit 1
+    printf '%s\n' "$FM_FAKE_HARNESS_PID"
     ;;
 esac
 exit 1
 SH
   chmod +x "$fakebin/ps"
+  cat > "$fakebin/lsof" <<'SH'
+#!/usr/bin/env bash
+pid=
+prev=
+for arg in "$@"; do [ "$prev" = -p ] && pid=$arg; prev=$arg; done
+[ -n "$pid" ] || exit 1
+if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ] || [ "$pid" = "${FM_FAKE_LIVE_HOLDER_PID:-}" ]; then
+  printf 'p%s\nftxt\nn%s\n' "$pid" "$(command -v node)"
+  exit 0
+fi
+exit 1
+SH
+  chmod +x "$fakebin/lsof"
   printf '%s\n' "$harness" > "$fakebin/.harness-name"
 }
 
@@ -267,6 +283,7 @@ for arg in "\$@"; do
   prev="\$arg"
 done
 case "\$*" in
+  *"lstart="*) /bin/ps -o lstart= -p "\$pid"; exit \$? ;;
   *"comm="*)
     if [ "\$pid" = "$holder_pid" ]; then
       printf '/usr/local/bin/pi\n'
@@ -288,6 +305,17 @@ esac
 exit 1
 SH
   chmod +x "$fakebin/ps"
+  cat > "$fakebin/lsof" <<SH
+#!/usr/bin/env bash
+pid=
+prev=
+for arg in "\$@"; do [ "\$prev" = -p ] && pid=\$arg; prev=\$arg; done
+[ "\$pid" = "$holder_pid" ] || exit 1
+printf 'p%s\\nftxt\\nn%s\\n' "\$pid" "$(command -v node)"
+SH
+  chmod +x "$fakebin/lsof"
+  fm_test_register_pi_process "$ROOT" "$home/state" "$holder_pid" \
+    || fail "could not register the Pi diagnostic holder fixture"
 }
 
 # make_fake_tmux <fakebin> <live-target>: display-message succeeds only for
@@ -506,24 +534,36 @@ SH
 # past the suite's fake process ancestry.
 run_session_start() {
   local home=$1 root=$2 path=$3 pi_harness=${4:-}
+  [ -f "$home/state/.pi-processes/$$" ] || \
+    fm_test_register_pi_process "$ROOT" "$home/state" "$$" \
+    || fail "could not register the session-start Pi fixture"
+  [ "$(FM_FAKE_HARNESS_PID="$$" FM_HOME="$home" FM_ROOT_OVERRIDE="$root" \
+    FM_STATE_OVERRIDE="$home/state" PATH="$path" "$ROOT/bin/fm-harness.sh")" = pi ] \
+    || fail "session-start fixture did not resolve its registered Pi identity"
   if [ -n "$pi_harness" ]; then
-    env PI_CODING_AGENT=true FM_PI_HARNESS="$pi_harness" \
-      FM_HOME="$home" FM_ROOT_OVERRIDE="$root" PATH="$path" \
-      "$SESSION_START"
+    env PI_CODING_AGENT=true FM_PI_HARNESS="$pi_harness" FM_FAKE_HARNESS_PID="$$" \
+      FM_HOME="$home" FM_ROOT_OVERRIDE="$root" FM_STATE_OVERRIDE="$home/state" \
+      FM_DATA_OVERRIDE="$home/data" FM_CONFIG_OVERRIDE="$home/config" \
+      FM_PROJECTS_OVERRIDE="$home/projects" PATH="$path" "$SESSION_START"
   else
     env -u PI_CODING_AGENT -u FM_PI_HARNESS \
-      FM_HOME="$home" FM_ROOT_OVERRIDE="$root" PATH="$path" \
-      "$SESSION_START"
+      FM_FAKE_HARNESS_PID="$$" FM_HOME="$home" FM_ROOT_OVERRIDE="$root" FM_STATE_OVERRIDE="$home/state" \
+      FM_DATA_OVERRIDE="$home/data" FM_CONFIG_OVERRIDE="$home/config" \
+      FM_PROJECTS_OVERRIDE="$home/projects" PATH="$path" "$SESSION_START"
   fi
 }
 
 run_pi_session_start() {  # <home> <root> <path> [fm-session-start args...]
   local home=$1 root=$2 path=$3
   shift 3
+  [ -f "$home/state/.pi-processes/$SESSION_START_TEST_HARNESS_PID" ] || \
+    fm_test_register_pi_process "$ROOT" "$home/state" "$SESSION_START_TEST_HARNESS_PID" \
+    || fail "could not register the Pi session-start fixture"
   env PI_CODING_AGENT=true FM_PI_HARNESS=pi \
     FM_FAKE_HARNESS_PID="$SESSION_START_TEST_HARNESS_PID" \
-    FM_HOME="$home" FM_ROOT_OVERRIDE="$root" PATH="$path" \
-    "$SESSION_START" "$@"
+    FM_HOME="$home" FM_ROOT_OVERRIDE="$root" FM_STATE_OVERRIDE="$home/state" \
+    FM_DATA_OVERRIDE="$home/data" FM_CONFIG_OVERRIDE="$home/config" \
+    FM_PROJECTS_OVERRIDE="$home/projects" PATH="$path" "$SESSION_START" "$@"
 }
 
 
@@ -556,7 +596,7 @@ EOF
   ln -s "$ROOT/bin" "$root/bin"
   make_fake_toolchain "$fakebin"
   make_fake_ps_pi "$fakebin"
-  fm_fake_exit0 "$fakebin" pi
+  ln -s "$(command -v pi)" "$fakebin/pi"
   make_fake_tmux_secondmate_recovery "$fakebin"
   : > "$log"
   printf '%s|%s|%s|%s|%s|%s\n' "$root" "$home" "$fakebin" "$mate" "$log" "$spawned"
@@ -603,7 +643,7 @@ EOF
   ln -s "$ROOT/bin" "$root/bin"
   make_fake_toolchain "$fakebin"
   make_fake_ps_pi "$fakebin"
-  fm_fake_exit0 "$fakebin" pi
+  ln -s "$(command -v pi)" "$fakebin/pi"
   make_fake_herdr_secondmate_recovery "$fakebin"
   : > "$log"
   printf '%s|%s|%s|%s|%s|%s\n' "$root" "$home" "$fakebin" "$mate" "$log" "$state"
@@ -664,6 +704,7 @@ install_pi_watch_extension_fixture() {
   local root=$1
   mkdir -p "$root/.pi/extensions"
   cp "$ROOT/.pi/extensions/fm-primary-pi-watch.ts" "$root/.pi/extensions/fm-primary-pi-watch.ts"
+  cp "$ROOT/.pi/extensions/fm-pi-process-registration.ts" "$root/.pi/extensions/fm-pi-process-registration.ts"
 }
 
 write_pi_watch_loaded_marker() {
@@ -752,10 +793,16 @@ EOF
 
   sleep 300 &
   holder_pid=$!
+  fm_test_register_pi_process "$ROOT" "$home/state" "$holder_pid" || fail "could not register the live Pi lock-holder fixture"
+  PATH="$fakebin:$BASE_PATH" FM_FAKE_LIVE_HOLDER_PID="$holder_pid" \
+    FM_HOME="$home" FM_ROOT_OVERRIDE="$root" FM_STATE_OVERRIDE="$home/state" \
+    bash -c '. "$1/bin/fm-session-lock-lib.sh"; fm_harness_pid_alive "$2"' _ "$ROOT" "$holder_pid" \
+    || fail "registered live Pi lock-holder fixture was not accepted"
   printf '%s\n' "$holder_pid" > "$home/state/.lock"
 
   status=0
-  out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH") || status=$?
+  out=$(FM_FAKE_LIVE_HOLDER_PID="$holder_pid" \
+    run_session_start "$home" "$root" "$fakebin:$BASE_PATH") || status=$?
   kill "$holder_pid" 2>/dev/null || true
   wait "$holder_pid" 2>/dev/null || true
 
@@ -801,6 +848,8 @@ EOF
   make_fake_toolchain "$fakebin"
   make_fake_ps_pi "$fakebin"
   append_wake "$home/state" signal task-a "done: must remain queued" || fail "seed wake failed"
+  fm_test_register_pi_process "$ROOT" "$home/state" "$$" \
+    || fail "could not pre-register the lock-publication failure fixture"
   chmod 0500 "$home/state"
 
   status=0
@@ -840,8 +889,10 @@ EOF
 
   sleep 300 &
   holder_pid=$!
+  fm_test_register_pi_process "$ROOT" "$home/state" "$holder_pid" || fail "could not register the trace-context lock-holder fixture"
   printf '%s\n' "$holder_pid" > "$home/state/.lock"
-  out=$(FM_TRACE_CONTEXT=off run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+  out=$(FM_TRACE_CONTEXT=off FM_FAKE_LIVE_HOLDER_PID="$holder_pid" \
+    run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
   kill "$holder_pid" 2>/dev/null || true
   wait "$holder_pid" 2>/dev/null || true
   assert_contains "$out" "READ-ONLY SESSION" "trace-context refusal fixture did not enter read-only mode"
@@ -886,11 +937,21 @@ case "$*" in
       printf '%s\n' bash
     fi
     ;;
-  *"ppid="*) printf '%s\n' "$FM_FAKE_HARNESS_PID" ;;
+  *"lstart="*) /bin/ps -o lstart= -p "$pid" ;;
+  *"ppid="*) [ "$pid" = "$FM_FAKE_HARNESS_PID" ] && exit 1; printf '%s\n' "$FM_FAKE_HARNESS_PID" ;;
   *) exit 1 ;;
 esac
 SH
-  chmod +x "$fakebin/ps"
+  cat > "$fakebin/lsof" <<'SH'
+#!/usr/bin/env bash
+pid=
+previous=
+for argument in "$@"; do [ "$previous" = -p ] && pid=$argument; previous=$argument; done
+[ -f "$FM_FAKE_LOCK_STATE/harness-$pid" ] || exit 1
+printf 'p%s\nftxt\nn%s\n' "$pid" "$(command -v node)"
+SH
+  chmod +x "$fakebin/ps" "$fakebin/lsof"
+  ln -s "$(command -v node)" "$fakebin/node"
 
   pids=
   i=1
@@ -898,6 +959,8 @@ SH
     (
       harness_pid=$(sh -c 'printf "%s\n" "$PPID"')
       : > "$home/state/harness-$harness_pid"
+      fm_test_register_pi_process "$ROOT" "$home/state" "$harness_pid" \
+        || fail "could not register concurrent Pi fixture $i"
       : > "$ready/$i"
       while [ "$(find "$ready" -type f | wc -l | tr -d ' ')" -lt 40 ]; do
         sleep 0.01
@@ -939,8 +1002,9 @@ $rec
 EOF
   make_fake_toolchain "$fakebin"
   make_fake_ps_pi "$fakebin"
-  # Force a MISSING diagnostic line so the bootstrap section is non-trivial.
-  rm -f "$fakebin/node"
+  # Force a MISSING diagnostic line without removing Node, which the
+  # registered canonical Pi executable itself requires.
+  rm -f "$fakebin/chrome-devtools-axi"
 
   printf 'window=fm-sess:w1\nkind=ship\n' > "$home/state/task-a.meta"
   printf 'Captain memory that may be truncated away safely.\n' > "$home/data/captain.md"
@@ -979,7 +1043,7 @@ EOF
   assert_contains "$out" "Captain memory that may be truncated away safely." \
     "the ordering fixture did not actually print a memory file"
 
-  missing_line=$(printf '%s\n' "$out" | grep -n 'MISSING: node' | head -1 | cut -d: -f1)
+  missing_line=$(printf '%s\n' "$out" | grep -n 'MISSING: chrome-devtools-axi' | head -1 | cut -d: -f1)
   [ -n "$missing_line" ] || fail "MISSING diagnostic did not appear at all"
   [ "$missing_line" -lt "$fleet_line" ] || fail "actionable MISSING diagnostic was buried after the bulk fleet-state digest"
 
@@ -1344,7 +1408,7 @@ $rec
 EOF
   make_fake_toolchain "$fakebin"
   make_fake_ps_pi "$fakebin"
-  rm -f "$fakebin/node"
+  rm -f "$fakebin/chrome-devtools-axi"
 
   printf 'needs-decision: pick a library\n' > "$home/state/task-z.status"
   append_wake "$home/state" signal task-z.status "needs-decision: pick a library"
@@ -1354,7 +1418,7 @@ EOF
   # fm-lock.sh's own exact success text.
   assert_contains "$out" "lock acquired: harness pid" "fm-lock.sh's real output did not appear (composition, not reimplementation)"
   # fm-bootstrap.sh's own exact MISSING-tool line format.
-  assert_contains "$out" "MISSING: node (install:" "fm-bootstrap.sh's real detect line did not appear verbatim"
+  assert_contains "$out" "MISSING: chrome-devtools-axi (install:" "fm-bootstrap.sh's real detect line did not appear verbatim"
   # fm-wake-drain.sh's real drained record (raw tab-separated queue line).
   assert_contains "$out" "$(printf 'signal\ttask-z.status\tneeds-decision: pick a library')" "fm-wake-drain.sh's real drained record did not appear"
   assert_contains "$out" "wake annotation: latest wake-EVENT observed at drain, not current state: task-z.status: needs-decision: pick a library" "fm-session-start.sh did not preserve the drain's separate annotation line"
@@ -1489,8 +1553,10 @@ EOF
   make_fake_ps_pi "$fakebin"
   sleep 300 &
   holder_pid=$!
+  fm_test_register_pi_process "$ROOT" "$home/state" "$holder_pid" || fail "could not register the network lock-holder fixture"
   printf '%s\n' "$holder_pid" > "$home/state/.lock"
   out=$(HERDR_ENV='' HERDR_PANE_ID='' HERDR_TAB_ID='' HERDR_WORKSPACE_ID='' \
+    FM_FAKE_LIVE_HOLDER_PID="$holder_pid" \
     run_session_start "$home" "$root" "$fakebin:$BASE_PATH" pi)
   kill "$holder_pid" 2>/dev/null || true
   wait "$holder_pid" 2>/dev/null || true
@@ -1782,7 +1848,7 @@ EOF
     _ "$ROOT/bin/fm-timeout-lib.sh")
   [ "$mechanism" = bash ] || fail "the forced pure-Bash timeout fixture selected '$mechanism'"
 
-  out=$(FM_TIMEOUT_MECHANISM_OVERRIDE=bash FM_SESSION_START_TIMEOUT=3 FM_STARTUP_NETWORK_TIMEOUT=2 \
+  out=$(FM_TIMEOUT_MECHANISM_OVERRIDE=bash FM_SESSION_START_TIMEOUT=8 FM_STARTUP_NETWORK_TIMEOUT=2 \
     run_session_start "$home" "$root" "$fakebin:$BASE_PATH") || status=$?
 
   expect_code 0 "$status" "a truncated session start must still exit 0 so the session can open"
@@ -2079,6 +2145,7 @@ EOF
 
   sleep 300 &
   holder_pid=$!
+  fm_test_register_pi_process "$ROOT" "$home/state" "$holder_pid" || fail "could not register the compact lock-holder fixture"
   printf '%s\n%s\n' "$holder_pid" "$(hash_file_for_test "$root/AGENTS.md")" \
     > "$home/state/.session-start-agents-baseline"
   printf '%s\n' "$holder_pid" > "$home/state/.lock"
@@ -2111,7 +2178,13 @@ EOF
   make_fake_toolchain "$fakebin"
   make_fake_ps_harness "$fakebin" pi
   printf '%s\n' 'AGENTS_SHA_TEST=original' > "$root/AGENTS.md"
-  printf '#!/usr/bin/env bash\nexit 1\n' > "$fakebin/shasum"
+  cat > "$fakebin/shasum" <<'SH'
+#!/usr/bin/env bash
+case "${*: -1}" in
+  */.pi/extensions/fm-pi-process-registration.ts) exec /usr/bin/shasum "$@" ;;
+esac
+exit 1
+SH
   printf '#!/usr/bin/env bash\nexit 1\n' > "$fakebin/sha256sum"
   chmod +x "$fakebin/shasum" "$fakebin/sha256sum"
 
@@ -2151,9 +2224,7 @@ EOF
   make_fake_ps_pi "$fakebin"
   git -C "$root" checkout -q -B fm/reemit-tangle
 
-  reemit=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$root" PATH="$fakebin:$BASE_PATH" \
-    env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
-    "$SESSION_START" --reemit)
+  reemit=$(run_pi_session_start "$home" "$root" "$fakebin:$BASE_PATH" --reemit)
 
   # A re-emit skips the sweeps because it ALREADY ran them, not because it lacks
   # the lock, so it must still own repair rather than deferring to a lock holder.
@@ -2165,10 +2236,10 @@ EOF
   rm -f "$home/state/.lock"
   sleep 300 &
   holder_pid=$!
+  fm_test_register_pi_process "$ROOT" "$home/state" "$holder_pid" || fail "could not register the re-emit lock-holder fixture"
   printf '%s\n' "$holder_pid" > "$home/state/.lock"
-  readonly_out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$root" PATH="$fakebin:$BASE_PATH" \
-    env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
-    "$SESSION_START" --reemit)
+  readonly_out=$(FM_FAKE_LIVE_HOLDER_PID="$holder_pid" \
+    run_pi_session_start "$home" "$root" "$fakebin:$BASE_PATH" --reemit)
   kill "$holder_pid" 2>/dev/null || true
   wait "$holder_pid" 2>/dev/null || true
 

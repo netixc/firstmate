@@ -213,13 +213,17 @@ make_fake_spawn_toolchain() {
 exit 0
 SH
   chmod +x "$fakebin/tmux"
-  fm_fake_exit0 "$fakebin" pi
+  ln -s "$(command -v node)" "$fakebin/node"
+  ln -s "$(command -v pi)" "$fakebin/pi"
   printf '%s\n' "$fakebin"
 }
 
 # Version-aware stubs so bootstrap's tool floors stay quiet in fixture PATH.
 add_bootstrap_compatible_tools() {
   local fakebin=$1
+  # The spawn fixture points node at the real runtime so canonical Pi can answer
+  # --version. Remove that link before writing the bootstrap-only node stub.
+  rm -f "$fakebin/node"
   fm_fake_exit0 "$fakebin" node chrome-devtools-axi gh treehouse
   fm_fake_version_tool "$fakebin" lavish-axi FM_FAKE_LAVISH_AXI_VERSION 0.1.46
   cat > "$fakebin/gh-axi" <<'SH'
@@ -289,7 +293,7 @@ new_git_world() {
 }
 
 test_spawn_convergence_point_copies_shared_file() {
-  local rec w root home sm fakebin data_override
+  local rec w root home sm fakebin data_override out
   rec=$(new_git_world spawn-point)
   IFS='|' read -r w root home sm <<EOF
 $rec
@@ -299,15 +303,15 @@ EOF
   write_shared "$data_override/captain-shared.md" "shared from override"
   fakebin=$(make_fake_spawn_toolchain "$w")
 
-  PATH="$fakebin:$BASE_PATH" TMUX='' \
+  out=$(PATH="$fakebin:$BASE_PATH" TMUX='' \
     FM_ROOT_OVERRIDE="$root" FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$data_override" \
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
     FM_SPAWN_NO_GUARD=1 \
-    "$ROOT/bin/fm-spawn.sh" sm "$sm" pi --secondmate >/dev/null 2>&1 || true
+    "$ROOT/bin/fm-spawn.sh" sm "$sm" pi --secondmate 2>&1) || true
 
   cmp -s "$data_override/captain-shared.md" "$sm/data/captain-shared.md" \
-    || fail "spawn convergence point did not copy shared captain preferences from FM_DATA_OVERRIDE"
+    || fail "spawn convergence point did not copy shared captain preferences from FM_DATA_OVERRIDE: $out"
   assert_shared_readonly "$sm/data/captain-shared.md"
   pass "spawn convergence point propagates data/captain-shared.md from FM_DATA_OVERRIDE"
 }

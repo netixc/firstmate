@@ -282,6 +282,7 @@ case "${1:-}" in
             *) printf '%s\n' "$mode"; exit 0 ;;
           esac
           ;;
+        *pane_tty*) printf '/dev/fake\n'; exit 0 ;;
       esac
     done
     exit 0
@@ -304,7 +305,35 @@ case "${1:-}" in
 esac
 exit 0
 SH
-  chmod +x "$fakebin/tmux"
+  cat > "$fakebin/ps" <<'SH'
+#!/usr/bin/env bash
+set -u
+script_dir=$(CDPATH='' cd "$(dirname "$0")" && pwd)
+live_pid=${FM_TEST_LIVE_PI_PID:-}
+[ -n "$live_pid" ] || live_pid=$(cat "$script_dir/.live-pi-pid" 2>/dev/null || true)
+case "$*" in
+  *"lstart="*) exec /bin/ps "$@" ;;
+  *"-t fake"*)
+    [ "${FM_TEST_PANE_CMD:-}" = pi ] && [ -n "$live_pid" ] \
+      && printf '%s %s %s pi\n' "$live_pid" "$live_pid" "$live_pid"
+    exit 0
+    ;;
+  *"-p $live_pid -o args="*) [ -n "$live_pid" ] && printf 'pi\n'; exit 0 ;;
+esac
+exec /bin/ps "$@"
+SH
+  cat > "$fakebin/lsof" <<'SH'
+#!/usr/bin/env bash
+script_dir=$(CDPATH='' cd "$(dirname "$0")" && pwd)
+live_pid=${FM_TEST_LIVE_PI_PID:-}
+[ -n "$live_pid" ] || live_pid=$(cat "$script_dir/.live-pi-pid" 2>/dev/null || true)
+[ -n "$live_pid" ] || exit 1
+case " $* " in
+  *" -p $live_pid "*) printf 'p%s\nftxt\nn%s\n' "$live_pid" "$(command -v node)" ;;
+  *) exit 1 ;;
+esac
+SH
+  chmod +x "$fakebin/tmux" "$fakebin/ps" "$fakebin/lsof"
   printf '%s\n' "$fakebin"
 }
 
@@ -323,7 +352,7 @@ new_world() {
   mkdir -p "$w/home/state" "$w/home/config"
   touch "$w/home/state/.last-watcher-beat"
   printf 'pi\n' > "$w/home/config/crew-harness"
-  printf '%s\n' "$w"
+  (cd "$w" && pwd)
 }
 
 # add_sm_home <w> <id> <window>: a plain (non-git) secondmate home - the
@@ -346,9 +375,16 @@ add_sm_home() {
 }
 
 run_bootstrap() {  # <fakebin> <home> <pane-cmd> <call-log> [extra env...] -> stdout
-  local fb=$1 home=$2 cmd=$3 log=$4; shift 4
+  local fb=$1 home=$2 cmd=$3 log=$4 fixture_bin; shift 4
+  fixture_bin=${fb%%:*}
+  if [ -n "${FM_TEST_LIVE_PI_PID:-}" ]; then
+    printf '%s\n' "$FM_TEST_LIVE_PI_PID" > "$fixture_bin/.live-pi-pid"
+  else
+    rm -f "$fixture_bin/.live-pi-pid"
+  fi
   PATH="$fb:$BASE_PATH" TMUX='' FM_BACKEND=tmux FM_HOME="$home" \
     FM_TEST_PANE_CMD="$cmd" FM_TMUX_CALL_LOG="$log" \
+    FM_TEST_LIVE_PI_PID="${FM_TEST_LIVE_PI_PID:-}" \
     env "$@" "$ROOT/bin/fm-bootstrap.sh" 2>&1
 }
 
@@ -368,6 +404,27 @@ test_sweep_respawns_confirmed_dead_secondmate() {
   assert_contains "$(cat "$log")" "new-window" \
     "a confirmed-dead secondmate should actually be relaunched"
   pass "sweep: a confirmed-dead secondmate endpoint is killed and respawned"
+}
+
+test_sweep_leaves_alive_secondmate_untouched() {
+  local w fb tmuxfb log out live_pid
+  w=$(new_world sweep-alive)
+  add_sm_home "$w" sm1 firstmate:fm-sm1
+  fb=$(make_toolchain "$w"); tmuxfb=$(make_liveness_tmux "$w")
+  log="$w/calls.log"; : > "$log"
+  node -e 'setInterval(() => {}, 1000)' &
+  live_pid=$!
+  fm_test_register_pi_process "$w/sm1" "$w/sm1/state" "$live_pid" \
+    || fail "could not register the healthy live-secondmate fixture"
+
+  out=$(FM_TEST_LIVE_PI_PID="$live_pid" run_bootstrap "$tmuxfb:$fb" "$w/home" pi "$log")
+  kill "$live_pid" 2>/dev/null || true
+  wait "$live_pid" 2>/dev/null || true
+
+  assert_not_contains "$out" "SECONDMATE_LIVENESS:" \
+    "an already-live secondmate should be handled silently"
+  [ ! -s "$log" ] || fail "an already-live secondmate must never be killed or respawned: $(cat "$log")"
+  pass "sweep: a registered live Pi secondmate is untouched"
 }
 
 test_sweep_respawns_authoritatively_missing_pi_secondmate() {
@@ -444,6 +501,35 @@ test_sweep_never_acts_on_unverified_harness_dead_reading() {
   pass "sweep: an unverified harness blocks recovery with a concrete diagnostic"
 }
 
+test_sweep_converges_no_retouch_once_alive() {
+  local w fb tmuxfb log out1 out2 live_pid live_home
+  w=$(new_world sweep-idempotent)
+  add_sm_home "$w" sm1 firstmate:fm-sm1
+  fb=$(make_toolchain "$w"); tmuxfb=$(make_liveness_tmux "$w")
+  log="$w/calls.log"; : > "$log"
+
+  out1=$(run_bootstrap "$tmuxfb:$fb" "$w/home" zsh "$log")
+  assert_not_contains "$out1" "SECONDMATE_LIVENESS: secondmate sm1: respawned" \
+    "round 1 should handle the successful respawn silently"
+  [ -s "$log" ] || fail "round 1 should have logged the kill and respawn operations"
+
+  node -e 'setInterval(() => {}, 1000)' &
+  live_pid=$!
+  live_home=$(awk -F= '$1 == "home" { print substr($0, 6); exit }' "$w/home/state/sm1.meta")
+  [ -n "$live_home" ] || fail "post-respawn metadata lost the secondmate home"
+  fm_test_register_pi_process "$live_home" "$live_home/state" "$live_pid" \
+    || fail "could not register the post-respawn live fixture"
+  : > "$log"
+  out2=$(FM_TEST_LIVE_PI_PID="$live_pid" run_bootstrap "$tmuxfb:$fb" "$w/home" pi "$log")
+  kill "$live_pid" 2>/dev/null || true
+  wait "$live_pid" 2>/dev/null || true
+
+  assert_not_contains "$out2" "SECONDMATE_LIVENESS:" \
+    "round 2 should handle the registered live secondmate silently"
+  [ ! -s "$log" ] || fail "round 2 must not re-kill or re-respawn a live secondmate: $(cat "$log")"
+  pass "sweep: recovery converges and a registered live secondmate is not touched again"
+}
+
 test_sweep_skipped_under_detect_only() {
   local w fb tmuxfb log out
   w=$(new_world sweep-detect-only)
@@ -485,11 +571,13 @@ test_tmux_agent_state_rejects_malformed_targets_before_probe
 test_herdr_agent_state_preserves_husk_classifier
 test_agent_state_dispatcher_and_compatibility
 test_sweep_respawns_confirmed_dead_secondmate
+test_sweep_leaves_alive_secondmate_untouched
 test_sweep_respawns_authoritatively_missing_pi_secondmate
 test_sweep_never_acts_on_ambiguous_existing_process
 test_sweep_never_acts_on_transient_unreadability
 test_sweep_reports_missing_endpoint_relaunch_failure
 test_sweep_never_acts_on_unverified_harness_dead_reading
+test_sweep_converges_no_retouch_once_alive
 test_sweep_skipped_under_detect_only
 test_sweep_noop_with_no_secondmate_meta
 

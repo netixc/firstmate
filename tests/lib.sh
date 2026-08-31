@@ -107,6 +107,36 @@ fm_test_tmproot() {
   printf '%s\n' "$root"
 }
 
+# Publish the same parent-owned Pi registration evidence as the real extension,
+# but only for a live fixture pid and a fixture state directory. The canonical
+# installed package is read for identity and is never mutated.
+fm_test_register_pi_process() {  # <code-root> <state-dir> <pid>
+  local code_root=$1 state_dir=$2 pid=$3 extension source cli start version marker
+  code_root=$(cd "$code_root" && pwd) || return 1
+  source="$ROOT/.pi/extensions/fm-pi-process-registration.ts"
+  extension="$code_root/.pi/extensions/fm-pi-process-registration.ts"
+  mkdir -p "$(dirname "$extension")" "$state_dir/.pi-processes"
+  if [ "$source" != "$extension" ]; then
+    cp "$source" "$extension" || return 1
+  fi
+  cli=$(python3 - "$(command -v pi)" <<'PY'
+import sys
+from pathlib import Path
+print(Path(sys.argv[1]).resolve(strict=True))
+PY
+) || return 1
+  [ "$($cli --version 2>/dev/null)" = 0.84.4 ] || return 1
+  start=$(/bin/ps -o lstart= -p "$pid" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+  [ -n "$start" ] || return 1
+  if command -v shasum >/dev/null 2>&1; then
+    version="sha256:$(shasum -a 256 "$extension" | awk '{print $1}')"
+  else
+    version="sha256:$(sha256sum "$extension" | awk '{print $1}')"
+  fi
+  marker="$state_dir/.pi-processes/$pid"
+  printf '%s\n%s\n%s\n%s\n%s\n' "$version" "$pid" "$start" "$extension" "$cli" > "$marker"
+}
+
 trap fm_test_cleanup EXIT
 trap 'fm_test_cleanup; exit 130' INT
 trap 'fm_test_cleanup; exit 143' TERM
