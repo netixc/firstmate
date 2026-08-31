@@ -41,7 +41,7 @@ The portable tmux regression rejects an unrelated native executable renamed to `
 tests/fm-tmux-agent-liveness.test.sh
 ```
 
-The real model integration pins the supported Pi release and exercises harness resolution from a natural Pi tool subprocess:
+The credentialed real-model integration pins the supported Pi release, exercises identity resolution from a natural Pi tool subprocess, and validates interrupt, exit, and transactional relaunch:
 
 ```sh
 tests/fm-pi-only-live-e2e.test.sh
@@ -72,12 +72,12 @@ ps -o comm= -p "$engine_pid"
 FM_HOME="$fixture_home" bin/fm-crew-state.sh "$task_id"
 ```
 
-The personal edition now treats only the exact `pi` process name as a live worker identity.
-`tests/fm-tmux-agent-liveness.test.sh` launches real foreground processes in tmux and proves that `pi` is alive while legacy identities and aliases, including the former launcher name, remain unsupported.
-Provider-qualified model names do not participate in this process-name decision.
+The personal edition accepts a tmux worker as Pi only when its foreground ancestry carries the canonical Pi 0.84.4 package image and a matching Firstmate extension lifecycle registration.
+`tests/fm-tmux-agent-liveness.test.sh` launches real foreground processes in tmux and proves that registered canonical Pi is alive while a renamed native executable, legacy identities, and aliases remain unsupported.
+Provider-qualified model names do not participate in this process-identity decision.
 
-Herdr continues to use native registered-agent state rather than process-name matching.
-Zellij has no verified recovery-grade agent process probe, while Orca and cmux do not support secondmate spawns, so those backends retain their existing generic launch semantics without widening worker identity.
+Herdr continues to use native registered-agent state rather than tmux process-identity matching.
+Zellij has no verified recovery-grade agent process probe, while Orca and cmux do not support secondmate spawns, so those backends retain their existing plain Pi launch semantics without widening worker identity.
 
 The current classifier matrix and its refresh guard are recorded in [Composer classification matrix](#composer-classification-matrix), with portable shape coverage in `tests/fm-composer-lib.test.sh` and `tests/fm-composer-ghost.test.sh`.
 

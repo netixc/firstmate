@@ -1090,10 +1090,10 @@ PI_TUI_MODE=
 if pi_supports_tui_mode "$PI_BIN"; then PI_TUI_MODE=' --tui-mode regular'; fi
 LAUNCH=${LAUNCH//__PITUIMODE__/$PI_TUI_MODE}
 
-# config/secondmate-harness may carry optional model/effort tokens alongside the
-# harness ("<harness> [<model>] [<effort>]"). They apply only when this is a
-# --secondmate spawn and no explicit per-spawn harness/raw launch was supplied, so
-# the harness itself came from the secondmate config fallback chain. Resolving
+# config/secondmate-harness may carry optional model/effort tokens alongside exact
+# pi ("pi [<model>] [<effort>]"). They apply only when this is a --secondmate
+# spawn and no explicit per-spawn harness was supplied, so the harness itself
+# came from the secondmate config fallback chain. Resolving
 # here on every spawn makes the pin durable across respawns. Precedence: explicit
 # --model/--effort flags still win over the file's tokens.
 if [ "$KIND" = secondmate ] && [ -z "$ARG3" ]; then

@@ -218,7 +218,7 @@ After the retry budget, `fm_composer_queued_enter_verdict` treats proven pending
 On an already active or unreadable baseline, the adapter falls back to conservative composer clearance, with a pre-Enter rendered-footer transition when that baseline is unavailable.
 A fully unreadable target stops retrying and reports unknown.
 
-Some harnesses never present a legibly idle native baseline at all, so the composer fallback is their only path.
+When Herdr cannot present a legibly idle native Pi baseline, the composer fallback is the only path.
 That fallback alone reported every delivered steer as unconfirmed, so it is paired with a rendered-footer transition: the pane's verified busy footer is read once before the first Enter, and an idle-to-busy transition across that Enter confirms the submit.
 It is the same semantic signal the native path uses and the same one the tmux submit core reads.
 A pane already mid-turn cannot borrow a rendered-footer transition as proof of this delivery; after retries, only proven pending text plus native `working` can establish that its Enter was accepted and queued.

@@ -192,7 +192,7 @@ Without this launcher, reconcile would silently fail to start a runner on macOS 
 
 ## Scope
 
-The runner is domain-neutral and creates no endpoint, task metadata, or backlog item, so the supported primary harnesses and runtime backends are unaffected except through the existing `check` and status-signal wake paths they already consume.
+The runner is domain-neutral and creates no endpoint, task metadata, or backlog item, so the Pi primary and runtime backends are unaffected except through the existing `check` and status-signal wake paths they already consume.
 Built-in adapters extend the runner through `bin/fm-procevent-<adapter>.sh`; the `when` adapter also uses the runner library's locked registration publisher so its private trust state and source registration are serialized under one source boundary.
 Explicit external adapters instead use the single-capability contract in [`docs/extension-bindings.md`](../extension-bindings.md), with no filename discovery or package-supplied argv.
 An adapter's `terminal` command is optional and defaults to keeping the source armed.

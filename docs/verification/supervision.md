@@ -11,10 +11,13 @@ FM_PI_ONLY_LIVE_E2E=1 tests/fm-pi-only-live-e2e.test.sh
 ```
 
 ```text
-ok - real Pi model and child-process identity resolve exact plain pi (Pi 0.84.4)
+ok - real Pi extensions register lifecycle identity (Pi 0.84.4)
+ok - real Pi interrupt and exit lifecycle control succeed (Pi 0.84.4)
+ok - real Pi transactional relaunch preserves profile metadata (Pi 0.84.4)
 ```
 
 The test runs the real model through plain `pi`, asks it to execute the public harness detector from a Pi child process, and requires exact `pi` output.
+It then launches real Pi in the production shell-and-tmux shape and validates extension registration, interrupt, exit, and transactional relaunch with model and effort metadata preserved.
 `tests/fm-pi-only-harness.test.sh` supplies portable public-interface coverage for exact identity, migration refusal, control, and semantic busy state.
 
 ## Wedge-alarm channels

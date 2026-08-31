@@ -17,8 +17,8 @@ mkdir -p "$STATE" 2>/dev/null || {
   exit 1
 }
 
-# Harness identity (FM_HARNESS_RE, ancestry walk, holder liveness) is owned by
-# same identity contract.
+# Plain Pi ancestry and holder liveness are owned by
+# bin/fm-session-lock-lib.sh and its shared harness-identity library.
 # shellcheck source=bin/fm-session-lock-lib.sh
 . "$SCRIPT_DIR/fm-session-lock-lib.sh"
 

@@ -2,7 +2,7 @@
 name: harness-adapters
 description: >-
   Agent-only reference for plain Pi worker operations.
-  Use before spawning or recovering a worker or secondmate, handling trust, invoking a harness-specific skill, interrupting or exiting an agent, or verifying Pi integration.
+  Use before spawning or recovering a worker or secondmate, handling trust, invoking a Pi skill, interrupting or exiting an agent, or verifying Pi integration.
 user-invocable: false
 metadata:
   internal: true

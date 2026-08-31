@@ -244,12 +244,11 @@ The installed extension API has no supported global transcript filter, user-mess
 Pi 0.81.1 through 0.82.0 and Pi 0.84.4 export `AssistantMessageComponent` and `InteractiveMode`, so Calm uses separate idempotent, API-probed adapters for assistant thinking layout and the complete operational-user transcript row while leaving all message data and non-Calm rendering unchanged; see the [compatibility contract](calm.md#pi-compatibility) for how a future Pi lacking one of those exports is handled.
 General component replacement, ANSI cursor erasure, provider-context mutation, and installed-file patching remain rejected as unsupported or preservation-breaking workarounds.
 
-## Cross-harness verification record
+## Pi verification record
 
-The original five-harness inspection was performed on 2026-07-22, with every integration surface rechecked and Pi reverified at 0.81.1 on 2026-07-23 for the latest Calm presentation change.
+Pi was reverified at 0.81.1 on 2026-07-23 for the Calm presentation change, and later sections record the subsequent Pi compatibility refreshes.
 
 ```text
-1.17.18
 $ pi --version
 0.81.1
 ```
@@ -258,10 +257,10 @@ $ pi --version
 | --- | --- | --- |
 | Pi (verified 0.81.1 through 0.82.0) | Partially feasible with two API-probed exported-class adapters. | Public APIs control working visibility, collapsed labels, known tool slots, custom entries, and expansion redraws; exported assistant and interactive-mode classes provide the collapsed-thinking and operational-user layout boundaries, gated on the exact method's presence rather than a version number, while generic user, tool, and status filtering remains unavailable. |
 
-These conclusions are deliberately limited to the named versions and supported surfaces.
-They do not claim that a harness can never add the missing renderer API.
-The canonical encoder and every non-Pi delivery path remain unchanged, and the tmux, Herdr, Zellij, Orca, and cmux runtime surfaces continue to transport the same input selected by the harness adapter.
-Only Pi's Calm presentation implementation changed; every producer and non-Pi transport remains unchanged.
+This conclusion is deliberately limited to the named Pi versions and supported surfaces.
+It does not claim that Pi can never add a missing renderer API.
+The canonical encoder and the tmux, Herdr, Zellij, Orca, and cmux runtime transports remain unchanged.
+Only Pi's Calm presentation implementation changed; every producer and runtime transport remains unchanged.
 
 ## Regression coverage
 
