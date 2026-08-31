@@ -14,7 +14,7 @@ fm_harness_excluded_install_path() {
   case "$path" in
     */bin/pi-signed) printf 'pi-signed\n'; return 0 ;;
     */bin/claude|*/claude/versions/*) printf 'claude\n'; return 0 ;;
-    */bin/codex) printf 'codex\n'; return 0 ;;
+    */bin/codex|*/@openai/codex/bin/codex.js) printf 'codex\n'; return 0 ;;
     */bin/opencode|*/opencode/bin/opencode.js) printf 'opencode\n'; return 0 ;;
     */bin/grok) printf 'grok\n'; return 0 ;;
     */bin/kimi) printf 'kimi\n'; return 0 ;;
@@ -161,8 +161,25 @@ except OSError:
 PY
 ) || return 1
   [ -f "$cli" ] && [ ! -L "$cli" ] || return 1
-  digest=$(fm_harness_file_sha256 "$cli") || return 1
-  [ "$digest" = 5406c369954516fb56879d685e082ff9095cd6e06e41af406f394942377fd4bf ] || return 1
+  digest=$(python3 - "$cli" <<'PY'
+import hashlib
+import sys
+from pathlib import Path
+root = Path(sys.argv[1]).parent
+value = hashlib.sha256()
+try:
+    files = sorted(path for path in root.rglob("*") if path.is_file())
+    for path in files:
+        value.update(path.relative_to(root).as_posix().encode())
+        value.update(b"\0")
+        value.update(path.read_bytes())
+        value.update(b"\0")
+except OSError:
+    raise SystemExit(1)
+print(value.hexdigest())
+PY
+) || return 1
+  [ "$digest" = 1dfa94d6d88b01237cb5bcd6fbaed13289108ebb76e580806833be228372fd08 ] || return 1
   version=$("$cli" --version 2>/dev/null || true)
   [ "$version" = 0.84.4 ]
 }
@@ -172,10 +189,10 @@ fm_harness_pid_pi_registration() {
   root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
   if [ -n "${FM_HARNESS_IDENTITY_HOME:-}" ]; then
     state_dir="$FM_HARNESS_IDENTITY_HOME/state"
-    expected_extension="$FM_HARNESS_IDENTITY_HOME/.pi/extensions/fm-primary-pi-watch.ts"
+    expected_extension="$FM_HARNESS_IDENTITY_HOME/.pi/extensions/fm-pi-process-registration.ts"
   else
     state_dir=${FM_STATE_OVERRIDE:-${FM_HOME:-${FM_ROOT_OVERRIDE:-$root}}/state}
-    expected_extension="$root/.pi/extensions/fm-primary-pi-watch.ts"
+    expected_extension="$root/.pi/extensions/fm-pi-process-registration.ts"
   fi
   marker="$state_dir/.pi-processes/$pid"
   [ -f "$marker" ] && [ ! -L "$marker" ] || return 1
@@ -188,7 +205,7 @@ fm_harness_pid_pi_registration() {
   [ "$marker_extension" = "$expected_extension" ] || return 1
   fm_harness_pi_cli_canonical "$marker_cli" || return 1
   [ -f "$marker_extension" ] && [ ! -L "$marker_extension" ] || return 1
-  actual_version="sha256:$(fm_harness_file_sha256 "$root/.pi/extensions/fm-primary-pi-watch.ts")" || return 1
+  actual_version="sha256:$(fm_harness_file_sha256 "$root/.pi/extensions/fm-pi-process-registration.ts")" || return 1
   [ "$marker_version" = "$actual_version" ] || return 1
   [ "$(fm_harness_file_sha256 "$marker_extension")" = "${actual_version#sha256:}" ] || return 1
   current_start=$(ps -o lstart= -p "$pid" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')

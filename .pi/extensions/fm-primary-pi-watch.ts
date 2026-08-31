@@ -10,12 +10,13 @@
 // callbacks from a prior generation are no-ops against the active replacement.
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
 import { Box, Container, Text, type Component } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
+import { installPiProcessRegistration } from "./fm-pi-process-registration.ts";
 import {
   createBranchDispatchOffer,
   FM_BRANCH_DISPATCH_EVENT,
@@ -89,9 +90,6 @@ const state = process.env.FM_STATE_OVERRIDE || `${fmHome}/state`;
 const config = process.env.FM_CONFIG_OVERRIDE || `${fmHome}/config`;
 const armScript = `${fmRoot}/bin/fm-watch-arm.sh`;
 const marker = `${state}/.pi-watch-extension-loaded`;
-const processMarkerDir = `${state}/.pi-processes`;
-const processMarker = `${processMarkerDir}/${process.pid}`;
-const processMarkerTemp = `${processMarker}.${process.pid}.tmp`;
 const extensionVersion = `sha256:${createHash("sha256").update(readFileSync(extensionFile)).digest("hex")}`;
 const retryBaseMs = positiveInteger("FM_WATCH_REARM_RETRY_BASE_MS", 250);
 const retryMaxMs = positiveInteger("FM_WATCH_REARM_RETRY_MAX_MS", 4000);
@@ -151,23 +149,10 @@ function lockOwnership(): LockOwnership {
   return pidAlive(lockPid) ? "other" : "missing";
 }
 
-function processStartIdentity(): string {
-  const result = spawnSync("ps", ["-o", "lstart=", "-p", String(process.pid)], { encoding: "utf8" });
-  return result.status === 0 ? result.stdout.trim() : "";
-}
-
 function markLoaded(): void {
-  mkdirSync(processMarkerDir, { recursive: true });
-  writeFileSync(processMarkerTemp, `${extensionVersion}\n${process.pid}\n${processStartIdentity()}\n${extensionFile}\n${process.argv[1] ? realpathSync(process.argv[1]) : ""}\n`);
-  renameSync(processMarkerTemp, processMarker);
   if (lockOwnership() === "other") return;
   mkdirSync(state, { recursive: true });
   writeFileSync(marker, `${extensionVersion}\n${process.pid}\n`);
-}
-
-function clearProcessMarker(): void {
-  rmSync(processMarker, { force: true });
-  rmSync(processMarkerTemp, { force: true });
 }
 
 function actionableLine(output: string): string {
@@ -240,6 +225,7 @@ const cleanupOnProcessExit = () => {
 process.once("exit", cleanupOnProcessExit);
 
 export default function (pi: ExtensionAPI) {
+  installPiProcessRegistration(pi, state);
   let generation = createGeneration();
   activateGeneration(generation);
 
@@ -584,7 +570,6 @@ export default function (pi: ExtensionAPI) {
   });
   pi.on?.("session_shutdown", () => {
     stopGeneration(generation);
-    clearProcessMarker();
   });
 
   pi.registerCommand?.("fm-watch-arm-pi", {
