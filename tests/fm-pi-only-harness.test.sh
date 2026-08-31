@@ -80,6 +80,12 @@ set -e
 assert_eq 2 "$rc" "excluded shell script entrypoint is rejected"
 assert_contains "$out" "unsupported harness" "excluded shell script entrypoint reports migration"
 set +e
+out=$(env PI_CODING_AGENT=true FAKE_COMM=bash FAKE_ARGS="bash '/tmp/user home/bin/pi-signed'" PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
+rc=$?
+set -e
+assert_eq 2 "$rc" "spaced excluded shell entrypoint is rejected"
+assert_contains "$out" "unsupported harness" "spaced excluded shell entrypoint reports migration"
+set +e
 out=$(env PI_CODING_AGENT=true FAKE_COMM=node FAKE_ARGS='node /opt/opencode/bin/opencode.js' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
 rc=$?
 set -e

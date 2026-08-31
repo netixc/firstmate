@@ -4,9 +4,10 @@ set -eu
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 . "$ROOT/bin/fm-session-lock-lib.sh"
 
-fm_harness_process_matches /opt/homebrew/bin/pi /opt/homebrew/bin/pi /opt/homebrew/bin/pi \
-  || fail "plain Pi process not recognized"
-pass "exact plain Pi process is recognized"
+if fm_harness_process_matches pi pi /tmp/pi; then
+  fail "arbitrary native binary named pi was recognized"
+fi
+pass "arbitrary native binary named pi is not trusted"
 
 if fm_harness_process_matches sleep 'pi 60' /bin/sleep; then
   fail "mutable argv0 authorized a non-Pi process"

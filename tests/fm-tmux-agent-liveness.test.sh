@@ -8,7 +8,10 @@ command -v pi >/dev/null 2>&1 || { echo 'skip: plain Pi unavailable'; exit 0; }
 TMP=$(fm_test_tmproot tmux-pi-live)
 mkdir -p "$TMP/bin"
 REAL_PI=$(command -v pi)
-ln -s "$(command -v sleep)" "$TMP/bin/pi"
+cp "$(command -v sleep)" "$TMP/bin/pi"
+if [ "$(uname -s)" = Darwin ]; then
+  codesign --force --sign - "$TMP/bin/pi" >/dev/null 2>&1
+fi
 SOCK="fm-pi-live-$$"; trap 'tmux -L "$SOCK" kill-server 2>/dev/null || true; rm -rf "$TMP"' EXIT
 tmux -L "$SOCK" -f /dev/null new-session -d -s live -n fake "$TMP/bin/pi 60"
 tmux -L "$SOCK" new-window -d -t live -n pi "$REAL_PI --no-session --no-extensions"
@@ -23,8 +26,8 @@ FM_BACKEND_LIB_DIR="$ROOT/bin"; export FM_BACKEND_LIB_DIR
 # shellcheck source=/dev/null
 . "$ROOT/bin/backends/tmux.sh"
 state=$(fm_backend_tmux_agent_state live:fake 2>/dev/null || true)
-[ "$state" != alive ] || fail "a sleep symlink named pi classified alive"
-pass "a process merely named pi is not plain Pi"
+[ "$state" != alive ] || fail "an unrelated native binary copied to pi classified alive"
+pass "an arbitrary native binary named pi is not plain Pi"
 for _ in $(seq 1 50); do
   state=$(fm_backend_tmux_agent_state live:pi 2>/dev/null || true)
   [ "$state" = alive ] && break
