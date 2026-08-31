@@ -6,7 +6,7 @@ FM_HARNESS_IDENTITY_LIB_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$FM_HARNESS_IDENTITY_LIB_DIR/fm-harness-identity-lib.sh"
 
 fm_harness_process_matches() {
-  [ "$(fm_harness_process_identity "$1" "${2:-}" || true)" = pi ]
+  [ "$(fm_harness_process_identity "$1" "${2:-}" "${3:-}" "${4:-}" || true)" = pi ]
 }
 
 fm_harness_ancestry_pids() {
@@ -14,7 +14,7 @@ fm_harness_ancestry_pids() {
   for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
     comm=$(ps -o comm= -p "$pid" 2>/dev/null) || break
     args=$(ps -o args= -p "$pid" 2>/dev/null || true)
-    identity=$(fm_harness_process_identity "$comm" "$args" || true)
+    identity=$(fm_harness_pid_identity "$pid" "$comm" "$args" || true)
     fm_harness_identity_excluded "$identity" && return 1
     if [ "$identity" = pi ] && [ -z "$pi_pid" ]; then
       pi_pid=$pid
@@ -35,7 +35,7 @@ fm_harness_pid_alive() {
   kill -0 "$pid" 2>/dev/null || return 1
   comm=$(ps -o comm= -p "$pid" 2>/dev/null) || return 1
   args=$(ps -o args= -p "$pid" 2>/dev/null || true)
-  fm_harness_process_matches "$comm" "$args"
+  [ "$(fm_harness_pid_identity "$pid" "$comm" "$args" || true)" = pi ]
 }
 
 fm_session_lock_owned_by_self() {

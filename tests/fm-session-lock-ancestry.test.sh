@@ -4,14 +4,21 @@ set -eu
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 . "$ROOT/bin/fm-session-lock-lib.sh"
 
-fm_harness_process_matches /opt/homebrew/bin/pi /opt/homebrew/bin/pi \
+fm_harness_process_matches /opt/homebrew/bin/pi /opt/homebrew/bin/pi /opt/homebrew/bin/pi \
   || fail "plain Pi process not recognized"
 pass "exact plain Pi process is recognized"
 
-if fm_harness_process_matches sleep 'pi 60'; then
+if fm_harness_process_matches sleep 'pi 60' /bin/sleep; then
   fail "mutable argv0 authorized a non-Pi process"
 fi
 pass "mutable argv0 cannot authorize a non-Pi process"
+if fm_harness_process_matches pi 'pi' /usr/bin/node; then
+  fail "mutable Node process title authorized a non-Pi process"
+fi
+pass "mutable Node process title cannot authorize a non-Pi process"
+fm_harness_process_matches pi pi /usr/bin/node /opt/pi-coding-agent/addon.node \
+  || fail "Pi's Node process lacked immutable package-image recognition"
+pass "Pi's Node process requires immutable package-image evidence"
 
 for path in \
   /usr/local/bin/pi-launcher \

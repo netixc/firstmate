@@ -22,7 +22,7 @@ fm_control_harness_family() {
 }
 
 fm_control_harness_supports_kind() {
-  [ "${1-}" = pi ] && case "${2-}" in crewmate|scout|secondmate) return 0 ;; esac
+  [ "${1-}" = pi ] && case "${2-}" in ship|crewmate|scout|secondmate) return 0 ;; esac
   return 1
 }
 

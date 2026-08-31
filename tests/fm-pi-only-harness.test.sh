@@ -51,6 +51,12 @@ set -e
 assert_eq 2 "$rc" "Cursor agent process is rejected"
 assert_contains "$out" "unsupported harness" "Cursor agent process reports migration"
 set +e
+out=$(env PI_CODING_AGENT=true FAKE_COMM=muse-bin-1.2.3 FAKE_ARGS=muse-bin-1.2.3 PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
+rc=$?
+set -e
+assert_eq 2 "$rc" "versioned Muse process is rejected"
+assert_contains "$out" "unsupported harness" "versioned Muse process reports migration"
+set +e
 out=$(env PI_CODING_AGENT=true FAKE_COMM=2.1.220 FAKE_ARGS=/opt/claude/versions/2.1.220 PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
 rc=$?
 set -e
@@ -104,6 +110,8 @@ assert_eq "$meta_before" "$(cksum "$TMP/state/mate.meta")" "excluded secondmate 
 . "$ROOT/bin/fm-control-lib.sh"
 fm_control_harness_supported pi || fail "plain Pi control is supported"
 pass "plain Pi control is supported"
+fm_control_harness_supports_kind pi ship || fail "plain Pi ship relaunch is supported"
+pass "plain Pi ship relaunch is supported"
 for old in pi-signed claude codex opencode grok kimi cursor muse; do
   if fm_control_harness_supported "$old"; then fail "$old control metadata is unsupported"; fi
   pass "$old control metadata is unsupported"
