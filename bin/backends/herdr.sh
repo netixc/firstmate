@@ -85,6 +85,8 @@ FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 # through fm_transition_policy - it never re-encodes the mapping.
 # shellcheck source=bin/fm-transition-lib.sh
 . "$FM_BACKEND_HERDR_ROOT/bin/fm-transition-lib.sh"
+# shellcheck source=bin/fm-harness-identity-lib.sh
+. "$FM_BACKEND_HERDR_ROOT/bin/fm-harness-identity-lib.sh"
 
 FM_BACKEND_HERDR_MIN_PROTOCOL=14
 # events.subscribe (the native pane.agent_status_changed push stream) and its
@@ -1927,9 +1929,27 @@ fm_backend_herdr_tab_is_husk() {  # <session> <pane_id>
 # a confirmed agent-less pane is `dead`, a registered agent is `alive`, and an
 # unexpected or failed API read is `unreadable`.
 fm_backend_herdr_registered_pi_identity() {  # <session> <pane_id>
-  local out
-  out=$(fm_backend_herdr_cli "$1" agent get "$2" 2>/dev/null) || return 1
-  [ "$(printf '%s' "$out" | jq -r '.result.agent.agent // empty' 2>/dev/null)" = pi ]
+  local session=$1 pane_id=$2 agent_out process_out pid comm args identity
+  agent_out=$(fm_backend_herdr_cli "$session" agent get "$pane_id" 2>/dev/null) || return 1
+  [ "$(printf '%s' "$agent_out" | jq -r '.result.agent.agent // empty' 2>/dev/null)" = pi ] || return 1
+  process_out=$(fm_backend_herdr_cli "$session" pane process-info --pane "$pane_id" 2>/dev/null) || return 1
+  printf '%s' "$process_out" | jq -e --arg pane "$pane_id" '
+    .result.type == "pane_process_info"
+    and .result.process_info.pane_id == $pane
+    and (.result.process_info.foreground_processes | type) == "array"
+  ' >/dev/null 2>&1 || return 1
+  while IFS= read -r pid; do
+    case "$pid" in ''|*[!0-9]*|0|1) continue ;; esac
+    comm=$(LC_ALL=C ps -p "$pid" -o comm= 2>/dev/null) || continue
+    comm=$(printf '%s' "$comm" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    [ -n "$comm" ] || continue
+    args=$(LC_ALL=C ps -p "$pid" -o args= 2>/dev/null) || continue
+    identity=$(fm_harness_pid_identity "$pid" "$comm" "$args" || true)
+    [ "$identity" = pi ] && return 0
+  done <<EOF
+$(printf '%s' "$process_out" | jq -r '.result.process_info.foreground_processes[]? | .pid | select(type == "number" and . > 1) | floor' 2>/dev/null)
+EOF
+  return 1
 }
 
 fm_backend_herdr_agent_state() {  # <target>

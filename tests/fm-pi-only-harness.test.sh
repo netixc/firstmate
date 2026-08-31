@@ -99,6 +99,12 @@ set -e
 assert_eq 2 "$rc" "excluded shell entrypoint after option value is rejected"
 assert_contains "$out" "unsupported harness" "option-bearing shell entrypoint reports migration"
 set +e
+out=$(env PI_CODING_AGENT=true FAKE_COMM=bash FAKE_ARGS='bash +O extglob /opt/bin/pi-signed' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
+rc=$?
+set -e
+assert_eq 2 "$rc" "excluded shell entrypoint after plus option value is rejected"
+assert_contains "$out" "unsupported harness" "plus-option-bearing shell entrypoint reports migration"
+set +e
 out=$(env PI_CODING_AGENT=true FAKE_COMM=node FAKE_ARGS='node /opt/opencode/bin/opencode.js' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
 rc=$?
 set -e

@@ -62,8 +62,8 @@ else:
 args = words[1:]
 takes_value = {
     "node": set(), "nodejs": set(),
-    "bash": {"-c", "-O", "-o", "--init-file", "--rcfile"},
-    "sh": {"-c", "-o"}, "zsh": {"-c", "-o"}, "dash": {"-c", "-o"},
+    "bash": {"-c", "-O", "+O", "-o", "+o", "--init-file", "--rcfile"},
+    "sh": {"-c", "-o", "+o"}, "zsh": {"-c", "-o", "+o"}, "dash": {"-c", "-o", "+o"},
     "python": {"-c", "-m", "-W", "-X", "--check-hash-based-pycs"},
     "ruby": {"-e", "-C", "-E", "-F", "-I", "-K", "-r", "-T", "-W", "--disable", "--dump", "--enable", "--encoding", "--external-encoding", "--internal-encoding"},
     "perl": {"-e", "-E", "-F", "-I", "-M", "-m"},
@@ -90,7 +90,7 @@ no_script = {
     "deno": {"-e", "--eval"},
 }
 attached_value = {
-    "bash": {"-O", "-o"}, "sh": {"-o"}, "zsh": {"-o"}, "dash": {"-o"},
+    "bash": {"-O", "+O", "-o", "+o"}, "sh": {"-o", "+o"}, "zsh": {"-o", "+o"}, "dash": {"-o", "+o"},
     "python": {"-W", "-X"}, "ruby": {"-C", "-E", "-F", "-I", "-K", "-r", "-T", "-W", "-x"},
     "perl": {"-F", "-I", "-M", "-m", "-V", "-x"},
 }

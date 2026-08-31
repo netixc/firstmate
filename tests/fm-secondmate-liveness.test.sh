@@ -188,10 +188,38 @@ test_agent_state_dispatcher_and_compatibility() {
   out=$(bash -c '. "$0/bin/fm-backend.sh"; fm_backend_source herdr; fm_backend_herdr_pane_agent_state() { printf "live"; }; fm_backend_agent_state herdr sess:p1' "$ROOT")
   [ "$out" = alive ] || fail "detailed dispatcher should route Herdr, got '$out'"
 
-  out=$(FM_HARNESS_IDENTITY_HOME=/secondmate bash -c '. "$0/bin/fm-backend.sh"; fm_backend_source herdr; fm_backend_herdr_pane_agent_state() { printf "live"; }; fm_backend_herdr_registered_pi_identity() { return 1; }; fm_backend_agent_state herdr sess:p1' "$ROOT")
-  [ "$out" = ambiguous ] || fail "a live Herdr registration without canonical Pi identity should be ambiguous, got '$out'"
-  out=$(FM_HARNESS_IDENTITY_HOME=/secondmate bash -c '. "$0/bin/fm-backend.sh"; fm_backend_source herdr; fm_backend_herdr_pane_agent_state() { printf "live"; }; fm_backend_herdr_registered_pi_identity() { return 0; }; fm_backend_agent_state herdr sess:p1' "$ROOT")
-  [ "$out" = alive ] || fail "a live Herdr registration with canonical Pi identity should be alive, got '$out'"
+  out=$(FM_HARNESS_IDENTITY_HOME=/secondmate bash -c '
+    . "$0/bin/fm-backend.sh"
+    fm_backend_source herdr
+    fm_backend_herdr_pane_agent_state() { printf "live"; }
+    fm_backend_herdr_cli() {
+      case "$2 $3" in
+        "agent get") printf '\''{"result":{"agent":{"agent":"pi","agent_status":"idle"}}}\n'\'' ;;
+        "pane process-info") printf '\''{"result":{"type":"pane_process_info","process_info":{"pane_id":"p1","foreground_processes":[{"pid":4242,"name":"pi"}]}}}\n'\'' ;;
+        *) return 1 ;;
+      esac
+    }
+    ps() { case "$*" in *"comm="*) printf "pi\n" ;; *"args="*) printf "pi\n" ;; *) return 1 ;; esac; }
+    fm_harness_pid_identity() { [ "$1" = 4242 ] && [ "$2" = pi ] && printf "claude\n"; }
+    fm_backend_agent_state herdr sess:p1
+  ' "$ROOT")
+  [ "$out" = ambiguous ] || fail "a mutable Herdr Pi label without endpoint-bound canonical identity should be ambiguous, got '$out'"
+  out=$(FM_HARNESS_IDENTITY_HOME=/secondmate bash -c '
+    . "$0/bin/fm-backend.sh"
+    fm_backend_source herdr
+    fm_backend_herdr_pane_agent_state() { printf "live"; }
+    fm_backend_herdr_cli() {
+      case "$2 $3" in
+        "agent get") printf '\''{"result":{"agent":{"agent":"pi","agent_status":"idle"}}}\n'\'' ;;
+        "pane process-info") printf '\''{"result":{"type":"pane_process_info","process_info":{"pane_id":"p1","foreground_processes":[{"pid":4242,"name":"pi"}]}}}\n'\'' ;;
+        *) return 1 ;;
+      esac
+    }
+    ps() { case "$*" in *"comm="*) printf "pi\n" ;; *"args="*) printf "pi\n" ;; *) return 1 ;; esac; }
+    fm_harness_pid_identity() { [ "$1" = 4242 ] && [ "$2" = pi ] && printf "pi\n"; }
+    fm_backend_agent_state herdr sess:p1
+  ' "$ROOT")
+  [ "$out" = alive ] || fail "endpoint-bound canonical Pi registration should make a live Herdr pane alive, got '$out'"
 
   out=$(bash -c '. "$0/bin/fm-backend.sh"; fm_backend_agent_state zellij sess:7' "$ROOT")
   [ "$out" = unverified ] || fail "Zellij should remain unverified, got '$out'"
