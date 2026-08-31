@@ -114,6 +114,10 @@ fm_harness_process_identity() {
   parser=$comm
   case "$(basename -- "$executable")" in node|nodejs) parser=$executable ;; esac
   entrypoint=$(fm_harness_command_entrypoint "$parser" "$args" "" "$executable" || true)
+  if fm_harness_interpreter "$parser" && [ "$(basename -- "$comm")" != pi ] && [ "$(basename -- "$parser")" != "$(basename -- "$comm")" ] && [ -z "$entrypoint" ]; then
+    printf 'unverified-node\n'
+    return 0
+  fi
   identity=$(fm_harness_excluded_install_path "$entrypoint" || true)
   [ -z "$identity" ] || { printf '%s\n' "$identity"; return 0; }
   return 1
@@ -124,6 +128,12 @@ fm_harness_pid_excluded_argv() {
   parser=$comm
   case "$(basename -- "$executable")" in node|nodejs) parser=$executable ;; esac
   entrypoint=$(fm_harness_command_entrypoint "$parser" "$fallback" "$pid" "$executable" || true)
+  if [ "$(basename -- "$executable")" = node ] || [ "$(basename -- "$executable")" = nodejs ]; then
+    if [ "$(basename -- "$comm")" != pi ] && [ -z "$entrypoint" ]; then
+      printf 'unverified-node\n'
+      return 0
+    fi
+  fi
   identity=$(fm_harness_excluded_install_path "$entrypoint" || true)
   [ -z "$identity" ] || printf '%s\n' "$identity"
   [ -n "$identity" ]
@@ -137,6 +147,23 @@ fm_harness_file_sha256() {
   else
     return 1
   fi
+}
+
+fm_harness_pi_cli_canonical() {
+  python3 - "$1" <<'PY'
+import json
+import sys
+from pathlib import Path
+try:
+    cli = Path(sys.argv[1]).resolve(strict=True)
+    root = cli.parents[2]
+    package = json.loads((root / "package.json").read_text())
+    target = (root / package["bin"]["pi"]).resolve(strict=True)
+except (OSError, KeyError, IndexError, json.JSONDecodeError):
+    raise SystemExit(1)
+if package.get("name") != "@earendil-works/pi-coding-agent" or package.get("version") != "0.84.4" or target != cli:
+    raise SystemExit(1)
+PY
 }
 
 fm_harness_pid_pi_registration() {
@@ -158,7 +185,7 @@ fm_harness_pid_pi_registration() {
   marker_cli=$(sed -n '5p' "$marker" 2>/dev/null)
   [ "$marker_pid" = "$pid" ] && [ -n "$marker_start" ] || return 1
   [ "$marker_extension" = "$expected_extension" ] || return 1
-  case "$marker_cli" in */pi-coding-agent/dist/bundle/cli.js) ;; *) return 1 ;; esac
+  fm_harness_pi_cli_canonical "$marker_cli" || return 1
   [ -f "$marker_extension" ] && [ ! -L "$marker_extension" ] || return 1
   actual_version="sha256:$(fm_harness_file_sha256 "$root/.pi/extensions/fm-primary-pi-watch.ts")" || return 1
   [ "$marker_version" = "$actual_version" ] || return 1
@@ -201,7 +228,7 @@ fm_harness_pid_identity() {
 
 fm_harness_identity_excluded() {
   case "$1" in
-    pi-signed|claude|codex|opencode|grok|kimi|cursor|muse) return 0 ;;
+    pi-signed|claude|codex|opencode|grok|kimi|cursor|muse|unverified-node) return 0 ;;
     *) return 1 ;;
   esac
 }

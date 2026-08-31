@@ -122,6 +122,12 @@ set -e
 assert_eq 2 "$rc" "excluded Node entrypoint with rewritten title is rejected"
 assert_contains "$out" "unsupported harness" "rewritten-title excluded Node entrypoint reports migration"
 set +e
+out=$(env PI_CODING_AGENT=true FAKE_COMM=worker FAKE_EXECUTABLE="$(command -v node)" FAKE_ARGS=worker PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
+rc=$?
+set -e
+assert_eq 2 "$rc" "rewritten Node argv without launch provenance is rejected"
+assert_contains "$out" "unsupported harness" "erased Node launch provenance reports migration"
+set +e
 out=$(env PI_CODING_AGENT=true FAKE_CHAIN=signed-wrapper PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
 rc=$?
 set -e
