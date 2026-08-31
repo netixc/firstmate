@@ -50,14 +50,20 @@ import sys
 from pathlib import Path
 
 name = Path(sys.argv[1]).name
+ambiguous = "unverified-interpreter"
 if sys.argv[3] and Path(f"/proc/{sys.argv[3]}/cmdline").is_file():
-    words = Path(f"/proc/{sys.argv[3]}/cmdline").read_bytes().split(b"\0")
+    try:
+        words = Path(f"/proc/{sys.argv[3]}/cmdline").read_bytes().split(b"\0")
+    except OSError:
+        print(ambiguous)
+        raise SystemExit(0)
     words = [word.decode(errors="surrogateescape") for word in words if word]
 else:
     try:
         words = shlex.split(sys.argv[2])
     except ValueError:
-        raise SystemExit(1)
+        print(ambiguous)
+        raise SystemExit(0)
 
 args = words[1:]
 takes_value = {
@@ -72,6 +78,7 @@ takes_value = {
 }
 if name.startswith("python"):
     name = "python"
+known_options = {key: set(value) for key, value in takes_value.items()}
 if name in {"node", "nodejs"}:
     node = sys.argv[4] or name
     try:
@@ -81,6 +88,7 @@ if name in {"node", "nodejs"}:
     for line in help_text.splitlines():
         declaration = line.strip().split("  ", 1)[0]
         options = re.findall(r"(?<![\w-])(--?[A-Za-z0-9-]+)(=\.\.\.)?", declaration)
+        known_options[name].update(option for option, _ in options)
         if any(value for _, value in options):
             takes_value[name].update(option for option, _ in options)
 no_script = {
@@ -96,26 +104,34 @@ attached_value = {
 }
 subcommands = {"bun": {"run"}, "deno": {"run"}}
 skip = False
+options_ended = False
 for word in args:
     if skip:
         skip = False
         continue
-    if word == "--":
+    if word == "--" and not options_ended:
+        options_ended = True
         continue
     option = word.split("=", 1)[0]
-    if option in no_script.get(name, set()):
+    if not options_ended and option in no_script.get(name, set()):
         break
-    if option in takes_value.get(name, set()):
+    if not options_ended and option in takes_value.get(name, set()):
         skip = "=" not in word
         continue
-    if any(word.startswith(prefix) and word != prefix for prefix in attached_value.get(name, set())):
+    if not options_ended and any(word.startswith(prefix) and word != prefix for prefix in attached_value.get(name, set())):
         continue
-    if word.startswith("-"):
-        continue
-    if word in subcommands.get(name, set()):
+    if not options_ended and word.startswith(("-", "+")):
+        if option in known_options.get(name, set()):
+            continue
+        print(ambiguous)
+        break
+    if not options_ended and word in subcommands.get(name, set()):
         continue
     print(word)
     break
+else:
+    if skip:
+        print(ambiguous)
 PY
 }
 
@@ -129,6 +145,10 @@ fm_harness_process_identity() {
   parser=$comm
   case "$(basename -- "$executable")" in node|nodejs) parser=$executable ;; esac
   entrypoint=$(fm_harness_command_entrypoint "$parser" "$args" "" "$executable" || true)
+  if [ "$entrypoint" = unverified-interpreter ]; then
+    printf 'unverified-interpreter\n'
+    return 0
+  fi
   if fm_harness_interpreter "$parser" && [ "$(basename -- "$comm")" != pi ] && [ "$(basename -- "$parser")" != "$(basename -- "$comm")" ] && [ -z "$entrypoint" ]; then
     printf 'unverified-node\n'
     return 0
@@ -143,6 +163,10 @@ fm_harness_pid_excluded_argv() {
   parser=$comm
   case "$(basename -- "$executable")" in node|nodejs) parser=$executable ;; esac
   entrypoint=$(fm_harness_command_entrypoint "$parser" "$fallback" "$pid" "$executable" || true)
+  if [ "$entrypoint" = unverified-interpreter ]; then
+    printf 'unverified-interpreter\n'
+    return 0
+  fi
   if [ "$(basename -- "$executable")" = node ] || [ "$(basename -- "$executable")" = nodejs ]; then
     if [ "$(basename -- "$comm")" != pi ] && [ -z "$entrypoint" ]; then
       printf 'unverified-node\n'
@@ -261,7 +285,7 @@ fm_harness_pid_identity() {
 
 fm_harness_identity_excluded() {
   case "$1" in
-    pi-signed|claude|codex|opencode|grok|kimi|cursor|muse|unverified-node) return 0 ;;
+    pi-signed|claude|codex|opencode|grok|kimi|cursor|muse|unverified-node|unverified-interpreter) return 0 ;;
     *) return 1 ;;
   esac
 }

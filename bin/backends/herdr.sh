@@ -1960,12 +1960,8 @@ fm_backend_herdr_agent_state() {  # <target>
     dead) printf 'missing' ;;
     no-agent) printf 'dead' ;;
     live)
-      if [ -n "${FM_HARNESS_IDENTITY_HOME:-}" ]; then
-        fm_backend_herdr_registered_pi_identity "$FM_BACKEND_HERDR_SESSION" "$FM_BACKEND_HERDR_PANE" \
-          && printf 'alive' || printf 'ambiguous'
-      else
-        printf 'alive'
-      fi
+      fm_backend_herdr_registered_pi_identity "$FM_BACKEND_HERDR_SESSION" "$FM_BACKEND_HERDR_PANE" \
+        && printf 'alive' || printf 'ambiguous'
       ;;
     *) printf 'unreadable' ;;
   esac
