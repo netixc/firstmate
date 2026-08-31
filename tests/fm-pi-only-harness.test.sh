@@ -35,7 +35,12 @@ else
   esac
 fi
 SH
-chmod +x "$TMP/fakebin/ps"
+cat > "$TMP/fakebin/lsof" <<'SH'
+#!/usr/bin/env bash
+[ -n "${FAKE_EXECUTABLE:-}" ] || exit 1
+printf 'p1\nftxt\nn%s\n' "$FAKE_EXECUTABLE"
+SH
+chmod +x "$TMP/fakebin/ps" "$TMP/fakebin/lsof"
 for old in pi-signed claude codex opencode grok kimi cursor muse; do
   set +e
   out=$(env PI_CODING_AGENT=true FAKE_COMM="$old" FAKE_ARGS="$old" PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
@@ -63,6 +68,12 @@ set -e
 assert_eq 2 "$rc" "version-named excluded primary process is rejected"
 assert_contains "$out" "unsupported harness" "version-named excluded primary reports migration"
 set +e
+out=$(env PI_CODING_AGENT=true FAKE_COMM=worker FAKE_ARGS=worker FAKE_EXECUTABLE=/opt/claude/versions/2.1.220 PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
+rc=$?
+set -e
+assert_eq 2 "$rc" "immutable excluded executable path is rejected"
+assert_contains "$out" "unsupported harness" "immutable excluded executable reports migration"
+set +e
 out=$(env PI_CODING_AGENT=true FAKE_COMM=bash FAKE_ARGS='bash /opt/bin/pi-signed' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
 rc=$?
 set -e
@@ -80,6 +91,7 @@ rc=$?
 set -e
 assert_eq 2 "$rc" "excluded wrapper above an inner Pi process is rejected"
 assert_contains "$out" "unsupported harness" "excluded wrapper above Pi reports migration"
+assert_eq pi "$(env PI_CODING_AGENT=true FAKE_COMM=bash FAKE_ARGS='bash ./claude' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "ordinary excluded-named shell script remains under Pi"
 assert_eq pi "$(env PI_CODING_AGENT=true FAKE_COMM=bash FAKE_ARGS='bash ./claude.sh' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "ordinary similarly named shell script remains under Pi"
 assert_eq pi "$(env PI_CODING_AGENT=true FAKE_COMM=python FAKE_ARGS='python muse.py' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "ordinary similarly named Python script remains under Pi"
 assert_eq pi "$(env PI_CODING_AGENT=true FAKE_COMM=bash FAKE_ARGS='bash anthropic/claude' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "provider-qualified model text remains valid under Pi"
