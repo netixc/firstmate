@@ -37,7 +37,7 @@ detect_own() {
     pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
     [ -n "$pid" ] && [ "$pid" -gt 1 ] || break
   done
-  if [ "$pi_seen" -eq 1 ] || [ "${PI_CODING_AGENT:-}" = true ]; then
+  if [ "$pi_seen" -eq 1 ]; then
     printf 'pi\n'
   else
     printf 'unknown\n'

@@ -10,7 +10,7 @@ assert_eq() { [ "$1" = "$2" ] || fail "$3 (expected '$1', got '$2')"; pass "$3";
 mkdir -p "$TMP/config" "$TMP/state"
 HARNESS="$ROOT/bin/fm-harness.sh"
 
-assert_eq pi "$(PI_CODING_AGENT=true FM_HOME="$TMP" "$HARNESS")" "Pi marker resolves to plain pi"
+assert_eq unknown "$(PI_CODING_AGENT=true FM_HOME="$TMP" "$HARNESS")" "mutable Pi environment marker cannot authorize plain Pi"
 mkdir -p "$TMP/fakebin"
 cat > "$TMP/fakebin/ps" <<'SH'
 #!/usr/bin/env bash
@@ -133,12 +133,12 @@ rc=$?
 set -e
 assert_eq 2 "$rc" "excluded wrapper above an inner Pi process is rejected"
 assert_contains "$out" "unsupported harness" "excluded wrapper above Pi reports migration"
-assert_eq pi "$(env PI_CODING_AGENT=true FAKE_COMM=bash FAKE_ARGS='bash ./claude' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "ordinary excluded-named shell script remains under Pi"
-assert_eq pi "$(env PI_CODING_AGENT=true FAKE_COMM=bash FAKE_ARGS='bash ./claude.sh' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "ordinary similarly named shell script remains under Pi"
-assert_eq pi "$(env PI_CODING_AGENT=true FAKE_COMM=bash FAKE_ARGS='bash ./script /tmp/bin/claude' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "excluded install path used as data remains under Pi"
-assert_eq pi "$(env PI_CODING_AGENT=true FAKE_COMM=node FAKE_EXECUTABLE="$(command -v node)" FAKE_ARGS='node helper.js /opt/bin/codex' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "excluded install path used as Node helper data remains under Pi"
-assert_eq pi "$(env PI_CODING_AGENT=true FAKE_COMM=python FAKE_ARGS='python muse.py' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "ordinary similarly named Python script remains under Pi"
-assert_eq pi "$(env PI_CODING_AGENT=true FAKE_COMM=bash FAKE_ARGS='bash anthropic/claude' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "provider-qualified model text remains valid under Pi"
+assert_eq unknown "$(env PI_CODING_AGENT=true FAKE_COMM=bash FAKE_ARGS='bash ./claude' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "ordinary excluded-named shell script is not treated as a harness"
+assert_eq unknown "$(env PI_CODING_AGENT=true FAKE_COMM=bash FAKE_ARGS='bash ./claude.sh' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "ordinary similarly named shell script is not treated as a harness"
+assert_eq unknown "$(env PI_CODING_AGENT=true FAKE_COMM=bash FAKE_ARGS='bash ./script /tmp/bin/claude' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "excluded install path used as data is not treated as a harness"
+assert_eq unknown "$(env PI_CODING_AGENT=true FAKE_COMM=node FAKE_EXECUTABLE="$(command -v node)" FAKE_ARGS='node helper.js /opt/bin/codex' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "excluded install path used as Node helper data is not treated as a harness"
+assert_eq unknown "$(env PI_CODING_AGENT=true FAKE_COMM=python FAKE_ARGS='python muse.py' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "ordinary similarly named Python script is not treated as a harness"
+assert_eq unknown "$(env PI_CODING_AGENT=true FAKE_COMM=bash FAKE_ARGS='bash anthropic/claude' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "provider-qualified model text remains valid input"
 for old in pi-signed claude codex opencode grok kimi cursor muse; do
   printf '%s\n' "$old" > "$TMP/config/crew-harness"
   set +e

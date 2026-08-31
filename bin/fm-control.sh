@@ -14,8 +14,8 @@
 # That marking is right for a message and wrong for a lifecycle command - a
 # marked "/quit" arrives as ordinary chat the agent reasons ABOUT instead of
 # executing. This script is the control plane: semantic process control with a
-# closed verb list, per-harness mechanics owned by an executable adapter
-# (bin/fm-control-lib.sh) rather than improvised in agent prose, and a verified
+# closed verb list, plain-Pi mechanics owned by bin/fm-control-lib.sh rather
+# than improvised in agent prose, and a verified
 # postcondition for every action. There is deliberately NO arbitrary-text and
 # NO generic raw-key entry point here; fm-send remains the only way to send an
 # agent something to read.
@@ -23,24 +23,21 @@
 #   interrupt  Deliver the harness's verified interrupt sequence. The agent
 #              keeps running. Postcondition: delivery succeeded, the endpoint
 #              still exists, and the agent is still alive where the backend can
-#              classify that. Cancellation is confirmed only from an adapter-
-#              owned acknowledgement and otherwise reported unconfirmed. Busy
+#              classify that. Cancellation is confirmed only from a Pi-owned
+#              acknowledgement and otherwise reported unconfirmed. Busy
 #              state is never rewritten as proof of the action.
 #   exit       Stop the agent, preserving its terminal endpoint, worktree, and
 #              every uncommitted change. Interrupts first when the task reads
 #              busy, then submits the harness's exit command. Postcondition:
 #              the backend's recovery-grade classifier reports the agent gone.
 #              Already-stopped is success (idempotent).
-#   relaunch   Transactionally replace the running agent with a new one, in the
-#              SAME endpoint and SAME worktree, on the same or a newly chosen
-#              harness/model/effort - so switching harness is one ordinary use
-#              of this verb. With no explicit axis, a secondmate re-resolves its
-#              durable config/secondmate-harness pin (harness plus its optional
-#              model and effort tokens) exactly as any other respawn does, while
-#              a ship or scout keeps the exact adapter already recorded for it.
-#              A prefixed raw-command basename cannot reconstruct its launch
-#              command, so relaunch requires an explicit --harness for it.
-#              --note is required for a ship or scout, whose replacement
+#   relaunch   Transactionally replace the running Pi agent with a new one, in
+#              the SAME endpoint and SAME worktree, with optional model and
+#              effort changes. The only accepted harness selection is exact
+#              plain `pi`. With no explicit axis, a secondmate re-resolves its
+#              durable config/secondmate-harness Pi pin and optional model and
+#              effort tokens, while a ship or scout keeps its recorded Pi
+#              selection. --note is required for a ship or scout, whose replacement
 #              inherits the local copy but none of the conversation; a
 #              secondmate reconciles its own home's records at startup, so its
 #              standing charter is never rewritten.
@@ -56,10 +53,9 @@
 # endpoint, or discarding work stays with bin/fm-teardown.sh, which owns the
 # landed-work test.
 #
-# `resume` is not a verb: it is not deterministic across the verified adapters
-# (bin/fm-control-lib.sh's header owns that reasoning). `relaunch` covers the
-# same need for every adapter because the brief on disk, not a harness-private
-# session, is the durable instruction.
+# `resume` is not a verb because Pi session state is not the durable instruction
+# source. `relaunch` covers that need through the brief on disk rather than a
+# harness-private session.
 #
 # Targeting is EXACT: only a bare task id with a state/<id>.meta record in
 # THIS home is accepted, and the record must pass the shared endpoint-identity
@@ -598,7 +594,7 @@ resolve_relaunch_profile() {
   [ -n "$PRIOR_EFFORT" ] || PRIOR_EFFORT=default
   if [ "$HARNESS_SET" = 0 ] \
      && [ "$PRIOR_RECORDED_HARNESS" != "$PRIOR_HARNESS" ]; then
-    die "task $ID records harness '$PRIOR_RECORDED_HARNESS', whose original launch command cannot be reconstructed from its recorded basename; relaunching without --harness would substitute the canonical adapter '$PRIOR_HARNESS' for the command actually running. Pass an explicit --harness to choose the replacement runtime deliberately"
+    die "task $ID records unsupported launch identity '$PRIOR_RECORDED_HARNESS'; migrate its metadata to exact plain pi before relaunch"
   fi
   CONFIG_HARNESS=
   CONFIG_MODEL=
@@ -630,21 +626,21 @@ resolve_relaunch_profile() {
   fi
   if [ "$HARNESS_SET" = 1 ]; then
     fm_control_harness_supported "$NEW_HARNESS" \
-      || die "'$NEW_HARNESS' is not a verified harness; fm-control refuses to relaunch onto an adapter with no verified control or launch mechanics"
+      || die "'$NEW_HARNESS' is not exact plain pi; fm-control refuses the relaunch"
     TARGET_HARNESS=$NEW_HARNESS
   elif [ "$HARNESS_SET" = 0 ] && [ -n "$CONFIG_HARNESS" ]; then
     fm_control_harness_supported "$CONFIG_HARNESS" \
-      || die "the configured secondmate harness '$CONFIG_HARNESS' is not verified; fm-control refuses to relaunch onto an adapter with no verified control or launch mechanics"
+      || die "the configured secondmate harness '$CONFIG_HARNESS' is not exact plain pi; fm-control refuses the relaunch"
     TARGET_HARNESS=$CONFIG_HARNESS
   else
     TARGET_HARNESS=$PRIOR_HARNESS
   fi
-  # The launch owner refuses an adapter that cannot run this task's kind, but it
+  # The launch owner also checks that Pi supports this task kind, but it
   # is only reached after the old agent has been stopped. Asking the same
   # capability table here keeps that refusal on the pre-stop side of the
   # transaction, where nothing has changed yet.
   fm_control_harness_supports_kind "$TARGET_HARNESS" "$KIND" \
-    || die "'$TARGET_HARNESS' is not verified to run a $KIND task, so relaunching $ID onto it would stop the running agent for a launch that must be refused; choose an adapter verified for this kind"
+    || die "plain Pi is not verified to run a $KIND task, so relaunching $ID would stop the running agent for a launch that must be refused"
   # A model or effort chosen for the previous harness does not transfer to a
   # different one, so an explicit harness change resets both axes unless the
   # caller names them too.
