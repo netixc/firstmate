@@ -28,7 +28,10 @@ detect_own() {
     comm=$(ps -o comm= -p "$pid" 2>/dev/null) || break
     case "$(basename -- "$comm")" in
       pi) printf 'pi\n'; return ;;
-      pi-signed) unsupported pi-signed; return ;;
+      pi-signed|claude|codex|opencode|grok|kimi|cursor|muse)
+        unsupported "$(basename -- "$comm")"
+        return
+        ;;
       node*|python*)
         args=$(ps -o args= -p "$pid" 2>/dev/null || true)
         case "$args" in *" pi "*|*/pi) printf 'pi\n'; return ;; esac

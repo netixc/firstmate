@@ -606,9 +606,15 @@ resolve_relaunch_profile() {
     # and scouts deliberately do NOT resolve config here: their harness comes
     # from firstmate's own dispatch-profile judgment at intake, and silently
     # re-resolving it would bypass that consultation.
-    CONFIG_HARNESS=$("$SCRIPT_DIR/fm-harness.sh" secondmate 2>/dev/null || true)
-    CONFIG_MODEL=$("$SCRIPT_DIR/fm-harness.sh" secondmate-model 2>/dev/null || true)
-    CONFIG_EFFORT=$("$SCRIPT_DIR/fm-harness.sh" secondmate-effort 2>/dev/null || true)
+    if ! CONFIG_HARNESS=$("$SCRIPT_DIR/fm-harness.sh" secondmate); then
+      die "the configured secondmate harness could not be resolved"
+    fi
+    if ! CONFIG_MODEL=$("$SCRIPT_DIR/fm-harness.sh" secondmate-model); then
+      die "the configured secondmate model could not be resolved"
+    fi
+    if ! CONFIG_EFFORT=$("$SCRIPT_DIR/fm-harness.sh" secondmate-effort); then
+      die "the configured secondmate effort could not be resolved"
+    fi
     case "$CONFIG_EFFORT" in
       ''|low|medium|high|xhigh|max) ;;
       *)
