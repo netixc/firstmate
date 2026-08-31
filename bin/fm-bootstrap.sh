@@ -1000,7 +1000,7 @@ x_mode_setup() {
 
   x_mode_supervision_repair() {
     local out
-    out=$("$SCRIPT_DIR/fm-supervision-instructions.sh" --repair-line 2>/dev/null) \
+    out=$("$SCRIPT_DIR/fm-supervision-instructions.sh" --harness pi --repair-line 2>/dev/null) \
       || out='repair missing watcher supervision according to the session-start operating block.'
     printf '%s\n' "$out"
   }

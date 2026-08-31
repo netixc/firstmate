@@ -40,7 +40,14 @@ cat > "$TMP/fakebin/lsof" <<'SH'
 [ -n "${FAKE_EXECUTABLE:-}" ] || exit 1
 printf 'p1\nftxt\nn%s\n' "$FAKE_EXECUTABLE"
 SH
-chmod +x "$TMP/fakebin/ps" "$TMP/fakebin/lsof"
+cat > "$TMP/fakebin/readlink" <<'SH'
+#!/usr/bin/env bash
+case "${1:-}" in
+  /proc/*/exe) [ -n "${FAKE_EXECUTABLE:-}" ] && { printf '%s\n' "$FAKE_EXECUTABLE"; exit 0; } ;;
+esac
+exec /usr/bin/readlink "$@"
+SH
+chmod +x "$TMP/fakebin/ps" "$TMP/fakebin/lsof" "$TMP/fakebin/readlink"
 for old in pi-signed claude codex opencode grok kimi cursor muse; do
   set +e
   out=$(env PI_CODING_AGENT=true FAKE_COMM="$old" FAKE_ARGS="$old" PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)

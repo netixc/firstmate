@@ -827,12 +827,6 @@ make_routine_bootstrap_fixture() {
   c1=$(git -C "$root" rev-parse HEAD)
   git -C "$root" worktree add -q --detach "$sm" "$c1"
   printf '%s\n' sm > "$sm/.fm-secondmate-home"
-  {
-    printf 'window=firstmate:fm-sm\n'
-    printf 'kind=secondmate\n'
-    printf 'harness=pi\n'
-    printf 'home=%s\n' "$sm"
-  } > "$home/state/sm.meta"
   fakebin=$(make_fake_toolchain "$case_dir")
   add_real_jq "$fakebin"
   cat > "$fakebin/tmux" <<'SH'
@@ -869,7 +863,7 @@ test_routine_bootstrap_confirmations_are_silent() {
   local out
   out=$(run_routine_bootstrap_fixture bash "$TMP_ROOT/routine-silent")
   [ -z "$out" ] || fail "routine bootstrap confirmations should be silent, got: $out"
-  pass "bootstrap keeps routine tasks-axi, harness, dispatch, and already-live liveness confirmations silent"
+  pass "bootstrap keeps routine tasks-axi, harness, and dispatch confirmations silent"
 }
 
 test_routine_bootstrap_contract_runs_under_system_bash() {

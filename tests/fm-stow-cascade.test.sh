@@ -50,8 +50,8 @@ esac
 SH
 chmod +x "$FAKEBIN/fake-ssh"
 
-# A tmux whose pane reports a running agent, so the local endpoint probe has a
-# real backend read to classify rather than a stubbed verdict.
+# A tmux whose pane reports an unregistered Pi-like process name, so the local
+# endpoint probe must classify through the real backend rather than a stubbed verdict.
 cat > "$FAKEBIN/tmux" <<'SH'
 #!/usr/bin/env bash
 set -u
@@ -223,8 +223,8 @@ test_transport_routes_by_placement_and_liveness() {
     FM_FAKE_REMOTE_BUDGET="$TMP_ROOT/remote-budget.txt" \
     FM_FAKE_REMOTE_AGENT_STATE=alive)
   set -e
-  [ "$(value_in "$(stanza "$out" live-local)" transport)" = agent ] \
-    || fail "a local home with a live agent was not routed to that agent"
+  [ "$(value_in "$(stanza "$out" live-local)" transport)" = direct ] \
+    || fail "an unregistered Pi process name was trusted as a live local agent"
   [ "$(value_in "$(stanza "$out" idle-local)" placement)" = local ] \
     || fail "a local home was not reported as local"
   [ "$(value_in "$(stanza "$out" idle-local)" transport)" = direct ] \

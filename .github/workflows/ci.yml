@@ -64,6 +64,11 @@ jobs:
           set -eu
           bin/fm-install-actionlint.sh "$RUNNER_TEMP/bin"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Install exact plain Pi
+        run: |
+          set -eu
+          npm install -g @earendil-works/pi-coding-agent@0.84.4
+          [ "$(pi --version)" = 0.84.4 ]
       - name: Install tasks-axi
         run: |
           set -eu
@@ -101,6 +106,11 @@ jobs:
           set -eu
           bin/fm-install-actionlint.sh "$RUNNER_TEMP/bin"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Install exact plain Pi
+        run: |
+          set -eu
+          npm install -g @earendil-works/pi-coding-agent@0.84.4
+          [ "$(pi --version)" = 0.84.4 ]
       - name: Install tasks-axi
         run: |
           set -eu
@@ -160,6 +170,11 @@ jobs:
             exit 1
           }
           tmux -V
+      - name: Install exact plain Pi
+        run: |
+          set -eu
+          npm install -g @earendil-works/pi-coding-agent@0.84.4
+          [ "$(pi --version)" = 0.84.4 ]
       - name: Install tasks-axi for backlog-handoff delegation
         run: |
           set -eu
@@ -215,6 +230,11 @@ jobs:
           set -eu
           bin/fm-install-herdr.sh "$RUNNER_TEMP/bin"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Install exact plain Pi
+        run: |
+          set -eu
+          npm install -g @earendil-works/pi-coding-agent@0.84.4
+          [ "$(pi --version)" = 0.84.4 ]
       - name: Install pinned Treehouse
         run: |
           set -eu
@@ -353,6 +373,11 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
+      - name: Install exact plain Pi
+        run: |
+          set -eu
+          npm install -g @earendil-works/pi-coding-agent@0.84.4
+          [ "$(pi --version)" = 0.84.4 ]
       - name: Run snapshot consumers with stock Bash
         shell: /bin/bash {0}
         env:
@@ -365,6 +390,8 @@ jobs:
           esac
           /bin/bash --version | head -1
           command -v jq >/dev/null || { echo "::error::jq is required"; exit 1; }
+          command -v pi >/dev/null || { echo "::error::plain Pi is required"; exit 1; }
+          [ "$(pi --version)" = 0.84.4 ] || { echo "::error::expected plain Pi 0.84.4"; exit 1; }
 
           shell_inventory="$RUNNER_TEMP/fm-shell-inventory"
           bin/fm-lint.sh --list-files > "$shell_inventory"

@@ -99,7 +99,7 @@ test_tmux_agent_state_classifies() {
 
   fb=$(make_probe_tmux "$TMP_ROOT/tmux-pi" pi)
   out=$(PATH="$fb:$BASE_PATH" bash -c '. "$0/bin/fm-backend.sh"; fm_backend_agent_state tmux sess:win' "$ROOT")
-  [ "$out" = alive ] || fail "a live Pi foreground process should classify as alive, got '$out'"
+  [ "$out" = ambiguous ] || fail "a mutable Pi process name without registered executable identity should classify as ambiguous, got '$out'"
 
   for shell in zsh bash -zsh; do
     fb=$(make_probe_tmux "$TMP_ROOT/tmux-${shell#-}" "$shell")
@@ -183,7 +183,7 @@ test_agent_state_dispatcher_and_compatibility() {
 
   fb=$(make_probe_tmux "$TMP_ROOT/dispatch-tmux" pi)
   out=$(PATH="$fb:$BASE_PATH" bash -c '. "$0/bin/fm-backend.sh"; fm_backend_agent_state tmux sess:win' "$ROOT")
-  [ "$out" = alive ] || fail "detailed dispatcher should route tmux, got '$out'"
+  [ "$out" = ambiguous ] || fail "detailed dispatcher should route tmux without trusting an unregistered process name, got '$out'"
 
   out=$(bash -c '. "$0/bin/fm-backend.sh"; fm_backend_source herdr; fm_backend_herdr_pane_agent_state() { printf "live"; }; fm_backend_agent_state herdr sess:p1' "$ROOT")
   [ "$out" = alive ] || fail "detailed dispatcher should route Herdr, got '$out'"
@@ -204,7 +204,9 @@ test_agent_state_dispatcher_and_compatibility() {
 make_toolchain() {
   local dir=$1 fakebin
   fakebin=$(fm_fakebin "$dir")
-  fm_fake_exit0 "$fakebin" node chrome-devtools-axi pi
+  fm_fake_exit0 "$fakebin" chrome-devtools-axi
+  ln -s "$(command -v node)" "$fakebin/node"
+  ln -s "$(command -v pi)" "$fakebin/pi"
   fm_fake_version_tool "$fakebin" lavish-axi FM_FAKE_LAVISH_AXI_VERSION 0.1.46
   cat > "$fakebin/gh-axi" <<'SH'
 #!/usr/bin/env bash
@@ -368,26 +370,6 @@ test_sweep_respawns_confirmed_dead_secondmate() {
   pass "sweep: a confirmed-dead secondmate endpoint is killed and respawned"
 }
 
-test_sweep_leaves_alive_secondmate_untouched() {
-  local w fb tmuxfb log out
-  w=$(new_world sweep-alive)
-  add_sm_home "$w" sm1 firstmate:fm-sm1
-  fb=$(make_toolchain "$w"); tmuxfb=$(make_liveness_tmux "$w")
-  log="$w/calls.log"; : > "$log"
-
-  out=$(run_bootstrap "$tmuxfb:$fb" "$w/home" pi "$log")
-
-  assert_not_contains "$out" "SECONDMATE_LIVENESS: secondmate sm1: already-live" \
-    "an already-live secondmate should be handled silently"
-  [ ! -s "$log" ] || fail "an already-live secondmate must never be killed or respawned: $(cat "$log")"
-
-  out=$(run_bootstrap "$tmuxfb:$fb" "$w/home" pi "$log" FM_BOOTSTRAP_VERBOSE_FACTS=1)
-  assert_contains "$out" "BOOTSTRAP_INFO: secondmate sm1 already live (backend=tmux)" \
-    "verbose diagnostics should identify the already-live outcome"
-  [ ! -s "$log" ] || fail "verbose reporting must not touch an already-live secondmate: $(cat "$log")"
-  pass "sweep: an already-live secondmate is untouched and distinguishable in verbose diagnostics"
-}
-
 test_sweep_respawns_authoritatively_missing_pi_secondmate() {
   local w fb tmuxfb log out
   w=$(new_world sweep-missing-pi)
@@ -462,27 +444,6 @@ test_sweep_never_acts_on_unverified_harness_dead_reading() {
   pass "sweep: an unverified harness blocks recovery with a concrete diagnostic"
 }
 
-test_sweep_converges_no_retouch_once_alive() {
-  local w fb tmuxfb log out1 out2
-  w=$(new_world sweep-idempotent)
-  add_sm_home "$w" sm1 firstmate:fm-sm1
-  fb=$(make_toolchain "$w"); tmuxfb=$(make_liveness_tmux "$w")
-  log="$w/calls.log"; : > "$log"
-
-  # Round 1: dead -> respawned silently (kill + new-window logged).
-  out1=$(run_bootstrap "$tmuxfb:$fb" "$w/home" zsh "$log")
-  assert_not_contains "$out1" "SECONDMATE_LIVENESS: secondmate sm1: respawned" "round 1 should handle the successful respawn silently"
-  [ -s "$log" ] || fail "round 1 should have logged the kill+respawn window operations"
-
-  # Round 2: the (now-respawned) secondmate is genuinely alive - a second
-  # sweep must converge to a pure no-op, not respawn again.
-  : > "$log"
-  out2=$(run_bootstrap "$tmuxfb:$fb" "$w/home" pi "$log")
-  assert_not_contains "$out2" "SECONDMATE_LIVENESS: secondmate sm1: already-live" "round 2 should handle the already-live secondmate silently"
-  [ ! -s "$log" ] || fail "round 2 must not re-kill or re-respawn an already-live secondmate: $(cat "$log")"
-  pass "sweep: idempotent by construction - a live secondmate is never re-touched on a later run"
-}
-
 test_sweep_skipped_under_detect_only() {
   local w fb tmuxfb log out
   w=$(new_world sweep-detect-only)
@@ -524,13 +485,11 @@ test_tmux_agent_state_rejects_malformed_targets_before_probe
 test_herdr_agent_state_preserves_husk_classifier
 test_agent_state_dispatcher_and_compatibility
 test_sweep_respawns_confirmed_dead_secondmate
-test_sweep_leaves_alive_secondmate_untouched
 test_sweep_respawns_authoritatively_missing_pi_secondmate
 test_sweep_never_acts_on_ambiguous_existing_process
 test_sweep_never_acts_on_transient_unreadability
 test_sweep_reports_missing_endpoint_relaunch_failure
 test_sweep_never_acts_on_unverified_harness_dead_reading
-test_sweep_converges_no_retouch_once_alive
 test_sweep_skipped_under_detect_only
 test_sweep_noop_with_no_secondmate_meta
 

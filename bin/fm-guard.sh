@@ -188,6 +188,7 @@ if [ "$watcher_healthy" = false ]; then
     x_mode=0
     [ -f "$CONFIG/x-mode.env" ] && x_mode=1
     fix=$("$SCRIPT_DIR/fm-supervision-instructions.sh" \
+      --harness pi \
       --read-only "$READ_ONLY" \
       --afk "$afk" \
       --x-mode "$x_mode" \

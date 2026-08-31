@@ -178,7 +178,7 @@ test_fixture_snapshot_json() {
   printf '%s' "$out" | jq -e '
     .tasks[] | select(.id == "secondmate-task")
     | .secondmate_projects == ["alpha","beta","gamma"]
-      and .endpoint.agent_alive == "alive"
+      and .endpoint.agent_alive == "unknown"
       and (.actions.watch | contains("do not routinely fm-peek"))
   ' >/dev/null || fail "secondmate return-channel guidance missing"
   printf '%s' "$out" | jq -e '
@@ -596,8 +596,8 @@ test_view_renders_snapshot() {
     "view should render done backlog row"
   assert_contains "$view" "bin/fm-send.sh fm-secondmate-task" \
     "view should show secondmate send guidance"
-  assert_contains "$view" "| secondmate-task | working / status-log | secondmate | $home/secondmate-home | tmux | present / alive |" \
-    "view should show secondmate endpoint agent liveness"
+  assert_contains "$view" "| secondmate-task | working / status-log | secondmate | $home/secondmate-home | tmux | present / unknown |" \
+    "view should not infer agent liveness from an unregistered Pi process name"
   assert_not_contains "$view" "fm-peek.sh fm-secondmate-task" \
     "view must not tell firstmate to routinely peek secondmates"
   pass "fleet view renders the snapshot without secondmate peek guidance"
@@ -675,11 +675,11 @@ test_secondmate_open_decision_survives_live_endpoint() {
   out=$(PATH="$fakebin:$PATH" FM_HOME="$home" "$SNAPSHOT" --json)
   printf '%s' "$out" | jq -e '
     .tasks[] | select(.id == "active-secondmate")
-    | .endpoint.agent_alive == "alive"
+    | .endpoint.agent_alive == "unknown"
       and .hints.pending_decision == true
       and (.hints.open_decisions | length) == 1
-  ' >/dev/null || fail "a live secondmate endpoint must not clear an unrelated keyed decision: $out"
-  pass "a live secondmate endpoint preserves unrelated open decisions"
+  ' >/dev/null || fail "an endpoint without registered Pi identity must not clear an unrelated keyed decision: $out"
+  pass "an unverified endpoint preserves unrelated open decisions"
 }
 
 # An open decision clears ONLY on an explicit resolution referencing its key, never

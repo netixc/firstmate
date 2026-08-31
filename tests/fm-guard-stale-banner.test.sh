@@ -610,12 +610,10 @@ test_extension_live_watcher_is_healthy_without_ownership_evidence() {
   pass "fm-guard stale banner: extension model stays silent for a live watcher"
 }
 
-# The cases above pin the model. This one takes the end-user path instead: no
-# FM_SUPERVISION_MODEL at all, so bin/fm-harness.sh must route a Pi primary to the
-# extension model on its own. Without that routing the tolerance would never reach
-# a real Pi home. The foreign markers are cleared because fm-harness.sh tests them
-# ahead of Pi, and the host running this suite may carry one.
-test_pi_harness_routes_itself_to_the_extension_model() {
+# A mutable environment marker cannot establish Pi identity. Without a verified
+# primary process, the guard must remain loud rather than granting the extension
+# model's handoff tolerance.
+test_mutable_pi_marker_does_not_select_the_extension_model() {
   local dir home out pid
   dir=$(make_guard_case harness-routing-pi)
   home=$(case_home "$dir")
@@ -628,13 +626,14 @@ test_pi_harness_routes_itself_to_the_extension_model() {
     "$ROOT/bin/fm-guard.sh" 2>&1)
   kill "$pid" 2>/dev/null || true
   wait "$pid" 2>/dev/null || true
-  [ -z "$out" ] || fail "a Pi primary must route itself to the extension model, got: $out"
-  pass "fm-guard stale banner: the plain Pi primary routes itself to the extension model"
+  assert_contains "$out" "WATCHER DOWN" \
+    "a mutable Pi marker must not select the extension model"
+  pass "fm-guard stale banner: a mutable Pi marker cannot establish primary identity"
 }
 
 test_first_stale_call_prints_full_banner
 test_repeated_same_episode_prints_reminder_only
-test_pi_harness_routes_itself_to_the_extension_model
+test_mutable_pi_marker_does_not_select_the_extension_model
 test_extension_handoff_with_live_session_is_healthy
 test_extension_handoff_with_empty_lock_is_healthy
 test_extension_held_unhealthy_locks_stay_alarm
