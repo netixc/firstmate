@@ -117,6 +117,12 @@ set -e
 assert_eq 2 "$rc" "excluded Node script entrypoint is rejected"
 assert_contains "$out" "unsupported harness" "excluded Node script entrypoint reports migration"
 set +e
+out=$(env PI_CODING_AGENT=true FAKE_COMM=node FAKE_ARGS='node /tmp/pi-signed' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
+rc=$?
+set -e
+assert_eq 2 "$rc" "excluded basename Node entrypoint is rejected"
+assert_contains "$out" "unsupported harness" "excluded basename Node entrypoint reports migration"
+set +e
 out=$(env PI_CODING_AGENT=true FAKE_COMM=node FAKE_ARGS='node /opt/node_modules/@openai/codex/bin/codex.js' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
 rc=$?
 set -e
@@ -164,12 +170,29 @@ rc=$?
 set -e
 assert_eq 2 "$rc" "excluded wrapper above an inner Pi process is rejected"
 assert_contains "$out" "unsupported harness" "excluded wrapper above Pi reports migration"
-assert_eq unknown "$(env PI_CODING_AGENT=true FAKE_COMM=bash FAKE_ARGS='bash ./claude' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "ordinary excluded-named shell script is not treated as a harness"
+set +e
+out=$(env PI_CODING_AGENT=true FAKE_COMM=bash FAKE_ARGS='bash ./claude' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS" 2>&1)
+rc=$?
+set -e
+assert_eq 2 "$rc" "excluded basename shell entrypoint is rejected"
+assert_contains "$out" "unsupported harness" "excluded basename shell entrypoint reports migration"
+rm -f "$TMP/state/.session-start-complete" "$TMP/state/.session-start-agents-baseline"
+set +e
+out=$(env PI_CODING_AGENT=true FAKE_COMM=claude FAKE_ARGS=claude PATH="$TMP/fakebin:$PATH" \
+  FM_HOME="$TMP" FM_ROOT_OVERRIDE="$ROOT" FM_STATE_OVERRIDE="$TMP/state" \
+  FM_DATA_OVERRIDE="$TMP/data" FM_CONFIG_OVERRIDE="$TMP/config" \
+  "$ROOT/bin/fm-session-start.sh" 2>&1)
+rc=$?
+set -e
+assert_eq 2 "$rc" "session start rejects an excluded primary"
+assert_contains "$out" "unsupported harness" "session start preserves the primary identity failure"
+assert_absent "$TMP/state/.session-start-complete" "excluded primary cannot publish session completion"
+assert_absent "$TMP/state/.session-start-agents-baseline" "excluded primary cannot publish a session baseline"
 assert_eq unknown "$(env PI_CODING_AGENT=true FAKE_COMM=bash FAKE_ARGS='bash ./claude.sh' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "ordinary similarly named shell script is not treated as a harness"
 assert_eq unknown "$(env PI_CODING_AGENT=true FAKE_COMM=bash FAKE_ARGS='bash ./script /tmp/bin/claude' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "excluded install path used as data is not treated as a harness"
 assert_eq unknown "$(env PI_CODING_AGENT=true FAKE_COMM=node FAKE_EXECUTABLE="$(command -v node)" FAKE_ARGS='node helper.js /opt/bin/codex' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "excluded install path used as Node helper data is not treated as a harness"
 assert_eq unknown "$(env PI_CODING_AGENT=true FAKE_COMM=python FAKE_ARGS='python muse.py' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "ordinary similarly named Python script is not treated as a harness"
-assert_eq unknown "$(env PI_CODING_AGENT=true FAKE_COMM=bash FAKE_ARGS='bash anthropic/claude' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "provider-qualified model text remains valid input"
+assert_eq unknown "$(env PI_CODING_AGENT=true FAKE_COMM=bash FAKE_ARGS='bash ./script anthropic/claude' PATH="$TMP/fakebin:$PATH" FM_HOME="$TMP" "$HARNESS")" "provider-qualified model text remains valid input"
 for old in pi-signed claude codex opencode grok kimi cursor muse; do
   printf '%s\n' "$old" > "$TMP/config/crew-harness"
   set +e

@@ -180,10 +180,9 @@
 # the digest never runs without the same hard bound and process-group cleanup.
 #
 # Usage: fm-session-start.sh [--reemit] [--source <source>]
-#   Prints the full ordered digest to stdout and always exits 0: this is a
-#   reporting command, not a gate. A lock refusal is reported as a loud
-#   banner inline, never a silent failure or a non-zero exit that would make
-#   an agent skip the rest of the digest.
+#   Prints the full ordered digest to stdout. A lock refusal is reported as a
+#   loud banner inline, never a silent failure or a non-zero exit that would
+#   make an agent skip the rest of the digest.
 #
 #   --reemit  This process ALREADY took the helm at its own startup and has
 #             only lost its context (a /clear or a compaction). Skip the
@@ -319,10 +318,13 @@ if [ -z "${FM_SESSION_START_STAGE_FILE:-}" ]; then
     printf '%s\n' "$BAR"
   fi
   rm -f "$SESSION_START_STAGE_FILE" 2>/dev/null || true
+  if [ "$SESSION_START_RC" -ne 0 ] && [ "$SESSION_START_RC" -ne 124 ]; then
+    exit "$SESSION_START_RC"
+  fi
   exit 0
 fi
 
-PRIMARY_HARNESS=$("$SCRIPT_DIR/fm-harness.sh" 2>/dev/null || printf unknown)
+PRIMARY_HARNESS=$("$SCRIPT_DIR/fm-harness.sh") || exit $?
 
 # shellcheck source=bin/fm-backend.sh
 . "$SCRIPT_DIR/fm-backend.sh"

@@ -153,7 +153,7 @@ fm_harness_process_identity() {
     printf 'unverified-node\n'
     return 0
   fi
-  identity=$(fm_harness_excluded_install_path "$entrypoint" || true)
+  identity=$(fm_harness_excluded_entrypoint "$entrypoint" || true)
   [ -z "$identity" ] || { printf '%s\n' "$identity"; return 0; }
   return 1
 }
@@ -173,7 +173,7 @@ fm_harness_pid_excluded_argv() {
       return 0
     fi
   fi
-  identity=$(fm_harness_excluded_install_path "$entrypoint" || true)
+  identity=$(fm_harness_excluded_entrypoint "$entrypoint" || true)
   [ -z "$identity" ] || printf '%s\n' "$identity"
   [ -n "$identity" ]
 }
