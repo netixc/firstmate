@@ -839,6 +839,30 @@ EOF
   pass "a lock refusal prints a loud read-only banner, skips every mutating step, and still completes the digest"
 }
 
+test_unknown_primary_identity_is_rejected() {
+  local rec root home fakebin out status
+  rec=$(new_world unknown-primary)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_harness "$fakebin" unknown
+
+  status=0
+  out=$(FM_FAKE_HARNESS=unknown FM_HOME="$home" FM_ROOT_OVERRIDE="$root" \
+    FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
+    FM_CONFIG_OVERRIDE="$home/config" FM_PROJECTS_OVERRIDE="$home/projects" \
+    PATH="$fakebin:$BASE_PATH" "$SESSION_START" 2>&1) || status=$?
+
+  expect_code 2 "$status" "fm-session-start.sh must reject an unknown primary identity"
+  assert_contains "$out" "unsupported primary harness identity unknown" "unknown primary rejection was not explicit"
+  assert_contains "$out" "exact plain pi 0.84.4 with canonical process registration is required" "unknown primary rejection omitted the supported identity boundary"
+  assert_not_contains "$out" "FLEET STATE" "unknown primary identity reached the session digest"
+  [ ! -e "$home/state/.lock" ] || fail "unknown primary identity published a session lock"
+
+  pass "session start rejects an unknown primary before publishing session state"
+}
+
 test_lock_write_failure_read_only_path() {
   local rec root home fakebin out status
   rec=$(new_world lock-write-failure)
@@ -2445,6 +2469,7 @@ EOF
 
 test_context_digest_absent_empty_present
 test_lock_refusal_read_only_path
+test_unknown_primary_identity_is_rejected
 test_lock_write_failure_read_only_path
 test_trace_context_effective_state_is_frozen_after_lock
 test_session_lock_concurrent_single_winner

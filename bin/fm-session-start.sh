@@ -325,6 +325,10 @@ if [ -z "${FM_SESSION_START_STAGE_FILE:-}" ]; then
 fi
 
 PRIMARY_HARNESS=$("$SCRIPT_DIR/fm-harness.sh") || exit $?
+if [ "$PRIMARY_HARNESS" != pi ]; then
+  printf 'error: unsupported primary harness identity %q; exact plain pi 0.84.4 with canonical process registration is required\n' "$PRIMARY_HARNESS" >&2
+  exit 2
+fi
 
 # shellcheck source=bin/fm-backend.sh
 . "$SCRIPT_DIR/fm-backend.sh"
