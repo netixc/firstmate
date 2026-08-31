@@ -265,7 +265,10 @@ fm_harness_pi_launch_record_migrate() {  # <state-dir> <pid> <version> <start> <
   if [ -f "$extension" ] && [ "sha256:$(fm_harness_file_sha256 "$extension")" = "$version" ]; then
     fm_harness_pi_launch_record_publish "$state_dir" "$pid" "$extension" "$cli" "$start" || return 1
     launch="$state_dir/.pi-launches/$pid-$(printf '%s' "$start" | fm_harness_file_sha256 /dev/stdin)"
-    sed '7s/parent-v1/migration-v1/;8,9d' "$launch" > "$launch.migration" && mv "$launch.migration" "$launch" || { rm -f "$launch.migration"; return 1; }
+    if ! sed '7s/parent-v1/migration-v1/;8,9d' "$launch" > "$launch.migration" || ! mv "$launch.migration" "$launch"; then
+      rm -f "$launch.migration"
+      return 1
+    fi
     return
   fi
   [ -n "$root" ] || return 1
@@ -277,7 +280,10 @@ fm_harness_pi_launch_record_migrate() {  # <state-dir> <pid> <version> <start> <
     if [ "sha256:$(fm_harness_file_sha256 "$candidate")" = "$version" ]; then
       fm_harness_pi_launch_record_publish "$state_dir" "$pid" "$candidate" "$cli" "$start" || { rm -f "$candidate"; return 1; }
       launch="$state_dir/.pi-launches/$pid-$(printf '%s' "$start" | fm_harness_file_sha256 /dev/stdin)"
-      sed '7s/parent-v1/migration-v1/;8,9d' "$launch" > "$launch.migration" && mv "$launch.migration" "$launch" || { rm -f "$candidate" "$launch.migration"; return 1; }
+      if ! sed '7s/parent-v1/migration-v1/;8,9d' "$launch" > "$launch.migration" || ! mv "$launch.migration" "$launch"; then
+        rm -f "$candidate" "$launch.migration"
+        return 1
+      fi
       rm -f "$candidate"
       return 0
     fi
