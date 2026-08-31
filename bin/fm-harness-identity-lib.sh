@@ -224,7 +224,7 @@ PY
 }
 
 fm_harness_pid_pi_registration() {
-  local pid=$1 root state_dir expected_extension marker marker_version marker_pid marker_start marker_extension marker_cli current_start actual_version
+  local pid=$1 root state_dir expected_extension marker marker_version marker_pid marker_start marker_extension marker_cli marker_launch current_start launch_id launch_version launch_pid launch_start launch_image launch_cli launch_extension
   root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
   if [ -n "${FM_HARNESS_IDENTITY_HOME:-}" ]; then
     state_dir="$FM_HARNESS_IDENTITY_HOME/state"
@@ -240,15 +240,26 @@ fm_harness_pid_pi_registration() {
   marker_start=$(sed -n '3p' "$marker" 2>/dev/null)
   marker_extension=$(sed -n '4p' "$marker" 2>/dev/null)
   marker_cli=$(sed -n '5p' "$marker" 2>/dev/null)
+  marker_launch=$(sed -n '6p' "$marker" 2>/dev/null)
   [ "$marker_pid" = "$pid" ] && [ -n "$marker_start" ] || return 1
-  [ "$marker_extension" = "$expected_extension" ] || return 1
-  fm_harness_pi_cli_canonical "$marker_cli" || return 1
-  [ -f "$marker_extension" ] && [ ! -L "$marker_extension" ] || return 1
-  actual_version="sha256:$(fm_harness_file_sha256 "$root/.pi/extensions/fm-pi-process-registration.ts")" || return 1
-  [ "$marker_version" = "$actual_version" ] || return 1
-  [ "$(fm_harness_file_sha256 "$marker_extension")" = "${actual_version#sha256:}" ] || return 1
+  launch_id=$(printf '%s' "$marker_start" | fm_harness_file_sha256 /dev/stdin) || return 1
+  [ "$marker_launch" = "$state_dir/.pi-launches/$pid-$launch_id" ] || return 1
+  [ -f "$marker_launch" ] && [ ! -L "$marker_launch" ] || return 1
+  launch_version=$(sed -n '1p' "$marker_launch" 2>/dev/null)
+  launch_pid=$(sed -n '2p' "$marker_launch" 2>/dev/null)
+  launch_start=$(sed -n '3p' "$marker_launch" 2>/dev/null)
+  launch_image=$(sed -n '4p' "$marker_launch" 2>/dev/null)
+  launch_cli=$(sed -n '5p' "$marker_launch" 2>/dev/null)
+  launch_extension=$(sed -n '6p' "$marker_launch" 2>/dev/null)
+  [ "$launch_version" = "$marker_version" ] && [ "$launch_pid" = "$marker_pid" ] && [ "$launch_start" = "$marker_start" ] || return 1
+  [ "$launch_cli" = "$marker_cli" ] && [ "$launch_extension" = "$marker_extension" ] || return 1
+  [ "$launch_extension" = "$expected_extension" ] || return 1
+  [ "$launch_image" = "$state_dir/.pi-launches/images/${launch_version#sha256:}.ts" ] || return 1
+  [ -f "$launch_image" ] && [ ! -L "$launch_image" ] || return 1
+  [ "sha256:$(fm_harness_file_sha256 "$launch_image")" = "$launch_version" ] || return 1
+  fm_harness_pi_cli_canonical "$launch_cli" || return 1
   current_start=$(ps -o lstart= -p "$pid" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-  [ "$current_start" = "$marker_start" ]
+  [ "$current_start" = "$launch_start" ]
 }
 
 fm_harness_pid_executable() {

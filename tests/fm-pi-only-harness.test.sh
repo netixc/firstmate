@@ -5,7 +5,8 @@ set -eu
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 TMP=$(fm_test_tmproot fm-pi-only-harness)
 mkdir -p "$TMP"
-trap 'rm -rf "$TMP"' EXIT
+rolling_pid=
+trap '[ -z "$rolling_pid" ] || kill "$rolling_pid" 2>/dev/null || true; rm -rf "$TMP"' EXIT
 assert_eq() { [ "$1" = "$2" ] || fail "$3 (expected '$1', got '$2')"; pass "$3"; }
 mkdir -p "$TMP/config" "$TMP/state"
 HARNESS="$ROOT/bin/fm-harness.sh"
@@ -257,6 +258,26 @@ for old in pi-signed claude codex opencode grok kimi cursor muse; do
 done
 assert_eq Escape "$(fm_control_interrupt_key pi)" "Pi interrupt key"
 assert_eq /quit "$(fm_control_exit_command pi)" "Pi exit command"
+
+rolling_home="$TMP/rolling-home"
+mkdir -p "$rolling_home/state"
+rolling_home=$(cd "$rolling_home" && pwd -P)
+sleep 300 &
+rolling_pid=$!
+fm_test_register_pi_process "$rolling_home" "$rolling_home/state" "$rolling_pid" || fail "could not publish rolling-update Pi launch evidence"
+printf 'updated checkout image\n' > "$rolling_home/.pi/extensions/fm-pi-process-registration.ts"
+FM_HARNESS_IDENTITY_HOME="$rolling_home" bash -c '. "$1"; fm_harness_pid_pi_registration "$2"' _ "$ROOT/bin/fm-harness-identity-lib.sh" "$rolling_pid" || fail "immutable Pi launch evidence should survive a checkout update"
+pass "immutable Pi launch evidence survives a checkout update"
+rolling_launch=$(sed -n '6p' "$rolling_home/state/.pi-processes/$rolling_pid")
+chmod 644 "$rolling_launch"
+rm -f "$rolling_launch"
+if FM_HARNESS_IDENTITY_HOME="$rolling_home" bash -c '. "$1"; fm_harness_pid_pi_registration "$2"' _ "$ROOT/bin/fm-harness-identity-lib.sh" "$rolling_pid"; then
+  fail "mutable process marker should not replace parent launch evidence"
+fi
+pass "mutable process marker cannot replace parent launch evidence"
+kill "$rolling_pid" 2>/dev/null || true
+wait "$rolling_pid" 2>/dev/null || true
+rolling_pid=
 
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-busy-lib.sh"
