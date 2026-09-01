@@ -17,9 +17,9 @@ set -u
 BASE_PATH=${FM_TEST_BASE_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
 TMP_ROOT=$(fm_test_tmproot fm-bootstrap-network-parallel)
 TMP_ROOT=$(cd "$TMP_ROOT" && pwd)
-export FM_BACKEND_CMUX_BUNDLE_BIN="$TMP_ROOT/no-bundled-cmux"
-unset TMUX TMUX_PANE HERDR_ENV HERDR_PANE_ID HERDR_SESSION HERDR_SOCKET_PATH \
-  CMUX_WORKSPACE_ID CMUX_SURFACE_ID CMUX_SOCKET_PATH CMUX_TAB_ID CMUX_PANEL_ID \
+export FM_BACKEND_LEGACY_PROVIDER_BUNDLE_BIN="$TMP_ROOT/no-bundled-legacy-provider"
+unset LEGACY_PROVIDER LEGACY_PROVIDER_PANE HERDR_ENV HERDR_PANE_ID HERDR_SESSION HERDR_SOCKET_PATH \
+  LEGACY_PROVIDER_WORKSPACE_ID LEGACY_PROVIDER_SURFACE_ID LEGACY_PROVIDER_SOCKET_PATH LEGACY_PROVIDER_TAB_ID LEGACY_PROVIDER_PANEL_ID \
   2>/dev/null || true
 
 command -v python3 >/dev/null 2>&1 \
@@ -171,7 +171,7 @@ test_remote_probe_scheduling_keeps_per_mate_lines() { # <parallel|fallback>
   git -C "$primary" add AGENTS.md bin
   git -C "$primary" commit -qm 'seed primary default branch'
   fakebin=$(fm_fakebin "$dir")
-  fm_fake_exit0 "$fakebin" gh treehouse tmux node
+  fm_fake_exit0 "$fakebin" gh treehouse legacy-provider node
   log="$dir/probe.log"
   : > "$log"
   install_fake_ssh "$fakebin"

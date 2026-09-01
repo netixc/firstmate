@@ -208,11 +208,11 @@ make_fake_spawn_toolchain() {
   local dir=$1 fakebin
   fakebin="$dir/fakebin"
   mkdir -p "$fakebin"
-  cat > "$fakebin/tmux" <<'SH'
+  cat > "$fakebin/legacy-provider" <<'SH'
 #!/usr/bin/env bash
 exit 0
 SH
-  chmod +x "$fakebin/tmux"
+  chmod +x "$fakebin/legacy-provider"
   ln -s "$(command -v node)" "$fakebin/node"
   ln -s "$(command -v pi)" "$fakebin/pi"
   printf '%s\n' "$fakebin"
@@ -303,7 +303,7 @@ EOF
   write_shared "$data_override/captain-shared.md" "shared from override"
   fakebin=$(make_fake_spawn_toolchain "$w")
 
-  out=$(PATH="$fakebin:$BASE_PATH" TMUX='' \
+  out=$(PATH="$fakebin:$BASE_PATH" LEGACY_PROVIDER='' \
     FM_ROOT_OVERRIDE="$root" FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$data_override" \
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \

@@ -16,11 +16,11 @@ assert_eq "$(fm_backend_name)" herdr "the product default must be Herdr"
 assert_eq "$FM_BACKEND_KNOWN" herdr "known provider set must contain only Herdr"
 assert_eq "$(fm_backend_required_tools herdr)" "herdr jq treehouse" "Herdr toolchain must retain Treehouse and JSON parsing"
 
-FM_BACKEND=tmux
+FM_BACKEND=legacy-provider
 if fm_backend_name >"$TMP/out" 2>"$TMP/err"; then fail "an excluded provider must be refused"; fi
 grep -q "requires backend=herdr" "$TMP/err" || fail "excluded provider refusal must name the migration"
 unset FM_BACKEND
-printf 'zellij\n' > "$TMP/home/config/backend"
+printf 'legacy-provider\n' > "$TMP/home/config/backend"
 if fm_backend_name >"$TMP/out" 2>"$TMP/err"; then fail "an excluded configured provider must be refused"; fi
 grep -q "never falls back" "$TMP/err" || fail "configured-provider refusal must state no fallback"
 printf 'herdr\n' > "$TMP/home/config/backend"

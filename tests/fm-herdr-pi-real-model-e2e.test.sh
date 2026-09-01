@@ -21,7 +21,6 @@ TMP_ROOT=$(fm_test_tmproot fm-herdr-pi-real-model-e2e)
 MODEL=${FM_HERDR_PI_REAL_MODEL:-openai-codex/gpt-5.6-sol}
 TOKEN=FM_HERDR_ONLY_REAL_MODEL_OK
 STEER_TOKEN=FM_HERDR_ONLY_STEERING_OK
-WATCH_TOKEN=FM_HERDR_ONLY_WATCHER_OK
 PANE=
 TAB=
 WORKSPACE=
@@ -67,20 +66,26 @@ fm_backend_source herdr || fail "could not load the Herdr provider"
 fm_backend_validate_task_endpoint "$HOME_DIR/state/real-model.meta" real-model \
   || fail "the real endpoint metadata did not preserve exact hierarchy"
 
+fm_backend_events_capable herdr "$SESSION" || fail "native watcher events were unavailable"
+watch_out="$TMP_ROOT/watch.out"
+watch_rc_file="$TMP_ROOT/watch.rc"
+( fm_backend_wait_transition herdr "$SESSION" 60 "$HOME_DIR/state" "$SESSION:$PANE" >"$watch_out"; printf '%s\n' "$?" >"$watch_rc_file" ) &
+watch_pid=$!
+sleep 0.5
 prompt='Use the bash tool to run sleep 3. Then reply with exactly the concatenation of FM_HERDR_ONLY_REAL_ and MODEL_OK, with no other text.'
-printf -v command 'pi --approve --no-session --no-context-files --no-extensions --model %q --thinking low %q' \
+printf -v command 'pi --no-session --no-context-files --no-extensions --model %q --thinking low %q' \
   "$MODEL" "$prompt"
 "$LAB_HELPER" run "$SESSION" pane run "$PANE" "$command" >/dev/null \
   || fail "could not launch real Pi in the isolated Herdr pane"
-
-working=0
-for _ in $(seq 1 100); do
-  state=$("$LAB_HELPER" run "$SESSION" agent get "$PANE" 2>/dev/null \
-    | jq -r '.result.agent.agent_status // empty' 2>/dev/null || true)
-  case "$state" in working|blocked) working=1; break ;; esac
-  sleep 0.1
-done
-[ "$working" -eq 1 ] || fail "Herdr never observed the real Pi provider turn running"
+wait "$watch_pid"
+watch_rc=$(cat "$watch_rc_file" 2>/dev/null || true)
+watch_record=$(cat "$watch_out" 2>/dev/null || true)
+[ "$watch_rc" = 0 ] || fail "native watcher did not deliver the real Pi blocked transition (rc=${watch_rc:-missing})"
+[ "$(fm_transition_pane_id "$watch_record")" = "$PANE" ] \
+  && [ "$(fm_transition_to_status "$watch_record")" = blocked ] \
+  || fail "native watcher delivered the wrong real Pi transition"
+"$LAB_HELPER" run "$SESSION" pane send-keys "$PANE" Enter >/dev/null \
+  || fail "could not approve the real Pi tool call after its blocked transition"
 
 answered=0
 for _ in $(seq 1 180); do
@@ -126,33 +131,6 @@ control=$(FM_CONTROL_POLL=0.2 FM_CONTROL_EXIT_WAIT=3 "$ROOT/bin/fm-control.sh" r
 case "$control" in *"interrupt-delivered real-model"*"verified=agent-alive"*) : ;; *) fail "control lacked real-agent liveness proof: $control" ;; esac
 [ "$(fm_backend_agent_state herdr "$SESSION:$PANE")" = alive ] \
   || fail "real Pi did not survive production interrupt control"
-
-fm_backend_events_capable herdr "$SESSION" || fail "native watcher events were unavailable after steering and control"
-watch_out="$TMP_ROOT/watch.out"
-watch_rc_file="$TMP_ROOT/watch.rc"
-( fm_backend_wait_transition herdr "$SESSION" 8 "$HOME_DIR/state" "$SESSION:$PANE" >"$watch_out"; printf '%s\n' "$?" >"$watch_rc_file" ) &
-watch_pid=$!
-sleep 0.5
-watch_prompt='Use the bash tool to run sleep 3. Then reply with exactly the concatenation of FM_HERDR_ONLY_ and WATCHER_OK, with no other text.'
-submit=$(fm_backend_send_text_submit herdr "$SESSION:$PANE" "$watch_prompt" 3 0.2 0.2)
-[ "$submit" = empty ] || fail "the watcher turn was not delivered: $submit"
-wait "$watch_pid"
-watch_rc=$(cat "$watch_rc_file" 2>/dev/null || true)
-watch_record=$(cat "$watch_out" 2>/dev/null || true)
-[ "$watch_rc" = 0 ] || fail "native watcher did not deliver the real Pi transition (rc=${watch_rc:-missing})"
-[ "$(fm_transition_pane_id "$watch_record")" = "$PANE" ] \
-  && [ "$(fm_transition_to_status "$watch_record")" = working ] \
-  || fail "native watcher delivered the wrong real Pi transition"
-watched=0
-for _ in $(seq 1 120); do
-  if "$LAB_HELPER" run "$SESSION" pane read "$PANE" --source recent --lines 200 2>/dev/null \
-    | grep -Fq "$WATCH_TOKEN"; then
-    watched=1
-    break
-  fi
-  sleep 1
-done
-[ "$watched" -eq 1 ] || fail "the real Pi watcher turn did not complete"
 
 fm_backend_kill herdr "$SESSION:$PANE" || fail "production cleanup could not close the exact real Pi pane"
 if "$LAB_HELPER" run "$SESSION" pane get "$PANE" >/dev/null 2>&1; then

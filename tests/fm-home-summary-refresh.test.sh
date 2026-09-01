@@ -39,7 +39,7 @@ trap 'cleanup; exit 143' TERM
 
 command -v jq >/dev/null 2>&1 || { echo "skip: jq not found"; exit 0; }
 
-cat > "$FAKEBIN/tmux" <<'SH'
+cat > "$FAKEBIN/legacy-provider" <<'SH'
 #!/usr/bin/env bash
 case "${1:-}" in
   display-message) printf '%%1\n' ;;
@@ -55,7 +55,7 @@ if [ -n "${FM_TEST_NM_MARKER:-}" ]; then
 fi
 exit 0
 SH
-chmod +x "$FAKEBIN/tmux" "$FAKEBIN/no-mistakes"
+chmod +x "$FAKEBIN/legacy-provider" "$FAKEBIN/no-mistakes"
 
 mkdir -p "$HOME_DIR/state" "$HOME_DIR/data" "$HOME_DIR/config" \
   "$HOME_DIR/projects/task" "$HOME_DIR/bin"

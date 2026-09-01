@@ -68,7 +68,7 @@ test_ambiguous_metadata_refuses_before_send() {
   dir="$TMP_ROOT/ambiguous"; mkdir -p "$dir"
   fb=$(make_stubs "$dir"); home=$(setup_home ambiguous); log="$dir/herdr.log"; : > "$log"
   fm_write_meta "$home/state/lane.meta" \
-    "backend=tmux" "backend=herdr" "window=legacy:fm-lane" "window=lab:w1:p1" \
+    "backend=legacy-provider" "backend=herdr" "window=legacy:fm-lane" "window=lab:w1:p1" \
     "endpoint_task_id=lane" "worktree=$TMP_ROOT/worktree" "project=$TMP_ROOT/project" \
     "kind=ship" "harness=pi" "herdr_session=lab" "herdr_workspace_id=w1" \
     "herdr_tab_id=w1:t1" "herdr_pane_id=w1:p1"

@@ -31,7 +31,7 @@ make_fakebin() {  # <dir>
 [ "${FAKE_NM_SLEEP:-0}" = 1 ] && sleep 30
 exit 0
 SH
-  cat > "$fb/tmux" <<'SH'
+  cat > "$fb/legacy-provider" <<'SH'
 #!/usr/bin/env bash
 case "${1:-}" in
   display-message) case "$*" in *dead-*) exit 1 ;; *) printf '%%1\n' ;; esac ;;
@@ -70,7 +70,7 @@ SH
 echo "curl $*" >> "$NET_LOG"
 exit 1
 SH
-  chmod +x "$fb/no-mistakes" "$fb/tmux" "$fb/gh" "$fb/gh-axi" "$fb/curl"
+  chmod +x "$fb/no-mistakes" "$fb/legacy-provider" "$fb/gh" "$fb/gh-axi" "$fb/curl"
   printf '%s\n' "$fb"
 }
 

@@ -51,7 +51,7 @@ test_invalid_and_ambiguous_records_refuse_before_mutation() {
 
   dir=$(make_case unsupported-backend)
   fm_write_meta "$dir/home/state/$id.meta" \
-    "backend=tmux" "window=legacy:fm-$id" "endpoint_task_id=$id" \
+    "backend=legacy-provider" "window=legacy:fm-$id" "endpoint_task_id=$id" \
     "worktree=$dir/worktree" "project=$dir/project"
   assert_refused_without_mutation "$dir" "$id" "unsupported provider"
 

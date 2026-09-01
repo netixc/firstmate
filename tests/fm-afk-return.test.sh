@@ -68,7 +68,7 @@ ack_return() {  # <case-dir> <return-output>
 seed_live_blocker() {  # <case-dir> <backend> <key>
   local dir=$1 backend=$2 key=$3 target
   case "$backend" in
-    tmux) target='synthetic:fm-repair-task' ;;
+    legacy-provider) target='synthetic:fm-repair-task' ;;
     herdr) target='fm-lab-synthetic:w1:p2' ;;
   esac
   cat > "$dir/home/state/repair-task.meta" <<EOF
@@ -152,7 +152,7 @@ test_return_gate_orders_catchup_before_bearings() {
 
 test_explicit_reclassification_requires_durable_reason() {
   local backend dir out rc
-  for backend in tmux herdr; do
+  for backend in legacy-provider herdr; do
     dir="$TMP_ROOT/reclassify-$backend"
     install_runner "$dir"
     seed_live_blocker "$dir" "$backend" vendor-release
@@ -178,7 +178,7 @@ test_explicit_reclassification_requires_durable_reason() {
     out=$(run_return "$dir" check) || fail "$backend durable reclassification did not clear the return gate: $out"
     [ ! -e "$dir/home/state/.afk-return-catchup" ] || fail "$backend reclassification left a gate behind"
   done
-  pass "tmux and Herdr blockers require the same explicit durable reclassification before ordinary work"
+  pass "legacy-provider and Herdr blockers require the same explicit durable reclassification before ordinary work"
 }
 
 test_captain_decision_does_not_masquerade_as_firstmate_blocker() {
@@ -187,7 +187,7 @@ test_captain_decision_does_not_masquerade_as_firstmate_blocker() {
   install_runner "$dir"
   cat > "$dir/home/state/decision-task.meta" <<'EOF'
 window=synthetic:fm-decision-task
-backend=tmux
+backend=legacy-provider
 kind=ship
 EOF
   printf 'needs-decision [key=api-shape]: captain must choose the synthetic API shape\n' > "$dir/home/state/decision-task.status"

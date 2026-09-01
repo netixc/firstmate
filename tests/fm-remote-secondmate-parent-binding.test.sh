@@ -142,7 +142,7 @@ git -C "$PARENT/projects/alpha" push -q -u origin main
 git --git-dir="$TMP_ROOT/alpha.git" symbolic-ref HEAD refs/heads/main
 printf -- '- alpha [direct-PR] - alpha project (added 2026-08-04)\n' > "$PARENT/data/projects.md"
 printf 'pi\n' > "$PARENT/config/secondmate-harness"
-printf 'tmux\n' > "$PARENT/config/backend"
+printf 'legacy-provider\n' > "$PARENT/config/backend"
 
 # The primary home is the X-mode / relay home: the captain's real activation.
 printf 'FMX_PAIRING_TOKEN=repro-token\n' > "$PARENT/.env"
@@ -228,7 +228,7 @@ write_child_meta() {
     "mode=local-only" "yolo=off"
 }
 mkdir -p "$TMP_ROOT/childfake"
-for t in tmux treehouse no-mistakes gh gh-axi tasks-axi; do
+for t in legacy-provider treehouse no-mistakes gh gh-axi tasks-axi; do
   printf '#!/usr/bin/env bash\nexit 0\n' > "$TMP_ROOT/childfake/$t"
   chmod +x "$TMP_ROOT/childfake/$t"
 done

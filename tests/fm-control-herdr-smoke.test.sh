@@ -2,7 +2,7 @@
 # tests/fm-control-herdr-smoke.test.sh - real-herdr smoke test for the agent
 # lifecycle control plane (bin/fm-control.sh).
 #
-# tmux is the control plane's reference backend and is covered hermetically in
+# legacy-provider is the control plane's reference backend and is covered hermetically in
 # tests/fm-control.test.sh. herdr is the OTHER backend whose recovery-grade
 # agent-state classifier the control plane is allowed to trust, so its
 # behavior is pinned here against the REAL binary rather than a stub: whether

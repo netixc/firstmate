@@ -102,7 +102,7 @@ fm_composer_normalize_trim_var() {  # <varname>
 # fm_composer_strip_ghost: the ONE fleet-wide ANSI-aware extractor of "real typed
 # content" from a captured, styled composer row. Reads the styled line on stdin
 # (from `herdr pane read --format ansi` or
-# `zellij action dump-screen --ansi`) and prints the
+# a provider-native ANSI screen capture) and prints the
 # plain, non-ghost text on stdout, dropping:
 #     A reset (SGR 0) or normal-intensity (SGR 22) ends a dim run.
 #   - dark/muted TRUECOLOR foreground runs (SGR 38;2;r;g;b or the colon form
@@ -1013,7 +1013,7 @@ EOF
     # A styled agent-glyph placeholder disappears above when ghost stripping
     # proves it is furniture. If the same placeholder-looking bytes survive
     # styling, they are real user input and must remain in the extracted content
-    # (the zellij paste proof depends on observing exactly what was typed).
+    # (the paste proof depends on observing exactly what was typed).
     # such styling proof, so their structurally fixed positions remain the two
     # idle-regex exceptions here.
     if [ -z "$content" ] \

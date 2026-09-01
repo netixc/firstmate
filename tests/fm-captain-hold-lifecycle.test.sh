@@ -29,7 +29,7 @@ make_home() {  # <name>
 ## Done
 EOF
   fakebin=$(fm_fakebin "$home")
-  fm_fake_exit0 "$fakebin" tmux treehouse no-mistakes gh gh-axi
+  fm_fake_exit0 "$fakebin" legacy-provider treehouse no-mistakes gh gh-axi
   printf '%s\n' "$home"
 }
 
@@ -590,7 +590,7 @@ test_secondmate_hold_stays_in_authoritative_home() {
 ## Done
 EOF
   fakebin=$(fm_fakebin "$mate")
-  fm_fake_exit0 "$fakebin" tmux treehouse no-mistakes gh gh-axi
+  fm_fake_exit0 "$fakebin" legacy-provider treehouse no-mistakes gh gh-axi
   origin=sample-mate-review
   mkdir -p "$mate/data/$origin"
   tasks_in "$mate" add "$origin" "Investigate secondmate sample" --kind scout --repo sample --start >/dev/null
@@ -951,7 +951,7 @@ test_chat_channel_feeds_the_same_keyed_answer_intake() {
     || fail "precondition: completion did not transfer the decision to its durable owner"
 
   fb="$home/fakebin"
-  cat > "$fb/tmux" <<'SH'
+  cat > "$fb/legacy-provider" <<'SH'
 #!/usr/bin/env bash
 set -u
 case "${1:-}" in
@@ -975,7 +975,7 @@ case "${1:-}" in
 esac
 exit 0
 SH
-  chmod +x "$fb/tmux"
+  chmod +x "$fb/legacy-provider"
 
   : > "$home/send.log"
   env PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$home" FM_HOME="$home" \
