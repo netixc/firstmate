@@ -1,0 +1,23 @@
+
+ pi v0.84.4
+ escape interrupt · ctrl+c/ctrl+d clear/exit · / commands · ! bash · ctrl+o more
+ Press ctrl+o to show full startup help and loaded resources.
+
+ Pi can explain its own features and look up its docs. Ask it how to use or extend Pi.
+
+[Extensions]
+  fm-calm.ts, followup-e2e.ts
+
+
+ CAPTAIN_PROMPT_exact_watcher_repeat_2
+
+
+ CAPTAIN_ANSWER_exact_watcher_repeat_2
+
+ MONITOR_HANDLED_exact_watcher_repeat_2_ONE
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-calm-pi-extension.S3OUxP/followup-project (main)
+2.1%/4.1k (auto)                                                                                                                                   deterministic
