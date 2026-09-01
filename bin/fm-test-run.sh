@@ -206,7 +206,6 @@ family_for_basename() {
     fm-herdr-lab.test.sh|fm-lint.test.sh|\
     fm-lint-workflows.test.sh|\
     fm-operational-input.test.sh|fm-pi-only-harness.test.sh|fm-pi-primary-types.test.sh|\
-    fm-harness-adapter-references.test.sh|\
     fm-send-popup-settle.test.sh|fm-send-settle.test.sh|\
     fm-supervision-instructions.test.sh|fm-task-delivery.test.sh|\
     fm-tmux-submit-busy.test.sh|fm-trace-context-lib.test.sh|\
@@ -517,7 +516,6 @@ tests/fm-extension-binding.test.sh 35000
 tests/fm-gate-refuse.test.sh 4071
 tests/fm-gitignore-config.test.sh 63
 tests/fm-gotmp.test.sh 762
-tests/fm-harness-adapter-references.test.sh 2
 tests/fm-guard-stale-banner.test.sh 11280
 tests/fm-herdr-session-cleanup.test.sh 14120
 tests/fm-herdr-submit-confirm-live-e2e.test.sh 20
