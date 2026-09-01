@@ -47,18 +47,18 @@ Verify setup by spawning a small task and confirming its `fm-<id>` window appear
 ### Agent liveness probe
 
 A target-existence check proves only that the pane exists.
-The deeper tmux agent-liveness probe first verifies exact window membership, then reads process names to distinguish a running harness from a bare idle shell.
+The deeper tmux agent-liveness probe first verifies exact window membership, then reads process names to distinguish running Pi from a bare idle shell.
 Only `dead` and `missing` authorize recovery because a false dead result could launch a duplicate agent.
 
 For positive attribution, the probe combines two independent name sources rather than making either one load-bearing.
 `#{pane_current_command}` and the pane tty foreground process group's kernel `comm` values expose different name fields, and which one retains executable identity is platform-dependent.
-The foreground probe also reads argv[0] so an exact harness install-path component can carry the verdict when the other fields expose a rewritten process name.
-Either source naming a verified harness is enough for `alive`, because a false `dead` is the one verdict that can start a duplicate agent on a live worktree, while a readable foreground process group settles the negative verdicts.
+The foreground probe also reads argv[0] so an exact Pi install-path component can carry the verdict when the other fields expose a rewritten process name.
+Either source naming Pi is enough for `alive`, because a false `dead` is the one verdict that can start a duplicate agent on a live worktree, while a readable foreground process group settles the negative verdicts.
 
-Scoping the second source to the foreground process group rather than to the pane's descendants is deliberate: a harness-named process left running in the background of an otherwise idle pane must not read as an agent.
+Scoping the second source to the foreground process group rather than to the pane's descendants is deliberate: a Pi-named process left running in the background of an otherwise idle pane must not read as an agent.
 
-The CI-enforced portable regression and opt-in real-harness drift guard follow the split owned by `.agents/skills/firstmate-coding-guidelines/SKILL.md`.
-Run the real-harness guard after any harness upgrade and before trusting refreshed evidence.
+The CI-enforced portable regression and opt-in real-Pi drift guard follow the split owned by `.agents/skills/firstmate-coding-guidelines/SKILL.md`.
+Run the real-Pi guard after any Pi upgrade and before trusting refreshed evidence.
 
 ### Composer, busy state, and delivery
 
@@ -71,7 +71,7 @@ A bare shell prompt is `unknown`, so away-mode escalation is never injected into
 Busy state is not read from rendered text on this backend.
 A task's busy, idle, unknown, or dead verdict comes from the semantic busy-state contract owned by `bin/fm-busy-lib.sh`; [architecture](architecture.md#busy-state-is-semantic-for-plain-pi) owns its boundaries.
 The submit acknowledgement and away-mode supervisor-pane busy guard below still consult rendered output, but only to decide whether input can be delivered, never to decide recorded task state.
-The supervisor guard selects only the detected primary harness's signature rather than a global union of vendor patterns.
+The supervisor guard selects Pi's rendered busy signature rather than a union of retired vendor patterns.
 
 `bin/fm-tmux-lib.sh` owns exact type-and-submit mechanics.
 It types a message once and retries Enter only until the composer clears.
@@ -82,7 +82,7 @@ The verdicts above are delivery-critical only for the local typed plane - harnes
 
 After the normal retry budget, only structurally proven pending text in a provably busy pane is accepted as queued, while an idle pane remains `pending` as a genuine swallowed Enter.
 Ambiguous pending text never receives the busy-queue conversion.
-A second, baseline-gated conversion covers harnesses whose mid-turn screen the classifier cannot identify (Pi replaces its separated composer while working): when and only when the pane was idle before the text was typed, an idle-to-busy transition across the submit's own Enter confirms delivery, the same turn-started signal Herdr reads natively.
+A second, baseline-gated conversion covers Pi's unidentifiable mid-turn screen because Pi replaces its separated composer while working: when and only when the pane was idle before the text was typed, an idle-to-busy transition across the submit's own Enter confirms delivery, the same turn-started signal Herdr reads natively.
 Without that baseline, an `unknown` verdict is preserved untouched, so a busy-looking pane can never convert an unread composer into a confirmation.
 `tests/fm-tmux-submit-busy.test.sh` covers busy and idle panes with proven, ambiguous, and cleared composers.
 
@@ -93,7 +93,7 @@ Without that baseline, an `unknown` verdict is preserved untouched, so a busy-lo
 ```sh
 tests/fm-backend-tmux-smoke.test.sh
 tests/fm-tmux-agent-liveness.test.sh
-tests/fm-harness-liveness-drift-live-e2e.test.sh
+tests/fm-pi-only-live-e2e.test.sh
 tests/fm-composer-ghost.test.sh
 tests/fm-tmux-submit-busy.test.sh
 tests/fm-bootstrap.test.sh

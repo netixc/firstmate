@@ -111,7 +111,7 @@ Roughly 0.02 ms per session start, from a single `[ -f "$FM_HOME/.env" ]` test t
 
 The plain Pi primary harness is unaffected by this transport-only behavior.
 Nothing here reads or renders harness-specific state.
-The only supervision surfaces touched are the session-start digest, which `bin/fm-supervision-instructions.sh` already renders per harness without knowing this section exists, and the wake payload produced by the existing relay poll, which every harness protocol consumes identically.
+The only supervision surfaces touched are the session-start digest, which `bin/fm-supervision-instructions.sh` already renders for Pi without knowing this section exists, and the wake payload produced by the existing relay poll, which the Pi protocol consumes through the existing shared path.
 
 Runtime backends (tmux, herdr, zellij, orca, cmux): not applicable after inspection.
 No command here reads `state/<id>.meta`'s backend fields, resolves an endpoint, or captures a pane.

@@ -14,9 +14,9 @@
 # of real model tokens. Tune the wait with FM_SEND_INBOX_LIVE_TIMEOUT (seconds,
 # default 240). Record the dated result in docs/verification/runtime-backends.md.
 #
-# Folder trust: harnesses launch with the repo root as cwd, which the
-# operator's machine has normally already trusted; a trust dialog is a real
-# unready state and correctly fails that harness's check.
+# Folder trust: Pi launches with the repo root as cwd, which the operator's
+# machine has normally already trusted; a trust dialog is a real unready state
+# and correctly fails the Pi check.
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
