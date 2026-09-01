@@ -97,7 +97,12 @@ exit 0
 SH
   chmod +x "$fakebin/tmux"
   chmod +x "$fakebin/treehouse"
-  fm_fake_exit0 "$fakebin" pi
+  cat > "$fakebin/pi" <<'SH'
+#!/usr/bin/env bash
+[ "${1:-}" != --version ] || { printf '0.84.4\n'; exit 0; }
+exit 0
+SH
+  chmod +x "$fakebin/pi"
   : > "$dir/tmux.log"
   printf '%s\n' "$fakebin"
 }

@@ -675,11 +675,11 @@ test_secondmate_open_decision_survives_live_endpoint() {
   out=$(PATH="$fakebin:$PATH" FM_HOME="$home" "$SNAPSHOT" --json)
   printf '%s' "$out" | jq -e '
     .tasks[] | select(.id == "active-secondmate")
-    | .endpoint.agent_alive == "unknown"
+    | .endpoint.agent_alive == "alive"
       and .hints.pending_decision == true
       and (.hints.open_decisions | length) == 1
-  ' >/dev/null || fail "an endpoint without registered Pi identity must not clear an unrelated keyed decision: $out"
-  pass "an unverified endpoint preserves unrelated open decisions"
+  ' >/dev/null || fail "a live plain Pi endpoint must not clear an unrelated keyed decision: $out"
+  pass "a live plain Pi endpoint preserves unrelated open decisions"
 }
 
 # An open decision clears ONLY on an explicit resolution referencing its key, never

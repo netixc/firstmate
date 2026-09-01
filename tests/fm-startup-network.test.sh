@@ -124,8 +124,6 @@ EOF
 run_stage() {  # <home> <root> <args...>
   local home=$1 root=$2 harness_pid=${FM_FAKE_HARNESS_PID_OVERRIDE:-$$}
   shift 2
-  fm_test_register_pi_process "$root" "$home/state" "$harness_pid" \
-    || fail "could not register the startup-network Pi fixture"
   PATH="$root/bin:$PATH" FM_FAKE_HARNESS_PID="$harness_pid" \
     FM_HOME="$home" FM_ROOT_OVERRIDE="$root" FM_STATE_OVERRIDE="$home/state" \
     FM_DATA_OVERRIDE="$home/data" FM_CONFIG_OVERRIDE="$home/config" \
