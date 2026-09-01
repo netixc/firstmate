@@ -194,14 +194,16 @@ fm_backend_validate_active_task_endpoint() {
 }
 
 fm_backend_meta_for_window() {
-  local target=$1 state=$2 meta window
+  local target=$1 state=$2 meta window match= count=0
   for meta in "$state"/*.meta; do
     [ -e "$meta" ] || continue
     window=$(fm_backend_meta_exact_value "$meta" window 2>/dev/null || true)
     [ -n "$window" ] && [ "$window" = "$target" ] || continue
-    printf '%s' "$meta"; return 0
+    match=$meta
+    count=$((count + 1))
   done
-  return 1
+  [ "$count" -eq 1 ] || return 1
+  printf '%s' "$match"
 }
 
 fm_backend_task_id_for_selector() {
@@ -252,12 +254,54 @@ fm_backend_source() {
   fi
 }
 
-fm_backend_capture() { local backend=$1; shift; fm_backend_source "$backend" && fm_backend_herdr_capture "$@"; }
-fm_backend_send_key() { local backend=$1; shift; fm_backend_source "$backend" && fm_backend_herdr_send_key "$@"; }
-fm_backend_send_text_submit() { local backend=$1; shift; fm_backend_source "$backend" && fm_backend_herdr_send_text_submit "$@"; }
+fm_backend_validate_task_operation() {  # <backend> <target> [expected-label]
+  local backend=$1 target=$2 label=${3:-} id meta
+  fm_backend_validate "$backend" || return 1
+  if [ -n "$label" ]; then
+    case "$label" in fm-?*) id=${label#fm-} ;; *) return 1 ;; esac
+    meta="$FM_HOME/state/$id.meta"
+  else
+    meta=$(fm_backend_meta_for_window "$target" "$FM_HOME/state" 2>/dev/null) || {
+      echo "REFUSED: Herdr endpoint '$target' has no unique recorded task binding; no endpoint action was attempted." >&2
+      return 1
+    }
+    id=$(basename "$meta" .meta)
+  fi
+  fm_backend_validate_active_task_endpoint "$meta" "$id" || return 1
+  if [ "$FM_BACKEND_VALIDATED_TARGET" != "$target" ]; then
+    echo "REFUSED: Herdr endpoint '$target' contradicts the recorded endpoint for task $id; no endpoint action was attempted." >&2
+    return 1
+  fi
+}
+
+fm_backend_capture() {
+  local backend=$1 target=$2 lines=${3:-} label=${4:-}
+  fm_backend_validate_task_operation "$backend" "$target" "$label" \
+    && fm_backend_herdr_capture "$target" "$lines"
+}
+fm_backend_send_key() {
+  local backend=$1 target=$2 key=$3 label=${4:-}
+  fm_backend_validate_task_operation "$backend" "$target" "$label" \
+    && fm_backend_herdr_send_key "$target" "$key"
+}
+fm_backend_send_text_submit() {
+  local backend=$1 target=$2 text=$3 retries=${4:-} sleep_s=${5:-} settle=${6:-} label=${7:-}
+  fm_backend_validate_task_operation "$backend" "$target" "$label" \
+    && fm_backend_herdr_send_text_submit "$target" "$text" "$retries" "$sleep_s" "$settle"
+}
 fm_backend_kill() { local backend=$1; shift; [ -n "${1:-}" ] || return 1; fm_backend_source "$backend" && fm_backend_herdr_kill "$@"; }
-fm_backend_busy_state() { local backend=$1; shift; fm_backend_source "$backend" >/dev/null 2>&1 || { printf 'unknown'; return 0; }; fm_backend_herdr_busy_state "$@"; }
-fm_backend_composer_state() { local backend=$1; shift; fm_backend_source "$backend" >/dev/null 2>&1 || { printf 'unknown'; return 0; }; fm_backend_herdr_composer_state "$@"; }
+fm_backend_busy_state() {
+  local backend=$1 target=$2 label=${3:-}
+  fm_backend_validate_task_operation "$backend" "$target" "$label" >/dev/null 2>&1 \
+    || { printf 'unknown'; return 0; }
+  fm_backend_herdr_busy_state "$target"
+}
+fm_backend_composer_state() {
+  local backend=$1 target=$2 label=${3:-}
+  fm_backend_validate_task_operation "$backend" "$target" "$label" >/dev/null 2>&1 \
+    || { printf 'unknown'; return 0; }
+  fm_backend_herdr_composer_state "$target"
+}
 
 fm_backend_target_exists() {
   local backend=$1 target=$2 label=${3:-} session pane live id meta

@@ -51,6 +51,9 @@ case "${1:-} ${2:-}" in
     printf '{"result":{"tabs":[{"workspace_id":"w1","tab_id":"w1:t1","label":"%s"}]}}\n' \
       "${FM_FAKE_LIVE_LABEL:-fm-task}"
     ;;
+  "pane read")
+    printf 'task output\n'
+    ;;
   "server ")
     printf 'started\n' >> "${FM_FAKE_SERVER_LOG:-/dev/null}"
     ;;
@@ -77,9 +80,14 @@ assert_eq "$FM_BACKEND_VALIDATED_BACKEND" herdr "validated provider"
 assert_eq "$FM_BACKEND_VALIDATED_TARGET" lab:w1:p2 "validated target"
 assert_eq "$(fm_backend_resolve_selector task "$TMP/home/state")" lab:w1:p2 "task selectors must resolve through metadata"
 fm_backend_target_exists herdr lab:w1:p2 fm-task || fail "exact live task hierarchy should exist"
+assert_eq "$(fm_backend_capture herdr lab:w1:p2 10 fm-task)" "task output" \
+  "task-bound capture must accept the exact live task hierarchy"
 export FM_FAKE_LIVE_LABEL=fm-other
 if fm_backend_target_exists herdr lab:w1:p2 fm-task; then
   fail "target existence must reject reused hierarchy IDs bound to another task label"
+fi
+if fm_backend_capture herdr lab:w1:p2 10 fm-task >"$TMP/out" 2>"$TMP/err"; then
+  fail "task-bound capture must reject reused hierarchy IDs bound to another task label"
 fi
 unset FM_FAKE_LIVE_LABEL
 export FM_FAKE_LIVE_TAB=w1:t9
