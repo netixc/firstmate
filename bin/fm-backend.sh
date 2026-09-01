@@ -863,7 +863,7 @@ fm_backend_target_exists() {  # <backend> <target> [expected-label]
 # fm_backend_agent_state: the single recovery-grade agent/endpoint state
 # contract. It is deliberately richer than fm_backend_target_exists's cheap
 # pane-presence read and prints exactly one of:
-#   alive      - a verified harness agent is running.
+#   alive      - a plain Pi agent is running.
 #   dead       - the endpoint exists but confidently has no agent.
 #   missing    - the recorded endpoint is authoritatively absent.
 #   ambiguous  - the endpoint exists but its process cannot be attributed.

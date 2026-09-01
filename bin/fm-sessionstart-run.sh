@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# Session-open entry point for harnesses that RUN the digest instead of asking
-# the agent to. It is the one command those harnesses' session-open adapters
-# invoke, and it decides, from the session-open source, whether this open needs
-# the full digest, a context re-emit, or nothing at all.
+# Session-open entry point for Pi's native extension, which runs the digest
+# instead of asking the agent to. Pi's session-open source determines whether
+# this open needs the full digest, a context re-emit, or nothing at all.
 #
 # Why running beats nudging: bin/fm-sessionstart-nudge.sh can only ASK the agent
 # to take the helm, and an agent can defer that, including when a first-command
@@ -12,9 +11,9 @@
 # first turn is.
 #
 # Usage: fm-sessionstart-run.sh [--source <source>] [--pi-prerequisite]
-#   --source  The harness's own session-open source. When omitted, the source is
-#             (the `source` field). An unreadable or unrecognized source is
-#             treated as `startup`, because taking the helm redundantly is
+#   --source  Pi's session-open source. When omitted, startup is used. An
+#             unreadable or unrecognized source is also treated as startup,
+#             because taking the helm redundantly is
 #             cheap and idempotent while not taking it is the whole bug.
 #   --pi-prerequisite
 #             Internal Pi extension mode. An intentional gate/scope stand-down
@@ -22,7 +21,7 @@
 #             native attempt that settled without output. Every ordinary hook
 #             invocation retains the always-zero compatibility contract below.
 #
-# Source routing (see docs/sessionstart-nudge.md for the per-harness names):
+# Source routing (see docs/sessionstart-nudge.md):
 #   startup, new            full digest - this process has not taken the helm
 #   clear, compact          `--reemit` digest only when this lock owner recorded
 #                           a completed full startup; otherwise a full digest,

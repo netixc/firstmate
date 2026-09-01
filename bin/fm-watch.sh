@@ -171,8 +171,8 @@ esac
 SIGNAL_GRACE=${FM_SIGNAL_GRACE:-30}   # seconds to linger after a signal so trailing
                                       # signals (a status write, then the same turn's
                                       # turn-end hook) coalesce into one wake
-# Busy state is decided by the semantic contract in bin/fm-busy-lib.sh, which
-# is the single owner of per-harness sources, source attribution, and the one
+# Busy state is decided by the plain Pi semantic contract in bin/fm-busy-lib.sh,
+# which owns source trust, attribution, and malformed-state handling.
 # Always-on wake triage: most wakes during a long crew validation are benign (a
 # working: note or turn-end while a pipeline runs, a no-change heartbeat). Rather
 # than wake firstmate's LLM for each, this watcher classifies every wake in bash
@@ -580,10 +580,9 @@ wedge_timer_check() {  # <window> <since-file> <triage-label> <escalation-count-
 }
 
 # busy_turn_over_age: 0 iff <task>'s latest completed-turn marker is at least
-# BUSY_TURN_MAX_SECS old. Ages the per-task turn-ended marker, the harness-neutral
-# signal every verified harness's turn-end hook touches; before any turn has
-# completed, ages the task's spawn record instead so a fresh task still gets a
-# bound. The caller checks that the pane is busy and routes a crossed bound
+# BUSY_TURN_MAX_SECS old. Ages the per-task turn-ended marker touched by Pi's
+# turn-end extension; before any turn has completed, ages the task's spawn
+# record instead so a fresh task still gets a bound. The caller checks that the pane is busy and routes a crossed bound
 # through busy_turn_bound_check, never anything that touches the worker itself.
 busy_turn_over_age() {  # <task>
   local task=$1 f

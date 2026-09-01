@@ -139,13 +139,11 @@ fm_watcher_healthy() {
 
 # fm_watcher_healthy above is the PID-STRICT primitive: true only when a live,
 # identity-matched watcher PROCESS holds this home's lock with a fresh beacon. The
-# arm layer (bin/fm-watch-arm.sh) needs exactly
-# that - it decides whether to start, attach to, or replace a real watcher
-# process, so a leftover beacon must never satisfy it. bin/fm-turnend-guard.sh
-# also keeps this strict check because it fires at the turn boundary where the
-# auto-arm brings a fresh watcher up. The pull warning (bin/fm-guard.sh) fires
-# mid-turn, where the auto-arm model runs no watcher at all, so it wants a
-# different, model-aware question:
+# arm layer (bin/fm-watch-arm.sh) needs exactly that - it decides whether to
+# start, attach to, or replace a real watcher process, so a leftover beacon must
+# never satisfy it. bin/fm-turnend-guard.sh also keeps this strict check at the
+# turn boundary. The pull warning in bin/fm-guard.sh instead tolerates Pi's
+# extension-owned watcher hand-off only when continuity is independently proven:
 
 # fm_supervision_model prints the plain Pi extension-owned continuity model.
 # A non-Pi detected primary is unsupported rather than assigned a fallback model.
@@ -229,18 +227,15 @@ fm_pi_extension_owns_supervision() {
 #                                             the lock (the beacon is still fresh)
 #                              stale-beacon - the beacon is stale beyond grace or
 #                                             absent (a genuine supervision lapse)
-# autoarm: a fresh beacon within grace is healthy even with no live watcher,
-# because the watcher only runs between turns; only a stale beacon is a lapse.
-# extension: a live identity-matched watcher is the ordinary healthy state, but a
-# genuinely unheld lock is also healthy while the beacon is fresh AND a live Pi
-# session provably owns continuity (fm_pi_extension_owns_supervision) - that is the
-# extension's own tear-down-and-respawn hand-off, which it retries and escalates
-# itself. A lock with any recorded pid remains down if the strict health check fails.
-# Without ownership proof an unheld lock is down exactly as before, so an unloaded,
-# version-drifted, or exited Pi session still alarms immediately, and a cycle the
-# extension never restores still alarms once the beacon passes grace.
-# persistent: require a live identity-matched watcher with a fresh beacon
-# (fm_watcher_healthy); a fresh leftover beacon with no live watcher is still down.
+# For plain Pi's extension model, a live identity-matched watcher is the ordinary
+# healthy state. A genuinely unheld lock is also healthy while the beacon is
+# fresh and a live Pi session provably owns continuity through
+# fm_pi_extension_owns_supervision; this is the extension's own
+# tear-down-and-respawn hand-off. A lock with any recorded pid remains down if
+# the strict health check fails. Without ownership proof an unheld lock is down,
+# so an unloaded, version-drifted, or exited Pi session alarms immediately, and
+# a cycle the extension never restores alarms once the beacon passes grace.
+# Unsupported supervision models never receive hand-off tolerance.
 # shellcheck disable=SC2034 # Read by callers after the function returns.
 FM_WATCHER_VERDICT_OK=false
 # shellcheck disable=SC2034 # Read by callers after the function returns.

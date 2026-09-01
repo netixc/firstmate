@@ -111,9 +111,8 @@ fm_backend_tmux_send_text_line() {  # <target> <text>
   tmux send-keys -t "$1" "$2" Enter
 }
 
-# fm_backend_tmux_send_literal: send TEXT as literal bytes with no
-# submission - the caller sends Enter separately (fm-spawn.sh's launch-command
-# send pauses between the literal send and Enter for the harness to settle).
+# fm_backend_tmux_send_literal: send TEXT as literal bytes with no submission.
+# The caller sends Enter separately after allowing plain Pi to settle.
 # Mirrors `tmux send-keys -t "$T" -l "<text>"`.
 fm_backend_tmux_send_literal() {  # <target> <text>
   tmux send-keys -t "$1" -l "$2"
@@ -229,8 +228,8 @@ fm_backend_tmux_foreground_argv0s() {  # <target>
 # transient tmux problem never licenses a duplicate.
 #
 # The verdict combines two independent name sources rather than trusting either
-# alone. Either source naming a verified harness is enough for `alive`, because
-# a false `dead` is the one outcome that can launch a duplicate agent onto a
+# alone. Either source naming exact Pi is enough for `alive`, because a false
+# `dead` is the one outcome that can launch a duplicate agent onto a
 # live worktree, while the foreground process group - when it is readable - is
 # authoritative for the negative verdicts, since it is the only source that can
 # distinguish a truly idle pane from a rewritten process title.

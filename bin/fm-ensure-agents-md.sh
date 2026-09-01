@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Ensure a project worktree has the canonical AGENTS.md knowledge file and
-# maintenance section. Retired harness memory files are not migrated or created.
+# maintenance section. A real CLAUDE.md is refused before any AGENTS.md mutation
+# so legacy project knowledge must be reconciled manually; symlinks are ignored.
 # Usage: fm-ensure-agents-md.sh [repo-or-worktree-dir]
 set -eu
 

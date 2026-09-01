@@ -4,7 +4,7 @@
 #
 # Usage: fm-control.sh <task-id> interrupt
 #        fm-control.sh <task-id> exit
-#        fm-control.sh <task-id> relaunch [--harness <name>] [--model <name>]
+#        fm-control.sh <task-id> relaunch [--harness pi] [--model <name>]
 #                                         [--effort <level>]
 #                                         (--note <text> | --note-file <path>)
 #
@@ -14,32 +14,30 @@
 # That marking is right for a message and wrong for a lifecycle command - a
 # marked "/quit" arrives as ordinary chat the agent reasons ABOUT instead of
 # executing. This script is the control plane: semantic process control with a
-# closed verb list, per-harness mechanics owned by an executable adapter
-# (bin/fm-control-lib.sh) rather than improvised in agent prose, and a verified
-# postcondition for every action. There is deliberately NO arbitrary-text and
+# closed verb list, plain Pi mechanics owned by bin/fm-control-lib.sh rather than
+# improvised in agent prose, and a verified postcondition for every action.
+# There is deliberately NO arbitrary-text and
 # NO generic raw-key entry point here; fm-send remains the only way to send an
 # agent something to read.
 #
-#   interrupt  Deliver the harness's verified interrupt sequence. The agent
-#              keeps running. Postcondition: delivery succeeded, the endpoint
+#   interrupt  Deliver Pi's verified interrupt sequence. The agent keeps
+#              running. Postcondition: delivery succeeded, the endpoint
 #              still exists, and the agent is still alive where the backend can
 #              classify that. Cancellation is confirmed only from an adapter-
 #              owned acknowledgement and otherwise reported unconfirmed. Busy
 #              state is never rewritten as proof of the action.
 #   exit       Stop the agent, preserving its terminal endpoint, worktree, and
 #              every uncommitted change. Interrupts first when the task reads
-#              busy, then submits the harness's exit command. Postcondition:
-#              the backend's recovery-grade classifier reports the agent gone.
+#              busy, then submits Pi's exit command. Postcondition: the
+#              backend's recovery-grade classifier reports the agent gone.
 #              Already-stopped is success (idempotent).
-#   relaunch   Transactionally replace the running agent with a new one, in the
-#              SAME endpoint and SAME worktree, on the same or a newly chosen
-#              harness/model/effort - so switching harness is one ordinary use
-#              of this verb. With no explicit axis, a secondmate re-resolves its
-#              durable config/secondmate-harness pin (harness plus its optional
-#              model and effort tokens) exactly as any other respawn does, while
-#              a ship or scout keeps the exact adapter already recorded for it.
-#              A prefixed raw-command basename cannot reconstruct its launch
-#              command, so relaunch requires an explicit --harness for it.
+#   relaunch   Transactionally replace the running plain Pi agent in the SAME
+#              endpoint and SAME worktree, optionally changing its Pi model or
+#              effort. With no explicit axis, a secondmate re-resolves its durable
+#              config/secondmate-harness Pi pin and optional model and effort
+#              tokens exactly as any other respawn does, while a ship or scout
+#              keeps its recorded Pi profile. An explicit harness must be pi;
+#              retired identities and raw commands are refused.
 #              --note is required for a ship or scout, whose replacement
 #              inherits the local copy but none of the conversation; a
 #              secondmate reconciles its own home's records at startup, so its
@@ -56,10 +54,8 @@
 # endpoint, or discarding work stays with bin/fm-teardown.sh, which owns the
 # landed-work test.
 #
-# `resume` is not a verb: it is not deterministic across the verified adapters
-# (bin/fm-control-lib.sh's header owns that reasoning). `relaunch` covers the
-# same need for every adapter because the brief on disk, not a harness-private
-# session, is the durable instruction.
+# `resume` is not a verb. `relaunch` covers that need because the brief on disk,
+# not a Pi-private session, is the durable instruction.
 #
 # Targeting is EXACT: only a bare task id with a state/<id>.meta record in
 # THIS home is accepted, and the record must pass the shared endpoint-identity
@@ -72,9 +68,8 @@
 # host, so no postcondition this plane verifies could be read for it here.
 #
 # Fail-closed boundaries:
-#   - An unverified harness, or a harness whose control mechanics are unknown,
-#     is refused rather than guessed at.
-#   - A backend that cannot deliver the harness's interrupt key is refused
+#   - Every harness identity other than exact pi is refused rather than guessed.
+#   - A backend that cannot deliver Pi's interrupt key is refused
 #     (Orca's terminal API has no Escape).
 #   - `exit` and `relaunch` require a backend with a recovery-grade agent-state
 #     classifier (tmux, herdr), because without one the "the agent stopped"

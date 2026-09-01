@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Spawn a direct report: a crewmate in a treehouse or Orca worktree, or a
 # secondmate in its isolated firstmate home.
-# Usage: fm-spawn.sh <task-id> <project-dir> --mode <no-mistakes|direct-PR|local-only> --yolo <on|off> [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--backend <name>]
-#        fm-spawn.sh <task-id> <project-dir> --scout [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--backend <name>]
-#        fm-spawn.sh <task-id> [<firstmate-home>] [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--backend <name>] --secondmate
+# Usage: fm-spawn.sh <task-id> <project-dir> --mode <no-mistakes|direct-PR|local-only> --yolo <on|off> [(--harness pi)|pi] [--model <name>] [--effort <level>] [--backend <name>]
+#        fm-spawn.sh <task-id> <project-dir> --scout [(--harness pi)|pi] [--model <name>] [--effort <level>] [--backend <name>]
+#        fm-spawn.sh <task-id> [<firstmate-home>] [(--harness pi)|pi] [--model <name>] [--effort <level>] [--backend <name>] --secondmate
 #   --mode and --yolo are this task's delivery contract, REQUIRED for every ship
 #   spawn and refused on --scout and --secondmate spawns. Firstmate resolves both
 #   per task at intake (AGENTS.md section 7); data/projects.md holds the captain's
@@ -25,19 +25,18 @@
 #   deliberately re-launching an already-stopped task. Every identity axis -
 #   backend, kind, project or home, worktree, endpoint - comes from the task's
 #   validated state/<id>.meta, so --backend, --scout, --secondmate, a project
-#   positional, and batch pairs are all refused alongside it; only harness,
-#   model, and effort may change, which is what makes a harness switch one
-#   ordinary relaunch. It refuses unless the recorded endpoint is positively
-#   agent-free on a backend with a recovery-grade agent-state classifier (tmux
-#   or herdr), refuses unless the endpoint's shell is sitting in the recorded
-#   worktree, and clears the previous harness's per-task wiring before arming
-#   the new incarnation.
-#   --harness <name> is the explicit per-spawn harness/profile adapter. The old
-#   positional harness arg still works for back-compat.
+#   positional, and batch pairs are all refused alongside it; only an explicit
+#   exact Pi harness, model, and effort may be supplied. It refuses unless the
+#   recorded endpoint is positively agent-free on a backend with a recovery-grade
+#   agent-state classifier (tmux or herdr), refuses unless the endpoint's shell is
+#   sitting in the recorded worktree, and clears the previous incarnation's Pi
+#   wiring before arming the replacement.
+#   --harness pi is the only supported explicit per-spawn harness selection.
+#   The positional pi argument remains accepted for compatibility; every retired
+#   harness name and raw launch command is explicitly refused.
 #   --model <name> and --effort <low|medium|high|xhigh|max> are concrete profile
-#   axes chosen by firstmate at intake. They are only threaded into harnesses whose
-#   installed CLIs were verified to support that axis; unsupported axes are omitted
-#   from that harness's launch rather than guessed.
+#   axes chosen by firstmate at intake and passed through Pi's verified flags;
+#   unsupported effort values are recorded but omitted from launch.
 #   --backend <name> is the explicit runtime session-provider backend for this
 #   exact task only (docs/configuration.md "Runtime backend" owns when that flag
 #   is authorized). Without it, the script resolves FM_BACKEND, then
@@ -1031,9 +1030,8 @@ resolve_pi_executable() {
   esac
 }
 
-# Pi's CLI surface is version-dependent, so probe the resolved executable's help
-# before composing the optional regular-TUI flag. An absent or inconclusive probe
-# omits the flag so older Pi versions can still spawn.
+# Probe the required Pi 0.84.4 executable's help before composing the optional
+# regular-TUI flag. An absent or inconclusive capability probe omits that flag.
 pi_supports_tui_mode() {
   local executable=$1 help
   help=$("$executable" --help 2>&1) || return 1
@@ -1934,10 +1932,9 @@ fi
 TASK_TMP="/tmp/fm-$ID"
 mkdir -p "$TASK_TMP/gotmp"
 
-# Per-harness turn-end hook where enabled: a file that touches
-# state/<id>.turn-ended when the agent finishes a turn. Worktree-resident hooks
-# and token pointers stay out of git's view so they never block teardown's dirty
-# check or leak into a commit.
+# Pi's per-task extension touches state/<id>.turn-ended when the agent finishes
+# a turn. The state-side extension pointer stays out of git's view so it cannot
+# block teardown's dirty check or leak into a commit.
 mkdir -p "$STATE"
 STATE_REAL=$(cd "$STATE" && pwd -P)
 TURNEND="$STATE_REAL/$ID.turn-ended"
@@ -1949,11 +1946,9 @@ exclude_path() {
   grep -qxF "$rel" "$EXCL" 2>/dev/null || echo "$rel" >> "$EXCL"
 }
 if [ "$RELAUNCH" -eq 1 ]; then
-  # Retire the previous incarnation's per-task harness wiring before arming the
-  # new one. Without this, a harness switch would leave the old adapter's hook
-  # files and turn-end token registry entries behind, and even a same-harness
-  # relaunch would orphan the retired busy generation's token
-  # (bin/fm-control-lib.sh owns where those artifacts live).
+  # Retire the previous incarnation's per-task Pi wiring before arming the new
+  # one, so relaunch cannot orphan the retired busy generation's extension token
+  # (bin/fm-control-lib.sh owns where that artifact lives).
   clear_relaunch_harness_wiring "$RELAUNCH_PRIOR_HARNESS" "$WT" "$STATE_REAL" "$ID" || {
     echo "error: could not retire $RELAUNCH_PRIOR_HARNESS wiring for task $ID; refusing to arm the replacement" >&2
     exit 1
