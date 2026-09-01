@@ -259,7 +259,7 @@ $ pi --version
 
 This conclusion is deliberately limited to the named Pi versions and supported surfaces.
 It does not claim that Pi can never add a missing renderer API.
-The canonical encoder and the tmux, Herdr, Zellij, Orca, and cmux runtime transports remain unchanged.
+The canonical encoder and Herdr runtime transport remain unchanged.
 Only Pi's Calm presentation implementation changed; every producer and runtime transport remains unchanged.
 
 ## Regression coverage

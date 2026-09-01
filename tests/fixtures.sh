@@ -7,7 +7,7 @@
 #
 # Generic reporters, temp roots, git fixtures, and fail/pass/fm_test_cleanup
 # come from tests/lib.sh, pulled in below. This file owns the shared fake
-# no-mistakes, gh, gh-axi, tmux, ssh, and spawn-world helpers. Wake-queue mocks
+# no-mistakes, gh, gh-axi, Herdr, ssh, and spawn-world helpers. Wake-queue mocks
 # stay in wake-helpers.sh; secondmate-lifecycle mocks stay in
 # secondmate-helpers.sh.
 #
@@ -89,100 +89,45 @@ fm_test_fake_gh_axi() {
   fm_fake_version_tool "$fakebin" gh-axi FM_FAKE_GH_AXI_VERSION "$FM_TEST_GH_AXI_VERSION"
 }
 
-# --- fake tmux / ssh / sleep ------------------------------------------------
+# --- fake Herdr / ssh / sleep -----------------------------------------------
 
-# fm_test_fake_tmux_spawn <fakebin>
-# Spawn-world tmux: pane_current_path from FM_FAKE_PANE_PATH, session named
-# firstmate, window ops succeed, send-keys succeed. When FM_FAKE_LAUNCH_LOG is
-# set, each send-keys -l payload is appended one per line. Optional
-# FM_FAKE_DUPLICATE_WINDOW is printed from list-windows.
-#
-# The pane path defaults to empty when FM_FAKE_PANE_PATH is unset. Window
-# cleanup and option operations are no-ops. Launch logging is env-gated, so
-# suites that do not set FM_FAKE_LAUNCH_LOG keep a silent send-keys.
-fm_test_fake_tmux_spawn() {
+# fm_test_fake_herdr <fakebin>
+# Stateful-enough Herdr boundary for shared spawn and send fixtures.
+fm_test_fake_herdr() {
   local fakebin=$1
-  cat > "$fakebin/tmux" <<'SH'
+  cat > "$fakebin/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
-case "$*" in
-  *"#{pane_current_path}"*) printf '%s\n' "${FM_FAKE_PANE_PATH:-}"; exit 0 ;;
-esac
-case "${1:-}" in
-  display-message) printf 'firstmate\n'; exit 0 ;;
-  list-windows)
-    if [ -n "${FM_FAKE_DUPLICATE_WINDOW:-}" ]; then
-      printf '%s\n' "$FM_FAKE_DUPLICATE_WINDOW"
-    fi
-    exit 0
-    ;;
-  has-session|new-session|new-window|kill-window|set-window-option) exit 0 ;;
-  send-keys)
-    if [ -n "${FM_FAKE_LAUNCH_LOG:-}" ]; then
-      prev=
-      for a in "$@"; do
-        if [ "$prev" = "-l" ]; then
-          printf '%s\n' "$a" >> "$FM_FAKE_LAUNCH_LOG"
-        fi
-        prev=$a
-      done
-    fi
-    exit 0
-    ;;
-esac
-exit 0
-SH
-  chmod +x "$fakebin/tmux"
-}
-
-# fm_test_fake_tmux_send <fakebin>
-# Send-world tmux: logs send-keys -l payloads to FM_SEND_LOG, reports a numeric
-# cursor_y, and renders an empty bordered composer so the submit path reads
-# empty. Env knobs:
-#   FM_FAKE_TMUX_SEND_FAIL=1  send-keys exits 1
-#   FM_FAKE_TMUX_COMPOSER=pending  capture-pane shows leftover composer text
-fm_test_fake_tmux_send() {
-  local fakebin=$1
-  cat > "$fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-set -u
-case "${1:-}" in
-  send-keys)
-    [ "${FM_FAKE_TMUX_SEND_FAIL:-0}" = 1 ] && exit 1
-    shift
-    literal=0
-    while [ $# -gt 0 ]; do
-      case "$1" in
-        -t) shift 2 ;;
-        -l) literal=1; shift ;;
-        *) break ;;
-      esac
-    done
-    if [ "$literal" = 1 ]; then
-      printf '%s' "${1:-}" >> "${FM_SEND_LOG:-/dev/null}"
-    fi
-    exit 0
-    ;;
-  display-message)
-    for a in "$@"; do
-      case "$a" in *cursor_y*) printf '1\n'; exit 0 ;; esac
-    done
-    printf 'fakepane\n'
-    exit 0
-    ;;
-  capture-pane)
-    if [ "${FM_FAKE_TMUX_COMPOSER:-}" = pending ]; then
+case "${1:-} ${2:-}" in
+  "status --json") printf '%s\n' '{"client":{"protocol":14,"version":"0.12.3"},"server":{"running":true,"protocol":14,"version":"0.12.3"}}' ;;
+  "session list") printf '%s\n' '{"sessions":[{"name":"default","running":true,"socket_path":"/tmp/fake-herdr.sock"}]}' ;;
+  "workspace list") printf '%s\n' '{"result":{"workspaces":[{"workspace_id":"w1","label":"Firstmate","focused":true,"active_tab_id":"w1:t1"}]}}' ;;
+  "workspace get") printf '%s\n' '{"result":{"workspace":{"workspace_id":"w1","label":"Firstmate","focused":true,"active_tab_id":"w1:t1"}}}' ;;
+  "tab list") printf '%s\n' '{"result":{"tabs":[{"tab_id":"w1:t1","workspace_id":"w1","label":"captain","focused":true}]}}' ;;
+  "tab create") printf '%s\n' '{"result":{"tab":{"tab_id":"w1:t2","workspace_id":"w1"},"root_pane":{"pane_id":"w1:p2","tab_id":"w1:t2","workspace_id":"w1"}}}' ;;
+  "tab get") printf '%s\n' '{"result":{"tab":{"tab_id":"w1:t2","workspace_id":"w1","label":"fm-task"}}}' ;;
+  "pane list") printf '%s\n' '{"result":{"panes":[{"pane_id":"w1:p2","tab_id":"w1:t2","workspace_id":"w1"}]}}' ;;
+  "pane get") printf '{"result":{"pane":{"pane_id":"%s","tab_id":"w1:t2","workspace_id":"w1","foreground_cwd":"%s"}}}\n' "${3:-w1:p2}" "${FM_FAKE_PANE_PATH:-}" ;;
+  "pane read")
+    if [ "${FM_FAKE_HERDR_COMPOSER:-}" = pending ]; then
       printf '╭──────────────╮\n│ leftover txt │\n╰──────────────╯\n'
     else
       printf '╭────╮\n│    │\n╰────╯\n'
     fi
-    exit 0
     ;;
-  list-windows) exit 0 ;;
+  "pane send-text")
+    [ "${FM_FAKE_HERDR_SEND_FAIL:-0}" = 1 ] && exit 1
+    printf '%s' "${4:-}" >> "${FM_SEND_LOG:-/dev/null}"
+    ;;
+  "pane run")
+    [ -n "${FM_FAKE_LAUNCH_LOG:-}" ] && printf '%s\n' "${4:-}" >> "$FM_FAKE_LAUNCH_LOG"
+    ;;
+  "pane send-keys"|"pane close"|"tab close"|"tab focus"|"workspace focus") ;;
+  "agent get") printf '%s\n' '{"result":{"agent":{"agent_status":"idle"}}}' ;;
+  *) exit 0 ;;
 esac
-exit 0
 SH
-  chmod +x "$fakebin/tmux"
+  chmod +x "$fakebin/herdr"
 }
 
 # fm_test_fake_ssh <fakebin> [name]
@@ -244,13 +189,13 @@ fm_test_spawn_brief() {
 }
 
 # fm_test_make_spawn_fakebin <dir> [extra-exit0-tool...]
-# Creates <dir>/fakebin with the spawn tmux stub, a no-op treehouse, and any
+# Creates <dir>/fakebin with the Herdr stub, a no-op Treehouse, and any
 # extra exit-0 tools. Echoes the fakebin path.
 fm_test_make_spawn_fakebin() {
   local dir=$1 fakebin
   shift
   fakebin=$(fm_fakebin "$dir")
-  fm_test_fake_tmux_spawn "$fakebin"
+  fm_test_fake_herdr "$fakebin"
   fm_fake_exit0 "$fakebin" treehouse "$@"
   printf '%s\n' "$fakebin"
 }
@@ -271,7 +216,8 @@ fm_test_run_spawn() {
   FM_ROOT_OVERRIDE='' FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
-    FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$pane" TMUX="${TMUX:-fake,1,0}" \
+    FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$pane" FM_BACKEND=herdr \
+    HERDR_ENV=1 HERDR_SESSION=default HERDR_WORKSPACE_ID=w1 HERDR_TAB_ID=w1:t1 HERDR_PANE_ID=w1:p1 \
     PATH="$fakebin:$PATH" \
     "$ROOT/bin/fm-spawn.sh" "$@" 2>&1
 }
@@ -279,13 +225,13 @@ fm_test_run_spawn() {
 # --- send-world stubs -------------------------------------------------------
 
 # make_stubs <dir>
-# Send-world fakebin: send tmux + no-op sleep. Echoes the fakebin path.
+# Send-world fakebin: Herdr plus no-op sleep. Echoes the fakebin path.
 # Suites that need recording sleep, herdr, or ssh add those on top of this
 # fakebin (or replace sleep via fm_test_fake_sleep_log).
 make_stubs() {
   local dir=$1 fakebin
   fakebin=$(fm_fakebin "$dir")
-  fm_test_fake_tmux_send "$fakebin"
+  fm_test_fake_herdr "$fakebin"
   fm_test_fake_sleep_noop "$fakebin"
   printf '%s\n' "$fakebin"
 }

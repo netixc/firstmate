@@ -102,9 +102,11 @@ fm_backend_endpoint_child_valid() {
 }
 
 fm_backend_validate_task_endpoint() {
-  local meta=$1 id=$2 backend window worktree project binding session workspace tab pane
+  local meta=$1 id=$2 backend window worktree project binding session workspace tab pane live
   FM_BACKEND_VALIDATED_BACKEND=
   FM_BACKEND_VALIDATED_TARGET=
+  FM_BACKEND_VALIDATED_WORKSPACE=
+  FM_BACKEND_VALIDATED_TAB=
   [ -f "$meta" ] && [ ! -L "$meta" ] || {
     echo "REFUSED: task $id has no regular endpoint metadata at $meta; preserving task state." >&2
     return 1
@@ -141,10 +143,25 @@ fm_backend_validate_task_endpoint() {
     echo "REFUSED: Herdr endpoint metadata for task $id is malformed or inconsistent; preserving task state." >&2
     return 1
   fi
+  if command -v herdr >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+    fm_backend_source herdr || return 1
+    live=$(fm_backend_herdr_cli "$session" pane get "$pane" 2>/dev/null || true)
+    if [ -n "$live" ]; then
+      if ! printf '%s' "$live" | jq -e --arg workspace "$workspace" --arg tab "$tab" --arg pane "$pane" \
+        '.result.pane.workspace_id == $workspace and .result.pane.tab_id == $tab and .result.pane.pane_id == $pane' >/dev/null 2>&1; then
+        echo "REFUSED: live Herdr pane identity contradicts the recorded workspace, tab, or pane for task $id; preserving task state." >&2
+        return 1
+      fi
+    fi
+  fi
   # shellcheck disable=SC2034 # Output globals consumed by sourcing callers.
   FM_BACKEND_VALIDATED_BACKEND=herdr
   # shellcheck disable=SC2034 # Output globals consumed by sourcing callers.
   FM_BACKEND_VALIDATED_TARGET=$window
+  # shellcheck disable=SC2034 # Output globals consumed by sourcing callers.
+  FM_BACKEND_VALIDATED_WORKSPACE=$workspace
+  # shellcheck disable=SC2034 # Output globals consumed by sourcing callers.
+  FM_BACKEND_VALIDATED_TAB=$tab
 }
 
 fm_backend_meta_for_window() {

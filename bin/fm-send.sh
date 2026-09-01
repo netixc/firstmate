@@ -8,8 +8,7 @@
 #   ad hoc endpoint search, because a "successful" send to the wrong endpoint is
 #   worse than a loud failure.
 # Special keys instead of text: fm-send.sh <target> --key Enter
-# Herdr supports Escape, Enter, and C-c;
-# Orca currently supports Enter and C-c only, and rejects Escape.
+# Herdr supports Escape, Enter, and C-c.
 #
 # Two data planes:
 #

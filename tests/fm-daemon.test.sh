@@ -1330,34 +1330,6 @@ test_housekeeping_herdr_resumed_stale_cleared() {
   pass "resumed herdr stale clears through backend-aware busy state"
 }
 
-test_housekeeping_orca_persistent_stale_resolves_terminal() {
-  local dir state key
-  dir=$(make_supercase stale-orca-persistent)
-  state="$dir/state"
-  fm_write_meta "$state/orca-w8.meta" "window=fm-orca-w8" "terminal=term-orca-w8" "backend=orca"
-  printf 'working\n' > "$state/orca-w8.status"
-  key=$(printf '%s' "orca-w8" | tr ':/.' '___')
-  echo $(( $(date +%s) - 500 )) > "$state/.subsuper-stale-$key"
-  (
-    fm_backend_capture() {
-      [ "$1" = orca ] || fail "expected orca capture backend, got $1"
-      [ "$2" = "term-orca-w8" ] || fail "expected Orca terminal target, got $2"
-      printf 'idle prompt\n'
-    }
-    fm_backend_busy_state() {
-      [ "$1" = orca ] || fail "expected orca busy backend, got $1"
-      [ "$2" = "term-orca-w8" ] || fail "expected Orca busy target, got $2"
-      printf 'idle'
-    }
-    fm_backend_capture orca term-orca-w8 40 >/dev/null
-    [ "$(fm_backend_busy_state orca term-orca-w8)" = idle ] || fail "Orca busy stub did not report idle"
-    FM_STATE_OVERRIDE="$state" FM_STALE_ESCALATE_SECS=240 housekeeping "$state"
-  ) || fail "Orca persistent stale housekeeping failed"
-  [ -s "$state/.subsuper-escalations" ] || fail "persistent Orca stale was not escalated"
-  [ ! -e "$state/.subsuper-stale-$key" ] || fail "Orca stale marker not cleared after escalation"
-  pass "persistent Orca stale resolves the terminal from metadata"
-}
-
 test_escalate_batches_into_one_digest() {
   local dir state fakebin sent capture n
   dir=$(make_supercase batch)
@@ -1679,52 +1651,6 @@ test_pane_input_pending_requires_proven_empty_prompt() {
 # shell), NOT an empty agent composer. It must read `unknown` (unsafe target),
 # never `empty`. Before this fix a dead-shell pane read `empty` and the away-mode
 # injector could type (and a shell could execute) an escalation there.
-test_tmux_composer_state_bare_shell_is_unknown() {
-  local dir fakebin capture g out
-  dir=$(make_supercase composer-bare-shell)
-  fakebin="$dir/fakebin"; capture="$dir/pane.txt"
-  for g in '$' '%' '#' '>'; do
-    printf 'output\noutput\n%s \n' "$g" > "$capture"
-    out=$(PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=2 \
-      fm_tmux_composer_state "fakepane")
-    [ "$out" = unknown ] \
-      || fail "bare shell prompt '$g' must classify unknown (dead shell, unsafe), got '$out'"
-  done
-  pass "fm_tmux_composer_state: a bare shell prompt (\$/%/#/>) reads unknown, never empty (dead-shell injection safety)"
-}
-
-# The other side of the fix: a bordered composer box (the harness draws its own
-# prompt glyph inside it) and Pi's bare agent prompt glyph are
-# genuine empty agent composers and must still read `empty`.
-test_tmux_composer_state_bordered_and_agent_rows_are_empty() {
-  local dir fakebin capture out
-  dir=$(make_supercase composer-empty-agent)
-  fakebin="$dir/fakebin"; capture="$dir/pane.txt"
-  printf '╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯\n' > "$capture"
-  out=$(PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=1 \
-    fm_tmux_composer_state "fakepane")
-  [ "$out" = empty ] || fail "a bordered '│ > │' composer should read empty, got '$out'"
-  printf '%s\n' "❯ " > "$capture"
-  out=$(PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=0 \
-    fm_tmux_composer_state "fakepane")
-  [ "$out" = empty ] || fail "a bare Pi '❯' composer should read empty, got '$out'"
-  pass "fm_tmux_composer_state: a bordered composer box and Pi prompt glyph still read empty"
-}
-
-test_tmux_composer_state_requires_matching_box_borders() {
-  local dir fakebin capture line out
-  dir=$(make_supercase composer-decorated-shell)
-  fakebin="$dir/fakebin"; capture="$dir/pane.txt"
-  for line in '| $ ' '$ |' '│ % ' '# ┃'; do
-    printf '%s\n' "$line" > "$capture"
-    out=$(PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=0 \
-      fm_tmux_composer_state "fakepane")
-    [ "$out" != empty ] \
-      || fail "a decorated shell prompt '$line' must not read as an empty composer"
-  done
-  pass "fm_tmux_composer_state: only matching edge borders form a composer box"
-}
-
 test_pane_input_pending_preserves_bright_placeholder_like_draft() {
   local dir fakebin capture
   dir=$(make_supercase pending-custom-idle)
@@ -1864,37 +1790,6 @@ test_pane_input_pending_bordered_with_text_is_pending() {
     pane_input_pending "fakepane" \
     || fail "real text inside a bordered composer was not detected as pending"
   pass "pane_input_pending: text inside a bordered composer is still pending"
-}
-
-test_submit_ack_confirms_on_bordered_empty_composer() {
-  # RC2: the submit acknowledgement must recognize a bordered-EMPTY composer as
-  # "submitted." The old ACK reused the broken check, so on Pi it could never
-  # confirm and always reported a false "Enter swallowed."
-  local dir fakebin sent verdict
-  dir=$(make_bordered_case ack-bordered)
-  fakebin="$dir/fakebin"; sent="$dir/sent.log"; : > "$sent"
-  verdict=$(PATH="$fakebin:$PATH" FM_FAKE_COMPOSER="$dir/composer" FM_FAKE_SENT="$sent" \
-    fm_tmux_submit_core "win" "the digest" 3 0.05 0.05)
-  [ "$verdict" = empty ] || fail "submit-ACK did not confirm on a bordered-empty composer: $verdict"
-  [ "$(grep -cv '\[ENTER\]' "$sent")" -eq 1 ] || fail "digest typed more than once (retype)"
-  [ "$(grep -c '\[ENTER\]' "$sent")" -eq 1 ] || fail "expected exactly one submitted Enter"
-  pass "submit-ACK confirms a submit when the composer returns to a bordered-empty box"
-}
-
-test_submit_ack_reports_pending_on_persistent_swallow() {
-  # A genuinely swallowed Enter (text stays in the box across all retries) is
-  # reported as "pending" — the daemon keeps the buffer, fm-send exits non-zero —
-  # and the digest is typed ONCE (Enter-only retries, never a retype).
-  local dir fakebin sent verdict
-  dir=$(make_bordered_case ack-swallow)
-  fakebin="$dir/fakebin"; sent="$dir/sent.log"; : > "$sent"
-  touch "$dir/.swallow"
-  verdict=$(PATH="$fakebin:$PATH" FM_FAKE_COMPOSER="$dir/composer" FM_FAKE_SENT="$sent" \
-    FM_FAKE_SWALLOW="$dir/.swallow" FM_FAKE_PERSIST_SWALLOW=1 \
-    fm_tmux_submit_core "win" "the digest" 3 0.05 0.05)
-  [ "$verdict" = pending ] || fail "persistent swallow not reported as pending: $verdict"
-  [ "$(grep -cv '\[ENTER\]' "$sent")" -eq 1 ] || fail "digest retyped on swallow (expected type-once)"
-  pass "submit-ACK reports pending on a persistently swallowed Enter (type-once)"
 }
 
 test_max_defer_empty_swallow_types_once_and_alarms() {
@@ -2400,53 +2295,39 @@ test_fm_send_exits_nonzero_on_unproven_submit() {
   pass "fm-send exits non-zero unless delivery is proven empty"
 }
 
-# --- herdr backend-awareness (fm-turnend-guard-h6-adjacent transport fix) ----
-# Discovery, busy/pending dispatch, and the full inject_msg guard chain must
-# work through the herdr backend, not just tmux. Env-var prefix assignments
-# (e.g. `TMUX_PANE= HERDR_ENV=1 ... discover_supervisor_target`) neutralize
-# whatever ambient TMUX_PANE/HERDR_ENV the CURRENT dev/CI shell happens to carry
-# for the duration of that one call only, so these tests are deterministic
-# regardless of what runtime backend is running this test suite itself.
+# --- Herdr supervisor discovery and transport -------------------------------
 
 test_discover_supervisor_backend_precedence() {
   local out
-  out=$(FM_SUPERVISOR_BACKEND=herdr TMUX_PANE='%9' HERDR_ENV=1 HERDR_PANE_ID=w1:p1 discover_supervisor_backend)
-  [ "$out" = herdr ] || fail "explicit FM_SUPERVISOR_BACKEND override was not honored: $out"
+  out=$(FM_SUPERVISOR_BACKEND=herdr HERDR_ENV=1 HERDR_PANE_ID=w1:p1 discover_supervisor_backend)
+  [ "$out" = herdr ] || fail "explicit Herdr provider was not honored: $out"
 
-  out=$(FM_SUPERVISOR_BACKEND='' TMUX_PANE='%9' HERDR_ENV=1 HERDR_PANE_ID=w1:p1 discover_supervisor_backend)
-  [ "$out" = tmux ] || fail "TMUX_PANE should win over HERDR_ENV (tmux nested in herdr resolves to tmux): $out"
+  out=$(FM_SUPERVISOR_BACKEND='' HERDR_ENV=1 HERDR_PANE_ID=w1:p1 discover_supervisor_backend)
+  [ "$out" = herdr ] || fail "Herdr pane identity did not resolve to Herdr: $out"
 
-  out=$(FM_SUPERVISOR_BACKEND='' TMUX_PANE='' HERDR_ENV=1 HERDR_PANE_ID=w1:p1 discover_supervisor_backend)
-  [ "$out" = herdr ] || fail "HERDR_ENV=1 with HERDR_PANE_ID present should resolve to herdr: $out"
-
-  if out=$(FM_SUPERVISOR_BACKEND='' TMUX_PANE='' HERDR_ENV='' HERDR_PANE_ID='' discover_supervisor_backend); then
-    fail "bare fallback (no override, no TMUX_PANE, no HERDR_ENV) should return non-zero"
+  if out=$(FM_SUPERVISOR_BACKEND='' HERDR_ENV='' HERDR_PANE_ID='' discover_supervisor_backend 2>/dev/null); then
+    fail "an unproved provider should return non-zero"
   fi
-  [ "$out" = tmux ] || fail "bare fallback should still print tmux: $out"
 
-  pass "discover_supervisor_backend: override > TMUX_PANE > HERDR_ENV+HERDR_PANE_ID > tmux fallback"
+  pass "discover_supervisor_backend accepts only explicit or ambient Herdr"
 }
 
 test_discover_supervisor_target_herdr() {
   local out
-  out=$(FM_SUPERVISOR_TARGET=explicit:target TMUX_PANE='' HERDR_ENV=1 HERDR_PANE_ID=w1:p9 discover_supervisor_target)
-  [ "$out" = "explicit:target" ] || fail "explicit FM_SUPERVISOR_TARGET override was not honored: $out"
+  out=$(FM_SUPERVISOR_TARGET=explicit:w1:p9 FM_SUPERVISOR_BACKEND=herdr discover_supervisor_target)
+  [ "$out" = "explicit:w1:p9" ] || fail "explicit Herdr target was not honored: $out"
 
-  out=$(FM_SUPERVISOR_TARGET='' TMUX_PANE='%3' HERDR_ENV=1 HERDR_PANE_ID=w1:p9 discover_supervisor_target)
-  [ "$out" = '%3' ] || fail "TMUX_PANE should win over herdr markers: $out"
+  out=$(FM_SUPERVISOR_TARGET='' HERDR_ENV=1 HERDR_PANE_ID=w1:p9 HERDR_SESSION='' discover_supervisor_target)
+  [ "$out" = "default:w1:p9" ] || fail "Herdr target should default HERDR_SESSION to default: $out"
 
-  out=$(FM_SUPERVISOR_TARGET='' TMUX_PANE='' HERDR_ENV=1 HERDR_PANE_ID=w1:p9 HERDR_SESSION='' discover_supervisor_target)
-  [ "$out" = "default:w1:p9" ] || fail "herdr target should default HERDR_SESSION to 'default': $out"
+  out=$(FM_SUPERVISOR_TARGET='' HERDR_ENV=1 HERDR_PANE_ID=w1:p9 HERDR_SESSION=iso1 discover_supervisor_target)
+  [ "$out" = "iso1:w1:p9" ] || fail "Herdr target should use the explicit named session: $out"
 
-  out=$(FM_SUPERVISOR_TARGET='' TMUX_PANE='' HERDR_ENV=1 HERDR_PANE_ID=w1:p9 HERDR_SESSION=iso1 discover_supervisor_target)
-  [ "$out" = "iso1:w1:p9" ] || fail "herdr target should use an explicit HERDR_SESSION: $out"
-
-  if out=$(FM_SUPERVISOR_TARGET='' TMUX_PANE='' HERDR_ENV='' HERDR_PANE_ID='' discover_supervisor_target); then
-    fail "bare fallback should return non-zero"
+  if out=$(FM_SUPERVISOR_TARGET='' HERDR_ENV='' HERDR_PANE_ID='' discover_supervisor_target 2>/dev/null); then
+    fail "an unproved Herdr target should return non-zero"
   fi
-  [ "$out" = "firstmate:0" ] || fail "bare fallback should still print firstmate:0: $out"
 
-  pass "discover_supervisor_target: override > TMUX_PANE > herdr '<session>:<pane-id>' composition > firstmate:0 fallback"
+  pass "discover_supervisor_target accepts exact explicit or ambient Herdr identity"
 }
 
 test_pane_is_busy_herdr_native_busy_state() {
@@ -2625,7 +2506,6 @@ test_housekeeping_pause_marker_transitions_to_clear
 test_housekeeping_herdr_persistent_stale_resolves_meta
 test_housekeeping_herdr_idle_busy_record_clears_stale
 test_housekeeping_herdr_resumed_stale_cleared
-test_housekeeping_orca_persistent_stale_resolves_terminal
 test_escalate_batches_into_one_digest
 test_escalate_batch_age_uses_first_append
 test_heartbeat_scan_dedup
@@ -2644,9 +2524,6 @@ test_strip_injection_marker
 test_pane_input_pending_detects_partial_input
 test_pane_input_pending_blank_defers_strict
 test_pane_input_pending_requires_proven_empty_prompt
-test_tmux_composer_state_bare_shell_is_unknown
-test_tmux_composer_state_bordered_and_agent_rows_are_empty
-test_tmux_composer_state_requires_matching_box_borders
 test_pane_input_pending_preserves_bright_placeholder_like_draft
 test_classify_signal_dedup_against_scan
 test_classify_signal_skips_turn_end_markers
@@ -2671,8 +2548,6 @@ test_afk_nonterminal_working_merged_keeps_wedge_aging
 test_afk_genuine_done_still_terminal_stale
 test_pane_input_pending_bordered_idle_not_pending
 test_pane_input_pending_bordered_with_text_is_pending
-test_submit_ack_confirms_on_bordered_empty_composer
-test_submit_ack_reports_pending_on_persistent_swallow
 test_max_defer_empty_swallow_types_once_and_alarms
 test_max_defer_flushes_empty_idle_pane
 test_max_defer_pending_composer_alarms_without_typing

@@ -69,8 +69,6 @@
 #
 # Fail-closed boundaries:
 #   - Every harness identity other than exact pi is refused rather than guessed.
-#   - A backend that cannot deliver Pi's interrupt key is refused
-#     (Orca's terminal API has no Escape).
 #   - `exit` and `relaunch` require a backend with a recovery-grade agent-state
 #     Herdr classifier, because without it the "the agent stopped"
 #     postcondition cannot be proven. Unsupported providers are refused rather

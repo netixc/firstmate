@@ -128,7 +128,7 @@ The Herdr setup and safety guide is linked in [Documentation](#documentation) be
  │crewmate│   │crewmate│      │crewmate│   one autonomous agent each
  └───┬────┘   └───┬────┘      └───┬────┘
      ▼            ▼               ▼
-  treehouse worktree, Orca worktree, or isolated secondmate home
+  treehouse worktree or isolated secondmate home
      │
      ├─ ship: project mode ► PR/local merge ► teardown
      │
