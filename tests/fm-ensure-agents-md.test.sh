@@ -72,6 +72,58 @@ cmp -s "$case_dir/agents.before" "$case_dir/AGENTS.md" || fail "divergent-memory
 cmp -s "$case_dir/claude.before" "$case_dir/CLAUDE.md" || fail "divergent-memory refusal modified CLAUDE.md"
 pass "fm-ensure-agents-md: divergent current and legacy memory is preserved and refused"
 
+case_dir=$(new_case canonical-pointer)
+printf '# Current project memory\n' > "$case_dir/AGENTS.md"
+cat > "$case_dir/CLAUDE.md" <<'EOF'
+<!-- Points Claude at AGENTS.md via import; edit AGENTS.md, not this file. -->
+@AGENTS.md
+EOF
+cp "$case_dir/CLAUDE.md" "$case_dir/claude.before"
+out=$($ENSURE "$case_dir")
+assert_contains "$out" "updated: added ## Maintaining this file" "canonical pointer should permit AGENTS.md maintenance"
+cmp -s "$case_dir/claude.before" "$case_dir/CLAUDE.md" || fail "canonical pointer was modified"
+pass "fm-ensure-agents-md: canonical real pointer remains supported"
+
+case_dir=$(new_case pointer-only)
+cat > "$case_dir/CLAUDE.md" <<'EOF'
+<!-- Points Claude at AGENTS.md via import; edit AGENTS.md, not this file. -->
+@AGENTS.md
+EOF
+cp "$case_dir/CLAUDE.md" "$case_dir/claude.before"
+out=$($ENSURE "$case_dir")
+assert_contains "$out" "created: AGENTS.md" "canonical pointer should permit fresh AGENTS.md creation"
+cmp -s "$case_dir/claude.before" "$case_dir/CLAUDE.md" || fail "pointer-only setup modified CLAUDE.md"
+assert_grep '## Maintaining this file' "$case_dir/AGENTS.md" "pointer-only setup should create maintained AGENTS.md"
+pass "fm-ensure-agents-md: canonical pointer supports fresh creation"
+
+case_dir=$(new_case correct-symlink)
+printf '# Current project memory\n' > "$case_dir/AGENTS.md"
+ln -s AGENTS.md "$case_dir/CLAUDE.md"
+out=$($ENSURE "$case_dir")
+assert_contains "$out" "updated: added ## Maintaining this file" "correct symlink should permit AGENTS.md maintenance"
+[ -L "$case_dir/CLAUDE.md" ] || fail "correct CLAUDE.md symlink was replaced"
+[ "$(readlink "$case_dir/CLAUDE.md")" = 'AGENTS.md' ] || fail "correct CLAUDE.md symlink was retargeted"
+pass "fm-ensure-agents-md: correct symlink pointer remains supported"
+
+case_dir=$(new_case dangling-correct-symlink)
+ln -s AGENTS.md "$case_dir/CLAUDE.md"
+out=$($ENSURE "$case_dir")
+assert_contains "$out" "created: AGENTS.md" "correct dangling pointer should permit fresh AGENTS.md creation"
+[ -L "$case_dir/CLAUDE.md" ] || fail "correct dangling CLAUDE.md symlink was replaced"
+[ "$(readlink "$case_dir/CLAUDE.md")" = 'AGENTS.md' ] || fail "correct dangling CLAUDE.md symlink was retargeted"
+pass "fm-ensure-agents-md: dangling correct symlink supports fresh creation"
+
+case_dir=$(new_case wrong-symlink)
+printf '# Current project memory\n' > "$case_dir/AGENTS.md"
+printf '# Other memory\n' > "$case_dir/OTHER.md"
+ln -s OTHER.md "$case_dir/CLAUDE.md"
+cp "$case_dir/AGENTS.md" "$case_dir/agents.before"
+if out=$($ENSURE "$case_dir" 2>&1); then fail "wrong CLAUDE.md symlink should be refused"; fi
+assert_contains "$out" "does not point to AGENTS.md" "wrong symlink refusal should name the conflict"
+cmp -s "$case_dir/agents.before" "$case_dir/AGENTS.md" || fail "wrong symlink refusal modified AGENTS.md"
+[ "$(readlink "$case_dir/CLAUDE.md")" = 'OTHER.md' ] || fail "wrong symlink refusal modified CLAUDE.md"
+pass "fm-ensure-agents-md: wrong symlink is preserved and refused"
+
 case_dir=$(new_case agents-symlink)
 printf '# target\n' > "$case_dir/target"
 ln -s target "$case_dir/AGENTS.md"

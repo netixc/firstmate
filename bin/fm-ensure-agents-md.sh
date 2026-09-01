@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Ensure a project worktree has the canonical AGENTS.md knowledge file and
-# maintenance section. A real CLAUDE.md is refused before any AGENTS.md mutation
-# so legacy project knowledge must be reconciled manually; symlinks are ignored.
+# maintenance section. Canonical CLAUDE.md pointers are preserved; legacy or
+# divergent memory and invalid pointers are refused before AGENTS.md mutation.
 # Usage: fm-ensure-agents-md.sh [repo-or-worktree-dir]
 set -eu
 
@@ -25,6 +25,35 @@ DIR=${1:-.}
 DIR=$(cd "$DIR" && pwd -P)
 cd "$DIR"
 AGENTS=AGENTS.md
+CLAUDE=CLAUDE.md
+
+claude_pointer_content() {
+  cat <<'EOF'
+<!-- Points Claude at AGENTS.md via import; edit AGENTS.md, not this file. -->
+@AGENTS.md
+EOF
+}
+
+is_canonical_claude_pointer() {
+  [ -f "$CLAUDE" ] && [ ! -L "$CLAUDE" ] || return 1
+  claude_pointer_content | cmp -s - "$CLAUDE"
+}
+
+is_correct_claude_symlink() {
+  [ -L "$CLAUDE" ] || return 1
+  local target
+  target=$(readlink "$CLAUDE")
+  case "$target" in
+    "$AGENTS"|"./$AGENTS") return 0 ;;
+  esac
+  [ -e "$AGENTS" ] || return 1
+  command -v python3 >/dev/null 2>&1 || return 1
+  python3 - "$CLAUDE" "$AGENTS" <<'PY'
+import os
+import sys
+sys.exit(0 if os.path.realpath(sys.argv[1]) == os.path.realpath(sys.argv[2]) else 1)
+PY
+}
 
 write_maintenance_section() {
   cat <<'EOF'
@@ -103,9 +132,20 @@ if [ -e "$AGENTS" ] && [ ! -f "$AGENTS" ]; then
   exit 1
 fi
 
-if [ -f CLAUDE.md ] && [ ! -L CLAUDE.md ]; then
-  echo "conflict: CLAUDE.md contains legacy project memory in $DIR; rename or reconcile it as AGENTS.md manually" >&2
-  exit 1
+if [ -L "$CLAUDE" ]; then
+  if ! is_correct_claude_symlink; then
+    echo "conflict: CLAUDE.md is a symlink in $DIR but does not point to AGENTS.md; curate the pointer manually before rerunning" >&2
+    exit 1
+  fi
+elif [ -e "$CLAUDE" ]; then
+  if [ ! -f "$CLAUDE" ]; then
+    echo "conflict: CLAUDE.md exists in $DIR but is not a regular file or symlink; curate it manually before rerunning" >&2
+    exit 1
+  fi
+  if ! is_canonical_claude_pointer; then
+    echo "conflict: CLAUDE.md contains legacy project memory in $DIR; curate AGENTS.md and CLAUDE.md manually before rerunning" >&2
+    exit 1
+  fi
 fi
 
 if [ -f "$AGENTS" ]; then

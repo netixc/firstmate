@@ -320,7 +320,8 @@ Durable project-intrinsic agent knowledge lives in each project's committed `AGE
 Ship briefs prompt crewmates to create or update those files through the normal delivery path; `data/projects.md` stays a thin private registry.
 Each project `AGENTS.md` carries a short `## Maintaining this file` self-governance section; `bin/fm-ensure-agents-md.sh` owns the canonical wording and injects it idempotently.
 It refuses a case-variant real memory file such as a lowercase `agents.md`, preserving portable discovery of the canonical name on case-sensitive filesystems.
-It also refuses any real `CLAUDE.md`, including one beside an existing `AGENTS.md`, so unique legacy project knowledge must be reconciled manually instead of being silently excluded from Pi's effective memory.
+A canonical real `CLAUDE.md` `@AGENTS.md` pointer or a `CLAUDE.md` symlink resolving to `AGENTS.md` remains supported and unchanged.
+A real `CLAUDE.md` with other content and any symlink resolving elsewhere are refused before `AGENTS.md` mutation so legacy or divergent project knowledge must be curated manually.
 The full ownership rule - what is project-intrinsic versus fleet-private, and how firstmate keeps the two apart without writing into project clones - is owned by [`AGENTS.md`](../AGENTS.md) (project and knowledge management).
 
 ## Operational memory routing
