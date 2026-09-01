@@ -1,30 +1,20 @@
 #!/usr/bin/env bash
-# tests/fm-composer-matrix-live-e2e.test.sh - the live composer-matrix guard
+# tests/fm-composer-matrix-live-e2e.test.sh - the live Pi composer guard
 # (live-harness-optin family; task fm-composer-thin-adapter-refactor-r1).
 #
-# The shared composer classifier's shape catalogue (bin/fm-composer-lib.sh) is
-# built entirely from vendor-rendered signals, so per
-# .agents/skills/firstmate-coding-guidelines it must be proven against the
-# REAL harnesses: a stub can only confirm the assumption already written into
-# the stub. This guard launches every INSTALLED verified harness idle in an
-# isolated tmux server and requires the real fm_tmux_composer_state to reach
-# `empty`, failing loudly with the harness name and version. It also proves:
+# The shared composer classifier consumes Pi-rendered signals, so per
+# .agents/skills/firstmate-coding-guidelines it must be proven against real Pi.
+# This guard launches exact Pi 0.84.4 idle in an isolated tmux server and
+# requires the real fm_tmux_composer_state to reach `empty`. It also proves:
 #   - the strict blank-row posture live: a plain shell pane with a blank
 #     cursor row must classify unknown and defer injection;
 #   - the zellij false-positive regression live (when zellij is installed): a
-#     pane whose content changes for reasons unrelated to submission must NOT
-#     report a delivered send, and a real claude-in-zellij `dump-screen
-#     --ansi` capture must classify empty through the zellij thin adapter.
+#     pane whose content changes for reasons unrelated to submission must not
+#     report a delivered send.
 #
-# Run explicitly with FM_COMPOSER_MATRIX_LIVE=1. No prompt is ever submitted
-# to any harness, so no model tokens are spent. An absent harness is reported
-# explicitly and skipped; a run that verified nothing fails rather than
-# passing vacuously. Refresh docs/verification/runtime-backends.md ("Composer
-# classification matrix") from this guard's output after any harness upgrade.
-#
-# Folder trust: harnesses are launched with the repo root as cwd, which the
-# operator's machine has normally already trusted; a trust dialog is a real
-# unreadable-composer state and correctly fails that harness's check.
+# Run explicitly with FM_COMPOSER_MATRIX_LIVE=1. No prompt is submitted, so no
+# model tokens are spent. Refresh docs/verification/runtime-backends.md from
+# this guard's output after a Pi upgrade.
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -35,6 +25,9 @@ if [ "${FM_COMPOSER_MATRIX_LIVE:-0}" != 1 ]; then
 fi
 
 command -v tmux >/dev/null 2>&1 || { echo "not ok - FM_COMPOSER_MATRIX_LIVE=1 but tmux is not installed" >&2; exit 1; }
+command -v pi >/dev/null 2>&1 || { echo "not ok - FM_COMPOSER_MATRIX_LIVE=1 but pi is not installed" >&2; exit 1; }
+PI_VERSION=$(pi --version 2>/dev/null || true)
+[ "$PI_VERSION" = 0.84.4 ] || { printf 'not ok - exact Pi 0.84.4 required, found %s\n' "${PI_VERSION:-unknown}" >&2; exit 1; }
 
 SOCKET="fm-cmx-live-$$"
 SESSION="cmxlive"
@@ -116,14 +109,8 @@ check_harness_idle_empty() {  # <name> <launch-cmd...>
   tmux -L "$SOCKET" kill-window -t "$SESSION:$win" 2>/dev/null || true
 }
 
-# --- 1. Every installed verified harness must reach a proven-empty composer --
-for h in claude codex opencode pi grok kimi muse; do
-  if command -v "$h" >/dev/null 2>&1; then
-    check_harness_idle_empty "$h" "$h"
-  else
-    note "harness absent, not verified here: $h"
-  fi
-done
+# --- 1. Exact Pi 0.84.4 must reach a proven-empty composer -------------------
+check_harness_idle_empty pi pi
 
 # --- 2. The strict blank-row posture, live ----------------------------------
 # A plain shell pane parked on a blank line between two rules (the audit's
@@ -211,7 +198,7 @@ if command -v zellij >/dev/null 2>&1; then
   ZJ_BG=
   zellij delete-session --force "$ZELLIJ_SESSION" >/dev/null 2>&1 || true
 else
-  note "harness absent, not verified here: zellij (false-positive regression not exercised)"
+  note "zellij absent; false-positive regression not exercised"
 fi
 
 # --- refuse a vacuous pass ---------------------------------------------------

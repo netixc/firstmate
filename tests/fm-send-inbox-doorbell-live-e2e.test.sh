@@ -5,23 +5,14 @@
 # The steering inbox's one behavioral assumption is that a real worker agent
 # follows the constant self-describing doorbell line: list the inbox, read and
 # act on its records in numeric order, then mv each into handled/. A stub can
-# only confirm the assumption already
-# written into the stub, so per .agents/skills/firstmate-coding-guidelines
-# this is proven against every INSTALLED verified harness: each is launched
-# idle in an isolated tmux server, steered through the REAL fm-send (durable
-# record + doorbell), and must both ACT on the instruction (create a named
-# file) and ACKNOWLEDGE it (the mv into handled/), failing loudly with the
-# harness name and version.
+# only confirm the assumption already written into the stub, so this is proven
+# against exact Pi 0.84.4. Pi is launched idle in an isolated tmux server,
+# steered through the real fm-send, and must both act on the instruction and
+# acknowledge it by moving the record into handled/.
 #
-# Run explicitly with FM_SEND_INBOX_LIVE_E2E=1. This test spends a small
-# number of real model tokens per installed harness (one short turn each) -
-# authorized by the harness-dependent-checks rule. An absent harness is
-# reported explicitly and skipped; a run that verified nothing fails rather
-# than passing vacuously. Restrict with
-# FM_SEND_INBOX_LIVE_HARNESSES="claude codex ..." when needed, and tune the
-# per-harness wait with FM_SEND_INBOX_LIVE_TIMEOUT (seconds, default 240).
-# Record the dated per-harness result in
-# docs/verification/runtime-backends.md ("Steering-inbox doorbell").
+# Run explicitly with FM_SEND_INBOX_LIVE_E2E=1. This test spends a small number
+# of real model tokens. Tune the wait with FM_SEND_INBOX_LIVE_TIMEOUT (seconds,
+# default 240). Record the dated result in docs/verification/runtime-backends.md.
 #
 # Folder trust: harnesses launch with the repo root as cwd, which the
 # operator's machine has normally already trusted; a trust dialog is a real
@@ -36,6 +27,9 @@ if [ "${FM_SEND_INBOX_LIVE_E2E:-0}" != 1 ]; then
 fi
 
 command -v tmux >/dev/null 2>&1 || { echo "not ok - FM_SEND_INBOX_LIVE_E2E=1 but tmux is not installed" >&2; exit 1; }
+command -v pi >/dev/null 2>&1 || { echo "not ok - FM_SEND_INBOX_LIVE_E2E=1 but pi is not installed" >&2; exit 1; }
+PI_VERSION=$(pi --version 2>/dev/null || true)
+[ "$PI_VERSION" = 0.84.4 ] || { printf 'not ok - exact Pi 0.84.4 required, found %s\n' "${PI_VERSION:-unknown}" >&2; exit 1; }
 unset NO_MISTAKES_GATE
 
 SOCKET="fm-inbox-live-$$"
@@ -77,20 +71,10 @@ harness_version() {  # <binary>
   "$1" --version 2>/dev/null | head -1 || printf 'version-unknown'
 }
 
-# Launch <name> idle with its unattended-autonomy flags (the same posture
-# bin/fm-spawn.sh uses), so the doorbell-triggered shell actions need no
-# interactive approval.
-launch_cmd() {  # <name>
-  case "$1" in
-    claude) printf '%s' 'CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false claude --dangerously-skip-permissions' ;;
-    codex) printf '%s' 'codex --dangerously-bypass-approvals-and-sandbox' ;;
-    opencode) printf '%s' "OPENCODE_CONFIG_CONTENT='{\"permission\":{\"*\":\"allow\"}}' opencode" ;;
-    pi|pi-signed) printf '%s' "$1" ;;
-    grok) printf '%s' 'grok --always-approve' ;;
-    kimi) printf '%s' 'kimi --auto' ;;
-    muse) printf '%s' 'MUSE_EXPERIMENTAL_FOREIGN_PERSONAL_CONTEXT_KILL=on muse --yolo' ;;
-    *) return 1 ;;
-  esac
+# Launch Pi idle with unattended tool approval so the doorbell-triggered shell
+# action does not need interactive approval.
+launch_cmd() {
+  printf '%s' 'pi --approve --no-session'
 }
 
 # Wait for the harness to look steerable. 0 = the composer classified a
@@ -186,14 +170,7 @@ check_harness_doorbell() {  # <name>
   tmux -L "$SOCKET" kill-window -t "$SESSION:$win" 2>/dev/null || true
 }
 
-HARNESSES=${FM_SEND_INBOX_LIVE_HARNESSES:-'claude codex opencode pi grok kimi muse'}
-for h in $HARNESSES; do
-  if command -v "$h" >/dev/null 2>&1; then
-    check_harness_doorbell "$h"
-  else
-    note "harness absent, not verified here: $h"
-  fi
-done
+check_harness_doorbell pi
 
 if [ "$FAILED" -ne 0 ]; then
   printf 'not ok - live steering-inbox doorbell guard found failures above\n' >&2

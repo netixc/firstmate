@@ -285,10 +285,13 @@ case "$p" in
 esac
 pass "real herdr: current_path reads the pane's live cwd"
 
-# --- busy_state on a real claude harness (verified in herdr-verification-p2.md) ---
+# --- busy_state on real Pi ---------------------------------------------------
 
-if [ "${FM_HERDR_SMOKE_REAL_CLAUDE:-0}" = 1 ] && command -v claude >/dev/null 2>&1; then
-  fm_backend_herdr_send_literal "$TARGET" "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false claude --dangerously-skip-permissions --print 'say the word HERDRSMOKEOK and nothing else'"
+if [ "${FM_HERDR_SMOKE_REAL_PI:-0}" = 1 ]; then
+  command -v pi >/dev/null 2>&1 || fail "FM_HERDR_SMOKE_REAL_PI=1 but pi is not installed"
+  pi_version=$(pi --version 2>/dev/null || true)
+  [ "$pi_version" = 0.84.4 ] || fail "FM_HERDR_SMOKE_REAL_PI=1 requires exact Pi 0.84.4, found ${pi_version:-unknown}"
+  fm_backend_herdr_send_literal "$TARGET" "pi --print --approve --no-session --no-context-files --no-extensions 'Reply with exactly HERDRSMOKEOK and nothing else.'"
   sleep 0.2
   fm_backend_herdr_send_key "$TARGET" Enter
   found_working=0
@@ -298,7 +301,7 @@ if [ "${FM_HERDR_SMOKE_REAL_CLAUDE:-0}" = 1 ] && command -v claude >/dev/null 2>
     [ "$bs" = idle ] && break
     sleep 0.5
   done
-  [ "$found_working" -eq 1 ] || echo "note: never observed agent_status=working for the real claude run (timing-dependent, not fatal)" >&2
+  [ "$found_working" -eq 1 ] || echo "note: never observed agent_status=working for the real Pi run (timing-dependent, not fatal)" >&2
   # Wait for completion regardless, bounded.
   for _ in $(seq 1 40); do
     bs=$(fm_backend_herdr_busy_state "$TARGET" 2>/dev/null)
@@ -307,13 +310,11 @@ if [ "${FM_HERDR_SMOKE_REAL_CLAUDE:-0}" = 1 ] && command -v claude >/dev/null 2>
   done
   out=$(fm_backend_herdr_capture "$TARGET" 30)
   case "$out" in
-    *HERDRSMOKEOK*) pass "real herdr: agent_status busy/idle detection tracks a real claude turn, and capture shows its output" ;;
-    *) echo "note: claude output marker not observed within the bound (timing-dependent, not fatal to this smoke suite)" >&2 ;;
+    *HERDRSMOKEOK*) pass "real herdr: agent_status busy/idle detection tracks a real Pi $pi_version turn, and capture shows its output" ;;
+    *) echo "note: Pi output marker not observed within the bound (timing-dependent, not fatal to this smoke suite)" >&2 ;;
   esac
-elif [ "${FM_HERDR_SMOKE_REAL_CLAUDE:-0}" != 1 ]; then
-  echo "note: FM_HERDR_SMOKE_REAL_CLAUDE=1 not set; skipping the real-agent busy_state check" >&2
 else
-  echo "note: claude not installed; skipping the real-agent busy_state check" >&2
+  echo "note: FM_HERDR_SMOKE_REAL_PI=1 not set; skipping the real-agent busy_state check" >&2
 fi
 
 # --- kill -----------------------------------------------------------------
