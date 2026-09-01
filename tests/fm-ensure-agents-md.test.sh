@@ -61,6 +61,17 @@ assert_absent "$case_dir/AGENTS.md" "legacy-memory refusal must not create unrel
 assert_grep 'Keep this durable fact.' "$case_dir/CLAUDE.md" "legacy-memory refusal must preserve existing knowledge"
 pass "fm-ensure-agents-md: legacy-only project memory is preserved and refused"
 
+case_dir=$(new_case divergent-memory)
+printf '# Current project memory\n\nKeep the current fact.\n' > "$case_dir/AGENTS.md"
+printf '# Legacy project memory\n\nKeep the legacy fact.\n' > "$case_dir/CLAUDE.md"
+cp "$case_dir/AGENTS.md" "$case_dir/agents.before"
+cp "$case_dir/CLAUDE.md" "$case_dir/claude.before"
+if out=$($ENSURE "$case_dir" 2>&1); then fail "divergent project memory should be refused without explicit reconciliation"; fi
+assert_contains "$out" "CLAUDE.md contains legacy project memory" "divergent-memory refusal should name the conflict"
+cmp -s "$case_dir/agents.before" "$case_dir/AGENTS.md" || fail "divergent-memory refusal modified AGENTS.md"
+cmp -s "$case_dir/claude.before" "$case_dir/CLAUDE.md" || fail "divergent-memory refusal modified CLAUDE.md"
+pass "fm-ensure-agents-md: divergent current and legacy memory is preserved and refused"
+
 case_dir=$(new_case agents-symlink)
 printf '# target\n' > "$case_dir/target"
 ln -s target "$case_dir/AGENTS.md"

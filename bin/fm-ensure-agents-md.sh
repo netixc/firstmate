@@ -102,6 +102,11 @@ if [ -e "$AGENTS" ] && [ ! -f "$AGENTS" ]; then
   exit 1
 fi
 
+if [ -f CLAUDE.md ] && [ ! -L CLAUDE.md ]; then
+  echo "conflict: CLAUDE.md contains legacy project memory in $DIR; rename or reconcile it as AGENTS.md manually" >&2
+  exit 1
+fi
+
 if [ -f "$AGENTS" ]; then
   ensure_maintenance_section
   if [ "$MAINT_INJECTED" -eq 1 ]; then
@@ -110,11 +115,6 @@ if [ -f "$AGENTS" ]; then
     echo "unchanged: AGENTS.md in $DIR"
   fi
   exit 0
-fi
-
-if [ -f CLAUDE.md ] && [ ! -L CLAUDE.md ]; then
-  echo "conflict: CLAUDE.md contains legacy project memory in $DIR; rename or reconcile it as AGENTS.md manually" >&2
-  exit 1
 fi
 
 write_skeleton
