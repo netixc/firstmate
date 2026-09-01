@@ -154,14 +154,22 @@ fm_backend_validate_task_endpoint() {
 }
 
 fm_backend_live_pane_matches_task_endpoint() {  # <meta> <task-id> <pane-json>
-  local meta=$1 id=$2 live=$3 workspace tab pane
+  local meta=$1 id=$2 live=$3 session workspace tab pane tabs label
   fm_backend_validate_task_endpoint "$meta" "$id" || return 1
+  session=$(fm_backend_meta_exact_value "$meta" herdr_session)
   workspace=$FM_BACKEND_VALIDATED_WORKSPACE
   tab=$FM_BACKEND_VALIDATED_TAB
   pane=$(fm_backend_meta_exact_value "$meta" herdr_pane_id)
+  label="fm-$id"
   if ! printf '%s' "$live" | jq -e --arg workspace "$workspace" --arg tab "$tab" --arg pane "$pane" \
     '.result.pane.workspace_id == $workspace and .result.pane.tab_id == $tab and .result.pane.pane_id == $pane' >/dev/null 2>&1; then
     echo "REFUSED: live Herdr pane identity is malformed or contradicts the recorded workspace, tab, or pane for task $id; no endpoint action was attempted." >&2
+    return 1
+  fi
+  if ! tabs=$(fm_backend_herdr_cli "$session" tab list --workspace "$workspace" 2>/dev/null) \
+    || ! printf '%s' "$tabs" | jq -e --arg tab "$tab" --arg label "$label" \
+      '(.result.tabs | type) == "array" and ([.result.tabs[] | select(.tab_id == $tab and .label == $label)] | length) == 1' >/dev/null 2>&1; then
+    echo "REFUSED: live Herdr tab identity is missing, ambiguous, or no longer bound to task $id; no endpoint action was attempted." >&2
     return 1
   fi
 }

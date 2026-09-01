@@ -40,12 +40,19 @@ cat > "$TMP/fakebin/herdr" <<'SH'
 #!/usr/bin/env bash
 case "${1:-} ${2:-}" in
   "status --json")
-    printf '{"client":{"version":"0.8.2","protocol":16},"server":{"running":true}}\n'
+    printf '{"client":{"version":"0.8.2","protocol":16},"server":{"running":%s}}\n' "${FM_FAKE_SERVER_RUNNING:-true}"
     ;;
   "pane get")
     [ "${3:-}" = w1:p2 ] || exit 1
     printf '{"result":{"pane":{"workspace_id":"%s","tab_id":"%s","pane_id":"w1:p2"}}}\n' \
       "${FM_FAKE_LIVE_WORKSPACE:-w1}" "${FM_FAKE_LIVE_TAB:-w1:t1}"
+    ;;
+  "tab list")
+    printf '{"result":{"tabs":[{"workspace_id":"w1","tab_id":"w1:t1","label":"%s"}]}}\n' \
+      "${FM_FAKE_LIVE_LABEL:-fm-task}"
+    ;;
+  "server ")
+    printf 'started\n' >> "${FM_FAKE_SERVER_LOG:-/dev/null}"
     ;;
   *) exit 1 ;;
 esac
@@ -70,6 +77,11 @@ assert_eq "$FM_BACKEND_VALIDATED_BACKEND" herdr "validated provider"
 assert_eq "$FM_BACKEND_VALIDATED_TARGET" lab:w1:p2 "validated target"
 assert_eq "$(fm_backend_resolve_selector task "$TMP/home/state")" lab:w1:p2 "task selectors must resolve through metadata"
 fm_backend_target_exists herdr lab:w1:p2 fm-task || fail "exact live task hierarchy should exist"
+export FM_FAKE_LIVE_LABEL=fm-other
+if fm_backend_target_exists herdr lab:w1:p2 fm-task; then
+  fail "target existence must reject reused hierarchy IDs bound to another task label"
+fi
+unset FM_FAKE_LIVE_LABEL
 export FM_FAKE_LIVE_TAB=w1:t9
 if fm_backend_target_exists herdr lab:w1:p2 fm-task; then
   fail "target existence must reject a pane moved outside its recorded tab"
@@ -79,6 +91,12 @@ if fm_backend_validate_active_task_endpoint "$TMP/home/state/task.meta" task 2>"
 fi
 unset FM_FAKE_LIVE_TAB
 grep -q "contradicts the recorded" "$TMP/err" || fail "live identity refusal must name the contradiction"
+export FM_FAKE_SERVER_RUNNING=false FM_FAKE_SERVER_LOG="$TMP/server.log"
+if fm_backend_herdr_capture lab:w1:p2 >/dev/null 2>"$TMP/err"; then
+  fail "ordinary endpoint reads must refuse a stopped Herdr session"
+fi
+[ ! -e "$TMP/server.log" ] || fail "ordinary endpoint reads must never start Herdr"
+unset FM_FAKE_SERVER_RUNNING FM_FAKE_SERVER_LOG
 for mismatch in 'herdr_tab_id=w2:t1' 'herdr_pane_id=w2:p2'; do
   cp "$TMP/home/state/task.meta" "$TMP/mismatch.meta"
   key=${mismatch%%=*}

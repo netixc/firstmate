@@ -2443,7 +2443,7 @@ fm_backend_herdr_projection_recovery_allows_flat() {  # <session> <journal> <tas
     echo "error: malformed herdr presentation journal for $id; refusing duplicate launch" >&2
     return 1
   }
-  fm_backend_herdr_server_ensure "$session" || {
+  fm_backend_herdr_server_running "$session" || {
     echo "error: could not inspect the quarantined herdr presentation for $id; refusing duplicate launch" >&2
     return 1
   }
@@ -2523,7 +2523,7 @@ fm_backend_herdr_parse_target() {  # <target>
 
 fm_backend_herdr_target_ready() {  # <target>
   fm_backend_herdr_parse_target "$1" || return 1
-  fm_backend_herdr_server_ensure "$FM_BACKEND_HERDR_SESSION" || return 1
+  fm_backend_herdr_server_running "$FM_BACKEND_HERDR_SESSION" || return 1
 }
 
 # fm_backend_herdr_current_path: the live FOREGROUND process's cwd, or empty on

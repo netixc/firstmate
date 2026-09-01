@@ -27,12 +27,16 @@ This record owns concurrent isolation evidence for the portable parallel candida
 - `tests/fm-brief.test.sh`
 - `tests/fm-captain-hold-lifecycle.test.sh`
 - `tests/fm-cd-pretool-check.test.sh`
+- `tests/fm-composer-lib.test.sh`
+- `tests/fm-crew-state.test.sh`
 - `tests/fm-ensure-agents-md.test.sh`
 - `tests/fm-herdr-lab.test.sh`
 - `tests/fm-lint.test.sh`
 - `tests/fm-pi-primary-types.test.sh`
 - `tests/fm-pr-merge.test.sh`
 - `tests/fm-review-diff.test.sh`
+- `tests/fm-send-popup-settle.test.sh`
+- `tests/fm-send-settle.test.sh`
 - `tests/fm-send-strict.test.sh`
 - `tests/fm-spawn-batch.test.sh`
 - `tests/fm-supervision-instructions.test.sh`
@@ -49,11 +53,15 @@ This record owns concurrent isolation evidence for the portable parallel candida
 | 35095 | 0 | 4 | `tests/fm-captain-hold-lifecycle.test.sh` |
 | 27529 | 0 | 1 | `tests/fm-arm-pretool-check.test.sh` |
 | 20922 | 0 | 21 | `tests/fm-test-run.test.sh` |
+| 17558 | 0 | 8 | `tests/fm-crew-state.test.sh` |
 | 16582 | 0 | 5 | `tests/fm-cd-pretool-check.test.sh` |
 | 9766 | 0 | 12 | `tests/fm-lint.test.sh` |
 | 9562 | 0 | 11 | `tests/fm-herdr-lab.test.sh` |
 | 6290 | 0 | 14 | `tests/fm-pr-merge.test.sh` |
+| 4563 | 0 | 16 | `tests/fm-send-popup-settle.test.sh` |
+| 3544 | 0 | 7 | `tests/fm-composer-lib.test.sh` |
 | 3025 | 0 | 18 | `tests/fm-send-strict.test.sh` |
+| 2753 | 0 | 17 | `tests/fm-send-settle.test.sh` |
 | 2166 | 0 | 15 | `tests/fm-review-diff.test.sh` |
 | 1315 | 0 | 3 | `tests/fm-brief.test.sh` |
 | 975 | 0 | 19 | `tests/fm-spawn-batch.test.sh` |

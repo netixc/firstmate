@@ -38,6 +38,18 @@
       "worker": 5
     },
     {
+      "duration_ms": 3544,
+      "exit": 0,
+      "path": "tests/fm-composer-lib.test.sh",
+      "worker": 7
+    },
+    {
+      "duration_ms": 17558,
+      "exit": 0,
+      "path": "tests/fm-crew-state.test.sh",
+      "worker": 8
+    },
+    {
       "duration_ms": 513,
       "exit": 0,
       "path": "tests/fm-ensure-agents-md.test.sh",
@@ -72,6 +84,18 @@
       "exit": 0,
       "path": "tests/fm-review-diff.test.sh",
       "worker": 15
+    },
+    {
+      "duration_ms": 4563,
+      "exit": 0,
+      "path": "tests/fm-send-popup-settle.test.sh",
+      "worker": 16
+    },
+    {
+      "duration_ms": 2753,
+      "exit": 0,
+      "path": "tests/fm-send-settle.test.sh",
+      "worker": 17
     },
     {
       "duration_ms": 3025,
