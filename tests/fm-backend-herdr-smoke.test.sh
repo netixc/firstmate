@@ -291,7 +291,8 @@ if [ "${FM_HERDR_SMOKE_REAL_PI:-0}" = 1 ]; then
   command -v pi >/dev/null 2>&1 || fail "FM_HERDR_SMOKE_REAL_PI=1 but pi is not installed"
   pi_version=$(pi --version 2>/dev/null || true)
   [ "$pi_version" = 0.84.4 ] || fail "FM_HERDR_SMOKE_REAL_PI=1 requires exact Pi 0.84.4, found ${pi_version:-unknown}"
-  fm_backend_herdr_send_literal "$TARGET" "pi --print --approve --no-session --no-context-files --no-extensions 'Reply with exactly HERDRSMOKEOK and nothing else.'"
+  reply_token="HERDRSMOKEOK_$$_$RANDOM"
+  fm_backend_herdr_send_literal "$TARGET" "pi --print --approve --no-session --no-context-files --no-extensions 'Reply with exactly $reply_token and nothing else.'"
   sleep 0.2
   fm_backend_herdr_send_key "$TARGET" Enter
   found_working=0
@@ -308,11 +309,20 @@ if [ "${FM_HERDR_SMOKE_REAL_PI:-0}" = 1 ]; then
     [ "$bs" = idle ] && break
     sleep 0.5
   done
-  out=$(fm_backend_herdr_capture "$TARGET" 30)
-  case "$out" in
-    *HERDRSMOKEOK*) pass "real herdr: agent_status busy/idle detection tracks a real Pi $pi_version turn, and capture shows its output" ;;
-    *) echo "note: Pi output marker not observed within the bound (timing-dependent, not fatal to this smoke suite)" >&2 ;;
-  esac
+  reply_rendered=0
+  out=''
+  for _ in $(seq 1 20); do
+    out=$(fm_backend_herdr_capture "$TARGET" 30)
+    marker_count=$(printf '%s\n' "$out" | grep -Fo "$reply_token" | wc -l | tr -d '[:space:]')
+    if [ "$marker_count" -ge 2 ]; then
+      reply_rendered=1
+      break
+    fi
+    sleep 0.5
+  done
+  [ "$reply_rendered" -eq 1 ] \
+    || fail "real herdr: Pi $pi_version reply did not render after the echoed input"$'\n'"$out"
+  pass "real herdr: agent_status busy/idle detection tracks a real Pi $pi_version turn, and capture shows its rendered reply"
 else
   echo "note: FM_HERDR_SMOKE_REAL_PI=1 not set; skipping the real-agent busy_state check" >&2
 fi
