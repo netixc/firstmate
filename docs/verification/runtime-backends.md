@@ -3,6 +3,35 @@
 This maintainer record captures active evidence for the sole Herdr session provider and the retained Pi supervision branch.
 Refresh Herdr evidence only through a named non-default lab using `bin/fm-herdr-lab.sh`; never operate on the live default session.
 
+## Herdr-only acceptance
+
+The provider cut was reverified on 2026-09-01 with Herdr 0.8.2 and real Pi 0.84.4 in guarded, named, non-default labs.
+The real-model case used the authenticated `openai-codex/gpt-5.6-sol` provider from inside the exact Herdr pane and required Herdr to observe the provider turn running before accepting the model's response.
+The AFK injection case exercised the production Herdr steering, watcher, buffering, retry, wedge, and cleanup paths; model interpretation is not load-bearing for those terminal and state transitions.
+The adapter and control smokes exercised exact session, workspace, tab, pane, state, steering, liveness, control, restart, and cleanup behavior against the real Herdr release.
+
+```sh
+tests/fm-backend-herdr-smoke.test.sh
+tests/fm-control-herdr-smoke.test.sh
+tests/fm-afk-inject-herdr-e2e.test.sh
+FM_HERDR_PI_REAL_MODEL_E2E=1 tests/fm-herdr-pi-real-model-e2e.test.sh
+```
+
+Observed acceptance lines:
+
+```text
+ok - real herdr: BOTH workspace ids/labels AND both tasks' pane ids survive a session stop + fresh server restart (multi-workspace shape)
+ok - real herdr: send_text_line runs a command atomically (pane run) and its output is capturable
+ok - real herdr: kill removes the pane and is idempotent/best-effort
+ok - real herdr: interrupt delivers the harness's key and proves the agent survived it
+ok - real herdr Scenario A: partial input defers injection; digest arrives clean after idle
+ok - real herdr Scenario B: swallowed Enter (via the herdr shim) produces exactly one clean digest
+ok - real herdr Scenario D: a persistently pending composer raises the max-defer wedge alarm, preserves the buffer, and never crashes the daemon
+ok - real Pi 0.84.4 model turn runs inside an exact named Herdr endpoint
+```
+
+Each guard tears down only its generated lab name and uses the lab helper's default-fleet tripwire, so a pass also proves isolation and exact cleanup.
+
 ## Herdr
 
 The compatibility floor is protocol 14.
@@ -368,8 +397,9 @@ ok - real herdr: no control verb removed the endpoint or the task's local copy
 ok - real herdr: an agent that does not stop fails closed instead of being reported as stopped
 ```
 
-The registry read through `herdr pane report-agent` is the same source `fm_backend_herdr_agent_state` classifies, so registering and not registering an agent on a plain shell pane exercises exactly the gate every lifecycle verb depends on, with no real agent launched.
-That command is the guard that refreshes this record; run it after every Herdr upgrade rather than trusting the version above.
+The registry read through `herdr pane report-agent` is the same source `fm_backend_herdr_agent_state` classifies, so registering and not registering an agent on a plain shell pane isolates the control gate from model behavior.
+This control smoke is protocol evidence rather than the real-agent acceptance proof; the Herdr-only acceptance guard above supplies the real Pi and real-model evidence.
+Run both after every Herdr upgrade rather than trusting the version above.
 
 ## Pi supervision branch
 

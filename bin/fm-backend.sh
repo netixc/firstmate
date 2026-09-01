@@ -26,16 +26,6 @@ fm_backend_list_contains() {  # <list> <name>
 
 fm_backend_is_known() { [ "${1:-}" = herdr ]; }
 
-# Compatibility shim for callers that ask which provider this process uses.
-# The product no longer infers a provider from ambient terminal variables.
-fm_backend_detect() {
-  # shellcheck disable=SC2034 # Output globals consumed by sourcing callers.
-  FM_BACKEND_DETECTED=herdr
-  # shellcheck disable=SC2034 # Output globals consumed by sourcing callers.
-  FM_BACKEND_DETECT_SIGNAL=product
-  printf 'herdr'
-}
-
 fm_backend_name() {
   local line value=herdr
   if [ -n "${FM_BACKEND:-}" ]; then
@@ -81,20 +71,6 @@ fm_meta_get() {
   grep "^$key=" "$meta" 2>/dev/null | tail -1 | cut -d= -f2- || true
 }
 
-# Absence is deliberately not reinterpreted as Herdr. The sentinel makes old
-# metadata produce a concrete unsupported-provider blocker at every dispatcher.
-fm_backend_of_meta() {
-  local value
-  value=$(fm_meta_get "$1" backend)
-  printf '%s' "${value:-legacy-unrecorded}"
-}
-
-fm_backend_target_of_meta() {
-  local window
-  window=$(fm_meta_get "$1" window)
-  [ -n "$window" ] && printf '%s' "$window"
-}
-
 fm_backend_meta_exact_value() {
   local meta=$1 key=$2 count value
   count=$(grep -c "^$key=" "$meta" 2>/dev/null || true)
@@ -102,6 +78,17 @@ fm_backend_meta_exact_value() {
   value=$(grep "^$key=" "$meta" | cut -d= -f2-)
   [ -n "$value" ] || return 1
   printf '%s' "$value"
+}
+
+# Absence and ambiguity are deliberately not reinterpreted as Herdr.
+fm_backend_of_meta() {
+  local value
+  value=$(fm_backend_meta_exact_value "$1" backend 2>/dev/null || true)
+  printf '%s' "${value:-unsupported-or-ambiguous}"
+}
+
+fm_backend_target_of_meta() {
+  fm_backend_meta_exact_value "$1" window 2>/dev/null || true
 }
 
 fm_backend_endpoint_atom_valid() {
@@ -158,7 +145,7 @@ fm_backend_meta_for_window() {
   local target=$1 state=$2 meta window
   for meta in "$state"/*.meta; do
     [ -e "$meta" ] || continue
-    window=$(fm_meta_get "$meta" window)
+    window=$(fm_backend_meta_exact_value "$meta" window 2>/dev/null || true)
     [ -n "$window" ] && [ "$window" = "$target" ] || continue
     printf '%s' "$meta"; return 0
   done
@@ -193,18 +180,16 @@ fm_backend_expected_label_of_selector() {
 }
 
 fm_backend_resolve_selector() {
-  local raw=$1 state=$2 meta window backend
+  local raw=$1 state=$2 meta id
   meta=$(fm_backend_meta_for_selector "$raw" "$state" 2>/dev/null || true)
   [ -n "$meta" ] || meta=$(fm_backend_meta_for_window "$raw" "$state" 2>/dev/null || true)
   if [ -z "$meta" ]; then
     echo "error: no task metadata for '$raw'; ad hoc or legacy endpoint selection is unsupported in the Herdr-only edition" >&2
     return 1
   fi
-  backend=$(fm_backend_of_meta "$meta")
-  fm_backend_validate "$backend" || return 1
-  window=$(fm_backend_target_of_meta "$meta")
-  [ -n "$window" ] || { echo "error: no Herdr target recorded in $meta" >&2; return 1; }
-  printf '%s' "$window"
+  id=$(basename "$meta" .meta)
+  fm_backend_validate_task_endpoint "$meta" "$id" || return 1
+  printf '%s' "$FM_BACKEND_VALIDATED_TARGET"
 }
 
 fm_backend_source() {

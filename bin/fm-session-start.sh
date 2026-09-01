@@ -44,7 +44,7 @@
 #                       represented by the two digests below.
 #   6. fleet digest   - a compact data/backlog.md identity/metadata listing,
 #                       every state/*.meta, a bounded state/*.status tail,
-#                       state/.afk, and a cheap per-task endpoint-liveness read:
+#                       state/.afk, and a bounded per-task endpoint-liveness read:
 #                       read-only, always runs.
 #   7. network checks - the result of the deferred network stage started back at
 #                       step 1, harvested WITHOUT waiting for it.
@@ -64,15 +64,17 @@
 # was individually unbounded. One unreachable remote secondmate could burn the
 # entire FM_SESSION_START_TIMEOUT and truncate the digest, so a slow network
 # could cost the work queue itself.
-# So no step between here and the last line below makes an external-network
-# call. The five that did - `gh auth status`, secondmate liveness, secondmate
-# convergence, pending remote handoff delivery, and the fleet-sync fetch - are
-# started as one detached bounded worker right after the lock (step 1) and
-# harvested at step 7 without ever blocking on it. bin/fm-startup-network.sh
-# owns that stage and its safety argument; bin/fm-bootstrap.sh remains the owner
-# of the sweeps themselves and still runs every one of them.
-# The digest is therefore composed from local reads and local subprocesses only,
-# and an unreachable host now delays a reported check rather than the startup.
+# The mutating and fleet-wide external-network checks - `gh auth status`,
+# secondmate liveness, secondmate convergence, pending remote handoff delivery,
+# and the fleet-sync fetch - are started as one detached bounded worker right
+# after the lock (step 1) and harvested at step 7 without ever blocking on it.
+# The fleet digest makes only a short bounded read through each recorded remote
+# secondmate's state interface so it never misroutes remote identity locally.
+# bin/fm-startup-network.sh owns the deferred stage and its safety argument;
+# bin/fm-bootstrap.sh remains the owner of the sweeps themselves and still runs
+# every one of them.
+# An unreachable host is reported as unknown after that short bound rather than
+# consuming the whole startup budget or being misreported as a dead local pane.
 # What this deliberately trades: on a slow network the digest prints "IN
 # PROGRESS" and names exactly which checks are not yet confirmed, instead of
 # waiting for them. It never reports an unconfirmed check as passed.
@@ -807,6 +809,8 @@ print_backlog_compact "$DATA/backlog.md" "data/backlog.md"
 
 subsection "Work under way (state/*.meta)"
 META_FOUND=0
+remote_timeout=${FM_SESSION_START_REMOTE_TIMEOUT:-2}
+case "$remote_timeout" in ''|*[!0-9]*|0) remote_timeout=2 ;; esac
 for meta in "$STATE"/*.meta; do
   [ -f "$meta" ] || continue
   META_FOUND=1
@@ -816,7 +820,23 @@ for meta in "$STATE"/*.meta; do
 
   window=$(fm_meta_get "$meta" window)
   target=$(fm_backend_target_of_meta "$meta")
-  if [ -n "$window" ]; then
+  remote_host=$(fm_meta_get "$meta" remote_host)
+  if [ -n "$remote_host" ]; then
+    backend=$(fm_meta_get "$meta" remote_backend)
+    [ -n "$backend" ] || backend=unknown
+    remote_state=
+    if remote_state=$(fm_run_timed "$remote_timeout" \
+      "$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh state "$id" < /dev/null 2>/dev/null); then
+      remote_state=$(printf '%s\n' "$remote_state" | tail -1)
+    else
+      remote_state=unknown
+    fi
+    case "$remote_state" in
+      alive) printf 'endpoint: alive (backend=%s window=%s remote=%s)\n' "$backend" "$window" "$remote_host" ;;
+      dead|missing) printf 'endpoint: dead (backend=%s window=%s remote=%s state=%s)\n' "$backend" "$window" "$remote_host" "$remote_state" ;;
+      *) printf 'endpoint: unknown (backend=%s window=%s remote=%s state=%s)\n' "$backend" "$window" "$remote_host" "$remote_state" ;;
+    esac
+  elif [ -n "$window" ]; then
     backend=$(fm_backend_of_meta "$meta")
     if fm_backend_target_exists "$backend" "${target:-$window}" "fm-$id"; then
       printf 'endpoint: alive (backend=%s window=%s)\n' "$backend" "$window"

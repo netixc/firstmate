@@ -301,14 +301,10 @@ fm_send_resolve_target() {  # <raw-target>
       return 0
     fi
     RESOLUTION_TRIED="meta=$meta; backend=from-meta"
-    target=$(fm_backend_target_of_meta "$meta")
-    if [ -z "$target" ]; then
-      echo "error: no backend target recorded in $meta (tried $RESOLUTION_TRIED)" >&2
-      return 1
-    fi
-    backend=$(fm_backend_of_meta "$meta")
-    RESOLVED_TARGET=$target
-    TARGET_BACKEND=$backend
+    id=$(fm_send_id_from_meta "$meta")
+    fm_backend_validate_task_endpoint "$meta" "$id" || return 1
+    RESOLVED_TARGET=$FM_BACKEND_VALIDATED_TARGET
+    TARGET_BACKEND=$FM_BACKEND_VALIDATED_BACKEND
     TARGET_META=$meta
     TARGET_HARNESS=$(fm_meta_get "$meta" harness)
     EXPECTED_LABEL=$(fm_backend_expected_label_of_selector "$raw" "$STATE")
@@ -340,13 +336,10 @@ fm_send_resolve_target() {  # <raw-target>
 
   meta=$(fm_backend_meta_for_window "$raw" "$STATE" 2>/dev/null || true)
   if [ -n "$meta" ]; then
-    target=$(fm_backend_target_of_meta "$meta")
-    if [ -z "$target" ]; then
-      echo "error: no backend target recorded in $meta (tried explicit target '$raw' via recorded window/terminal; backend=from-meta)" >&2
-      return 1
-    fi
-    RESOLVED_TARGET=$target
-    TARGET_BACKEND=$(fm_backend_of_meta "$meta")
+    id=$(fm_send_id_from_meta "$meta")
+    fm_backend_validate_task_endpoint "$meta" "$id" || return 1
+    RESOLVED_TARGET=$FM_BACKEND_VALIDATED_TARGET
+    TARGET_BACKEND=$FM_BACKEND_VALIDATED_BACKEND
     TARGET_META=$meta
     TARGET_HARNESS=$(fm_meta_get "$meta" harness)
     RESOLUTION_TRIED="explicit target '$raw' matched $meta; backend=$TARGET_BACKEND"

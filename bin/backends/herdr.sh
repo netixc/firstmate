@@ -1443,18 +1443,33 @@ fm_backend_herdr_projection_order_best_effort() {  # <session> <created-workspac
 }
 
 # fm_backend_herdr_server_ensure: start the herdr server for <session>
-# headless (no TUI client) if not already running, mirroring tmux's `tmux
-# has-session || tmux new-session -d`. Verified: a bare socket CLI call does
-# NOT auto-start the server, so this must run before any workspace/tab/pane
-# call. Bounded poll for the server to report running.
+# headless (no TUI client) if not already running. Verified: a bare socket CLI
+# call does NOT auto-start the server, so this must run before any
+# workspace/tab/pane call. Bounded poll for the server to report running.
+fm_backend_herdr_server_running() {  # <session>
+  local session=$1 status
+  status=$(fm_backend_herdr_cli "$session" status --json 2>/dev/null) || {
+    echo "error: herdr status for session '$session' is unreachable; refusing to create an endpoint" >&2
+    return 2
+  }
+  printf '%s' "$status" | jq -e '(.server.running | type) == "boolean"' >/dev/null 2>&1 || {
+    echo "error: herdr status for session '$session' is malformed or ambiguous; refusing to create an endpoint" >&2
+    return 2
+  }
+  printf '%s' "$status" | jq -e '.server.running == true' >/dev/null 2>&1
+}
+
 fm_backend_herdr_server_ensure() {  # <session>
-  local session=$1 running out i
-  running=$(fm_backend_herdr_cli "$session" status --json 2>/dev/null | jq -r '.server.running // false' 2>/dev/null)
-  [ "$running" = "true" ] && return 0
+  local session=$1 state i
+  fm_backend_herdr_server_running "$session" || state=$?
+  [ "${state:-0}" -eq 0 ] && return 0
+  [ "$state" -eq 1 ] || return "$state"
   ( fm_backend_herdr_cli "$session" server >/dev/null 2>&1 & ) || return 1
   for i in $(seq 1 20); do
-    running=$(fm_backend_herdr_cli "$session" status --json 2>/dev/null | jq -r '.server.running // false' 2>/dev/null)
-    [ "$running" = "true" ] && return 0
+    state=0
+    fm_backend_herdr_server_running "$session" >/dev/null || state=$?
+    [ "$state" -eq 0 ] && return 0
+    [ "$state" -eq 1 ] || return "$state"
     sleep 0.5
   done
   echo "error: herdr server for session '$session' did not report running within 10s" >&2
@@ -1526,8 +1541,7 @@ fm_backend_herdr_workspace_find() {  # <session>
 #   0 - one exact, self-consistent launcher pane/tab/workspace in <session>.
 #   2 - this process is NOT running in a herdr pane (no HERDR_PANE_ID at all),
 #       so there is no launcher workspace to inherit and the caller falls back
-#       to its per-home container. HERDR_ENV=1 on its own is only a backend
-#       SELECTION marker (bin/fm-backend.sh's fm_backend_detect), never a
+#       to its per-home container. HERDR_ENV=1 on its own never establishes a
 #       parent binding - herdr always injects the pane id alongside it.
 #   1 - a launcher pane IS claimed but its binding is missing, stale,
 #       contradictory, or belongs to another herdr session. The caller must
@@ -2690,11 +2704,11 @@ fm_backend_herdr_rendered_busy_state() {  # <target> [harness] -> busy|idle|unkn
 #
 # Confirmation signal: when the target is legibly idle before Enter,
 # submission is confirmed by fm_backend_herdr_wait_for_working observing a
-# keep agent_status idle for a whole landed turn, so an idle native result
-# falls through to the shared composer verdict: empty is positive delivery,
-# proven pending retries Enter, and retries-exhausted pending plus a
-# generating busy signal is a queued Enter via
-# fm_composer_queued_enter_verdict (bin/fm-composer-lib.sh).
+# native busy transition. An idle native result falls through to the shared
+# composer verdict, but empty remains inconclusive because interrupt recovery
+# can clear text without submitting it. Proven pending or empty retries Enter,
+# and retries-exhausted pending plus a generating busy signal is a queued Enter
+# via fm_composer_queued_enter_verdict (bin/fm-composer-lib.sh).
 #
 # Incident (2026-07-07, followed up on 2026-07-08): a redelivery loop in the
 # away-mode daemon. Root cause: composer-content submit confirmation was too
@@ -2718,10 +2732,10 @@ fm_backend_herdr_rendered_busy_state() {  # <target> [harness] -> busy|idle|unkn
 #     across herdr's per-attempt confirmation budget (not once at the end), so a
 #     transition landing partway through a window is still caught before this
 #     loop gives up and sends a needless extra Enter.
-#   - Instant round-trip or a native status that never leaves idle: bounded by
-#     the composer fallback. A cleared composer is delivery; a proven-pending
-#     composer on an idle pane is a swallow; extra Enter on an already-empty
-#     composer is a no-op, not a duplicate delivery of <text>.
+#   - Instant round-trip or a native status that never leaves idle: a cleared
+#     composer is inconclusive because Herdr can also clear text while recovering
+#     from an interrupt. Enter retries are harmless on an empty composer, while
+#     only a native transition can turn that cleared state into delivery proof.
 # Fallback path, for a harness whose native agent-state is never legibly idle
 # mid-turn, and after - so the idle-baseline path above is structurally
 # unreachable for it). That harness always lands in the composer branch, and
@@ -2799,11 +2813,9 @@ fm_backend_herdr_send_text_submit() {  # <target> <text> <retries> <enter-sleep>
         busy) printf 'empty'; return 0 ;;
         unknown) printf 'unknown'; return 0 ;;
       esac
-      # Native stayed idle. Composer empty is positive delivery (a landed
       verdict=$(fm_backend_herdr_composer_state "$target")
       case "$verdict" in
-        empty) printf 'empty'; return 0 ;;
-        pending|pending-unproven) ;;
+        empty|pending|pending-unproven) ;;
         *) printf '%s' "$verdict"; return 0 ;;
       esac
     else
@@ -2824,6 +2836,8 @@ fm_backend_herdr_send_text_submit() {  # <target> <text> <retries> <enter-sleep>
     if [ "$i" -ge "$retries" ]; then
       if [ "$enter_sent" -eq 0 ]; then
         printf 'send-failed'
+      elif [ "$baseline" = idle ] && [ "$verdict" = empty ]; then
+        printf 'pending'
       else
         fm_composer_queued_enter_verdict "$verdict" \
           "$(fm_backend_herdr_queued_enter_busy "$target" "$allow_rendered")"

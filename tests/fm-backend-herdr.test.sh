@@ -499,6 +499,42 @@ test_container_ensure_refuses_an_ambiguous_home_label() {
 
 # --- container_ensure / create_task ------------------------------------------
 
+test_server_ensure_starts_only_from_authoritative_stopped_state() {
+  local dir log resp fb out status
+
+  dir="$TMP_ROOT/server-unreachable"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
+  printf '7\n' > "$resp/1.exit"
+  fb=$(make_herdr_fakebin "$dir")
+  out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SCRIPT_STATUS=1 \
+    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_server_ensure fmtest' "$ROOT" 2>&1)
+  status=$?
+  expect_code 2 "$status" "an unreachable status probe must block server creation"
+  assert_contains "$out" "unreachable" "the status blocker did not identify transport failure"
+  assert_not_contains "$(cat "$log")" $'\x1f''server' "an unreachable status probe started a server"
+
+  dir="$TMP_ROOT/server-malformed"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
+  printf '{}\n' > "$resp/1.out"
+  fb=$(make_herdr_fakebin "$dir")
+  out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SCRIPT_STATUS=1 \
+    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_server_ensure fmtest' "$ROOT" 2>&1)
+  status=$?
+  expect_code 2 "$status" "a malformed status probe must block server creation"
+  assert_contains "$out" "malformed or ambiguous" "the malformed status blocker was not concrete"
+  assert_not_contains "$(cat "$log")" $'\x1f''server' "a malformed status probe started a server"
+
+  dir="$TMP_ROOT/server-stopped"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
+  printf '{"server":{"running":false}}\n' > "$resp/1.out"
+  printf '{"server":{"running":true}}\n' > "$resp/2.out"
+  printf '{"server":{"running":true}}\n' > "$resp/3.out"
+  fb=$(make_herdr_fakebin "$dir")
+  PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SCRIPT_STATUS=1 \
+    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_server_ensure fmtest' "$ROOT" \
+    || fail "an authoritative stopped state should permit server creation"
+  assert_contains "$(cat "$log")" $'\x1f''server' "an authoritative stopped state did not start the server"
+
+  pass "fm_backend_herdr_server_ensure creates only after authoritative stopped status"
+}
+
 test_container_ensure_starts_server_and_workspace() {
   local dir log resp fb out
   dir="$TMP_ROOT/container"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
@@ -3304,21 +3340,28 @@ test_send_text_submit_idle_baseline_does_not_confirm_failed_enter() {
   pass "fm_backend_herdr_send_text_submit: a failed Enter cannot borrow a later native transition as delivery proof"
 }
 
-test_send_text_submit_idle_native_empty_composer_confirms_delivery() {
+test_send_text_submit_idle_native_empty_composer_requires_transition() {
   local dir log resp fb out enter_count
   dir="$TMP_ROOT/submit-idle-native-empty-composer"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  # After Enter, native wait_for_working stays idle and the composer clears:
-  # that empty verdict is positive delivery, not a swallow.
   printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/2.out"
   printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/4.out"
   printf '  \xe2\x9d\xaf\n' > "$resp/5.out"
+  printf '{"result":{"agent":{"agent_status":"working"}}}\n' > "$resp/7.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_BACKEND_HERDR_SUBMIT_POLLS=1 \
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_send_text_submit default:w1:p2 "hello captain" 3 0.01 0.01' "$ROOT" )
-  [ "$out" = empty ] || fail "an idle native status plus a cleared composer must confirm delivery, got '$out'"
+  [ "$out" = empty ] || fail "the later native transition should confirm delivery, got '$out'"
   enter_count=$(grep -c $'\x1f''pane'$'\x1f''send-keys'$'\x1f''w1:p2'$'\x1f''enter' "$log")
-  [ "$enter_count" -eq 1 ] || fail "a cleared composer should confirm without extra Enters, sent $enter_count Enter(s)"
-  pass "fm_backend_herdr_send_text_submit: idle native agent-state plus empty composer reports empty (landed Pi turn)"
+  [ "$enter_count" -eq 2 ] || fail "an idle cleared composer should require another harmless Enter, sent $enter_count Enter(s)"
+
+  dir="$TMP_ROOT/submit-idle-native-empty-unconfirmed"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
+  for n in 2 4 7 10; do printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/$n.out"; done
+  for n in 5 8 11; do printf '  \xe2\x9d\xaf\n' > "$resp/$n.out"; done
+  fb=$(make_herdr_fakebin "$dir")
+  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_BACKEND_HERDR_SUBMIT_POLLS=1 \
+    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_send_text_submit default:w1:p2 "hello captain" 3 0.01 0.01' "$ROOT" )
+  [ "$out" = pending ] || fail "an always-idle cleared composer must remain unconfirmed, got '$out'"
+  pass "fm_backend_herdr_send_text_submit: idle cleared composer waits for native transition proof"
 }
 
 test_composer_state_guard_still_refuses_real_pending_text_after_submit_confirmation_change() {
@@ -3746,6 +3789,7 @@ test_workspace_ensure_prefers_the_launcher_over_the_first_label_match
 test_workspace_ensure_refuses_an_ambiguous_label_with_no_launcher
 test_workspace_ensure_other_home_ignores_the_launcher_identity
 test_container_ensure_refuses_an_ambiguous_home_label
+test_server_ensure_starts_only_from_authoritative_stopped_state
 test_container_ensure_starts_server_and_workspace
 test_container_ensure_reuses_existing_workspace
 test_container_ensure_creates_with_no_focus_flag
@@ -3850,7 +3894,7 @@ test_send_text_submit_confirms_blocked_after_enter
 test_send_text_submit_preexisting_working_pending_is_queued_enter
 test_send_text_submit_preexisting_working_does_not_confirm_failed_enter
 test_send_text_submit_idle_baseline_does_not_confirm_failed_enter
-test_send_text_submit_idle_native_empty_composer_confirms_delivery
+test_send_text_submit_idle_native_empty_composer_requires_transition
 test_composer_state_guard_still_refuses_real_pending_text_after_submit_confirmation_change
 test_send_text_submit_slow_transition_within_one_enter_needs_no_extra_enter
 test_send_text_submit_send_failed
