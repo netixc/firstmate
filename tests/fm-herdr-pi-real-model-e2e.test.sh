@@ -25,7 +25,12 @@ PANE=
 TAB=
 WORKSPACE=
 HOME_DIR="$TMP_ROOT/home"
-mkdir -p "$HOME_DIR/state"
+PI_AGENT_DIR="$TMP_ROOT/pi-agent"
+mkdir -p "$HOME_DIR/state" "$PI_AGENT_DIR"
+source_pi_dir=${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}
+if [ -f "$source_pi_dir/auth.json" ]; then
+  cp "$source_pi_dir/auth.json" "$PI_AGENT_DIR/auth.json"
+fi
 export FM_HOME="$HOME_DIR" FM_ROOT_OVERRIDE="$ROOT"
 
 cleanup() {
@@ -40,12 +45,14 @@ trap cleanup EXIT
 "$LAB_HELPER" provision "$SESSION"
 created=$("$LAB_HELPER" run "$SESSION" workspace create --cwd "$ROOT" --label real-model --no-focus) \
   || fail "could not create the isolated real-model workspace"
+WORKSPACE=$(printf '%s' "$created" | jq -r '.result.workspace.workspace_id // .result.root_pane.workspace_id // empty')
+[ -n "$WORKSPACE" ] || fail "the isolated workspace returned no workspace identity"
+created=$("$LAB_HELPER" run "$SESSION" tab create --workspace "$WORKSPACE" --cwd "$ROOT" --label fm-real-model --no-focus) \
+  || fail "could not create the production-labeled real-model task tab"
 PANE=$(printf '%s' "$created" | jq -r '.result.root_pane.pane_id // empty')
-[ -n "$PANE" ] || fail "the isolated workspace returned no pane identity"
+TAB=$(printf '%s' "$created" | jq -r '.result.tab.tab_id // .result.root_pane.tab_id // empty')
+[ -n "$PANE" ] && [ -n "$TAB" ] || fail "the task tab omitted its exact tab or pane identity"
 pane_info=$("$LAB_HELPER" run "$SESSION" pane get "$PANE") || fail "could not read the exact endpoint identity"
-TAB=$(printf '%s' "$pane_info" | jq -r '.result.pane.tab_id // empty')
-WORKSPACE=$(printf '%s' "$pane_info" | jq -r '.result.pane.workspace_id // empty')
-[ -n "$TAB" ] && [ -n "$WORKSPACE" ] || fail "the exact endpoint omitted its tab or workspace identity"
 cat > "$HOME_DIR/state/real-model.meta" <<EOF
 window=$SESSION:$PANE
 endpoint_task_id=real-model
@@ -73,8 +80,8 @@ watch_rc_file="$TMP_ROOT/watch.rc"
 watch_pid=$!
 sleep 0.5
 prompt='Use the bash tool to run sleep 3. Then reply with exactly the concatenation of FM_HERDR_ONLY_REAL_ and MODEL_OK, with no other text.'
-printf -v command 'pi --no-session --no-context-files --no-extensions --model %q --thinking low %q' \
-  "$MODEL" "$prompt"
+printf -v command 'PI_CODING_AGENT_DIR=%q pi --no-session --no-context-files --no-extensions --model %q --thinking low %q' \
+  "$PI_AGENT_DIR" "$MODEL" "$prompt"
 "$LAB_HELPER" run "$SESSION" pane run "$PANE" "$command" >/dev/null \
   || fail "could not launch real Pi in the isolated Herdr pane"
 wait "$watch_pid"
