@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
-# tests/fm-afk-inject-herdr-e2e.test.sh - real-herdr end-to-end test for the
-# away-mode daemon's herdr transport (bin/fm-supervise-daemon.sh), the herdr
-# counterpart of tests/fm-afk-inject-e2e.test.sh's private-socket tmux e2e.
+# tests/fm-afk-inject-herdr-e2e.test.sh - real-Herdr end-to-end test for the
+# away-mode daemon's transport (bin/fm-supervise-daemon.sh).
 # Mirrors tests/fm-backend-herdr-smoke.test.sh and tests/herdr-test-safety.sh's
 # isolation patterns: everything runs on a throwaway, named, NEVER-default
 # HERDR_SESSION, torn down with herdr_safe_stop_and_delete. Skips cleanly when
 # herdr or jq is not installed.
 #
-# Unlike the tmux e2e (which redirects a bare `tmux` PATH shim to a private
-# socket), herdr already supports named-session isolation via --session, so no
-# PATH redirection is needed for the happy path - the daemon is simply pointed
+# Herdr supports named-session isolation via --session, so no PATH redirection
+# is needed for the happy path - the daemon is simply pointed
 # at FM_SUPERVISOR_BACKEND=herdr, FM_SUPERVISOR_TARGET="<session>:<pane-id>",
 # and HERDR_SESSION="<the isolated session>". A thin herdr SHIM is still used,
 # but only to simulate a swallowed Enter (Scenario B) - herdr's real CLI has no
@@ -20,9 +18,8 @@
 # The "supervisor pane" is a tiny deterministic bash loop (not a real harness
 # binary): it draws a bordered composer row ("│ > <buf> │") that exercises the
 # bordered branch of fm_backend_herdr_composer_state, and logs every submitted
-# line (hex + text + injection/user classification) - the same technique
-# tests/fm-afk-inject-e2e.test.sh uses for its tmux supervisor pane, so this
-# test asserts on submitted CONTENT, not pane appearance. It ALSO registers
+# line (hex + text + injection/user classification), so this test asserts on
+# submitted CONTENT, not pane appearance. It ALSO registers
 # itself as a real herdr agent via `herdr pane report-agent` and reports an
 # idle/working/idle cycle around each submission, because
 # fm_backend_herdr_send_text_submit's confirmation is native agent-state
@@ -121,10 +118,8 @@ for _ in $(seq 1 100); do
 done
 [ "$PANE_READY" = true ] || fail "the supervisor pane's shell did not become ready"
 
-# A second, independent live task tab in the same workspace, mirroring the tmux
-# e2e's fake fm-fake-c1 crewmate window - not required by scan_signals (which
-# only watches state/*.status mtimes, no window/pane dependency), but kept for
-# parity so this test's shape matches the tmux e2e's.
+# A second, independent live task tab in the same workspace represents a
+# crewmate while scan_signals observes state/*.status mtimes.
 FAKE_CREW_IDS=$(fm_backend_herdr_create_task "$CONTAINER" "fm-fake-c1" /tmp) \
   || fail "could not create the fake crewmate scratch tab"
 read -r _FAKE_TAB_ID FAKE_CREW_PANE_ID <<EOF

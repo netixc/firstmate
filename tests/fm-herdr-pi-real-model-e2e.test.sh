@@ -21,6 +21,7 @@ TMP_ROOT=$(fm_test_tmproot fm-herdr-pi-real-model-e2e)
 MODEL=${FM_HERDR_PI_REAL_MODEL:-openai-codex/gpt-5.6-sol}
 TOKEN=FM_HERDR_ONLY_REAL_MODEL_OK
 STEER_TOKEN=FM_HERDR_ONLY_STEERING_OK
+WATCH_TOKEN=FM_HERDR_ONLY_WATCHER_OK
 PANE=
 TAB=
 WORKSPACE=
@@ -127,22 +128,31 @@ case "$control" in *"interrupt-delivered real-model"*"verified=agent-alive"*) : 
   || fail "real Pi did not survive production interrupt control"
 
 fm_backend_events_capable herdr "$SESSION" || fail "native watcher events were unavailable after steering and control"
-"$LAB_HELPER" run "$SESSION" pane report-agent "$PANE" --source real-pi-continuity --agent pi --state idle >/dev/null \
-  || fail "could not establish the real Pi watcher baseline"
 watch_out="$TMP_ROOT/watch.out"
 watch_rc_file="$TMP_ROOT/watch.rc"
 ( fm_backend_wait_transition herdr "$SESSION" 8 "$HOME_DIR/state" "$SESSION:$PANE" >"$watch_out"; printf '%s\n' "$?" >"$watch_rc_file" ) &
 watch_pid=$!
 sleep 0.5
-"$LAB_HELPER" run "$SESSION" pane report-agent "$PANE" --source real-pi-continuity --agent pi --state blocked >/dev/null \
-  || fail "could not trigger the real Pi watcher transition"
+watch_prompt='Use the bash tool to run sleep 3. Then reply with exactly the concatenation of FM_HERDR_ONLY_ and WATCHER_OK, with no other text.'
+submit=$(fm_backend_send_text_submit herdr "$SESSION:$PANE" "$watch_prompt" 3 0.2 0.2)
+[ "$submit" = empty ] || fail "the watcher turn was not delivered: $submit"
 wait "$watch_pid"
 watch_rc=$(cat "$watch_rc_file" 2>/dev/null || true)
 watch_record=$(cat "$watch_out" 2>/dev/null || true)
 [ "$watch_rc" = 0 ] || fail "native watcher did not deliver the real Pi transition (rc=${watch_rc:-missing})"
 [ "$(fm_transition_pane_id "$watch_record")" = "$PANE" ] \
-  && [ "$(fm_transition_to_status "$watch_record")" = blocked ] \
+  && [ "$(fm_transition_to_status "$watch_record")" = working ] \
   || fail "native watcher delivered the wrong real Pi transition"
+watched=0
+for _ in $(seq 1 120); do
+  if "$LAB_HELPER" run "$SESSION" pane read "$PANE" --source recent --lines 200 2>/dev/null \
+    | grep -Fq "$WATCH_TOKEN"; then
+    watched=1
+    break
+  fi
+  sleep 1
+done
+[ "$watched" -eq 1 ] || fail "the real Pi watcher turn did not complete"
 
 fm_backend_kill herdr "$SESSION:$PANE" || fail "production cleanup could not close the exact real Pi pane"
 if "$LAB_HELPER" run "$SESSION" pane get "$PANE" >/dev/null 2>&1; then

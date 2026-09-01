@@ -442,7 +442,7 @@ is_proven_isolated_script() {
 }
 
 # The portable serial remainder: every tests/*.test.sh that is neither
-# proven-isolated nor real-herdr-gated. Watcher, lock, AFK, real tmux, daemon,
+# proven-isolated nor real-herdr-gated. Watcher, lock, AFK, daemon,
 # secondmate lifecycle, bootstrap, live-harness opt-in, GUI-backend, and other
 # unproven work stays here. Derived rather than enumerated so a newly added test
 # lands here by default instead of falling out of every lane.
@@ -469,7 +469,6 @@ list_portable_serial() {
 # procedure.
 portable_serial_weight_hints() {
   cat <<'EOF'
-tests/fm-afk-inject-e2e.test.sh 35900
 tests/fm-afk-pi-herdr-return-e2e.test.sh 66
 tests/fm-afk-return.test.sh 3974
 tests/fm-ask-user-authority.test.sh 83

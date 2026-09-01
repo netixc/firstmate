@@ -1410,23 +1410,21 @@ status_open_activities() {  # <status-file-or-dash>
   _fm_status_open_activities_stream < "$f"
 }
 
-# task id from a recorded window target, falling back to the tmux-shaped
-# "<session>:fm-<id>" form when no metadata state is available.
+# Resolve a task id only from exact recorded endpoint metadata.
 window_to_task() {
-  local w=$1 state=${2:-${STATE:-${FM_STATE_OVERRIDE:-}}} meta mw mt t
+  local w=$1 state=${2:-${STATE:-${FM_STATE_OVERRIDE:-}}} meta mw t
   if [ -n "$state" ]; then
     for meta in "$state"/*.meta; do
       [ -e "$meta" ] || continue
       mw=$(grep '^window=' "$meta" 2>/dev/null | tail -1 | cut -d= -f2- || true)
-      mt=$(grep '^terminal=' "$meta" 2>/dev/null | tail -1 | cut -d= -f2- || true)
-      [ "$mw" = "$w" ] || [ "$mt" = "$w" ] || continue
+      [ "$mw" = "$w" ] || continue
       t=$(basename "$meta")
       t=${t%.meta}
       printf '%s' "$t"
       return 0
     done
   fi
-  t="${w##*:}"; t="${t#fm-}"; printf '%s' "$t"
+  return 1
 }
 
 # Capture the bytes of an append-only status log at or after <start-offset> under

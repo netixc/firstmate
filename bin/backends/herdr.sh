@@ -7,7 +7,7 @@
 # protocol 14, macOS aarch64), refined by docs/herdr-backend.md's
 # "workspace-per-home" pass (AGENTS.md task herdr-sm-spaces-k4). Herdr is a
 # session provider ONLY (D3): the worktree provider stays treehouse, exactly
-# like tmux. Sourced only through bin/fm-backend.sh's fm_backend_source in
+# with Treehouse. Sourced only through bin/fm-backend.sh's fm_backend_source in
 # normal operation; the unit tests source it directly, so the FM_HOME fallback
 # below keeps that path sane without fm-backend.sh's preamble.
 #
@@ -26,7 +26,7 @@
 # focus, and agent-absence checks all agree under the session lock.
 # Every ambiguous recovered launch uses the default flat home workspace when
 # duplicate-agent risk is independently absent.
-# Target resolution stays parallel to the tmux adapter in both layouts.
+# Target resolution is identical in both layouts.
 # Projected create, move, and cleanup operations capture the named session's
 # exact active workspace and tab. On Herdr 0.7.5, an explicit close that
 # empties a non-focused workspace moves focus to that workspace's neighbor
@@ -413,7 +413,7 @@ fm_backend_herdr_version_check() {
 }
 
 # fm_backend_herdr_session: resolve which named herdr session this normal
-# spawn/op uses. HERDR_SESSION mirrors tmux's $TMUX ambient-selection for
+# spawn/op uses. HERDR_SESSION provides ambient named-session selection for
 # adapter workspace/tab/pane operations: an operator (or firstmate's own
 # isolated test harness) sets it explicitly; absent means herdr's own
 # "default" session. Do not use HERDR_SESSION alone for destructive test
@@ -1936,7 +1936,7 @@ fm_backend_herdr_tab_is_husk() {  # <session> <pane_id>
 }
 
 # fm_backend_herdr_agent_state: recovery-grade state for the same session-start
-# sweep as the tmux classifier. It reuses the husk classifier rather than
+# sweep as the shared process classifier. It reuses the husk classifier rather than
 # creating a second Herdr state machine: a structurally gone pane is `missing`,
 # a confirmed agent-less pane is `dead`, a registered agent is `alive`, and an
 # unexpected or failed API read is `unreadable`.
@@ -1964,7 +1964,7 @@ fm_backend_herdr_agent_alive() {  # <target>
 # fm_backend_herdr_create_task: create the task's tab (one pane) in
 # <container> ("session:workspace_id"). Herdr does NOT enforce label
 # uniqueness itself (verified: two tabs can share a label), so the duplicate
-# check is ours, mirroring tmux's manual check.
+# check is ours and is performed manually.
 #
 # A same-labeled tab already existing no longer means an automatic refusal:
 # herdr persists and restores its whole session layout (workspaces/tabs/
@@ -2527,7 +2527,7 @@ fm_backend_herdr_target_ready() {  # <target>
 }
 
 # fm_backend_herdr_current_path: the live FOREGROUND process's cwd, or empty on
-# any error. Mirrors tmux's pane_current_path poll used for worktree-path
+# any error. This is the worktree-path readiness poll.
 # discovery after `treehouse get`.
 #
 # Verified pitfall: `pane get`'s `.result.pane.cwd` is the pane's cwd AT
@@ -2545,7 +2545,7 @@ fm_backend_herdr_current_path() {  # <target>
 }
 
 # fm_backend_herdr_send_text_line: send one line of TEXT then submit,
-# ATOMICALLY - mirrors tmux's `send-keys -t T text Enter`. Used for the fixed
+# ATOMICALLY. Used for the fixed
 # spawn-time commands (treehouse get, the GOTMPDIR export). `pane run` types
 # the command and submits it in one call (verified).
 fm_backend_herdr_send_text_line() {  # <target> <text>
@@ -2554,9 +2554,9 @@ fm_backend_herdr_send_text_line() {  # <target> <text>
 }
 
 # fm_backend_herdr_send_literal: send TEXT as literal, UNSUBMITTED input - the
-# caller sends Enter separately. Mirrors tmux's `send-keys -t T -l text`.
+# caller sends Enter separately.
 # Verified: `pane send-text` does NOT auto-submit (contrary to the addendum's
-# original guess); it behaves exactly like tmux's `-l` literal send.
+# original guess); it is a literal send.
 fm_backend_herdr_send_literal() {  # <target> <text>
   fm_backend_herdr_target_ready "$1" || return 1
   fm_backend_herdr_cli "$FM_BACKEND_HERDR_SESSION" pane send-text "$FM_BACKEND_HERDR_PANE" "$2" >/dev/null 2>&1
@@ -2578,7 +2578,7 @@ fm_backend_herdr_normalize_key() {  # <key>
 }
 
 # fm_backend_herdr_send_key: one named special key. Mirrors fm-send.sh's --key
-# path (tmux's `send-keys -t T key`).
+# path.
 fm_backend_herdr_send_key() {  # <target> <key>
   fm_backend_herdr_target_ready "$1" || return 1
   local key
@@ -2587,8 +2587,7 @@ fm_backend_herdr_send_key() {  # <target> <key>
 }
 
 # fm_backend_herdr_capture: bounded plain-text pane capture. Mirrors
-# fm-peek.sh's/fm-watch.sh's `tmux capture-pane -p -t T -S -N`. --source recent
-# is the closest herdr analogue to tmux's scrollback-bounded capture.
+# fm-peek.sh and fm-watch.sh use --source recent for scrollback-bounded capture.
 #
 # Verified CLI quirk (herdr-verification-p2.md "pane read --lines bug", v0.7.1):
 # `pane read --source recent --lines N` returns COMPLETELY EMPTY output when N
@@ -2699,8 +2698,7 @@ fm_backend_herdr_rendered_busy_state() {  # <target> [harness] -> busy|idle|unkn
 # (Enter only, never retyped) until native agent-state, a cleared composer, or
 # fm_composer_queued_enter_verdict confirms delivery. Verified hazard
 # (herdr-verification-p2.md "slash/$ autocomplete popup"): a `/`- or
-# `$`-prefixed send opens a completion popup within ~0.1s, exactly like tmux's
-# here the same way it does for tmux.
+# A `$`-prefixed send can open a completion popup within about 0.1 seconds.
 #
 # Confirmation signal: when the target is legibly idle before Enter,
 # submission is confirmed by fm_backend_herdr_wait_for_working observing a
@@ -2743,7 +2741,7 @@ fm_backend_herdr_rendered_busy_state() {  # <target> [harness] -> busy|idle|unkn
 # unconfirmed on a message that had actually landed.
 # The escape is the SAME semantic signal the idle-baseline path uses, read from
 # the pane's verified busy footer instead of native agent-state, and it is the
-# rendered-footer twin of the tmux submit core's turn-started confirmation
+# rendered-footer twin of the submit core's turn-started confirmation
 # in the shared submit contract: an idle-to-busy transition ACROSS our Enter is proof the
 # harness accepted the submission. The baseline is taken before the first Enter
 # and only when the native baseline was not legibly idle, so the idle-baseline
@@ -2846,7 +2844,7 @@ fm_backend_herdr_send_text_submit() {  # <target> <text> <retries> <enter-sleep>
 }
 
 # fm_backend_herdr_kill: remove the task's pane, best-effort (mirrors
-# tmux-kill-window's `|| true` contract). Verified: closing a tab's only pane
+# the idempotent close contract). Verified: closing a tab's only pane
 # closes the tab too, so a separate tab close is unnecessary.
 # When the close would empty a non-focused workspace, Herdr 0.7.5's explicit
 # close moves focus to that workspace's neighbor with no restore anywhere in
@@ -3072,10 +3070,10 @@ fm_backend_herdr_pane_for_tab() {  # <session> <workspace_id> <tab_id>
 }
 
 # fm_backend_herdr_resolve_bare_selector: the live-tab-listing fallback for an
-# ad hoc selector with no meta (mirrors tmux's list-windows grep). Searches
+# ad hoc selector with no metadata. Searches
 # every RUNNING named herdr session (herdr session list) for a tab whose label
 # matches <name>, since herdr sessions are not addressed by one ambient
-# server the way a single tmux server is. Rare path in practice (herdr tasks
+# server. Rare path in practice (Herdr tasks
 # normally carry meta), best-effort.
 fm_backend_herdr_resolve_bare_selector() {  # <name>
   local name=$1 sessions session tabs tab_id wsid pane_id

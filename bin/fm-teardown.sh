@@ -1527,7 +1527,7 @@ reap_task_worktree_processes() {  # <label> <dir>...
   shift
   if ! command -v lsof >/dev/null 2>&1; then
     reap_task_backend_process_group "$label"
-    return 0
+    return $?
   fi
   while [ "$pass" -le "$max_passes" ]; do
     if ! task_pids_under_roots "$@"; then
@@ -2161,8 +2161,8 @@ teardown_herdr_require_prerequisites() {  # <task-id>
   fi
 }
 
-teardown_herdr_preflight_target() {  # <target> <task-id>
-  local target=$1 task_id=$2 session pane presence lock_path verified_lock_path lock_session held_path attempt
+teardown_herdr_preflight_target() {  # <target> <task-id> <meta>
+  local target=$1 task_id=$2 meta=$3 session pane presence live lock_path verified_lock_path lock_session held_path attempt
   teardown_herdr_require_prerequisites "$task_id" || return 1
   if ! fm_backend_herdr_parse_target "$target"; then
     echo "error: herdr endpoint $target for $task_id could not be parsed exactly; nothing was changed - repair the endpoint metadata and rerun teardown" >&2
@@ -2172,7 +2172,14 @@ teardown_herdr_preflight_target() {  # <target> <task-id>
   pane=$FM_BACKEND_HERDR_PANE
   presence=$(fm_backend_herdr_pane_presence_state "$session" "$pane")
   case "$presence" in
-    dead|present) ;;
+    dead) ;;
+    present)
+      if ! live=$(fm_backend_herdr_cli "$session" pane get "$pane" 2>/dev/null) \
+        || ! fm_backend_live_pane_matches_task_endpoint "$meta" "$task_id" "$live"; then
+        echo "error: herdr endpoint $target for $task_id does not match its recorded hierarchy; nothing was changed - repair the endpoint metadata and rerun teardown" >&2
+        return 1
+      fi
+      ;;
     *)
       echo "error: herdr endpoint $target for $task_id has ambiguous structured presence; nothing was changed - restore reliable endpoint inspection and rerun teardown" >&2
       return 1
@@ -2230,7 +2237,7 @@ preflight_firstmate_home_herdr_children() {  # <home>
     child_backend=$FM_BACKEND_VALIDATED_BACKEND
     child_target=$FM_BACKEND_VALIDATED_TARGET
     if [ "$child_backend" = herdr ]; then
-      teardown_herdr_preflight_target "$child_target" "$child_id" || return 1
+      teardown_herdr_preflight_target "$child_target" "$child_id" "$child_meta" || return 1
     fi
     child_kind=$(meta_value "$child_meta" kind)
     [ -n "$child_kind" ] || child_kind=ship
@@ -2340,7 +2347,7 @@ if [ "$KIND" = secondmate ]; then
     preflight_descendant_task_locks "$HOME_PATH" || exit 1
     validate_firstmate_home_children_removal "$HOME_PATH" || exit 1
     if [ "$BACKEND" = herdr ]; then
-      teardown_herdr_preflight_target "$T" "$ID" || exit 1
+      teardown_herdr_preflight_target "$T" "$ID" "$META" || exit 1
     fi
     preflight_firstmate_home_herdr_children "$HOME_PATH" || exit 1
   fi
@@ -2459,7 +2466,7 @@ fi
 TEARDOWN_HERDR_SESSION=
 TEARDOWN_HERDR_PANE=
 if [ "$BACKEND" = herdr ]; then
-  teardown_herdr_preflight_target "$T" "$ID" || exit 1
+  teardown_herdr_preflight_target "$T" "$ID" "$META" || exit 1
   fm_backend_herdr_parse_target "$T" || exit 1
   TEARDOWN_HERDR_SESSION=$FM_BACKEND_HERDR_SESSION
   TEARDOWN_HERDR_PANE=$FM_BACKEND_HERDR_PANE

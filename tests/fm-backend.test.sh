@@ -69,7 +69,11 @@ fm_backend_validate_task_endpoint "$TMP/home/state/task.meta" task || fail "exac
 assert_eq "$FM_BACKEND_VALIDATED_BACKEND" herdr "validated provider"
 assert_eq "$FM_BACKEND_VALIDATED_TARGET" lab:w1:p2 "validated target"
 assert_eq "$(fm_backend_resolve_selector task "$TMP/home/state")" lab:w1:p2 "task selectors must resolve through metadata"
+fm_backend_target_exists herdr lab:w1:p2 fm-task || fail "exact live task hierarchy should exist"
 export FM_FAKE_LIVE_TAB=w1:t9
+if fm_backend_target_exists herdr lab:w1:p2 fm-task; then
+  fail "target existence must reject a pane moved outside its recorded tab"
+fi
 if fm_backend_validate_active_task_endpoint "$TMP/home/state/task.meta" task 2>"$TMP/err"; then
   fail "a live pane contradicting the recorded tab must be refused"
 fi

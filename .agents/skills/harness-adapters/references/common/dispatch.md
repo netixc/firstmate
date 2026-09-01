@@ -25,7 +25,7 @@ Tool references record empirical knowledge for those executable owners.
 
 ## Pi integration verification
 
-Verify Pi detection in `../../../bin/fm-harness.sh`, canonical launch in `../../../bin/fm-spawn.sh`, busy state in `../../../bin/fm-busy-lib.sh`, shared composer behavior in `../../../bin/fm-composer-lib.sh`, lifecycle in `../../../bin/fm-control-lib.sh`, and tmux liveness in `../../../bin/backends/tmux.sh` when secondmate use is supported.
+Verify Pi detection in `../../../bin/fm-harness.sh`, canonical launch in `../../../bin/fm-spawn.sh`, busy state in `../../../bin/fm-busy-lib.sh`, shared composer behavior in `../../../bin/fm-composer-lib.sh`, lifecycle in `../../../bin/fm-control-lib.sh`, and Herdr liveness in `../../../bin/backends/herdr.sh` when secondmate use is supported.
 Also verify primary integration through `references/common/primary-hooks.md`, model discovery through `references/common/model-and-effort.md`, and one tool record.
 Pi support changes require their executable owner, portable regression, applicable credentialed live guard, and verification record to land together.
 `../firstmate-coding-guidelines/SKILL.md` owns Pi-dependent proof.

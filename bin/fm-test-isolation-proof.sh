@@ -9,7 +9,7 @@
 #
 # It does NOT compose production CI shard membership; fm-test-run.sh owns that
 # partition. The default portable pool excludes real Herdr, real default-server
-# tmux, watcher lock races, AFK, live harnesses, and GUI backends. A named family
+# watcher lock races, AFK, live harnesses, and stateful backends. A named family
 # pool instead runs that family's exact membership and inherits its prerequisites.
 #
 # Usage:

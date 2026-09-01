@@ -153,13 +153,24 @@ fm_backend_validate_task_endpoint() {
   FM_BACKEND_VALIDATED_TAB=$tab
 }
 
+fm_backend_live_pane_matches_task_endpoint() {  # <meta> <task-id> <pane-json>
+  local meta=$1 id=$2 live=$3 workspace tab pane
+  fm_backend_validate_task_endpoint "$meta" "$id" || return 1
+  workspace=$FM_BACKEND_VALIDATED_WORKSPACE
+  tab=$FM_BACKEND_VALIDATED_TAB
+  pane=$(fm_backend_meta_exact_value "$meta" herdr_pane_id)
+  if ! printf '%s' "$live" | jq -e --arg workspace "$workspace" --arg tab "$tab" --arg pane "$pane" \
+    '.result.pane.workspace_id == $workspace and .result.pane.tab_id == $tab and .result.pane.pane_id == $pane' >/dev/null 2>&1; then
+    echo "REFUSED: live Herdr pane identity is malformed or contradicts the recorded workspace, tab, or pane for task $id; no endpoint action was attempted." >&2
+    return 1
+  fi
+}
+
 fm_backend_validate_active_task_endpoint() {
-  local meta=$1 id=$2 session pane workspace tab live state=0
+  local meta=$1 id=$2 session pane live state=0
   fm_backend_validate_task_endpoint "$meta" "$id" || return 1
   session=$(fm_backend_meta_exact_value "$meta" herdr_session)
   pane=$(fm_backend_meta_exact_value "$meta" herdr_pane_id)
-  workspace=$FM_BACKEND_VALIDATED_WORKSPACE
-  tab=$FM_BACKEND_VALIDATED_TAB
   fm_backend_source herdr || return 1
   fm_backend_herdr_version_check || return 1
   fm_backend_herdr_server_running "$session" >/dev/null || state=$?
@@ -171,11 +182,7 @@ fm_backend_validate_active_task_endpoint() {
     echo "REFUSED: Herdr pane '$pane' in session '$session' is unreachable for task $id; no endpoint action was attempted." >&2
     return 1
   fi
-  if ! printf '%s' "$live" | jq -e --arg workspace "$workspace" --arg tab "$tab" --arg pane "$pane" \
-    '.result.pane.workspace_id == $workspace and .result.pane.tab_id == $tab and .result.pane.pane_id == $pane' >/dev/null 2>&1; then
-    echo "REFUSED: live Herdr pane identity is malformed or contradicts the recorded workspace, tab, or pane for task $id; no endpoint action was attempted." >&2
-    return 1
-  fi
+  fm_backend_live_pane_matches_task_endpoint "$meta" "$id" "$live"
 }
 
 fm_backend_meta_for_window() {
@@ -245,11 +252,15 @@ fm_backend_busy_state() { local backend=$1; shift; fm_backend_source "$backend" 
 fm_backend_composer_state() { local backend=$1; shift; fm_backend_source "$backend" >/dev/null 2>&1 || { printf 'unknown'; return 0; }; fm_backend_herdr_composer_state "$@"; }
 
 fm_backend_target_exists() {
-  local backend=$1 target=$2 session pane
+  local backend=$1 target=$2 label=${3:-} session pane live id meta
   fm_backend_source "$backend" || return 1
   session=${target%%:*}; pane=${target#*:}
   [ -n "$session" ] && [ -n "$pane" ] && [ "$pane" != "$target" ] || return 1
-  fm_backend_herdr_cli "$session" pane get "$pane" >/dev/null 2>&1
+  live=$(fm_backend_herdr_cli "$session" pane get "$pane" 2>/dev/null) || return 1
+  [ -n "$label" ] || return 0
+  id=${label#fm-}
+  meta="$FM_HOME/state/$id.meta"
+  fm_backend_live_pane_matches_task_endpoint "$meta" "$id" "$live" >/dev/null 2>&1
 }
 
 fm_backend_agent_state() { local backend=$1; shift; fm_backend_source "$backend" >/dev/null 2>&1 || { printf 'unverified'; return 0; }; fm_backend_herdr_agent_state "$@"; }

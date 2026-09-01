@@ -9,7 +9,7 @@
 #
 # Adapters pass capture capabilities as data:
 #   styled=1    ANSI styling is available for safe ghost-text stripping.
-#   cursor=1    tmux supplies a cursor row that anchors shape selection.
+#   cursor=1    a cursor row is available to anchor shape selection.
 #   identity=1  a native Pi identity/state probe can corroborate a separated
 #               composer; without it that shape stays unknown.
 #   rows=<n>    the bounded capture row count, for diagnostics only.
@@ -101,7 +101,7 @@ fm_composer_normalize_trim_var() {  # <varname>
 
 # fm_composer_strip_ghost: the ONE fleet-wide ANSI-aware extractor of "real typed
 # content" from a captured, styled composer row. Reads the styled line on stdin
-# (from `tmux capture-pane -e`, `herdr pane read --format ansi`, or
+# (from `herdr pane read --format ansi` or
 # `zellij action dump-screen --ansi`) and prints the
 # plain, non-ghost text on stdout, dropping:
 #     A reset (SGR 0) or normal-intensity (SGR 22) ends a dim run.
@@ -1052,7 +1052,7 @@ EOF
   plain=$(printf '%s\n' "$screen" | fm_composer_strip_ansi)
   _fm_composer_scan_screen "$plain" "$cy"
   if [ -n "$cy" ]; then
-    # Cursor mode (tmux): the shape CONTAINING the cursor is the composer.
+    # Cursor mode: the shape containing the cursor is the composer.
     if [ "$FM_COMPOSER_SCAN_UNSAFE" = 1 ]; then
       printf 'unknown'; return 0
     fi
@@ -1140,32 +1140,6 @@ EOF
   esac
 }
 
-# fm_composer_submit_retry_core: the ONE verify-and-retry-Enter submit loop
-# for the cursor-less backends (cmux, orca, zellij), parameterised by the
-# adapter's send-key and composer-state functions. The caller has already
-# typed the text ONCE (send_literal) and settled; this loop submits with
-# Enter, re-reading the composer verdict, and retries Enter ONLY - never
-# retypes, because a swallowed Enter leaves the text in the composer and
-# retyping would duplicate it. Proven pending (and pending-unproven) retries
-# consume the budget; any other verdict returns immediately, so `unknown`
-# stays a loud refusal rather than a blind retry into an unreadable pane.
-# tmux and herdr keep richer cores that consume this same shared verdict plus
-# fm_composer_queued_enter_verdict; no shape knowledge lives in any loop.
-fm_composer_submit_retry_core() {  # <send-key-fn> <state-fn> <target> <retries> <enter-sleep> [expected-label]
-  local send_key_fn=$1 state_fn=$2 target=$3 retries=$4 sleep_s=$5 expected_label=${6:-} i=0 state
-  while :; do
-    "$send_key_fn" "$target" Enter "$expected_label" || true
-    sleep "$sleep_s"
-    state=$("$state_fn" "$target" "$expected_label")
-    case "$state" in
-      pending|pending-unproven) ;;
-      *) printf '%s' "$state"; return 0 ;;
-    esac
-    i=$((i + 1))
-    [ "$i" -lt "$retries" ] || { printf '%s' "$state"; return 0; }
-  done
-}
-
 # fm_composer_queued_enter_verdict: the ONE busy-queued-Enter policy.
 # After Enter retries are spent, convert a structurally proven pending
 # composer given a delivery-busy signal from the adapter:
@@ -1174,8 +1148,7 @@ fm_composer_submit_retry_core() {  # <send-key-fn> <state-fn> <target> <retries>
 #   pending + unknown -> pending (unreadable busy is not proof of a queue)
 # Every other composer verdict is returned unchanged, so pending-unproven,
 # empty, and unknown never receive this conversion.
-# Adapters supply their own busy primitive (tmux: fm_pane_is_busy; herdr:
-# native agent_status=working, or a rendered busy footer on an idle native
+# Herdr supplies native agent_status=working or a rendered busy footer on an idle native
 # baseline). This function does not read a pane.
 fm_composer_queued_enter_verdict() {  # <composer-state> <busy|idle|unknown>
   local state=$1 busy=${2:-}

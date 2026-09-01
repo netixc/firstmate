@@ -2264,41 +2264,25 @@ test_leaked_tasktmp_process_is_reaped() {
   pass "a leaked descendant process rooted under the task's per-task tasktmp is reaped by teardown too"
 }
 
-test_lsof_absent_reaps_tmux_process_group() {
-  local case_dir rc pid path_without_lsof
-  case_dir=$(make_case lsof-absent-process-group-reap)
+test_lsof_absent_refuses_before_removal() {
+  local case_dir rc path_without_lsof
+  case_dir=$(make_case lsof-absent-refusal)
   write_meta "$case_dir" no-mistakes ship
   land_shippable_commit "$case_dir"
   path_without_lsof=$(make_path_without_lsof "$case_dir")
   PATH="$path_without_lsof" command -v lsof >/dev/null 2>&1 \
-    && fail "lsof-absent-process-group-reap: fixture path unexpectedly exposes lsof"
-
-  perl -e 'setpgrp(0, 0); chdir shift or die; exec "sleep", "300"' "$case_dir/wt" &
-  pid=$!
-  disown
-  sleep 0.3
-  kill -0 "$pid" 2>/dev/null || fail "lsof-absent-process-group-reap: setup sleeper did not start"
-  cat > "$case_dir/fakebin/tmux" <<EOF
-#!/usr/bin/env bash
-if [ "\${1:-}" = display-message ] && [ "\${*: -1}" = '#{pane_pid}' ]; then
-  printf '%s\n' '$pid'
-fi
-exit 0
-EOF
-  chmod +x "$case_dir/fakebin/tmux"
+    && fail "lsof-absent-refusal: fixture path unexpectedly exposes lsof"
 
   rc=0
   FM_TEARDOWN_TEST_PATH="$path_without_lsof" \
     run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr" || rc=$?
 
-  expect_code 0 "$rc" "lsof-absent-process-group-reap: teardown should succeed"
-  if kill -0 "$pid" 2>/dev/null; then
-    kill -KILL "$pid" 2>/dev/null || true
-    fail "lsof-absent-process-group-reap: tmux process group survived teardown"
-  fi
-  assert_grep "reaping leaked worktree process group" "$case_dir/stderr" \
-    "lsof-absent-process-group-reap: teardown did not use the process-group fallback"
-  pass "missing lsof falls back to reaping the tmux pane process group"
+  expect_code 1 "$rc" "lsof-absent-refusal: teardown should refuse"
+  assert_grep "lsof is unavailable" "$case_dir/stderr" \
+    "lsof-absent-refusal: teardown did not explain the process-reaping blocker"
+  assert_present "$case_dir/wt" "lsof-absent-refusal: teardown removed the worktree"
+  assert_present "$case_dir/state/task-x1.meta" "lsof-absent-refusal: teardown removed task metadata"
+  pass "missing lsof refuses teardown and preserves task state"
 }
 
 test_lsof_error_refuses_before_removal() {
@@ -2646,7 +2630,7 @@ test_another_branchs_parked_run_is_never_touched
 test_own_autonomous_run_is_left_alone
 test_leaked_worktree_process_is_reaped
 test_leaked_tasktmp_process_is_reaped
-test_lsof_absent_reaps_tmux_process_group
+test_lsof_absent_refuses_before_removal
 test_lsof_error_refuses_before_removal
 test_reused_pid_identity_is_not_force_killed
 test_exec_changed_process_is_still_reaped
