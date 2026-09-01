@@ -1,0 +1,28 @@
+6900207 Prune worker support to plain Pi 0.84.4
+9c2a3af Prune retired pending-reply harness fixture
+ffc916e Align Pi-only portable fixtures
+3aece6f no-mistakes(review): Remove source-content-only test assertions
+2e5d34d no-mistakes(review): Remove Pi executable attestation
+74e0486 no-mistakes(review): Reject malformed busy record numeric fields
+31ec5d8 no-mistakes(review): Reject retired secondmate relaunch configuration
+c521994 no-mistakes(review): Restore successful plain Pi key delivery reporting
+608402d no-mistakes(review): Assert rollback removes real Pi extension wiring
+5f1e1bd no-mistakes(review): Restore bounded vendor authentication probe
+82ae892 no-mistakes(review): Restrict live worker guards to exact Pi
+7265727 no-mistakes(review): Require rendered Pi reply in Herdr smoke
+502094f no-mistakes(document): Align documentation with Pi-only runtime
+b81082b Merge branch 'main' into fm/personal-pi-minimal-k8
+5806e72 no-mistakes(review): Enforce remote Pi version and argv0 liveness fallback
+a78dd94 no-mistakes(document): Align Pi-only documentation and evidence
+93ad219 no-mistakes(lint): Fix fake Pi fixture quoting
+e69994e Remove retired vendor authentication probe
+5dbb1cc no-mistakes(review): Remove source-only probe absence assertion
+72a3299 no-mistakes(document): Correct plain Pi verification guidance
+070d5ac no-mistakes(review): Reject retired positional harnesses and preserve legacy memory
+bdea4ff no-mistakes(review): Refuse divergent legacy memory before AGENTS updates
+d3a78e5 no-mistakes(document): Align Pi-only documentation and owner comments
+fae8ec0 no-mistakes(review): Preserve and validate supported CLAUDE.md pointers
+c97fe0d Restore Codex App companion boundary
+base 34b43a587fac7ab1f693c4397efbfc0435ccce76
+head c97fe0d9e3638f80648ad808d128ae4fa881f10a
+merge-base 34b43a587fac7ab1f693c4397efbfc0435ccce76

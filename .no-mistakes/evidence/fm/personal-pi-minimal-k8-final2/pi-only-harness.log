@@ -1,0 +1,24 @@
+$ tests/fm-pi-only-harness.test.sh
+ok - Pi marker resolves to plain pi
+ok - pi-signed configuration is rejected
+ok - claude configuration is rejected
+ok - codex configuration is rejected
+ok - opencode configuration is rejected
+ok - grok configuration is rejected
+ok - kimi configuration is rejected
+ok - cursor configuration is rejected
+ok - muse configuration is rejected
+ok - explicit plain Pi resolves
+ok - plain Pi control is supported
+ok - pi-signed control metadata is unsupported
+ok - claude control metadata is unsupported
+ok - codex control metadata is unsupported
+ok - opencode control metadata is unsupported
+ok - grok control metadata is unsupported
+ok - kimi control metadata is unsupported
+ok - cursor control metadata is unsupported
+ok - muse control metadata is unsupported
+ok - Pi interrupt key
+ok - Pi exit command
+ok - Pi semantic state is accepted
+ok - old metadata is not normalized

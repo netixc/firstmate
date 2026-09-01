@@ -1,0 +1,16 @@
+$ tests/fm-ensure-agents-md.test.sh
+ok - fm-ensure-agents-md: fresh setup creates only AGENTS.md with self-governance
+ok - fm-ensure-agents-md: existing AGENTS.md is updated idempotently
+ok - fm-ensure-agents-md: unterminated content receives a blank separator
+ok - fm-ensure-agents-md: CRLF line endings are preserved
+ok - fm-ensure-agents-md: legacy-only project memory is preserved and refused
+ok - fm-ensure-agents-md: divergent current and legacy memory is preserved and refused
+ok - fm-ensure-agents-md: canonical real pointer remains supported
+ok - fm-ensure-agents-md: canonical pointer supports fresh creation
+ok - fm-ensure-agents-md: correct symlink pointer remains supported
+ok - fm-ensure-agents-md: dangling correct symlink supports fresh creation
+ok - fm-ensure-agents-md: wrong symlink is preserved and refused
+ok - fm-ensure-agents-md: AGENTS.md symlinks are refused
+ok - fm-ensure-agents-md: non-regular AGENTS.md is refused
+ok - fm-ensure-agents-md: case-variant memory names are refused portably
+ok - fm-ensure-agents-md: help remains available

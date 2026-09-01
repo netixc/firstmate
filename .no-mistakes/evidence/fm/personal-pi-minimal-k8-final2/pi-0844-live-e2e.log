@@ -1,0 +1,7 @@
+$ FM_PI_ONLY_LIVE_E2E=1 tests/fm-pi-only-live-e2e.test.sh
+Preparing worktree (detached HEAD c97fe0d)
+ok - real Pi supervision extensions preserve plain-Pi identity (Pi 0.84.4)
+ok - real Pi interrupt lifecycle control succeeds (Pi 0.84.4)
+warning: /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.Nv1uSM/data/control/brief.md records no delivery contract line (scaffolded before ship briefs recorded one); launching on the explicit --mode no-mistakes - confirm its definition of done matches
+ok - real Pi transactional relaunch preserves executable and profile selection (Pi 0.84.4)
+ok - real Pi replacement exit lifecycle control succeeds (Pi 0.84.4)

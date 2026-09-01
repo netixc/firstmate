@@ -1,0 +1,16 @@
+$ tests/fm-spawn-dispatch-profile.test.sh
+ok - no --model/--effort records defaults and types the pi launch instructions
+ok - relative home overrides ignore CDPATH and become absolute before spawn launch construction
+ok - FM_HOME defaults resolve relative paths and preserve absolute spellings
+ok - absolute override spellings are preserved in spawn launch paths
+ok - unresolvable relative spawn overrides fail with named diagnostics
+ok - active crew-dispatch profile requires an explicit harness for ship spawns
+ok - active crew-dispatch profile requires an explicit harness for scout spawns
+ok - active crew-dispatch profile allows an explicit resolved harness
+ok - active crew-dispatch profile allows positional plain Pi
+ok - active crew-dispatch profile rejects raw launch commands
+ok - pi receives --model and --thinking max profile flags
+ok - Pi launch requires exact 0.84.4 before probing supported TUI flags
+ok - batch dispatch forwards shared --harness, --model, and --effort to every pair
+ok - retired positional secondmate harnesses are rejected before home resolution
+ok - active crew-dispatch profile does not block secondmate launches
