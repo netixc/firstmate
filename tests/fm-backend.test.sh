@@ -31,7 +31,7 @@ window=legacy:0
 worktree=$TMP/work
 project=$TMP/project
 EOF
-assert_eq "$(fm_backend_of_meta "$TMP/home/state/old.meta")" legacy-unrecorded "absent provider metadata must not be reinterpreted"
+assert_eq "$(fm_backend_of_meta "$TMP/home/state/old.meta")" unsupported-or-ambiguous "absent provider metadata must not be reinterpreted"
 if fm_backend_validate_task_endpoint "$TMP/home/state/old.meta" old 2>"$TMP/err"; then fail "old absent provider metadata must block cleanup"; fi
 grep -q "explicit migration to Herdr metadata is required" "$TMP/err" || fail "legacy blocker must be concrete"
 
@@ -50,6 +50,17 @@ fm_backend_validate_task_endpoint "$TMP/home/state/task.meta" task || fail "exac
 assert_eq "$FM_BACKEND_VALIDATED_BACKEND" herdr "validated provider"
 assert_eq "$FM_BACKEND_VALIDATED_TARGET" lab:w1:p2 "validated target"
 assert_eq "$(fm_backend_resolve_selector task "$TMP/home/state")" lab:w1:p2 "task selectors must resolve through metadata"
+for mismatch in 'herdr_tab_id=w2:t1' 'herdr_pane_id=w2:p2'; do
+  cp "$TMP/home/state/task.meta" "$TMP/mismatch.meta"
+  key=${mismatch%%=*}
+  value=${mismatch#*=}
+  awk -v key="$key" -v value="$value" 'index($0, key "=") == 1 { print key "=" value; next } { print }' \
+    "$TMP/mismatch.meta" > "$TMP/mismatch.next"
+  mv "$TMP/mismatch.next" "$TMP/mismatch.meta"
+  if fm_backend_validate_task_endpoint "$TMP/mismatch.meta" task 2>"$TMP/err"; then
+    fail "a Herdr child outside the recorded workspace must be refused"
+  fi
+done
 if fm_backend_resolve_selector 'legacy:0' "$TMP/home/state" 2>"$TMP/err"; then fail "ad hoc legacy endpoints must be refused"; fi
 grep -Eq "unsupported in the Herdr-only edition|explicit migration|unsupported session provider" "$TMP/err" || fail "ad hoc refusal must explain the boundary"
 

@@ -6,9 +6,9 @@ Refresh Herdr evidence only through a named non-default lab using `bin/fm-herdr-
 ## Herdr-only acceptance
 
 The provider cut was reverified on 2026-09-01 with Herdr 0.8.2 and real Pi 0.84.4 in guarded, named, non-default labs.
-The real-model case used the authenticated `openai-codex/gpt-5.6-sol` provider from inside the exact Herdr pane and required Herdr to observe the provider turn running before accepting the model's response.
-The AFK injection case exercised the production Herdr steering, watcher, buffering, retry, wedge, and cleanup paths; model interpretation is not load-bearing for those terminal and state transitions.
-The adapter and control smokes exercised exact session, workspace, tab, pane, state, steering, liveness, control, restart, and cleanup behavior against the real Herdr release.
+The real-model case used the authenticated `openai-codex/gpt-5.6-sol` provider from inside the exact Herdr pane and drove that real Pi through production metadata validation, native state, typed steering, recovery control, liveness, event-watcher continuity, and exact cleanup.
+The AFK injection case independently exercised production Herdr buffering, retry, wedge, and supervisor cleanup paths; model interpretation is not load-bearing for those terminal and state transitions.
+The adapter and control smokes additionally exercised isolation and restart behavior against the real Herdr release.
 
 ```sh
 tests/fm-backend-herdr-smoke.test.sh
@@ -27,7 +27,7 @@ ok - real herdr: interrupt delivers the harness's key and proves the agent survi
 ok - real herdr Scenario A: partial input defers injection; digest arrives clean after idle
 ok - real herdr Scenario B: swallowed Enter (via the herdr shim) produces exactly one clean digest
 ok - real herdr Scenario D: a persistently pending composer raises the max-defer wedge alarm, preserves the buffer, and never crashes the daemon
-ok - real Pi 0.84.4 model turn runs inside an exact named Herdr endpoint
+ok - real Pi 0.84.4 completes Herdr state, steering, control, watcher, and cleanup lifecycle
 ```
 
 Each guard tears down only its generated lab name and uses the lab helper's default-fleet tripwire, so a pass also proves isolation and exact cleanup.

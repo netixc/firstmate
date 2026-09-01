@@ -2705,8 +2705,7 @@ fm_backend_herdr_rendered_busy_state() {  # <target> [harness] -> busy|idle|unkn
 # Confirmation signal: when the target is legibly idle before Enter,
 # submission is confirmed by fm_backend_herdr_wait_for_working observing a
 # native busy transition. An idle native result falls through to the shared
-# composer verdict, but empty remains inconclusive because interrupt recovery
-# can clear text without submitting it. Proven pending or empty retries Enter,
+# composer verdict: empty is positive delivery, proven pending retries Enter,
 # and retries-exhausted pending plus a generating busy signal is a queued Enter
 # via fm_composer_queued_enter_verdict (bin/fm-composer-lib.sh).
 #
@@ -2732,10 +2731,10 @@ fm_backend_herdr_rendered_busy_state() {  # <target> [harness] -> busy|idle|unkn
 #     across herdr's per-attempt confirmation budget (not once at the end), so a
 #     transition landing partway through a window is still caught before this
 #     loop gives up and sends a needless extra Enter.
-#   - Instant round-trip or a native status that never leaves idle: a cleared
-#     composer is inconclusive because Herdr can also clear text while recovering
-#     from an interrupt. Enter retries are harmless on an empty composer, while
-#     only a native transition can turn that cleared state into delivery proof.
+#   - Instant round-trip or a native status that never leaves idle: bounded by
+#     the composer fallback. A cleared composer is delivery; a proven-pending
+#     composer on an idle pane is a swallow; extra Enter on an already-empty
+#     composer is a no-op, not a duplicate delivery of <text>.
 # Fallback path, for a harness whose native agent-state is never legibly idle
 # mid-turn, and after - so the idle-baseline path above is structurally
 # unreachable for it). That harness always lands in the composer branch, and
@@ -2815,7 +2814,8 @@ fm_backend_herdr_send_text_submit() {  # <target> <text> <retries> <enter-sleep>
       esac
       verdict=$(fm_backend_herdr_composer_state "$target")
       case "$verdict" in
-        empty|pending|pending-unproven) ;;
+        empty) printf 'empty'; return 0 ;;
+        pending|pending-unproven) ;;
         *) printf '%s' "$verdict"; return 0 ;;
       esac
     else
@@ -2836,8 +2836,6 @@ fm_backend_herdr_send_text_submit() {  # <target> <text> <retries> <enter-sleep>
     if [ "$i" -ge "$retries" ]; then
       if [ "$enter_sent" -eq 0 ]; then
         printf 'send-failed'
-      elif [ "$baseline" = idle ] && [ "$verdict" = empty ]; then
-        printf 'pending'
       else
         fm_composer_queued_enter_verdict "$verdict" \
           "$(fm_backend_herdr_queued_enter_busy "$target" "$allow_rendered")"

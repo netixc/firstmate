@@ -8,7 +8,7 @@ Herdr provides the terminal session while Treehouse continues to provide task wo
 
 ## Setup
 
-Pick Herdr when you want native busy, idle, and blocked state and accept the experimental limits below.
+Install Herdr to use Firstmate's sole session provider, with native busy, idle, and blocked state.
 
 Prerequisites:
 
@@ -20,11 +20,8 @@ Prerequisites:
 Herdr is dual-licensed AGPL-3.0-or-later or commercial.
 Firstmate invokes its CLI as a separate process.
 
-Select Herdr with local `config/backend` containing `herdr`, `FM_BACKEND=herdr` for one launch, or an explicit request to Firstmate.
-A remote second-mate agent is the one case with no choice: it always runs on Herdr, and [`remote-secondmates.md`](remote-secondmates.md) owns that requirement and the readiness its host must meet.
-It is also auto-detected when the primary runs natively under `HERDR_ENV=1` and is not inside tmux.
-A tmux pane nested inside Herdr resolves to tmux because the innermost multiplexer wins.
-An auto-detected Herdr spawn prints an opt-out notice.
+Herdr is always selected; local `config/backend` or `FM_BACKEND` may state `herdr` explicitly, but any other value is an unsupported migration blocker rather than a provider choice.
+Remote secondmate agents also always run on Herdr, and [`remote-secondmates.md`](remote-secondmates.md) owns the readiness their hosts must meet.
 
 Spawn stops before creating a Herdr container or acquiring a task worktree when `herdr`, `jq`, or the protocol floor is unavailable.
 No separate first-run provisioning is required.
@@ -220,7 +217,7 @@ A fully unreadable target stops retrying and reports unknown.
 
 When Herdr cannot present a legibly idle native Pi baseline, the composer fallback is the only path.
 That fallback alone reported every delivered steer as unconfirmed, so it is paired with a rendered-footer transition: the pane's verified busy footer is read once before the first Enter, and an idle-to-busy transition across that Enter confirms the submit.
-It is the same semantic signal the native path uses and the same one the tmux submit core reads.
+It is the same semantic signal the native path uses.
 A pane already mid-turn cannot borrow a rendered-footer transition as proof of this delivery; after retries, only proven pending text plus native `working` can establish that its Enter was accepted and queued.
 The composer verdict itself is deliberately unchanged: a right-aligned status token on the composer row stays content for every other caller, including the away-mode pre-injection guard.
 The poll density bounds the residual possibility of an extremely fast complete turn; a missed native transition falls through to the composer verdict rather than reporting a false swallow.
@@ -263,7 +260,7 @@ This prevents closing the workspace's last tab before a replacement exists.
 
 The generic Herdr agent-liveness probe reuses the same classifier.
 A structurally gone pane becomes `missing`, a restored agent-less shell becomes `dead`, a registered agent becomes `alive`, and an unexpected read becomes `unreadable`.
-Unlike tmux process-name inspection, native registration can classify Pi without guessing from a generic interpreter name.
+Native registration classifies Pi without guessing from a generic interpreter name.
 
 The session-start sweep uses this probe.
 Mid-session secondmate agent-process liveness is not implemented because idle secondmates are deliberately exempt from stale-pane escalation and need a separate periodic identity signal.
@@ -283,8 +280,8 @@ There is still one watcher process; the event reader is a bounded child of that 
 
 ## Away-mode supervisor support
 
-The away daemon supports tmux and Herdr supervisor panes only.
-It refuses Zellij, Orca, and cmux as supervisor backends rather than applying the wrong transport.
+The away daemon supports Herdr supervisor panes only.
+Unsupported provider metadata is refused rather than applying another transport.
 For Herdr, target existence, native state, capture, composer state, and verified submit all route through the shared backend dispatcher and the explicit named-session CLI owner.
 The pane-independent max-defer alert is configured in [`wedge-alarm.md`](wedge-alarm.md).
 
@@ -317,7 +314,7 @@ Tests use thin compatibility wrappers in `tests/herdr-test-safety.sh` and never 
 - A Firstmate outside Herdr cannot resolve a launcher workspace, so a colliding home label refuses new spawns until the collision is cleared.
 - Ghost and placeholder recognition uses ANSI de-emphasis when available; an unstyled glyph row carrying trailing non-idle text fails safely to `unknown`.
 - Mid-session secondmate agent-process liveness is not implemented.
-- Only tmux and Herdr can host the away-mode supervisor terminal.
+- Only Herdr can host the away-mode supervisor terminal.
 
 ## Regression entry points
 

@@ -20,7 +20,13 @@ SESSION=$($LAB_HELPER name fm-herdr-pi-real-model-e2e)
 TMP_ROOT=$(fm_test_tmproot fm-herdr-pi-real-model-e2e)
 MODEL=${FM_HERDR_PI_REAL_MODEL:-openai-codex/gpt-5.6-sol}
 TOKEN=FM_HERDR_ONLY_REAL_MODEL_OK
+STEER_TOKEN=FM_HERDR_ONLY_STEERING_OK
 PANE=
+TAB=
+WORKSPACE=
+HOME_DIR="$TMP_ROOT/home"
+mkdir -p "$HOME_DIR/state"
+export FM_HOME="$HOME_DIR" FM_ROOT_OVERRIDE="$ROOT"
 
 cleanup() {
   local rc=$?
@@ -36,6 +42,29 @@ created=$("$LAB_HELPER" run "$SESSION" workspace create --cwd "$ROOT" --label re
   || fail "could not create the isolated real-model workspace"
 PANE=$(printf '%s' "$created" | jq -r '.result.root_pane.pane_id // empty')
 [ -n "$PANE" ] || fail "the isolated workspace returned no pane identity"
+pane_info=$("$LAB_HELPER" run "$SESSION" pane get "$PANE") || fail "could not read the exact endpoint identity"
+TAB=$(printf '%s' "$pane_info" | jq -r '.result.pane.tab_id // empty')
+WORKSPACE=$(printf '%s' "$pane_info" | jq -r '.result.pane.workspace_id // empty')
+[ -n "$TAB" ] && [ -n "$WORKSPACE" ] || fail "the exact endpoint omitted its tab or workspace identity"
+cat > "$HOME_DIR/state/real-model.meta" <<EOF
+window=$SESSION:$PANE
+endpoint_task_id=real-model
+worktree=$ROOT
+project=$ROOT
+harness=pi
+kind=ship
+backend=herdr
+herdr_session=$SESSION
+herdr_workspace_id=$WORKSPACE
+herdr_tab_id=$TAB
+herdr_pane_id=$PANE
+EOF
+
+# shellcheck source=bin/fm-backend.sh
+. "$ROOT/bin/fm-backend.sh"
+fm_backend_source herdr || fail "could not load the Herdr provider"
+fm_backend_validate_task_endpoint "$HOME_DIR/state/real-model.meta" real-model \
+  || fail "the real endpoint metadata did not preserve exact hierarchy"
 
 prompt='Use the bash tool to run sleep 3. Then reply with exactly the concatenation of FM_HERDR_ONLY_REAL_ and MODEL_OK, with no other text.'
 printf -v command 'pi --approve --no-session --no-context-files --no-extensions --model %q --thinking low %q' \
@@ -63,6 +92,47 @@ for _ in $(seq 1 180); do
 done
 [ "$answered" -eq 1 ] || fail "the real model did not return the required token"
 
-"$LAB_HELPER" run "$SESSION" pane get "$PANE" >/dev/null \
-  || fail "the exact Herdr endpoint disappeared after the provider turn"
-pass "real Pi 0.84.4 model turn runs inside an exact named Herdr endpoint"
+[ "$(fm_backend_agent_state herdr "$SESSION:$PANE")" = alive ] \
+  || fail "production liveness did not recognize the real Pi agent"
+
+steer_prompt='Reply with exactly the concatenation of FM_HERDR_ONLY_ and STEERING_OK, with no other text.'
+submit=$(fm_backend_send_text_submit herdr "$SESSION:$PANE" "$steer_prompt" 3 0.2 0.2)
+[ "$submit" = empty ] || fail "production steering did not confirm delivery: $submit"
+steered=0
+for _ in $(seq 1 120); do
+  if "$LAB_HELPER" run "$SESSION" pane read "$PANE" --source recent --lines 200 2>/dev/null \
+    | grep -Fq "$STEER_TOKEN"; then
+    steered=1
+    break
+  fi
+  sleep 1
+done
+[ "$steered" -eq 1 ] || fail "the real model did not answer the production steering path"
+
+control_prompt='Use the bash tool to run sleep 20. After it finishes, reply CONTROL_NOT_INTERRUPTED.'
+submit=$(fm_backend_send_text_submit herdr "$SESSION:$PANE" "$control_prompt" 3 0.2 0.2)
+[ "$submit" = empty ] || fail "the control turn was not delivered: $submit"
+working=0
+for _ in $(seq 1 100); do
+  state=$("$LAB_HELPER" run "$SESSION" agent get "$PANE" 2>/dev/null \
+    | jq -r '.result.agent.agent_status // empty' 2>/dev/null || true)
+  case "$state" in working|blocked) working=1; break ;; esac
+  sleep 0.1
+done
+[ "$working" -eq 1 ] || fail "Herdr never observed the real Pi control turn"
+control=$(FM_CONTROL_POLL=0.2 FM_CONTROL_EXIT_WAIT=3 "$ROOT/bin/fm-control.sh" real-model interrupt 2>&1) \
+  || fail "production control could not interrupt real Pi: $control"
+case "$control" in *"interrupt-delivered real-model"*"verified=agent-alive"*) : ;; *) fail "control lacked real-agent liveness proof: $control" ;; esac
+[ "$(fm_backend_agent_state herdr "$SESSION:$PANE")" = alive ] \
+  || fail "real Pi did not survive production interrupt control"
+
+fm_backend_events_capable herdr "$SESSION" || fail "native watcher events were unavailable after steering and control"
+watch_rc=0
+fm_backend_wait_transition herdr "$SESSION" 1 "$HOME_DIR/state" "$SESSION:$PANE" >/dev/null || watch_rc=$?
+[ "$watch_rc" -eq 1 ] || fail "native watcher continuity failed after the real Pi lifecycle (rc=$watch_rc)"
+
+fm_backend_kill herdr "$SESSION:$PANE" || fail "production cleanup could not close the exact real Pi pane"
+if "$LAB_HELPER" run "$SESSION" pane get "$PANE" >/dev/null 2>&1; then
+  fail "production cleanup left the exact real Pi endpoint alive"
+fi
+pass "real Pi 0.84.4 completes Herdr state, steering, control, watcher, and cleanup lifecycle"

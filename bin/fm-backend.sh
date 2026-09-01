@@ -95,6 +95,12 @@ fm_backend_endpoint_atom_valid() {
   case "$1" in ''|*[!A-Za-z0-9._@%+-]*) return 1 ;; esac
 }
 
+fm_backend_endpoint_child_valid() {
+  local workspace=$1 child=$2 suffix
+  case "$child" in "$workspace":*) suffix=${child#*:} ;; *) return 1 ;; esac
+  fm_backend_endpoint_atom_valid "$suffix"
+}
+
 fm_backend_validate_task_endpoint() {
   local meta=$1 id=$2 backend window worktree project binding session workspace tab pane
   FM_BACKEND_VALIDATED_BACKEND=
@@ -130,8 +136,8 @@ fm_backend_validate_task_endpoint() {
     || [ "$window" != "$session:$pane" ] \
     || ! fm_backend_endpoint_atom_valid "$session" \
     || ! fm_backend_endpoint_atom_valid "$workspace" \
-    || ! fm_backend_endpoint_atom_valid "${tab//:/_}" \
-    || ! fm_backend_endpoint_atom_valid "${pane//:/_}"; then
+    || ! fm_backend_endpoint_child_valid "$workspace" "$tab" \
+    || ! fm_backend_endpoint_child_valid "$workspace" "$pane"; then
     echo "REFUSED: Herdr endpoint metadata for task $id is malformed or inconsistent; preserving task state." >&2
     return 1
   fi
