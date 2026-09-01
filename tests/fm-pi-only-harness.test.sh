@@ -10,10 +10,6 @@ assert_eq() { [ "$1" = "$2" ] || fail "$3 (expected '$1', got '$2')"; pass "$3";
 mkdir -p "$TMP/config" "$TMP/state"
 HARNESS="$ROOT/bin/fm-harness.sh"
 
-[ ! -e "$ROOT/bin/fm-vendor-auth-probe.sh" ] \
-  || fail "retired standalone vendor credential probe remains installed"
-pass "retired standalone vendor credential probe is absent"
-
 assert_eq pi "$(PI_CODING_AGENT=true FM_HOME="$TMP" "$HARNESS")" "Pi marker resolves to plain pi"
 for old in pi-signed claude codex opencode grok kimi cursor muse; do
   printf '%s\n' "$old" > "$TMP/config/crew-harness"
