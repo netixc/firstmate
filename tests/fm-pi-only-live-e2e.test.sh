@@ -6,6 +6,7 @@ if [ "${FM_PI_ONLY_LIVE_E2E:-0}" != 1 ]; then
   exit 0
 fi
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export FM_GATE_REFUSE_BYPASS=1
 command -v pi >/dev/null 2>&1 || { echo "not ok - pi unavailable" >&2; exit 1; }
 PI_BIN=$(command -v pi)
 PI_VERSION=$($PI_BIN --version 2>/dev/null || true)
