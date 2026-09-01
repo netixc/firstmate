@@ -22,8 +22,6 @@
 . "$FM_BACKEND_LIB_DIR/fm-tmux-lib.sh"
 # shellcheck source=bin/fm-session-lock-lib.sh
 . "$FM_BACKEND_LIB_DIR/fm-session-lock-lib.sh"
-# shellcheck source=bin/fm-cursor-lib.sh
-. "$FM_BACKEND_LIB_DIR/fm-cursor-lib.sh"
 
 # fm_backend_tmux_resolve_bare_selector: the live-window-listing fallback for a
 # selector that is neither an explicit target nor a task selector routed
@@ -113,9 +111,8 @@ fm_backend_tmux_send_text_line() {  # <target> <text>
   tmux send-keys -t "$1" "$2" Enter
 }
 
-# fm_backend_tmux_send_literal: send TEXT as literal bytes with no
-# submission - the caller sends Enter separately (fm-spawn.sh's launch-command
-# send pauses between the literal send and Enter for the harness to settle).
+# fm_backend_tmux_send_literal: send TEXT as literal bytes with no submission.
+# The caller sends Enter separately after allowing plain Pi to settle.
 # Mirrors `tmux send-keys -t "$T" -l "<text>"`.
 fm_backend_tmux_send_literal() {  # <target> <text>
   tmux send-keys -t "$1" -l "$2"
@@ -158,38 +155,18 @@ fm_backend_tmux_current_command() {  # <target>
 # else. Keeping one classifier means the two independent name sources can never
 # drift into disagreeing about what a given name means.
 fm_backend_tmux_classify_process_name() {  # <path> [argv0] -> agent|shell|other
-  local path=$1 argv0=${2:-} base
+  local path=$1 argv0=${2:-} base argv0_base
   base=${path##*/}
   base=${base#-}
   case "$base" in
-    # muse is anchored rather than globbed like its neighbours: its installed
-    # binary is muse-bin-<version> (the launcher execs it, so the version is the
-    # live process name and changes on every auto-update), and unlike `claude` or
-    # `codex` the substring `muse` is a common English fragment - a *muse* glob
-    # would classify musescore or amuse as a live agent pane. The install path
-    # cannot carry it either: ~/.local/bin/muse-bin-<version> has no `muse` path
-    # COMPONENT, so the fm_harness_path_name fallback below never fires for it.
-    muse|muse-bin-*) printf 'agent' ;;
-    *claude*|*codex*|*opencode*|*grok*|*kimi*|pi|pi-signed|pi-launcher|Pi) printf 'agent' ;;
+    pi) printf 'agent' ;;
     zsh|bash|sh|dash|ash|ksh|mksh|tcsh|csh|fish) printf 'shell' ;;
     *)
-      if fm_harness_path_name "$path" >/dev/null || fm_harness_path_name "$argv0" >/dev/null; then
-        printf 'agent'
-      # cursor-agent runs as a bundled node script, so tmux reports the pane
-      # command as a bare `node` that no name pattern above can own, and its
-      # other installed name is the far-too-generic `agent` (verified live on
-      # cursor-agent 2026.08.11-e8db854: #{pane_current_command} is `node` while
-      # `ps -o comm=` carries the cursor-agent install path). Identity therefore
-      # comes from the narrowed structural rule in bin/fm-cursor-lib.sh, which
-      # demands Cursor's own name or install tree in the path or argv[0]. An
-      # unrelated `node` or `agent` matches nothing here and stays `other`,
-      # which the callers above fold into `ambiguous` rather than `dead`, so a
-      # stranger's node pane is never reported as an agent-free pane.
-      elif fm_cursor_process_matches "${path:-$argv0}" '' "$argv0"; then
-        printf 'agent'
-      else
-        printf 'other'
-      fi
+      argv0_base=${argv0##*/}
+      case "$argv0_base" in
+        pi) printf 'agent' ;;
+        *) printf 'other' ;;
+      esac
       ;;
   esac
 }
@@ -199,21 +176,15 @@ fm_backend_tmux_classify_process_name() {  # <path> [argv0] -> agent|shell|other
 # Empty on any failure.
 #
 # This is the foreground-process-group half of the liveness probe, and it exists
-# because `#{pane_current_command}` and `ps -o comm=` expose different name
-# fields whose roles vary by platform. On macOS the tmux field can carry a
-# harness-rewritten title (Claude Code 2.1.220 reports `2.1.220`) while `comm`
-# retains executable identity; the portable Linux regression observes the
-# reverse for its version-named executable. Reading both `comm` and argv[0]
-# preserves an identifying install path without making either platform's field
+# because `#{pane_current_command}` and `ps -o comm=` expose different process
+# name fields whose roles vary by platform. Reading both `comm` and argv[0]
+# preserves exact executable identity without making either platform's field
 # assignment load-bearing.
 #
 # Scoping to the foreground process group rather than to the pane's descendants
 # is what keeps the probe honest in the other direction: a harness-named process
 # left running in the background of an otherwise idle pane is deliberately NOT
-# reported, so a genuinely agent-free pane still classifies `dead`. It also
-# reports every member of a multi-process launcher (the Pi Launcher path runs a
-# `pi-signed` wrapper and a `pi` engine in one group), so no launcher needs its
-# own special case here.
+# reported, so a genuinely agent-free pane still classifies `dead`.
 #
 # Like fm_backend_tmux_current_command this is a RAW pane read: tmux answers an
 # absent target from the client's active window rather than failing, so callers
@@ -257,8 +228,8 @@ fm_backend_tmux_foreground_argv0s() {  # <target>
 # transient tmux problem never licenses a duplicate.
 #
 # The verdict combines two independent name sources rather than trusting either
-# alone. Either source naming a verified harness is enough for `alive`, because
-# a false `dead` is the one outcome that can launch a duplicate agent onto a
+# alone. Either source naming exact Pi is enough for `alive`, because a false
+# `dead` is the one outcome that can launch a duplicate agent onto a
 # live worktree, while the foreground process group - when it is readable - is
 # authoritative for the negative verdicts, since it is the only source that can
 # distinguish a truly idle pane from a rewritten process title.

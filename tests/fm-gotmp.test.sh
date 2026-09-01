@@ -55,9 +55,10 @@ make_fake_root() {
   # tmux adapter; both are unchanged by this suite's fixture, just newly
   # required siblings since the P1 backend extraction).
   ln -s "$ROOT/bin/fm-backend.sh" "$fake/bin/fm-backend.sh"
-  ln -s "$ROOT/bin/backends/tmux.sh" "$fake/bin/backends/tmux.sh"
+  cat > "$fake/bin/backends/tmux.sh" <<'SH'
+fm_backend_tmux_kill() { return 0; }
+SH
   ln -s "$ROOT/bin/fm-tmux-lib.sh" "$fake/bin/fm-tmux-lib.sh"
-  ln -s "$ROOT/bin/fm-cursor-lib.sh" "$fake/bin/fm-cursor-lib.sh"
   ln -s "$ROOT/bin/fm-composer-lib.sh" "$fake/bin/fm-composer-lib.sh"
   ln -s "$ROOT/bin/fm-nm-run-lib.sh" "$fake/bin/fm-nm-run-lib.sh"
   # fm-lock-lib.sh: teardown sources it for the shared lock-staleness proof.
@@ -89,12 +90,16 @@ make_fake_root() {
   ln -s "$ROOT/bin/fm-pending-reply-lib.sh" "$fake/bin/fm-pending-reply-lib.sh"
   ln -s "$ROOT/bin/fm-marker-lib.sh" "$fake/bin/fm-marker-lib.sh"
   ln -s "$ROOT/bin/fm-operational-input.sh" "$fake/bin/fm-operational-input.sh"
-  # fm-guard.sh: stub (teardown calls it with `|| true`).
+  # Runtime stubs keep teardown inside the disposable fixture.
+  cat > "$fake/bin/tmux" <<'SH'
+#!/usr/bin/env bash
+exit 0
+SH
   cat > "$fake/bin/fm-guard.sh" <<'SH'
 #!/usr/bin/env bash
 exit 0
 SH
-  chmod +x "$fake/bin/fm-guard.sh"
+  chmod +x "$fake/bin/tmux" "$fake/bin/fm-guard.sh"
   # fm-fleet-sync.sh: stub (called for non-scout/non-local-only teardowns).
   cat > "$fake/bin/fm-fleet-sync.sh" <<'SH'
 #!/usr/bin/env bash
@@ -111,7 +116,7 @@ SH
 window=fakeses:fm-$id
 worktree=$TMP_ROOT/nonexistent-worktree-$id
 project=$TMP_ROOT/nonexistent-project-$id
-harness=claude
+harness=pi
 kind=ship
 mode=no-mistakes
 yolo=off
@@ -132,7 +137,7 @@ test_teardown_removes_tasktmp_dir() {
   # Sanity: dir + contents exist before teardown.
   [ -d "$task_tmp/gotmp" ] || fail "precondition: gotmp missing before teardown"
   # Run the REAL teardown against the fake root.
-  FM_HOME="$fake" bash "$fake/bin/fm-teardown.sh" "$id" >/dev/null 2>&1 \
+  FM_HOME="$fake" PATH="$fake/bin:$PATH" bash "$fake/bin/fm-teardown.sh" "$id" >/dev/null 2>&1 \
     || fail "teardown exited non-zero with a valid tasktmp"
   [ ! -e "$task_tmp" ] \
     || fail "teardown did not remove the tasktmp dir ($task_tmp still exists)"
@@ -147,9 +152,10 @@ test_teardown_skips_gracefully_without_tasktmp() {
   mkdir -p "$fake/bin/backends" "$fake/state"
   ln -s "$TEARDOWN" "$fake/bin/fm-teardown.sh"
   ln -s "$ROOT/bin/fm-backend.sh" "$fake/bin/fm-backend.sh"
-  ln -s "$ROOT/bin/backends/tmux.sh" "$fake/bin/backends/tmux.sh"
+  cat > "$fake/bin/backends/tmux.sh" <<'SH'
+fm_backend_tmux_kill() { return 0; }
+SH
   ln -s "$ROOT/bin/fm-tmux-lib.sh" "$fake/bin/fm-tmux-lib.sh"
-  ln -s "$ROOT/bin/fm-cursor-lib.sh" "$fake/bin/fm-cursor-lib.sh"
   ln -s "$ROOT/bin/fm-composer-lib.sh" "$fake/bin/fm-composer-lib.sh"
   ln -s "$ROOT/bin/fm-nm-run-lib.sh" "$fake/bin/fm-nm-run-lib.sh"
   ln -s "$ROOT/bin/fm-lock-lib.sh" "$fake/bin/fm-lock-lib.sh"
@@ -194,12 +200,12 @@ SH
 window=fakeses:fm-$id
 worktree=$TMP_ROOT/nonexistent-wt-$id
 project=$TMP_ROOT/nonexistent-proj-$id
-harness=claude
+harness=pi
 kind=ship
 mode=no-mistakes
 yolo=off
 META
-  FM_HOME="$fake" bash "$fake/bin/fm-teardown.sh" "$id" >/dev/null 2>&1 \
+  FM_HOME="$fake" PATH="$fake/bin:$PATH" bash "$fake/bin/fm-teardown.sh" "$id" >/dev/null 2>&1 \
     || fail "teardown exited non-zero when tasktmp= was absent"
   pass "fm-teardown skips gracefully when tasktmp= is absent (backward compat)"
 }
@@ -212,7 +218,7 @@ test_teardown_skips_gracefully_when_dir_missing() {
   [ ! -e "$task_tmp" ] || fail "precondition: task_tmp should not exist yet"
   local fake
   fake=$(make_fake_root "$id" "$task_tmp")
-  FM_HOME="$fake" bash "$fake/bin/fm-teardown.sh" "$id" >/dev/null 2>&1 \
+  FM_HOME="$fake" PATH="$fake/bin:$PATH" bash "$fake/bin/fm-teardown.sh" "$id" >/dev/null 2>&1 \
     || fail "teardown exited non-zero when tasktmp dir was missing"
   [ ! -e "$task_tmp" ] || fail "teardown created/left the tasktmp dir unexpectedly"
   pass "fm-teardown skips gracefully when tasktmp= points to a nonexistent dir"

@@ -31,7 +31,7 @@ make_main_home() {  # <name> <mate-id>
   cat > "$home/state/$id.meta" <<META
 window=firstmate:fm-$id
 kind=secondmate
-harness=claude
+harness=pi
 backend=tmux
 spawn_gen=spawn-$id
 home=$abs
@@ -108,7 +108,7 @@ worktree=-
 project=-
 backend=herdr
 endpoint_task_id=$1
-harness=claude
+harness=pi
 herdr_session=fm-remote
 herdr_workspace_id=w1
 herdr_tab_id=t1
@@ -129,7 +129,7 @@ make_remote_parent_home() {  # <name> <mate-id> <remote-home> <host> -> echoes h
   cat > "$home/state/$id.meta" <<META
 window=remote:$id
 endpoint_task_id=$id
-harness=claude
+harness=pi
 kind=secondmate
 mode=secondmate
 yolo=off
@@ -536,7 +536,7 @@ SH
     cat > "$home/state/mate.meta" <<META
 window=firstmate:fm-mate
 kind=secondmate
-harness=claude
+harness=pi
 backend=tmux
 spawn_gen=spawn-replacement
 home=$mate

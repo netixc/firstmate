@@ -29,7 +29,6 @@ Markers are compact trailing HTML comments, deliberately cheap because marker by
 - Treehouse pool slots share one repo, so workers must create their task branch before editing. <!--a:2026-08-03-->
 - While state/.afk exists, the away-daemon owns triage (until the afk-wake fix lands; tracked: afk-pi-wake-bypass-r1). <!--p:2026-07-20-->
 - Never restart the shared no-mistakes daemon while runs are active. <!--P-->
-- Codex writes its trust prompt to stderr, not stdout. <!--a:2026-07-28/6-->
 ```
 
 The tier names say what the pass does with an entry:
@@ -175,7 +174,7 @@ Approved project-level destinations are not produced by stow: they ship normally
 - A user-owned local skill: a directory under `.agents/skills/<freeform-name>/` whose path is appended to the active home clone's repository-local exclude file, never to a `.gitignore`.
   Resolve `home_root` to `$FM_HOME` when it is set and otherwise to the Firstmate code root, and anchor every destination index check, exclude-path lookup, and ignore verification to that root with `git -C "$home_root"`.
   Before approval and again before migration, validate that the chosen freeform destination under `home_root` is absent from that home's git index and collides with no existing file or directory, and reject the destination if either check fails.
-  The name is freeform with no user-vs-firstmate naming convention, the skill stays per-home and untracked, and the harness still lists and JIT-loads it because skill discovery scans the filesystem and ignores git status (verified in `docs/verification/stow-memory.md`).
+  The name is freeform with no user-vs-firstmate naming convention, the skill stays per-home and untracked, and Pi still lists and JIT-loads it because skill discovery scans the filesystem and ignores git status.
   Its precise, condition-stated description line is its entire trigger; it gets no `AGENTS.md` declaration because `AGENTS.md` is shared tracked material.
   Because this destination is local and untracked, it is also the JIT home for private conditional knowledge that no committed surface may hold.
 - An already-existing user-owned local on-demand note with an established trigger, after confirming it is untracked, private, and able to hold the quoted entry.

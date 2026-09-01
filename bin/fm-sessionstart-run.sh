@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# Session-open entry point for harnesses that RUN the digest instead of asking
-# the agent to. It is the one command those harnesses' session-open adapters
-# invoke, and it decides, from the session-open source, whether this open needs
-# the full digest, a context re-emit, or nothing at all.
+# Session-open entry point for Pi's native extension, which runs the digest
+# instead of asking the agent to. Pi's session-open source determines whether
+# this open needs the full digest, a context re-emit, or nothing at all.
 #
 # Why running beats nudging: bin/fm-sessionstart-nudge.sh can only ASK the agent
 # to take the helm, and an agent can defer that, including when a first-command
@@ -12,10 +11,9 @@
 # first turn is.
 #
 # Usage: fm-sessionstart-run.sh [--source <source>] [--pi-prerequisite]
-#   --source  The harness's own session-open source. When omitted, the source is
-#             read from a Claude/Codex-shaped JSON hook payload on stdin
-#             (the `source` field). An unreadable or unrecognized source is
-#             treated as `startup`, because taking the helm redundantly is
+#   --source  Pi's session-open source. When omitted, startup is used. An
+#             unreadable or unrecognized source is also treated as startup,
+#             because taking the helm redundantly is
 #             cheap and idempotent while not taking it is the whole bug.
 #   --pi-prerequisite
 #             Internal Pi extension mode. An intentional gate/scope stand-down
@@ -23,7 +21,7 @@
 #             native attempt that settled without output. Every ordinary hook
 #             invocation retains the always-zero compatibility contract below.
 #
-# Source routing (see docs/sessionstart-nudge.md for the per-harness names):
+# Source routing (see docs/sessionstart-nudge.md):
 #   startup, new            full digest - this process has not taken the helm
 #   clear, compact          `--reemit` digest only when this lock owner recorded
 #                           a completed full startup; otherwise a full digest,
@@ -35,7 +33,6 @@
 #                           process resumed an old session (the nudge fires).
 #
 # Every ordinary transport path exits 0, exactly like the nudge wrapper: a
-# Claude SessionStart exit 2 blocks session initialization, so a failed session
 # start must reach the agent as digest text it can act on, never as a refusal to
 # open the session. The internal Pi prerequisite's silent exit 3 never reaches a
 # harness hook; it only distinguishes intentional ineligibility before provider
@@ -56,8 +53,6 @@ COMPLETION_FILE="$STATE/.session-start-complete"
 . "$SCRIPT_DIR/fm-primary-scope-lib.sh"
 # shellcheck source=bin/fm-session-lock-lib.sh
 . "$SCRIPT_DIR/fm-session-lock-lib.sh"
-# shellcheck source=bin/fm-hook-host-lib.sh
-. "$SCRIPT_DIR/fm-hook-host-lib.sh"
 
 SOURCE=
 PI_PREREQUISITE=0
@@ -100,32 +95,7 @@ session_start_completed() {
   [ "$completion_pid" = "$lock_pid" ]
 }
 
-if [ -z "$SOURCE" ] && [ ! -t 0 ]; then
-  # Claude and Codex both deliver a JSON SessionStart payload on stdin whose
-  # `source` field carries startup|resume|clear|compact. Parsed without jq so a
-  # host missing it still gets correct routing rather than silent full runs.
-  # A terminal stdin is skipped outright: a hook always pipes its payload, and
-  # an operator running this by hand must not be left waiting on a read.
-  # Splitting on the quote character finds the FIRST "source" key and its value
-  # without depending on greedy-regex luck, and it cannot mistake a string VALUE
-  # of "source" for the key, because only a key is followed by a bare colon.
-  PAYLOAD=$(cat 2>/dev/null || true)
-  # Cursor loads the tracked Claude settings as well as its own registration,
-  # so a Cursor-delivered payload here is the duplicate: bin/fm-sessionstart-
-  # cursor.sh already owns that session open and calls this wrapper with an
-  # explicit --source and no payload. Running twice would take the helm twice
-  # and repeat every startup sweep.
-  if fm_hook_payload_is_foreign_host "$PAYLOAD"; then
-    exit 0
-  fi
-  SOURCE=$(printf '%s' "$PAYLOAD" | awk '
-    BEGIN { RS = "\"" }
-    seen == 2 { print; exit }
-    seen == 1 && $0 ~ /^[[:space:]]*:[[:space:]]*$/ { seen = 2; next }
-    seen == 1 { seen = 0 }
-    $0 == "source" { seen = 1 }
-  ')
-fi
+
 
 case "$SOURCE" in
   resume|reload|fork)

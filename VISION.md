@@ -52,14 +52,14 @@ Workers are supervised, not trusted: independent validation, behavioral tests, a
 Unlanded work is never torn down; a refusal to discard is a finding, not an obstacle.
 A new task shape earns its way in only when existing primitives genuinely cannot compose to cover it; simplicity is a capability the fleet defends.
 
-## The fleet outlives any vendor
+## The fleet remains inspectable
 
 The first mate is not another harness and not another orchestrator app.
-The experience it creates is a new way of working, orthogonal to which agent harness or session manager the captain already uses.
-It is an agent distro, not an app: instructions, skills, scripts, and state conventions that any verified harness can inhabit - Claude Code, Codex, Pi, and others - and that run across session managers such as tmux, Herdr, and Orca.
+The experience it creates is a new way of working, with the agent runtime kept separate from the session manager the captain uses.
+It is an agent distro, not an app: instructions, skills, scripts, and state conventions loaded through plain Pi and run across session managers such as tmux, Herdr, and Orca.
 The first mate can read, understand, and evolve every part of itself: plain instructions, scripts, and text records keep the whole system introspectable, hot-modifiable, and self-evolving by the very agent that runs it.
 When something is not working well, the captain can ask the first mate and it figures it out; captains using their own firstmate to improve the shared surface is how the fleet evolves in the open.
-Harness adapters earn trust through verification, and the fleet keeps sailing when any one vendor's tool degrades.
+Runtime integration earns trust through verification, and session-manager choices remain replaceable without changing the distro's operating contracts.
 Contracts bind to semantics a vendor actually exposes, never to the pixels of today's UI.
 Quota, model, and effort choices stay inspectable and captain-owned; the first mate never downgrades the intelligence doing the work without the captain's standing, explicit permission.
 
@@ -72,4 +72,4 @@ The shared surface is generic and captain-agnostic; everything personal - prefer
 This repository ships through its own discipline: firstmate work is validated like any other project's, and field incidents become regression coverage.
 
 A change aligns when it deepens the captain's peace of mind, confidence, and ease of looking away, gives more shipped outcomes per unit of attention and tokens, makes delegation safer or more legible, strengthens a refusal path, keeps the system introspectable, hot-modifiable, and self-evolving, or lets the fleet survive another failure mode.
-A change should be resisted when it trades that experience for more noise or more context-switching, lets the fleet act beyond adjudicable intent, assumes consent instead of asking for it, adds a layer between intent and action, mixes scripted mechanics with agent judgment, spends tokens where a script would do, serves anyone but the captain, couples the distro to one vendor or session manager, buries an outcome in mechanics, or grows the command layer into the workshop it commands.
+A change should be resisted when it trades that experience for more noise or more context-switching, lets the fleet act beyond adjudicable intent, assumes consent instead of asking for it, adds a layer between intent and action, mixes scripted mechanics with agent judgment, spends tokens where a script would do, serves anyone but the captain, couples the distro's operating contracts to one session manager or model provider, buries an outcome in mechanics, or grows the command layer into the workshop it commands.

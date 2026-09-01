@@ -78,7 +78,7 @@ case "\${1:-}" in
   display-message)
     case "\$*" in
       *'#{pane_current_path}'*) cut -d'|' -f2- "\$state" ;;
-      *'#{pane_current_command}'*) printf 'codex\n' ;;
+      *'#{pane_current_command}'*) printf 'pi\n' ;;
       *'#{cursor_y}'*) printf '0\n' ;;
       *'#S'*) printf 'firstmate\n' ;;
       *) printf '%%1\n' ;;
@@ -88,7 +88,7 @@ case "\${1:-}" in
   capture-pane) printf '❯\n'; exit 0 ;;
   send-keys) [ ! -f "\$fail_send" ] || exit 1; exit 0 ;;
   kill-window) rm -f -- "\$state"; exit 0 ;;
-  list-panes) printf 'codex\n'; exit 0 ;;
+  list-panes) printf 'pi\n'; exit 0 ;;
 esac
 exit 0
 SH
@@ -120,7 +120,7 @@ git -C "$PARENT/projects/alpha" push -q -u origin main
 cat > "$PARENT/data/projects.md" <<EOF
 - alpha [direct-PR] - alpha project (added 2026-08-02)
 EOF
-printf 'codex\n' > "$PARENT/config/secondmate-harness"
+printf 'pi\n' > "$PARENT/config/secondmate-harness"
 printf 'tmux\n' > "$PARENT/config/backend"
 printf 'primary harness defaults\n' > "$PARENT/config/crew-harness"
 
@@ -211,7 +211,7 @@ case "${FM_FAKE_SSH_MODE:-normal}:$command_name:$command_rel" in
     printf 'schema=fm-remote-secondmate-control.v1\n'
     printf 'backend=tmux\n'
     printf 'target=firstmate:fm-ios\n'
-    printf 'harness=codex\n'
+    printf 'harness=pi\n'
     exit 0
     ;;
   launch-default-session-route:fm-remote-secondmate-control.sh:*)
@@ -220,7 +220,7 @@ case "${FM_FAKE_SSH_MODE:-normal}:$command_name:$command_rel" in
     printf 'backend=herdr\n'
     printf 'target=default:w1:p2\n'
     printf 'herdr_session=default\n'
-    printf 'harness=codex\n'
+    printf 'harness=pi\n'
     exit 0
     ;;
   provision-block-fail:fm-remote-home-provision.sh:*)
@@ -750,7 +750,7 @@ if remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh route ios
   || remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh capture ios >/dev/null 2>&1 \
   || remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh observe ios >/dev/null 2>&1 \
   || remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh retire ios --force >/dev/null 2>&1 \
-  || remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh launch ios codex - - herdr >/dev/null 2>&1; then
+  || remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh launch ios pi - - herdr >/dev/null 2>&1; then
   fail "legacy default-session metadata remained operational"
 fi
 cmp -s "$TMP_ROOT/herdr-before-default-session.log" "$HERDR_LOG" \
@@ -801,14 +801,14 @@ cat > "$remote_route_meta" <<EOF
 window=firstmate:fm-ios
 worktree=$REMOTE_HOME
 project=$REMOTE_ROOT
-harness=codex
+harness=pi
 kind=secondmate
 backend=tmux
 EOF
 cp "$remote_route_meta" "$TMP_ROOT/remote-ios-legacy-before-refusal.meta"
 printf 'fm-ios|%s\n' "$REMOTE_HOME" > "$TMUX_STATE"
 set +e
-remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh launch ios codex - - herdr \
+remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh launch ios pi - - herdr \
   > "$TMP_ROOT/legacy-alive-refusal.out" 2>&1
 legacy_alive_rc=$?
 set -e
@@ -907,7 +907,8 @@ pass "marked send and routed reply complete through the existing parent correlat
 rm -f "$PARENT/state/.wake-queue"
 
 printf '{"revision":2}\n' > "$PARENT/config/crew-dispatch.json"
-printf 'grok\n' > "$PARENT/config/crew-harness"
+printf 'pi\n' > "$PARENT/config/crew-harness"
+printf 'default\n' > "$REMOTE_HOME/config/crew-harness"
 set +e
 FM_FAKE_SSH_MODE=inherit-partial remote_env "$ROOT/bin/fm-config-push.sh" \
   > "$TMP_ROOT/config-partial.out" 2>&1
@@ -915,14 +916,14 @@ config_partial_rc=$?
 set -e
 [ "$config_partial_rc" -ne 0 ] || fail "partial remote inheritance claimed complete convergence"
 assert_grep '"revision":2' "$REMOTE_HOME/config/crew-dispatch.json" "partial inheritance did not apply its first file"
-[ "$(cat "$REMOTE_HOME/config/crew-harness")" != grok ] \
+[ "$(cat "$REMOTE_HOME/config/crew-harness")" != pi ] \
   || fail "partial inheritance unexpectedly applied the failed file"
 NUDGE_MARKER="$PARENT/state/.secondmate-nudge-pending/ios.pending"
 assert_grep 'remote=1' "$NUDGE_MARKER" "partial inheritance left no durable remote reread marker"
 publish_healthy_watcher_identity "$PARENT/state" "$PARENT" "$REMOTE_ROOT/bin/fm-watch.sh"
 remote_env "$ROOT/bin/fm-bootstrap.sh" > "$TMP_ROOT/config-partial-retry.out" \
   || fail "bootstrap did not converge partial remote inheritance"
-[ "$(cat "$REMOTE_HOME/config/crew-harness")" = grok ] \
+[ "$(cat "$REMOTE_HOME/config/crew-harness")" = pi ] \
   || fail "bootstrap did not apply the remaining inherited file"
 assert_absent "$NUDGE_MARKER" "bootstrap cleared no remote reread marker after convergence"
 PARTIAL_CONFIG_CORR=$(newest_remote_inbox_corr)
@@ -974,22 +975,39 @@ wait "$config_second" || fail "bootstrap inheritance transaction failed after wa
   || fail "later bootstrap convergence was overwritten by stale inherited bytes"
 pass "config push and bootstrap serialize remote inheritance convergence"
 
-printf 'codex\n' > "$PARENT/config/crew-harness"
+printf 'pi\n' > "$PARENT/config/crew-harness"
 # A failed reread nudge now means the durable remote inbox RECORD could not be
-# written (a swallowed doorbell alone no longer fails a recorded steer), so
-# the failure is induced by making the remote steering inbox unwritable.
-chmod 555 "$REMOTE_HOME/state/parent-route/ios.inbox"
+# written (a swallowed doorbell alone no longer fails a recorded steer). A
+# regular file at the inbox path is a deterministic publication failure even
+# for privileged CI users; permission-bit fixtures are not. Seed the pending
+# reread record so an otherwise unchanged push must retry delivery.
+mkdir -p "${NUDGE_MARKER%/*}"
+cat > "$NUDGE_MARKER" <<EOF
+id=ios
+selector=fm-ios
+home=$REMOTE_HOME
+commit=
+instructions=remote
+message=Firstmate instructions or inherited config changed on this host. Re-read AGENTS.md and the inherited config files before further work.
+remote=1
+EOF
+chmod 600 "$NUDGE_MARKER"
+mv "$REMOTE_HOME/state/parent-route/ios.inbox" "$REMOTE_HOME/state/parent-route/ios.inbox.saved"
+: > "$REMOTE_HOME/state/parent-route/ios.inbox"
 if remote_env "$ROOT/bin/fm-config-push.sh" > "$TMP_ROOT/config-push-fail.out" 2>&1; then
-  chmod 755 "$REMOTE_HOME/state/parent-route/ios.inbox"
+  rm -f "$REMOTE_HOME/state/parent-route/ios.inbox"
+  mv "$REMOTE_HOME/state/parent-route/ios.inbox.saved" "$REMOTE_HOME/state/parent-route/ios.inbox"
   fail "remote config push claimed success after its reread record could not be written"
 fi
 if [ ! -f "$NUDGE_MARKER" ]; then
-  chmod 755 "$REMOTE_HOME/state/parent-route/ios.inbox"
+  rm -f "$REMOTE_HOME/state/parent-route/ios.inbox"
+  mv "$REMOTE_HOME/state/parent-route/ios.inbox.saved" "$REMOTE_HOME/state/parent-route/ios.inbox"
   printf 'config push failure output:\n%s\n' "$(cat "$TMP_ROOT/config-push-fail.out")" >&2
   fail "failed remote config reread did not retain a retry marker"
 fi
 assert_grep 'remote=1' "$NUDGE_MARKER" "remote config reread marker lost its placement"
-chmod 755 "$REMOTE_HOME/state/parent-route/ios.inbox"
+rm -f "$REMOTE_HOME/state/parent-route/ios.inbox"
+mv "$REMOTE_HOME/state/parent-route/ios.inbox.saved" "$REMOTE_HOME/state/parent-route/ios.inbox"
 remote_env "$ROOT/bin/fm-config-push.sh" > "$TMP_ROOT/config-push-retry.out" \
   || fail "unchanged remote config push did not retry its pending reread"
 assert_absent "$NUDGE_MARKER" "successful remote config reread left its retry marker"
@@ -1081,7 +1099,7 @@ cat > "$remote_route_meta" <<EOF
 window=firstmate:fm-ios
 worktree=$REMOTE_HOME
 project=$REMOTE_ROOT
-harness=codex
+harness=pi
 kind=secondmate
 backend=tmux
 EOF

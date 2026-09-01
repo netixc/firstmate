@@ -7,7 +7,7 @@ Load this with the running or recorded tool reference for trust, skill invocatio
 The router owns lifecycle-only control and recorded-harness selection.
 Conversation and harness-native skill invocation use `../../../bin/fm-send.sh`.
 `../../../docs/agent-control.md` owns the data-plane split, and `../../../bin/fm-control-lib.sh` owns executable capabilities.
-Tool-reference exit and interrupt values are empirical records, not keys to improvise; a new adapter remains uncontrollable until they land in that owner.
+The Pi reference's exit and interrupt values are empirical records, not keys to improvise; unknown identities remain uncontrollable.
 Let the control plane verify postconditions.
 
 ## Trust and skill submission

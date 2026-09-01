@@ -63,7 +63,6 @@ run_guard_case_read_only() {
     "$ROOT/bin/fm-guard.sh" 2>&1
 }
 
-# The Claude Stop auto-arm model: the watcher runs only between turns, so a fresh
 # beacon with no live watcher process is the healthy mid-turn state.
 run_guard_case_autoarm() {
   local dir=$1
@@ -345,44 +344,6 @@ test_read_only_never_mutates_stale_banner_state_files() {
   pass "fm-guard stale banner: read-only never mutates stale-banner state files"
 }
 
-test_autoarm_fresh_beacon_without_watcher_is_healthy() {
-  local dir out
-  dir=$(make_guard_case autoarm-fresh)
-  # A fresh beacon and NO live watcher: the healthy mid-turn state under the
-  # Claude Stop auto-arm model, where the watcher only runs between turns.
-  touch "$(case_home "$dir")/state/.last-watcher-beat"
-  out=$(run_guard_case_autoarm "$dir")
-  [ -z "$out" ] \
-    || fail "auto-arm model with a fresh beacon and no live watcher must stay silent, got: $out"
-  pass "fm-guard stale banner: auto-arm fresh beacon without a live watcher is healthy"
-}
-
-test_autoarm_stale_beacon_alarms_with_correct_reason() {
-  local dir out
-  dir=$(make_guard_case autoarm-stale)
-  # No beacon at all -> a genuine supervision lapse even under the auto-arm model.
-  out=$(run_guard_case_autoarm "$dir")
-  [ "$(count_text "$out" "WATCHER DOWN - SUPERVISION IS OFF")" -eq 1 ] \
-    || fail "auto-arm model with an absent/stale beacon must alarm: $out"
-  assert_contains "$out" "no watcher has a fresh beacon" \
-    "auto-arm stale-beacon banner must name the stale-beacon reason"
-  pass "fm-guard stale banner: auto-arm stale beacon alarms with the true reason"
-}
-
-test_autoarm_stale_episode_is_stable() {
-  local dir out1 out2
-  dir=$(make_guard_case autoarm-stable-episode)
-  out1=$(run_guard_case_autoarm "$dir")
-  out2=$(run_guard_case_autoarm "$dir")
-  [ "$(count_text "$out1" "WATCHER DOWN - SUPERVISION IS OFF")" -eq 1 ] \
-    || fail "first auto-arm stale call did not print the full banner: $out1"
-  [ "$(count_text "$out2" "WATCHER DOWN - SUPERVISION IS OFF")" -eq 0 ] \
-    || fail "auto-arm stale episode re-printed the full banner instead of deduping: $out2"
-  assert_contains "$out2" "full banner already printed this episode" \
-    "second auto-arm stale call did not print the concise reminder"
-  pass "fm-guard stale banner: auto-arm stale episode stays one episode across calls"
-}
-
 test_persistent_no_watcher_banner_names_missing_process() {
   local dir out
   dir=$(make_guard_case persistent-no-watcher-reason)
@@ -655,29 +616,20 @@ test_extension_live_watcher_is_healthy_without_ownership_evidence() {
 # a real Pi home. The foreign markers are cleared because fm-harness.sh tests them
 # ahead of Pi, and the host running this suite may carry one.
 test_pi_harness_routes_itself_to_the_extension_model() {
-  local dir home out pid harness
-  local -a pi_env
-  for harness in pi pi-signed; do
-    pi_env=(PI_CODING_AGENT=true)
-    [ "$harness" = pi ] || pi_env+=(FM_PI_HARNESS=pi-signed)
-    dir=$(make_guard_case "harness-routing-$harness")
-    home=$(case_home "$dir")
-    sleep 60 &
-    pid=$!
-    record_pi_extension_session "$dir" "$pid" || fail "could not record the Pi extension session"
-    touch "$home/state/.last-watcher-beat"
-    out=$(env -u CLAUDECODE -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u GROK_AGENT -u FM_SUPERVISION_MODEL \
-      "${pi_env[@]}" \
-      FM_ROOT_OVERRIDE="$(case_root "$dir")" \
-      FM_HOME="$home" \
-      FM_GUARD_GRACE=999 \
-      "$ROOT/bin/fm-guard.sh" 2>&1)
-    kill "$pid" 2>/dev/null || true
-    wait "$pid" 2>/dev/null || true
-    [ -z "$out" ] \
-      || fail "a $harness primary must route itself to the extension model, got: $out"
-  done
-  pass "fm-guard stale banner: Pi and pi-signed primaries route themselves to the extension model"
+  local dir home out pid
+  dir=$(make_guard_case harness-routing-pi)
+  home=$(case_home "$dir")
+  sleep 60 &
+  pid=$!
+  record_pi_extension_session "$dir" "$pid" || fail "could not record the Pi extension session"
+  touch "$home/state/.last-watcher-beat"
+  out=$(env -u FM_SUPERVISION_MODEL PI_CODING_AGENT=true \
+    FM_ROOT_OVERRIDE="$(case_root "$dir")" FM_HOME="$home" FM_GUARD_GRACE=999 \
+    "$ROOT/bin/fm-guard.sh" 2>&1)
+  kill "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+  [ -z "$out" ] || fail "a Pi primary must route itself to the extension model, got: $out"
+  pass "fm-guard stale banner: the plain Pi primary routes itself to the extension model"
 }
 
 test_first_stale_call_prints_full_banner
@@ -692,9 +644,6 @@ test_extension_stale_beacon_alarms_despite_live_session
 test_extension_handoff_keeps_queued_wake_warning
 test_persistent_model_ignores_pi_extension_evidence
 test_extension_live_watcher_is_healthy_without_ownership_evidence
-test_autoarm_fresh_beacon_without_watcher_is_healthy
-test_autoarm_stale_beacon_alarms_with_correct_reason
-test_autoarm_stale_episode_is_stable
 test_persistent_no_watcher_banner_names_missing_process
 test_persistent_no_watcher_episode_survives_beacon_touch
 test_fresh_beacon_without_live_watcher_stays_alarm

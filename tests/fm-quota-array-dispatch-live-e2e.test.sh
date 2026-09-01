@@ -29,7 +29,9 @@ LAB=$(mktemp -d "${TMPDIR:-/tmp}/fm-quota-array-dispatch-live.XXXXXX")
 PROJECT="$LAB/project"
 FAKEBIN="$LAB/fakebin"
 FIXTURE="$LAB/quota.json"
+AUTH_FIXTURE="$LAB/quota-auth.json"
 CALLS="$LAB/quota-axi.calls"
+VENDOR_CALLS="$LAB/vendor.calls"
 
 cleanup() {
   rm -rf "$LAB"
@@ -148,6 +150,10 @@ case "$*" in
     record JSON
     cat "${QUOTA_AXI_FIXTURE:?}"
     ;;
+  "auth --json")
+    record AUTH
+    cat "${QUOTA_AXI_AUTH_FIXTURE:?}"
+    ;;
   *)
     printf 'unexpected quota-axi invocation: %s\n' "$*" >&2
     exit 64
@@ -155,18 +161,34 @@ case "$*" in
 esac
 SH
 chmod +x "$FAKEBIN/quota-axi"
+cat > "$FAKEBIN/grok" <<'SH'
+#!/usr/bin/env bash
+printf 'grok %s\n' "$*" >> "${VENDOR_CALLS:?}"
+exit 97
+SH
+chmod +x "$FAKEBIN/grok"
 
 write_fixture() {
   cat > "$FIXTURE"
 }
 
+write_auth_fixture() {
+  cat > "$AUTH_FIXTURE"
+}
+
+write_auth_fixture <<'JSON'
+{"providers":[]}
+JSON
+
 run_case() {
   local label=$1 expected=$2 expected_calls=$3 prompt=$4 out calls required
   shift 4
   : > "$CALLS"
+  : > "$VENDOR_CALLS"
   out=$(
     cd "$PROJECT" &&
       PATH="$FAKEBIN:$PATH" QUOTA_AXI_CALLS="$CALLS" QUOTA_AXI_FIXTURE="$FIXTURE" \
+        QUOTA_AXI_AUTH_FIXTURE="$AUTH_FIXTURE" VENDOR_CALLS="$VENDOR_CALLS" \
         pi --print --approve --no-session --no-context-files --no-extensions \
           --no-skills --skill .agents/skills --tools bash \
           --model openai-codex/gpt-5.6-sol --thinking high \
@@ -174,6 +196,8 @@ run_case() {
   ) || fail "$label: Pi skill run failed: $out"
   calls=$(cat "$CALLS")
   [ "$calls" = "$expected_calls" ] || fail "$label: unexpected quota-axi call sequence: $calls"
+  [ ! -s "$VENDOR_CALLS" ] \
+    || fail "$label: retired vendor CLI was invoked: $(cat "$VENDOR_CALLS")"
   printf '%s\n' "$out" | grep -Fxq "$expected" \
     || fail "$label: expected final line $expected, got: $out"
   for required in "$@"; do
@@ -270,6 +294,30 @@ run_case \
   "FACT=claude|headroom=80|spendPriority=-1.1111|runway_seconds=241920" \
   "FACT=codex|headroom=20|spendPriority=-0.8333|runway_seconds=90720"
 
+write_auth_fixture <<'JSON'
+{
+  "providers": [
+    {
+      "provider": "codex",
+      "sources": [
+        {"id": "codex:account", "status": "authenticated"}
+      ]
+    }
+  ]
+}
+JSON
+run_case \
+  "missing matching authentication evidence stays disclosed uncertainty" \
+  "SELECTED=codex" \
+  "TOON
+AUTH" \
+  "Resolve this matched plain-Pi dispatch profile array now. Load quota-array-dispatch, run quota-axi with no flags exactly once, then read quota-axi auth --json because authentication evidence is in question. Both Pi profiles have comparable required fit, catalog-supported models, the same strongest reasoning class, and known runway supporting the two-hour completion horizon. The authentication result has a healthy matching source for Pi's Codex-family profile but no matching source for Pi's Claude-family profile. Treat that missing source as disclosed uncertainty, not ineligibility, and do not invoke any vendor CLI. Return exact lines FACT=claude|eligible=yes|auth=unknown|spendPriority=-1.1111 and FACT=codex|eligible=yes|auth=authenticated|spendPriority=-0.8333, then the exact final line SELECTED=codex. Do not use other commands and do not modify files." \
+  "FACT=claude|eligible=yes|auth=unknown|spendPriority=-1.1111" \
+  "FACT=codex|eligible=yes|auth=authenticated|spendPriority=-0.8333"
+
+write_auth_fixture <<'JSON'
+{"providers":[]}
+JSON
 write_fixture <<'JSON'
 {
   "generatedAt": "2030-01-01T00:00:00Z",

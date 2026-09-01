@@ -101,8 +101,7 @@ init_changed_fixture_repo() {
     fm-test-run.test.sh \
     fm-cd-pretool-check.test.sh \
     fm-daemon.test.sh \
-    fm-harness-adapter-instructions-live-e2e.test.sh \
-    fm-harness-adapter-references.test.sh \
+    fm-pi-only-live-e2e.test.sh \
     fm-backend-herdr-smoke.test.sh \
     fm-secondmate-safety.test.sh \
     fm-session-start.test.sh \
@@ -132,8 +131,6 @@ init_changed_fixture_repo() {
   # shellcheck disable=SC2016  # literal fixture text: the reference must reach
   # the file verbatim so the changed-file scan can find it, not expand here.
   printf '. "$ROOT/bin/shared-probe-lib.sh"\n' >"$repo/bin/fm-watch-probe.sh"
-  printf '# .claude/settings.json\n# .pi/extensions/fm-primary-turnend-guard.ts\n' \
-    >>"$repo/tests/fm-cd-pretool-check.test.sh"
   printf '# .pi/extensions/fm-primary-pi-watch.ts\n' >>"$repo/tests/fm-pi-watch-extension.test.sh"
   mkdir -p \
     "$repo/.agents/skills/example" \
@@ -142,7 +139,6 @@ init_changed_fixture_repo() {
   : >"$repo/.agents/skills/example/SKILL.md"
   : >"$repo/.agents/skills/harness-adapters/SKILL.md"
   : >"$repo/.agents/skills/harness-adapters/references/common/dispatch.md"
-  : >"$repo/.claude/settings.json"
   : >"$repo/.pi/extensions/fm-primary-pi-watch.ts"
   : >"$repo/.pi/extensions/fm-primary-turnend-guard.ts"
   : >"$repo/docs/fm-test-isolation-proof.md"
@@ -228,7 +224,6 @@ test_changed_dependency_selection_and_unmapped_failure() {
   git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm supervisor-change
 
   printf '\n' >>"$repo/.agents/skills/example/SKILL.md"
-  printf '\n' >>"$repo/.claude/settings.json"
   printf '\n' >>"$repo/.pi/extensions/fm-primary-pi-watch.ts"
   printf '\n' >>"$repo/.pi/extensions/fm-primary-turnend-guard.ts"
   listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD)
@@ -240,15 +235,13 @@ test_changed_dependency_selection_and_unmapped_failure() {
 
   printf '\n' >>"$repo/.agents/skills/harness-adapters/references/common/dispatch.md"
   listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD)
-  assert_contains "$listed" "tests/fm-harness-adapter-references.test.sh" "harness adapter reference selects portable structural coverage"
-  assert_contains "$listed" "tests/fm-harness-adapter-instructions-live-e2e.test.sh" "harness adapter reference selects opt-in instruction coverage"
+  assert_contains "$listed" "tests/fm-pi-only-live-e2e.test.sh" "harness adapter reference selects real Pi integration coverage"
   git -C "$repo" add .agents/skills/harness-adapters
   git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm harness-adapter-reference-change
 
   printf '\n' >>"$repo/.agents/skills/harness-adapters/SKILL.md"
   listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD)
-  assert_contains "$listed" "tests/fm-harness-adapter-references.test.sh" "harness adapter router selects portable structural coverage"
-  assert_contains "$listed" "tests/fm-harness-adapter-instructions-live-e2e.test.sh" "harness adapter router selects opt-in instruction coverage"
+  assert_contains "$listed" "tests/fm-pi-only-live-e2e.test.sh" "harness adapter router selects real Pi integration coverage"
   git -C "$repo" add .agents/skills/harness-adapters/SKILL.md
   git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm harness-adapter-router-change
 

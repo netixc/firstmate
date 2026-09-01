@@ -57,7 +57,7 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(CDPATH='' cd "$SCRIPT_DIR/.." && pwd -P)}"
 # shellcheck source=bin/fm-tasks-axi-lib.sh
 . "$SCRIPT_DIR/fm-tasks-axi-lib.sh"
 REQUIRED_TOOLS=(git jq herdr tasks-axi treehouse)
-HARNESS_TOOLS=(claude codex opencode pi pi-signed grok kimi)
+HARNESS_TOOLS=(pi)
 OPTIONAL_TOOLS=(tmux no-mistakes gh)
 LAUNCH_AGENT_LABEL=dev.firstmate.herdr.fm-remote
 # The dedicated remote-secondmate session. The user's interactive Herdr work
@@ -310,7 +310,7 @@ check_remote_job_worker() {
 }
 
 report_required_tools() {
-  local tool resolved harness
+  local tool resolved harness version
   MISSING=()
   for tool in "${REQUIRED_TOOLS[@]}"; do
     resolved=$(command -v "$tool" 2>/dev/null || true)
@@ -329,7 +329,13 @@ report_required_tools() {
   for harness in "${HARNESS_TOOLS[@]}"; do
     resolved=$(command -v "$harness" 2>/dev/null || true)
     if [ -n "$resolved" ] && [ -x "$resolved" ]; then
-      printf 'required harness=%s:%s\n' "$harness" "$resolved"
+      version=$("$resolved" --version 2>/dev/null || true)
+      if [ "$version" = 0.84.4 ]; then
+        printf 'required harness=%s:%s\n' "$harness" "$resolved"
+        return 0
+      fi
+      printf 'required harness=MISSING (pi version %s; requires 0.84.4)\n' "${version:-unknown}"
+      MISSING+=(harness)
       return 0
     fi
   done

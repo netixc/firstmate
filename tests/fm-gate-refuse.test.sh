@@ -145,7 +145,7 @@ run_spawn() {
       FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
       FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$pane" TMUX=fake,1,0 \
       PATH="$fakebin:$PATH" "$@" \
-      "$SPAWN" "$id" "$proj" codex --mode no-mistakes --yolo off ) 2>&1
+      "$SPAWN" "$id" "$proj" pi --mode no-mistakes --yolo off ) 2>&1
 }
 
 test_spawn_refuses_and_admits() {
@@ -229,7 +229,7 @@ test_send_refuses_and_admits() {
   home="$TMP/send-home"; mkdir -p "$home/state"
   fakebin=$(make_send_fakebin "$TMP/send-fake")
   log="$TMP/send-tmux.log"
-  fm_write_meta "$home/state/lane-ok.meta" "window=sess:fm-lane-ok" "kind=ship" "harness=codex"
+  fm_write_meta "$home/state/lane-ok.meta" "window=sess:fm-lane-ok" "kind=ship" "harness=pi"
 
   # env-marker refuse.
   : > "$log"

@@ -75,13 +75,13 @@ fm_write_meta "$HOME_DIR/state/ledger-task.meta" \
   "window=fmtest:fm-ledger-task" \
   "worktree=$HOME_DIR/projects/task" \
   "project=firstmate" \
-  "harness=claude" \
+  "harness=pi" \
   "kind=ship" \
   "mode=no-mistakes" \
   "spawn_gen=fm.ledger123456"
 busy_gen=$("$ROOT/bin/fm-busy-event.sh" arm "$HOME_DIR/state" ledger-task)
 "$ROOT/bin/fm-busy-event.sh" apply "$HOME_DIR/state" ledger-task idle \
-  --gen "$busy_gen" --source claude-hook --event stop
+  --gen "$busy_gen" --source pi-ext --event stop
 
 NOW_ONE=2026-08-28T10:00:00Z
 EPOCH_ONE=1787911200
@@ -532,13 +532,13 @@ fm_write_meta "$COST_HOME/state/cost-task.meta" \
   "window=fmtest:fm-cost-task" \
   "worktree=$COST_HOME/projects/task" \
   "project=firstmate" \
-  "harness=claude" \
+  "harness=pi" \
   "kind=ship" \
   "mode=no-mistakes" \
   "spawn_gen=fm.cost123456"
 cost_busy_gen=$("$ROOT/bin/fm-busy-event.sh" arm "$COST_HOME/state" cost-task)
 "$ROOT/bin/fm-busy-event.sh" apply "$COST_HOME/state" cost-task idle \
-  --gen "$cost_busy_gen" --source claude-hook --event stop
+  --gen "$cost_busy_gen" --source pi-ext --event stop
 python3 - "$COST_HOME/state/cost-task.status" <<'PY'
 import sys
 note = ("the crewmate ran validation and reported checks on the branch "
@@ -588,7 +588,7 @@ fm_write_meta "$REMOTE_HOME/state/rsm.meta" \
   "window=remote:rsm" \
   "endpoint_task_id=rsm" \
   "worktree=/remote/home/never-locally-present" \
-  "harness=claude" \
+  "harness=pi" \
   "kind=secondmate" \
   "mode=secondmate" \
   "home=/remote/home" \
@@ -713,7 +713,7 @@ fm_write_meta "$RESTART_HOME/state/restart-task.meta" \
   "window=fmtest:fm-restart-task" \
   "worktree=$RESTART_HOME/projects/task" \
   "project=firstmate" \
-  "harness=claude" \
+  "harness=pi" \
   "kind=ship" \
   "mode=no-mistakes" \
   "spawn_gen=fm.restart123456"

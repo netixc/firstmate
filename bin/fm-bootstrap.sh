@@ -145,8 +145,6 @@ DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 . "$SCRIPT_DIR/fm-tangle-lib.sh"
 # shellcheck source=bin/fm-ff-lib.sh disable=SC1091
 . "$SCRIPT_DIR/fm-ff-lib.sh"
-# shellcheck source=bin/fm-cursor-lib.sh disable=SC1091
-. "$SCRIPT_DIR/fm-cursor-lib.sh"
 # shellcheck source=bin/fm-config-inherit-lib.sh disable=SC1091
 . "$SCRIPT_DIR/fm-config-inherit-lib.sh"
 # shellcheck source=bin/fm-secondmate-nudge-lib.sh disable=SC1091
@@ -769,7 +767,7 @@ secondmate_liveness_one() {  # <meta> <id>
   [ -n "$target" ] || target="$window"
   agent_state=$(fm_backend_agent_state "$backend" "$target" 2>/dev/null) || agent_state=unreadable
   case "$harness" in
-    claude|codex|opencode|pi|pi-signed|grok|kimi) ;;
+    pi) ;;
     *)
       case "$agent_state" in dead|missing) agent_state=unverified-harness ;; esac
       ;;
@@ -846,7 +844,6 @@ install_cmd() {
 manual_install_url() {
   case "$1" in
     herdr) echo "https://herdr.dev" ;;
-    cursor-agent) echo "https://cursor.com/cli" ;;
     *) return 1 ;;
   esac
 }
@@ -997,7 +994,7 @@ x_mode_setup() {
 
   x_mode_supervision_repair() {
     local out
-    out=$("$SCRIPT_DIR/fm-supervision-instructions.sh" --repair-line 2>/dev/null) \
+    out=$("$SCRIPT_DIR/fm-supervision-instructions.sh" --harness pi --repair-line 2>/dev/null) \
       || out='repair missing watcher supervision according to the session-start operating block.'
     printf '%s\n' "$out"
   }
@@ -1081,17 +1078,12 @@ crew_dispatch_validate() {
     return 0
   fi
   err=$(jq -r '
-    def verified($h): ["claude","codex","opencode","pi","pi-signed","grok","kimi","cursor","muse"] | index($h);
+    def verified($h): $h == "pi";
     def effort_ok($h; $e):
       if $e == null then true
       elif ($e | type) != "string" then false
-      elif $h == "claude" then (["low","medium","high","xhigh","max"] | index($e))
-      elif $h == "codex" then (["low","medium","high","xhigh"] | index($e))
-      elif $h == "grok" then (["low","medium","high"] | index($e))
-      elif $h == "pi" or $h == "pi-signed" then (["low","medium","high","xhigh","max"] | index($e))
-      elif $h == "muse" then (["low","medium","high","xhigh","max"] | index($e))
-      elif $h == "opencode" or $h == "kimi" or $h == "cursor" then false
-      else true
+      elif $h == "pi" then (["low","medium","high","xhigh","max"] | index($e))
+      else false
       end;
     def profiles($value):
       if ($value | type) == "array" then $value
@@ -1256,14 +1248,10 @@ detect_local_config() {
   if [ "${FM_BOOTSTRAP_VERBOSE_FACTS:-0}" = 1 ] && [ -n "$crew" ] && [ "$crew" != "default" ]; then
     echo "BOOTSTRAP_INFO: crew harness override active: $crew"
   fi
-  # A configured cursor crew harness needs a cursor executable present, and
-  # cursor ships under EITHER installed name. Resolution runs through the
-  # verified owner rather than a bare `command -v`, so a home that merely has
-  # some unrelated executable named `agent` on PATH is still reported missing
-  # instead of failing at the first spawn.
-  if [ "$crew" = cursor ] && ! fm_cursor_resolve_binary >/dev/null 2>&1; then
-    echo "MISSING_MANUAL: cursor-agent (instructions: $(manual_install_url cursor-agent))"
-  fi
+  case "$crew" in
+    ''|default|pi) ;;
+    *) echo "CREW_HARNESS: unsupported harness '$crew' - migrate config/crew-harness to an explicitly selected plain pi harness" ;;
+  esac
   crew_dispatch_validate
   if [ "${FM_BOOTSTRAP_VERBOSE_FACTS:-0}" = 1 ] \
     && ! fm_backlog_backend_manual "$CONFIG" && fm_tasks_axi_compatible; then

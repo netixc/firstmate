@@ -14,8 +14,8 @@
 #      with a notice, and the steer is still durably sent (exit 0).
 #   5. A failed doorbell is still a sent steer (exit 0, record durable): the
 #      watcher's re-ring ladder owns delivery from the record on.
-#   6. Carve-outs keep the typed plane: a leading "/" (any harness), a leading
-#      "$" to codex, an explicit backend target, and the --key path.
+#   6. Carve-outs keep the typed plane for Pi slash invocations and explicit
+#      backend targets; ordinary dollar-prefixed text still rides the inbox.
 #   7. A marked secondmate steer carries its marker + corr token in the record
 #      body, and the pending-reply expectation is marked delivered at enqueue.
 #   8. Pending-reply bookkeeping failure after enqueue never reports a
@@ -86,7 +86,7 @@ SH
 }
 
 setup_case() {  # <name> [harness] -> echoes case dir with home/state + t1 meta
-  local name=$1 harness=${2:-claude} dir
+  local name=$1 harness=${2:-pi} dir
   dir="$TMP_ROOT/$name"
   mkdir -p "$dir/home/state"
   make_stubs "$dir" >/dev/null
@@ -195,19 +195,14 @@ test_harness_invocations_stay_typed() {
   typed=$(cat "$dir/send.log")
   assert_contains "$typed" "/no-mistakes" "the slash command should be typed literally"
   [ ! -d "$dir/home/state/t1.inbox" ] || fail "a slash command must not be routed to the inbox"
-  # A codex `$<skill>` invocation likewise stays typed.
-  dir=$(setup_case codexskill codex); err="$dir/send.err"
-  run_send "$dir" "$err" -- t1 '$no-mistakes' || fail "a codex \$skill send should succeed"
-  assert_contains "$(cat "$dir/send.log")" '$no-mistakes' "the codex \$skill should be typed literally"
-  [ ! -d "$dir/home/state/t1.inbox" ] || fail "a codex \$skill must not be routed to the inbox"
-  # The same `$` message to a non-codex harness is plain text: inbox plane.
-  dir=$(setup_case dollartext claude); err="$dir/send.err"
-  run_send "$dir" "$err" -- t1 '$5/month is cheap' || fail "a claude \$-text send should succeed"
-  [ -f "$dir/home/state/t1.inbox/001.msg" ] || fail "a non-codex \$-message should ride the inbox"
+  # Dollar-prefixed Pi text is an ordinary durable-inbox steer.
+  dir=$(setup_case dollartext pi); err="$dir/send.err"
+  run_send "$dir" "$err" -- t1 '$5/month is cheap' || fail "a Pi dollar-text send should succeed"
+  [ -f "$dir/home/state/t1.inbox/001.msg" ] || fail "Pi dollar-text should ride the inbox"
   case "$(cat "$dir/send.log")" in
-    *'$5/month'*) fail "a non-codex \$-message payload was typed" ;;
+    *'$5/month'*) fail "the Pi dollar-text payload was typed" ;;
   esac
-  pass "fm-send planes: slash and codex \$skill invocations stay typed; plain \$-text rides the inbox"
+  pass "fm-send planes: Pi slash invocations stay typed; ordinary dollar-text rides the inbox"
 }
 
 test_explicit_target_stays_typed() {
@@ -219,14 +214,6 @@ test_explicit_target_stays_typed() {
   [ -z "$(find "$dir/home/state" -maxdepth 1 -name '*.inbox' -print 2>/dev/null)" ] \
     || fail "an explicit target has no task record here and must not grow an inbox"
   pass "fm-send planes: an explicit backend target keeps the typed plane"
-}
-
-test_key_path_never_touches_inbox() {
-  local dir err
-  dir=$(setup_case keypath); err="$dir/send.err"
-  run_send "$dir" "$err" -- t1 --key Enter || fail "a --key send should succeed"
-  [ ! -d "$dir/home/state/t1.inbox" ] || fail "the --key path must never write an inbox record"
-  pass "fm-send planes: the --key lifecycle path never touches the inbox"
 }
 
 test_secondmate_marker_and_enqueue_delivery() {
@@ -345,7 +332,6 @@ test_pending_composer_skips_ring_advisorily
 test_failed_ring_is_still_sent
 test_harness_invocations_stay_typed
 test_explicit_target_stays_typed
-test_key_path_never_touches_inbox
 test_secondmate_marker_and_enqueue_delivery
 test_post_enqueue_bookkeeping_failure_is_not_retryable
 test_meta_lock_contention_fails_bounded

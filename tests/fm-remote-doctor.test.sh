@@ -200,11 +200,12 @@ SH
 #!/usr/bin/env bash
 exit 0
 SH
-  cat > "$CASE_BIN/claude" <<'SH'
+  cat > "$CASE_BIN/pi" <<'SH'
 #!/usr/bin/env bash
+[ "${1:-}" = --version ] && printf '0.84.4\n'
 exit 0
 SH
-  chmod +x "$CASE_BIN/uname" "$CASE_BIN/launchctl" "$CASE_BIN/tasks-axi" "$CASE_BIN/treehouse" "$CASE_BIN/claude"
+  chmod +x "$CASE_BIN/uname" "$CASE_BIN/launchctl" "$CASE_BIN/tasks-axi" "$CASE_BIN/treehouse" "$CASE_BIN/pi"
   cat > "$CASE_BIN/sleep" <<'SH'
 #!/usr/bin/env bash
 exit 0
@@ -516,14 +517,30 @@ assert_contains "$DOCTOR_OUT" 'check herdr-server=ok:' "the started server was n
 [ ! -s "$CASE_LAUNCHCTL_LOG" ] || fail "the linux path invoked launchctl"
 pass "a non-darwin host skips launch agents and starts its herdr server directly"
 
+new_case Linux with-herdr no-gui
+cat > "$CASE_BIN/pi" <<'SH'
+#!/usr/bin/env bash
+[ "${1:-}" = --version ] && printf '0.85.0\n'
+SH
+chmod +x "$CASE_BIN/pi"
+doctor --fix
+expect_code 1 "$DOCTOR_RC" "a host with the wrong Pi version was reported ready"
+assert_contains "$DOCTOR_OUT" 'required harness=MISSING (pi version 0.85.0; requires 0.84.4)' \
+  "the incompatible Pi version was not rejected by worker-side readiness"
+assert_contains "$DOCTOR_OUT" 'required tools do not resolve on the remote runtime PATH: harness' \
+  "the incompatible Pi version did not fail required-tool readiness"
+pass "worker-side readiness requires exact Pi 0.84.4"
+
 # --- --fix may add only owned wrappers for version-manager tools -------------
 
 new_case Linux with-herdr no-gui
 MANAGER_BIN="$CASE_HOME/.nvm/versions/node/v24/bin"
 mkdir -p "$MANAGER_BIN"
-printf '#!/usr/bin/env bash\nexit 0\n' > "$MANAGER_BIN/codex"
-printf '#!/usr/bin/env bash\nexit 0\n' > "$MANAGER_BIN/grok"
-chmod +x "$MANAGER_BIN/codex" "$MANAGER_BIN/grok"
+cat > "$MANAGER_BIN/pi" <<'SH'
+#!/usr/bin/env bash
+[ "${1:-}" = --version ] && printf '0.84.4\n'
+SH
+chmod +x "$MANAGER_BIN/pi"
 mv "$CASE_BIN/tasks-axi" "$MANAGER_BIN/tasks-axi"
 doctor
 expect_code 1 "$DOCTOR_RC" "a version-manager-only required tool was reported ready"
@@ -539,14 +556,12 @@ assert_grep '# Firstmate remote tool wrapper v1' "$CASE_HOME/.local/bin/tasks-ax
   "the generated wrapper is not marked Firstmate-owned"
 assert_grep "$MANAGER_BIN/tasks-axi" "$CASE_HOME/.local/bin/tasks-axi" \
   "the generated wrapper does not execute the discovered absolute target"
-assert_absent "$CASE_HOME/.local/bin/codex" "--fix wrapped an alternate harness when claude already satisfied readiness"
-assert_absent "$CASE_HOME/.local/bin/grok" "--fix wrapped an alternate harness when claude already satisfied readiness"
+assert_absent "$CASE_HOME/.local/bin/pi" "--fix wrapped Pi when the direct Pi binary already satisfied readiness"
 
-rm -f "$CASE_BIN/claude"
+rm -f "$CASE_BIN/pi"
 doctor --fix
-expect_code 0 "$DOCTOR_RC" "--fix did not wrap one discoverable harness when none resolved"
-assert_present "$CASE_HOME/.local/bin/codex" "--fix did not create the first needed harness wrapper"
-assert_absent "$CASE_HOME/.local/bin/grok" "--fix created more harness wrappers than readiness requires"
+expect_code 0 "$DOCTOR_RC" "--fix did not wrap discoverable Pi"
+assert_present "$CASE_HOME/.local/bin/pi" "--fix did not create the Pi wrapper"
 
 mv "$CASE_BIN/treehouse" "$MANAGER_BIN/treehouse"
 mkdir -p "$CASE_HOME/.local/bin"
@@ -564,7 +579,7 @@ CASE_REMOTE_JOB_ACTIVE=
 CASE_PLATFORM_OVERRIDE=Linux
 rm -f "$CASE_BIN/sleep" "$CASE_BIN/uname"
 mkdir -p "$CASE_HOME/.local/bin"
-for tool in herdr tasks-axi treehouse claude; do
+for tool in herdr tasks-axi treehouse pi; do
   ln -s "$CASE_BIN/$tool" "$CASE_HOME/.local/bin/$tool"
 done
 HOME="$CASE_HOME" FM_ROOT_OVERRIDE="$ROOT" FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux \

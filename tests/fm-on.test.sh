@@ -55,7 +55,8 @@ case "\${1:-}:\${2:-}" in
 esac
 SH
 cp "$ROOT/bin/fm-remote-doctor.sh" "$ROOT/bin/fm-tasks-axi-lib.sh" \
-  "$ROOT/bin/fm-backend.sh" "$REMOTE_ROOT/bin/"
+  "$ROOT/bin/fm-backend.sh" "$ROOT/bin/fm-composer-lib.sh" \
+  "$ROOT/bin/fm-transition-lib.sh" "$REMOTE_ROOT/bin/"
 mkdir -p "$REMOTE_ROOT/bin/backends"
 cp "$ROOT/bin/backends/herdr.sh" "$REMOTE_ROOT/bin/backends/herdr.sh"
 cat > "$REMOTE_ROOT/bin/fm-mutate.sh" <<'SH'
@@ -239,7 +240,7 @@ expect_dir "$REMOTE_ROOT/bin"
 if [ -d "$ACCOUNT_HOME/.local/bin" ] && [ ! -L "$ACCOUNT_HOME/.local/bin" ]; then
   expect_dir "$ACCOUNT_HOME/.local/bin"
 fi
-for candidate in "${NVM_CHILD_DIRS[@]}"; do expect_dir "$candidate"; done
+for candidate in ${NVM_CHILD_DIRS[@]+"${NVM_CHILD_DIRS[@]}"}; do expect_dir "$candidate"; done
 for candidate in "${MANAGER_DIRS[@]}"; do
   [ -d "$candidate" ] && [ ! -L "$candidate" ] && expect_dir "$candidate"
 done
@@ -347,8 +348,11 @@ case "${1:-}:${2:-}" in
 esac
 SH
 printf '#!/usr/bin/env bash\nexit 0\n' > "$DOCTOR_BIN/treehouse"
-printf '#!/usr/bin/env bash\nexit 0\n' > "$DOCTOR_BIN/claude"
-chmod +x "$DOCTOR_BIN/jq" "$DOCTOR_BIN/herdr" "$DOCTOR_BIN/tasks-axi" "$DOCTOR_BIN/treehouse" "$DOCTOR_BIN/claude"
+cat > "$DOCTOR_BIN/pi" <<'SH'
+#!/usr/bin/env bash
+[ "${1:-}" = --version ] && printf '0.84.4\n'
+SH
+chmod +x "$DOCTOR_BIN/jq" "$DOCTOR_BIN/herdr" "$DOCTOR_BIN/tasks-axi" "$DOCTOR_BIN/treehouse" "$DOCTOR_BIN/pi"
 set +e
 out=$(HOME="$DOCTOR_HOME" PATH="$DOCTOR_BIN:/usr/bin:/bin:/usr/sbin:/sbin" "$ROOT/bin/fm-remote-doctor.sh" 2>&1)
 rc=$?
@@ -363,7 +367,7 @@ fi
 assert_contains "$out" "required herdr=$DOCTOR_BIN/herdr" "the remote doctor did not require herdr"
 assert_contains "$out" "required tasks-axi=$DOCTOR_BIN/tasks-axi" "the remote doctor did not require compatible tasks-axi"
 assert_contains "$out" "required treehouse=$DOCTOR_BIN/treehouse" "the remote doctor did not require treehouse"
-assert_contains "$out" "required harness=claude:$DOCTOR_BIN/claude" "the remote doctor did not require a verified harness"
+assert_contains "$out" "required harness=pi:$DOCTOR_BIN/pi" "the remote doctor did not require plain Pi"
 assert_not_contains "$out" 'required tools do not resolve' "a resolved required tool was still reported missing"
 pass "the remote doctor reports its required runtime tool set and optional tools"
 
