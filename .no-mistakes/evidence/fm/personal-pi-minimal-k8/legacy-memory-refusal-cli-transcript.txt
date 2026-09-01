@@ -1,0 +1,11 @@
+Before:
+AGENTS.md: Keep the current fact.
+CLAUDE.md: Keep the legacy fact.
+
+Command: bin/fm-ensure-agents-md.sh <project>
+conflict: CLAUDE.md contains legacy project memory in /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1EANB0897DZ4CFVWYRP2SPG/.test-evidence-legacy-memory-20274; rename or reconcile it as AGENTS.md manually
+Exit: 1
+
+After:
+AGENTS.md: Keep the current fact.
+CLAUDE.md: Keep the legacy fact.

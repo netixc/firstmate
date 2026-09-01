@@ -1,0 +1,5 @@
+COMMAND: pi --version
+0.84.4
+
+COMMAND: real Pi 0.84.4 loads Firstmate supervision extensions and asks fm-harness for runtime identity
+pi
