@@ -57,8 +57,8 @@ fm_busy_record_read() {
     printf 'malformed'
     return 1
   fi
-  case "$r_seq:$r_ts" in *[!0-9:]*) printf 'malformed'; return 1 ;; esac
-  [ -n "$r_seq" ] && [ -n "$r_ts" ] || { printf 'malformed'; return 1; }
+  case "$r_seq" in ''|*[!0-9]*) printf 'malformed'; return 1 ;; esac
+  case "$r_ts" in ''|*[!0-9]*) printf 'malformed'; return 1 ;; esac
   case "$r_state" in busy|idle|unknown) ;; *) printf 'malformed'; return 1 ;; esac
   [ "$r_gen" = "$gen" ] || { printf 'gen-mismatch'; return 1; }
   printf '%s %s %s %s' "$r_state" "$r_source" "$r_event" "$r_seq"
