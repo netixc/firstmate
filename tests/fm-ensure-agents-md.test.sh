@@ -53,6 +53,14 @@ raise SystemExit(0 if b"\n" not in raw.replace(b"\r\n", b"") else 1)
 PY
 pass "fm-ensure-agents-md: CRLF line endings are preserved"
 
+case_dir=$(new_case legacy-memory)
+printf '# Legacy project memory\n\nKeep this durable fact.\n' > "$case_dir/CLAUDE.md"
+if out=$($ENSURE "$case_dir" 2>&1); then fail "legacy project memory should be refused without explicit reconciliation"; fi
+assert_contains "$out" "CLAUDE.md contains legacy project memory" "legacy-memory refusal should name the conflict"
+assert_absent "$case_dir/AGENTS.md" "legacy-memory refusal must not create unrelated project memory"
+assert_grep 'Keep this durable fact.' "$case_dir/CLAUDE.md" "legacy-memory refusal must preserve existing knowledge"
+pass "fm-ensure-agents-md: legacy-only project memory is preserved and refused"
+
 case_dir=$(new_case agents-symlink)
 printf '# target\n' > "$case_dir/target"
 ln -s target "$case_dir/AGENTS.md"

@@ -112,5 +112,10 @@ if [ -f "$AGENTS" ]; then
   exit 0
 fi
 
+if [ -f CLAUDE.md ] && [ ! -L CLAUDE.md ]; then
+  echo "conflict: CLAUDE.md contains legacy project memory in $DIR; rename or reconcile it as AGENTS.md manually" >&2
+  exit 1
+fi
+
 write_skeleton
 echo "created: AGENTS.md in $DIR"

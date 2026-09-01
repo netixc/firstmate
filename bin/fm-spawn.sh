@@ -990,6 +990,9 @@ elif [ "$KIND" = secondmate ]; then
     ''|pi)
       ARG3=${POS[1]:-}
       ;;
+    claude|codex|opencode|pi-signed|grok|kimi|cursor|muse)
+      ARG3=${POS[1]}
+      ;;
     *' '*)
       if [ "${#POS[@]}" -gt 2 ] || [ -d "${POS[1]}" ]; then
         FIRSTMATE_HOME=${POS[1]}

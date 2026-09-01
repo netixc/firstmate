@@ -418,6 +418,24 @@ test_batch_forwards_shared_profile_flags() {
   pass "batch dispatch forwards shared --harness, --model, and --effort to every pair"
 }
 
+test_retired_positional_secondmate_harness_is_rejected() {
+  local rec id sm out status
+  id=retired-positional-secondmate-z15b
+  rec=$(make_spawn_case retired-positional-secondmate pi "$id")
+  read_case_record "$rec"
+  sm="$CASE_DIR/claude"
+  make_seeded_secondmate_home "$sm" "$id"
+
+  out=$(cd "$CASE_DIR" && run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
+    "$id" claude --secondmate)
+  status=$?
+  expect_code 1 "$status" "retired positional secondmate harness should fail even when a same-named home exists"
+  assert_contains "$out" "unsupported harness 'claude'" "retired positional refusal should identify the harness"
+  assert_absent "$HOME_DIR/state/$id.meta" "retired positional refusal should happen before metadata publication"
+  [ ! -s "$LAUNCH_LOG" ] || fail "retired positional harness reached the endpoint"
+  pass "retired positional secondmate harnesses are rejected before home resolution"
+}
+
 test_active_dispatch_profile_does_not_block_secondmate_launch() {
   local rec id sm out status
   id=profile-secondmate-z16
@@ -451,4 +469,5 @@ test_active_dispatch_profile_rejects_raw_launch_command
 test_pi_threads_model_and_max_effort
 test_pi_tui_mode_probe_is_safe_for_old_and_new_pi
 test_batch_forwards_shared_profile_flags
+test_retired_positional_secondmate_harness_is_rejected
 test_active_dispatch_profile_does_not_block_secondmate_launch
