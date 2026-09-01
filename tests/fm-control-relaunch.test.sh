@@ -723,7 +723,7 @@ test_prepublication_abort_retires_replacement_wiring_and_busy_state() {
   expect_code 1 "$rc" "a failed metadata publication should fail closed"$'\n'"$out"
   [ "$(meta_field "$dir" rl28 harness)" = pi ] \
     || fail "a failed publication should retain the prior durable record"
-  [ ! -e "$dir/wt/.pi/settings.local.json" ] \
+  [ ! -e "$dir/home/state/rl28.pi-ext.ts" ] \
     || fail "an aborted replacement should remove its harness wiring"
   [ ! -e "$dir/home/state/rl28.busy-gen" ] \
     || fail "an aborted replacement should retire its busy generation"
