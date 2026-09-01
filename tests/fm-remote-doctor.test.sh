@@ -536,7 +536,10 @@ pass "worker-side readiness requires exact Pi 0.84.4"
 new_case Linux with-herdr no-gui
 MANAGER_BIN="$CASE_HOME/.nvm/versions/node/v24/bin"
 mkdir -p "$MANAGER_BIN"
-printf '#!/usr/bin/env bash\n[ "${1:-}" = --version ] && printf "0.84.4\\n"\n' > "$MANAGER_BIN/pi"
+cat > "$MANAGER_BIN/pi" <<'SH'
+#!/usr/bin/env bash
+[ "${1:-}" = --version ] && printf '0.84.4\n'
+SH
 chmod +x "$MANAGER_BIN/pi"
 mv "$CASE_BIN/tasks-axi" "$MANAGER_BIN/tasks-axi"
 doctor
