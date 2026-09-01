@@ -470,6 +470,39 @@ test_secondmate_relaunch_ignores_invalid_configured_effort_before_stop() {
 }
 
 
+test_secondmate_relaunch_rejects_retired_config_before_stop() {
+  local dir home out rc
+  dir=$(new_case retired-config sm7)
+  home="$dir/home"
+  mkdir -p "$home/config" "$home/data/sm7"
+  printf 'claude\n' > "$home/config/secondmate-harness"
+  printf '# secondmate brief\n' > "$home/data/sm7/brief.md"
+  fm_git_worktree "$dir/proj" "$dir/smhome" sm-branch
+  {
+    echo "window=fmses:fm-sm7"
+    echo "endpoint_task_id=sm7"
+    echo "worktree=$dir/smhome"
+    echo "project=$dir/smhome"
+    echo "harness=pi"
+    echo "kind=secondmate"
+    echo "mode=secondmate"
+    echo "yolo=off"
+    echo "model=default"
+    echo "effort=default"
+    echo "home=$dir/smhome"
+  } > "$home/state/sm7.meta"
+  printf '%s\n' "fm-sm7" > "$dir/fake/windows"
+  printf '%s' "$dir/smhome" > "$dir/fake/cwd"
+
+  out=$(run_control "$dir" sm7 relaunch); rc=$?
+  expect_code 1 "$rc" "a retired configured harness should refuse"
+  assert_contains "$out" "unsupported harness claude" \
+    "the refusal should identify the retired configured harness"
+  [ "$(cat "$dir/fake/command")" = pi ] \
+    || fail "a retired configured harness must be rejected before stopping the live Pi agent"
+  pass "fm-control relaunch: retired secondmate harness config refuses before stop"
+}
+
 
 test_ship_relaunch_ignores_the_crew_harness_config() {
   local dir out
@@ -978,6 +1011,7 @@ test_explicit_model_wins_over_the_recorded_one
 test_relaunch_onto_an_unverified_harness_is_refused
 test_secondmate_relaunch_picks_up_the_configured_harness_pin
 test_secondmate_relaunch_ignores_invalid_configured_effort_before_stop
+test_secondmate_relaunch_rejects_retired_config_before_stop
 test_ship_relaunch_ignores_the_crew_harness_config
 test_spawn_relaunch_without_a_harness_reuses_the_recorded_one
 test_missing_worktree_refuses_before_stopping_anything
