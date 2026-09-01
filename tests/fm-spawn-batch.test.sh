@@ -2,8 +2,8 @@
 # Behavior tests for fm-spawn.sh batch dispatch (`id=repo` pairs).
 #
 # These exercise argument routing only: each spawn attempt fails fast at the
-# missing-brief check, which is reached before any tmux/treehouse side effect, so
-# the tests create no windows or worktrees. FM_SPAWN_NO_GUARD=1 keeps them off the
+# missing-brief check, which is reached before any Herdr or Treehouse side effect,
+# so the tests create no panes or worktrees. FM_SPAWN_NO_GUARD=1 keeps them off the
 # live watcher guard / state. Parser and path-scoping cases are table-driven; the
 # only behavior asserted on its own is "a multi-pair batch does not stop after the
 # first failure".
@@ -14,7 +14,7 @@ set -u
 
 SPAWN="$ROOT/bin/fm-spawn.sh"
 TMP_ROOT=$(fm_test_tmproot fm-spawn-batch)
-export FM_BACKEND=tmux
+export FM_BACKEND=herdr
 
 # Clear ambient firstmate overrides so the behavior test owns its environment.
 run_spawn() {

@@ -265,14 +265,8 @@ fm_send_meta_for_key_value() {  # <state-dir> <key> <value>
   return 1
 }
 
-fm_send_count_colons() {  # <string>
-  local s=$1 no_colons
-  no_colons=${s//:/}
-  printf '%s' $(( ${#s} - ${#no_colons} ))
-}
-
 fm_send_resolve_target() {  # <raw-target>
-  local raw=$1 meta pane_meta target backend assumed colons id session hint
+  local raw=$1 meta pane_meta id session hint
 
   RESOLVED_TARGET=""
   TARGET_BACKEND=""
@@ -301,7 +295,7 @@ fm_send_resolve_target() {  # <raw-target>
     fi
     RESOLUTION_TRIED="meta=$meta; backend=from-meta"
     id=$(fm_send_id_from_meta "$meta")
-    fm_backend_validate_task_endpoint "$meta" "$id" || return 1
+    fm_backend_validate_active_task_endpoint "$meta" "$id" || return 1
     RESOLVED_TARGET=$FM_BACKEND_VALIDATED_TARGET
     TARGET_BACKEND=$FM_BACKEND_VALIDATED_BACKEND
     TARGET_META=$meta
@@ -336,7 +330,7 @@ fm_send_resolve_target() {  # <raw-target>
   meta=$(fm_backend_meta_for_window "$raw" "$STATE" 2>/dev/null || true)
   if [ -n "$meta" ]; then
     id=$(fm_send_id_from_meta "$meta")
-    fm_backend_validate_task_endpoint "$meta" "$id" || return 1
+    fm_backend_validate_active_task_endpoint "$meta" "$id" || return 1
     RESOLVED_TARGET=$FM_BACKEND_VALIDATED_TARGET
     TARGET_BACKEND=$FM_BACKEND_VALIDATED_BACKEND
     TARGET_META=$meta
@@ -345,26 +339,7 @@ fm_send_resolve_target() {  # <raw-target>
     return 0
   fi
 
-  case "$raw" in
-    *:*)
-      colons=$(fm_send_count_colons "$raw")
-      [ "$colons" -ge 2 ] || {
-        echo "error: explicit target '$raw' is not a Herdr session:pane identity; legacy provider targets require explicit migration" >&2
-        return 1
-      }
-      assumed=herdr
-      if ! fm_backend_target_exists "$assumed" "$raw"; then
-        echo "error: explicit target '$raw' is not a live $assumed endpoint (tried meta=$STATE/$raw.meta; metadata window/terminal lookup; backend=$assumed). Use fm-<id> for a recorded task/lane, or pass a target whose backend endpoint can be verified." >&2
-        return 1
-      fi
-      RESOLVED_TARGET=$raw
-      TARGET_BACKEND=$assumed
-      RESOLUTION_TRIED="meta=$STATE/$raw.meta; metadata window/terminal lookup; backend=$assumed; endpoint=verified"
-      return 0
-      ;;
-  esac
-
-  echo "error: target '$raw' is not resolvable (tried meta=$STATE/$raw.meta; metadata window/terminal lookup; backend=none). Use fm-$raw for a recorded task/lane, or pass a well-formed explicit backend target such as session:window." >&2
+  echo "error: target '$raw' has no exact task metadata in $STATE; ad hoc endpoint selection is unsupported in the Herdr-only edition" >&2
   return 1
 }
 

@@ -17,7 +17,11 @@ set -u
 printf '%s\n' "$*" >> "${FM_HERDR_LOG:?}"
 case "${1:-} ${2:-}" in
   "status --json") printf '{"client":{"version":"0.8.2","protocol":16},"server":{"running":true}}\n' ;;
-  "pane get") printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "${3:-}" ;;
+  "pane get")
+    [ "${FM_FAKE_HERDR_UNREACHABLE:-0}" != 1 ] || exit 1
+    printf '{"result":{"pane":{"pane_id":"%s","workspace_id":"%s","tab_id":"%s"}}}\n' \
+      "${3:-}" "${FM_FAKE_HERDR_WORKSPACE:-w1}" "${FM_FAKE_HERDR_TAB:-w1:t1}"
+    ;;
   "pane send-keys") [ -z "${FM_FAKE_HERDR_SEND_KEY_FAIL:-}" ] ;;
 esac
 SH
@@ -93,10 +97,37 @@ test_prefixless_and_legacy_explicit_targets_refuse() {
   PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" FM_HERDR_LOG="$log" \
     "$SEND" legacy:window "nudge" >/dev/null 2>"$dir/legacy.err"; rc=$?
   [ "$rc" -ne 0 ] || fail "a legacy explicit target unexpectedly sent"
-  assert_contains "$(cat "$dir/legacy.err")" "legacy provider targets require explicit migration" \
-    "the legacy target blocker did not require migration"
+  assert_contains "$(cat "$dir/legacy.err")" "ad hoc endpoint selection is unsupported" \
+    "the legacy target blocker did not require recorded task metadata"
   [ ! -s "$log" ] || fail "an invalid explicit target reached Herdr"
   pass "fm-send refuses prefixless and legacy explicit endpoint identities"
+}
+
+test_unrecorded_and_contradictory_live_targets_refuse() {
+  local dir fb home log rc
+  dir="$TMP_ROOT/live-identity"; mkdir -p "$dir"
+  fb=$(make_stubs "$dir"); home=$(setup_home live-identity); log="$dir/herdr.log"; : > "$log"
+  write_herdr_meta "$home/state/lane.meta" lane w1:p1
+
+  PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" FM_HERDR_LOG="$log" \
+    "$SEND" lab:w9:p9 "must not route" >/dev/null 2>"$dir/unrecorded.err"; rc=$?
+  [ "$rc" -ne 0 ] || fail "an unrecorded live-shaped target unexpectedly sent"
+  assert_contains "$(cat "$dir/unrecorded.err")" "ad hoc endpoint selection is unsupported" \
+    "the unrecorded endpoint blocker did not require task metadata"
+
+  PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" FM_HERDR_LOG="$log" \
+    FM_FAKE_HERDR_TAB=w1:t9 "$SEND" lane "must not route" >/dev/null 2>"$dir/hierarchy.err"; rc=$?
+  [ "$rc" -ne 0 ] || fail "a contradictory live tab unexpectedly sent"
+  assert_contains "$(cat "$dir/hierarchy.err")" "contradicts the recorded workspace, tab, or pane" \
+    "the contradictory live hierarchy did not produce a blocker"
+
+  PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" FM_HERDR_LOG="$log" \
+    FM_FAKE_HERDR_UNREACHABLE=1 "$SEND" lane "must not route" >/dev/null 2>"$dir/unreachable.err"; rc=$?
+  [ "$rc" -ne 0 ] || fail "an unreachable recorded pane unexpectedly sent"
+  assert_contains "$(cat "$dir/unreachable.err")" "is unreachable" \
+    "the unreachable pane did not produce a concrete blocker"
+  [ ! -e "$home/state/lane.inbox" ] || fail "a refused live identity created a durable delivery record"
+  pass "fm-send requires task binding and exact live Herdr hierarchy"
 }
 
 test_key_exit_status_follows_herdr_delivery() {
@@ -119,4 +150,5 @@ test_key_exit_status_follows_herdr_delivery() {
 test_exact_task_send_uses_recorded_herdr_endpoint
 test_ambiguous_metadata_refuses_before_send
 test_prefixless_and_legacy_explicit_targets_refuse
+test_unrecorded_and_contradictory_live_targets_refuse
 test_key_exit_status_follows_herdr_delivery

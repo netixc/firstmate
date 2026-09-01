@@ -102,7 +102,7 @@ fm_backend_endpoint_child_valid() {
 }
 
 fm_backend_validate_task_endpoint() {
-  local meta=$1 id=$2 backend window worktree project binding session workspace tab pane live
+  local meta=$1 id=$2 backend window worktree project binding session workspace tab pane
   FM_BACKEND_VALIDATED_BACKEND=
   FM_BACKEND_VALIDATED_TARGET=
   FM_BACKEND_VALIDATED_WORKSPACE=
@@ -143,17 +143,6 @@ fm_backend_validate_task_endpoint() {
     echo "REFUSED: Herdr endpoint metadata for task $id is malformed or inconsistent; preserving task state." >&2
     return 1
   fi
-  if command -v herdr >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
-    fm_backend_source herdr || return 1
-    live=$(fm_backend_herdr_cli "$session" pane get "$pane" 2>/dev/null || true)
-    if [ -n "$live" ]; then
-      if ! printf '%s' "$live" | jq -e --arg workspace "$workspace" --arg tab "$tab" --arg pane "$pane" \
-        '.result.pane.workspace_id == $workspace and .result.pane.tab_id == $tab and .result.pane.pane_id == $pane' >/dev/null 2>&1; then
-        echo "REFUSED: live Herdr pane identity contradicts the recorded workspace, tab, or pane for task $id; preserving task state." >&2
-        return 1
-      fi
-    fi
-  fi
   # shellcheck disable=SC2034 # Output globals consumed by sourcing callers.
   FM_BACKEND_VALIDATED_BACKEND=herdr
   # shellcheck disable=SC2034 # Output globals consumed by sourcing callers.
@@ -162,6 +151,31 @@ fm_backend_validate_task_endpoint() {
   FM_BACKEND_VALIDATED_WORKSPACE=$workspace
   # shellcheck disable=SC2034 # Output globals consumed by sourcing callers.
   FM_BACKEND_VALIDATED_TAB=$tab
+}
+
+fm_backend_validate_active_task_endpoint() {
+  local meta=$1 id=$2 session pane workspace tab live state=0
+  fm_backend_validate_task_endpoint "$meta" "$id" || return 1
+  session=$(fm_backend_meta_exact_value "$meta" herdr_session)
+  pane=$(fm_backend_meta_exact_value "$meta" herdr_pane_id)
+  workspace=$FM_BACKEND_VALIDATED_WORKSPACE
+  tab=$FM_BACKEND_VALIDATED_TAB
+  fm_backend_source herdr || return 1
+  fm_backend_herdr_version_check || return 1
+  fm_backend_herdr_server_running "$session" >/dev/null || state=$?
+  if [ "$state" -ne 0 ]; then
+    [ "$state" -ne 1 ] || echo "REFUSED: Herdr session '$session' is not running; task $id is unreachable and no endpoint action was attempted." >&2
+    return 1
+  fi
+  if ! live=$(fm_backend_herdr_cli "$session" pane get "$pane" 2>/dev/null); then
+    echo "REFUSED: Herdr pane '$pane' in session '$session' is unreachable for task $id; no endpoint action was attempted." >&2
+    return 1
+  fi
+  if ! printf '%s' "$live" | jq -e --arg workspace "$workspace" --arg tab "$tab" --arg pane "$pane" \
+    '.result.pane.workspace_id == $workspace and .result.pane.tab_id == $tab and .result.pane.pane_id == $pane' >/dev/null 2>&1; then
+    echo "REFUSED: live Herdr pane identity is malformed or contradicts the recorded workspace, tab, or pane for task $id; no endpoint action was attempted." >&2
+    return 1
+  fi
 }
 
 fm_backend_meta_for_window() {
@@ -211,7 +225,7 @@ fm_backend_resolve_selector() {
     return 1
   fi
   id=$(basename "$meta" .meta)
-  fm_backend_validate_task_endpoint "$meta" "$id" || return 1
+  fm_backend_validate_active_task_endpoint "$meta" "$id" || return 1
   printf '%s' "$FM_BACKEND_VALIDATED_TARGET"
 }
 
