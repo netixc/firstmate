@@ -52,16 +52,13 @@ fm_control_exit_command() {
 
 fm_control_backend_supports_key() {
   local backend=${1-} key=${2-}
-  case "$backend" in
-    tmux|herdr|zellij|cmux) case "$key" in Escape|Enter|C-c|C-u) return 0 ;; esac ;;
-    orca) case "$key" in Enter|C-c) return 0 ;; esac ;;
-  esac
+  [ "$backend" = herdr ] || return 1
+  case "$key" in Escape|Enter|C-c|C-u) return 0 ;; esac
   return 1
 }
 
 fm_control_backend_state_verified() {
-  case "${1-}" in tmux|herdr) return 0 ;; esac
-  return 1
+  [ "${1-}" = herdr ]
 }
 
 fm_control_harness_wiring_paths() {

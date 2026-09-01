@@ -23,7 +23,7 @@
 #     env and auto-discovers it.
 #   - Harnesses with NO native background mechanism (e.g. pi) run this THROUGH
 #     bin/fm-afk-launch.sh, which creates a non-visible tracked terminal per
-#     backend (herdr tab/workspace, tmux detached session) and passes the
+#     Herdr tab/workspace and passes the
 #     captain pane in as FM_SUPERVISOR_TARGET so injection targets it, not the
 #     daemon's own new pane.
 # children after the tool call returns, while a tracked background terminal stays

@@ -22,7 +22,6 @@ The proof ran 24 candidates with four workers and no failures.
 | 6290 | `tests/fm-pr-merge.test.sh` |
 | 5569 | `tests/fm-composer-ghost.test.sh` |
 | 4563 | `tests/fm-send-popup-settle.test.sh` |
-| 4021 | `tests/fm-tmux-submit-busy.test.sh` |
 | 3544 | `tests/fm-composer-lib.test.sh` |
 | 3025 | `tests/fm-send-strict.test.sh` |
 | 2753 | `tests/fm-send-settle.test.sh` |
@@ -49,7 +48,6 @@ The two parallel lanes use longest-processing-time assignment from those measure
 ## Portable serial remainder
 
 `portable-serial` includes every `tests/*.test.sh` that is neither proven-isolated nor `real-herdr-gated`.
-It keeps watcher, lock, AFK, real tmux, daemon, secondmate lifecycle, bootstrap, live-harness opt-in, GUI-backend, and other unproven work serial.
 Membership is derived rather than enumerated, so a newly added test lands here by default.
 
 ## Portable serial CI shards

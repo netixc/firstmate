@@ -273,19 +273,13 @@ window_kind() {
   echo unknown
 }
 
-# window_backend: the backend recorded in the meta whose window= matches <w>,
-# defaulting to tmux (absent backend= means tmux; the P1 compatibility
-# contract) when no matching meta carries the field, or none matches at all.
+# Return the exact recorded provider. Missing metadata remains unsupported and
+# cannot be silently relabeled as Herdr.
 window_backend() {
-  local w=$1 meta backend
-  meta=$(fm_backend_meta_for_window "$w" "$STATE" 2>/dev/null || true)
-  if [ -n "$meta" ]; then
-    backend=$(grep '^backend=' "$meta" | cut -d= -f2- || true)
-    [ -n "$backend" ] || backend=tmux
-    echo "$backend"
-    return 0
-  fi
-  echo tmux
+  local meta
+  meta=$(fm_backend_meta_for_window "$1" "$STATE" 2>/dev/null || true)
+  [ -n "$meta" ] || { echo legacy-unrecorded; return 0; }
+  fm_backend_of_meta "$meta"
 }
 
 window_harness() {

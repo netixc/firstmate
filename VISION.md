@@ -56,7 +56,7 @@ A new task shape earns its way in only when existing primitives genuinely cannot
 
 The first mate is not another harness and not another orchestrator app.
 The experience it creates is a new way of working, with the agent runtime kept separate from the session manager the captain uses.
-It is an agent distro, not an app: instructions, skills, scripts, and state conventions loaded through plain Pi and run across session managers such as tmux, Herdr, and Orca.
+It is an agent distro, not an app: instructions, skills, scripts, and state conventions loaded through plain Pi and run through Herdr as its sole session provider.
 The first mate can read, understand, and evolve every part of itself: plain instructions, scripts, and text records keep the whole system introspectable, hot-modifiable, and self-evolving by the very agent that runs it.
 When something is not working well, the captain can ask the first mate and it figures it out; captains using their own firstmate to improve the shared surface is how the fleet evolves in the open.
 Runtime integration earns trust through verification, and session-manager choices remain replaceable without changing the distro's operating contracts.

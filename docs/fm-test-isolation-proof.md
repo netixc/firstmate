@@ -27,7 +27,6 @@ This record owns concurrent isolation evidence for the portable parallel candida
 - `tests/fm-brief.test.sh`
 - `tests/fm-captain-hold-lifecycle.test.sh`
 - `tests/fm-cd-pretool-check.test.sh`
-- `tests/fm-composer-ghost.test.sh`
 - `tests/fm-composer-lib.test.sh`
 - `tests/fm-crew-state.test.sh`
 - `tests/fm-ensure-agents-md.test.sh`
@@ -42,7 +41,6 @@ This record owns concurrent isolation evidence for the portable parallel candida
 - `tests/fm-spawn-batch.test.sh`
 - `tests/fm-supervision-instructions.test.sh`
 - `tests/fm-test-run.test.sh`
-- `tests/fm-tmux-submit-busy.test.sh`
 - `tests/fm-transition-lib.test.sh`
 - `tests/fm-x-mode.test.sh`
 
@@ -60,9 +58,7 @@ This record owns concurrent isolation evidence for the portable parallel candida
 | 9766 | 0 | 12 | `tests/fm-lint.test.sh` |
 | 9562 | 0 | 11 | `tests/fm-herdr-lab.test.sh` |
 | 6290 | 0 | 14 | `tests/fm-pr-merge.test.sh` |
-| 5569 | 0 | 6 | `tests/fm-composer-ghost.test.sh` |
 | 4563 | 0 | 16 | `tests/fm-send-popup-settle.test.sh` |
-| 4021 | 0 | 22 | `tests/fm-tmux-submit-busy.test.sh` |
 | 3544 | 0 | 7 | `tests/fm-composer-lib.test.sh` |
 | 3025 | 0 | 18 | `tests/fm-send-strict.test.sh` |
 | 2753 | 0 | 17 | `tests/fm-send-settle.test.sh` |

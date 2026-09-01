@@ -72,8 +72,8 @@
 #   - A backend that cannot deliver Pi's interrupt key is refused
 #     (Orca's terminal API has no Escape).
 #   - `exit` and `relaunch` require a backend with a recovery-grade agent-state
-#     classifier (tmux, herdr), because without one the "the agent stopped"
-#     postcondition cannot be proven. zellij, orca, and cmux are refused rather
+#     Herdr classifier, because without it the "the agent stopped"
+#     postcondition cannot be proven. Unsupported providers are refused rather
 #     than reported as successful blind.
 #   - An ambiguous or unreadable endpoint state refuses; only a positively
 #     classified state acts.
