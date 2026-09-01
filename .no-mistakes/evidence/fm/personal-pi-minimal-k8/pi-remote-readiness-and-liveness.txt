@@ -1,0 +1,25 @@
+REMOTE WORKER READINESS — supported Pi
+# pi --version => 0.84.4
+# fm-remote-doctor.sh --worker-tool-probe
+required git=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-readiness.W7vrPy/git
+required jq=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-readiness.W7vrPy/jq
+required herdr=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-readiness.W7vrPy/herdr
+required tasks-axi=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-readiness.W7vrPy/tasks-axi
+required treehouse=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-readiness.W7vrPy/treehouse
+required harness=pi:/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-readiness.W7vrPy/pi
+exit=0
+
+REMOTE WORKER READINESS — unsupported Pi
+# pi --version => 0.85.0
+# fm-remote-doctor.sh --worker-tool-probe
+required git=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-readiness.W7vrPy/git
+required jq=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-readiness.W7vrPy/jq
+required herdr=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-readiness.W7vrPy/herdr
+required tasks-axi=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-readiness.W7vrPy/tasks-axi
+required treehouse=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-readiness.W7vrPy/treehouse
+required harness=MISSING (pi version 0.85.0; requires 0.84.4)
+exit=1
+
+TMUX PROCESS LIVENESS — two-source classification
+empty primary + argv0 /usr/local/bin/pi => agent
+empty primary + argv0 /tmp/pi/bash => other
