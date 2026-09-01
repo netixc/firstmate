@@ -118,7 +118,7 @@ Both `bin/fm-test-run.sh` and the current proof harness therefore order concurre
 | 2 | `FM_ISOLATION_SUMMARY total=32 failed=0 concurrency=4 duration_ms=156462` |
 
 This family is what a change to `bin/fm-test-run.sh` itself selects, so it decides that selection's wall clock.
-Before admission, 14 of its scripts fell to the serial tail and the 33-script selection measured 327.3s against a 300s budget: the concurrent group was 19 scripts totalling 273.4s while the tail alone was 215.7s, dominated by `fm-calm-pi-extension` (77.5s), `fm-vendor-auth-probe` (51.0s).
+Before admission, 14 of its scripts fell to the serial tail and the 33-script selection measured 327.3s against a 300s budget: the concurrent group was 19 scripts totalling 273.4s while the tail alone was 215.7s, dominated by `fm-calm-pi-extension` (77.5s).
 Admitting the family moves that tail into the bounded concurrent group.
 Current runner-file selection was verified on 2026-08-28 with the runner and its tests bound to each measured Bash version.
 Because the runner uses `#!/usr/bin/env bash` and invokes each test with `bash` from `PATH`, the stock macOS measurement used `PATH=/bin:$PATH bin/fm-test-run.sh --changed --max-wall-ms 300000` so both resolved to `/bin/bash` 3.2.57.
