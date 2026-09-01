@@ -1658,7 +1658,7 @@ const EXACT_WATCHER_INPUT =
   "Run bin/fm-wake-drain.sh first and handle the queued wake. Watcher continuity is extension-owned.";
 
 function monitorInput(suffix: "ONE" | "TWO"): string {
-  if (label === "exact_watcher" && suffix === "ONE") return EXACT_WATCHER_INPUT;
+  if (label.startsWith("exact_watcher") && suffix === "ONE") return EXACT_WATCHER_INPUT;
   if (label === "legacy_away" && suffix === "ONE") {
     return "\u2063Supervisor escalate (LEGACY_AWAY_E2E)";
   }
@@ -1817,14 +1817,25 @@ TS
       fail "Pi follow-up $label case did not process the monitoring notification"
     fi
 
-    pane=$(tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" -S - 2>/dev/null || true)
-    [ "$(printf '%s\n' "$pane" | grep -Fc "CAPTAIN_ANSWER_$label" || true)" -eq 1 ] \
-      || fail "Pi follow-up $label case rendered a duplicate captain answer"
-    assert_contains "$pane" "CAPTAIN_PROMPT_$label" "Pi follow-up $label case hid the genuine captain prompt"
+    # Session persistence commits before Pi's terminal renderer necessarily presents the
+    # completed follow-up. Observe the user-visible boundary itself before counting rows;
+    # an immediate capture can contain zero answers and used to misreport that as a
+    # duplicate. This condition wait has no effect on a real duplicate, which the exact
+    # count below still rejects.
+    i=0
+    while [ "$i" -lt 120 ]; do
+      pane=$(tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" -S - 2>/dev/null || true)
+      printf '%s\n' "$pane" | grep -Fq "MONITOR_HANDLED_${label}_ONE" && break
+      sleep 0.05
+      i=$((i + 1))
+    done
     assert_contains "$pane" "MONITOR_HANDLED_${label}_ONE" "Pi follow-up $label case did not render the intended processing result"
+    [ "$(printf '%s\n' "$pane" | grep -Fc "CAPTAIN_ANSWER_$label" || true)" -eq 1 ] \
+      || fail "Pi follow-up $label case rendered other than one captain answer"
+    assert_contains "$pane" "CAPTAIN_PROMPT_$label" "Pi follow-up $label case hid the genuine captain prompt"
     if [ "$calm_state" = on ]; then
       assert_not_contains "$pane" "MONITOR_${label}_ONE" "Pi follow-up $label case rendered a Calm-hidden operational user row"
-      if [ "$label" = exact_watcher ]; then
+      if [[ "$label" = exact_watcher* ]]; then
         assert_not_contains "$pane" "FIRSTMATE WATCHER WAKE: signal: /home/fixture/github/kunchenguid/firstmate/state/oss-triage-t4.status" \
           "Pi exact watcher case rendered the Calm-hidden authoritative payload"
         assert_not_contains "$pane" "Run bin/fm-wake-drain.sh first and handle the queued wake." \
@@ -1864,7 +1875,7 @@ const handled = expected === 2
   : `MONITOR_HANDLED_${label}_ONE`;
 const expectedOperationalTexts = Array.from({ length: expected }, (_, index) => {
   const suffix = index === 0 ? "ONE" : "TWO";
-  return label === "exact_watcher" && suffix === "ONE"
+  return label.startsWith("exact_watcher") && suffix === "ONE"
     ? "\u2063FIRSTMATE_OP: v1 watcher: FIRSTMATE WATCHER WAKE: signal: /home/fixture/github/kunchenguid/firstmate/state/oss-triage-t4.status\n\nRun bin/fm-wake-drain.sh first and handle the queued wake. Watcher continuity is extension-owned."
     : label === "legacy_away" && suffix === "ONE"
       ? "\u2063Supervisor escalate (LEGACY_AWAY_E2E)"
@@ -1959,8 +1970,12 @@ JS
   run_followup_case exact-watcher on exact_watcher 1
   exact_session=$session_file
   replay_exact_case
+  run_followup_case exact-watcher-repeat-1 on exact_watcher_repeat_1 1
+  run_followup_case exact-watcher-repeat-2 on exact_watcher_repeat_2 1
   run_followup_case legacy-away on legacy_away 1
   run_followup_case loaded-off off loaded_off 1
+  run_followup_case loaded-off-repeat-1 off loaded_off_repeat_1 1
+  run_followup_case loaded-off-repeat-2 off loaded_off_repeat_2 1
   run_followup_case loaded-default default loaded_default 1
   run_followup_case extension-absent absent absent 1
   run_followup_case adjacent on adjacent 2 '' adjacent
