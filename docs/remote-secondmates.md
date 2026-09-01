@@ -38,7 +38,7 @@ Within a home's lane the worker preempts a running reply long-poll as soon as an
 A caller that disconnects or whose caller-side wait expires before its job completes cancels it instead of abandoning it: cancelled queued work is skipped, cancelled running work is stopped, and the finalized record is cleaned up, so retries never convoy behind abandoned work.
 Linux uses the same queue and worker protocol without the Aqua-session requirement.
 A worker stops itself once its configured code root stops being a Firstmate checkout, so a worker started from a worktree cannot outlive that worktree, and `bin/fm-remote-job-reap-orphans.sh` clears any worker already left behind that way without ever touching one whose checkout still exists.
-The remote account must provide the required toolchain, the selected worker runtime, the selected session backend, and credentials that work on that host.
+The remote account must provide the required plain Pi runtime, the selected session backend, the remaining toolchain, and credentials that work on that host.
 The origin URL named for each project must be reachable from the remote account because projects are cloned on that host rather than copied from the primary.
 
 ## Non-interactive tool contract
@@ -108,7 +108,7 @@ These steps are never automated and are always reported rather than silently att
 - FileVault, which holds a reboot at pre-boot authentication before any login session exists.
 - Installing any missing required tool that no safe wrapper can resolve.
 - The required remote tool set is `git`, `jq`, `herdr`, compatible `tasks-axi`, `treehouse`, and plain `pi` reporting exactly version 0.84.4.
-- Each worker runtime's own `/login`, and any keychain password prompt that login needs.
+- Pi's own `/login`, and any keychain password prompt that login needs.
 
 Firstmate never writes an auto-login password, never changes FileVault, and never stores an account password.
 A file at `~/.local/bin/fm-remote-entrypoint.sh` that is not Firstmate's own symlink is reported for the operator to inspect and is never overwritten.

@@ -87,7 +87,7 @@ Release happens only on explicit retirement or seed rollback, never on routine r
 It also writes the gitignored `.fm-secondmate-parent` durable binding before the required `.fm-secondmate-home` identity marker; the parser header in [`bin/fm-secondmate-parent-lib.sh`](../../../bin/fm-secondmate-parent-lib.sh) owns the record contract, and both files must remain in place.
 `bin/fm-spawn.sh --secondmate` launches exact plain Pi through the secondmate harness path, resolving `config/secondmate-harness` -> `config/crew-harness` -> the primary's own Pi identity unless an explicit per-spawn `--harness pi` override is passed.
 
-`config/secondmate-harness` may also pin a concrete model and effort for the secondmate agent, in the SAME file rather than a new one: the format is a single whitespace-separated line `<harness> [<model>] [<effort>]`, with only the first non-empty, non-comment line parsed.
+`config/secondmate-harness` may also pin a concrete model and effort for the secondmate agent in the same file rather than a new one; [`docs/configuration.md`](../../../docs/configuration.md#harness-support) owns the accepted syntax.
 A bare `pi` remains harness-only with no model or effort flag; every other harness token is unsupported migration input.
 `bin/fm-harness.sh secondmate-model` and `bin/fm-harness.sh secondmate-effort` print the optional second and third tokens (empty when absent, or when the file is absent, `default`, or Pi-only); they read only `config/secondmate-harness`, never `config/crew-harness`, which accepts only bare `pi` or `default`.
 For a `--secondmate` spawn, `bin/fm-spawn.sh` populates `MODEL`/`EFFORT` from those tokens only when the harness itself came from the secondmate config path for that spawn.
