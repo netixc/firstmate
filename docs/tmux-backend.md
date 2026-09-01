@@ -52,7 +52,7 @@ Only `dead` and `missing` authorize recovery because a false dead result could l
 
 For positive attribution, the probe combines two independent name sources rather than making either one load-bearing.
 `#{pane_current_command}` and the pane tty foreground process group's kernel `comm` values expose different name fields, and which one retains executable identity is platform-dependent.
-The foreground probe also reads argv[0] so an exact Pi install-path component can carry the verdict when the other fields expose a rewritten process name.
+The foreground probe also reads argv[0] so its exact `pi` basename can carry the verdict when the other fields expose a rewritten process name.
 Either source naming Pi is enough for `alive`, because a false `dead` is the one verdict that can start a duplicate agent on a live worktree, while a readable foreground process group settles the negative verdicts.
 
 Scoping the second source to the foreground process group rather than to the pane's descendants is deliberate: a Pi-named process left running in the background of an otherwise idle pane must not read as an agent.

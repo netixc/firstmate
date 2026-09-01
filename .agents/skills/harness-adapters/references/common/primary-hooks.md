@@ -11,7 +11,7 @@ Never invent a wait shape for another identity.
 `../../../bin/fm-busy-lib.sh` remains the semantic busy owner; a tool reference names only its source and evidence.
 
 Validate any turn-end change against real Pi in a scratch project or throwaway home.
-Update its executable or hook owner, concise tool fact, and `../../../docs/verification/supervision.md` under "Turn-end guard".
+Update its executable or hook owner, concise tool fact, and the current active evidence in `../../../docs/verification/supervision.md`.
 
 ## Pre-tool protection
 
@@ -25,9 +25,9 @@ Any built-in Pi delegation behavior must remain inside Firstmate's durable task 
 ## Session start
 
 `../../../AGENTS.md` section 3 remains the behavioral owner.
-`../../../docs/sessionstart-nudge.md` owns native tier assignment, transport, source routing, runtime bound, and fail-open behavior.
+`../../../docs/sessionstart-nudge.md` owns Pi's native invocation, compatibility boundary, and failure reporting.
 Read it before changing session-open behavior.
-`../../../docs/verification/supervision.md` under "Native session-start delivery" owns active dated evidence.
+`../../../docs/verification/supervision.md` owns active dated evidence.
 
 ## Watcher supervision
 

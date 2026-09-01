@@ -10,4 +10,5 @@ Repair uses the `fm_watch_arm_pi` tool, never a shell-background substitute.
 `docs/supervision-protocols/pi.md` owns the operator sequence.
 
 `tests/fm-turnend-guard.test.sh`, `tests/fm-pi-watch-extension.test.sh`, and `tests/fm-pi-primary-types.test.sh` cover the executable and extension contracts.
-`FM_PI_PRIMARY_LIVE_E2E=1 tests/fm-pi-primary-live-e2e.test.sh` refreshes real Pi evidence recorded in [`verification/supervision.md`](verification/supervision.md).
+`FM_PI_LIVE_E2E=1 tests/fm-pi-primary-live-e2e.test.sh` provides real Pi integration coverage.
+Current plain Pi evidence is recorded in [`verification/supervision.md`](verification/supervision.md).

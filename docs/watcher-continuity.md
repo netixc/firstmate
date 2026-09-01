@@ -15,4 +15,5 @@ The main Pi session and Pi supervision branch claim eligible queue rows before p
 Each actor may present and acknowledge only rows carrying its own durable claim, so neither can consume the other's work.
 
 `tests/fm-pi-watch-extension.test.sh`, `tests/fm-watch-arm.test.sh`, and `tests/fm-guard-stale-banner.test.sh` cover deterministic behavior.
-`FM_PI_PRIMARY_LIVE_E2E=1 tests/fm-pi-primary-live-e2e.test.sh` refreshes real Pi evidence recorded in [`verification/supervision.md`](verification/supervision.md).
+`FM_PI_LIVE_E2E=1 tests/fm-pi-primary-live-e2e.test.sh` provides real Pi integration coverage.
+Current plain Pi evidence is recorded in [`verification/supervision.md`](verification/supervision.md).

@@ -8,4 +8,4 @@ Malformed input or an unavailable optional classifier steps aside without execut
 
 The protected behavior forbids shell-backgrounded, piped, bundled, or broad-kill watcher commands while permitting the owned Pi watcher tool and documented standalone recovery.
 `tests/fm-arm-pretool-check.test.sh` exercises the executable interface.
-Real Pi integration is refreshed through `FM_PI_PRIMARY_LIVE_E2E=1 tests/fm-pi-primary-live-e2e.test.sh` and recorded in [`verification/supervision.md`](verification/supervision.md).
+Run `FM_PI_LIVE_E2E=1 tests/fm-pi-primary-live-e2e.test.sh` for real Pi integration coverage.
