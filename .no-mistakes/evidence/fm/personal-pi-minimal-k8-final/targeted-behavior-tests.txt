@@ -1,0 +1,121 @@
+FM_TEST_BEGIN 2026-09-01T12:25:39Z tests/fm-ensure-agents-md.test.sh family=pure-contract-unit expected_gate_skip=none
+ok - fm-ensure-agents-md: fresh setup creates only AGENTS.md with self-governance
+ok - fm-ensure-agents-md: existing AGENTS.md is updated idempotently
+ok - fm-ensure-agents-md: unterminated content receives a blank separator
+ok - fm-ensure-agents-md: CRLF line endings are preserved
+ok - fm-ensure-agents-md: legacy-only project memory is preserved and refused
+ok - fm-ensure-agents-md: divergent current and legacy memory is preserved and refused
+ok - fm-ensure-agents-md: canonical real pointer remains supported
+ok - fm-ensure-agents-md: canonical pointer supports fresh creation
+ok - fm-ensure-agents-md: correct symlink pointer remains supported
+ok - fm-ensure-agents-md: dangling correct symlink supports fresh creation
+ok - fm-ensure-agents-md: wrong symlink is preserved and refused
+ok - fm-ensure-agents-md: AGENTS.md symlinks are refused
+ok - fm-ensure-agents-md: non-regular AGENTS.md is refused
+ok - fm-ensure-agents-md: case-variant memory names are refused portably
+ok - fm-ensure-agents-md: help remains available
+FM_TEST_END 2026-09-01T12:25:40Z tests/fm-ensure-agents-md.test.sh exit=0 duration_ms=805 gate_skip=false
+FM_TEST_BEGIN 2026-09-01T12:25:40Z tests/fm-pi-only-harness.test.sh family=pure-contract-unit expected_gate_skip=none
+ok - Pi marker resolves to plain pi
+ok - pi-signed configuration is rejected
+ok - claude configuration is rejected
+ok - codex configuration is rejected
+ok - opencode configuration is rejected
+ok - grok configuration is rejected
+ok - kimi configuration is rejected
+ok - cursor configuration is rejected
+ok - muse configuration is rejected
+ok - explicit plain Pi resolves
+ok - plain Pi control is supported
+ok - pi-signed control metadata is unsupported
+ok - claude control metadata is unsupported
+ok - codex control metadata is unsupported
+ok - opencode control metadata is unsupported
+ok - grok control metadata is unsupported
+ok - kimi control metadata is unsupported
+ok - cursor control metadata is unsupported
+ok - muse control metadata is unsupported
+ok - Pi interrupt key
+ok - Pi exit command
+ok - Pi semantic state is accepted
+ok - old metadata is not normalized
+FM_TEST_END 2026-09-01T12:25:40Z tests/fm-pi-only-harness.test.sh exit=0 duration_ms=603 gate_skip=false
+FM_TEST_BEGIN 2026-09-01T12:25:40Z tests/fm-spawn-dispatch-profile.test.sh family=backend-dispatch expected_gate_skip=none
+ok - no --model/--effort records defaults and types the pi launch instructions
+ok - relative home overrides ignore CDPATH and become absolute before spawn launch construction
+ok - FM_HOME defaults resolve relative paths and preserve absolute spellings
+ok - absolute override spellings are preserved in spawn launch paths
+ok - unresolvable relative spawn overrides fail with named diagnostics
+ok - active crew-dispatch profile requires an explicit harness for ship spawns
+ok - active crew-dispatch profile requires an explicit harness for scout spawns
+ok - active crew-dispatch profile allows an explicit resolved harness
+ok - active crew-dispatch profile allows positional plain Pi
+ok - active crew-dispatch profile rejects raw launch commands
+ok - pi receives --model and --thinking max profile flags
+ok - Pi launch requires exact 0.84.4 before probing supported TUI flags
+ok - batch dispatch forwards shared --harness, --model, and --effort to every pair
+ok - retired positional secondmate harnesses are rejected before home resolution
+ok - active crew-dispatch profile does not block secondmate launches
+FM_TEST_END 2026-09-01T12:26:41Z tests/fm-spawn-dispatch-profile.test.sh exit=0 duration_ms=61041 gate_skip=false
+FM_TEST_BEGIN 2026-09-01T12:26:42Z tests/fm-secondmate-harness.test.sh family=secondmate expected_gate_skip=none
+ok - plain Pi secondmate model and effort resolve
+FM_TEST_END 2026-09-01T12:26:42Z tests/fm-secondmate-harness.test.sh exit=0 duration_ms=472 gate_skip=false
+FM_TEST_BEGIN 2026-09-01T12:26:42Z tests/fm-pi-watch-extension.test.sh family=watcher-wake-lock expected_gate_skip=none
+ok - Pi extension reports external healthy watcher output
+ok - Pi custom tool exposes repair-only metadata and returns automatic-continuation guidance
+ok - Pi redundant tool call returns ownership guidance and spawns no second child
+ok - Pi scheduled retry remains extension-owned after another tool call
+ok - Pi actionable close starts one successor before wake delivery settles
+ok - Pi dispatcher branch offer owns accepted wakes and falls back to main
+ok - Pi dispatcher flags a fleet-wide heartbeat offer as branch-eligible
+ok - a co-present check row neither vetoes nor rides a heartbeat into main
+ok - every main-only check class still reaches main, never the supervision branch
+ok - heartbeat restoration failure stays on main
+ok - watcher-failure repair stays with main even with a live, accepting branch listener
+ok - Pi refused handling handshake is classified and not swallowed
+ok - Pi hung successor falls back to one typed actionable wake
+ok - Pi unretired successor falls back without an overlapping retry
+ok - Pi late unretired closes resume classified supervision
+ok - Pi clean empty close triggers a bounded continuity retry
+ok - Pi established clean closes stop at the configured retry limit
+ok - Pi close handler verifies session-lock ownership before successor launch
+ok - Pi watcher arm distinguishes all session lock ownership states
+ok - Pi session transitions use a generation owner across /new /resume /fork, stale callbacks, and quit
+ok - Pi process-exit cleanup listener remains singular across session replacement
+ok - Pi process-exit cleanup stops the attached arm child
+FM_TEST_END 2026-09-01T12:27:34Z tests/fm-pi-watch-extension.test.sh exit=0 duration_ms=52184 gate_skip=false
+FM_TEST_BEGIN 2026-09-01T12:27:34Z tests/fm-composer-lib.test.sh family=pure-contract-unit expected_gate_skip=none
+ok - fm_composer_classify_content: a bare shell prompt glyph (>/$/%/#) reads unknown, never empty
+ok - fm_composer_classify_content: stripped unbordered content is unknown except the Pi glyph
+ok - fm_composer_classify_content: a bare shell prompt carrying a command is not empty
+ok - fm_composer_classify_content: a bare prompt glyph inside a bordered composer box reads empty (Pi's idle composer)
+ok - fm_composer_classify_content: the Pi prompt glyph reads empty bordered or bare
+ok - fm_composer_classify_content: an empty composer reads empty
+ok - fm_composer_classify_content: idle matching is limited to proven placeholder positions
+ok - fm_composer_classify_content: idle matching preserves the caller's case mode
+ok - fm_composer_classify_content: real unsubmitted text reads pending (including a popup argument-hint fill)
+ok - matrix: pi's separated composer needs identity + structure; the blank row alone never proves it
+ok - strict posture: blank and unidentified rows are unknown, never injectable empty
+ok - fm_composer_classify_screen: the bare composer's wrap region stays identified; structure breaks it
+ok - fm_composer_classify_screen: a row-leading agent glyph reanchors the live composer
+ok - fm_composer_classify_screen: a lower dead shell invalidates only cursorless stale composers
+ok - fm_composer_classify_screen: cursorless bare wrap regions participate in verdicts
+ok - fm_composer_classify_screen: the bottom-most candidate wins; stale banners cannot
+ok - fm_composer_classify_screen: incomplete lower structure invalidates stale boxes
+ok - fm_composer_classify_screen: a proven box tolerates a bottom-border cursor
+ok - fm_composer_extract_selected_content: scopes user content and excludes furniture
+ok - fm_composer_queued_enter_verdict: pending + busy returns empty (queued Enter)
+ok - fm_composer_queued_enter_verdict: pending + idle/unknown stays pending
+ok - fm_composer_queued_enter_verdict: only proven pending is converted
+FM_TEST_END 2026-09-01T12:27:40Z tests/fm-composer-lib.test.sh exit=0 duration_ms=5100 gate_skip=false
+FM_TEST_SUMMARY total=6 failed=0 skipped_gate=0 duration_ms=120791
+FM_TEST_SUMMARY_FAMILY family=backend-dispatch count=1 duration_ms=61041 failed=0
+FM_TEST_SUMMARY_FAMILY family=pure-contract-unit count=3 duration_ms=6508 failed=0
+FM_TEST_SUMMARY_FAMILY family=secondmate count=1 duration_ms=472 failed=0
+FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=52184 failed=0
+FM_TEST_SLOWEST rank=1 script=tests/fm-spawn-dispatch-profile.test.sh duration_ms=61041
+FM_TEST_SLOWEST rank=2 script=tests/fm-pi-watch-extension.test.sh duration_ms=52184
+FM_TEST_SLOWEST rank=3 script=tests/fm-composer-lib.test.sh duration_ms=5100
+FM_TEST_SLOWEST rank=4 script=tests/fm-ensure-agents-md.test.sh duration_ms=805
+FM_TEST_SLOWEST rank=5 script=tests/fm-pi-only-harness.test.sh duration_ms=603
+FM_TEST_SLOWEST rank=6 script=tests/fm-secondmate-harness.test.sh duration_ms=472
