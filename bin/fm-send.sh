@@ -253,20 +253,8 @@ fm_send_record_interrupt() {
 }
 
 
-fm_send_meta_for_key_value() {  # <state-dir> <key> <value>
-  local state=$1 key=$2 value=$3 meta got
-  for meta in "$state"/*.meta; do
-    [ -e "$meta" ] || continue
-    got=$(fm_meta_get "$meta" "$key")
-    [ "$got" = "$value" ] || continue
-    printf '%s' "$meta"
-    return 0
-  done
-  return 1
-}
-
 fm_send_resolve_target() {  # <raw-target>
-  local raw=$1 meta pane_meta id session hint
+  local raw=$1 meta id
 
   RESOLVED_TARGET=""
   TARGET_BACKEND=""
@@ -305,41 +293,7 @@ fm_send_resolve_target() {  # <raw-target>
     return 0
   fi
 
-  case "$raw" in
-    fm-*:*)
-      # A named Herdr session may itself begin with "fm-". Keep that explicit
-      # session:pane target on the validated backend-target path below rather
-      # than mistaking it for an unresolved task selector.
-      ;;
-    fm-*)
-      RESOLUTION_TRIED="meta=$STATE/$raw.meta; legacy-meta=$STATE/${raw#fm-}.meta; backend=none"
-      echo "error: no metadata for $raw in $STATE (tried $RESOLUTION_TRIED); pass a well-formed explicit backend target only when targeting outside this firstmate home" >&2
-      return 1
-      ;;
-  esac
-
-  pane_meta=$(fm_send_meta_for_key_value "$STATE" herdr_pane_id "$raw" 2>/dev/null || true)
-  if [ -n "$pane_meta" ]; then
-    session=$(fm_meta_get "$pane_meta" herdr_session)
-    hint="${session:-<herdr-session>}:$raw"
-    id=$(fm_send_id_from_meta "$pane_meta")
-    echo "error: target '$raw' matches herdr_pane_id in $pane_meta but is missing its herdr session prefix; expected <herdr-session>:<pane-id> such as '$hint' or use 'fm-$id' (tried meta=$STATE/$raw.meta; backend=herdr)" >&2
-    return 1
-  fi
-
-  meta=$(fm_backend_meta_for_window "$raw" "$STATE" 2>/dev/null || true)
-  if [ -n "$meta" ]; then
-    id=$(fm_send_id_from_meta "$meta")
-    fm_backend_validate_active_task_endpoint "$meta" "$id" || return 1
-    RESOLVED_TARGET=$FM_BACKEND_VALIDATED_TARGET
-    TARGET_BACKEND=$FM_BACKEND_VALIDATED_BACKEND
-    TARGET_META=$meta
-    TARGET_HARNESS=$(fm_meta_get "$meta" harness)
-    RESOLUTION_TRIED="explicit target '$raw' matched $meta; backend=$TARGET_BACKEND"
-    return 0
-  fi
-
-  echo "error: target '$raw' has no exact task metadata in $STATE; ad hoc endpoint selection is unsupported in the Herdr-only edition" >&2
+  echo "error: target '$raw' is not a recorded task selector in $STATE; use its task id or fm-<task-id>; ad hoc endpoint selection is unsupported in the Herdr-only edition" >&2
   return 1
 }
 

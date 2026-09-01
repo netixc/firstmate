@@ -38,12 +38,17 @@ grep -q "explicit migration to Herdr metadata is required" "$TMP/err" || fail "l
 mkdir -p "$TMP/fakebin"
 cat > "$TMP/fakebin/herdr" <<'SH'
 #!/usr/bin/env bash
-if [ "${1:-} ${2:-} ${3:-}" = "pane get w1:p2" ]; then
-  printf '{"result":{"pane":{"workspace_id":"%s","tab_id":"%s","pane_id":"w1:p2"}}}\n' \
-    "${FM_FAKE_LIVE_WORKSPACE:-w1}" "${FM_FAKE_LIVE_TAB:-w1:t1}"
-  exit 0
-fi
-exit 1
+case "${1:-} ${2:-}" in
+  "status --json")
+    printf '{"client":{"version":"0.8.2","protocol":16},"server":{"running":true}}\n'
+    ;;
+  "pane get")
+    [ "${3:-}" = w1:p2 ] || exit 1
+    printf '{"result":{"pane":{"workspace_id":"%s","tab_id":"%s","pane_id":"w1:p2"}}}\n' \
+      "${FM_FAKE_LIVE_WORKSPACE:-w1}" "${FM_FAKE_LIVE_TAB:-w1:t1}"
+    ;;
+  *) exit 1 ;;
+esac
 SH
 chmod +x "$TMP/fakebin/herdr"
 PATH="$TMP/fakebin:$PATH"
@@ -64,10 +69,12 @@ fm_backend_validate_task_endpoint "$TMP/home/state/task.meta" task || fail "exac
 assert_eq "$FM_BACKEND_VALIDATED_BACKEND" herdr "validated provider"
 assert_eq "$FM_BACKEND_VALIDATED_TARGET" lab:w1:p2 "validated target"
 assert_eq "$(fm_backend_resolve_selector task "$TMP/home/state")" lab:w1:p2 "task selectors must resolve through metadata"
-if FM_FAKE_LIVE_TAB=w1:t9 fm_backend_validate_task_endpoint "$TMP/home/state/task.meta" task 2>"$TMP/err"; then
+export FM_FAKE_LIVE_TAB=w1:t9
+if fm_backend_validate_active_task_endpoint "$TMP/home/state/task.meta" task 2>"$TMP/err"; then
   fail "a live pane contradicting the recorded tab must be refused"
 fi
-grep -q "live Herdr pane identity contradicts" "$TMP/err" || fail "live identity refusal must name the contradiction"
+unset FM_FAKE_LIVE_TAB
+grep -q "contradicts the recorded" "$TMP/err" || fail "live identity refusal must name the contradiction"
 for mismatch in 'herdr_tab_id=w2:t1' 'herdr_pane_id=w2:p2'; do
   cp "$TMP/home/state/task.meta" "$TMP/mismatch.meta"
   key=${mismatch%%=*}

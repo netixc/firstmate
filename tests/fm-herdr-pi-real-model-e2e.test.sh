@@ -127,9 +127,22 @@ case "$control" in *"interrupt-delivered real-model"*"verified=agent-alive"*) : 
   || fail "real Pi did not survive production interrupt control"
 
 fm_backend_events_capable herdr "$SESSION" || fail "native watcher events were unavailable after steering and control"
-watch_rc=0
-fm_backend_wait_transition herdr "$SESSION" 1 "$HOME_DIR/state" "$SESSION:$PANE" >/dev/null || watch_rc=$?
-[ "$watch_rc" -eq 1 ] || fail "native watcher continuity failed after the real Pi lifecycle (rc=$watch_rc)"
+"$LAB_HELPER" run "$SESSION" pane report-agent "$PANE" --source real-pi-continuity --agent pi --state idle >/dev/null \
+  || fail "could not establish the real Pi watcher baseline"
+watch_out="$TMP_ROOT/watch.out"
+watch_rc_file="$TMP_ROOT/watch.rc"
+( fm_backend_wait_transition herdr "$SESSION" 8 "$HOME_DIR/state" "$SESSION:$PANE" >"$watch_out"; printf '%s\n' "$?" >"$watch_rc_file" ) &
+watch_pid=$!
+sleep 0.5
+"$LAB_HELPER" run "$SESSION" pane report-agent "$PANE" --source real-pi-continuity --agent pi --state blocked >/dev/null \
+  || fail "could not trigger the real Pi watcher transition"
+wait "$watch_pid"
+watch_rc=$(cat "$watch_rc_file" 2>/dev/null || true)
+watch_record=$(cat "$watch_out" 2>/dev/null || true)
+[ "$watch_rc" = 0 ] || fail "native watcher did not deliver the real Pi transition (rc=${watch_rc:-missing})"
+[ "$(fm_transition_pane_id "$watch_record")" = "$PANE" ] \
+  && [ "$(fm_transition_to_status "$watch_record")" = blocked ] \
+  || fail "native watcher delivered the wrong real Pi transition"
 
 fm_backend_kill herdr "$SESSION:$PANE" || fail "production cleanup could not close the exact real Pi pane"
 if "$LAB_HELPER" run "$SESSION" pane get "$PANE" >/dev/null 2>&1; then

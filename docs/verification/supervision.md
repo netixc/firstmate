@@ -17,7 +17,7 @@ ok - real Pi transactional relaunch preserves profile metadata (Pi 0.84.4)
 ```
 
 The test runs the real model through plain `pi`, asks it to execute the public harness detector from a Pi child process, and requires exact `pi` output.
-It then launches real Pi in the production shell-and-tmux shape and validates extension registration, interrupt, exit, and transactional relaunch with model and effort metadata preserved.
+The production Herdr endpoint lifecycle is covered by `FM_HERDR_PI_REAL_MODEL_E2E=1 tests/fm-herdr-pi-real-model-e2e.test.sh`, including exact identity, steering, interrupt, native watcher delivery, liveness, and cleanup.
 `tests/fm-pi-only-harness.test.sh` supplies portable public-interface coverage for exact identity, migration refusal, control, and semantic busy state.
 
 ## Wedge-alarm channels

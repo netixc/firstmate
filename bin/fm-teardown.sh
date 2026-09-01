@@ -1510,8 +1510,8 @@ $dir_pids"
 }
 
 reap_task_backend_process_group() {  # <label>
-  echo "warning: lsof is unavailable; Herdr exposes no safe process-group fallback for task $ID" >&2
-  return 0
+  echo "REFUSED: lsof is unavailable, so leaked processes cannot be identified safely for task $ID; preserving the worktree/tasktmp for manual inspection or retry." >&2
+  return 1
 }
 
 
@@ -2442,7 +2442,7 @@ fi
 # not by task-worktree cleanup.
 if [ "$KIND" != secondmate ]; then
   conclude_task_no_mistakes_run "$WT"
-  reap_task_worktree_processes worktree "$WT" "$TASK_TMP"
+  reap_task_worktree_processes worktree "$WT" "$TASK_TMP" || exit 1
 fi
 
 # Fix 3 (see script header): sweep remote job workers abandoned by an already

@@ -30,9 +30,9 @@ Treat the digest's endpoint result as a presence signal, not proof that the task
 Read the targeted current state with `bin/fm-crew-state.sh <id>` before deciding to relaunch.
 A no-mistakes run matched to the crew's branch and current code remains authoritative when the endpoint is dead: handle a terminal or parked run through the normal lifecycle, and keep supervising an active run instead of creating a duplicate worker.
 
-When no authoritative run accounts for the task, inspect only its recorded backend and worktree inventory.
-Use `treehouse status` for treehouse-backed tmux, herdr, zellij, or cmux tasks, and use the recorded `orca_worktree_id=` and `terminal=` for Orca tasks.
-Do not sweep another home's endpoints or infer ownership from a matching window label.
+When no authoritative run accounts for the task, inspect its exact recorded Herdr endpoint and Treehouse worktree inventory.
+Use `treehouse status` for the isolated copy and the recorded Herdr session, workspace, tab, and pane identities for the endpoint.
+Absent, legacy, contradictory, or unreachable identity is a blocker; do not sweep another home's endpoints or infer ownership from a matching label.
 
 Before relaunch, prove that no live agent still owns the recorded task and that the existing worktree remains available.
 Preserve its uncommitted changes and commits, keep the same task identity, and resume or relaunch the recorded harness in that existing worktree with the same brief plus a concise progress note.

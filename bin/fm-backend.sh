@@ -219,7 +219,6 @@ fm_backend_expected_label_of_selector() {
 fm_backend_resolve_selector() {
   local raw=$1 state=$2 meta id
   meta=$(fm_backend_meta_for_selector "$raw" "$state" 2>/dev/null || true)
-  [ -n "$meta" ] || meta=$(fm_backend_meta_for_window "$raw" "$state" 2>/dev/null || true)
   if [ -z "$meta" ]; then
     echo "error: no task metadata for '$raw'; ad hoc or legacy endpoint selection is unsupported in the Herdr-only edition" >&2
     return 1

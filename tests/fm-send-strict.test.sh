@@ -91,14 +91,20 @@ test_prefixless_and_legacy_explicit_targets_refuse() {
   PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" FM_HERDR_LOG="$log" \
     "$SEND" w1:p1 "nudge" >/dev/null 2>"$dir/prefixless.err"; rc=$?
   [ "$rc" -ne 0 ] || fail "a prefixless Herdr pane unexpectedly sent"
-  assert_contains "$(cat "$dir/prefixless.err")" "missing its herdr session prefix" \
-    "the prefixless pane blocker was not concrete"
+  assert_contains "$(cat "$dir/prefixless.err")" "not a recorded task selector" \
+    "the prefixless pane blocker did not require a task selector"
+
+  PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" FM_HERDR_LOG="$log" \
+    "$SEND" lab:w1:p1 "nudge" >/dev/null 2>"$dir/exact-window.err"; rc=$?
+  [ "$rc" -ne 0 ] || fail "a recorded task's raw endpoint unexpectedly sent"
+  assert_contains "$(cat "$dir/exact-window.err")" "not a recorded task selector" \
+    "the raw endpoint blocker did not require its task selector"
 
   PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" FM_HERDR_LOG="$log" \
     "$SEND" legacy:window "nudge" >/dev/null 2>"$dir/legacy.err"; rc=$?
   [ "$rc" -ne 0 ] || fail "a legacy explicit target unexpectedly sent"
   assert_contains "$(cat "$dir/legacy.err")" "ad hoc endpoint selection is unsupported" \
-    "the legacy target blocker did not require recorded task metadata"
+    "the legacy target blocker did not require a recorded task selector"
   [ ! -s "$log" ] || fail "an invalid explicit target reached Herdr"
   pass "fm-send refuses prefixless and legacy explicit endpoint identities"
 }
