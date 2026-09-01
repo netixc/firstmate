@@ -77,6 +77,12 @@ FM_AFK_LAUNCH_WS_LABEL="firstmate-afk-daemon"
 . "$FM_AFK_LAUNCH_DIR/fm-backend.sh"
 # shellcheck source=bin/fm-supervisor-target-lib.sh
 . "$FM_AFK_LAUNCH_DIR/fm-supervisor-target-lib.sh"
+if [ "${BASH_SOURCE[0]}" = "${0}" ] && [ "${1:-start}" = start ]; then
+  FM_AFK_PREFLIGHT_TARGET=$(discover_supervisor_target) || exit 1
+  FM_AFK_PREFLIGHT_BACKEND=$(discover_supervisor_backend) || exit 1
+  fm_backend_validate_supervisor_endpoint "$FM_AFK_PREFLIGHT_BACKEND" "$FM_AFK_PREFLIGHT_TARGET" || exit 1
+  unset FM_AFK_PREFLIGHT_TARGET FM_AFK_PREFLIGHT_BACKEND
+fi
 # fm-afk-start.sh provides the daemon-lock liveness helpers and
 # fm_afk_clear_stale_artifacts; it is sourceable (BASH_SOURCE guard) and its
 # main does not run on source. It sets `set -eu`, so turn errexit back off for
@@ -372,8 +378,10 @@ fm_afk_launch_create_herdr() {  # <captain-target> <captain-backend>
     fm_afk_launch_log "cannot derive herdr session from captain target '$captain_target'"
     return 1
   fi
-  fm_backend_source herdr || return 1
-  fm_backend_herdr_server_ensure "$session" || { fm_afk_launch_log "herdr server not ready for session '$session'"; return 1; }
+  fm_backend_validate_supervisor_endpoint "$captain_backend" "$captain_target" || {
+    fm_afk_launch_log "captain Herdr pane is not passively reachable at '$captain_target'"
+    return 1
+  }
   label=${FM_AFK_LAUNCH_LABEL:-"$FM_AFK_LAUNCH_WS_LABEL-$$-${RANDOM:-0}-$(date '+%s')"}
   out=$(fm_backend_herdr_cli "$session" workspace create --cwd "$FM_HOME" --label "$label" --no-focus 2>/dev/null)
   create_result=$?
@@ -427,6 +435,10 @@ fm_afk_launch_start() {
     fm_afk_launch_log "could not resolve the captain supervisor pane (set FM_SUPERVISOR_TARGET)"; return 1; }
   captain_backend=$(discover_supervisor_backend) || {
     fm_afk_launch_log "could not resolve the captain supervisor backend (set FM_SUPERVISOR_BACKEND)"; return 1; }
+  fm_backend_validate_supervisor_endpoint "$captain_backend" "$captain_target" || {
+    fm_afk_launch_log "captain Herdr pane is not passively reachable at '$captain_target'"
+    return 1
+  }
 
   mkdir -p "$FM_AFK_LAUNCH_STATE"
 
@@ -581,7 +593,21 @@ fm_afk_launch_stop() {
 }
 
 fm_afk_launch_main() {
-  local result
+  local result captain_target captain_backend
+  if [ "${1:-start}" = start ]; then
+    captain_target=$(discover_supervisor_target) || {
+      fm_afk_launch_log "could not resolve the captain supervisor pane (set FM_SUPERVISOR_TARGET)"
+      return 1
+    }
+    captain_backend=$(discover_supervisor_backend) || {
+      fm_afk_launch_log "could not resolve the captain supervisor backend (set FM_SUPERVISOR_BACKEND)"
+      return 1
+    }
+    fm_backend_validate_supervisor_endpoint "$captain_backend" "$captain_target" || {
+      fm_afk_launch_log "captain Herdr pane is not passively reachable at '$captain_target'"
+      return 1
+    }
+  fi
   # Traps first, lock second. Acquiring before the handlers exist leaves a
   # window where a signal terminates this process by default action and leaks
   # the lock directory, which then blocks the next away-mode launch until the

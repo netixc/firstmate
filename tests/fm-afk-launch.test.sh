@@ -225,6 +225,36 @@ unit_failed_start_rolls_back_state() {
   rm -rf "$st"
 }
 
+unit_unreachable_captain_refuses_before_creation() {
+  local st fakebin log
+  st=$(mktemp -d "${TMPDIR:-/tmp}/fm-afk-unreachable-captain.XXXXXX")
+  fakebin="$st/fakebin"
+  log="$st/herdr.log"
+  mkdir -p "$fakebin"
+  cat > "$fakebin/herdr" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$FM_FAKE_HERDR_LOG"
+case "${1:-} ${2:-}" in
+  "status --json") printf '%s\n' '{"client":{"protocol":16,"version":"0.8.2"},"server":{"running":true}}' ;;
+  "pane get") exit 1 ;;
+  *) exit 1 ;;
+esac
+SH
+  chmod +x "$fakebin/herdr"
+  if PATH="$fakebin:$PATH" FM_FAKE_HERDR_LOG="$log" FM_HOME="$st" \
+    FM_STATE_OVERRIDE="$st/state" FM_SUPERVISOR_TARGET=lab:w1:p9 \
+    FM_SUPERVISOR_BACKEND=herdr "$LAUNCH" start >/dev/null 2>&1; then
+    fail "unreachable captain: away launch unexpectedly succeeded"
+  elif [ -e "$st/state" ]; then
+    fail "unreachable captain: away launch mutated lifecycle state"
+  elif grep -E '(^| )server( |$)|workspace create' "$log" >/dev/null 2>&1; then
+    fail "unreachable captain: away launch created another endpoint"
+  else
+    pass "unreachable captain: passive preflight refuses before state or endpoint creation"
+  fi
+  rm -rf "$st"
+}
+
 unit_lock_initialization_grace() {
   local st marker initializer
   st=$(mktemp -d "${TMPDIR:-/tmp}/fm-afk-lock-init.XXXXXX")
@@ -262,6 +292,9 @@ unit_signal_exits_with_lock_cleanup() {
   marker="$st/resumed"
   FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" bash -c '
     . "$1"
+    discover_supervisor_target() { printf "lab:w1:p2"; }
+    discover_supervisor_backend() { printf "herdr"; }
+    fm_backend_validate_supervisor_endpoint() { return 0; }
     fm_afk_launch_start() { sleep 30; }
     fm_afk_launch_main start
     : > "$2"
@@ -299,8 +332,7 @@ unit_herdr_partial_create_recovery() {
   FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" FM_AFK_LAUNCH_ENTRY=/bin/true \
     FM_AFK_LAUNCH_LABEL=afk-exact-label RECORDED="$recorded" bash -c '
     . "$1"
-    fm_backend_source() { return 0; }
-    fm_backend_herdr_server_ensure() { return 0; }
+    fm_backend_validate_supervisor_endpoint() { return 0; }
     fm_backend_herdr_cli() {
       if [ "$2 $3" = "workspace create" ]; then
         printf %s '\''truncated'\''
@@ -327,8 +359,7 @@ unit_herdr_error_with_exact_ids_closes_exact() {
   st=$(mktemp -d "${TMPDIR:-/tmp}/fm-afk-herdr-error-exact.XXXXXX")
   FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" bash -c '
     . "$1"
-    fm_backend_source() { return 0; }
-    fm_backend_herdr_server_ensure() { return 0; }
+    fm_backend_validate_supervisor_endpoint() { return 0; }
     fm_backend_herdr_cli() {
       if [ "$2 $3" = "workspace create" ]; then
         printf %s '\''{"result":{"workspace":{"workspace_id":"ws-exact"},"root_pane":{"pane_id":"pane-exact"}}}'\''
@@ -354,8 +385,7 @@ unit_herdr_run_failure_preserves_unconfirmed_record() {
   st=$(mktemp -d "${TMPDIR:-/tmp}/fm-afk-herdr-run-fail.XXXXXX")
   FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" bash -c '
     . "$1"
-    fm_backend_source() { return 0; }
-    fm_backend_herdr_server_ensure() { return 0; }
+    fm_backend_validate_supervisor_endpoint() { return 0; }
     fm_backend_herdr_cli() {
       if [ "$2 $3" = "workspace create" ]; then
         printf %s '\''{"result":{"workspace":{"workspace_id":"ws-exact"},"root_pane":{"pane_id":"pane-exact"}}}'\''
@@ -797,6 +827,7 @@ unit_fresh_vs_refresh
 unit_stop_ordering
 unit_stop_rejects_reused_pid
 unit_failed_start_rolls_back_state
+unit_unreachable_captain_refuses_before_creation
 unit_lock_initialization_grace
 unit_signal_exits_with_lock_cleanup
 unit_herdr_partial_create_recovery

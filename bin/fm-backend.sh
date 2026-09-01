@@ -254,19 +254,43 @@ fm_backend_source() {
   fi
 }
 
-fm_backend_validate_task_operation() {  # <backend> <target> [expected-label]
-  local backend=$1 target=$2 label=${3:-} id meta
-  fm_backend_validate "$backend" || return 1
-  if [ -n "$label" ]; then
-    case "$label" in fm-?*) id=${label#fm-} ;; *) return 1 ;; esac
-    meta="$FM_HOME/state/$id.meta"
-  else
-    meta=$(fm_backend_meta_for_window "$target" "$FM_HOME/state" 2>/dev/null) || {
-      echo "REFUSED: Herdr endpoint '$target' has no unique recorded task binding; no endpoint action was attempted." >&2
+fm_backend_validate_supervisor_endpoint() {  # <backend> <target>
+  local backend=$1 target=$2 session pane live state=0
+  fm_backend_source "$backend" || return 1
+  session=${target%%:*}
+  pane=${target#*:}
+  [ -n "$session" ] && [ -n "$pane" ] && [ "$pane" != "$target" ] \
+    && fm_backend_endpoint_atom_valid "$session" \
+    && fm_backend_endpoint_child_valid "${pane%%:*}" "$pane" || {
+      echo "REFUSED: supervisor Herdr endpoint '$target' is malformed; no endpoint action was attempted." >&2
       return 1
     }
-    id=$(basename "$meta" .meta)
+  fm_backend_herdr_version_check || return 1
+  fm_backend_herdr_server_running "$session" >/dev/null || state=$?
+  if [ "$state" -ne 0 ]; then
+    [ "$state" -ne 1 ] || echo "REFUSED: supervisor Herdr session '$session' is not running; no endpoint action was attempted." >&2
+    return 1
   fi
+  live=$(fm_backend_herdr_cli "$session" pane get "$pane" 2>/dev/null) || {
+    echo "REFUSED: supervisor Herdr pane '$pane' in session '$session' is unreachable; no endpoint action was attempted." >&2
+    return 1
+  }
+  printf '%s' "$live" | jq -e --arg pane "$pane" \
+    '.result.pane.pane_id == $pane and (.result.pane.workspace_id | type) == "string" and (.result.pane.workspace_id | length) > 0 and (.result.pane.tab_id | type) == "string" and (.result.pane.tab_id | length) > 0' >/dev/null 2>&1 || {
+      echo "REFUSED: live supervisor Herdr pane identity is malformed or contradicts '$target'; no endpoint action was attempted." >&2
+      return 1
+    }
+}
+
+fm_backend_validate_task_operation() {  # <backend> <target> [expected-label]
+  local backend=$1 target=$2 label=${3:-} id meta
+  if [ -z "$label" ]; then
+    fm_backend_validate_supervisor_endpoint "$backend" "$target"
+    return
+  fi
+  fm_backend_validate "$backend" || return 1
+  case "$label" in fm-?*) id=${label#fm-} ;; *) return 1 ;; esac
+  meta="$FM_HOME/state/$id.meta"
   fm_backend_validate_active_task_endpoint "$meta" "$id" || return 1
   if [ "$FM_BACKEND_VALIDATED_TARGET" != "$target" ]; then
     echo "REFUSED: Herdr endpoint '$target' contradicts the recorded endpoint for task $id; no endpoint action was attempted." >&2

@@ -44,8 +44,9 @@ case "${1:-} ${2:-}" in
     ;;
   "pane get")
     [ "${3:-}" = w1:p2 ] || exit 1
-    printf '{"result":{"pane":{"workspace_id":"%s","tab_id":"%s","pane_id":"w1:p2"}}}\n' \
-      "${FM_FAKE_LIVE_WORKSPACE:-w1}" "${FM_FAKE_LIVE_TAB:-w1:t1}"
+    printf '{"result":{"pane":{"workspace_id":"%s","tab_id":"%s","pane_id":"%s"}}}\n' \
+      "${FM_FAKE_LIVE_WORKSPACE:-w1}" "${FM_FAKE_LIVE_TAB:-w1:t1}" \
+      "${FM_FAKE_LIVE_PANE:-w1:p2}"
     ;;
   "tab list")
     printf '{"result":{"tabs":[{"workspace_id":"w1","tab_id":"w1:t1","label":"%s"}]}}\n' \
@@ -82,6 +83,13 @@ assert_eq "$(fm_backend_resolve_selector task "$TMP/home/state")" lab:w1:p2 "tas
 fm_backend_target_exists herdr lab:w1:p2 fm-task || fail "exact live task hierarchy should exist"
 assert_eq "$(fm_backend_capture herdr lab:w1:p2 10 fm-task)" "task output" \
   "task-bound capture must accept the exact live task hierarchy"
+assert_eq "$(fm_backend_capture herdr lab:w1:p2 10)" "task output" \
+  "supervisor capture must accept an exact passively validated pane"
+export FM_FAKE_LIVE_PANE=w1:p9
+if fm_backend_capture herdr lab:w1:p2 10 >"$TMP/out" 2>"$TMP/err"; then
+  fail "supervisor capture must reject a contradictory live pane identity"
+fi
+unset FM_FAKE_LIVE_PANE
 export FM_FAKE_LIVE_LABEL=fm-other
 if fm_backend_target_exists herdr lab:w1:p2 fm-task; then
   fail "target existence must reject reused hierarchy IDs bound to another task label"
