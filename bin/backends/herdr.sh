@@ -2558,8 +2558,6 @@ fm_backend_herdr_normalize_key() {  # <key>
     Enter|enter) printf 'enter' ;;
     Escape|escape|Esc|esc) printf 'escape' ;;
     C-c|c-c|ctrl+c|Ctrl+C) printf 'ctrl+c' ;;
-    # C-u clears a composer line. fm-send.sh's muse interrupt path needs it to
-    # drop the prompt muse restores into the composer after Escape.
     C-u|c-u|ctrl+u|Ctrl+U) printf 'ctrl+u' ;;
     *) printf '%s' "$1" ;;
   esac
@@ -2612,11 +2610,9 @@ fm_backend_herdr_capture_ansi() {  # <target> <lines>
 # These functions are the ONLY herdr-specific composer knowledge left: the
 # ANSI pane capture (with its small-N workaround), the native `agent get`
 # identity probe, and the capability descriptor. Every shape - the bordered
-# box, the bare agent-glyph row, opencode's left-bar, and pi's
 # identity-gated separated pair (which this adapter pioneered) - now lives in
 # the shared owner (bin/fm-composer-lib.sh, fm_composer_classify_screen), so
 # a new harness shape is taught there once and every backend learns it in the
-# same commit. The muse `⟩` glyph this adapter's local bare-prompt pattern
 # silently omitted is exactly the drift class that consolidation removes.
 
 fm_backend_herdr_agent_identity_raw() {  # <session> <pane> -> <agent>\t<status>
@@ -2690,12 +2686,10 @@ fm_backend_herdr_rendered_busy_state() {  # <target> [harness] -> busy|idle|unkn
 # fm_composer_queued_enter_verdict confirms delivery. Verified hazard
 # (herdr-verification-p2.md "slash/$ autocomplete popup"): a `/`- or
 # `$`-prefixed send opens a completion popup within ~0.1s, exactly like tmux's
-# claude/codex popups, so the caller's <settle> before the first Enter matters
 # here the same way it does for tmux.
 #
 # Confirmation signal: when the target is legibly idle before Enter,
 # submission is confirmed by fm_backend_herdr_wait_for_working observing a
-# submit-active agent_status after Enter. Live Claude on Herdr 0.8.0 can
 # keep agent_status idle for a whole landed turn, so an idle native result
 # falls through to the shared composer verdict: empty is positive delivery,
 # proven pending retries Enter, and retries-exhausted pending plus a
@@ -2704,9 +2698,6 @@ fm_backend_herdr_rendered_busy_state() {  # <target> [harness] -> busy|idle|unkn
 #
 # Incident (2026-07-07, followed up on 2026-07-08): a redelivery loop in the
 # away-mode daemon. Root cause: composer-content submit confirmation was too
-# sensitive to harness rendering details. Real claude/codex use bare prompt
-# rows, and real codex adds dynamic idle suggestions after `›`; the later
-# ANSI-aware composer classifier now handles that Codex shape, and idle-baseline
 # submit confirmation still prefers native agent-state so a faint idle tip
 # cannot block a landed send. Composer content is consulted only after native
 # state stays idle, as the empty/pending owner, and for submit attempts whose
@@ -2732,10 +2723,8 @@ fm_backend_herdr_rendered_busy_state() {  # <target> [harness] -> busy|idle|unkn
 #     composer on an idle pane is a swallow; extra Enter on an already-empty
 #     composer is a no-op, not a duplicate delivery of <text>.
 # Fallback path, for a harness whose native agent-state is never legibly idle
-# (measured live: herdr reports a cursor pane `blocked` in every state - idle,
 # mid-turn, and after - so the idle-baseline path above is structurally
 # unreachable for it). That harness always lands in the composer branch, and
-# cursor's mid-turn composer row renders its own placeholder beside a
 # right-aligned `ctrl+c to stop`, so the content verdict is `pending` on a
 # composer that holds no user text at all and every steer reported delivery
 # unconfirmed on a message that had actually landed.
@@ -2749,12 +2738,9 @@ fm_backend_herdr_rendered_busy_state() {  # <target> [harness] -> busy|idle|unkn
 # mid-turn cannot use a rendered-footer transition as proof of this Enter;
 # only the separate retries-exhausted, proven-pending queued-Enter verdict can
 # confirm delivery from its native working state.
-# Queued-while-busy Enter (OpenCode 1.18.4, and any harness that keeps typed
 # text visible until the current turn ends): after the retry budget, a proven
 # pending composer plus native agent_status=working is delivered, not swallowed.
-# blocked is not working, so a Cursor pane that is blocked in every state does
 # not receive this conversion. On an idle native baseline, a rendered busy
-# footer may supply the same generating signal because live Claude never leaves
 # idle. The policy is fm_composer_queued_enter_verdict; this adapter only
 # supplies the busy primitive.
 # Echoes empty|pending|unknown|send-failed, a subset of the proof-carrying
@@ -2763,9 +2749,7 @@ fm_backend_herdr_rendered_busy_state() {  # <target> [harness] -> busy|idle|unkn
 #
 # fm_backend_herdr_queued_enter_busy: delivery-busy for the shared queued-Enter
 # conversion. Native agent_status=working is generating; blocked is not (a
-# permission prompt, or Cursor's always-blocked native state, is not a queued
 # mid-turn). When <allow-rendered> is 1, an idle native baseline may also take
-# the pane's rendered busy footer, because live Claude keeps agent_status idle
 # through a whole turn.
 fm_backend_herdr_queued_enter_busy() {  # <target> <allow-rendered>
   local target=$1 allow_rendered=${2:-0} raw
@@ -2816,7 +2800,6 @@ fm_backend_herdr_send_text_submit() {  # <target> <text> <retries> <enter-sleep>
         unknown) printf 'unknown'; return 0 ;;
       esac
       # Native stayed idle. Composer empty is positive delivery (a landed
-      # Claude turn that never flipped agent_status). Proven pending retries.
       verdict=$(fm_backend_herdr_composer_state "$target")
       case "$verdict" in
         empty) printf 'empty'; return 0 ;;
@@ -3009,7 +2992,6 @@ fm_backend_herdr_busy_state() {  # <target>
 #             the submit landed - independent of
 #             whatever the composer's own text happens to show (docs/
 #             herdr-backend.md "Incident (2026-07-07)": composer content is
-#             what fooled the OLD confirmation on codex's dynamic idle-tip
 #             text). Returned the INSTANT it is seen, without waiting out the
 #             rest of the budget.
 #   idle    - the target was legibly read at least once and never reported

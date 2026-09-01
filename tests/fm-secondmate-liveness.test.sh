@@ -97,11 +97,9 @@ SH
 test_tmux_agent_state_classifies() {
   local fb out
 
-  for harness in claude codex opencode grok kimi pi pi-signed pi-launcher Pi; do
-    fb=$(make_probe_tmux "$TMP_ROOT/tmux-$harness" "$harness")
-    out=$(PATH="$fb:$BASE_PATH" bash -c '. "$0/bin/fm-backend.sh"; fm_backend_agent_state tmux sess:win' "$ROOT")
-    [ "$out" = alive ] || fail "a live $harness foreground process should classify as alive, got '$out'"
-  done
+  fb=$(make_probe_tmux "$TMP_ROOT/tmux-pi" pi)
+  out=$(PATH="$fb:$BASE_PATH" bash -c '. "$0/bin/fm-backend.sh"; fm_backend_agent_state tmux sess:win' "$ROOT")
+  [ "$out" = alive ] || fail "a live Pi foreground process should classify as alive, got '$out'"
 
   for shell in zsh bash -zsh; do
     fb=$(make_probe_tmux "$TMP_ROOT/tmux-${shell#-}" "$shell")
@@ -183,7 +181,7 @@ test_herdr_agent_state_preserves_husk_classifier() {
 test_agent_state_dispatcher_and_compatibility() {
   local fb out
 
-  fb=$(make_probe_tmux "$TMP_ROOT/dispatch-tmux" claude)
+  fb=$(make_probe_tmux "$TMP_ROOT/dispatch-tmux" pi)
   out=$(PATH="$fb:$BASE_PATH" bash -c '. "$0/bin/fm-backend.sh"; fm_backend_agent_state tmux sess:win' "$ROOT")
   [ "$out" = alive ] || fail "detailed dispatcher should route tmux, got '$out'"
 
@@ -206,7 +204,8 @@ test_agent_state_dispatcher_and_compatibility() {
 make_toolchain() {
   local dir=$1 fakebin
   fakebin=$(fm_fakebin "$dir")
-  fm_fake_exit0 "$fakebin" node chrome-devtools-axi pi-signed
+  fm_fake_exit0 "$fakebin" node chrome-devtools-axi
+  fm_fake_version_tool "$fakebin" pi FM_FAKE_PI_VERSION 0.84.4
   fm_fake_version_tool "$fakebin" lavish-axi FM_FAKE_LAVISH_AXI_VERSION 0.1.46
   cat > "$fakebin/gh-axi" <<'SH'
 #!/usr/bin/env bash
@@ -322,7 +321,7 @@ new_world() {
   w="$TMP_ROOT/$name"
   mkdir -p "$w/home/state" "$w/home/config"
   touch "$w/home/state/.last-watcher-beat"
-  printf 'codex\n' > "$w/home/config/crew-harness"
+  printf 'pi\n' > "$w/home/config/crew-harness"
   printf '%s\n' "$w"
 }
 
@@ -331,7 +330,7 @@ new_world() {
 # worktree; a non-git home just makes the unrelated fast-forward sweep log a
 # harmless "not a git repo" skip.
 add_sm_home() {
-  local w=$1 id=$2 window=$3 harness=${4:-claude}
+  local w=$1 id=$2 window=$3 harness=${4:-pi}
   local home="$w/$id"
   mkdir -p "$home/bin" "$home/data" "$home/state" "$home/config" "$home/projects"
   printf '%s\n' "$id" > "$home/.fm-secondmate-home"
@@ -377,13 +376,13 @@ test_sweep_leaves_alive_secondmate_untouched() {
   fb=$(make_toolchain "$w"); tmuxfb=$(make_liveness_tmux "$w")
   log="$w/calls.log"; : > "$log"
 
-  out=$(run_bootstrap "$tmuxfb:$fb" "$w/home" claude "$log")
+  out=$(run_bootstrap "$tmuxfb:$fb" "$w/home" pi "$log")
 
   assert_not_contains "$out" "SECONDMATE_LIVENESS: secondmate sm1: already-live" \
     "an already-live secondmate should be handled silently"
   [ ! -s "$log" ] || fail "an already-live secondmate must never be killed or respawned: $(cat "$log")"
 
-  out=$(run_bootstrap "$tmuxfb:$fb" "$w/home" claude "$log" FM_BOOTSTRAP_VERBOSE_FACTS=1)
+  out=$(run_bootstrap "$tmuxfb:$fb" "$w/home" pi "$log" FM_BOOTSTRAP_VERBOSE_FACTS=1)
   assert_contains "$out" "BOOTSTRAP_INFO: secondmate sm1 already live (backend=tmux)" \
     "verbose diagnostics should identify the already-live outcome"
   [ ! -s "$log" ] || fail "verbose reporting must not touch an already-live secondmate: $(cat "$log")"
@@ -403,25 +402,6 @@ test_sweep_respawns_authoritatively_missing_pi_secondmate() {
   assert_contains "$(cat "$log")" "new-window" "an authoritatively missing Pi secondmate should be relaunched"
   assert_not_contains "$(cat "$log")" "kill-window" "an absent window should not need a destructive pre-kill"
   pass "sweep: an authoritatively missing Pi secondmate window is relaunched"
-}
-
-test_sweep_respawns_authoritatively_missing_pi_signed_secondmate() {
-  local w fb tmuxfb log out
-  w=$(new_world sweep-missing-pi-signed)
-  printf '%s\n' pi-signed > "$w/home/config/secondmate-harness"
-  add_sm_home "$w" sm1 firstmate:fm-sm1 pi-signed
-  fb=$(make_toolchain "$w"); tmuxfb=$(make_liveness_tmux "$w")
-  log="$w/calls.log"; : > "$log"
-
-  out=$(run_bootstrap "$tmuxfb:$fb" "$w/home" missing "$log")
-
-  assert_not_contains "$out" "unverified for recovery" \
-    "a recorded pi-signed secondmate should be verified for recovery"
-  assert_contains "$(cat "$log")" "new-window" \
-    "an authoritatively missing pi-signed secondmate should be relaunched"
-  assert_not_contains "$(cat "$log")" "kill-window" \
-    "an absent pi-signed window should not need a destructive pre-kill"
-  pass "sweep: an authoritatively missing pi-signed secondmate window is relaunched"
 }
 
 test_sweep_never_acts_on_ambiguous_existing_process() {
@@ -498,7 +478,7 @@ test_sweep_converges_no_retouch_once_alive() {
   # Round 2: the (now-respawned) secondmate is genuinely alive - a second
   # sweep must converge to a pure no-op, not respawn again.
   : > "$log"
-  out2=$(run_bootstrap "$tmuxfb:$fb" "$w/home" claude "$log")
+  out2=$(run_bootstrap "$tmuxfb:$fb" "$w/home" pi "$log")
   assert_not_contains "$out2" "SECONDMATE_LIVENESS: secondmate sm1: already-live" "round 2 should handle the already-live secondmate silently"
   [ ! -s "$log" ] || fail "round 2 must not re-kill or re-respawn an already-live secondmate: $(cat "$log")"
   pass "sweep: idempotent by construction - a live secondmate is never re-touched on a later run"
@@ -509,7 +489,7 @@ test_sweep_skipped_under_detect_only() {
   w=$(new_world sweep-detect-only)
   add_sm_home "$w" sm1 firstmate:fm-sm1
   mkdir -p "$w/home/config"
-  printf 'codex\n' > "$w/home/config/crew-harness"
+  printf 'pi\n' > "$w/home/config/crew-harness"
   fb=$(make_toolchain "$w"); tmuxfb=$(make_liveness_tmux "$w")
   log="$w/calls.log"; : > "$log"
 
@@ -547,7 +527,6 @@ test_agent_state_dispatcher_and_compatibility
 test_sweep_respawns_confirmed_dead_secondmate
 test_sweep_leaves_alive_secondmate_untouched
 test_sweep_respawns_authoritatively_missing_pi_secondmate
-test_sweep_respawns_authoritatively_missing_pi_signed_secondmate
 test_sweep_never_acts_on_ambiguous_existing_process
 test_sweep_never_acts_on_transient_unreadability
 test_sweep_reports_missing_endpoint_relaunch_failure

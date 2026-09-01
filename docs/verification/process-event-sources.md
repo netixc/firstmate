@@ -161,10 +161,8 @@ The 2026-08-27 review inspected `bin/fm-harness.sh`, `bin/fm-supervision-instruc
 
 | Axis | Reviewed boundary and result |
 | --- | --- |
-| Claude, Codex, OpenCode, Pi, pi-signed, Grok, and Cursor primaries | Applicable only at the existing watcher continuation after one shared `check` wake; no package byte, command, state path, or verdict enters a harness-specific integration. |
-| Kimi | The process-event path never enters the worker runtime, and a Kimi primary retains the existing unknown-protocol supervision fallback rather than gaining extension-specific behavior. |
-| Muse | Muse remains a crewmate/scout-only runtime, so no primary process-event integration exists; external adapters still run in the owning home, not in Muse. |
-| Claude, Codex, OpenCode, Pi, pi-signed, Grok, Kimi, Cursor, and Muse task workers | Not applicable after inspecting harness detection and launch ownership, because source registration has no task metadata or worker endpoint and the package is never launched through `fm-spawn`. |
+| Plain Pi primary | Applicable only at the existing continuation after one shared notification; no package byte, command, local path, or verdict enters a harness-specific integration. |
+| Plain Pi task workers | Not applicable: source registration has no task metadata or worker endpoint and the package is never launched through `fm-spawn`. |
 | tmux, Herdr, Zellij, Orca, and cmux session providers | Not applicable after inspecting the known and spawn-capable backend dispatch sets, because process-event execution calls no backend selector, capture, send, liveness, or cleanup primitive. |
 | Local and remote secondmate homes | Applicable at the home boundary only; each home owns its own binding, content-addressed package, extension state, registration, result, and watcher, and `config/extensions.d` remains outside the inherited-material allowlist. |
 
@@ -194,7 +192,7 @@ Without this launcher, reconcile would silently fail to start a runner on macOS 
 
 ## Scope
 
-The runner is domain-neutral and creates no endpoint, task metadata, or backlog item, so the supported primary harnesses and runtime backends are unaffected except through the existing `check` and status-signal wake paths they already consume.
+The runner is domain-neutral and creates no endpoint, task metadata, or backlog item, so the Pi primary and runtime backends are unaffected except through the existing `check` and status-signal wake paths they already consume.
 Built-in adapters extend the runner through `bin/fm-procevent-<adapter>.sh`; the `when` adapter also uses the runner library's locked registration publisher so its private trust state and source registration are serialized under one source boundary.
 Explicit external adapters instead use the single-capability contract in [`docs/extension-bindings.md`](../extension-bindings.md), with no filename discovery or package-supplied argv.
 An adapter's `terminal` command is optional and defaults to keeping the source armed.

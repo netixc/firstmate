@@ -251,9 +251,9 @@ fm_write_meta() {
 # fm_write_secondmate_meta <file> <home> [window] [projects] [harness]: write the
 # standard kind=secondmate meta block used across the secondmate suites. Window
 # defaults to firstmate:fm-<id>, projects defaults to alpha, and harness defaults
-# to echo to match the common case.
+# to the sole supported worker identity, plain Pi.
 fm_write_secondmate_meta() {
-  local file=$1 home=$2 id window projects=${4:-alpha} harness=${5:-echo}
+  local file=$1 home=$2 id window projects=${4:-alpha} harness=${5:-pi}
   id=$(basename "$file" .meta)
   window=${3:-firstmate:fm-$id}
   fm_write_meta "$file" \

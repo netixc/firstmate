@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# fm-send pre-submit popup-settle selection (the codex `$<skill>` fix).
 #
 # Some TUIs open a completion popup when the composer's first character triggers
-# it: codex (and others) for a leading `/` slash command, and codex specifically
 # for a leading `$<skill>` invocation (e.g. `$no-mistakes`). Submitting before the
 # popup settles lets it swallow the Enter, so the line never submits. fm-send
 # absorbs this by pausing `settle` seconds AFTER typing and BEFORE the (retried)
@@ -14,10 +12,7 @@
 # rides the durable inbox instead, where only the constant doorbell (fixed
 # fast settle) touches the terminal:
 #   /...            -> 1.2  (universal; `/` only starts a command, never plain text)
-#   $... to codex   -> 1.2  (scoped: codex opens a `$<skill>` popup)
-#   $... to claude  -> inbox plane (NOT codex: `$` commonly starts plain text)
 #   $... explicit   -> 0.3  (session:window target has no meta -> harness unknown
-#                            -> non-codex safe default, still typed)
 #   plain text      -> inbox plane for a selector, 0.3 typed for an explicit target
 #
 # The popup-settle is the FIRST sleep recorded: fm_tmux_submit_core types the text,
@@ -117,7 +112,6 @@ first_settle() {  # <expected> <label> <harness|--explicit> <message> [selector-
 # a harness-native invocation no longer types its payload at all - it rides
 # the durable inbox, so no popup-settle question exists for it. Assert the
 # routing (record enqueued, payload never typed) and that the doorbell's own
-# fixed fast settle (0.3) is the first sleep, so the codex-scoped `$` rule can
 # never regress into slowing plain text again.
 rides_inbox() {  # <label> <harness> <message>
   local label=$1 harness=$2 msg=$3
@@ -137,31 +131,10 @@ rides_inbox() {  # <label> <harness> <message>
   pass "fm-send popup-settle: $label -> inbox plane, fast doorbell"
 }
 
-# Codex `$<skill>` gets the long settle so its `$` popup clears (the fix).
-first_settle 1.2 'codex $skill -> long settle' codex '$no-mistakes'
+# Plain Pi slash invocations use the long popup settle.
+first_settle 1.2 'Pi /command -> long settle' pi '/no-mistakes'
+first_settle 1.2 'Pi /command exact task id -> long settle' pi '/no-mistakes' exact
 
-# The same Codex `$<skill>` path must work when the target is addressed by exact
-# task id, not only by the legacy `fm-<id>` window label.
-first_settle 1.2 'codex $skill exact task id -> long settle' codex '$no-mistakes' exact
-
-# Same `$` message to claude is ordinary text there: it rides the inbox and
-# only the fast doorbell touches the terminal.
-rides_inbox 'claude $-message' claude '$no-mistakes'
-
-# `$`-prefixed plain text to claude (a price) is likewise ordinary text - the
-# regression the codex scoping exists to prevent can no longer slow it.
-rides_inbox 'claude "$5/month"' claude '$5/month is cheap'
-
-# An explicit session:window target has no meta, so the harness is unknown and
-# treated as non-codex: the safe default keeps the fast path even for a `$` message.
-first_settle 0.3 'explicit target $message -> fast path (unknown harness)' --explicit '$no-mistakes'
-
-# The `/` slash case stays universal and unchanged: long settle regardless of
-# harness (here a non-codex claude target).
-first_settle 1.2 'claude /command -> long settle (slash unchanged)' claude '/no-mistakes'
-
-# A `/` to codex is likewise still the long settle (slash path untouched).
-first_settle 1.2 'codex /command -> long settle (slash unchanged)' codex '/help'
-
-# Plain text to codex rides the inbox - the codex scope is `$`-prefixed only.
-rides_inbox 'codex plain text' codex 'just a normal steer'
+# Dollar-prefixed and plain text are ordinary durable-inbox steers for Pi.
+rides_inbox 'Pi $-message' pi '$no-mistakes'
+rides_inbox 'Pi plain text' pi 'just a normal steer'

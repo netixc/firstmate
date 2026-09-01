@@ -3156,270 +3156,6 @@ test_composer_state_pi_separator_requires_safe_native_identity() {
   pass "fm_backend_herdr_composer_state: Pi separators never authorize working, non-Pi, unreadable, or over-tall targets"
 }
 
-# --- composer_state: unbordered (bare) composer rows -------------------------
-# Regression coverage for the away-mode redelivery-loop incident
-# (docs/herdr-backend.md "Incident (2026-07-07)"): real claude and codex
-# composer rows carry NO border glyph at all - the fixtures below are captured
-# verbatim (character-for-character) from a real herdr session running real
-# `claude`/`codex` (see the dated evidence entry). Before the fix these all
-# read "unknown" (claude/codex fixtures) or produced a false "empty" from a
-# stale decorative box (the banner-priority fixture) - none of them correctly
-# tracked the live composer, which is exactly what caused
-# bin/fm-supervise-daemon.sh's fm_backend_herdr_send_text_submit to never
-# confirm a landed injection, so escalate_flush never cleared
-# state/.subsuper-escalations and the same digest was redelivered every cycle.
-
-test_composer_state_claude_unbordered_prompt_is_empty() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/composer-claude-bare-empty"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '  20\n  21\n\n\xe2\x9c\xbb Worked for 2s\n\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n\xe2\x9d\xaf\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n  Opus 4.8 (1M context)   \xe2\x96\x8d               3%%\n  \xe2\x86\x90 for agents\n' > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
-  [ "$out" = empty ] || fail "a genuinely idle, unbordered real-claude '❯' prompt row (no border glyph anywhere in view) should read empty, got '$out' (regression: this used to read 'unknown' forever, which is exactly what broke escalate_flush's buffer-clear)"
-  pass "fm_backend_herdr_composer_state: a real-claude unbordered '❯' prompt row (no border box in view) reads empty"
-}
-
-test_composer_state_claude_unbordered_prompt_is_pending() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/composer-claude-bare-pending"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '  20\n  21\n\n\xe2\x9c\xbb Worked for 2s\n\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n\xe2\x9d\xaf hello there this is a test message\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n' > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
-  [ "$out" = pending ] || fail "real unsubmitted text in an unbordered real-claude prompt row should read pending, got '$out'"
-  pass "fm_backend_herdr_composer_state: a real-claude unbordered '❯ <text>' prompt row reads pending"
-}
-
-# The exact incident shape: a bordered decorative box (claude's own startup
-# welcome banner) is STILL in the capture window, sitting ABOVE the live,
-# unbordered "❯" prompt. Before the fix, the bordered branch was the ONLY one
-# ever consulted, so the LAST bordered row (the banner's own blank interior
-# spacer row, immediately above its closing ╰──╯) won by construction and was
-# misread as the live composer - which happened to strip to empty here, but
-# for the same reason never tracks the REAL composer once real text is typed
-# below the banner (see the daemon-level E2E evidence in
-# docs/herdr-backend.md). The live, bottom-most row must win regardless of
-# shape.
-test_composer_state_bare_prompt_below_stale_bordered_banner_wins() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/composer-banner-priority"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '\xe2\x95\xad\xe2\x94\x80 Claude Code \xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x95\xae\n\xe2\x94\x82           Welcome back Kun!           \xe2\x94\x82\n\xe2\x94\x82                                       \xe2\x94\x82\n\xe2\x95\xb0\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x95\xaf\n\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n\xe2\x9d\xaf still typing captain\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n' > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
-  [ "$out" = pending ] || fail "the live unbordered prompt row below a stale bordered banner must win (pending, real text present), got '$out'"
-  pass "fm_backend_herdr_composer_state: a live unbordered prompt row below a stale bordered decorative box still wins (not misread as the box's own row)"
-}
-
-# THE OVERNIGHT WEDGE regression (task afk-herdr-false-pending). Captured
-# read-only from the live primary claude-on-herdr pane default:w1:p3 on
-# 2026-07-10: an idle composer whose only content is claude's rotating
-# prompt-suggestion GHOST, rendered SGR-2 dim after the bare "❯" prompt
-# ("❯ \033[0m\033[2m<suggestion>\033[0m"). herdr's `pane read --format ansi`
-# preserves the dim attribute. The pre-fix herdr classifier stripped ALL ANSI
-# and read the suggestion as real pending text (its only faint check matched
-# codex's bold-wrapped "\033[1m❯ \033[0m\033[2m", which this shape is NOT), so
-# every away-mode injection deferred with "pending input (non-empty composer)"
-# all night (6524 lifetime defers; wedge 30623s undelivered). The shared
-# ANSI-aware owner now drops the dim ghost and the row reads empty (safe to
-# inject).
-test_composer_state_claude_dim_prompt_suggestion_ghost_is_empty() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/composer-claude-dim-ghost"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '\xe2\x9c\xbb Brewed for 2m 40s\n\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n\xe2\x9d\xaf \x1b[0m\x1b[2mwhat did the wheelhouse healing verification find?\x1b[0m\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n  Fable 5                 80%%\n' > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p3' "$ROOT" )
-  [ "$out" = empty ] || fail "the overnight shape - claude's SGR-2 dim prompt-suggestion ghost after a bare '❯' - must read empty, got '$out' (regression: this false-pending wedged away-mode injection all night)"
-  pass "fm_backend_herdr_composer_state: claude's dim prompt-suggestion ghost (the overnight wedge shape) reads empty"
-}
-
-# Same prompt row, but the text after "❯" is REAL (normal intensity, no dim) -
-# it must still read pending, so the ghost fix never weakens real-input
-# protection.
-test_composer_state_claude_dim_ghost_row_with_real_text_is_pending() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/composer-claude-dim-ghost-real"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n\xe2\x9d\xaf land pr 416 now\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n  Fable 5                 80%%\n' > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p3' "$ROOT" )
-  [ "$out" = pending ] || fail "real normal-intensity text after '❯' must still read pending, got '$out'"
-  pass "fm_backend_herdr_composer_state: real typed text on the same claude prompt row still reads pending"
-}
-
-# grok's TRUECOLOR placeholder gap (harness-adapters "Known gap"), now covered by
-# the same owner. grok renders its composer inside a bordered box whose border
-# and placeholder/hint text use a dark, muted truecolor foreground (verified live
-# against grok 0.2.93: border 38;2;86;82;110, muted 38;2;50;47;70, hint
-# 38;2;110;106;134; real input is the BRIGHT 38;2;224;222;244), while the "❯"
-# prompt glyph stays bright. The dark placeholder drops and the row reads empty.
-test_composer_state_grok_dark_truecolor_placeholder_is_empty() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/composer-grok-truecolor-ghost"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '  \x1b[38;2;86;82;110m\xe2\x95\xad\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x95\xae\x1b[39m\n  \x1b[38;2;86;82;110m\xe2\x94\x82\x1b[38;2;224;222;244m \xe2\x9d\xaf \x1b[38;2;50;47;70mType a message...\x1b[38;2;86;82;110m \xe2\x94\x82\x1b[39m\n  \x1b[38;2;86;82;110m\xe2\x95\xb0\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x95\xaf\x1b[39m\n' > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
-  [ "$out" = empty ] || fail "a grok bordered composer whose only content is a dark-truecolor placeholder must read empty, got '$out'"
-  pass "fm_backend_herdr_composer_state: grok's dark-truecolor placeholder (the TRUECOLOR gap) reads empty"
-}
-
-# grok's bordered composer with REAL bright typed input must still read pending.
-test_composer_state_grok_bright_truecolor_real_text_is_pending() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/composer-grok-truecolor-real"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '  \x1b[38;2;86;82;110m\xe2\x95\xad\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x95\xae\x1b[39m\n  \x1b[38;2;86;82;110m\xe2\x94\x82\x1b[38;2;224;222;244m \xe2\x9d\xaf fix the login bug \x1b[38;2;86;82;110m\xe2\x94\x82\x1b[39m\n  \x1b[38;2;86;82;110m\xe2\x95\xb0\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x95\xaf\x1b[39m\n' > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
-  [ "$out" = pending ] || fail "real bright typed text in a grok bordered composer must read pending, got '$out'"
-  pass "fm_backend_herdr_composer_state: grok's real bright typed input still reads pending"
-}
-
-test_composer_state_codex_bare_prompt_glyph_is_empty() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/composer-codex-bare"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '\xe2\x80\xa2 You have 2 usage limit resets available.\n\n\xe2\x80\xba\n\n  gpt-5.5 xhigh \xc2\xb7 Context 100%% left\n' > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
-  [ "$out" = empty ] || fail "a bare '›' (codex) prompt glyph with no trailing text should read empty, got '$out'"
-  pass "fm_backend_herdr_composer_state: a real-codex unbordered '›' prompt row reads empty"
-}
-
-test_composer_state_codex_faint_suggestion_is_empty() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/composer-codex-faint-suggestion"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '\xe2\x80\xa2 You have 2 usage limit resets available. Run /usage\nto use one.\n\n\x1b[0m\x1b[1m\xe2\x80\xba \x1b[0m\x1b[2mFind and fix a bug in @filename\x1b[0m\n\n  gpt-5.5 xhigh \xc2\xb7 Context 100%% left\n' > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
-  [ "$out" = empty ] || fail "a faint real-codex ghost suggestion should read empty, not pending, got '$out'"
-  pass "fm_backend_herdr_composer_state: a faint real-codex ghost suggestion reads empty"
-}
-
-test_composer_state_codex_non_faint_same_text_is_pending() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/composer-codex-non-faint-same-text"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '\xe2\x80\xa2 You have 2 usage limit resets available. Run /usage\nto use one.\n\n\x1b[0m\x1b[1m\xe2\x80\xba \x1b[0mFind and fix a bug in @filename\n\n  gpt-5.5 xhigh \xc2\xb7 Context 100%% left\n' > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
-  [ "$out" = pending ] || fail "the same words without faint styling should still protect real typed input, got '$out'"
-  pass "fm_backend_herdr_composer_state: non-faint codex prompt text still reads pending"
-}
-
-# --- wait_for_working: the native agent-state poll-and-classify primitive ---
-# Direct unit coverage for fm_backend_herdr_wait_for_working, the helper
-# fm_backend_herdr_send_text_submit now uses instead of composer scraping
-# (docs/herdr-backend.md "Native agent-state submit confirmation").
-
-test_wait_for_working_returns_busy_on_first_poll() {
-  local dir log resp fb out calls
-  dir="$TMP_ROOT/wait-busy-first"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '{"result":{"agent":{"agent_status":"working"}}}\n' > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_wait_for_working default w1:p2 1 5' "$ROOT" )
-  [ "$out" = busy ] || fail "wait_for_working should report busy once 'working' is observed, got '$out'"
-  calls=$(grep -c $'\x1f''agent'$'\x1f''get' "$log")
-  [ "$calls" -eq 1 ] || fail "wait_for_working should short-circuit on the FIRST busy poll instead of consuming the whole budget, made $calls call(s)"
-  pass "fm_backend_herdr_wait_for_working: reports 'busy' immediately on the first poll, without spending the rest of the budget"
-}
-
-test_wait_for_working_catches_a_slow_transition_mid_window() {
-  local dir log resp fb out calls
-  dir="$TMP_ROOT/wait-busy-slow"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  # Two idle samples, then working on the third - a transition that would be
-  # MISSED by a single check-at-the-end design (the old composer approach's
-  # shape) but is caught here because the budget is sampled repeatedly.
-  printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/1.out"
-  printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/2.out"
-  printf '{"result":{"agent":{"agent_status":"working"}}}\n' > "$resp/3.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_wait_for_working default w1:p2 0.03 3' "$ROOT" )
-  [ "$out" = busy ] || fail "wait_for_working should catch a transition that lands on a later sample within the SAME window, got '$out'"
-  calls=$(grep -c $'\x1f''agent'$'\x1f''get' "$log")
-  [ "$calls" -eq 3 ] || fail "expected exactly 3 agent-get polls (idle, idle, working), got $calls"
-  pass "fm_backend_herdr_wait_for_working: a slow transition landing on a later sample within one window is still caught (robust against the 'slow transition' failure direction)"
-}
-
-test_wait_for_working_samples_budget_endpoint_without_final_sleep() {
-  local dir log resp fb out sleep_log sleeps
-  dir="$TMP_ROOT/wait-budget-endpoint"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; sleep_log="$dir/sleeps"; : > "$log"; : > "$sleep_log"
-  printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/1.out"
-  printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/2.out"
-  printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/3.out"
-  printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/4.out"
-  printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/5.out"
-  printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/6.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_SLEEP_LOG="$sleep_log" \
-    bash -c '. "$0/bin/backends/herdr.sh"; sleep() { printf "sleep:%s\n" "$1" >> "$FM_SLEEP_LOG"; }; fm_backend_herdr_wait_for_working default w1:p2 0.5 6' "$ROOT" )
-  [ "$out" = idle ] || fail "wait_for_working should report idle when every endpoint-spread poll is readable-idle, got '$out'"
-  sleeps=$(grep -c '^sleep:0.1000$' "$sleep_log")
-  [ "$sleeps" -eq 5 ] || fail "six polls across a 0.5s budget should sleep five times at 0.1000s, got $sleeps matching sleeps; log: $(cat "$sleep_log")"
-  pass "fm_backend_herdr_wait_for_working: spreads six samples across the full budget endpoint without a final trailing sleep"
-}
-
-test_send_text_submit_applies_herdr_minimum_confirm_budget() {
-  local dir log resp fb out sleep_log sleeps
-  dir="$TMP_ROOT/submit-min-budget"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; sleep_log="$dir/sleeps"; : > "$log"; : > "$sleep_log"
-  printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/2.out"
-  printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/4.out"
-  printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/5.out"
-  printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/6.out"
-  printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/7.out"
-  printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/8.out"
-  printf '{"result":{"agent":{"agent_status":"working"}}}\n' > "$resp/9.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_SLEEP_LOG="$sleep_log" FM_BACKEND_HERDR_SUBMIT_POLLS=6 FM_BACKEND_HERDR_SUBMIT_MIN_SLEEP=0.6 \
-    bash -c '. "$0/bin/backends/herdr.sh"; sleep() { printf "sleep:%s\n" "$1" >> "$FM_SLEEP_LOG"; }; fm_backend_herdr_send_text_submit default:w1:p2 "hello captain" 1 0.4 0' "$ROOT" )
-  [ "$out" = empty ] || fail "send_text_submit should catch a slow-but-valid transition inside the herdr minimum budget, got '$out'"
-  sleeps=$(grep -c '^sleep:0.1200$' "$sleep_log")
-  [ "$sleeps" -eq 5 ] || fail "a 0.4s caller budget should be expanded to five 0.1200s sleeps across the 0.6s herdr floor, got $sleeps; log: $(cat "$sleep_log")"
-  [ "$(grep -c '^sleep:0.0800$' "$sleep_log")" -eq 0 ] || fail "send_text_submit used the caller's too-short 0.4s budget instead of the herdr floor: $(cat "$sleep_log")"
-  pass "fm_backend_herdr_send_text_submit: applies the herdr minimum confirmation budget before polling agent-state"
-}
-
-test_wait_for_working_returns_idle_when_never_busy_but_readable() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/wait-idle"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/1.out"
-  printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/2.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_wait_for_working default w1:p2 0.02 2' "$ROOT" )
-  [ "$out" = idle ] || fail "wait_for_working should report idle when the target was legibly read but never busy, got '$out'"
-  pass "fm_backend_herdr_wait_for_working: reports 'idle' (readable, genuinely not yet working) when 'busy' never appears"
-}
-
-test_wait_for_working_returns_unknown_when_never_readable() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/wait-unknown"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '1\n' > "$resp/1.exit"
-  printf '1\n' > "$resp/2.exit"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_wait_for_working default w1:p2 0.02 2' "$ROOT" )
-  [ "$out" = unknown ] || fail "wait_for_working should report unknown when every poll fails to read the target, got '$out'"
-  pass "fm_backend_herdr_wait_for_working: reports 'unknown' (a hard read failure, not a timing race) only when EVERY poll in the window fails"
-}
-
-test_wait_for_working_treats_blocked_as_submit_active() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/wait-blocked"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '{"result":{"agent":{"agent_status":"blocked"}}}\n' > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_wait_for_working default w1:p2 0.01 1' "$ROOT" )
-  [ "$out" = busy ] || fail "wait_for_working should treat a post-Enter blocked state as submit-active, got '$out'"
-  pass "fm_backend_herdr_wait_for_working: treats blocked as submit-active for confirmation without changing watcher busy-state semantics"
-}
-
 # --- send_text_submit: native agent-state (agent get) verify-and-retry ------
 # Rewritten for the 2026-07-07 incident (docs/herdr-backend.md): confirmation
 # no longer reads composer content in the normal idle-baseline path, so a
@@ -3518,8 +3254,8 @@ test_send_text_submit_confirms_blocked_after_enter() {
 test_send_text_submit_preexisting_working_pending_is_queued_enter() {
   local dir log resp fb out enter_count
   dir="$TMP_ROOT/submit-preexisting-working-queued"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  # Native working + proven pending after the retry budget is the OpenCode
-  # busy-queued Enter: the harness accepted Enter and will submit when the
+  # Native working plus proven pending after the retry budget is a busy-queued
+  # Enter: the harness accepted Enter and will submit when the
   # current turn ends. Footer transition is not the confirmation path here
   # because the pre-Enter native status is already working.
   printf '{"result":{"agent":{"agent_status":"working"}}}\n' > "$resp/2.out"
@@ -3571,7 +3307,6 @@ test_send_text_submit_idle_baseline_does_not_confirm_failed_enter() {
 test_send_text_submit_idle_native_empty_composer_confirms_delivery() {
   local dir log resp fb out enter_count
   dir="$TMP_ROOT/submit-idle-native-empty-composer"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  # Live Claude on Herdr 0.8.0 keeps agent_status idle through a landed turn.
   # After Enter, native wait_for_working stays idle and the composer clears:
   # that empty verdict is positive delivery, not a swallow.
   printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/2.out"
@@ -3583,171 +3318,9 @@ test_send_text_submit_idle_native_empty_composer_confirms_delivery() {
   [ "$out" = empty ] || fail "an idle native status plus a cleared composer must confirm delivery, got '$out'"
   enter_count=$(grep -c $'\x1f''pane'$'\x1f''send-keys'$'\x1f''w1:p2'$'\x1f''enter' "$log")
   [ "$enter_count" -eq 1 ] || fail "a cleared composer should confirm without extra Enters, sent $enter_count Enter(s)"
-  pass "fm_backend_herdr_send_text_submit: idle native agent-state plus empty composer reports empty (landed Claude turn)"
+  pass "fm_backend_herdr_send_text_submit: idle native agent-state plus empty composer reports empty (landed Pi turn)"
 }
 
-test_send_text_submit_idle_native_pending_plus_rendered_busy_is_queued() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/submit-idle-native-rendered-busy-queued"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  # Idle native baseline (Claude never leaves idle) with proven pending text
-  # and a generating footer after retries is a queued follow-up Enter.
-  printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/2.out"
-  printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/4.out"
-  printf '  \xe2\x9d\xaf hello captain\n' > "$resp/5.out"
-  printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/6.out"
-  printf 'thinking... esc to interrupt\n' > "$resp/7.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_BACKEND_HERDR_SUBMIT_POLLS=1 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_send_text_submit default:w1:p2 "hello captain" 1 0.01 0.01' "$ROOT" )
-  [ "$out" = empty ] || fail "idle native + proven pending + rendered busy after retries is a queued Enter, got '$out'"
-  pass "fm_backend_herdr_send_text_submit: idle native baseline uses a rendered busy footer to confirm a queued Enter"
-}
-
-# --- the never-idle-native-state harness (real cursor on herdr) --------------
-# Measured live on cursor-agent 2026.08.11-e8db854 under herdr: `agent get`
-# reports a cursor pane `blocked` in EVERY state - idle, mid-turn, and after -
-# so the idle-baseline native path is structurally unreachable and every typed
-# send lands in the composer branch. Cursor's mid-turn composer row renders its own
-# `Add a follow-up` placeholder beside a right-aligned `ctrl+c to stop`, so the
-# content verdict is `pending` on a composer holding no user text, and every
-# typed steer reported delivery unconfirmed on a message that had actually landed.
-# The bytes below are the real captures from that pane.
-
-# The idle capture: no busy token anywhere, which is the pre-Enter baseline.
-herdr_cursor_idle_plain() {
-  printf '%b' ' ▄▄▄▄▄▄▄▄▄▄\n  → Add a follow-up\n ▀▀▀▀▀▀▀▀▀▀\n  Cursor Grok 4.5 High · 7%%           Run Everything\n  ~/.treehouse/curhd-ae68cd/1/curhd · 39418af\n'
-}
-
-# The mid-turn capture, plain: the spinner verb rotates, the `ctrl+c to stop`
-# token does not, which is why the token is what the matcher keys on.
-herdr_cursor_midturn_plain() {
-  printf '%b' ' ⠘⠆ Running  59 tokens\n ▄▄▄▄▄▄▄▄▄▄\n  → Add a follow-up                   ctrl+c to stop\n ▀▀▀▀▀▀▀▀▀▀\n  1 task\n  Cursor Grok 4.5 High · 7%%           Run Everything\n  ~/.treehouse/curhd-ae68cd/1/curhd · 39418af\n'
-}
-
-# The same mid-turn rows as herdr renders them with styling: the glyph and the
-# placeholder tail are dim, the cell under the parked terminal cursor is
-# reverse video, and the busy token trails on the SAME row.
-herdr_cursor_midturn_ansi() {
-  printf '%b' ' \033[0m\033[38;2;21;21;21m▄▄▄▄▄▄▄▄▄▄\033[0m\r\n \033[0m\033[48;2;21;21;21m \033[0m\033[2m\033[48;2;21;21;21m→ \033[0m\033[7m\033[48;2;21;21;21mA\033[0m\033[2m\033[48;2;21;21;21mdd a follow-up\033[0m\033[48;2;21;21;21m                   \033[0m\033[2m\033[48;2;21;21;21mctrl+c to stop\033[0m\033[48;2;21;21;21m \033[0m\r\n \033[0m\033[38;2;21;21;21m▀▀▀▀▀▀▀▀▀▀\033[0m\r\n  \033[0m\033[38;5;4m1 task\033[0m\r\n  \033[0m\033[2mCursor Grok 4.5 High\033[0m \033[0m\033[2m·\033[0m \033[0m\033[2m7%%\033[0m           \033[0m\033[38;5;5mRun Everything\033[0m\r\n  \033[0m\033[2m~/.treehouse/curhd-ae68cd/1/curhd · 39418af\033[0m\r\n'
-}
-
-# Non-vacuity anchor for the two submit tests below: the real mid-turn capture
-# genuinely reads `pending`, so the confirmation those tests assert can only be
-# coming from the rendered-footer transition and never from a softened composer
-# verdict. The composer verdict is deliberately NOT relaxed - a right-aligned
-# status token on the composer row is content the shared classifier must keep
-# treating as content for every other caller.
-test_composer_state_cursor_midturn_row_reads_pending() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/composer-cursor-midturn"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  herdr_cursor_midturn_ansi > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
-  [ "$out" = pending ] || fail "cursor's mid-turn composer row carries a busy token and must stay 'pending' as composer CONTENT, got '$out'"
-  pass "fm_backend_herdr_composer_state: cursor's mid-turn placeholder-plus-busy-token row reads pending (why delivery needs a separate signal)"
-}
-
-test_rendered_busy_state_reads_the_cursor_busy_token() {
-  local dir log resp fb idle_out busy_out fail_out
-  dir="$TMP_ROOT/rendered-busy"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  herdr_cursor_idle_plain > "$resp/1.out"
-  herdr_cursor_midturn_plain > "$resp/2.out"
-  printf '1\n' > "$resp/3.exit"
-  fb=$(make_herdr_fakebin "$dir")
-  idle_out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_rendered_busy_state default:w1:p2' "$ROOT" )
-  busy_out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_rendered_busy_state default:w1:p2' "$ROOT" )
-  fail_out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_rendered_busy_state default:w1:p2' "$ROOT" )
-  [ "$idle_out" = idle ] || fail "an idle cursor pane renders no busy token and must read idle, got '$idle_out'"
-  [ "$busy_out" = busy ] || fail "a mid-turn cursor pane renders 'ctrl+c to stop' and must read busy, got '$busy_out'"
-  [ "$fail_out" = unknown ] || fail "an unreadable pane must read unknown, never idle, got '$fail_out'"
-  pass "fm_backend_herdr_rendered_busy_state: busy/idle/unknown from the rendered footer, with an unreadable pane never reading idle"
-}
-
-test_send_text_submit_confirms_never_idle_native_state_via_footer_transition() {
-  local dir log resp fb out enter_count
-  dir="$TMP_ROOT/submit-cursor-footer-transition"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  # 1: send-text
-  # 2: agent get - cursor is `blocked` even while idle, so the native
-  #    idle-baseline path is unreachable and the composer branch runs
-  # 3: pane read - rendered footer baseline: no busy token, so the pane was NOT
-  #    mid-turn before our Enter
-  # 4: send-keys enter
-  # 5: pane read - composer content mid-turn: placeholder plus busy token
-  # 6: pane read - rendered footer now busy: an idle-to-busy transition ACROSS
-  #    our Enter, which is the submission proof
-  printf '{"result":{"agent":{"agent_status":"blocked"}}}\n' > "$resp/2.out"
-  herdr_cursor_idle_plain > "$resp/3.out"
-  herdr_cursor_midturn_ansi > "$resp/5.out"
-  herdr_cursor_midturn_plain > "$resp/6.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_send_text_submit default:w1:p2 "hello captain" 3 0.01 0.01' "$ROOT" )
-  [ "$out" = empty ] || fail "an idle-to-busy rendered-footer transition must confirm the submit for a harness whose native state never goes idle, got '$out'"
-  enter_count=$(grep -c $'\x1f''pane'$'\x1f''send-keys'$'\x1f''w1:p2'$'\x1f''enter' "$log")
-  [ "$enter_count" -eq 1 ] || fail "a confirmed submit must not send a needless extra Enter, sent $enter_count Enter(s)"
-  pass "fm_backend_herdr_send_text_submit: a rendered-footer idle-to-busy transition confirms delivery when native agent-state never reports idle"
-}
-
-test_send_text_submit_never_idle_native_state_keeps_pending_without_a_transition() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/submit-cursor-no-transition"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  # The pane was ALREADY mid-turn before our Enter, so its busy footer is not
-  # evidence about OUR message: the verdict must stay pending rather than
-  # borrowing someone else's turn as proof of our delivery.
-  printf '{"result":{"agent":{"agent_status":"blocked"}}}\n' > "$resp/2.out"
-  herdr_cursor_midturn_plain > "$resp/3.out"
-  herdr_cursor_midturn_ansi > "$resp/5.out"
-  herdr_cursor_midturn_ansi > "$resp/7.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_send_text_submit default:w1:p2 "hello captain" 2 0.01 0.01' "$ROOT" )
-  [ "$out" = pending ] || fail "a pane already busy before our Enter must not confirm from that same busy footer, got '$out'"
-  pass "fm_backend_herdr_send_text_submit: an already-busy footer baseline is never accepted as proof that this Enter landed"
-}
-
-# Regression for the submit-confirmation side of the 2026-07-07 incident:
-# even if a Codex idle composer displays suggestion text, an idle-baseline
-# submit must confirm from native agent-state rather than composer scraping.
-# The pre-injection composer guard has its own faint-suggestion coverage below.
-test_send_text_submit_confirms_despite_codex_idle_tip_composer() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/submit-codex-idle-tip"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/2.out"
-  printf '{"result":{"agent":{"agent_status":"working"}}}\n' > "$resp/4.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_BACKEND_HERDR_SUBMIT_POLLS=1 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_send_text_submit default:w1:p2 "reply with just OK" 3 0.01 0.01' "$ROOT" )
-  [ "$out" = empty ] || fail "send_text_submit should confirm via agent_status alone even for a harness whose idle composer shows dynamic tip text, got '$out'"
-  [ "$(grep -c $'\x1f''pane'$'\x1f''read' "$log")" -eq 0 ] || fail "send_text_submit must never call 'pane read' - a codex-style dynamic idle-tip composer can never mislead a confirmation path that does not read it"
-  pass "fm_backend_herdr_send_text_submit: confirms submission via native agent-state alone, immune to a codex-style dynamic idle-tip composer that would have misread as 'pending' under the old composer-based confirmation"
-}
-
-# Companion regression for the pre-injection empty-box guard itself
-# (bin/fm-supervise-daemon.sh's pane_input_pending): a real Codex idle
-# composer can show faint ghost suggestions after the bare `›` prompt.
-# The guard must ignore that faint suggestion text, otherwise away-mode
-# escalation delivery defers forever even though the human has typed nothing.
-test_composer_state_codex_dynamic_idle_tip_reads_empty_when_faint() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/composer-codex-dynamic-tip"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '\xe2\x80\xa2 OK\n\n\n\x1b[0m\x1b[1m\xe2\x80\xba \x1b[0m\x1b[2mSummarize recent commits\x1b[0m\n\n  gpt-5.5 xhigh \xc2\xb7 Context 97%% left \xc2\xb7 /private/tmp \xc2\xb7 2\xe2\x80\xa6\n' > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
-  [ "$out" = empty ] || fail "a faint real-codex dynamic idle-tip row should read empty, got '$out'"
-  pass "fm_backend_herdr_composer_state: a faint real-codex dynamic idle-tip composer row reads empty"
-}
-
-# Regression guard for the PRE-injection empty-box guard itself
-# (bin/fm-supervise-daemon.sh's pane_input_pending, dispatched via
-# fm_backend_composer_state -> fm_backend_herdr_composer_state): this task
-# changes ONLY submit confirmation, so genuine unsubmitted text in the
-# composer must still read 'pending' and the guard must still refuse to
-# inject into it.
 test_composer_state_guard_still_refuses_real_pending_text_after_submit_confirmation_change() {
   local dir log resp fb out
   dir="$TMP_ROOT/composer-guard-still-refuses"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
@@ -3865,7 +3438,7 @@ test_dispatch_composer_state_routes_by_backend() {
   pass "fm_backend_composer_state dispatches every backend to its named thin classifier, unknown for unrecognized backends"
 }
 
-test_scripts_route_explicit_target_through_meta_backend() {
+test_peek_routes_explicit_target_through_meta_backend() {
   local dir state log resp fb neutral out
   dir="$TMP_ROOT/script-explicit-target"; state="$dir/state"; mkdir -p "$state" "$dir/responses"
   log="$dir/log"; resp="$dir/responses"; : > "$log"
@@ -3889,15 +3462,7 @@ SH
   assert_contains "$(cat "$log")" $'\x1f''pane'$'\x1f''read'$'\x1f''w1:p2' \
     "fm-peek did not route the explicit stale target through herdr capture"
 
-  : > "$log"
-  PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$neutral" FM_HOME="$neutral" FM_STATE_OVERRIDE="$state" \
-    FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    "$ROOT/bin/fm-send.sh" default:w1:p2 --key Escape >/dev/null 2>&1
-  expect_code 0 $? "fm-send --key should route an explicit metadata-matched target through herdr"
-  assert_contains "$(cat "$log")" $'\x1f''pane'$'\x1f''send-keys'$'\x1f''w1:p2'$'\x1f''escape' \
-    "fm-send did not route the explicit stale target through herdr send-key"
-
-  pass "fm-peek/fm-send: explicit stale targets matching metadata use the recorded backend"
+  pass "fm-peek: explicit stale targets matching metadata use the recorded backend"
 }
 
 # --- workspace lifecycle: reuse, no orphans, default-tab pruning -------------
@@ -4547,23 +4112,6 @@ test_composer_state_pi_separator_idle_is_empty
 test_composer_state_pi_separator_real_text_is_pending
 test_composer_state_pi_incomplete_separator_below_stale_generic_is_unknown
 test_composer_state_pi_separator_requires_safe_native_identity
-test_composer_state_claude_unbordered_prompt_is_empty
-test_composer_state_claude_unbordered_prompt_is_pending
-test_composer_state_bare_prompt_below_stale_bordered_banner_wins
-test_composer_state_claude_dim_prompt_suggestion_ghost_is_empty
-test_composer_state_claude_dim_ghost_row_with_real_text_is_pending
-test_composer_state_grok_dark_truecolor_placeholder_is_empty
-test_composer_state_grok_bright_truecolor_real_text_is_pending
-test_composer_state_codex_bare_prompt_glyph_is_empty
-test_composer_state_codex_faint_suggestion_is_empty
-test_composer_state_codex_non_faint_same_text_is_pending
-test_wait_for_working_returns_busy_on_first_poll
-test_wait_for_working_catches_a_slow_transition_mid_window
-test_wait_for_working_samples_budget_endpoint_without_final_sleep
-test_send_text_submit_applies_herdr_minimum_confirm_budget
-test_wait_for_working_returns_idle_when_never_busy_but_readable
-test_wait_for_working_returns_unknown_when_never_readable
-test_wait_for_working_treats_blocked_as_submit_active
 test_send_text_submit_detects_landed_send
 test_send_text_submit_detects_swallowed_enter
 test_send_text_submit_popup_autocomplete_requires_second_enter
@@ -4572,13 +4120,6 @@ test_send_text_submit_preexisting_working_pending_is_queued_enter
 test_send_text_submit_preexisting_working_does_not_confirm_failed_enter
 test_send_text_submit_idle_baseline_does_not_confirm_failed_enter
 test_send_text_submit_idle_native_empty_composer_confirms_delivery
-test_send_text_submit_idle_native_pending_plus_rendered_busy_is_queued
-test_composer_state_cursor_midturn_row_reads_pending
-test_rendered_busy_state_reads_the_cursor_busy_token
-test_send_text_submit_confirms_never_idle_native_state_via_footer_transition
-test_send_text_submit_never_idle_native_state_keeps_pending_without_a_transition
-test_send_text_submit_confirms_despite_codex_idle_tip_composer
-test_composer_state_codex_dynamic_idle_tip_reads_empty_when_faint
 test_composer_state_guard_still_refuses_real_pending_text_after_submit_confirmation_change
 test_send_text_submit_slow_transition_within_one_enter_needs_no_extra_enter
 test_send_text_submit_send_failed
@@ -4587,7 +4128,7 @@ test_send_text_submit_unknown_on_composer_capture_failure
 test_dispatch_routes_herdr_backend
 test_dispatch_busy_state_unknown_for_tmux
 test_dispatch_composer_state_routes_by_backend
-test_scripts_route_explicit_target_through_meta_backend
+test_peek_routes_explicit_target_through_meta_backend
 test_normalize_event_leaves_from_empty
 test_escalation_marker_keys_like_watcher
 test_apply_transition_blocked_requires_commit_to_dedupe

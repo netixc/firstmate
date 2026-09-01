@@ -27,7 +27,6 @@ Everything files to a local destination by default; an external system such as a
 
 2. **Discover the host's existing conventions before deciding where anything goes.**
    Don't assume a destination - look for what's actually there, roughly in this order:
-   - A project-level memory file, such as `CLAUDE.md`, `AGENTS.md`, or an equivalent at the repo root or nearby.
    - A user-level (global) memory file the running agent reads across projects, if one exists and is readable.
    - A `TODO`, `BACKLOG`, `NOTES`, or similarly named plain file already tracked in the project.
    This step is about local files only; do not scan for or infer an issue tracker here - step 3 owns external routing.
@@ -54,7 +53,6 @@ Everything files to a local destination by default; an external system such as a
 
 5. **Write only into locations that already exist as a real convention, the step-3 fallback (plus its `.gitignore` line), or a destination the user just approved in step 4.**
    Do not invent new shared files, new folders, or new tracker categories the project doesn't already have.
-   Never store, create, or edit a skill as a destination for a finding: there is no "graduate this to a skill" move, even in a repo whose existing `.claude/skills/` or `skills/` directory makes one look like a convention.
    The offload exit in step 7 does not weaken this: this skill only ever proposes such a move, and the on-demand home is created through the user's own change process, never by this skill's writes.
    If the fallback is unwritable and the user doesn't want a new convention, say so plainly and leave that finding unfiled rather than fabricate a destination.
 
@@ -84,7 +82,6 @@ Everything files to a local destination by default; an external system such as a
    In a git repo, report the ignore protection as it actually happened: either the `.gitignore` line was added and awaits the user's own commit, or the write failed and the user must ignore `.stow-notes.md` manually before relying on git to hide it.
    If the fallback was blocked because `.stow-notes.md` was already tracked, say that no private fallback was written and the session is not fully safe to reset until the user chooses another destination or accepts that tracked file.
    If a user preference landed in `.stow-notes.md` because no user-level memory file was discovered, add one caveat: it now applies to this project only, and the user must copy it into their own global memory file themselves if they want it to follow them across projects.
-   The real payoff of stowing is not this session but the next one: close with a short, copy-pasteable RESUME POINTER naming exactly which files a fresh session should load to pick this back up cold, e.g. `To pick this back up in a new session, load: CLAUDE.md (project conventions), .stow-notes.md (private notes, not shared)`.
    List only the files this sweep actually wrote or updated; skip the pointer if nothing was written.
 
 ## Tiered, decaying entries

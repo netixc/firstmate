@@ -7,10 +7,8 @@
 #   1. A BARE shell prompt glyph (`>`/`$`/`%`/`#`) on an unstructured row is a
 #      dead shell, NOT an empty agent composer - it must read `unknown`
 #      (unsafe-for-injection), never `empty`. This is the safety fix.
-#   2. The SAME shell glyph INSIDE a bordered composer box is the harness's own
-#      prompt and still reads `empty` (existing behavior preserved).
-#   3. The AGENT prompt glyphs `❯` (claude), `›` (codex), `⟩` (muse), and `→`
-#      (cursor) are a genuine empty agent composer either way, bordered or bare.
+#   2. The SAME shell glyph INSIDE a bordered composer box remains empty.
+#   3. Pi's `❯` prompt glyph is a genuine empty agent composer either way.
 #   4. Real unsubmitted text reads `pending`; a known idle placeholder reads
 #      `empty`.
 set -u
@@ -43,15 +41,9 @@ test_stripped_unbordered_content_uses_plain_content() {
     [ "$out" = unknown ] \
       || fail "stripped unbordered content '$plain' must retain its unknown safety verdict, got '$out'"
   done
-  # muse draws `⟩` at luminance ~150, the tightest margin over the 128 ghost
-  # threshold in the fleet, so a raised threshold really can strip it to empty
-  # and leave only the plain row. This branch is what keeps that pane readable.
-  for plain in '❯' '›' '⟩'; do
-    out=$(classify 0 '' '' sensitive "$plain")
-    [ "$out" = empty ] \
-      || fail "a stripped agent glyph '$plain' must remain empty, got '$out'"
-  done
-  pass "fm_composer_classify_content: stripped unbordered content is unknown except verified agent glyphs"
+  out=$(classify 0 '' '' sensitive '❯')
+  [ "$out" = empty ] || fail "a stripped Pi prompt glyph must remain empty, got '$out'"
+  pass "fm_composer_classify_content: stripped unbordered content is unknown except the Pi glyph"
 }
 
 test_bare_shell_prompt_with_command_is_not_empty() {
@@ -71,20 +63,16 @@ test_bordered_shell_glyph_is_empty() {
     [ "$out" = empty ] \
       || fail "a shell glyph '$g' inside a bordered composer box must read empty, got '$out'"
   done
-  pass "fm_composer_classify_content: a bare prompt glyph inside a bordered composer box reads empty (claude's own idle composer)"
+  pass "fm_composer_classify_content: a bare prompt glyph inside a bordered composer box reads empty (Pi's idle composer)"
 }
 
 # --- Agent glyphs are empty either way --------------------------------------
 
-test_agent_glyphs_are_empty_bordered_and_bare() {
+test_pi_glyph_is_empty_bordered_and_bare() {
   local out
-  out=$(classify 0 '❯'); [ "$out" = empty ] || fail "bare claude '❯' should read empty, got '$out'"
-  out=$(classify 0 '›'); [ "$out" = empty ] || fail "bare codex '›' should read empty, got '$out'"
-  out=$(classify 1 '❯'); [ "$out" = empty ] || fail "bordered claude '❯' should read empty, got '$out'"
-  out=$(classify 1 '›'); [ "$out" = empty ] || fail "bordered codex '›' should read empty, got '$out'"
-  out=$(classify 0 '⟩'); [ "$out" = empty ] || fail "bare muse '⟩' should read empty, got '$out'"
-  out=$(classify 1 '⟩'); [ "$out" = empty ] || fail "bordered muse '⟩' should read empty, got '$out'"
-  pass "fm_composer_classify_content: agent prompt glyphs (❯ claude, › codex, ⟩ muse) read empty bordered or bare"
+  out=$(classify 0 '❯'); [ "$out" = empty ] || fail "bare Pi '❯' should read empty, got '$out'"
+  out=$(classify 1 '❯'); [ "$out" = empty ] || fail "bordered Pi '❯' should read empty, got '$out'"
+  pass "fm_composer_classify_content: the Pi prompt glyph reads empty bordered or bare"
 }
 
 # --- Empty content and idle placeholder -------------------------------------
@@ -126,9 +114,7 @@ test_real_text_is_pending() {
   local out
   out=$(classify 0 '❯ fix findings 1 and 3'); [ "$out" = pending ] || fail "bare '❯ <text>' should be pending, got '$out'"
   out=$(classify 1 '> deploy staging now'); [ "$out" = pending ] || fail "bordered '> <text>' should be pending, got '$out'"
-  # muse restores the interrupted prompt into its composer after Escape, as real
-  # bright text. Reading that as pending is correct - it really is unsubmitted.
-  out=$(classify 0 '⟩ second turn to interrupt'); [ "$out" = pending ] || fail "bare '⟩ <text>' should be pending, got '$out'"
+  out=$(classify 0 '❯ second turn'); [ "$out" = pending ] || fail "bare Pi text should be pending, got '$out'"
   # A slash-command popup argument-hint placeholder is still unsubmitted text.
   out=$(classify 1 '/compact compaction instructions'); [ "$out" = pending ] || fail "a popup placeholder fill should be pending, got '$out'"
   pass "fm_composer_classify_content: real unsubmitted text reads pending (including a popup argument-hint fill)"
@@ -139,12 +125,7 @@ test_real_text_is_pending() {
 # correctness matrix (audit data/fm-composer-consolidation-audit-s1, task
 # fm-composer-thin-adapter-refactor-r1).
 #
-# Fixtures are the audit's byte-level captures of six REAL idle harnesses:
-# claude 2.1.226 (bare `❯` + U+00A0 NO-BREAK SPACE), codex 0.146.0 (bold `›`
-# + SGR-2 dim hint), muse (truecolor `⟩`, 38;2;90;160;255), pi (blank row
-# between solid `─` rules), opencode 1.14.46 (left-bar `┃` rows), and grok
-# 1.0.0 (bordered box with a TITLED bottom border), plus claude captured
-# inside zellij through `dump-screen --ansi` (`ESC[m` `❯` U+00A0).
+# Fixtures cover the real Pi prompt and separated composer shapes.
 #
 # Capability profiles mirror the real adapters' descriptors: tmux
 # (styled+cursor+identity), herdr/zellij (styled), cmux/orca (plain). Every
@@ -168,124 +149,6 @@ assert_screen() {
   [ "$out" = "$want" ] || fail "$label: expected $want, got '$out'"
   out=$(LC_ALL=C fm_composer_classify_screen "$@")
   [ "$out" = "$want" ] || fail "$label under LC_ALL=C: expected $want, got '$out'"
-}
-
-test_matrix_claude_bare_nbsp_row() {
-  # Real idle claude: `❯` + U+00A0, borderless, between horizontal rules.
-  # The audit's headline defect: this row read `pending` under LC_ALL=C
-  # (issue #1988), deferring every away-mode escalation in daemon contexts.
-  local screen typed
-  screen=$'transcript line\n────────────────────────\n❯'"$NBSP"$'\n────────────────────────\n  bypass permissions'
-  assert_screen "claude idle on tmux" empty "$CAPS_TMUX" "$screen" 2 probe-absent
-  assert_screen "claude idle on herdr" empty "$CAPS_STYLED" "$screen" '' probe-absent
-  assert_screen "claude idle on zellij" empty "$CAPS_STYLED_NOID" "$screen"
-  assert_screen "claude idle on cmux/orca" empty "$CAPS_PLAIN" "$screen"
-  typed=$'────────────────────────\n❯ fix the login bug\n────────────────────────'
-  assert_screen "claude typed on tmux" pending "$CAPS_TMUX" "$typed" 1 probe-absent
-  # Plain capture cannot tell typed text from claude's rotating suggestion:
-  # the styled=0 degradation defers instead of fabricating pending.
-  assert_screen "claude typed on plain backends" unknown "$CAPS_PLAIN" "$typed"
-  pass "matrix: claude's ❯+NBSP row reads empty on every profile in both locales (#1988)"
-}
-
-test_matrix_codex_dim_hint_row() {
-  # Real idle codex: bold `›`, reset, then an SGR-2 dim hint. Styled captures
-  # strip the ghost and prove empty; plain captures must defer as unknown -
-  # NEVER the old false `pending` that read the hint as unsent text.
-  local styled plain
-  styled=$'banner\n'"${ESC}[1m›${ESC}[0m ${ESC}[2mUse /skills to list available skills${ESC}[0m"
-  plain=$'banner\n› Use /skills to list available skills'
-  assert_screen "codex idle on tmux" empty "$CAPS_TMUX" "$styled" 1
-  assert_screen "codex idle on herdr" empty "$CAPS_STYLED" "$styled"
-  assert_screen "codex idle on zellij" empty "$CAPS_STYLED_NOID" "$styled"
-  assert_screen "codex idle on plain backends" unknown "$CAPS_PLAIN" "$plain"
-  pass "matrix: codex's dim hint is empty when styling proves it, unknown (never pending) when it cannot"
-}
-
-test_matrix_muse_truecolor_glyph_survives_signal_loss() {
-  # Real idle muse: truecolor `⟩` (38;2;90;160;255, luminance ~149.9) under a
-  # TITLED rule. Two independent signals prove emptiness: the glyph surviving
-  # the ghost strip, and the UNSTRIPPED plain row carrying an agent glyph.
-  # Drive them apart: with the luma threshold raised past the glyph's
-  # luminance, the ghost strip erases it, and the verdict must survive on the
-  # plain-row signal alone.
-  local screen plain out
-  screen=$'── Voice input (⌥ + v to start) ─────\n'"${ESC}[0m${ESC}[38;2;90;160;255m⟩${ESC}[0m"
-  plain=$'── Voice input (⌥ + v to start) ─────\n⟩'
-  assert_screen "muse idle on tmux" empty "$CAPS_TMUX" "$screen" 1
-  assert_screen "muse idle on herdr" empty "$CAPS_STYLED" "$screen"
-  assert_screen "muse idle on zellij" empty "$CAPS_STYLED_NOID" "$screen"
-  assert_screen "muse idle on cmux/orca" empty "$CAPS_PLAIN" "$plain"
-  out=$(FM_COMPOSER_GHOST_LUMA_MAX=200 fm_composer_classify_screen "$CAPS_STYLED" "$screen")
-  [ "$out" = empty ] || fail "muse must stay empty when the ghost strip eats its glyph (plain-row signal), got '$out'"
-  pass "matrix: muse's ⟩ reads empty everywhere and survives losing the styled-glyph signal"
-}
-
-test_matrix_cursor_reverse_video_placeholder_remnant() {
-  # Real idle cursor-agent (2026.08.11-e8db854), captured byte-for-byte from a
-  # live pane: the `→ ` glyph and the placeholder tail are dim (SGR 2), but the
-  # cell under the terminal cursor is REVERSE VIDEO (SGR 0;7). Reverse video is
-  # neither dim nor a dark foreground, so the ghost stripper keeps that one
-  # character and an idle composer reduces to a lone `P`.
-  local row screen plain out stripped
-  row="${ESC}[48;2;21;21;21m ${ESC}[2m→ ${ESC}[0;7m${ESC}[48;2;21;21;21mP"
-  row="${row}${ESC}[0;2m${ESC}[48;2;21;21;21mlan, search, build anything${ESC}[0m"
-  screen=$'transcript\n\n'"$row"
-  plain=$'transcript\n\n  → Plan, search, build anything'
-
-  # NON-VACUOUSNESS: prove the remnant really survives stripping. If the ghost
-  # stripper ever learned SGR 7, `stripped` would be empty and the verdict below
-  # would come from the empty-content path instead, silently retiring the
-  # plain-row branch this case exists to cover.
-  stripped=$(printf '%s' "$row" | fm_composer_strip_ghost)
-  fm_composer_normalize_trim_var stripped
-  [ "$stripped" = P ] \
-    || fail "cursor's reverse-video remnant must survive ghost stripping as 'P', got '$stripped'"
-
-  assert_screen "cursor idle on herdr" empty "$CAPS_STYLED" "$screen"
-  assert_screen "cursor idle on zellij" empty "$CAPS_STYLED_NOID" "$screen"
-  # An UNSTYLED capture carries no ghost-strip proof, so a bare row matching a
-  # placeholder is indistinguishable from typed text and must stay unknown -
-  # the same degradation every other bare-row placeholder already takes.
-  assert_screen "cursor idle on cmux/orca" unknown "$CAPS_PLAIN" "$plain"
-
-  # The dangerous direction: text a user actually TYPED is uniformly bright, so
-  # stripping leaves it EQUAL to the plain row. Even when that text is exactly
-  # the placeholder, it must stay pending - never a false empty.
-  local typed typed_plain
-  typed="${ESC}[48;2;21;21;21m ${ESC}[2m→ ${ESC}[0m${ESC}[38;2;224;222;244mAdd a follow-up${ESC}[0m"
-  typed_plain=$'transcript\n\n  → Add a follow-up'
-  assert_screen "cursor typed placeholder text stays pending" pending \
-    "$CAPS_STYLED" $'transcript\n\n'"$typed"
-  # Without styling there is no proof either way, so it must not read empty.
-  out=$(fm_composer_classify_screen "$CAPS_PLAIN" "$typed_plain")
-  [ "$out" != empty ] \
-    || fail "an unstyled cursor row matching the placeholder must not read empty, got '$out'"
-  pass "matrix: cursor's reverse-video placeholder remnant reads empty; real typed text stays pending"
-}
-
-test_matrix_herdr_halfblock_rule_bounds_bare_wrap() {
-  # Herdr draws a composer's rules with half-block glyphs (▄ above, ▀ below)
-  # rather than the box-drawing family. Without treating those as edges, a bare
-  # composer's WRAP region walks through its own closing rule and swallows the
-  # footer, whose real content turns an idle pane into a false `pending`.
-  # Captured live from a herdr cursor pane.
-  local screen plain out
-  plain=$'transcript\n \u2584\u2584\u2584\u2584\u2584\u2584\u2584\u2584\n  \u2192 Add a follow-up\n \u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\n  Cursor Grok 4.5 High \u00b7 6.7%   Run Everything\n  ~/wt \u00b7 64cdd3a'
-  # The closing rule must bound the region, so the footer below is not input.
-  fm_composer_row_has_edge " $(printf '\u2580\u2580\u2580')" \
-    || fail "a half-block rule row must count as a structural edge"
-  fm_composer_row_has_edge " $(printf '\u2584\u2584\u2584')" \
-    || fail "the upper half-block rule must count as a structural edge"
-  # Non-vacuousness: the footer rows really are non-blank content that would be
-  # swallowed if the rule did not bound the region.
-  case "$plain" in *"Run Everything"*) : ;; *) fail "fixture lost its footer content" ;; esac
-  ESC_LOCAL=$(printf '\033')
-  screen=$'transcript\n \u2584\u2584\u2584\u2584\u2584\u2584\u2584\u2584\n'"  ${ESC_LOCAL}[2m\u2192 ${ESC_LOCAL}[0;7mA${ESC_LOCAL}[0;2mdd a follow-up${ESC_LOCAL}[0m"$'\n \u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\n  Cursor Grok 4.5 High \u00b7 6.7%   Run Everything\n  ~/wt \u00b7 64cdd3a'
-  out=$(fm_composer_classify_screen "$CAPS_STYLED" "$(printf '%b' "$screen")")
-  [ "$out" = empty ] \
-    || fail "an idle cursor composer inside herdr half-block rules must read empty, got '$out'"
-  pass "matrix: herdr half-block rules bound a bare composer's wrap region"
 }
 
 test_matrix_pi_separated_needs_identity() {
@@ -325,81 +188,6 @@ test_matrix_pi_separated_needs_identity() {
   assert_screen "lone glyph on plain backend" empty "$CAPS_PLAIN" "$typed"
   assert_screen "lone glyph with non-pi identity" empty "$CAPS_STYLED" "$typed" '' "$none"
   pass "matrix: pi's separated composer needs identity + structure; the blank row alone never proves it"
-}
-
-test_matrix_opencode_leftbar_signals() {
-  # Real idle opencode: `┃`-prefixed rows holding the "Ask anything..." hint,
-  # blanks, and a Build-mode footer. Two independent idle signals: the shared
-  # idle-placeholder pattern (works on plain captures) and the ghost strip
-  # (works on styled captures even if the pattern is overridden away).
-  local screen typed dim_screen out
-  screen=$'  ┃\n  ┃  Ask anything... "What is the tech stack?"\n  ┃\n  ┃  Build · GPT-5.5 Fast OpenAI · high\n  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀'
-  dim_screen=$'  ┃\n  ┃  '"${ESC}[2mAsk anything...${ESC}[0m"$'\n  ┃\n  ┃  Build · GPT-5.5 Fast OpenAI · high\n  ╹▀▀▀▀'
-  assert_screen "opencode idle on tmux (cursor on hint)" empty "$CAPS_TMUX" "$dim_screen" 1
-  assert_screen "opencode idle on herdr" empty "$CAPS_STYLED" "$dim_screen"
-  assert_screen "opencode idle on zellij" empty "$CAPS_STYLED_NOID" "$dim_screen"
-  assert_screen "opencode idle on cmux/orca" empty "$CAPS_PLAIN" "$screen"
-  # Signal separation: with the idle pattern overridden to something that
-  # cannot match, a DIM-styled hint still proves empty through the ghost strip.
-  out=$(FM_COMPOSER_IDLE_RE='^NEVER-MATCHES$' fm_composer_classify_screen "$CAPS_TMUX" "$dim_screen" 1)
-  [ "$out" = empty ] || fail "a dim opencode hint must stay empty via the ghost strip alone, got '$out'"
-  typed=$'┃\n┃  refactor the parser please\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high\n╹▀▀▀▀'
-  assert_screen "opencode typed on tmux" pending "$CAPS_TMUX" "$typed" 1
-  assert_screen "opencode typed on plain backends" unknown "$CAPS_PLAIN" "$typed"
-  typed=$'┃  Ask anything... please investigate\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high\n╹▀▀▀▀'
-  assert_screen "opencode placeholder-like input on tmux" pending "$CAPS_TMUX" "$typed" 0
-  assert_screen "opencode placeholder-like input on plain backends" unknown "$CAPS_PLAIN" "$typed"
-  typed=$'┃  refactor the parser please\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high'
-  assert_screen "opencode multiline draft above blank cursor row" pending "$CAPS_TMUX" "$typed" 1
-  pass "matrix: opencode's left-bar composer reads empty everywhere and scans the full active run"
-}
-
-test_matrix_grok_titled_bottom_border() {
-  # Real idle grok: a bordered box whose BOTTOM border carries the model name.
-  # The audit showed the title alone flipped tmux's geometry check to
-  # ambiguous and the verdict to unknown, stranding every grok steer.
-  local titled plain_border typed placeholder_draft
-  titled=$'  ╭──────────────────────────────────────╮\n  │ ❯                                    │\n  ╰──────────────────── Grok 4.5 (high) ─╯'
-  plain_border=$'  ╭──────────────────────────────────────╮\n  │ ❯                                    │\n  ╰──────────────────────────────────────╯'
-  assert_screen "grok titled on tmux" empty "$CAPS_TMUX" "$titled" 1
-  assert_screen "grok titled on tmux bottom-border cursor" empty "$CAPS_TMUX" "$titled" 2
-  assert_screen "grok titled on herdr" empty "$CAPS_STYLED" "$titled"
-  placeholder_draft=$'  ╭──────────────────────────────────────╮\n  │ ❯ Type a message...                  │\n  ╰──────────────────── Grok 4.5 (high) ─╯'
-  assert_screen "grok bright placeholder-like draft on tmux" pending "$CAPS_TMUX" "$placeholder_draft" 1
-  assert_screen "grok placeholder on plain backends" empty "$CAPS_PLAIN" "$placeholder_draft"
-  assert_screen "grok titled on cmux/orca" empty "$CAPS_PLAIN" "$titled"
-  assert_screen "grok titled on zellij" empty "$CAPS_STYLED_NOID" "$titled"
-  # The tolerance is additive: an untitled border still proves the same box.
-  assert_screen "grok untitled border" empty "$CAPS_TMUX" "$plain_border" 1
-  typed=$'  ╭──────────────────────────────────────╮\n  │ ❯ deploy the fix                     │\n  ╰──────────────────── Grok 4.5 (high) ─╯'
-  assert_screen "grok typed on tmux" pending "$CAPS_TMUX" "$typed" 1
-  pass "matrix: grok's titled bottom border is tolerated as a title, not read as ambiguity"
-}
-
-test_matrix_kimi_bordered_shell_glyph_box() {
-  # Kimi's bordered `│ > │` composer - the shape fm-spawn.sh's retired
-  # spawn-local regex used to own. Now the shared owner proves it everywhere,
-  # which is what kimi launch-readiness and delivery route through.
-  local screen
-  screen=$'╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯'
-  assert_screen "kimi idle on tmux" empty "$CAPS_TMUX" "$screen" 1
-  assert_screen "kimi idle on cmux/orca" empty "$CAPS_PLAIN" "$screen"
-  assert_screen "kimi idle on herdr" empty "$CAPS_STYLED" "$screen"
-  assert_screen "kimi idle on zellij" empty "$CAPS_STYLED_NOID" "$screen"
-  pass "matrix: kimi's bordered shell-glyph box reads empty through the shared owner (spawn's fourth copy retired)"
-}
-
-test_matrix_claude_inside_zellij_ansi_dump() {
-  # Real claude captured through `zellij action dump-screen --ansi`
-  # (capability established by the audit): `ESC[m` `❯` U+00A0.
-  local screen plain
-  screen=$'zellij pane transcript\n'"${ESC}[m❯${NBSP}"
-  plain=$'zellij pane transcript\n❯'"$NBSP"
-  assert_screen "claude-in-zellij on tmux" empty "$CAPS_TMUX" "$screen" 1
-  assert_screen "claude-in-zellij on herdr" empty "$CAPS_STYLED" "$screen"
-  assert_screen "claude-in-zellij on zellij" empty "$CAPS_STYLED_NOID" "$screen"
-  assert_screen "claude-in-zellij on plain backends" empty "$CAPS_PLAIN" "$plain"
-  pass "matrix: the real claude-in-zellij --ansi dump reads empty in both locales"
 }
 
 test_strict_blank_row_divergence() {
@@ -482,15 +270,15 @@ test_cursorless_bare_wrap_region_classifies() {
   assert_screen "cursorless activity below bare row on zellij" pending "$CAPS_STYLED_NOID" "$activity"
   assert_screen "cursorless activity below bare row on cmux/orca" unknown "$CAPS_PLAIN" "$activity"
 
-  status=$'›\n\ncodex status line'
-  assert_screen "blank-separated codex status on herdr" empty "$CAPS_STYLED" "$status"
-  assert_screen "blank-separated codex status on zellij" empty "$CAPS_STYLED_NOID" "$status"
-  assert_screen "blank-separated codex status on cmux/orca" empty "$CAPS_PLAIN" "$status"
+  status=$'❯\n\nPi status line'
+  assert_screen "blank-separated Pi status on herdr" empty "$CAPS_STYLED" "$status"
+  assert_screen "blank-separated Pi status on zellij" empty "$CAPS_STYLED_NOID" "$status"
+  assert_screen "blank-separated Pi status on cmux/orca" empty "$CAPS_PLAIN" "$status"
 
-  bounded=$'────────────────────────\n❯\n────────────────────────\nClaude 4.1'
-  assert_screen "rule-bounded claude footer on herdr" empty "$CAPS_STYLED" "$bounded" '' probe-absent
-  assert_screen "rule-bounded claude footer on zellij" empty "$CAPS_STYLED_NOID" "$bounded"
-  assert_screen "rule-bounded claude footer on cmux/orca" empty "$CAPS_PLAIN" "$bounded"
+  bounded=$'────────────────────────\n❯\n────────────────────────\nPi'
+  assert_screen "rule-bounded Pi footer on herdr" empty "$CAPS_STYLED" "$bounded" '' probe-absent
+  assert_screen "rule-bounded Pi footer on zellij" empty "$CAPS_STYLED_NOID" "$bounded"
+  assert_screen "rule-bounded Pi footer on cmux/orca" empty "$CAPS_PLAIN" "$bounded"
 
   ghost=$'❯ '"${ESC}[2ma long rotating suggestion that${ESC}[0m"$'\n'"${ESC}[2mwraps onto the next line${ESC}[0m"
   out=$(fm_composer_classify_screen "$CAPS_STYLED" "$ghost")
@@ -500,36 +288,13 @@ test_cursorless_bare_wrap_region_classifies() {
   pass "fm_composer_classify_screen: cursorless bare wrap regions participate in verdicts"
 }
 
-test_cursorless_container_rejects_contiguous_lower_activity() {
-  local box leftbar grok kimi opencode
-  box=$'╭────────────────────────╮\n│ ❯                      │\n╰────────────────────────╯\nWorking on request...'
-  assert_screen "stale box above activity on herdr" unknown "$CAPS_STYLED" "$box"
-  assert_screen "stale box above activity on zellij" unknown "$CAPS_STYLED_NOID" "$box"
-  assert_screen "stale box above activity on cmux/orca" unknown "$CAPS_PLAIN" "$box"
-
-  leftbar=$'┃\n┃  Ask anything...\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high\n╹▀▀▀▀▀▀▀▀\nWorking on request...'
-  assert_screen "stale left-bar above activity on herdr" unknown "$CAPS_STYLED" "$leftbar"
-  assert_screen "stale left-bar above activity on zellij" unknown "$CAPS_STYLED_NOID" "$leftbar"
-  assert_screen "stale left-bar above activity on cmux/orca" unknown "$CAPS_PLAIN" "$leftbar"
-
-  grok=$'╭────────────────────────╮\n│ ❯                      │\n╰──────── Grok 4.5 ──────╯\n\nGrok status'
-  kimi=$'╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯\n\nKimi status'
-  opencode=$'┃\n┃  Ask anything...\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high\n╹▀▀▀▀▀▀▀▀\n\nOpenCode status'
-  assert_screen "blank-separated grok footer" empty "$CAPS_STYLED_NOID" "$grok"
-  assert_screen "blank-separated kimi footer" empty "$CAPS_PLAIN" "$kimi"
-  assert_screen "left-bar floor and blank-separated footer" empty "$CAPS_STYLED_NOID" "$opencode"
-  pass "fm_composer_classify_screen: cursorless containers reject only contiguous unclaimed activity"
-}
-
 test_bottom_most_candidate_wins() {
   # The one ranking rule: the live composer is bottom-anchored, so a stale
-  # decorative box (codex's startup banner) can never outrank the real row
+  # decorative box can never outrank the real Pi row
   # below it - the confidently-wrong orca case from the audit.
   local screen out
   screen=$'╭────────────────────────╮\n│ permissions: YOLO mode │\n╰────────────────────────╯\n❯'"$NBSP"
-  assert_screen "banner above live claude row" empty "$CAPS_PLAIN" "$screen"
-  out=$(fm_composer_classify_screen "$CAPS_PLAIN" $'╭────────────────────────╮\n│ permissions: YOLO mode │\n╰────────────────────────╯\n› Use /skills to list available skills')
-  [ "$out" != pending ] || fail "a stale banner must never classify as pending composer text"
+  assert_screen "banner above live Pi row" empty "$CAPS_PLAIN" "$screen"
   screen=$'❯ old draft\n\n❯'
   assert_screen "blank-separated newer bare composer" empty "$CAPS_STYLED_NOID" "$screen"
   pass "fm_composer_classify_screen: the bottom-most candidate wins; stale banners cannot"
@@ -542,15 +307,6 @@ test_incomplete_lower_box_invalidates_stale_candidate() {
   [ "$out" = unknown ] \
     || fail "an incomplete lower box must invalidate an earlier empty box, got '$out'"
   pass "fm_composer_classify_screen: incomplete lower structure invalidates stale boxes"
-}
-
-test_titled_bottom_requires_matching_width() {
-  local screen out
-  screen=$'╭────────────────────────╮\n│ ❯                      │\n╰─ Grok ─╯'
-  out=$(fm_composer_classify_screen "$CAPS_TMUX" "$screen" 1)
-  [ "$out" = unknown ] \
-    || fail "a short titled bottom must not prove an empty box, got '$out'"
-  pass "fm_composer_classify_screen: titled bottoms retain full box geometry"
 }
 
 test_cursor_on_proven_box_bottom_classifies_content() {
@@ -607,30 +363,19 @@ test_bare_shell_glyphs_are_unknown
 test_stripped_unbordered_content_uses_plain_content
 test_bare_shell_prompt_with_command_is_not_empty
 test_bordered_shell_glyph_is_empty
-test_agent_glyphs_are_empty_bordered_and_bare
+test_pi_glyph_is_empty_bordered_and_bare
 test_empty_content_is_empty
 test_idle_placeholder_is_empty
 test_idle_placeholder_case_mode_is_explicit
 test_real_text_is_pending
-test_matrix_claude_bare_nbsp_row
-test_matrix_codex_dim_hint_row
-test_matrix_muse_truecolor_glyph_survives_signal_loss
-test_matrix_cursor_reverse_video_placeholder_remnant
-test_matrix_herdr_halfblock_rule_bounds_bare_wrap
 test_matrix_pi_separated_needs_identity
-test_matrix_opencode_leftbar_signals
-test_matrix_grok_titled_bottom_border
-test_matrix_kimi_bordered_shell_glyph_box
-test_matrix_claude_inside_zellij_ansi_dump
 test_strict_blank_row_divergence
 test_bare_wrap_region_classifies
 test_contiguous_transcript_reanchors_on_live_prompt
 test_lower_dead_shell_invalidates_cursorless_candidate
 test_cursorless_bare_wrap_region_classifies
-test_cursorless_container_rejects_contiguous_lower_activity
 test_bottom_most_candidate_wins
 test_incomplete_lower_box_invalidates_stale_candidate
-test_titled_bottom_requires_matching_width
 test_cursor_on_proven_box_bottom_classifies_content
 test_selected_content_is_composer_scoped_and_wrap_normalized
 

@@ -108,7 +108,7 @@ env -u TMUX -u FM_BACKEND PATH="$PATH" HERDR_ENV=1 \
   FM_ROOT_OVERRIDE="$ROOT" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" \
   FM_CONFIG_OVERRIDE="$CONFIG" FM_PROJECTS_OVERRIDE="$TMP_ROOT/unused-projects" \
   FM_SPAWN_NO_GUARD=1 \
-  "$ROOT/bin/fm-spawn.sh" "$ID" "$PROJ" "sh -c 'echo autodetect-smoke-ok'" --mode no-mistakes --yolo off \
+  "$ROOT/bin/fm-spawn.sh" "$ID" "$PROJ" --harness pi --mode no-mistakes --yolo off \
   >"$OUT_FILE" 2>"$ERR_FILE"
 status=$?
 [ "$status" -eq 0 ] || fail "fm-spawn.sh did not succeed auto-detecting herdr"$'\n'"--- stdout ---"$'\n'"$(cat "$OUT_FILE")"$'\n'"--- stderr ---"$'\n'"$(cat "$ERR_FILE")"
@@ -141,17 +141,14 @@ PANE=$(grep '^herdr_pane_id=' "$META" | cut -d= -f2-)
 [ -n "$PANE" ] || fail "auto-detected spawn meta is missing herdr_pane_id"
 pass "real herdr: auto-detected spawn records backend=herdr and herdr_session/workspace/tab/pane fields in meta"
 
-# --- confirm the trivial launch command actually ran in the herdr pane ------
+# --- confirm Herdr observes real Pi running in the pane --------------------
 
-sleep 1
-CAPTURED=$("$HERDR_LAB_HELPER" run "$HERDR_LAB_SESSION" pane read "$PANE" --source recent --lines 200) || \
-  fail "capture failed on the auto-detected herdr pane"
-CAPTURED=$(printf '%s\n' "$CAPTURED" | tail -n 30)
-case "$CAPTURED" in
-  *autodetect-smoke-ok*) : ;;
-  *) fail "the raw launch command did not run in the auto-detected herdr pane"$'\n'"$CAPTURED" ;;
-esac
-pass "real herdr: the auto-detected spawn's launch command actually ran in the herdr pane"
+sleep 2
+PANE_INFO=$("$HERDR_LAB_HELPER" run "$HERDR_LAB_SESSION" pane get "$PANE") \
+  || fail "could not read the auto-detected herdr pane"
+printf '%s\n' "$PANE_INFO" | jq -e '.result.pane.agent == "pi"' >/dev/null \
+  || fail "plain Pi did not launch in the auto-detected herdr pane"$'\n'"$PANE_INFO"
+pass "real herdr: the auto-detected spawn launched plain Pi in the herdr pane"
 
 # --- teardown completes the trivial spawn/teardown cycle --------------------
 

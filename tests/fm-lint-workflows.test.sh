@@ -155,12 +155,11 @@ jobs:
   x:
     runs-on: ubuntu-latest
     steps:
-      - name: Compatibility pointers must stay intact
+      - name: Broken heredoc fixture
         run: |
           set -eu
-          cmp -s CLAUDE.md - <<'EOF' || exit 1
-<!-- Points Claude at AGENTS.md via import; edit AGENTS.md, not this file. -->
-@AGENTS.md
+          cat <<'EOF'
+broken body
 EOF
           echo ok
 YAML

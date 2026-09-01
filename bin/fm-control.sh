@@ -136,7 +136,6 @@ DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 . "$SCRIPT_DIR/fm-wake-lib.sh"
 
 POLL=${FM_CONTROL_POLL:-0.5}
-SETTLE_WAIT=${FM_CONTROL_SETTLE_WAIT:-5}
 EXIT_WAIT=${FM_CONTROL_EXIT_WAIT:-30}
 LAUNCH_WAIT=${FM_CONTROL_LAUNCH_WAIT:-90}
 EXIT_RETRIES=${FM_CONTROL_EXIT_RETRIES:-3}
@@ -177,7 +176,7 @@ shift 2
 if ! fm_control_verb_allowed "$VERB"; then
   {
     if [ "$VERB" = resume ]; then
-      echo "error: 'resume' is not a control verb: resuming an exited agent is not deterministic across the verified adapters (codex and grok need a session id printed at exit, opencode continues the most recent session for the cwd, and claude, pi, pi-signed, and kimi have no verified pane-resume contract). Use 'relaunch', which carries the brief plus a progress note into a fresh agent on any adapter."
+      echo "error: 'resume' is not a control verb for plain Pi. Use 'relaunch', which carries the durable instructions into a fresh Pi agent."
     else
       echo "error: '$VERB' is not a control verb"
     fi
@@ -372,34 +371,10 @@ send_interrupt_keys() {
 }
 
 prepare_interrupt_ack() {
-  INTERRUPT_ACK_SOURCE=$(fm_control_interrupt_ack_source "$HARNESS")
-  INTERRUPT_ACK_LOG=
-  INTERRUPT_ACK_RUN=
-  case "$INTERRUPT_ACK_SOURCE" in
-    muse-session-terminal)
-      INTERRUPT_ACK_LOG=$(fm_busy_muse_session_log "$STATE" "$ID" 2>/dev/null || true)
-      [ -n "$INTERRUPT_ACK_LOG" ] || return 0
-      INTERRUPT_ACK_RUN=$(fm_busy_muse_active_run_id "$INTERRUPT_ACK_LOG" 2>/dev/null || true)
-      ;;
-  esac
+  return 0
 }
 
 interrupt_cancel_claim() {
-  local elapsed=0 terminal=
-  case "$INTERRUPT_ACK_SOURCE:$INTERRUPT_ACK_RUN" in
-    muse-session-terminal:?*) ;;
-    *) printf 'unconfirmed'; return 0 ;;
-  esac
-  while :; do
-    terminal=$(fm_busy_muse_run_terminal "$INTERRUPT_ACK_LOG" "$INTERRUPT_ACK_RUN" 2>/dev/null || true)
-    case "$terminal" in
-      cancelled) printf 'confirmed'; return 0 ;;
-      ?*) printf 'unconfirmed'; return 0 ;;
-    esac
-    awk -v e="$elapsed" -v t="$SETTLE_WAIT" 'BEGIN{exit !(e < t)}' || break
-    sleep "$POLL"
-    elapsed=$(awk -v e="$elapsed" -v p="$POLL" 'BEGIN{printf "%.3f", e + p}')
-  done
   printf 'unconfirmed'
 }
 

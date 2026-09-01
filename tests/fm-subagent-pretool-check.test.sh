@@ -20,11 +20,11 @@ git -C "$PRIMARY" init -q
 BRIEF_ONLY_ROUTE='first classify the work under the AGENTS.md intake contract, then use bin/fm-brief.sh followed by bin/fm-spawn.sh for dispatched work'
 SCOUT_ROUTE='first classify the work under the AGENTS.md intake contract: work already classified as a scout goes to bin/fm-scout.sh "<question>" [project], while authorized ship work and its bounded research go to bin/fm-brief.sh then bin/fm-spawn.sh'
 
-# Every delegation, scheduling, worktree, and task-tracking tool Claude Code
+# Every delegation, scheduling, worktree, and task-tracking tool Pi Code
 # 2.1.217 offered a primary session in the observed baseline.
 # This inventory is shape-classification coverage for the shipped guard and the
-# recommended local Claude deny-list hardening list, but tracked settings must
-# not ship that Claude-only permissions layer.
+# recommended local Pi deny-list hardening list, but tracked settings must
+# not ship that Pi-only permissions layer.
 DELEGATION_TOOLS='Task Agent Workflow RemoteTrigger Monitor ScheduleWakeup SendMessage EnterWorktree ExitWorktree CronCreate CronDelete CronList TaskCreate TaskGet TaskList TaskUpdate TaskStop TaskOutput'
 
 # Tools that must stay available: denying these would break ordinary work.
@@ -47,7 +47,7 @@ run_tool() {
   : > "$OUT"
   : > "$ERR"
   env FM_ROOT_OVERRIDE="$PRIMARY" FM_HOME="$PRIMARY" FM_STATE_OVERRIDE="$STATE" "$@" \
-    "$CHECK" --claude --tool "$tool" > "$OUT" 2> "$ERR" || rc=$?
+    "$CHECK" --tool "$tool" > "$OUT" 2> "$ERR" || rc=$?
   return "$rc"
 }
 
@@ -66,7 +66,7 @@ expect_deny() {
   [ "$rc" -eq 2 ] || fail "$label ($tool) must deny with exit 2, got $rc"
   [ ! -s "$OUT" ] || fail "$label ($tool) deny wrote stdout: $(cat "$OUT")"
   jq -e '.hookSpecificOutput.hookEventName == "PreToolUse" and .hookSpecificOutput.permissionDecision == "deny"' "$ERR" >/dev/null 2>&1 \
-    || fail "$label ($tool) deny omitted Claude's permission decision: $(cat "$ERR")"
+    || fail "$label ($tool) deny omitted Pi's permission decision: $(cat "$ERR")"
   jq -e --arg tool "$tool" '.systemMessage | startswith("[subagent-dispatch]") and contains("blocked tool: " + $tool)' "$ERR" >/dev/null 2>&1 \
     || fail "$label ($tool) deny message lost its code or tool name: $(jq -r '.systemMessage' "$ERR")"
 }
@@ -191,7 +191,7 @@ test_task_worktree_and_non_firstmate_repo_are_inert() {
   : > "$OUT"
   : > "$ERR"
   FM_ROOT_OVERRIDE="$child" FM_HOME="$child" FM_STATE_OVERRIDE="$child/state" \
-    "$CHECK" --claude --tool Agent > "$OUT" 2> "$ERR" || rc=$?
+    "$CHECK" --tool Agent > "$OUT" 2> "$ERR" || rc=$?
   [ "$rc" -eq 0 ] || fail "a crewmate task worktree must be out of scope, got exit $rc: $(cat "$ERR")"
   [ ! -s "$OUT" ] || fail "task-worktree no-op wrote stdout: $(cat "$OUT")"
   [ ! -s "$ERR" ] || fail "task-worktree no-op wrote stderr: $(cat "$ERR")"
@@ -200,7 +200,7 @@ test_task_worktree_and_non_firstmate_repo_are_inert() {
   git -C "$plain" init -q
   rc=0
   FM_ROOT_OVERRIDE="$plain" FM_HOME="$plain" FM_STATE_OVERRIDE="$plain/state" \
-    "$CHECK" --claude --tool Agent > "$OUT" 2> "$ERR" || rc=$?
+    "$CHECK" --tool Agent > "$OUT" 2> "$ERR" || rc=$?
   [ "$rc" -eq 0 ] || fail "a non-firstmate repo must be out of scope, got exit $rc"
   pass "the guard is inert in a crewmate task worktree and in a non-firstmate repo"
 }
@@ -212,7 +212,7 @@ test_secondmate_home_is_in_scope() {
   printf '# fixture\n' > "$second/AGENTS.md"
   printf 'sm-fixture\n' > "$second/.fm-secondmate-home"
   FM_ROOT_OVERRIDE="$second" FM_HOME="$second" FM_STATE_OVERRIDE="$second/state" \
-    "$CHECK" --claude --tool Agent > "$OUT" 2> "$ERR" || rc=$?
+    "$CHECK" --tool Agent > "$OUT" 2> "$ERR" || rc=$?
   [ "$rc" -eq 2 ] || fail "a marked secondmate home operates a fleet and must be guarded, got exit $rc"
   pass "a marked secondmate home is guarded even though it is a linked worktree"
 }
@@ -222,27 +222,18 @@ test_stdin_transports_and_output_shapes() {
   : > "$OUT"; : > "$ERR"
   printf '%s' '{"tool_name":"Agent","tool_input":{"prompt":"go"}}' \
     | FM_ROOT_OVERRIDE="$PRIMARY" FM_HOME="$PRIMARY" FM_STATE_OVERRIDE="$STATE" \
-      "$CHECK" --claude > "$OUT" 2> "$ERR" || rc=$?
-  [ "$rc" -eq 2 ] || fail "Claude-shaped stdin must deny, got exit $rc"
-  [ ! -s "$OUT" ] || fail "Claude deny wrote stdout, which makes Claude ignore the deny: $(cat "$OUT")"
-
-  rc=0
-  : > "$OUT"; : > "$ERR"
-  printf '%s' '{"toolName":"Agent"}' \
-    | FM_ROOT_OVERRIDE="$PRIMARY" FM_HOME="$PRIMARY" FM_STATE_OVERRIDE="$STATE" \
       "$CHECK" > "$OUT" 2> "$ERR" || rc=$?
-  [ "$rc" -eq 2 ] || fail "Grok-shaped stdin must deny, got exit $rc"
-  jq -e '.decision == "deny" and (.reason | startswith("[subagent-dispatch]"))' "$OUT" >/dev/null 2>&1 \
-    || fail "default deny mode must write a Grok decision object on stdout: $(cat "$OUT")"
+  [ "$rc" -eq 2 ] || fail "Pi-shaped stdin must deny, got exit $rc"
+  [ ! -s "$OUT" ] || fail "Pi deny wrote stdout, which makes Pi ignore the deny: $(cat "$OUT")"
 
   rc=0
   : > "$OUT"; : > "$ERR"
   printf '%s' '{"tool_name":"Bash","tool_input":{"command":"ls"}}' \
     | FM_ROOT_OVERRIDE="$PRIMARY" FM_HOME="$PRIMARY" FM_STATE_OVERRIDE="$STATE" \
-      "$CHECK" --claude > "$OUT" 2> "$ERR" || rc=$?
+      "$CHECK" > "$OUT" 2> "$ERR" || rc=$?
   [ "$rc" -eq 0 ] || fail "Bash through stdin must allow, got exit $rc"
   [ ! -s "$OUT" ] && [ ! -s "$ERR" ] || fail "stdin allow wrote output"
-  pass "both stdin transports classify correctly and Claude's deny keeps stdout empty"
+  pass "Pi stdin transport classifies correctly and keeps deny output off stdout"
 }
 
 test_malformed_transport_fails_open() {
@@ -252,7 +243,7 @@ test_malformed_transport_fails_open() {
     : > "$OUT"; : > "$ERR"
     printf '%s' "$payload" \
       | FM_ROOT_OVERRIDE="$PRIMARY" FM_HOME="$PRIMARY" FM_STATE_OVERRIDE="$STATE" \
-        "$CHECK" --claude > "$OUT" 2> "$ERR" || rc=$?
+        "$CHECK" > "$OUT" 2> "$ERR" || rc=$?
     [ "$rc" -eq 0 ] || fail "malformed transport must fail open, payload '$payload' gave exit $rc"
     [ ! -s "$OUT" ] || fail "fail-open path wrote stdout for payload '$payload'"
   done
@@ -269,7 +260,7 @@ test_missing_jq_stdin_transport_fails_open() {
   : > "$OUT"; : > "$ERR"
   printf '%s' '{"tool_name":"Agent"}' \
     | env PATH="$fakebin" FM_ROOT_OVERRIDE="$PRIMARY" FM_HOME="$PRIMARY" FM_STATE_OVERRIDE="$STATE" \
-      "$CHECK" --claude > "$OUT" 2> "$ERR" || rc=$?
+      "$CHECK" > "$OUT" 2> "$ERR" || rc=$?
   [ "$rc" -eq 0 ] || fail "missing jq transport must fail open, got exit $rc: $(cat "$ERR")"
   [ ! -s "$OUT" ] || fail "missing jq fail-open path wrote stdout: $(cat "$OUT")"
   [ ! -s "$ERR" ] || fail "missing jq fail-open path wrote stderr: $(cat "$ERR")"

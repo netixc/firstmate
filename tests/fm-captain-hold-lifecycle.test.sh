@@ -88,7 +88,7 @@ write_origin_meta() {  # <home> <id> [kind]
     "window=firstmate:fm-$id" \
     "worktree=$home/projects/missing-$id" \
     "project=$home/projects/sample" \
-    "harness=codex" \
+    "harness=pi" \
     "kind=$kind" \
     "mode=$kind"
 }
@@ -625,8 +625,9 @@ EOF
 # answer time, a card-declared release mode frees held work, freeform prose can
 # forge nothing, and a replayed capture is idempotent.
 test_bound_channel_answers_close_at_answer_time() {
-  local home id sid artifact result out show rc
+  local home id sid artifact result out show rc fixture_sid
   home=$(make_home channel-answer-closure)
+  fixture_sid="fixture-src-$$"
   id=sample-eval-proposal
   mkdir -p "$home/data/$id"
   tasks_in "$home" add "$id" "Propose sample eval changes" --kind scout --repo sample --start >/dev/null \
@@ -698,20 +699,21 @@ esac
 exit 2
 SH
   chmod +x "$home/adapter-root/bin/fm-procevent-fixturechan.sh"
-  run_captain "$home" bind fixture-src >/dev/null \
+  mkdir -p "$home/procevent-claims"
+  run_captain "$home" bind "$fixture_sid" >/dev/null \
     || fail "could not bind the fixture channel"
   PATH="$home/fakebin:$PATH" FM_ROOT_OVERRIDE="$home/adapter-root" FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_PROCEVENT_CLAIM_ROOT="$home/procevent-claims" \
-    "$ROOT/bin/fm-procevent.sh" register fixturechan fixture-src -- cat "$result" >/dev/null \
+    "$ROOT/bin/fm-procevent.sh" register fixturechan "$fixture_sid" -- cat "$result" >/dev/null \
     || fail "could not register the fixture channel source"
   PATH="$home/fakebin:$PATH" FM_ROOT_OVERRIDE="$home/adapter-root" FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
-    FM_PROCEVENT_CLAIM_ROOT="$home/procevent-claims" \
-    "$ROOT/bin/fm-procevent.sh" start fixture-src >/dev/null 2>&1
-  assert_absent "$home/state/procevent-inbox/fixture-src.1.handled" \
+    FM_PROCEVENT_CLAIM_ROOT="$home/procevent-claims" PI_CODING_AGENT=true \
+    "$ROOT/bin/fm-procevent.sh" start "$fixture_sid" >/dev/null 2>&1
+  assert_absent "$home/state/procevent-inbox/$fixture_sid.1.handled" \
     "feeding a captain answer retired the notification firstmate still needs"
-  assert_present "$home/state/procevent-inbox/fixture-src.1.result" \
+  assert_present "$home/state/procevent-inbox/$fixture_sid.1.result" \
     "the fixture channel captured no result to feed"
 
   show=$(tasks_in "$home" show sample-membership-call --full)
@@ -733,7 +735,7 @@ SH
   # run that could not close every answered key still reports nonzero.
   set +e
   out=$(run_lavish "$home" answers "$result" \
-    | run_captain "$home" answers --source "the captured result fixture-src sequence 1" 2>&1)
+    | run_captain "$home" answers --source "the captured result $fixture_sid sequence 1" 2>&1)
   rc=$?
   set -e
   [ "$rc" -ne 0 ] || fail "a run that skipped a key reported success"
@@ -967,9 +969,7 @@ case "${1:-}" in
       printf '%s' "${1:-}" >> "$FM_SEND_LOG"
     fi
     exit 0 ;;
-  display-message)
-    for a in "$@"; do case "$a" in *cursor_y*) printf '1\n'; exit 0 ;; esac; done
-    printf 'fakepane\n'; exit 0 ;;
+  display-message) printf 'fakepane\n'; exit 0 ;;
   capture-pane) printf '╭────╮\n│    │\n╰────╯\n'; exit 0 ;;
   list-windows) exit 0 ;;
 esac

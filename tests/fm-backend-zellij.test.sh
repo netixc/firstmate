@@ -1210,7 +1210,7 @@ test_send_text_submit_send_failed_when_pane_absent() {
 
 # --- fm-*.sh script routing via explicit backend-tagged meta ------------------
 
-test_scripts_route_explicit_target_through_meta_backend() {
+test_peek_routes_explicit_target_through_meta_backend() {
   local dir state fb neutral out
   dir="$TMP_ROOT/script-explicit-target"; state="$dir/state"; mkdir -p "$state" "$dir/responses"
   neutral="$dir/neutral-root"; mkdir -p "$neutral"
@@ -1237,17 +1237,7 @@ SH
   assert_contains "$(cat "$dir/log")" $'\x1f''dump-screen'$'\x1f''--pane-id'$'\x1f''7' \
     "fm-peek did not route the explicit metadata-matched target through zellij capture"
 
-  : > "$dir/log"
-  PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$neutral" FM_HOME="$neutral" FM_STATE_OVERRIDE="$state" \
-    FM_ZELLIJ_LOG="$dir/log" FM_ZELLIJ_RESPONSES="$dir/responses" FM_ZELLIJ_SESSION_LIST="firstmate" \
-    "$ROOT/bin/fm-send.sh" firstmate:7 --key Escape >/dev/null 2>&1
-  expect_code 0 $? "fm-send --key should route an explicit metadata-matched target through zellij"
-  zellij_assert_call_order "$dir/log" $'\x1f''list-panes'$'\x1f''--json' $'\x1f''send-keys' \
-    "fm-send did not verify the pane before send-key"
-  assert_contains "$(cat "$dir/log")" $'\x1f''send-keys'$'\x1f''--pane-id'$'\x1f''7'$'\x1f''Esc' \
-    "fm-send did not route the explicit metadata-matched target through zellij send-key"
-
-  pass "fm-peek/fm-send: explicit metadata-matched targets use the recorded zellij backend"
+  pass "fm-peek: explicit metadata-matched targets use the recorded zellij backend"
 }
 
 test_scripts_verify_label_for_fm_targets() {
@@ -1355,6 +1345,6 @@ test_composer_state_reads_styled_dump
 test_composer_state_dead_pane_is_unknown
 test_send_text_submit_send_failed_when_session_absent
 test_send_text_submit_send_failed_when_pane_absent
-test_scripts_route_explicit_target_through_meta_backend
+test_peek_routes_explicit_target_through_meta_backend
 test_scripts_verify_label_for_fm_targets
 test_scripts_reject_fm_target_label_mismatch

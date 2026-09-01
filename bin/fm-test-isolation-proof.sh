@@ -129,8 +129,8 @@ exclusion_reason() {
       printf '%s\n' 'AFK lifecycle / inject path; exclusive daemon and pane control'
       ;;
     fm-afk-pi-herdr-return-e2e.test.sh|\
-    fm-codex-continuity-live-e2e.test.sh|fm-grok-continuity-live-e2e.test.sh|\
-    fm-opencode-primary-live-e2e.test.sh|fm-pi-primary-live-e2e.test.sh|\
+    \
+    fm-pi-primary-live-e2e.test.sh|\
     fm-quota-array-dispatch-live-e2e.test.sh|fm-send-secondmate-marker-herdr-e2e.test.sh|\
     fm-sessionstart-instruction-refresh-live-e2e.test.sh)
       printf '%s\n' 'live harness opt-in; never default parallel CI'
@@ -169,7 +169,6 @@ tests/fm-composer-ghost.test.sh
 tests/fm-composer-lib.test.sh
 tests/fm-crew-state.test.sh
 tests/fm-ensure-agents-md.test.sh
-tests/fm-grok-harness.test.sh
 tests/fm-herdr-lab.test.sh
 tests/fm-lint.test.sh
 tests/fm-pi-primary-types.test.sh
@@ -553,9 +552,7 @@ fi
 # residual path under PROOF_ROOT is expected and cleaned by trap. Refuse if a
 # worker wrote a fixed global path we know about from audit (none remain after
 # the arm-pretool stderr path uses TMPDIR).
-if find "$PROOF_ROOT" -type f -name 'fm-arm-pretool-check-claude-stderr.*' 2>/dev/null | grep -q .; then
-  : # allowed only under proof roots; nothing to do
-fi
+
 
 RUN_FINISHED_ISO=$(now_iso)
 RUN_FINISHED_MS=$(now_ms)

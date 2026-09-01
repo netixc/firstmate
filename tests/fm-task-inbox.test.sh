@@ -340,7 +340,7 @@ setup_watch_case() {  # <name> -> echoes case dir; state in <dir>/state
   dir="$TMP_ROOT/$name"
   mkdir -p "$dir/state"
   make_watch_stubs "$dir" >/dev/null
-  fm_write_meta "$dir/state/t1.meta" "window=sess:fm-t1" "kind=ship" "harness=grok"
+  fm_write_meta "$dir/state/t1.meta" "window=sess:fm-t1" "kind=ship" "harness=pi"
   printf '%s\n' "$dir"
 }
 
@@ -383,10 +383,12 @@ test_watcher_rerings_idle_pane_quietly() {
 }
 
 test_watcher_waits_on_busy_pane() {
-  local dir state out log pid rec
+  local dir state out log pid rec gen
   dir=$(setup_watch_case busywait)
   state="$dir/state"; out="$dir/watch.out"; log="$dir/send.log"; : > "$log"
   printf 'some output\nBUSYTOKEN active\n' > "$dir/busy.capture"
+  gen=$("$ROOT/bin/fm-busy-event.sh" arm "$state" t1)
+  "$ROOT/bin/fm-busy-event.sh" apply "$state" t1 busy --gen "$gen" --source pi-ext --event tool-call
   rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
   age_path "$rec"
   watch_bg "$state" "$dir/fakebin" "$out" \

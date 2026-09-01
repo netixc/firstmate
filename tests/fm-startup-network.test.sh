@@ -36,7 +36,7 @@ new_world() {
   w="$TMP_ROOT/$name"
   home="$w/home"
   root="$w/root"
-  mkdir -p "$home/state" "$root/bin"
+  mkdir -p "$home/state" "$home/data" "$home/config" "$home/projects" "$root/bin"
   for f in "$ROOT"/bin/*.sh; do
     ln -s "$f" "$root/bin/$(basename "$f")"
   done
@@ -73,15 +73,25 @@ for argument in "$@"; do
 done
 if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then
   case "$*" in
-    *comm=*) printf '/usr/local/bin/claude\n' ;;
-    *args=*) printf 'claude\n' ;;
+    *comm=*) printf '/usr/local/bin/pi\n' ;;
+    *args=*) printf 'pi\n' ;;
     *ppid=*) /bin/ps -o ppid= -p "$pid" ;;
+    *lstart=*) /bin/ps -o lstart= -p "$pid" ;;
   esac
 else
   /bin/ps "$@"
 fi
 SH
   chmod +x "$root/bin/ps"
+  cat > "$root/bin/lsof" <<'SH'
+#!/usr/bin/env bash
+[ -n "${FM_FAKE_HARNESS_PID:-}" ] || exit 1
+case " $* " in
+  *" -p $FM_FAKE_HARNESS_PID "*) printf 'p%s\nftxt\nn%s\n' "$FM_FAKE_HARNESS_PID" "$(command -v node)" ;;
+  *) exit 1 ;;
+esac
+SH
+  chmod +x "$root/bin/lsof"
   printf '%s|%s|%s\n' "$home" "$root" "$w/bootstrap.log"
 }
 
@@ -112,10 +122,14 @@ EOF
 }
 
 run_stage() {  # <home> <root> <args...>
-  local home=$1 root=$2
+  local home=$1 root=$2 harness_pid=${FM_FAKE_HARNESS_PID_OVERRIDE:-$$}
   shift 2
-  PATH="$root/bin:$PATH" FM_FAKE_HARNESS_PID="${FM_FAKE_HARNESS_PID_OVERRIDE:-$$}" \
-    FM_HOME="$home" FM_ROOT_OVERRIDE="$root" "$root/bin/fm-startup-network.sh" "$@"
+  fm_test_register_pi_process "$root" "$home/state" "$harness_pid" \
+    || fail "could not register the startup-network Pi fixture"
+  PATH="$root/bin:$PATH" FM_FAKE_HARNESS_PID="$harness_pid" \
+    FM_HOME="$home" FM_ROOT_OVERRIDE="$root" FM_STATE_OVERRIDE="$home/state" \
+    FM_DATA_OVERRIDE="$home/data" FM_CONFIG_OVERRIDE="$home/config" \
+    FM_PROJECTS_OVERRIDE="$home/projects" "$root/bin/fm-startup-network.sh" "$@"
 }
 
 wait_for_startup_network_wake() {  # <home> [tenths]
@@ -146,7 +160,8 @@ EOF
   started=$(date +%s)
   # Command substitution reads to EOF, exactly like a hook harvesting hook output.
   FM_FAKE_BOOTSTRAP_LOG="$log" FM_FAKE_BOOTSTRAP_SLEEP=10 \
-    run_stage "$home" "$root" start --locked 1 --harvest-pid $$ >/dev/null
+    run_stage "$home" "$root" start --locked 1 --harvest-pid $$ >/dev/null \
+    || fail "start refused the registered Pi fixture"
   elapsed=$(( $(date +%s) - started ))
 
   [ "$elapsed" -lt 4 ] || fail "start blocked for ${elapsed}s behind a 10s worker"

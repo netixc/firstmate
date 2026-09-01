@@ -226,7 +226,6 @@ if (r.terminal && Array.isArray(r.terminal.tail)) {
 # fm_backend_orca_composer_capture: the orca composer screen - one bounded
 # tail read of the live terminal. Deliberately NOT the old 200-line
 # backward-paged read: the composer is bottom-anchored, and paging back into
-# scrollback is what let a stale startup banner (codex's bordered
 # "permissions" box) compete with - and once outrank - the live composer.
 fm_backend_orca_composer_capture() {  # <terminal-id> [expected-label]
   fm_backend_orca_capture "$1" "$FM_COMPOSER_CAPTURE_LINES"
@@ -243,7 +242,6 @@ fm_backend_orca_composer_caps() {
 
 # fm_backend_orca_composer_state: thin adapter - capture plus capabilities in,
 # shared verdict out. Every shape (bordered boxes AND the borderless bare-glyph
-# row this adapter never learned, which left every claude/codex/pi/muse steer
 # unconfirmed) lives in bin/fm-composer-lib.sh.
 fm_backend_orca_composer_state() {  # <terminal-id> [expected-label] -> empty|pending|pending-unproven|unknown
   local cap verdict

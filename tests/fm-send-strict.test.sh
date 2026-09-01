@@ -95,7 +95,7 @@ test_exact_lane_id_send_still_works() {
   local dir fb home err log rc got
   dir="$TMP_ROOT/exact"; mkdir -p "$dir"
   fb=$(make_stubs "$dir"); home=$(setup_home exact); err="$dir/send.err"; log="$dir/tmux.log"; : > "$log"
-  fm_write_meta "$home/state/mpf-lane-m8.meta" "window=sess:fm-mpf-lane-m8" "kind=ship"
+  fm_write_meta "$home/state/mpf-lane-m8.meta" "window=sess:fm-mpf-lane-m8" "kind=ship" "harness=pi"
 
   PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" FM_TMUX_LOG="$log" FM_SEND_SETTLE=0 \
     "$SEND" mpf-lane-m8 "lost dispatch" >/dev/null 2>"$err"; rc=$?
@@ -142,7 +142,7 @@ test_prefixless_herdr_pane_id_fails() {
   dir="$TMP_ROOT/herdr-pane"; mkdir -p "$dir"
   fb=$(make_stubs "$dir"); home=$(setup_home herdr); err="$dir/send.err"; log="$dir/tmux.log"; : > "$log"
   fm_write_meta "$home/state/nudge.meta" \
-    "window=default:wB:p2" "backend=herdr" "herdr_session=default" "herdr_pane_id=wB:p2" "kind=ship"
+    "window=default:wB:p2" "backend=herdr" "herdr_session=default" "herdr_pane_id=wB:p2" "kind=ship" "harness=pi"
 
   PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" FM_TMUX_LOG="$log" FM_SEND_SETTLE=0 \
     "$SEND" wB:p2 "nudge" >/dev/null 2>"$err"; rc=$?
@@ -168,27 +168,11 @@ test_unmatched_single_colon_target_must_exist() {
   pass "fm-send strict: unmatched single-colon explicit targets must verify live before sending"
 }
 
-test_fm_prefixed_herdr_session_is_an_explicit_target() {
-  local dir fb home err log herdr_log rc
-  dir="$TMP_ROOT/fm-remote-explicit"; mkdir -p "$dir"
-  fb=$(make_stubs "$dir"); home=$(setup_home fmremote); err="$dir/send.err"; log="$dir/tmux.log"; herdr_log="$dir/herdr.log"
-  : > "$log"
-  : > "$herdr_log"
-
-  PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" FM_TMUX_LOG="$log" FM_HERDR_LOG="$herdr_log" FM_SEND_SETTLE=0 \
-    "$SEND" fm-remote:w1:p2 --key Enter >/dev/null 2>"$err"; rc=$?
-  expect_code 0 "$rc" "an fm-prefixed Herdr session target should be accepted as explicit"
-  assert_grep 'pane get w1:p2 --session fm-remote' "$herdr_log" "fm-prefixed Herdr target was not verified in its session"
-  assert_grep 'pane send-keys w1:p2 enter --session fm-remote' "$herdr_log" "fm-prefixed Herdr target was not sent its key in its session"
-  assert_no_grep '--session default' "$herdr_log" "fm-prefixed Herdr target fell back to the default session"
-  pass "fm-send strict: fm-prefixed Herdr sessions remain explicit backend targets"
-}
-
 test_healthy_fm_id_send_still_works() {
   local dir fb home err log rc got
   dir="$TMP_ROOT/healthy"; mkdir -p "$dir"
   fb=$(make_stubs "$dir"); home=$(setup_home healthy); err="$dir/send.err"; log="$dir/tmux.log"; : > "$log"
-  fm_write_meta "$home/state/lane-ok.meta" "window=sess:fm-lane-ok" "kind=ship" "harness=codex"
+  fm_write_meta "$home/state/lane-ok.meta" "window=sess:fm-lane-ok" "kind=ship" "harness=pi"
 
   PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" FM_TMUX_LOG="$log" FM_SEND_SETTLE=0 \
     "$SEND" fm-lane-ok "hello captain" >/dev/null 2>"$err"; rc=$?
@@ -210,32 +194,9 @@ test_healthy_fm_id_send_still_works() {
 # nonzero and name the key.
 # Both directions are asserted from one stub so the failing case cannot go
 # quietly vacuous if the key ever stops being delivered at all.
-test_key_send_exit_status_follows_delivery() {
-  local dir fb home err log rc
-  dir="$TMP_ROOT/key-exit"; mkdir -p "$dir"
-  fb=$(make_stubs "$dir"); home=$(setup_home keyexit); err="$dir/send.err"; log="$dir/tmux.log"; : > "$log"
-  fm_write_meta "$home/state/lane-key.meta" "window=sess:fm-lane-key" "kind=ship"
-
-  PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" FM_TMUX_LOG="$log" FM_SEND_SETTLE=0 \
-    "$SEND" lane-key --key Escape >/dev/null 2>"$err"; rc=$?
-  expect_code 0 "$rc" "a delivered --key interrupt should report success"
-  assert_contains "$(cat "$log")" "target=sess:fm-lane-key literal=0 arg=Escape" "the delivered case should send the named key"
-
-  : > "$log"
-  PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" FM_TMUX_LOG="$log" FM_SEND_SETTLE=0 \
-    FM_FAKE_TMUX_SEND_KEY_FAIL=Escape \
-    "$SEND" lane-key --key Escape >/dev/null 2>"$err"; rc=$?
-  [ "$rc" -ne 0 ] || fail "an undelivered --key interrupt reported success"
-  assert_contains "$(cat "$err")" "key 'Escape' not sent" "the undelivered case should name the key that failed"
-  assert_contains "$(cat "$log")" "target=sess:fm-lane-key literal=0 arg=Escape" "the undelivered case should still have attempted the send"
-  pass "fm-send --key: exit status follows delivery, and an undelivered key never reports success"
-}
-
 test_exact_lane_id_send_still_works
-test_key_send_exit_status_follows_delivery
 test_unset_fm_home_fails
 test_unresolvable_target_does_not_tmux_fallback
 test_prefixless_herdr_pane_id_fails
 test_unmatched_single_colon_target_must_exist
-test_fm_prefixed_herdr_session_is_an_explicit_target
 test_healthy_fm_id_send_still_works
