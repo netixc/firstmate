@@ -202,6 +202,7 @@ exit 0
 SH
   cat > "$CASE_BIN/pi" <<'SH'
 #!/usr/bin/env bash
+[ "${1:-}" = --version ] && printf '0.84.4\n'
 exit 0
 SH
   chmod +x "$CASE_BIN/uname" "$CASE_BIN/launchctl" "$CASE_BIN/tasks-axi" "$CASE_BIN/treehouse" "$CASE_BIN/pi"
@@ -516,12 +517,26 @@ assert_contains "$DOCTOR_OUT" 'check herdr-server=ok:' "the started server was n
 [ ! -s "$CASE_LAUNCHCTL_LOG" ] || fail "the linux path invoked launchctl"
 pass "a non-darwin host skips launch agents and starts its herdr server directly"
 
+new_case Linux with-herdr no-gui
+cat > "$CASE_BIN/pi" <<'SH'
+#!/usr/bin/env bash
+[ "${1:-}" = --version ] && printf '0.85.0\n'
+SH
+chmod +x "$CASE_BIN/pi"
+doctor --fix
+expect_code 1 "$DOCTOR_RC" "a host with the wrong Pi version was reported ready"
+assert_contains "$DOCTOR_OUT" 'required harness=MISSING (pi version 0.85.0; requires 0.84.4)' \
+  "the incompatible Pi version was not rejected by worker-side readiness"
+assert_contains "$DOCTOR_OUT" 'required tools do not resolve on the remote runtime PATH: harness' \
+  "the incompatible Pi version did not fail required-tool readiness"
+pass "worker-side readiness requires exact Pi 0.84.4"
+
 # --- --fix may add only owned wrappers for version-manager tools -------------
 
 new_case Linux with-herdr no-gui
 MANAGER_BIN="$CASE_HOME/.nvm/versions/node/v24/bin"
 mkdir -p "$MANAGER_BIN"
-printf '#!/usr/bin/env bash\nexit 0\n' > "$MANAGER_BIN/pi"
+printf '#!/usr/bin/env bash\n[ "${1:-}" = --version ] && printf "0.84.4\\n"\n' > "$MANAGER_BIN/pi"
 chmod +x "$MANAGER_BIN/pi"
 mv "$CASE_BIN/tasks-axi" "$MANAGER_BIN/tasks-axi"
 doctor

@@ -310,7 +310,7 @@ check_remote_job_worker() {
 }
 
 report_required_tools() {
-  local tool resolved harness
+  local tool resolved harness version
   MISSING=()
   for tool in "${REQUIRED_TOOLS[@]}"; do
     resolved=$(command -v "$tool" 2>/dev/null || true)
@@ -329,7 +329,13 @@ report_required_tools() {
   for harness in "${HARNESS_TOOLS[@]}"; do
     resolved=$(command -v "$harness" 2>/dev/null || true)
     if [ -n "$resolved" ] && [ -x "$resolved" ]; then
-      printf 'required harness=%s:%s\n' "$harness" "$resolved"
+      version=$("$resolved" --version 2>/dev/null || true)
+      if [ "$version" = 0.84.4 ]; then
+        printf 'required harness=%s:%s\n' "$harness" "$resolved"
+        return 0
+      fi
+      printf 'required harness=MISSING (pi version %s; requires 0.84.4)\n' "${version:-unknown}"
+      MISSING+=(harness)
       return 0
     fi
   done

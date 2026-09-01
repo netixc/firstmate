@@ -348,7 +348,7 @@ case "${1:-}:${2:-}" in
 esac
 SH
 printf '#!/usr/bin/env bash\nexit 0\n' > "$DOCTOR_BIN/treehouse"
-printf '#!/usr/bin/env bash\nexit 0\n' > "$DOCTOR_BIN/pi"
+printf '#!/usr/bin/env bash\n[ "${1:-}" = --version ] && printf "0.84.4\\n"\n' > "$DOCTOR_BIN/pi"
 chmod +x "$DOCTOR_BIN/jq" "$DOCTOR_BIN/herdr" "$DOCTOR_BIN/tasks-axi" "$DOCTOR_BIN/treehouse" "$DOCTOR_BIN/pi"
 set +e
 out=$(HOME="$DOCTOR_HOME" PATH="$DOCTOR_BIN:/usr/bin:/bin:/usr/sbin:/sbin" "$ROOT/bin/fm-remote-doctor.sh" 2>&1)

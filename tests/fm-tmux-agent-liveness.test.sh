@@ -19,6 +19,11 @@ PATH="$TMP/bin:$PATH"
 FM_BACKEND_LIB_DIR="$ROOT/bin"; export FM_BACKEND_LIB_DIR
 # shellcheck source=/dev/null
 . "$ROOT/bin/backends/tmux.sh"
+[ "$(fm_backend_tmux_classify_process_name '' /usr/local/bin/pi)" = agent ] \
+ || fail "exact Pi argv0 fallback did not classify alive"
+[ "$(fm_backend_tmux_classify_process_name '' /tmp/pi/bash)" = other ] \
+ || fail "a Pi directory component was accepted as an argv0 identity"
+pass "exact Pi argv0 basename provides the secondary liveness signal"
 for _ in $(seq 1 20); do
  state=$(fm_backend_tmux_agent_state live:pi 2>/dev/null || true)
  [ "$state" = alive ] && break
