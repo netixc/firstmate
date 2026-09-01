@@ -1,0 +1,442 @@
++ set -eu
++ '[' 1 '!=' 1 ']'
++++ dirname tests/fm-pi-only-live-e2e.test.sh
+++ cd tests/..
+++ pwd
++ ROOT=/Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z
++ command -v pi
+++ command -v pi
++ PI_BIN=/opt/homebrew/bin/pi
+++ /opt/homebrew/bin/pi --version
++ PI_VERSION=0.84.4
++ '[' 0.84.4 = 0.84.4 ']'
++ command -v tmux
+++ mktemp -d /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.XXXXXX
++ TMP=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ WORKTREE=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA/worktree
++ SESSION=fm-pi-control-38619
++ trap cleanup EXIT
++ git -C /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z worktree add --detach /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA/worktree HEAD
+Preparing worktree (detached HEAD 5dbb1cc)
++ mkdir -p /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA/state /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA/data/control /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA/pi-agent
+++ cd /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z
+++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
+++ /opt/homebrew/bin/pi --print --approve --no-session --no-context-files --no-extensions -e /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/.pi/extensions/fm-primary-pi-watch.ts -e /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/.pi/extensions/fm-primary-turnend-guard.ts --model openai-codex/gpt-5.6-sol --thinking low 'Use the bash tool to run PI_CODING_AGENT=true bin/fm-harness.sh. Reply with exactly the command'\''s one-word stdout and nothing else.'
++ out=pi
++ '[' pi = pi ']'
++ printf 'ok - real Pi supervision extensions preserve plain-Pi identity (Pi %s)\n' 0.84.4
+ok - real Pi supervision extensions preserve plain-Pi identity (Pi 0.84.4)
++ tmux new-session -d -c /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA/worktree -s fm-pi-control-38619 -n fm-control
++ tmux send-keys -l -t fm-pi-control-38619:fm-control 'export FM_HOME='\''/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA'\'' PI_CODING_AGENT_DIR='\''/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA/pi-agent'\''; '\''/opt/homebrew/bin/pi'\'' --no-session --no-extensions -e '\''/Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/.pi/extensions/fm-primary-pi-watch.ts'\'' -e '\''/Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/.pi/extensions/fm-primary-turnend-guard.ts'\'''
++ tmux send-keys -t fm-pi-control-38619:fm-control Enter
++ printf 'Real Pi lifecycle control validation.\n'
++ printf 'window=%s:fm-control\nendpoint_task_id=control\nworktree=%s\nproject=%s\nkind=ship\nmode=no-mistakes\nyolo=off\nharness=pi\nmodel=%s\neffort=low\n' fm-pi-control-38619 /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA/worktree /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z openai-codex/gpt-5.6-sol
+++ seq 1 100
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ for _ in $(seq 1 100)
++ FM_HOME=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA
++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z/bin/fm-control.sh control interrupt
++ sleep 0.1
++ '[' 0 = 1 ']'
++ echo 'not ok - real Pi interrupt control failed'
+not ok - real Pi interrupt control failed
++ exit 1
++ cleanup
++ tmux kill-session -t fm-pi-control-38619
++ git -C /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1E3QA3TF17Z45W888XBDC5Z worktree remove --force /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA/worktree
++ rm -rf /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.BsDxpA

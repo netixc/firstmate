@@ -1,0 +1,6 @@
+Preparing worktree (detached HEAD 5dbb1cc)
+ok - real Pi supervision extensions preserve plain-Pi identity (Pi 0.84.4)
+ok - real Pi interrupt lifecycle control succeeds (Pi 0.84.4)
+warning: /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-pi-only-live.FxAfH6/data/control/brief.md records no delivery contract line (scaffolded before ship briefs recorded one); launching on the explicit --mode no-mistakes - confirm its definition of done matches
+ok - real Pi transactional relaunch preserves executable and profile selection (Pi 0.84.4)
+ok - real Pi replacement exit lifecycle control succeeds (Pi 0.84.4)
