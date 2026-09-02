@@ -1466,7 +1466,7 @@ herdr_projection_existing_meta_allows_flat() {  # <meta>
     old_state=$(fm_backend_herdr_pane_agent_state "$old_session" "$old_pane")
     case "$old_state" in
       dead|no-agent) return 0 ;;
-      live|unknown)
+      live|ambiguous|unknown)
         echo "error: existing herdr endpoint for $ID is $old_state; refusing duplicate launch" >&2
         return 1
         ;;

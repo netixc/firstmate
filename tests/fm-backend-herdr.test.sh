@@ -2664,11 +2664,12 @@ test_projection_reclaim_refusal_matrix_is_non_mutating() {
       run_case() {
         mode=$1; journal=$2; home=$3
         fm_backend_herdr_projection_live_binding_matches() {
-          [ "$mode" != ambiguous ]
+          [ "$mode" != binding-ambiguous ]
         }
         fm_backend_herdr_pane_agent_state() {
           case "$mode" in
             live) printf live ;;
+            ambiguous) printf ambiguous ;;
             unknown) printf unknown ;;
             *) printf no-agent ;;
           esac
@@ -2687,18 +2688,75 @@ test_projection_reclaim_refusal_matrix_is_non_mutating() {
       }
       run_case legacy "$LEGACY" "$HOME_A"
       run_case cross-home "$JOURNAL" "$HOME_B"
+      run_case binding-ambiguous "$JOURNAL" "$HOME_A"
       run_case ambiguous "$JOURNAL" "$HOME_A"
       run_case live "$JOURNAL" "$HOME_A"
       run_case unknown "$JOURNAL" "$HOME_A"
       run_case focus-unknown "$JOURNAL" "$HOME_A"
     ')
-  [ "$out" = $'legacy:2\ncross-home:2\nambiguous:2\nlive:1\nunknown:1\nfocus-unknown:2' ] \
+  [ "$out" = $'legacy:2\ncross-home:2\nbinding-ambiguous:2\nambiguous:1\nlive:1\nunknown:1\nfocus-unknown:2' ] \
     || fail "reclaim refusal matrix returned wrong decisions: $out"
   [ ! -s "$mutation_log" ] \
     || fail "legacy, cross-home, ambiguous, live/unknown, or focus-unknown refusal mutated Herdr: $(cat "$mutation_log")"
   [ "$(sed -n 's/^workspace_label=//p' "$journal")" = "$label" ] \
     || fail "reclaim refusal matrix rewrote the bound workspace label"
   pass "herdr presentation reclaim: legacy, cross-home, ambiguous, live/unknown, and focus-unknown cases refuse without mutation"
+}
+
+test_projection_ambiguous_classifier_refuses_every_recovery_mutation() {
+  local dir state home home_real meta journal token label before_meta before_journal out
+  dir="$TMP_ROOT/projection-ambiguous-classifier"; state="$dir/state"; home="$dir/home"
+  mkdir -p "$state" "$home"
+  home_real=$(cd "$home" && pwd -P)
+  meta="$state/ambiguous-r1.meta"
+  fm_write_herdr_task_meta "$meta" "worktree=$dir/worktree" "project=$dir/project" "harness=pi" "kind=ship"
+  mkdir -p "$dir/worktree" "$dir/project"
+  token=$(bash -c '
+    . "$0/bin/backends/herdr.sh"
+    token=$(fm_backend_herdr_projection_journal_create "$1" ambiguous-r1) || exit 1
+    label=$(fm_backend_herdr_projection_workspace_label ambiguous-r1 "$token")
+    fm_backend_herdr_projection_journal_bind \
+      "$1/ambiguous-r1.herdr-presentation" ambiguous-r1 "$2" lab \
+      w1 w1:t2 w1:p2 w0 firstmate "$label" fm-ambiguous-r1 || exit 1
+    printf "%s" "$token"
+  ' "$ROOT" "$state" "$home_real") || fail "could not create ambiguous recovery fixture"
+  journal="$state/ambiguous-r1.herdr-presentation"
+  label="└ ambiguous-r1 · p:$token"
+  before_meta=$(cat "$meta")
+  before_journal=$(cat "$journal")
+  out=$(ROOT="$ROOT" META="$meta" JOURNAL="$journal" HOME_A="$home" LABEL="$label" \
+    bash -c '
+      . "$ROOT/bin/backends/herdr.sh"
+      MUTATIONS=""
+      fm_backend_herdr_server_running() { return 0; }
+      fm_backend_herdr_pane_presence_state() { printf present; }
+      fm_backend_herdr_pane_idle_shell_pid() { printf "4242\n"; }
+      fm_backend_herdr_projection_live_binding_matches() { return 0; }
+      fm_backend_herdr_cli() {
+        case "$2 $3" in
+          "workspace list") printf "{\"result\":{\"workspaces\":[{\"workspace_id\":\"w1\",\"label\":\"%s\"}]}}\n" "$LABEL" ;;
+          "pane list") printf "{\"result\":{\"panes\":[{\"pane_id\":\"w1:p2\",\"tab_id\":\"w1:t2\"}]}}\n" ;;
+          "agent get") printf "{\"result\":{\"agent\":{\"agent\":\"pi\",\"agent_status\":\"idle\"}}}\n" ;;
+          *) MUTATIONS="${MUTATIONS}${2} ${3}"$'\''\n'\'' ;;
+        esac
+      }
+      set +e
+      fm_backend_herdr_projection_recovery_allows_flat lab "$JOURNAL" ambiguous-r1 >/dev/null 2>&1
+      flat=$?
+      fm_backend_herdr_projection_reclaim_task \
+        lab "$JOURNAL" ambiguous-r1 "$HOME_A" w1 w1:t2 w1:p2 firstmate fm-ambiguous-r1 /tmp/project \
+        >/dev/null 2>&1
+      reclaim=$?
+      fm_backend_herdr_projection_reclaim_rollback lab w1:p3 >/dev/null 2>&1
+      rollback=$?
+      set -e
+      printf "%s/%s/%s\n%s" "$flat" "$reclaim" "$rollback" "$MUTATIONS"
+    ')
+  [ "$out" = "1/1/1" ] || fail "actual ambiguous classifier reached a recovery mutation: $out"
+  [ "$(cat "$meta")" = "$before_meta" ] || fail "ambiguous recovery rewrote task metadata"
+  [ "$(cat "$journal")" = "$before_journal" ] || fail "ambiguous recovery rewrote the presentation journal"
+  assert_not_contains "$out" "release" "ambiguous recovery released endpoint authority"
+  pass "herdr presentation recovery: actual lone-shell contradiction refuses flat fallback, reclaim, rollback, and every mutation"
 }
 
 test_projection_reclaim_replaces_only_exact_husk_and_advances_binding() {
@@ -3857,6 +3915,7 @@ test_presentation_session_lock_path_is_shared_across_homes
 test_presentation_session_lock_path_rejects_malformed_socket
 test_projection_order_rejects_malformed_socket
 test_projection_reclaim_refusal_matrix_is_non_mutating
+test_projection_ambiguous_classifier_refuses_every_recovery_mutation
 test_projection_reclaim_replaces_only_exact_husk_and_advances_binding
 test_projection_recovery_is_read_only_and_refuses_live_duplicate_risk
 test_workspace_find_matches_only_this_homes_own_label
