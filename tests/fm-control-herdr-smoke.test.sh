@@ -10,8 +10,8 @@
 # comes from herdr's own agent registry.
 #
 # No real agent is launched. herdr's `pane report-agent` is the same registry
-# the adapter reads, so registering and not registering an agent on a plain
-# shell pane exercises exactly the classification the control plane gates on.
+# the adapter reads, so a synthetic registration on a proven lone shell
+# exercises the conservative contradiction the control plane must preserve.
 #
 # Always runs on a private, named, throwaway lab session, never the default
 # one (tests/herdr-test-safety.sh; the 2026-07-02 incident). Skips cleanly
@@ -20,7 +20,7 @@ set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-fail() { printf 'not ok - %s\n' "$1" >&2; cleanup_all; exit 1; }
+fail() { printf 'not ok - %s\n' "$1" >&2; exit 1; }
 pass() { printf 'ok - %s\n' "$1"; }
 
 command -v herdr >/dev/null 2>&1 || { echo "skip: herdr not found"; exit 0; }
@@ -31,19 +31,50 @@ command -v jq >/dev/null 2>&1 || { echo "skip: jq not found (required by the her
 herdr_forget_inherited_pane
 
 SESSION="fm-lab-control-smoke-$$"
+LAB_HELPER=${FM_HERDR_LAB_HELPER:-$ROOT/bin/fm-herdr-lab.sh}
+ORIGINAL_PATH=$PATH
 export HERDR_SESSION="$SESSION"
 SCRATCH=
 cleanup_all() {
-  [ -n "$SCRATCH" ] && rm -rf "$SCRATCH"
-  herdr_safe_stop_and_delete "$SESSION"
+  local rc=$?
+  trap - EXIT
+  if [ -n "$SCRATCH" ]; then
+    rm -rf "$SCRATCH"
+  fi
+  if ! PATH="$ORIGINAL_PATH" "$LAB_HELPER" teardown "$SESSION" >/dev/null; then
+    rc=1
+  fi
+  return "$rc"
 }
-trap cleanup_all EXIT
-fm_herdr_lab_prepare "$SESSION" || fail "could not prepare isolated Herdr lab session"
+trap 'rc=$?; cleanup_all || rc=$?; exit "$rc"' EXIT
+"$LAB_HELPER" provision "$SESSION" >/dev/null \
+  || fail "could not prepare isolated Herdr lab session"
 
 SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/fm-control-herdr.XXXXXX")
 SCRATCH=$(cd "$SCRATCH" && pwd)
+FAKEBIN="$SCRATCH/fakebin"
 HOME_DIR="$SCRATCH/home"
-mkdir -p "$HOME_DIR/state" "$HOME_DIR/data/hsmoke"
+mkdir -p "$FAKEBIN" "$HOME_DIR/state" "$HOME_DIR/data/hsmoke"
+cat > "$FAKEBIN/herdr" <<EOF
+#!/usr/bin/env bash
+set -u
+args=("\$@")
+n=\${#args[@]}
+if [ "\$n" -eq 2 ] && [ "\${args[0]}" = status ] && [ "\${args[1]}" = --json ]; then
+  exec env PATH="$ORIGINAL_PATH" "$LAB_HELPER" run "$SESSION" status --json
+fi
+if [ "\$n" -ge 2 ] && [ "\${args[\$((n-2))]}" = --session ]; then
+  [ "\${args[\$((n-1))]}" = "$SESSION" ] || { echo "wrapper refused foreign session" >&2; exit 97; }
+  args=("\${args[@]:0:\$((n-2))}")
+else
+  echo "wrapper requires trailing --session $SESSION" >&2
+  exit 98
+fi
+exec env PATH="$ORIGINAL_PATH" "$LAB_HELPER" run "$SESSION" "\${args[@]}"
+EOF
+chmod +x "$FAKEBIN/herdr"
+export PATH="$FAKEBIN:$ORIGINAL_PATH" FM_ROOT_OVERRIDE="$ROOT"
+lab() { env PATH="$ORIGINAL_PATH" "$LAB_HELPER" run "$SESSION" "$@"; }
 printf '# brief\n' > "$HOME_DIR/data/hsmoke/brief.md"
 
 # A real git worktree so the control plane's checkpoint has a real local copy.
@@ -56,8 +87,14 @@ git -C "$PROJ" add README.md
 git -C "$PROJ" -c user.name='Firstmate Tests' -c user.email='tests@example.invalid' commit -qm initial
 git -C "$PROJ" worktree add --quiet -b hsmoke "$WT"
 
+if [ -n "${_FM_BACKEND_HERDR_SOURCED:-}" ] \
+  || declare -F fm_backend_herdr_pane_agent_state >/dev/null 2>&1; then
+  fail "the smoke invocation inherited a previously sourced Herdr adapter"
+fi
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-backend.sh"
+[ "$FM_BACKEND_LIB_DIR" = "$ROOT/bin" ] \
+  || fail "the smoke invocation loaded fm-backend.sh from the wrong root"
 fm_backend_source herdr || fail "fm_backend_source herdr failed"
 
 CONTAINER_RAW=$(fm_backend_herdr_container_ensure "$WT") || fail "container_ensure failed"
@@ -113,37 +150,36 @@ case "$OUT" in
 esac
 pass "real herdr: interrupt refuses when herdr's own agent registry reports no agent"
 
-# --- a registered agent: classification flips, and the verbs follow ---------
+# --- stale registration: strict shell contradiction refuses every verb -------
 
-herdr pane report-agent "$PANE_ID" --source fm-control-smoke --agent fm-control-smoke-agent \
-  --state idle --session "$SESSION" >/dev/null 2>&1 \
-  || fail "could not register a live agent on the task pane"
+lab pane report-agent "$PANE_ID" --source fm-control-smoke --agent pi \
+  --state idle >/dev/null || fail "could not create the synthetic stale registration"
 
 STATE=$(fm_backend_agent_state herdr "$SESSION:$PANE_ID")
-[ "$STATE" = alive ] || fail "herdr should classify a registered agent as alive, got '$STATE'"
+[ "$STATE" = ambiguous ] \
+  || fail "a registered native status on the proven lone shell should be ambiguous, got '$STATE'"
 
-OUT=$(run_control hsmoke interrupt) || fail "interrupt against a registered agent should succeed: $OUT"
-case "$OUT" in
-  *"interrupt-delivered hsmoke harness=pi backend=herdr verified=agent-alive cancel=unconfirmed"*) : ;;
-  *) fail "interrupt should report the agent-alive proof on herdr, got: $OUT" ;;
-esac
-pass "real herdr: interrupt delivers the harness's key and proves the agent survived it"
-
-herdr pane get "$PANE_ID" --session "$SESSION" >/dev/null 2>&1 \
-  || fail "the control plane must never remove the endpoint it was operating on"
-[ -d "$WT" ] || fail "the control plane must never remove the task's local copy"
-pass "real herdr: no control verb removed the endpoint or the task's local copy"
-
-# Last, because it deliberately types a harness command into a pane that hosts
-# a plain shell: the registered agent cannot actually be stopped that way, and
-# the control plane must say so rather than report a stop it did not achieve.
-if OUT=$(run_control hsmoke exit 2>&1); then
-  fail "exit should fail closed when the agent does not stop: $OUT"
+before=$("$LAB_HELPER" run "$SESSION" pane read "$PANE_ID" --source recent --lines 40 2>/dev/null || true)
+if OUT=$(run_control hsmoke interrupt 2>&1); then
+  fail "interrupt should refuse an ambiguous registered shell: $OUT"
 fi
 case "$OUT" in
-  *"did not stop"*) : ;;
-  *) fail "the exit failure should say the agent did not stop, got: $OUT" ;;
+  *"reads 'ambiguous' rather than a positively classified state"*) : ;;
+  *) fail "interrupt should name the ambiguous liveness refusal, got: $OUT" ;;
 esac
-pass "real herdr: an agent that does not stop fails closed instead of being reported as stopped"
+if OUT=$(run_control hsmoke exit 2>&1); then
+  fail "exit should refuse an ambiguous registered shell: $OUT"
+fi
+case "$OUT" in
+  *"reads 'ambiguous' rather than a positively classified state"*) : ;;
+  *) fail "exit should name the ambiguous liveness refusal, got: $OUT" ;;
+esac
+after=$("$LAB_HELPER" run "$SESSION" pane read "$PANE_ID" --source recent --lines 40 2>/dev/null || true)
+[ "$after" = "$before" ] || fail "control typed into the shell after ambiguous liveness"
 
-fm_backend_herdr_kill "$SESSION:$PANE_ID" 2>/dev/null || true
+lab pane get "$PANE_ID" >/dev/null \
+  || fail "ambiguous control must preserve the endpoint"
+lab agent get "$PANE_ID" >/dev/null \
+  || fail "ambiguous control must preserve the registration"
+[ -d "$WT" ] || fail "ambiguous control must preserve the task's local copy"
+pass "real herdr: synthetic stale registration is ambiguous and control preserves every artifact without typing"

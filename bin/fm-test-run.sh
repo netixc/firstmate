@@ -257,7 +257,7 @@ family_for_basename() {
     fm-sessionstart-instruction-refresh-live-e2e.test.sh|\
     fm-quota-array-dispatch-live-e2e.test.sh|fm-send-secondmate-marker-herdr-e2e.test.sh|\
     \
-    fm-herdr-submit-confirm-live-e2e.test.sh)
+    fm-herdr-liveness-real-e2e.test.sh|fm-herdr-submit-confirm-live-e2e.test.sh)
       printf '%s\n' live-harness-optin
       ;;
     fm-backend-herdr.test.sh|fm-backend.test.sh|\
@@ -492,6 +492,7 @@ tests/fm-gate-refuse.test.sh 4071
 tests/fm-gitignore-config.test.sh 63
 tests/fm-guard-stale-banner.test.sh 11280
 tests/fm-herdr-session-cleanup.test.sh 14120
+tests/fm-herdr-liveness-real-e2e.test.sh 45
 tests/fm-herdr-submit-confirm-live-e2e.test.sh 20
 tests/fm-herdr-version-floor-live-e2e.test.sh 20
 tests/fm-inactive-reconcile.test.sh 41671

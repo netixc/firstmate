@@ -255,12 +255,13 @@ No Herdr-specific copy of that protocol exists.
 
 Stopping and restarting a named Herdr server preserves workspace, tab, pane, and label ids, but the underlying harness processes and live agent registrations do not survive.
 A restored same-labeled tab with a missing pane or no registered agent is a husk.
-Create replaces only a confidently dead or no-agent husk, creates the replacement before closing the old tab, and refuses live or unknown states.
+Create replaces only a confidently dead or no-agent husk, creates the replacement before closing the old tab, and refuses live, ambiguous, or unknown states.
 This prevents closing the workspace's last tab before a replacement exists.
 
 The generic Herdr agent-liveness probe reuses the same classifier.
-A structurally gone pane becomes `missing`, a restored agent-less shell becomes `dead`, a registered agent becomes `alive`, and an unexpected read becomes `unreadable`.
-Native registration classifies Pi without guessing from a generic interpreter name.
+A structurally gone pane becomes `missing`, a restored agent-less shell becomes `dead`, and a registered agent remains `alive` unless the existing strict exact-pane proof positively shows one lone idle shell, in which case the contradictory observation becomes `ambiguous`.
+Malformed or failed process evidence does not establish that narrow contradiction and preserves registry-only liveness; unexpected native API reads become `unreadable`.
+Ambiguity never releases an agent, closes a pane, authorizes replacement, or reports a successful stop.
 
 The session-start sweep uses this probe.
 Mid-session secondmate agent-process liveness is not implemented because idle secondmates are deliberately exempt from stale-pane escalation and need a separate periodic identity signal.
