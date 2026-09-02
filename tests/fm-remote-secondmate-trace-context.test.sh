@@ -184,7 +184,8 @@ pass "disabled: a remote-routed second mate records and receives no carrier and 
 # --- enabled: one carrier is recorded by the parent and received remotely ----
 : > "$PARENT/config/trace-context"
 freeze_parent_session
-reset_remote_herdr_fixture "$HERDR_STATE"   # the previous endpoint is gone; this is an ordinary relaunch
+reset_remote_herdr_fixture "$HERDR_STATE"   # the previous endpoint is gone; retire its exact route record before relaunch
+rm -f "$REMOTE_HOME/state/parent-route/ios.meta"
 : > "$HERDR_LOG"
 remote_env "$ROOT/bin/fm-spawn.sh" ios --secondmate >/dev/null 2>&1 \
   || fail "enabled remote secondmate spawn failed"
@@ -217,6 +218,7 @@ pass "enabled: a remote-routed second mate receives one carrier in its pane, ide
 
 # --- relaunch stability on the remote path ----------------------------------
 reset_remote_herdr_fixture "$HERDR_STATE"
+rm -f "$REMOTE_HOME/state/parent-route/ios.meta"
 : > "$HERDR_LOG"
 remote_env "$ROOT/bin/fm-spawn.sh" ios --secondmate >/dev/null 2>&1 \
   || fail "enabled remote secondmate relaunch failed"

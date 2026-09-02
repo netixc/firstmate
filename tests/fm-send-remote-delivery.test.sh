@@ -46,11 +46,10 @@ DRAIN="$ROOT/bin/fm-wake-drain.sh"
 TMP_ROOT=$(fm_test_tmproot fm-send-remote-delivery)
 TMP_ROOT=$(cd "$TMP_ROOT" && pwd)
 
-# Stub tmux for the local typed-plane legs: logs literal typed text to
-# FM_SEND_LOG. The default composer reads empty (clean submit);
-# FM_FAKE_TMUX_PENDING=1 keeps a proven pending composer with no busy footer,
-# so the real submit core exhausts its Enter budget and reports the pending
-# verdict. The ssh stub counts invocations, logs the wire line, and either
+# The native Herdr fixture logs typed text to FM_SEND_LOG. Its default
+# composer reads empty; FM_FAKE_HERDR_PENDING=1 keeps a proven pending
+# composer so the submit core exhausts its Enter budget and reports pending.
+# The ssh stub counts invocations, logs the wire line, and either
 # fails with FM_FAKE_SSH_RC (emitting FM_FAKE_SSH_STDERR as the remote
 # stderr), or decodes the entrypoint argv and executes the REAL host-local
 # command against the decoded remote home - with FM_FAKE_SSH_AMBIGUOUS=1
@@ -59,39 +58,25 @@ TMP_ROOT=$(cd "$TMP_ROOT" && pwd)
 make_stubs() {  # <dir> -> echoes fakebin dir
   local dir=$1 fb="$1/fakebin"
   mkdir -p "$fb"
-  cat > "$fb/tmux" <<'SH'
+  cat > "$fb/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
-case "${1:-}" in
-  send-keys)
-    shift
-    literal=0
-    while [ $# -gt 0 ]; do
-      case "$1" in
-        -t) shift 2 ;;
-        -l) literal=1; shift ;;
-        *) break ;;
-      esac
-    done
-    if [ "$literal" = 1 ]; then
-      printf '%s' "${1:-}" >> "$FM_SEND_LOG"
-    fi
-    exit 0 ;;
-  display-message)
-    for a in "$@"; do case "$a" in *cursor_y*) printf '1\n'; exit 0 ;; esac; done
-    printf 'fakepane\n'; exit 0 ;;
-  capture-pane)
-    if [ "${FM_FAKE_TMUX_PENDING:-0}" = 1 ]; then
-      printf '╭────────────╮\n│ > steer    │\n╰────────────╯\n'
-    else
-      printf '╭────╮\n│    │\n╰────╯\n'
-    fi
-    exit 0 ;;
-  list-windows) exit 0 ;;
+[ -z "${FM_HERDR_LOG:-}" ] || printf '%s\n' "$*" >> "$FM_HERDR_LOG"
+case "${1:-} ${2:-}" in
+  "status --json") printf '%s\n' '{"client":{"version":"0.12.3","protocol":14},"server":{"running":true}}' ;;
+  "session list") printf '%s\n' '{"sessions":[{"name":"fm-remote","running":true,"socket_path":"/tmp/fm-send-remote.sock"},{"name":"lab","running":true,"socket_path":"/tmp/fm-send-local.sock"}]}' ;;
+  "pane get") printf '%s\n' '{"result":{"pane":{"pane_id":"w1:p1","workspace_id":"w1","tab_id":"w1:t1"}}}' ;;
+  "tab list") printf '{"result":{"tabs":[{"tab_id":"w1:t1","workspace_id":"w1","label":"fm-%s"}]}}\n' "${FM_FAKE_HERDR_TASK_ID:-rsm}" ;;
+  "pane read")
+    if [ "${FM_FAKE_HERDR_PENDING:-0}" = 1 ]; then printf '╭────────────╮\n│ > steer    │\n╰────────────╯\n'
+    else printf '╭─────╮\n│ >   │\n╰─────╯\n'; fi ;;
+  "agent get") printf '%s\n' '{"result":{"agent":{"agent_status":"idle"}}}' ;;
+  "pane send-text") [ -z "${FM_SEND_LOG:-}" ] || printf '%s' "${4:-}" >> "$FM_SEND_LOG" ;;
+  "pane send-keys") : ;;
 esac
 exit 0
 SH
-  chmod +x "$fb/tmux"
+  chmod +x "$fb/herdr"
   cat > "$fb/sleep" <<'SH'
 #!/usr/bin/env bash
 exit 0
@@ -157,7 +142,7 @@ setup_remote_secondmate_home() {  # <name> -> echoes remote home dir
   printf 'rsm\n' > "$rh/.fm-secondmate-home"
   printf '# remote secondmate home fixture\n' > "$rh/AGENTS.md"
   fm_write_meta "$rh/state/parent-route/rsm.meta" \
-    "window=fm-remote:p1" \
+    "window=fm-remote:w1:p1" \
     "worktree=-" \
     "project=-" \
     "backend=herdr" \
@@ -165,8 +150,8 @@ setup_remote_secondmate_home() {  # <name> -> echoes remote home dir
     "harness=pi" \
     "herdr_session=fm-remote" \
     "herdr_workspace_id=w1" \
-    "herdr_tab_id=t1" \
-    "herdr_pane_id=p1"
+    "herdr_tab_id=w1:t1" \
+    "herdr_pane_id=w1:p1"
   printf '%s\n' "$rh"
 }
 
@@ -177,7 +162,7 @@ setup_remote_parent_home() {  # <name> <remote-home> -> echoes home dir
   home=$(setup_home "$1")
   mkdir -p "$home/data"
   fm_write_meta "$home/state/rsm.meta" \
-    "window=fm-remote:p1" \
+    "window=fm-remote:w1:p1" \
     "endpoint_task_id=rsm" \
     "harness=pi" \
     "kind=secondmate" \
@@ -187,7 +172,7 @@ setup_remote_parent_home() {  # <name> <remote-home> -> echoes home dir
     "remote_root=/remote/root" \
     "remote_backend=herdr" \
     "remote_herdr_session=fm-remote" \
-    "remote_target=fm-remote:p1"
+    "remote_target=fm-remote:w1:p1"
   cat > "$home/data/secondmates.md" <<EOF
 - rsm - remote test domain (host: remote-mac; root: /remote/root; home: $2; scope: remote testing; projects: alpha; added 2026-08-02)
 EOF
@@ -195,7 +180,7 @@ EOF
 }
 
 remote_inbox_records() {  # <remote-home>
-  find "$1/state/parent-route/rsm.inbox" -maxdepth 1 -name '*.msg' 2>/dev/null
+  find "$1/state/rsm.inbox" -maxdepth 1 -name '*.msg' 2>/dev/null
 }
 
 # The single non-dot pending-reply record in <home>, or empty.
@@ -212,7 +197,7 @@ send_env() {  # <fakebin> <parent-home> <ssh-log> [extra env...] -- <cmd...>
   shift 3
   env PATH="$fb:$PATH" \
     FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" FM_SEND_SETTLE=0 \
-    FM_SSH_BIN="$fb/fake-ssh" FM_SSH_LOG="$ssh_log" \
+    FM_SSH_BIN="$fb/fake-ssh" FM_SSH_LOG="$ssh_log" FM_HERDR_LOG="$ssh_log.herdr" \
     FM_SSH_COUNT="$ssh_log.count" FM_REMOTE_CODE_ROOT="$ROOT" \
     "$@"
 }
@@ -244,10 +229,10 @@ test_remote_steer_lands_in_remote_inbox() {
     *"$FM_FROMFIRST_MARK"*) : ;;
     *) fail "the remote record must carry the from-firstmate marker: $body" ;;
   esac
-  # The doorbell could not reach the fixture pane (no herdr CLI here); that
-  # never fails the send, and the notice still names the durable record.
-  assert_contains "$err" "durably recorded" \
-    "a failed doorbell must be reported as a notice on a durably sent steer"
+  assert_grep 'Firstmate instruction waiting' "$ssh_log.herdr" \
+    "the valid remote route did not ring its constant worker-inbox doorbell"
+  assert_no_grep 'please rename the metric' "$ssh_log.herdr" \
+    "the remote route typed the request payload instead of the constant doorbell"
   assert_not_contains "$err" "error:" "a durably recorded steer must not carry an error report"
   pend=$(pending_record "$home")
   [ -n "$pend" ] || fail "the marked remote steer must keep its pending-reply expectation"
@@ -312,7 +297,7 @@ test_remote_rerun_is_idempotent() {
     || fail "a stale explicit correlation reached the remote transport"
   [ "$(find "$home/state/pending-replies" -maxdepth 1 -type f ! -name '.*' | wc -l | tr -d ' ')" = 1 ] \
     || fail "a stale explicit correlation minted a replacement expectation"
-  [ "$(find "$rhome/state/parent-route/rsm.inbox" -name '*.msg' | wc -l | tr -d ' ')" = 1 ] \
+  [ "$(find "$rhome/state/rsm.inbox" -name '*.msg' | wc -l | tr -d ' ')" = 1 ] \
     || fail "a stale explicit correlation created another remote record"
   fm_pending_reply_set "$pend" phase delivery_unknown \
     || fail "could not restore the ambiguous expectation for the supported resend"
@@ -327,9 +312,9 @@ test_remote_rerun_is_idempotent() {
       bash -c "$resend_cmd"
   ) >"$dir/resend.out" 2>"$dir/resend.err" || rc=$?
   expect_code 0 "$rc" "the printed correlation-reusing resend must succeed without an inherited FM_HOME"
-  count=$(find "$rhome/state/parent-route/rsm.inbox" -name '*.msg' | wc -l | tr -d ' ')
+  count=$(find "$rhome/state/rsm.inbox" -name '*.msg' | wc -l | tr -d ' ')
   [ "$count" = 1 ] || fail "the correlation-reusing resend must leave exactly one remote record, found $count"
-  rec=$(find "$rhome/state/parent-route/rsm.inbox" -name '*.msg' | head -1)
+  rec=$(find "$rhome/state/rsm.inbox" -name '*.msg' | head -1)
   grep -F "corr=$corr" "$rec" >/dev/null \
     || fail "the deduplicated remote record did not preserve correlation $corr"
   [ -n "$(fm_pending_reply_get "$pend" delivered_epoch)" ] \
@@ -377,7 +362,7 @@ test_remote_fire_and_forget_never_arms_reply_recovery() {
   expect_code 3 "$rc" "an ambiguous fire-and-forget delivery must report unconfirmed"
   [ "$(find "$home/state/pending-replies" -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ')" = 0 ] \
     || fail "fire-and-forget delivery created a pending-reply expectation"
-  count=$(find "$rhome/state/parent-route/rsm.inbox" -name '*.msg' | wc -l | tr -d ' ')
+  count=$(find "$rhome/state/rsm.inbox" -name '*.msg' | wc -l | tr -d ' ')
   [ "$count" = 1 ] || fail "the ambiguous fire-and-forget delivery did not land exactly once"
   action=$(FM_TASK_INBOX_GRACE_SECS=0 FM_TASK_INBOX_RING_MAX=0 \
     fm_task_inbox_due_action "$rhome/state/parent-route" rsm)
@@ -387,7 +372,7 @@ test_remote_fire_and_forget_never_arms_reply_recovery() {
     "$SEND" rsm --fire-and-forget "$delivery" "reconcile your own books" \
     >"$dir/retry.out" 2>"$dir/retry.err" \
     || fail "the fire-and-forget retry failed"
-  count=$(find "$rhome/state/parent-route/rsm.inbox" -name '*.msg' | wc -l | tr -d ' ')
+  count=$(find "$rhome/state/rsm.inbox" -name '*.msg' | wc -l | tr -d ' ')
   [ "$count" = 1 ] || fail "the same fire-and-forget delivery id created a duplicate remote record"
   grep -F "delivery=$delivery" "$(remote_inbox_records "$rhome" | head -1)" >/dev/null \
     || fail "the remote record omitted its fire-and-forget delivery identity"
@@ -513,7 +498,7 @@ test_remote_resolve_key_closes_at_enqueue() {
   if printf '%s' "$out" | grep -F 'OPEN DECISIONS' >/dev/null; then
     fail "the answered decision still lists as open after a recorded remote answer: $out"
   fi
-  grep -rqF 'the weekend, freeze Friday' "$rhome/state/parent-route/rsm.inbox" \
+  grep -rqF 'the weekend, freeze Friday' "$rhome/state/rsm.inbox" \
     || fail "the remote answer must land in the remote steering inbox"
   pass "fm-send remote: a --resolve-key answer closes its decision at enqueue"
 }
@@ -531,7 +516,7 @@ test_remote_slash_rides_inbox() {
   expect_code 0 "$rc" "a remote harness-native steer must ride the inbox and exit 0"
   recs=$(remote_inbox_records "$rhome")
   [ -n "$recs" ] || fail "a remote '/' steer must land in the remote steering inbox, not a typed plane"
-  grep -rqF '/audit the ledger' "$rhome/state/parent-route/rsm.inbox" \
+  grep -rqF '/audit the ledger' "$rhome/state/rsm.inbox" \
     || fail "the remote record must carry the harness-native text verbatim"
   pass "fm-send remote: every remote text, harness-native included, rides the inbox"
 }
@@ -704,13 +689,15 @@ test_local_secondmate_pending_keeps_expectation_armed() {
   fb=$(make_stubs "$dir"); log="$dir/send.log"
   home=$(setup_home local-pending-expectation)
   fm_write_meta "$home/state/lsm.meta" \
-    "window=sess:fm-lsm" "harness=pi" "kind=secondmate" "mode=secondmate" "home=$home/sm"
+    "backend=herdr" "window=lab:w1:p1" "endpoint_task_id=lsm" \
+    "worktree=$home/wt" "project=$home/project" "herdr_session=lab" \
+    "herdr_workspace_id=w1" "herdr_tab_id=w1:t1" "herdr_pane_id=w1:p1" "harness=pi" "kind=secondmate" "mode=secondmate" "home=$home/sm"
 
   # A harness-native slash invocation keeps the typed plane for a LOCAL marked
   # secondmate target, so this pins the kept armed-expectation semantics there.
   : > "$log"
   rc=0
-  env PATH="$fb:$PATH" FM_FAKE_TMUX_PENDING=1 \
+  env PATH="$fb:$PATH" FM_FAKE_HERDR_PENDING=1 FM_FAKE_HERDR_TASK_ID=lsm \
     FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SEND_LOG="$log" FM_SEND_SETTLE=0 \
     "$SEND" lsm "/audit the ledger" >/dev/null 2>&1 || rc=$?
   expect_code 3 "$rc" "an unconfirmed local secondmate submit must exit delivered-unconfirmed"
@@ -732,14 +719,18 @@ test_local_pending_reports_delivered_unconfirmed() {
   dir="$TMP_ROOT/local-pending"; mkdir -p "$dir"
   fb=$(make_stubs "$dir"); log="$dir/send.log"
   home=$(setup_home local-pending)
+  fm_write_meta "$home/state/local.meta" \
+    "backend=herdr" "window=lab:w1:p1" "endpoint_task_id=local" \
+    "worktree=$home/wt" "project=$home/project" "herdr_session=lab" \
+    "herdr_workspace_id=w1" "herdr_tab_id=w1:t1" "herdr_pane_id=w1:p1" "harness=pi" "kind=ship"
 
-  # An explicit backend target is the typed plane, so the exit-3 ladder still
+  # A harness-native task command is the typed plane, so the exit-3 ladder still
   # governs it.
   : > "$log"
   rc=0
-  env PATH="$fb:$PATH" FM_FAKE_TMUX_PENDING=1 \
+  env PATH="$fb:$PATH" FM_FAKE_HERDR_PENDING=1 FM_FAKE_HERDR_TASK_ID=local \
     FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SEND_LOG="$log" FM_SEND_SETTLE=0 \
-    "$SEND" sess:win "steer text" >"$dir/out" 2>"$dir/err" || rc=$?
+    "$SEND" local "/steer text" >"$dir/out" 2>"$dir/err" || rc=$?
   err=$(cat "$dir/err")
   expect_code 3 "$rc" "an unconfirmed local submit must exit with the delivered-unconfirmed status"
   assert_contains "$err" "submission is unconfirmed" \
@@ -756,14 +747,17 @@ test_local_pending_does_not_close_resolve_key() {
   dir="$TMP_ROOT/local-pending-key"; mkdir -p "$dir"
   fb=$(make_stubs "$dir"); log="$dir/send.log"
   home=$(setup_home local-pending-key)
-  fm_write_meta "$home/state/t2.meta" "window=sess:fm-t2" "kind=ship" "harness=pi"
+  fm_write_meta "$home/state/t2.meta" \
+    "backend=herdr" "window=lab:w1:p1" "endpoint_task_id=t2" \
+    "worktree=$home/wt" "project=$home/project" "herdr_session=lab" \
+    "herdr_workspace_id=w1" "herdr_tab_id=w1:t1" "herdr_pane_id=w1:p1" "kind=ship" "harness=pi"
   printf 'blocked [key=creds]: need the deploy token\n' > "$home/state/t2.status"
 
   # A harness-native slash answer keeps the typed plane, so the unconfirmed
   # ladder still governs it; a plain-text answer would close at enqueue instead.
   : > "$log"
   rc=0
-  env PATH="$fb:$PATH" FM_FAKE_TMUX_PENDING=1 \
+  env PATH="$fb:$PATH" FM_FAKE_HERDR_PENDING=1 FM_FAKE_HERDR_TASK_ID=t2 \
     FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SEND_LOG="$log" FM_SEND_SETTLE=0 \
     "$SEND" t2 --resolve-key creds "/vault fetch deploy-token" >/dev/null 2>&1 || rc=$?
   expect_code 3 "$rc" "an unconfirmed local answer must exit with the delivered-unconfirmed status"

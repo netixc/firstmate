@@ -24,6 +24,8 @@ set -u
 
 # shellcheck source=tests/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck source=tests/fixtures.sh
+. "$ROOT/tests/fixtures.sh"
 
 # shellcheck source=bin/fm-ff-lib.sh
 . "$ROOT/bin/fm-ff-lib.sh"
@@ -34,7 +36,8 @@ BASE_PATH=${FM_TEST_BASE_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
 fm_git_identity fmtest fmtest@example.com
 
 TMP_ROOT=$(fm_test_tmproot fm-secondmate-sync)
-export FM_BACKEND=tmux
+export FM_BACKEND=herdr
+export HERDR_SESSION=lab
 
 # --- world builders --------------------------------------------------------
 
@@ -66,15 +69,19 @@ new_world() {
 # the primary at <commit>, plus its seed marker and a LIVE kind=secondmate meta
 # (a window= makes it a running direct report).
 add_sm_worktree() {
-  local w=$1 id=$2 commit=$3
+  local w=$1 id=$2 commit=$3 endpoint_n
   git -C "$w/main" worktree add -q --detach "$w/$id" "$commit"
   printf '%s\n' "$id" > "$w/$id/.fm-secondmate-home"
-  {
-    printf 'window=firstmate:fm-%s\n' "$id"
-    printf 'kind=secondmate\n'
-    printf 'harness=pi\n'
-    printf 'home=%s/%s\n' "$w" "$id"
-  } > "$w/home/state/$id.meta"
+  case "$id" in
+    sm-instr) endpoint_n=2 ;;
+    sm-readme) endpoint_n=3 ;;
+    sm-current) endpoint_n=4 ;;
+    *) endpoint_n=5 ;;
+  esac
+  fm_write_meta "$w/home/state/$id.meta" \
+    "backend=herdr" "window=lab:w1:p$endpoint_n" "endpoint_task_id=$id" \
+    "herdr_session=lab" "herdr_workspace_id=w1" "herdr_tab_id=w1:t$endpoint_n" "herdr_pane_id=w1:p$endpoint_n" \
+    "worktree=$w/$id" "project=$w/main" "kind=secondmate" "harness=pi" "home=$w/$id"
 }
 
 # bump_primary <w> <mode>: advance the PRIMARY's main branch by one local commit.
@@ -343,6 +350,13 @@ esac
 exit 0
 SH
   chmod +x "$fakebin/tmux"
+  fm_test_fake_herdr "$fakebin"
+  cat > "$fakebin/pi" <<'SH'
+#!/usr/bin/env bash
+[ "${1:-}" != --version ] || { printf '0.84.4\n'; exit 0; }
+exit 0
+SH
+  chmod +x "$fakebin/pi"
   cat > "$fakebin/gh" <<'SH'
 #!/usr/bin/env bash
 exit 0
@@ -414,7 +428,8 @@ test_bootstrap_sweep_nudges_only_instruction_change() {
   fakebin=$(make_fake_toolchain "$w")
   log="$w/tmux.log"
   out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
-    FM_SEND_SETTLE=0 FM_FAKE_TMUX_LOG="$log" \
+    FM_SEND_SETTLE=0 FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_HERDR_REQUIRE_SESSION=lab \
+    FM_FAKE_HERDR_SOCKET=/tmp/fm-sync-lab.sock FM_FAKE_HERDR_LOG="$log" \
     "$ROOT/bin/fm-bootstrap.sh" 2>/dev/null)
 
   info_line=$(printf '%s\n' "$out" | grep '^BOOTSTRAP_INFO: nudged fm-sm-instr ' || true)
@@ -460,7 +475,8 @@ test_bootstrap_nudge_send_uses_state_override() {
   log="$w/tmux.log"
 
   out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
-    FM_STATE_OVERRIDE="$override_state" FM_SEND_SETTLE=0 FM_FAKE_TMUX_LOG="$log" \
+    FM_STATE_OVERRIDE="$override_state" FM_SEND_SETTLE=0 FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_HERDR_REQUIRE_SESSION=lab \
+    FM_FAKE_HERDR_SOCKET=/tmp/fm-sync-lab.sock FM_FAKE_HERDR_LOG="$log" \
     "$ROOT/bin/fm-bootstrap.sh" 2>/dev/null)
 
   assert_contains "$out" "BOOTSTRAP_INFO: nudged fm-sm-instr with" \
@@ -500,7 +516,8 @@ test_bootstrap_nudge_retry_rejects_malformed_marker_id() {
   log="$w/tmux.log"
 
   out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
-    FM_SEND_SETTLE=0 FM_FAKE_TMUX_LOG="$log" \
+    FM_SEND_SETTLE=0 FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_HERDR_REQUIRE_SESSION=lab \
+    FM_FAKE_HERDR_SOCKET=/tmp/fm-sync-lab.sock FM_FAKE_HERDR_LOG="$log" \
     "$ROOT/bin/fm-bootstrap.sh" 2>/dev/null)
 
   assert_contains "$out" "NUDGE_SECONDMATES: secondmate ../escape: send failed: retry marker has unsafe id" \
@@ -618,15 +635,21 @@ case "\$cmd \$sub" in
   "status --json")
     printf '{"client":{"version":"0.7.1","protocol":14},"server":{"running":true}}\n'
     ;;
+  "session list")
+    printf '{"sessions":[{"name":"lab","running":true,"socket_path":"/tmp/fm-sync-rotate.sock"}]}\n'
+    ;;
   "pane get")
     if [ "\$arg" = "${stale#*:}" ]; then
-      printf '{"result":{"pane":{"pane_id":"${stale#*:}"}}}\n'
+      printf '{"result":{"pane":{"pane_id":"${stale#*:}","tab_id":"w9:t9","workspace_id":"w9"}}}\n'
     elif [ "\$arg" = "${fresh#*:}" ]; then
-      printf '{"result":{"pane":{"pane_id":"${fresh#*:}"}}}\n'
+      printf '{"result":{"pane":{"pane_id":"${fresh#*:}","tab_id":"wA:t2","workspace_id":"wA"}}}\n'
     else
       printf '{"error":{"code":"pane_not_found","message":"missing"}}\n' >&2
-      exit 0
+      exit 1
     fi
+    ;;
+  "tab list")
+    printf '{"result":{"tabs":[{"tab_id":"wA:t2","label":"fm-sm-instr"}]}}\n'
     ;;
   "agent get")
     if [ "\$arg" = "${stale#*:}" ]; then
@@ -652,21 +675,18 @@ SH
 
 test_nudge_retry_uses_fresh_herdr_endpoint_after_respawn() {
   local w c1 stale fresh fakebin herdrfb toolchain out meta window resolved stale_send fresh_send spawn_stub marker
-  stale=default:w9:pY
-  fresh=default:wA:p2
+  stale=lab:w9:p9
+  fresh=lab:wA:p2
   w=$(new_world nudge-herdr-rotate)
   c1=$(head_of "$w/main")
   add_sm_worktree "$w" sm-instr "$c1"
   bump_primary "$w" instr
 
   meta="$w/home/state/sm-instr.meta"
-  {
-    printf 'window=%s\n' "$stale"
-    printf 'backend=herdr\n'
-    printf 'kind=secondmate\n'
-    printf 'harness=pi\n'
-    printf 'home=%s/sm-instr\n' "$w"
-  } > "$meta"
+  fm_write_meta "$meta" \
+    "backend=herdr" "window=$stale" "endpoint_task_id=sm-instr" \
+    "herdr_session=lab" "herdr_workspace_id=w9" "herdr_tab_id=w9:t9" "herdr_pane_id=w9:p9" \
+    "worktree=$w/sm-instr" "project=$w/main" "kind=secondmate" "harness=pi" "home=$w/sm-instr"
 
   spawn_stub="$w/spawn-stub.sh"
   cat > "$spawn_stub" <<SH
@@ -675,9 +695,20 @@ set -u
 id=\${1:-}
 meta="\$FM_HOME/state/\$id.meta"
 [ -f "\$meta" ] || exit 1
-sed -i.bak "s/^window=.*/window=$fresh/" "\$meta" 2>/dev/null || \
-  sed -i "s/^window=.*/window=$fresh/" "\$meta"
-rm -f "\$meta.bak"
+cat > "\$meta" <<EOF
+backend=herdr
+window=$fresh
+endpoint_task_id=sm-instr
+herdr_session=lab
+herdr_workspace_id=wA
+herdr_tab_id=wA:t2
+herdr_pane_id=wA:p2
+worktree=$w/sm-instr
+project=$w/main
+kind=secondmate
+harness=pi
+home=$w/sm-instr
+EOF
 exit 0
 SH
   chmod +x "$spawn_stub"
@@ -710,7 +741,7 @@ SH
   assert_absent "$marker" "a durably enqueued nudge owes no retry marker"
 
   # shellcheck disable=SC2016  # $0/$1 belong to the inner bash -c process.
-  resolved=$(bash -c '. "$0/bin/fm-backend.sh"; fm_backend_resolve_selector fm-sm-instr "$1"' "$ROOT" "$w/home/state")
+  resolved=$(PATH="$herdrfb:$toolchain:$BASE_PATH" bash -c '. "$0/bin/fm-backend.sh"; fm_backend_resolve_selector fm-sm-instr "$1"' "$ROOT" "$w/home/state")
   [ "$resolved" = "$fresh" ] || fail "fm-<id> should resolve through post-respawn meta, got '$resolved'"
 
   # shellcheck disable=SC2016  # $0/$1 belong to the inner bash -c process.

@@ -348,28 +348,28 @@ case "${1:-}:${2:-}" in
 esac
 SH
 printf '#!/usr/bin/env bash\nexit 0\n' > "$DOCTOR_BIN/treehouse"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$DOCTOR_BIN/no-mistakes"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$DOCTOR_BIN/gh"
 cat > "$DOCTOR_BIN/pi" <<'SH'
 #!/usr/bin/env bash
 [ "${1:-}" = --version ] && printf '0.84.4\n'
 SH
-chmod +x "$DOCTOR_BIN/jq" "$DOCTOR_BIN/herdr" "$DOCTOR_BIN/tasks-axi" "$DOCTOR_BIN/treehouse" "$DOCTOR_BIN/pi"
+chmod +x "$DOCTOR_BIN/jq" "$DOCTOR_BIN/herdr" "$DOCTOR_BIN/tasks-axi" "$DOCTOR_BIN/treehouse" \
+  "$DOCTOR_BIN/no-mistakes" "$DOCTOR_BIN/gh" "$DOCTOR_BIN/pi"
 set +e
 out=$(HOME="$DOCTOR_HOME" PATH="$DOCTOR_BIN:/usr/bin:/bin:/usr/sbin:/sbin" "$ROOT/bin/fm-remote-doctor.sh" 2>&1)
 rc=$?
 set -e
 assert_contains "$out" "required git=$DOCTOR_BIN/git" "the remote doctor did not report where the required tool resolved"
-doctor_legacy-provider=$(PATH="$DOCTOR_BIN:/usr/bin:/bin:/usr/sbin:/sbin" command -v legacy-provider 2>/dev/null || true)
-if [ -n "$doctor_legacy-provider" ]; then
-  assert_contains "$out" "optional legacy-provider=$doctor_legacy-provider" "the remote doctor did not report the resolved optional tool"
-else
-  assert_contains "$out" 'optional legacy-provider=absent' "the remote doctor did not report an absent optional tool"
-fi
 assert_contains "$out" "required herdr=$DOCTOR_BIN/herdr" "the remote doctor did not require herdr"
 assert_contains "$out" "required tasks-axi=$DOCTOR_BIN/tasks-axi" "the remote doctor did not require compatible tasks-axi"
 assert_contains "$out" "required treehouse=$DOCTOR_BIN/treehouse" "the remote doctor did not require treehouse"
 assert_contains "$out" "required harness=pi:$DOCTOR_BIN/pi" "the remote doctor did not require plain Pi"
+assert_contains "$out" "optional no-mistakes=$DOCTOR_BIN/no-mistakes" "the remote doctor did not report no-mistakes as optional"
+assert_contains "$out" "optional gh=$DOCTOR_BIN/gh" "the remote doctor did not report gh as optional"
+assert_not_contains "$out" 'optional tmux=' "the remote doctor retained tmux in the Herdr-only optional-tool set"
 assert_not_contains "$out" 'required tools do not resolve' "a resolved required tool was still reported missing"
-pass "the remote doctor reports its required runtime tool set and optional tools"
+pass "the remote doctor reports its exact required runtime tool set"
 
 out=$(fm_on ios fm-probe-two.sh)
 assert_contains "$out" "home=$REMOTE_HOME" "first dynamic command stopped resolving"

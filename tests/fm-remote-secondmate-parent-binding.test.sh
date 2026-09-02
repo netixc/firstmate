@@ -222,8 +222,7 @@ esac
 CHILD_WT="$REMOTE_HOME/projects/alpha"
 mkdir -p "$REMOTE_HOME/state"
 write_child_meta() {
-  fm_write_meta "$REMOTE_HOME/state/work-child.meta" \
-    "window=firstmate:fm-work-child" "endpoint_task_id=work-child" \
+  fm_write_herdr_task_meta "$REMOTE_HOME/state/work-child.meta" \
     "worktree=$CHILD_WT" "project=$CHILD_WT" "harness=pi" "kind=ship" \
     "mode=local-only" "yolo=off"
 }
@@ -232,6 +231,16 @@ for t in legacy-provider treehouse no-mistakes gh gh-axi tasks-axi; do
   printf '#!/usr/bin/env bash\nexit 0\n' > "$TMP_ROOT/childfake/$t"
   chmod +x "$TMP_ROOT/childfake/$t"
 done
+cat > "$TMP_ROOT/childfake/herdr" <<'SH'
+#!/usr/bin/env bash
+case "${1:-} ${2:-}" in
+  "status --json") printf '%s\n' '{"client":{"version":"0.12.3","protocol":14},"server":{"running":true}}' ;;
+  "session list") printf '%s\n' '{"sessions":[{"name":"lab","running":true,"socket_path":"/tmp/fm-parent-binding-lab.sock"}]}' ;;
+  "pane get") printf '%s\n' '{"error":{"code":"pane_not_found"}}'; exit 1 ;;
+esac
+exit 0
+SH
+chmod +x "$TMP_ROOT/childfake/herdr"
 
 run_child_teardown() { # <extra env assignments...>
   local out rc=0

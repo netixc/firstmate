@@ -98,16 +98,151 @@ fm_test_fake_herdr() {
   cat > "$fakebin/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
+D=$(cd "$(dirname "$0")" && pwd)
+if [ -n "${FM_FAKE_HERDR_REQUIRE_SESSION:-}" ]; then
+  printf 'call %s\n' "$*" >> "${FM_FAKE_HERDR_LOG:?}"
+  requested_session=
+  previous=
+  for argument in "$@"; do
+    [ "$previous" != --session ] || requested_session=$argument
+    previous=$argument
+  done
+  case "${1:-} ${2:-}" in
+    "status --json"|"session list") ;;
+    *)
+      if [ "$requested_session" != "$FM_FAKE_HERDR_REQUIRE_SESSION" ]; then
+        printf 'rejected-session=%s\n' "${requested_session:-unscoped}" >> "$FM_FAKE_HERDR_LOG"
+        exit 64
+      fi
+      ;;
+  esac
+fi
 case "${1:-} ${2:-}" in
   "status --json") printf '%s\n' '{"client":{"protocol":14,"version":"0.12.3"},"server":{"running":true,"protocol":14,"version":"0.12.3"}}' ;;
-  "session list") printf '%s\n' '{"sessions":[{"name":"default","running":true,"socket_path":"/tmp/fake-herdr.sock"}]}' ;;
-  "workspace list") printf '%s\n' '{"result":{"workspaces":[{"workspace_id":"w1","label":"Firstmate","focused":true,"active_tab_id":"w1:t1"}]}}' ;;
-  "workspace get") printf '%s\n' '{"result":{"workspace":{"workspace_id":"w1","label":"Firstmate","focused":true,"active_tab_id":"w1:t1"}}}' ;;
-  "tab list") printf '%s\n' '{"result":{"tabs":[{"tab_id":"w1:t1","workspace_id":"w1","label":"captain","focused":true}]}}' ;;
-  "tab create") printf '%s\n' '{"result":{"tab":{"tab_id":"w1:t2","workspace_id":"w1"},"root_pane":{"pane_id":"w1:p2","tab_id":"w1:t2","workspace_id":"w1"}}}' ;;
-  "tab get") printf '%s\n' '{"result":{"tab":{"tab_id":"w1:t2","workspace_id":"w1","label":"fm-task"}}}' ;;
+  "session list")
+    if [ -n "${FM_FAKE_HERDR_REQUIRE_SESSION:-}" ]; then
+      printf '{"sessions":[{"name":"%s","running":true,"socket_path":"%s"}]}\n' \
+        "$FM_FAKE_HERDR_REQUIRE_SESSION" "${FM_FAKE_HERDR_SOCKET:?}"
+    else
+      printf '%s\n' '{"sessions":[{"name":"default","running":true,"socket_path":"/tmp/fake-herdr.sock"},{"name":"lab","running":true,"socket_path":"/tmp/fake-herdr-lab.sock"}]}'
+    fi
+    ;;
+  "workspace list")
+    if [ -e "$D/herdr-workspace-created" ]; then
+      printf '{"result":{"workspaces":[{"workspace_id":"w1","label":"Firstmate","focused":true,"active_tab_id":"w1:t1"},{"workspace_id":"w2","label":"%s","focused":false,"active_tab_id":"w2:t1"}]}}\n' "${FM_FAKE_HERDR_WORKSPACE_LABEL:-2ndmate}"
+    else
+      printf '%s\n' '{"result":{"workspaces":[{"workspace_id":"w1","label":"Firstmate","focused":true,"active_tab_id":"w1:t1"}]}}'
+    fi
+    ;;
+  "workspace create") touch "$D/herdr-workspace-created"; printf '{"result":{"workspace":{"workspace_id":"w2","label":"%s","active_tab_id":"w2:t1"},"tab":{"tab_id":"w2:t1","workspace_id":"w2","label":"1"},"root_pane":{"pane_id":"w2:p1","tab_id":"w2:t1","workspace_id":"w2"}}}\n' "${FM_FAKE_HERDR_WORKSPACE_LABEL:-2ndmate}" ;;
+  "workspace get")
+    workspace=${3:-w1}
+    label=Firstmate
+    [ "$workspace" = w1 ] || label=${FM_FAKE_HERDR_WORKSPACE_LABEL:-2ndmate}
+    printf '{"result":{"workspace":{"workspace_id":"%s","label":"%s","focused":true,"active_tab_id":"%s:t1"}}}\n' "$workspace" "$label" "$workspace"
+    ;;
+  "tab list")
+    workspace=w1
+    prev=
+    for arg in "$@"; do [ "$prev" != --workspace ] || workspace=$arg; prev=$arg; done
+    printf '{"result":{"tabs":[{"tab_id":"%s:t1","workspace_id":"%s","label":"captain","focused":true}' "$workspace" "$workspace"
+    if [ -e "$D/herdr-tab-created" ] || [ "${FM_FAKE_HERDR_DUPLICATE:-0}" = 1 ]; then
+      task_id=${FM_FAKE_HERDR_TASK_ID:-}
+      case "$workspace" in
+        w2) task_id=${FM_FAKE_HERDR_TASK_ID_W2:-$task_id} ;;
+        w3) task_id=${FM_FAKE_HERDR_TASK_ID_W3:-$task_id} ;;
+      esac
+      task_label=${task_id:+fm-$task_id}
+      [ -n "$task_label" ] || task_label=$(cat "$D/herdr-tab-created" 2>/dev/null)
+      [ -n "$task_label" ] || task_label=fm-task
+      printf ',{"tab_id":"%s:t2","workspace_id":"%s","label":"%s","focused":false}' "$workspace" "$workspace" "$task_label"
+    else
+      state_dir=${FM_STATE_OVERRIDE:-}
+      [ -n "$state_dir" ] || [ -z "${FM_HOME:-}" ] || state_dir="$FM_HOME/state"
+      if [ ! -e "$D/herdr-tab-closed" ] && [ -n "$state_dir" ]; then
+      for meta in "$state_dir"/*.meta; do
+        [ -f "$meta" ] || continue
+        tab=$(sed -n 's/^herdr_tab_id=//p' "$meta" | tail -1)
+        id=$(basename "$meta" .meta)
+        case "$tab" in "$workspace":*) printf ',{"tab_id":"%s","workspace_id":"%s","label":"fm-%s","focused":false}' "$tab" "$workspace" "$id" ;; esac
+        child_home=$(sed -n 's/^home=//p' "$meta" | tail -1)
+        [ -d "$child_home/state" ] || continue
+        for child_meta in "$child_home/state"/*.meta; do
+          [ -f "$child_meta" ] || continue
+          child_tab=$(sed -n 's/^herdr_tab_id=//p' "$child_meta" | tail -1)
+          child_id=$(basename "$child_meta" .meta)
+          case "$child_tab" in "$workspace":*) printf ',{"tab_id":"%s","workspace_id":"%s","label":"fm-%s","focused":false}' "$child_tab" "$workspace" "$child_id" ;; esac
+        done
+      done
+      fi
+    fi
+    printf ']}}\n'
+    ;;
+  "tab create")
+    workspace=w1
+    label=
+    prev=
+    for arg in "$@"; do
+      [ "$prev" != --workspace ] || workspace=$arg
+      [ "$prev" != --label ] || label=$arg
+      prev=$arg
+    done
+    rm -f "$D/herdr-tab-closed" "$D/herdr-pane-closed"
+    printf '%s\n' "$label" > "$D/herdr-tab-created"
+    printf '{"result":{"tab":{"tab_id":"%s:t2","workspace_id":"%s"},"root_pane":{"pane_id":"%s:p2","tab_id":"%s:t2","workspace_id":"%s"}}}\n' "$workspace" "$workspace" "$workspace" "$workspace" "$workspace"
+    ;;
+  "tab get")
+    tab=${3:-w1:t2}
+    workspace=${tab%%:*}
+    label=${FM_FAKE_HERDR_TASK_ID:+fm-$FM_FAKE_HERDR_TASK_ID}
+    [ -n "$label" ] || label=$(cat "$D/herdr-tab-created" 2>/dev/null)
+    state_dir=${FM_STATE_OVERRIDE:-}
+    [ -n "$state_dir" ] || [ -z "${FM_HOME:-}" ] || state_dir="$FM_HOME/state"
+    if [ -z "$label" ] && [ -n "$state_dir" ]; then
+      for meta in "$state_dir"/*.meta; do
+        [ -f "$meta" ] || continue
+        [ "$(sed -n 's/^herdr_tab_id=//p' "$meta" | tail -1)" = "$tab" ] || continue
+        label="fm-$(basename "$meta" .meta)"
+        break
+      done
+    fi
+    [ -n "$label" ] || label=fm-task
+    case "$tab" in *:t1) label=captain ;; esac
+    printf '{"result":{"tab":{"tab_id":"%s","workspace_id":"%s","label":"%s"}}}\n' "$tab" "$workspace" "$label"
+    ;;
   "pane list") printf '%s\n' '{"result":{"panes":[{"pane_id":"w1:p2","tab_id":"w1:t2","workspace_id":"w1"}]}}' ;;
-  "pane get") printf '{"result":{"pane":{"pane_id":"%s","tab_id":"w1:t2","workspace_id":"w1","foreground_cwd":"%s"}}}\n' "${3:-w1:p2}" "${FM_FAKE_PANE_PATH:-}" ;;
+  "pane get")
+    if [ -e "$D/herdr-pane-closed" ]; then
+      printf '%s\n' '{"error":{"code":"pane_not_found"}}'
+      [ -z "${FM_FAKE_HERDR_REQUIRE_SESSION:-}" ] || printf '%s\n' pane-not-found >> "$FM_FAKE_HERDR_LOG"
+      exit 1
+    fi
+    pane=${3:-w1:p2}
+    workspace=${pane%%:*}
+    tab="$workspace:t2"
+    case "$pane" in *:p1) tab="$workspace:t1" ;; esac
+    state_dir=${FM_STATE_OVERRIDE:-}
+    [ -n "$state_dir" ] || [ -z "${FM_HOME:-}" ] || state_dir="$FM_HOME/state"
+    if [ -n "$state_dir" ]; then
+      for meta in "$state_dir"/*.meta; do
+        [ -f "$meta" ] || continue
+        [ "$(sed -n 's/^herdr_pane_id=//p' "$meta" | tail -1)" = "$pane" ] || continue
+        tab=$(sed -n 's/^herdr_tab_id=//p' "$meta" | tail -1)
+        break
+      done
+    fi
+    path=${FM_FAKE_PANE_PATH:-}
+    if [ -n "${FM_FAKE_PANE_COUNTFILE:-}" ]; then
+      n=0
+      [ -f "$FM_FAKE_PANE_COUNTFILE" ] && n=$(cat "$FM_FAKE_PANE_COUNTFILE")
+      n=$((n + 1))
+      printf '%s\n' "$n" > "$FM_FAKE_PANE_COUNTFILE"
+      if [ "$n" -le "${FM_FAKE_PANE_STALE_READS:-0}" ]; then
+        path=${FM_FAKE_PANE_STALE:-}
+      fi
+    fi
+    printf '{"result":{"pane":{"pane_id":"%s","tab_id":"%s","workspace_id":"%s","foreground_cwd":"%s"}}}\n' "$pane" "$tab" "$workspace" "$path"
+    ;;
   "pane read")
     if [ "${FM_FAKE_HERDR_COMPOSER:-}" = pending ]; then
       printf '╭──────────────╮\n│ leftover txt │\n╰──────────────╯\n'
@@ -117,17 +252,49 @@ case "${1:-} ${2:-}" in
     ;;
   "pane send-text")
     [ "${FM_FAKE_HERDR_SEND_FAIL:-0}" = 1 ] && exit 1
-    printf '%s' "${4:-}" >> "${FM_SEND_LOG:-/dev/null}"
+    [ -n "${FM_FAKE_LAUNCH_LOG:-}" ] && printf '%s\n' "${4:-}" >> "$FM_FAKE_LAUNCH_LOG"
+    printf '%s\n' "${4:-}" >> "${FM_SEND_LOG:-/dev/null}"
     ;;
   "pane run")
+    case "${4:-}" in
+      'export TRACEPARENT='*)
+        if [ "${FM_FAKE_TRACEPARENT_SEND_UNSAFE:-0}" = 1 ]; then exit 2; fi
+        if [ "${FM_FAKE_TRACEPARENT_SEND_FAIL:-0}" = 1 ]; then exit 1; fi
+        if [ "${FM_FAKE_TRACE_METADATA_APPEND_FAIL:-0}" = 1 ] && [ -n "${FM_FAKE_META_PATH:-}" ]; then
+          chmod a-w "$FM_FAKE_META_PATH"
+        fi
+        ;;
+    esac
     [ -n "${FM_FAKE_LAUNCH_LOG:-}" ] && printf '%s\n' "${4:-}" >> "$FM_FAKE_LAUNCH_LOG"
     ;;
-  "pane send-keys"|"pane close"|"tab close"|"tab focus"|"workspace focus") ;;
-  "agent get") printf '%s\n' '{"result":{"agent":{"agent_status":"idle"}}}' ;;
+  "pane close") touch "$D/herdr-pane-closed" ;;
+  "pane send-keys"|"tab focus"|"workspace focus") ;;
+  "tab close") rm -f "$D/herdr-tab-created"; touch "$D/herdr-tab-closed" ;;
+  "agent get")
+    if [ "${FM_FAKE_HERDR_AGENT_MISSING:-0}" = 1 ]; then
+      printf '%s\n' '{"error":{"code":"agent_not_found"}}'
+    else
+      printf '{"result":{"agent":{"agent_status":"%s"}}}\n' "${FM_FAKE_HERDR_AGENT_STATUS:-idle}"
+    fi
+    ;;
   *) exit 0 ;;
 esac
+exit 0
 SH
   chmod +x "$fakebin/herdr"
+}
+
+# fm_test_assert_fake_herdr <fakebin>
+# Refuses a lifecycle fixture before any production command can fall through to
+# the operator's real Herdr binary.
+fm_test_assert_fake_herdr() {
+  local fakebin=$1 resolved
+  resolved=$(PATH="$fakebin:$PATH" command -v herdr 2>/dev/null || true)
+  [ "$resolved" = "$fakebin/herdr" ] || {
+    printf 'test fixture error: expected isolated Herdr at %s/herdr, resolved %s\n' \
+      "$fakebin" "${resolved:-<absent>}" >&2
+    return 1
+  }
 }
 
 # fm_test_fake_ssh <fakebin> [name]
@@ -175,6 +342,7 @@ SH
 fm_test_spawn_home() {
   local home=$1 harness=${2-}
   mkdir -p "$home/data" "$home/projects" "$home/state" "$home/config"
+  printf 'off\n' > "$home/config/herdr-presentation-spaces"
   touch "$home/state/.last-watcher-beat"
   if [ -n "$harness" ]; then
     printf '%s\n' "$harness" > "$home/config/crew-harness"
@@ -211,14 +379,16 @@ make_spawn_fakebin() {
 # CLAUDE_CONFIG_DIR, ...) are inherited. Does not add --mode/--yolo; ship tests
 # that need a delivery contract pass those flags themselves.
 fm_test_run_spawn() {
-  local home=$1 pane=$2 fakebin=$3
+  local home=$1 pane=$2 fakebin=$3 task
   shift 3
+  task=${1:-task}
+  fm_test_assert_fake_herdr "$fakebin" || return 1
   FM_ROOT_OVERRIDE='' FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
-    FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$pane" FM_BACKEND=herdr \
+    FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$pane" FM_FAKE_HERDR_TASK_ID="$task" FM_BACKEND=herdr \
     HERDR_ENV=1 HERDR_SESSION=default HERDR_WORKSPACE_ID=w1 HERDR_TAB_ID=w1:t1 HERDR_PANE_ID=w1:p1 \
-    PATH="$fakebin:$PATH" \
+    HERDR_SOCKET_PATH=/tmp/fake-herdr.sock PATH="$fakebin:$PATH" \
     "$ROOT/bin/fm-spawn.sh" "$@" 2>&1
 }
 

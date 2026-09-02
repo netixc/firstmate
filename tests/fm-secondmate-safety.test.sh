@@ -11,7 +11,8 @@ set -u
 . "$(dirname "${BASH_SOURCE[0]}")/secondmate-helpers.sh"
 
 TMP_ROOT=$(fm_test_tmproot fm-secondmate-safety)
-export FM_BACKEND=tmux
+export FM_BACKEND=herdr
+export HERDR_SESSION=lab
 
 file_mode() {
   if [ "$(uname)" = Darwin ]; then
@@ -278,7 +279,7 @@ test_home_seed_uses_treehouse_acquired_home() {
   log="$TMP_ROOT/dash-fake/tmux.log"
   lease="$TMP_ROOT/dash-fake/lease"
 
-  out=$(PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TREEHOUSE_HOME="$acquired" FM_FAKE_TMUX_LOG="$log" \
+  out=$(PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TREEHOUSE_HOME="$acquired" FM_FAKE_LAUNCH_LOG="$log" \
     FM_FAKE_TREEHOUSE_LEASE_FILE="$lease" \
     FM_SECONDMATE_CHARTER='dash acquired scope' FM_SECONDMATE_SCOPE='dash acquired scope' \
     "$ROOT/bin/fm-home-seed.sh" dash - alpha) \
@@ -310,7 +311,7 @@ test_home_seed_returns_treehouse_acquired_home_on_assignment_failure() {
   fakebin=$(make_fake_tmux "$TMP_ROOT/dash-fail-fake")
   log="$TMP_ROOT/dash-fail-fake/tmux.log"
 
-  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TREEHOUSE_HOME="$acquired" FM_FAKE_TMUX_LOG="$log" \
+  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TREEHOUSE_HOME="$acquired" FM_FAKE_LAUNCH_LOG="$log" \
     FM_SECONDMATE_CHARTER='dash acquired scope' FM_SECONDMATE_SCOPE='dash acquired scope' \
     "$ROOT/bin/fm-home-seed.sh" dash - alpha >/dev/null 2>"$err"; then
     fail "seed reused an acquired home marked for another secondmate"
@@ -340,7 +341,7 @@ test_home_seed_warns_when_acquired_home_return_fails() {
   log="$TMP_ROOT/dash-return-fail-fake/tmux.log"
   lease="$TMP_ROOT/dash-return-fail-fake/lease"
 
-  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TREEHOUSE_HOME="$acquired" FM_FAKE_TMUX_LOG="$log" \
+  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TREEHOUSE_HOME="$acquired" FM_FAKE_LAUNCH_LOG="$log" \
     FM_FAKE_TREEHOUSE_LEASE_FILE="$lease" FM_FAKE_TREEHOUSE_RETURN_FAIL=1 \
     FM_SECONDMATE_CHARTER='dash acquired scope' FM_SECONDMATE_SCOPE='dash acquired scope' \
     "$ROOT/bin/fm-home-seed.sh" dash - alpha >/dev/null 2>"$err"; then
@@ -367,7 +368,7 @@ test_home_seed_does_not_return_unsafe_acquired_home() {
   fakebin=$(make_fake_tmux "$TMP_ROOT/dash-active-fake")
   log="$TMP_ROOT/dash-active-fake/tmux.log"
 
-  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TREEHOUSE_HOME="$home" FM_FAKE_TMUX_LOG="$log" \
+  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TREEHOUSE_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" \
     "$ROOT/bin/fm-home-seed.sh" dash - alpha >/dev/null 2>"$err"; then
     fail "seed accepted an acquired home matching the active firstmate home"
   fi
@@ -378,7 +379,7 @@ test_home_seed_does_not_return_unsafe_acquired_home() {
   [ -d "$home/projects/alpha" ] || fail "unsafe acquired-home rollback removed the active home"
 
   : > "$log"
-  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TREEHOUSE_HOME="$descendant" FM_FAKE_TMUX_LOG="$log" \
+  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TREEHOUSE_HOME="$descendant" FM_FAKE_LAUNCH_LOG="$log" \
     "$ROOT/bin/fm-home-seed.sh" dash - alpha >/dev/null 2>"$err"; then
     fail "seed accepted an acquired home inside the active firstmate home"
   fi
@@ -524,7 +525,7 @@ test_home_seed_no_projects_end_to_end() {
   # Spawn tolerates the empty projects field: the home resolves from the registry
   # and the projects meta is recorded empty rather than breaking the launch.
   : > "$log"
-  PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" \
+  PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" \
     FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/no-projects-fake/pane.txt" \
     "$ROOT/bin/fm-spawn.sh" fdev "$sub" pi --secondmate >/dev/null 2>&1 \
     || fail "project-less secondmate spawn failed"
@@ -552,7 +553,7 @@ test_secondmate_spawn_resolves_punctuated_registry_projects() {
     || fail "home-seed validation rejected punctuated registry fields before spawn"
   fakebin=$(make_fake_tmux "$TMP_ROOT/punctuated-spawn-fake")
   log="$TMP_ROOT/punctuated-spawn-fake/tmux.log"
-  PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" \
+  PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" \
     FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/punctuated-spawn-fake/pane.txt" \
     "$ROOT/bin/fm-spawn.sh" punctuated pi --secondmate >/dev/null 2>&1 \
     || fail "secondmate spawn failed for punctuated registry fields"
@@ -604,14 +605,14 @@ EOF
       fm_write_secondmate_meta "$home/state/domain.meta" "$sub"
       meta_before="$TMP_ROOT/spawn-binding-$case_name.meta.before"
       cp "$home/state/domain.meta" "$meta_before"
-      if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" \
+      if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" \
         FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/spawn-binding-$case_name-fake/pane.txt" \
         "$ROOT/bin/fm-spawn.sh" domain pi --secondmate >/dev/null 2>"$err"; then
         fail "secondmate spawn accepted $case_name registry binding"
       fi
       cmp -s "$meta_before" "$home/state/domain.meta" || fail "secondmate spawn changed metadata after $case_name refusal"
     else
-      if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" \
+      if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" \
         FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/spawn-binding-$case_name-fake/pane.txt" \
         "$ROOT/bin/fm-spawn.sh" domain "$sub" pi --secondmate >/dev/null 2>"$err"; then
         fail "secondmate spawn accepted $case_name registry binding"
@@ -1383,7 +1384,7 @@ SH
   log="$TMP_ROOT/spawn-validate-fake/tmux.log"
   err="$TMP_ROOT/spawn-validate.err"
 
-  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/spawn-validate-fake/pane.txt" \
+  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/spawn-validate-fake/pane.txt" \
     "$ROOT/bin/fm-spawn.sh" domain "$subhome" pi --secondmate >/dev/null 2>"$err"; then
     fail "secondmate spawn accepted an unseeded home"
   fi
@@ -1394,7 +1395,7 @@ SH
   grep -F 'new-window' "$log" >/dev/null && fail "spawn created a window before validation"
 
   printf 'other\n' > "$wronghome/.fm-secondmate-home"
-  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/spawn-validate-fake/pane.txt" \
+  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/spawn-validate-fake/pane.txt" \
     "$ROOT/bin/fm-spawn.sh" domain "$wronghome" pi --secondmate >/dev/null 2>"$err"; then
     fail "secondmate spawn accepted a home marked for another secondmate"
   fi
@@ -1402,27 +1403,27 @@ SH
 
   printf 'domain\n' > "$marker_only/.fm-secondmate-home"
   printf 'charter\n' > "$marker_only/data/charter.md"
-  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/spawn-validate-fake/pane.txt" \
+  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/spawn-validate-fake/pane.txt" \
     "$ROOT/bin/fm-spawn.sh" domain "$marker_only" pi --secondmate >/dev/null 2>"$err"; then
     fail "secondmate spawn accepted a marked home missing AGENTS.md"
   fi
   grep -F 'not a firstmate home (missing AGENTS.md)' "$err" >/dev/null || fail "spawn did not explain missing AGENTS.md"
 
   printf '# Firstmate\n' > "$marker_only/AGENTS.md"
-  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/spawn-validate-fake/pane.txt" \
+  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/spawn-validate-fake/pane.txt" \
     "$ROOT/bin/fm-spawn.sh" domain "$marker_only" pi --secondmate >/dev/null 2>"$err"; then
     fail "secondmate spawn accepted a marked home missing bin"
   fi
   grep -F 'not a firstmate home (missing bin/)' "$err" >/dev/null || fail "spawn did not explain missing bin"
 
   printf 'domain\n' > "$home/.fm-secondmate-home"
-  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/spawn-validate-fake/pane.txt" \
+  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/spawn-validate-fake/pane.txt" \
     "$ROOT/bin/fm-spawn.sh" domain "$home" pi --secondmate >/dev/null 2>"$err"; then
     fail "secondmate spawn accepted the active home"
   fi
   grep -F 'secondmate home cannot be the active firstmate home' "$err" >/dev/null || fail "spawn did not reject active home"
 
-  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/spawn-validate-fake/pane.txt" \
+  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/spawn-validate-fake/pane.txt" \
     "$ROOT/bin/fm-spawn.sh" domain "$ROOT" pi --secondmate >/dev/null 2>"$err"; then
     fail "secondmate spawn accepted the firstmate repo root"
   fi
@@ -1430,7 +1431,7 @@ SH
 
   printf 'domain\n' > "$active_descendant/.fm-secondmate-home"
   printf 'charter\n' > "$active_descendant/data/charter.md"
-  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/spawn-validate-fake/pane.txt" \
+  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/spawn-validate-fake/pane.txt" \
     "$ROOT/bin/fm-spawn.sh" domain "$active_descendant" pi --secondmate >/dev/null 2>"$err"; then
     fail "secondmate spawn accepted a home inside the active firstmate home"
   fi
@@ -1438,7 +1439,7 @@ SH
 
   printf 'domain\n' > "$active_ancestor/.fm-secondmate-home"
   printf 'charter\n' > "$active_ancestor/data/charter.md"
-  if PATH="$fakebin:$PATH" FM_HOME="$ancestor_active_home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/spawn-validate-fake/pane.txt" \
+  if PATH="$fakebin:$PATH" FM_HOME="$ancestor_active_home" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/spawn-validate-fake/pane.txt" \
     "$ROOT/bin/fm-spawn.sh" domain "$active_ancestor" pi --secondmate >/dev/null 2>"$err"; then
     fail "secondmate spawn accepted a home containing the active firstmate home"
   fi
@@ -1446,7 +1447,7 @@ SH
 
   printf 'domain\n' > "$root_descendant/.fm-secondmate-home"
   printf 'charter\n' > "$root_descendant/data/charter.md"
-  if PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$fakeroot" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/spawn-validate-fake/pane.txt" \
+  if PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$fakeroot" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/spawn-validate-fake/pane.txt" \
     "$ROOT/bin/fm-spawn.sh" domain "$root_descendant" pi --secondmate >/dev/null 2>"$err"; then
     fail "secondmate spawn accepted a home inside the firstmate repo"
   fi
@@ -1454,7 +1455,7 @@ SH
 
   printf 'domain\n' > "$root_ancestor/.fm-secondmate-home"
   printf 'charter\n' > "$root_ancestor/data/charter.md"
-  if PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$root_inside" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/spawn-validate-fake/pane.txt" \
+  if PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$root_inside" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/spawn-validate-fake/pane.txt" \
     "$ROOT/bin/fm-spawn.sh" domain "$root_ancestor" pi --secondmate >/dev/null 2>"$err"; then
     fail "secondmate spawn accepted a home containing the firstmate repo"
   fi
@@ -1484,7 +1485,7 @@ test_secondmate_spawn_refuses_operational_dirs_outside_subhome() {
       printf 'charter\n' > "$sink/charter.md"
     fi
     : > "$log"
-    if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/spawn-opdir-fake/pane.txt" \
+    if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/spawn-opdir-fake/pane.txt" \
       "$ROOT/bin/fm-spawn.sh" domain "$subhome" pi --secondmate >/dev/null 2>"$err"; then
       fail "secondmate spawn accepted a subhome with $opdir symlinked outside the subhome"
     fi
@@ -1508,14 +1509,13 @@ test_fm_send_refuses_bare_window_without_home_meta() {
   log="$TMP_ROOT/send-fake/tmux.log"
   err="$TMP_ROOT/send-fake/send.err"
 
-  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_WINDOW="other-session:fm-missing" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/send-fake/pane.txt" \
+  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_WINDOW="other-session:fm-missing" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/send-fake/pane.txt" \
     "$ROOT/bin/fm-send.sh" fm-missing 'wrong home' >/dev/null 2>"$err"; then
     fail "fm-send sent to a bare firstmate window without home metadata"
   fi
-  grep -F "no metadata for fm-missing in $home/state" "$err" >/dev/null \
-    || fail "fm-send did not explain missing home metadata"
-  grep -F 'send-keys -t other-session:fm-missing' "$log" >/dev/null \
-    && fail "fm-send fell back to a foreign same-name window"
+  grep -F "not a recorded task selector" "$err" >/dev/null \
+    || fail "fm-send did not explain the missing recorded task selector"
+  [ ! -s "$log" ] || fail "fm-send reached a foreign endpoint without task metadata"
   pass "fm-send refuses a bare firstmate window with no metadata in this home"
 }
 
@@ -1529,23 +1529,13 @@ test_secondmate_teardown_retires_empty_home() {
   mkdir -p "$home/state" "$home/data" "$subhome/state"
   printf 'domain\n' > "$subhome/.fm-secondmate-home"
   subhome_abs=$(cd "$subhome" && pwd -P)
-  cat > "$home/state/domain.meta" <<EOF
-window=firstmate:fm-domain
-worktree=$subhome
-project=$subhome
-harness=echo
-kind=secondmate
-mode=secondmate
-yolo=off
-home=$subhome
-projects=alpha
-EOF
+  fm_write_secondmate_meta "$home/state/domain.meta" "$subhome"
   printf '%s\n' '- domain - design domain (home: '"$subhome"'; scope: design domain; projects: alpha; added 2026-06-22)' > "$home/data/secondmates.md"
   fakebin=$(make_fake_tmux "$TMP_ROOT/teardown-fake")
   log="$TMP_ROOT/teardown-fake/tmux.log"
   lease="$TMP_ROOT/teardown-fake/lease"
   printf 'domain\n' > "$lease"
-  PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$fmroot" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/teardown-fake/pane.txt" \
+  PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$fmroot" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/teardown-fake/pane.txt" \
     FM_FAKE_TREEHOUSE_LEASE_FILE="$lease" \
     "$ROOT/bin/fm-teardown.sh" domain >/dev/null 2>/dev/null \
     || fail "teardown failed for empty secondmate home"
@@ -1591,7 +1581,7 @@ EOF
     fakebin=$(make_fake_tmux "$TMP_ROOT/teardown-binding-$case_name-fake")
     log="$TMP_ROOT/teardown-binding-$case_name-fake/tmux.log"
     err="$TMP_ROOT/teardown-binding-$case_name.err"
-    if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" \
+    if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" \
       FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/teardown-binding-$case_name-fake/pane.txt" \
       "$ROOT/bin/fm-teardown.sh" domain --force >/dev/null 2>"$err"; then
       fail "secondmate teardown accepted $case_name registry binding"
@@ -1621,7 +1611,7 @@ test_secondmate_teardown_sweeps_process_events_before_removal() {
   fakebin=$(make_fake_tmux "$TMP_ROOT/procevent-teardown-fake")
   log="$TMP_ROOT/procevent-teardown-fake/tmux.log"
 
-  PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" \
+  PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" \
     FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/procevent-teardown-fake/pane.txt" \
     FM_FAKE_PROCEVENT_SWEEP_LOG="$sweep_log" \
     "$ROOT/bin/fm-teardown.sh" domain >/dev/null 2>/dev/null \
@@ -1649,7 +1639,7 @@ test_secondmate_teardown_refuses_process_events_without_sweep_script() {
   log="$TMP_ROOT/procevent-refusal-fake/tmux.log"
 
   if PATH="$fakebin:$PATH" FM_HOME="$home" FM_PROCEVENT_CLAIM_ROOT="$claim_root" \
-      FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/procevent-refusal-fake/pane.txt" \
+      FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/procevent-refusal-fake/pane.txt" \
       "$ROOT/bin/fm-teardown.sh" domain --force >/dev/null 2>"$err"; then
     fail "force teardown removed process-event state without a sweep-capable child script"
   fi
@@ -1686,7 +1676,7 @@ exit 1
 SH
   chmod +x "$fakebin/tasks-axi"
 
-  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" \
+  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" \
       FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/procevent-later-refusal-fake/pane.txt" \
       FM_FAKE_PROCEVENT_SWEEP_LOG="$sweep_log" \
       "$ROOT/bin/fm-teardown.sh" domain >/dev/null 2>"$err"; then
@@ -1718,7 +1708,11 @@ test_secondmate_force_teardown_sweeps_nested_homes() {
   subhome_abs=$(cd "$subhome" && pwd -P)
   childhome_abs=$(cd "$childhome" && pwd -P)
   fm_write_secondmate_meta "$home/state/domain.meta" "$subhome"
-  fm_write_secondmate_meta "$subhome/state/nested.meta" "$childhome"
+  fm_write_meta "$subhome/state/nested.meta" \
+    "backend=herdr" "window=lab:w2:p2" "endpoint_task_id=nested" \
+    "herdr_session=lab" "herdr_workspace_id=w2" "herdr_tab_id=w2:t2" "herdr_pane_id=w2:p2" \
+    "worktree=$childhome" "project=$childhome" "home=$childhome" \
+    "harness=pi" "kind=secondmate" "mode=secondmate" "yolo=off" "projects=beta"
   cat > "$home/data/secondmates.md" <<EOF
 - domain - design domain (home: $subhome; scope: design domain; projects: alpha; added 2026-06-22)
 - nested - nested domain (home: $childhome; scope: nested domain; projects: beta; added 2026-06-22)
@@ -1726,11 +1720,12 @@ EOF
   fakebin=$(make_fake_tmux "$TMP_ROOT/procevent-force-fake")
   log="$TMP_ROOT/procevent-force-fake/tmux.log"
 
-  PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" \
+  PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" \
     FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/procevent-force-fake/pane.txt" \
+    FM_FAKE_HERDR_DUPLICATE=1 FM_FAKE_HERDR_TASK_ID=domain FM_FAKE_HERDR_TASK_ID_W2=nested \
     FM_FAKE_PROCEVENT_SWEEP_LOG="$sweep_log" \
-    "$ROOT/bin/fm-teardown.sh" domain --force >/dev/null 2>/dev/null \
-    || fail "force teardown failed after recursively sweeping process events"
+    "$ROOT/bin/fm-teardown.sh" domain --force >"$TMP_ROOT/procevent-force.out" 2>&1 \
+    || fail "force teardown failed after recursively sweeping process events: $(cat "$TMP_ROOT/procevent-force.out")"
   grep -Fx "$subhome_abs" "$sweep_log" >/dev/null || fail "force teardown did not sweep the parent secondmate home"
   grep -Fx "$childhome_abs" "$sweep_log" >/dev/null || fail "force teardown did not sweep the nested secondmate home"
   [ ! -d "$subhome" ] || fail "force teardown retained the swept parent home"
@@ -1760,8 +1755,14 @@ test_secondmate_force_teardown_preserves_nested_restore_status() {
   install_fake_process_event_sweep "$grandchildhome" "$sweep_log"
   : > "$rearm_log"
   fm_write_secondmate_meta "$home/state/domain.meta" "$subhome"
-  fm_write_secondmate_meta "$subhome/state/nested.meta" "$childhome"
-  fm_write_secondmate_meta "$childhome/state/leaf.meta" "$grandchildhome"
+  fm_write_meta "$subhome/state/nested.meta" \
+    "backend=herdr" "window=lab:w2:p2" "endpoint_task_id=nested" \
+    "herdr_session=lab" "herdr_workspace_id=w2" "herdr_tab_id=w2:t2" "herdr_pane_id=w2:p2" \
+    "worktree=$childhome" "project=$childhome" "home=$childhome" "harness=pi" "kind=secondmate" "mode=secondmate" "yolo=off"
+  fm_write_meta "$childhome/state/leaf.meta" \
+    "backend=herdr" "window=lab:w3:p2" "endpoint_task_id=leaf" \
+    "herdr_session=lab" "herdr_workspace_id=w3" "herdr_tab_id=w3:t2" "herdr_pane_id=w3:p2" \
+    "worktree=$grandchildhome" "project=$grandchildhome" "home=$grandchildhome" "harness=pi" "kind=secondmate" "mode=secondmate" "yolo=off"
   cat > "$home/data/secondmates.md" <<EOF
 - domain - design domain (home: $subhome; scope: design domain; projects: alpha; added 2026-06-22)
 - nested - nested domain (home: $childhome; scope: nested domain; projects: beta; added 2026-06-22)
@@ -1771,8 +1772,10 @@ EOF
   log="$TMP_ROOT/procevent-nested-fail-fake/tmux.log"
 
   set +e
-  PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$fmroot" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" \
+  PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$fmroot" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" \
     FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/procevent-nested-fail-fake/pane.txt" \
+    FM_FAKE_HERDR_DUPLICATE=1 FM_FAKE_HERDR_TASK_ID=domain \
+    FM_FAKE_HERDR_TASK_ID_W2=nested FM_FAKE_HERDR_TASK_ID_W3=leaf \
     FM_FAKE_PROCEVENT_SWEEP_LOG="$sweep_log" FM_FAKE_PROCEVENT_REARM_LOG="$rearm_log" \
     FM_FAKE_TREEHOUSE_RETURN_FAIL=1 FM_FAKE_PROCEVENT_REARM_FAIL=1 \
     "$ROOT/bin/fm-teardown.sh" domain --force >/dev/null 2>"$err"
@@ -1806,23 +1809,13 @@ test_secondmate_teardown_refuses_failed_leased_home_return() {
   install_fake_process_event_sweep "$subhome" "$sweep_log"
   : > "$rearm_log"
   subhome_abs=$(cd "$subhome" && pwd -P)
-  cat > "$home/state/domain.meta" <<EOF
-window=firstmate:fm-domain
-worktree=$subhome
-project=$subhome
-harness=echo
-kind=secondmate
-mode=secondmate
-yolo=off
-home=$subhome
-projects=alpha
-EOF
+  fm_write_secondmate_meta "$home/state/domain.meta" "$subhome"
   printf '%s\n' '- domain - design domain (home: '"$subhome"'; scope: design domain; projects: alpha; added 2026-06-22)' > "$home/data/secondmates.md"
   fakebin=$(make_fake_tmux "$TMP_ROOT/teardown-return-fail-fake")
   log="$TMP_ROOT/teardown-return-fail-fake/tmux.log"
 
   set +e
-  PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$fmroot" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/teardown-return-fail-fake/pane.txt" \
+  PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$fmroot" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/teardown-return-fail-fake/pane.txt" \
     FM_FAKE_PROCEVENT_SWEEP_LOG="$sweep_log" FM_FAKE_PROCEVENT_REARM_LOG="$rearm_log" \
     FM_FAKE_TREEHOUSE_RETURN_FAIL=1 \
     "$ROOT/bin/fm-teardown.sh" domain >/dev/null 2>"$err"
@@ -1839,7 +1832,7 @@ EOF
   grep -F -- '- domain ' "$home/data/secondmates.md" >/dev/null || fail "teardown removed registry route after leased home return failed"
 
   set +e
-  PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$fmroot" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/teardown-return-fail-fake/pane.txt" \
+  PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$fmroot" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/teardown-return-fail-fake/pane.txt" \
     FM_FAKE_PROCEVENT_SWEEP_LOG="$sweep_log" FM_FAKE_PROCEVENT_REARM_LOG="$rearm_log" \
     FM_FAKE_TREEHOUSE_RETURN_FAIL=1 FM_FAKE_PROCEVENT_REARM_FAIL=1 \
     "$ROOT/bin/fm-teardown.sh" domain >/dev/null 2>"$err"
@@ -1862,22 +1855,12 @@ test_secondmate_teardown_removes_plain_clone_home_without_treehouse_return() {
   mark_firstmate_home "$subhome"
   printf 'domain\n' > "$subhome/.fm-secondmate-home"
   subhome_abs=$(cd "$subhome" && pwd -P)
-  cat > "$home/state/domain.meta" <<EOF
-window=firstmate:fm-domain
-worktree=$subhome
-project=$subhome
-harness=echo
-kind=secondmate
-mode=secondmate
-yolo=off
-home=$subhome
-projects=alpha
-EOF
+  fm_write_secondmate_meta "$home/state/domain.meta" "$subhome"
   printf '%s\n' '- domain - design domain (home: '"$subhome"'; scope: design domain; projects: alpha; added 2026-06-22)' > "$home/data/secondmates.md"
   fakebin=$(make_fake_tmux "$TMP_ROOT/plain-clone-teardown-fake")
   log="$TMP_ROOT/plain-clone-teardown-fake/tmux.log"
 
-  PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/plain-clone-teardown-fake/pane.txt" \
+  PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/plain-clone-teardown-fake/pane.txt" \
     FM_FAKE_TREEHOUSE_RETURN_FAIL=1 \
     "$ROOT/bin/fm-teardown.sh" domain >/dev/null 2>/dev/null \
     || fail "teardown failed for plain-clone secondmate home"
@@ -1897,42 +1880,27 @@ test_secondmate_force_teardown_discards_child_work() {
   mkdir -p "$home/state" "$home/data" "$subhome/state"
   fm_git_worktree "$childproj" "$childwt" force-child
   printf 'domain\n' > "$subhome/.fm-secondmate-home"
-  cat > "$home/state/domain.meta" <<EOF
-window=firstmate:fm-domain
-worktree=$subhome
-project=$subhome
-harness=echo
-kind=secondmate
-mode=secondmate
-yolo=off
-home=$subhome
-projects=alpha
-EOF
+  fm_write_secondmate_meta "$home/state/domain.meta" "$subhome"
   printf '%s\n' '- domain - design domain (home: '"$subhome"'; scope: design domain; projects: alpha; added 2026-06-22)' > "$home/data/secondmates.md"
-  cat > "$subhome/state/child.meta" <<EOF
-window=firstmate:fm-child
-worktree=$childwt
-project=$childproj
-harness=echo
-kind=ship
-mode=no-mistakes
-yolo=off
-EOF
+  fm_write_meta "$subhome/state/child.meta" \
+    "backend=herdr" "window=lab:w2:p2" "endpoint_task_id=child" \
+    "herdr_session=lab" "herdr_workspace_id=w2" "herdr_tab_id=w2:t2" "herdr_pane_id=w2:p2" \
+    "worktree=$childwt" "project=$childproj" "harness=pi" "kind=ship" "mode=no-mistakes" "yolo=off"
   fakebin=$(make_fake_tmux "$TMP_ROOT/force-teardown-fake")
   log="$TMP_ROOT/force-teardown-fake/tmux.log"
-  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/force-teardown-fake/pane.txt" \
-    "$ROOT/bin/fm-teardown.sh" domain >/dev/null 2>&1; then
+  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/force-teardown-fake/pane.txt" \
+    FM_FAKE_HERDR_REQUIRE_SESSION=lab FM_FAKE_HERDR_SOCKET=/tmp/fm-force-teardown-lab.sock FM_FAKE_HERDR_LOG="$log" "$ROOT/bin/fm-teardown.sh" domain >/dev/null 2>&1; then
     fail "teardown allowed a secondmate with in-flight child work"
   fi
-  PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/force-teardown-fake/pane.txt" \
-    "$ROOT/bin/fm-teardown.sh" domain --force >/dev/null 2>/dev/null \
-    || fail "force teardown failed to discard child work"
+  PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/force-teardown-fake/pane.txt" \
+    FM_FAKE_HERDR_REQUIRE_SESSION=lab FM_FAKE_HERDR_SOCKET=/tmp/fm-force-teardown-lab.sock FM_FAKE_HERDR_LOG="$log" "$ROOT/bin/fm-teardown.sh" domain --force >"$TMP_ROOT/force-teardown.out" 2>&1 \
+    || fail "force teardown failed to discard child work: $(cat "$TMP_ROOT/force-teardown.out")"
   [ ! -d "$subhome" ] || fail "force teardown did not remove the retired secondmate home"
   [ ! -d "$childwt" ] || fail "force teardown did not remove child worktree"
   [ ! -e "$home/state/domain.meta" ] || fail "teardown did not clear parent meta"
   grep -F -- '- domain ' "$home/data/secondmates.md" >/dev/null && fail "force teardown did not remove secondmate registry route"
-  grep -F 'kill-window -t =firstmate:=fm-child' "$log" >/dev/null || fail "force teardown did not kill child window"
-  grep -F 'kill-window -t =firstmate:=fm-domain' "$log" >/dev/null || fail "force teardown did not kill parent window"
+  grep -F 'call pane close w2:p2 --session lab' "$log" >/dev/null || fail "force teardown did not close the exact child pane"
+  assert_no_grep '--session default' "$log" "force teardown reached the default Herdr session"
   pass "secondmate force teardown discards child work"
 }
 
@@ -1946,27 +1914,12 @@ test_secondmate_force_teardown_preserves_child_on_unproven_lock() {
   mkdir -p "$home/state" "$home/data" "$subhome/state"
   fm_git_worktree "$childproj" "$childwt" force-child-lock
   printf 'domain\n' > "$subhome/.fm-secondmate-home"
-  cat > "$home/state/domain.meta" <<EOF
-window=firstmate:fm-domain
-worktree=$subhome
-project=$subhome
-harness=echo
-kind=secondmate
-mode=secondmate
-yolo=off
-home=$subhome
-projects=alpha
-EOF
+  fm_write_secondmate_meta "$home/state/domain.meta" "$subhome"
   printf '%s\n' '- domain - design domain (home: '"$subhome"'; scope: design domain; projects: alpha; added 2026-06-22)' > "$home/data/secondmates.md"
-  cat > "$subhome/state/child.meta" <<EOF
-window=firstmate:fm-child
-worktree=$childwt
-project=$childproj
-harness=echo
-kind=ship
-mode=no-mistakes
-yolo=off
-EOF
+  fm_write_meta "$subhome/state/child.meta" \
+    "backend=herdr" "window=lab:w2:p2" "endpoint_task_id=child" \
+    "herdr_session=lab" "herdr_workspace_id=w2" "herdr_tab_id=w2:t2" "herdr_pane_id=w2:p2" \
+    "worktree=$childwt" "project=$childproj" "harness=pi" "kind=ship" "mode=no-mistakes" "yolo=off"
   fakebin=$(make_fake_tmux "$TMP_ROOT/force-lock-child-fake")
   log="$TMP_ROOT/force-lock-child-fake/tmux.log"
   cat > "$fakebin/treehouse" <<'SH'
@@ -2006,7 +1959,7 @@ SH
   touch -t 200001010000 "$lock"
 
   set +e
-  PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/force-lock-child-fake/pane.txt" \
+  PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/force-lock-child-fake/pane.txt" \
     FM_STALE_WORKTREE_LOCK_RETRY_WAIT_SECS=0 FM_STALE_WORKTREE_LOCK_AGE_SECS=1 \
     "$ROOT/bin/fm-teardown.sh" domain --force >/dev/null 2>"$err"
   rc=$?
@@ -2032,26 +1985,17 @@ test_secondmate_force_teardown_allows_non_state_operational_dir_symlinks_inside_
     mkdir -p "$home/state" "$home/data" "$subhome" "$target"
     printf 'domain\n' > "$subhome/.fm-secondmate-home"
     ln -s "$target" "$subhome/$opdir"
-    cat > "$home/state/domain.meta" <<EOF
-window=firstmate:fm-domain
-worktree=$subhome
-project=$subhome
-harness=echo
-kind=secondmate
-mode=secondmate
-yolo=off
-home=$subhome
-projects=alpha
-EOF
+    fm_write_secondmate_meta "$home/state/domain.meta" "$subhome"
     printf '%s\n' '- domain - design domain (home: '"$subhome"'; scope: design domain; projects: alpha; added 2026-06-22)' > "$home/data/secondmates.md"
     fakebin=$(make_fake_tmux "$TMP_ROOT/symlink-inside-teardown-fake-$opdir")
     log="$TMP_ROOT/symlink-inside-teardown-fake-$opdir/tmux.log"
-    PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/symlink-inside-teardown-fake-$opdir/pane.txt" \
+    PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/symlink-inside-teardown-fake-$opdir/pane.txt" \
+      FM_FAKE_HERDR_REQUIRE_SESSION=lab FM_FAKE_HERDR_SOCKET=/tmp/fm-symlink-lab.sock FM_FAKE_HERDR_LOG="$log" \
       "$ROOT/bin/fm-teardown.sh" domain --force >/dev/null 2>"$err" \
       || fail "force teardown refused $opdir symlinked inside the secondmate home"
     [ ! -e "$subhome" ] || fail "force teardown did not remove subhome with inside $opdir symlink"
     [ ! -e "$home/state/domain.meta" ] || fail "force teardown did not clear parent meta for inside $opdir symlink"
-    grep -F 'kill-window -t =firstmate:=fm-domain' "$log" >/dev/null || fail "force teardown did not kill parent window for inside $opdir symlink"
+    grep -F 'call pane close w1:p2 --session lab' "$log" >/dev/null || fail "force teardown did not close the parent pane for inside $opdir symlink"
   done
   pass "force teardown allows non-state operational directory symlinks inside the subhome"
 }
@@ -2065,21 +2009,11 @@ test_secondmate_force_teardown_refuses_operational_dir_symlink_outside_home() {
   mkdir -p "$home/state" "$home/data" "$subhome" "$external_state"
   printf 'domain\n' > "$subhome/.fm-secondmate-home"
   ln -s "$external_state" "$subhome/state"
-  cat > "$home/state/domain.meta" <<EOF
-window=firstmate:fm-domain
-worktree=$subhome
-project=$subhome
-harness=echo
-kind=secondmate
-mode=secondmate
-yolo=off
-home=$subhome
-projects=alpha
-EOF
+  fm_write_secondmate_meta "$home/state/domain.meta" "$subhome"
   printf '%s\n' '- domain - design domain (home: '"$subhome"'; scope: design domain; projects: alpha; added 2026-06-22)' > "$home/data/secondmates.md"
   fakebin=$(make_fake_tmux "$TMP_ROOT/symlink-state-teardown-fake")
   log="$TMP_ROOT/symlink-state-teardown-fake/tmux.log"
-  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/symlink-state-teardown-fake/pane.txt" \
+  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/symlink-state-teardown-fake/pane.txt" \
     "$ROOT/bin/fm-teardown.sh" domain --force >/dev/null 2>"$err"; then
     fail "force teardown accepted a symlinked secondmate state directory"
   fi
@@ -2137,7 +2071,7 @@ SH
     log="$base/fake/tmux.log"
     err="$base/teardown.err"
     if PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$fmroot" FM_HOME="$home" \
-      FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$base/fake/pane.txt" \
+      FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$base/fake/pane.txt" \
       "$ROOT/bin/fm-teardown.sh" "$tid" >/dev/null 2>"$err"; then
       fail "teardown ($row) accepted a hazardous secondmate home"
     fi
@@ -2164,17 +2098,7 @@ test_secondmate_teardown_refuses_registered_nested_home() {
   mkdir -p "$home/state" "$home/data" "$subhome/state" "$nested/state"
   printf 'domain\n' > "$subhome/.fm-secondmate-home"
   printf 'nested\n' > "$nested/.fm-secondmate-home"
-  cat > "$home/state/domain.meta" <<EOF
-window=firstmate:fm-domain
-worktree=$subhome
-project=$subhome
-harness=echo
-kind=secondmate
-mode=secondmate
-yolo=off
-home=$subhome
-projects=alpha
-EOF
+  fm_write_secondmate_meta "$home/state/domain.meta" "$subhome"
   cat > "$home/state/nested.meta" <<EOF
 window=firstmate:fm-nested
 worktree=$nested
@@ -2192,7 +2116,7 @@ EOF
 EOF
   fakebin=$(make_fake_tmux "$TMP_ROOT/nested-teardown-fake")
   log="$TMP_ROOT/nested-teardown-fake/tmux.log"
-  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/nested-teardown-fake/pane.txt" \
+  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/nested-teardown-fake/pane.txt" \
     "$ROOT/bin/fm-teardown.sh" domain >/dev/null 2>"$err"; then
     fail "teardown removed a home containing another registered secondmate home"
   fi
@@ -2214,22 +2138,12 @@ test_secondmate_teardown_refuses_child_registry_nested_home() {
   mkdir -p "$home/state" "$home/data" "$subhome/state" "$subhome/data" "$nested/state"
   printf 'domain\n' > "$subhome/.fm-secondmate-home"
   printf 'nested\n' > "$nested/.fm-secondmate-home"
-  cat > "$home/state/domain.meta" <<EOF
-window=firstmate:fm-domain
-worktree=$subhome
-project=$subhome
-harness=echo
-kind=secondmate
-mode=secondmate
-yolo=off
-home=$subhome
-projects=alpha
-EOF
+  fm_write_secondmate_meta "$home/state/domain.meta" "$subhome"
   printf '%s\n' '- domain - design domain (home: '"$subhome"'; scope: design domain; projects: alpha; added 2026-06-22)' > "$home/data/secondmates.md"
   printf '%s\n' '- nested - nested domain (home: '"$nested"'; scope: nested domain; projects: beta; added 2026-06-22)' > "$subhome/data/secondmates.md"
   fakebin=$(make_fake_tmux "$TMP_ROOT/child-registry-teardown-fake")
   log="$TMP_ROOT/child-registry-teardown-fake/tmux.log"
-  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/child-registry-teardown-fake/pane.txt" \
+  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/child-registry-teardown-fake/pane.txt" \
     "$ROOT/bin/fm-teardown.sh" domain >/dev/null 2>"$err"; then
     fail "teardown removed a home containing a child-registry secondmate home"
   fi
@@ -2249,30 +2163,15 @@ test_secondmate_force_teardown_prevalidates_before_child_cleanup() {
   childwt="$TMP_ROOT/prevalidate-child-worktree"
   err="$TMP_ROOT/prevalidate-teardown.err"
   mkdir -p "$home/state" "$home/data" "$subhome/state" "$childproj" "$childwt"
-  cat > "$home/state/domain.meta" <<EOF
-window=firstmate:fm-domain
-worktree=$subhome
-project=$subhome
-harness=echo
-kind=secondmate
-mode=secondmate
-yolo=off
-home=$subhome
-projects=alpha
-EOF
+  fm_write_secondmate_meta "$home/state/domain.meta" "$subhome"
   printf '%s\n' '- domain - design domain (home: '"$subhome"'; scope: design domain; projects: alpha; added 2026-06-22)' > "$home/data/secondmates.md"
-  cat > "$subhome/state/child.meta" <<EOF
-window=firstmate:fm-child
-worktree=$childwt
-project=$childproj
-harness=echo
-kind=ship
-mode=no-mistakes
-yolo=off
-EOF
+  fm_write_meta "$subhome/state/child.meta" \
+    "backend=herdr" "window=lab:w2:p2" "endpoint_task_id=child" \
+    "herdr_session=lab" "herdr_workspace_id=w2" "herdr_tab_id=w2:t2" "herdr_pane_id=w2:p2" \
+    "worktree=$childwt" "project=$childproj" "harness=pi" "kind=ship" "mode=no-mistakes" "yolo=off"
   fakebin=$(make_fake_tmux "$TMP_ROOT/prevalidate-teardown-fake")
   log="$TMP_ROOT/prevalidate-teardown-fake/tmux.log"
-  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/prevalidate-teardown-fake/pane.txt" \
+  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/prevalidate-teardown-fake/pane.txt" \
     "$ROOT/bin/fm-teardown.sh" domain --force >/dev/null 2>"$err"; then
     fail "force teardown discarded child work before validating subhome"
   fi
@@ -2304,27 +2203,12 @@ seed_task_set_lock_home() {  # <tag> -> echoes "<home>|<subhome>"
   # its project, which would mask the refusal under test.
   fm_git_worktree "$childproj" "$childwt" "child-$tag"
   printf '%s\n' domain > "$subhome/.fm-secondmate-home"
-  cat > "$home/state/domain.meta" <<EOF
-window=firstmate:fm-domain
-worktree=$subhome
-project=$subhome
-harness=echo
-kind=secondmate
-mode=secondmate
-yolo=off
-home=$subhome
-projects=alpha
-EOF
+  fm_write_secondmate_meta "$home/state/domain.meta" "$subhome"
   printf '%s\n' '- domain - design domain (home: '"$subhome"'; scope: design domain; projects: alpha; added 2026-06-22)' > "$home/data/secondmates.md"
-  cat > "$subhome/state/child.meta" <<EOF
-window=firstmate:fm-child
-worktree=$childwt
-project=$childproj
-harness=echo
-kind=ship
-mode=no-mistakes
-yolo=off
-EOF
+  fm_write_meta "$subhome/state/child.meta" \
+    "backend=herdr" "window=lab:w2:p2" "endpoint_task_id=child" \
+    "herdr_session=lab" "herdr_workspace_id=w2" "herdr_tab_id=w2:t2" "herdr_pane_id=w2:p2" \
+    "worktree=$childwt" "project=$childproj" "harness=pi" "kind=ship" "mode=no-mistakes" "yolo=off"
   printf '%s|%s\n' "$home" "$subhome"
 }
 
@@ -2369,17 +2253,7 @@ seed_empty_task_set_home() {  # <tag> -> echoes "<home>|<subhome>"
   subhome="$TMP_ROOT/$tag-subhome"
   mkdir -p "$home/state" "$home/data" "$subhome/data"
   printf '%s\n' domain > "$subhome/.fm-secondmate-home"
-  cat > "$home/state/domain.meta" <<EOF
-window=firstmate:fm-domain
-worktree=$subhome
-project=$subhome
-harness=echo
-kind=secondmate
-mode=secondmate
-yolo=off
-home=$subhome
-projects=alpha
-EOF
+  fm_write_secondmate_meta "$home/state/domain.meta" "$subhome"
   printf '%s\n' '- domain - design domain (home: '"$subhome"'; scope: design domain; projects: alpha; added 2026-06-22)' > "$home/data/secondmates.md"
   printf '%s|%s\n' "$home" "$subhome"
 }
@@ -2394,7 +2268,7 @@ EOF
   err="$TMP_ROOT/taskset-state-file.err"
   fakebin=$(make_fake_tmux "$TMP_ROOT/taskset-state-file-fake")
   log="$TMP_ROOT/taskset-state-file-fake/tmux.log"
-  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" \
+  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" \
     FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/taskset-state-file-fake/pane.txt" \
     "$ROOT/bin/fm-teardown.sh" domain --force >/dev/null 2>"$err"; then
     fail "forced teardown accepted a non-directory descendant state path"
@@ -2419,7 +2293,7 @@ EOF
   err="$TMP_ROOT/taskset-state-symlink.err"
   fakebin=$(make_fake_tmux "$TMP_ROOT/taskset-state-symlink-fake")
   log="$TMP_ROOT/taskset-state-symlink-fake/tmux.log"
-  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" \
+  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" \
     FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/taskset-state-symlink-fake/pane.txt" \
     "$ROOT/bin/fm-teardown.sh" domain --force >/dev/null 2>"$err"; then
     fail "forced teardown accepted a symlinked descendant state path"
@@ -2459,7 +2333,7 @@ SH
   err="$TMP_ROOT/taskset-state-absent.err"
   fakebin=$(make_fake_tmux "$TMP_ROOT/taskset-state-absent-fake")
   log="$TMP_ROOT/taskset-state-absent-fake/tmux.log"
-  PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" \
+  PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" \
     FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/taskset-state-absent-fake/pane.txt" \
     XDG_STATE_HOME="$TMP_ROOT/taskset-state-absent-xdg" \
     FM_TASK_SET_TEST_READY="$ready" FM_TASK_SET_TEST_RELEASE="$release" \
@@ -2504,7 +2378,7 @@ EOF
   lock=${held#* }
   fakebin=$(make_fake_tmux "$TMP_ROOT/taskset-teardown-fake")
   log="$TMP_ROOT/taskset-teardown-fake/tmux.log"
-  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" \
+  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" \
     FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/taskset-teardown-fake/pane.txt" \
     "$ROOT/bin/fm-teardown.sh" domain --force >/dev/null 2>"$err"; then
     fail "forced teardown proceeded while a task was being published"
@@ -2587,30 +2461,15 @@ test_secondmate_force_teardown_refuses_child_active_home_descendant() {
   err="$TMP_ROOT/child-active-descendant.err"
   mkdir -p "$home/state" "$home/data" "$subhome/state" "$childproj"
   printf 'domain\n' > "$subhome/.fm-secondmate-home"
-  cat > "$home/state/domain.meta" <<EOF
-window=firstmate:fm-domain
-worktree=$subhome
-project=$subhome
-harness=echo
-kind=secondmate
-mode=secondmate
-yolo=off
-home=$subhome
-projects=alpha
-EOF
+  fm_write_secondmate_meta "$home/state/domain.meta" "$subhome"
   printf '%s\n' '- domain - design domain (home: '"$subhome"'; scope: design domain; projects: alpha; added 2026-06-22)' > "$home/data/secondmates.md"
-  cat > "$subhome/state/child.meta" <<EOF
-window=firstmate:fm-child
-worktree=$childwt
-project=$childproj
-harness=echo
-kind=ship
-mode=no-mistakes
-yolo=off
-EOF
+  fm_write_meta "$subhome/state/child.meta" \
+    "backend=herdr" "window=lab:w2:p2" "endpoint_task_id=child" \
+    "herdr_session=lab" "herdr_workspace_id=w2" "herdr_tab_id=w2:t2" "herdr_pane_id=w2:p2" \
+    "worktree=$childwt" "project=$childproj" "harness=pi" "kind=ship" "mode=no-mistakes" "yolo=off"
   fakebin=$(make_fake_tmux "$TMP_ROOT/child-active-descendant-fake")
   log="$TMP_ROOT/child-active-descendant-fake/tmux.log"
-  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/child-active-descendant-fake/pane.txt" \
+  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/child-active-descendant-fake/pane.txt" \
     "$ROOT/bin/fm-teardown.sh" domain --force >/dev/null 2>"$err"; then
     fail "force teardown removed a child worktree inside active FM_HOME"
   fi
@@ -2638,30 +2497,15 @@ exit 0
 SH
   chmod +x "$fakeroot/bin/fm-guard.sh"
   printf 'domain\n' > "$subhome/.fm-secondmate-home"
-  cat > "$home/state/domain.meta" <<EOF
-window=firstmate:fm-domain
-worktree=$subhome
-project=$subhome
-harness=echo
-kind=secondmate
-mode=secondmate
-yolo=off
-home=$subhome
-projects=alpha
-EOF
+  fm_write_secondmate_meta "$home/state/domain.meta" "$subhome"
   printf '%s\n' '- domain - design domain (home: '"$subhome"'; scope: design domain; projects: alpha; added 2026-06-22)' > "$home/data/secondmates.md"
-  cat > "$subhome/state/child.meta" <<EOF
-window=firstmate:fm-child
-worktree=$childwt
-project=$childproj
-harness=echo
-kind=ship
-mode=no-mistakes
-yolo=off
-EOF
+  fm_write_meta "$subhome/state/child.meta" \
+    "backend=herdr" "window=lab:w2:p2" "endpoint_task_id=child" \
+    "herdr_session=lab" "herdr_workspace_id=w2" "herdr_tab_id=w2:t2" "herdr_pane_id=w2:p2" \
+    "worktree=$childwt" "project=$childproj" "harness=pi" "kind=ship" "mode=no-mistakes" "yolo=off"
   fakebin=$(make_fake_tmux "$TMP_ROOT/child-repo-descendant-fake")
   log="$TMP_ROOT/child-repo-descendant-fake/tmux.log"
-  if PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$fakeroot" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/child-repo-descendant-fake/pane.txt" \
+  if PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$fakeroot" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/child-repo-descendant-fake/pane.txt" \
     "$ROOT/bin/fm-teardown.sh" domain --force >/dev/null 2>"$err"; then
     fail "force teardown removed a child worktree inside FM_ROOT"
   fi
@@ -2683,30 +2527,15 @@ test_secondmate_force_teardown_refuses_unregistered_child_worktree() {
   err="$TMP_ROOT/unregistered-child.err"
   mkdir -p "$home/state" "$home/data" "$subhome/state" "$childproj" "$childwt"
   printf 'domain\n' > "$subhome/.fm-secondmate-home"
-  cat > "$home/state/domain.meta" <<EOF
-window=firstmate:fm-domain
-worktree=$subhome
-project=$subhome
-harness=echo
-kind=secondmate
-mode=secondmate
-yolo=off
-home=$subhome
-projects=alpha
-EOF
+  fm_write_secondmate_meta "$home/state/domain.meta" "$subhome"
   printf '%s\n' '- domain - design domain (home: '"$subhome"'; scope: design domain; projects: alpha; added 2026-06-22)' > "$home/data/secondmates.md"
-  cat > "$subhome/state/child.meta" <<EOF
-window=firstmate:fm-child
-worktree=$childwt
-project=$childproj
-harness=echo
-kind=ship
-mode=no-mistakes
-yolo=off
-EOF
+  fm_write_meta "$subhome/state/child.meta" \
+    "backend=herdr" "window=lab:w2:p2" "endpoint_task_id=child" \
+    "herdr_session=lab" "herdr_workspace_id=w2" "herdr_tab_id=w2:t2" "herdr_pane_id=w2:p2" \
+    "worktree=$childwt" "project=$childproj" "harness=pi" "kind=ship" "mode=no-mistakes" "yolo=off"
   fakebin=$(make_fake_tmux "$TMP_ROOT/unregistered-child-fake")
   log="$TMP_ROOT/unregistered-child-fake/tmux.log"
-  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/unregistered-child-fake/pane.txt" \
+  if PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_LAUNCH_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/unregistered-child-fake/pane.txt" \
     "$ROOT/bin/fm-teardown.sh" domain --force >/dev/null 2>"$err"; then
     fail "force teardown removed an unregistered child worktree"
   fi
@@ -2735,7 +2564,7 @@ projects=alpha
 EOF
   fakebin=$(make_fake_tmux "$TMP_ROOT/watch-fake")
   out="$TMP_ROOT/watch-fake/watch.out"
-  PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_LOG="$TMP_ROOT/watch-fake/tmux.log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/watch-fake/pane.txt" \
+  PATH="$fakebin:$PATH" FM_HOME="$home" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_LAUNCH_LOG="$TMP_ROOT/watch-fake/tmux.log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/watch-fake/pane.txt" \
     FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$ROOT/bin/fm-watch.sh" > "$out" &
   pid=$!
   if ! wait_live "$pid" 25; then

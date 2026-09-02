@@ -288,7 +288,7 @@ sha256_file() {
 # the corr a reply must echo is read from the record body, never from typed
 # pane bytes.
 newest_remote_inbox_corr() {
-  grep -Eoh 'corr=[a-f0-9]{16}' "$REMOTE_HOME"/state/parent-route/ios.inbox/*.msg 2>/dev/null \
+  grep -Eoh 'corr=[a-f0-9]{16}' "$REMOTE_HOME"/state/ios.inbox/*.msg 2>/dev/null \
     | tail -1 | cut -d= -f2-
 }
 
@@ -731,7 +731,14 @@ publish_healthy_watcher_identity "$PARENT/state" "$PARENT" "$ROOT/bin/fm-watch.s
 # without the rendered-output fallback a tmux endpoint needs.
 [ "$(remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh observe ios)" = idle ] \
   || fail "remote endpoint delivery observation did not execute on its own host"
-pass "remote spawn launches on the remote-local backend and records a host-qualified route"
+capture_out=$(remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh capture ios 20) \
+  || fail "valid remote capture did not pass route-aware endpoint validation"
+assert_contains "$capture_out" '│ >   │' "valid remote capture did not return the exact fm-remote pane"
+remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh key ios Enter >/dev/null \
+  || fail "valid remote key did not pass route-aware endpoint validation"
+assert_grep 'pane send-keys ' "$HERDR_LOG" "valid remote key did not reach the exact fm-remote pane"
+assert_no_grep 'pane send-keys .*--session default' "$HERDR_LOG" "valid remote key reached the default session"
+pass "remote spawn, capture, and key use one exact host-qualified fm-remote route"
 
 remote_route_meta="$REMOTE_HOME/state/parent-route/ios.meta"
 cp "$remote_route_meta" "$TMP_ROOT/remote-ios-before-default-session.meta"
@@ -871,7 +878,7 @@ pass "remote spawn serializes inheritance through launch publication"
 # resend command, and the expectation resolves only after the correlated remote log
 # delta is ingested.
 ssh_before_send=$(cat "$SSH_COUNT")
-records_before_send=$(find "$REMOTE_HOME/state/parent-route/ios.inbox" -maxdepth 1 -name '*.msg' 2>/dev/null | wc -l | tr -d ' ')
+records_before_send=$(find "$REMOTE_HOME/state/ios.inbox" -maxdepth 1 -name '*.msg' 2>/dev/null | wc -l | tr -d ' ')
 set +e
 FM_FAKE_SSH_MODE=ambiguous remote_env "$ROOT/bin/fm-send.sh" fm-ios \
   'report the build result' > "$TMP_ROOT/send.out" 2> "$TMP_ROOT/send.err"
@@ -883,7 +890,7 @@ assert_no_grep 'do not resend' "$TMP_ROOT/send.err" "ambiguous remote send kept 
 ssh_after_send=$(cat "$SSH_COUNT")
 [ "$ssh_after_send" -eq $((ssh_before_send + 2)) ] \
   || fail "ambiguous remote send was not retried exactly once (ssh calls: $((ssh_after_send - ssh_before_send)))"
-records_after_send=$(find "$REMOTE_HOME/state/parent-route/ios.inbox" -maxdepth 1 -name '*.msg' | wc -l | tr -d ' ')
+records_after_send=$(find "$REMOTE_HOME/state/ios.inbox" -maxdepth 1 -name '*.msg' | wc -l | tr -d ' ')
 [ "$records_after_send" -eq $((records_before_send + 1)) ] \
   || fail "the retried remote steer did not dedup onto one new record, went $records_before_send -> $records_after_send"
 assert_no_grep 'report the build result' "$HERDR_LOG" "the steer payload was typed into the remote pane"
@@ -992,22 +999,22 @@ message=Firstmate instructions or inherited config changed on this host. Re-read
 remote=1
 EOF
 chmod 600 "$NUDGE_MARKER"
-mv "$REMOTE_HOME/state/parent-route/ios.inbox" "$REMOTE_HOME/state/parent-route/ios.inbox.saved"
-: > "$REMOTE_HOME/state/parent-route/ios.inbox"
+mv "$REMOTE_HOME/state/ios.inbox" "$REMOTE_HOME/state/ios.inbox.saved"
+: > "$REMOTE_HOME/state/ios.inbox"
 if remote_env "$ROOT/bin/fm-config-push.sh" > "$TMP_ROOT/config-push-fail.out" 2>&1; then
-  rm -f "$REMOTE_HOME/state/parent-route/ios.inbox"
-  mv "$REMOTE_HOME/state/parent-route/ios.inbox.saved" "$REMOTE_HOME/state/parent-route/ios.inbox"
+  rm -f "$REMOTE_HOME/state/ios.inbox"
+  mv "$REMOTE_HOME/state/ios.inbox.saved" "$REMOTE_HOME/state/ios.inbox"
   fail "remote config push claimed success after its reread record could not be written"
 fi
 if [ ! -f "$NUDGE_MARKER" ]; then
-  rm -f "$REMOTE_HOME/state/parent-route/ios.inbox"
-  mv "$REMOTE_HOME/state/parent-route/ios.inbox.saved" "$REMOTE_HOME/state/parent-route/ios.inbox"
+  rm -f "$REMOTE_HOME/state/ios.inbox"
+  mv "$REMOTE_HOME/state/ios.inbox.saved" "$REMOTE_HOME/state/ios.inbox"
   printf 'config push failure output:\n%s\n' "$(cat "$TMP_ROOT/config-push-fail.out")" >&2
   fail "failed remote config reread did not retain a retry marker"
 fi
 assert_grep 'remote=1' "$NUDGE_MARKER" "remote config reread marker lost its placement"
-rm -f "$REMOTE_HOME/state/parent-route/ios.inbox"
-mv "$REMOTE_HOME/state/parent-route/ios.inbox.saved" "$REMOTE_HOME/state/parent-route/ios.inbox"
+rm -f "$REMOTE_HOME/state/ios.inbox"
+mv "$REMOTE_HOME/state/ios.inbox.saved" "$REMOTE_HOME/state/ios.inbox"
 remote_env "$ROOT/bin/fm-config-push.sh" > "$TMP_ROOT/config-push-retry.out" \
   || fail "unchanged remote config push did not retry its pending reread"
 assert_absent "$NUDGE_MARKER" "successful remote config reread left its retry marker"

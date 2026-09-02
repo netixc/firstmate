@@ -4,22 +4,20 @@
 # for a leading `$<skill>` invocation (e.g. `$no-mistakes`). Submitting before the
 # popup settles lets it swallow the Enter, so the line never submits. fm-send
 # absorbs this by pausing `settle` seconds AFTER typing and BEFORE the (retried)
-# Enter - the first sleep fm_tmux_submit_core makes. These tests pin the
-# settle-SELECTION matrix hermetically (stubbed tmux + sleep, no real agent):
+# Enter - the first sleep the submit core makes. These tests pin the
+# settle-selection matrix hermetically with native Herdr and sleep fixtures:
 #
-# The settle matrix governs the TYPED plane (harness-native invocations and
-# explicit backend targets); a task-selector message that is not an invocation
-# rides the durable inbox instead, where only the constant doorbell (fixed
-# fast settle) touches the terminal:
-#   /...            -> 1.2  (universal; `/` only starts a command, never plain text)
-#   $... explicit   -> 0.3  (session:window target has no meta -> harness unknown
-#   plain text      -> inbox plane for a selector, 0.3 typed for an explicit target
+# The settle matrix governs the typed Pi invocation plane. A task-selector
+# message that is not an invocation rides the durable inbox instead, where only
+# the constant doorbell with its fixed fast settle touches the terminal:
+#   /...       -> 1.2
+#   other text -> inbox plane for a selector
 #
-# The popup-settle is the FIRST sleep recorded: fm_tmux_submit_core types the text,
+# The popup-settle is the first sleep recorded: the submit core types the text,
 # then `sleep "$settle"`, then the Enter-retry loop (sleep 0.4 each) and finally
 # fm-send's own post-submit FM_SEND_SETTLE pause. So tail-vs-head matters: this
-# suite asserts on the HEAD sleep, distinct from fm-send-settle.test.sh which pins
-# the TAIL (post-submit) pause. The retried Enter in fm_tmux_submit_core remains the
+# suite asserts on the head sleep, distinct from fm-send-settle.test.sh which pins
+# the tail post-submit pause. The retried Enter in the submit core remains the
 # real safety net; this settle is only the optimization that lets the popup clear so
 # the first Enter lands.
 #
@@ -30,45 +28,25 @@
 # shellcheck disable=SC2016
 set -u
 
-# shellcheck source=tests/lib.sh
-. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck source=tests/fixtures.sh
+. "$(dirname "${BASH_SOURCE[0]}")/fixtures.sh"
 
 SEND="$ROOT/bin/fm-send.sh"
 
 TMP_ROOT=$(fm_test_tmproot fm-send-popup-settle)
 
-# Same stub shape as fm-send-settle.test.sh: a fake tmux that drives the submit
-# path to a clean "empty" verdict on the first Enter, and a fake sleep that records
-# every requested duration (one per line) into FM_SLEEP_LOG instead of sleeping.
+# Native Herdr returns an empty composer; fake sleep records every requested
+# duration into FM_SLEEP_LOG instead of sleeping.
 make_stubs() {  # <dir> -> echoes fakebin dir
-  local dir=$1 fb="$1/fakebin"
-  mkdir -p "$fb"
-  cat > "$fb/tmux" <<'SH'
-#!/usr/bin/env bash
-set -u
-case "${1:-}" in
-  send-keys) exit 0 ;;
-  display-message)
-    for a in "$@"; do case "$a" in *cursor_y*) printf '1\n'; exit 0 ;; esac; done
-    printf 'fakepane\n'; exit 0 ;;
-  capture-pane) printf '╭────╮\n│    │\n╰────╯\n'; exit 0 ;;
-  list-windows) exit 0 ;;
-esac
-exit 0
-SH
-  chmod +x "$fb/tmux"
-  cat > "$fb/sleep" <<'SH'
-#!/usr/bin/env bash
-printf '%s\n' "${1:-}" >> "$FM_SLEEP_LOG"
-exit 0
-SH
-  chmod +x "$fb/sleep"
+  local dir=$1 fb
+  fb=$(fm_fakebin "$dir")
+  fm_test_fake_herdr "$fb"
+  fm_test_fake_sleep_log "$fb"
   printf '%s\n' "$fb"
 }
 
-# first_settle <expected> <label> <harness|--explicit> <message> [selector-form]: build a fresh
-# home, send <message> to a target whose meta records <harness> (or to a bare
-# session:window with NO meta when --explicit), and assert the FIRST recorded sleep
+# first_settle <expected> <label> <harness> <message> [selector-form]: build a
+# fresh home, send <message> to a recorded task, and assert the first sleep
 # (the popup-settle) equals <expected>. FM_SEND_SETTLE=0 strips the trailing
 # post-submit pause so the log holds only the popup-settle plus the 0.4 Enter wait,
 # keeping the head assertion crisp. FM_ROOT_OVERRIDE points at a non-repo dir so
@@ -77,30 +55,19 @@ SH
 first_settle() {  # <expected> <label> <harness|--explicit> <message> [selector-form]
   local expected=$1 label=$2 harness=$3 msg=$4
   local selector_form=${5:-legacy}
-  local dir fb log home target rc first meta_id
+  local dir fb log home target rc first
   dir="$TMP_ROOT/case-$RANDOM"; mkdir -p "$dir/state"
   fb=$(make_stubs "$dir"); log="$dir/sleep.log"; home="$dir"
-  if [ "$harness" = --explicit ]; then
-    target="sess:win"
-  else
-    case "$selector_form" in
-      exact)
-        target="popupcase"
-        meta_id=popupcase
-        ;;
-      legacy)
-        target="fm-popupcase"
-        meta_id=popupcase
-        ;;
-      *)
-        fail "$label: unknown selector form '$selector_form'"
-        ;;
-    esac
-    fm_write_meta "$home/state/$meta_id.meta" "window=sess:win" "harness=$harness"
-  fi
+  case "$selector_form" in
+    exact) target="popupcase" ;;
+    legacy) target="fm-popupcase" ;;
+    *) fail "$label: unknown selector form '$selector_form'" ;;
+  esac
+  fm_write_herdr_task_meta "$home/state/popupcase.meta" "harness=$harness" "kind=ship"
   : > "$log"
   env FM_SEND_SETTLE=0 PATH="$fb:$PATH" \
     FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SLEEP_LOG="$log" \
+    FM_FAKE_HERDR_DUPLICATE=1 FM_FAKE_HERDR_TASK_ID=popupcase \
     "$SEND" "$target" "$msg" 2>/dev/null; rc=$?
   expect_code 0 "$rc" "$label: send should succeed"
   first=$(head -1 "$log")
@@ -118,10 +85,11 @@ rides_inbox() {  # <label> <harness> <message>
   local dir fb log home rc first
   dir="$TMP_ROOT/case-$RANDOM"; mkdir -p "$dir/state"
   fb=$(make_stubs "$dir"); log="$dir/sleep.log"; home="$dir"
-  fm_write_meta "$home/state/popupcase.meta" "window=sess:win" "harness=$harness"
+  fm_write_herdr_task_meta "$home/state/popupcase.meta" "harness=$harness" "kind=ship"
   : > "$log"
   env FM_SEND_SETTLE=0 PATH="$fb:$PATH" \
     FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SLEEP_LOG="$log" \
+    FM_FAKE_HERDR_DUPLICATE=1 FM_FAKE_HERDR_TASK_ID=popupcase \
     "$SEND" fm-popupcase "$msg" 2>/dev/null; rc=$?
   expect_code 0 "$rc" "$label: send should succeed"
   grep -qF -- "$msg" "$home/state/popupcase.inbox/001.msg" \

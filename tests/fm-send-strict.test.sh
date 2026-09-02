@@ -17,11 +17,16 @@ set -u
 printf '%s\n' "$*" >> "${FM_HERDR_LOG:?}"
 case "${1:-} ${2:-}" in
   "status --json") printf '{"client":{"version":"0.8.2","protocol":16},"server":{"running":true}}\n' ;;
+  "session list") printf '%s\n' '{"sessions":[{"name":"lab","running":true,"socket_path":"/tmp/fm-send-strict-lab.sock"}]}' ;;
+  "workspace list") printf '%s\n' '{"result":{"workspaces":[{"workspace_id":"w1","label":"firstmate"}]}}' ;;
+  "tab list") printf '%s\n' '{"result":{"tabs":[{"tab_id":"w1:t1","workspace_id":"w1","label":"fm-lane"}]}}' ;;
+  "tab get") printf '%s\n' '{"result":{"tab":{"tab_id":"w1:t1","workspace_id":"w1","label":"fm-lane"}}}' ;;
   "pane get")
     [ "${FM_FAKE_HERDR_UNREACHABLE:-0}" != 1 ] || exit 1
     printf '{"result":{"pane":{"pane_id":"%s","workspace_id":"%s","tab_id":"%s"}}}\n' \
       "${3:-}" "${FM_FAKE_HERDR_WORKSPACE:-w1}" "${FM_FAKE_HERDR_TAB:-w1:t1}"
     ;;
+  "pane read") printf '%s\n' '❯' ;;
   "pane send-keys") [ -z "${FM_FAKE_HERDR_SEND_KEY_FAIL:-}" ] ;;
 esac
 SH

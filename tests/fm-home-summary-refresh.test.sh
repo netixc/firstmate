@@ -3,9 +3,9 @@
 # producer, writer, watcher-carried status trigger, and unchanged snapshot path.
 set -u
 
-# shellcheck source=tests/lib.sh
+# shellcheck source=tests/fixtures.sh
 # shellcheck disable=SC1091
-. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/fixtures.sh"
 
 WRITER="$ROOT/bin/fm-home-summary-refresh.sh"
 SNAPSHOT="$ROOT/bin/fm-fleet-snapshot.sh"
@@ -39,14 +39,7 @@ trap 'cleanup; exit 143' TERM
 
 command -v jq >/dev/null 2>&1 || { echo "skip: jq not found"; exit 0; }
 
-cat > "$FAKEBIN/legacy-provider" <<'SH'
-#!/usr/bin/env bash
-case "${1:-}" in
-  display-message) printf '%%1\n' ;;
-  capture-pane) printf 'fixture pane\n> \n' ;;
-esac
-exit 0
-SH
+fm_test_fake_herdr "$FAKEBIN"
 cat > "$FAKEBIN/no-mistakes" <<'SH'
 #!/usr/bin/env bash
 if [ -n "${FM_TEST_NM_MARKER:-}" ]; then
@@ -55,7 +48,7 @@ if [ -n "${FM_TEST_NM_MARKER:-}" ]; then
 fi
 exit 0
 SH
-chmod +x "$FAKEBIN/legacy-provider" "$FAKEBIN/no-mistakes"
+chmod +x "$FAKEBIN/no-mistakes"
 
 mkdir -p "$HOME_DIR/state" "$HOME_DIR/data" "$HOME_DIR/config" \
   "$HOME_DIR/projects/task" "$HOME_DIR/bin"
@@ -71,7 +64,7 @@ cat > "$HOME_DIR/data/backlog.md" <<'EOF'
 
 ## Done
 EOF
-fm_write_meta "$HOME_DIR/state/ledger-task.meta" \
+fm_write_herdr_task_meta "$HOME_DIR/state/ledger-task.meta" \
   "window=fmtest:fm-ledger-task" \
   "worktree=$HOME_DIR/projects/task" \
   "project=firstmate" \
@@ -227,7 +220,7 @@ cat > "$PARENT_HOME/data/backlog.md" <<'EOF'
 ## Done
 EOF
 fm_write_secondmate_meta "$PARENT_HOME/state/mate.meta" "$HOME_DIR" \
-  "fmtest:fm-mate" firstmate claude
+  "lab:w1:p2" firstmate pi
 PATH="$FAKEBIN:$PATH" \
   FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$PARENT_HOME" \
   FM_SNAPSHOT_NOW="$NOW_TWO" FM_SNAPSHOT_NOW_EPOCH="$EPOCH_TWO" \
@@ -528,7 +521,7 @@ cat > "$COST_HOME/data/backlog.md" <<'EOF'
 
 ## Done
 EOF
-fm_write_meta "$COST_HOME/state/cost-task.meta" \
+fm_write_herdr_task_meta "$COST_HOME/state/cost-task.meta" \
   "window=fmtest:fm-cost-task" \
   "worktree=$COST_HOME/projects/task" \
   "project=firstmate" \
@@ -709,7 +702,7 @@ cat > "$RESTART_HOME/data/backlog.md" <<'EOF'
 
 ## Done
 EOF
-fm_write_meta "$RESTART_HOME/state/restart-task.meta" \
+fm_write_herdr_task_meta "$RESTART_HOME/state/restart-task.meta" \
   "window=fmtest:fm-restart-task" \
   "worktree=$RESTART_HOME/projects/task" \
   "project=firstmate" \

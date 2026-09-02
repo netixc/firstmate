@@ -67,11 +67,16 @@ validate_home() { # <id> [allow-absent]
 meta_path() { printf '%s/%s.meta\n' "$CONTROL_STATE" "$1"; }
 
 remote_endpoint_load() {
-  local id=$1 herdr_session
+  local id=$1 herdr_session recorded_backend
   REMOTE_ENDPOINT_ERROR=
   REMOTE_ENDPOINT_META=$(meta_path "$id")
-  if ! fm_backend_validate_active_task_endpoint "$REMOTE_ENDPOINT_META" "$id" 2>/dev/null; then
-    REMOTE_ENDPOINT_ERROR="remote secondmate $id endpoint metadata is invalid; refusing access until it is explicitly migrated"
+  if ! fm_backend_validate_task_endpoint "$REMOTE_ENDPOINT_META" "$id" 2>/dev/null; then
+    recorded_backend=$(fm_backend_meta_exact_value "$REMOTE_ENDPOINT_META" backend 2>/dev/null || true)
+    if [ -n "$recorded_backend" ] && [ "$recorded_backend" != herdr ]; then
+      REMOTE_ENDPOINT_ERROR="remote secondmate $id endpoint is recorded on backend '$recorded_backend', expected 'herdr'; refusing access until it is explicitly migrated"
+    else
+      REMOTE_ENDPOINT_ERROR="remote secondmate $id endpoint metadata is invalid; refusing access until it is explicitly migrated"
+    fi
     return 1
   fi
   REMOTE_ENDPOINT_BACKEND=$FM_BACKEND_VALIDATED_BACKEND
@@ -92,6 +97,12 @@ remote_endpoint_load() {
       return 1
       ;;
   esac
+  if ! fm_backend_validate_active_task_endpoint "$REMOTE_ENDPOINT_META" "$id" 2>/dev/null; then
+    REMOTE_ENDPOINT_ERROR="remote secondmate $id endpoint metadata is invalid; refusing access until it is explicitly migrated"
+    return 1
+  fi
+  REMOTE_ENDPOINT_BACKEND=$FM_BACKEND_VALIDATED_BACKEND
+  REMOTE_ENDPOINT_TARGET=$FM_BACKEND_VALIDATED_TARGET
 }
 
 remote_endpoint_require() {
@@ -204,20 +215,21 @@ cmd_send() {
   # the parent may safely repeat this leg. Exit 0 once the record durably
   # exists; no ring outcome changes it, because the parent transport owns any
   # retry or reply-tracking policy from here.
-  if ! rec=$(fm_task_inbox_write_idempotent "$CONTROL_STATE" "$id" "$message" "$delivery_mode"); then
+  if ! rec=$(fm_task_inbox_write_idempotent "$TARGET_HOME/state" "$id" "$message" "$delivery_mode"); then
     fm_lock_release "$meta_lock"
-    die "steering-inbox record could not be written under $CONTROL_STATE/$id.inbox"
+    die "steering-inbox record could not be written under $TARGET_HOME/state/$id.inbox"
   fi
-  fm_lock_release "$meta_lock"
   case "$rec" in
     */handled/*)
       # The dedup landed on a record the worker already acknowledged: the
       # steer was delivered and acted on, so there is nothing to announce.
+      fm_lock_release "$meta_lock"
       printf 'notice: this steer was already delivered and acknowledged at %s; nothing re-rung\n' "$rec" >&2
       return 0
       ;;
   esac
-  fm_task_inbox_ring "$REMOTE_ENDPOINT_BACKEND" "$REMOTE_ENDPOINT_TARGET" "$rec" "fm-$id" || ring_rc=$?
+  fm_task_inbox_ring "$REMOTE_ENDPOINT_BACKEND" "$REMOTE_ENDPOINT_TARGET" "$rec" "fm-$id" "$REMOTE_ENDPOINT_META" || ring_rc=$?
+  fm_lock_release "$meta_lock"
   case "$ring_rc" in
     1) printf 'notice: doorbell skipped (composer visibly holds pending text); the steer is durably recorded at %s\n' "$rec" >&2 ;;
     2) printf 'notice: doorbell did not reach %s; the steer is durably recorded at %s\n' "$REMOTE_ENDPOINT_TARGET" "$rec" >&2 ;;
@@ -225,22 +237,32 @@ cmd_send() {
 }
 
 cmd_key() {
-  local id=$1 key=$2
+  local id=$1 key=$2 meta meta_lock rc=0
   validate_id "$id"
   validate_home "$id"
-  remote_endpoint_require "$id"
-  FM_HOME="$TARGET_HOME" FM_ROOT_OVERRIDE="$FM_ROOT" FM_STATE_OVERRIDE="$TARGET_HOME/state" \
-    "$SCRIPT_DIR/fm-send.sh" "$REMOTE_ENDPOINT_TARGET" --key "$key"
+  meta=$(meta_path "$id")
+  meta_lock=$(fm_meta_lock_path "$meta") || die "remote secondmate metadata lock path is invalid"
+  fm_task_inbox_lock_acquire "$meta_lock" || die "remote secondmate endpoint metadata could not be locked"
+  remote_endpoint_load "$id" || { fm_lock_release "$meta_lock"; die "$REMOTE_ENDPOINT_ERROR"; }
+  fm_backend_send_key "$REMOTE_ENDPOINT_BACKEND" "$REMOTE_ENDPOINT_TARGET" "$key" "fm-$id" "$REMOTE_ENDPOINT_META" || rc=$?
+  fm_lock_release "$meta_lock"
+  return "$rc"
 }
 
 cmd_capture() {
-  local id=$1 lines=${2:-20}
+  local id=$1 lines=${2:-20} meta meta_lock rc=0 out
   validate_id "$id"
   validate_home "$id"
   case "$lines" in ''|*[!0-9]*|0) die "capture line count must be positive" ;; esac
   [ "$lines" -le 100 ] || die "capture line count exceeds 100"
-  remote_endpoint_require "$id"
-  fm_backend_capture "$REMOTE_ENDPOINT_BACKEND" "$REMOTE_ENDPOINT_TARGET" "$lines" "fm-$id" | head -c 65536
+  meta=$(meta_path "$id")
+  meta_lock=$(fm_meta_lock_path "$meta") || die "remote secondmate metadata lock path is invalid"
+  fm_task_inbox_lock_acquire "$meta_lock" || die "remote secondmate endpoint metadata could not be locked"
+  remote_endpoint_load "$id" || { fm_lock_release "$meta_lock"; die "$REMOTE_ENDPOINT_ERROR"; }
+  out=$(fm_backend_capture "$REMOTE_ENDPOINT_BACKEND" "$REMOTE_ENDPOINT_TARGET" "$lines" "fm-$id" "$REMOTE_ENDPOINT_META") || rc=$?
+  fm_lock_release "$meta_lock"
+  [ "$rc" -eq 0 ] || return "$rc"
+  printf '%s' "$out" | head -c 65536
 }
 
 cmd_observe() {

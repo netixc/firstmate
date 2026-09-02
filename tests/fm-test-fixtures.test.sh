@@ -71,14 +71,26 @@ test_fake_gh_and_gh_axi() {
 }
 
 test_spawn_herdr_and_fakebin() {
-  local fakebin out log
+  local fakebin out log count
   fakebin=$(make_spawn_fakebin "$TMP_ROOT/spawn" gh-axi)
   log="$TMP_ROOT/spawn/launch.log"
   : > "$log"
-  out=$(FM_FAKE_PANE_PATH=/tmp/wt "$fakebin/herdr" pane get w1:p2 | jq -r '.result.pane.foreground_cwd')
+  fm_test_assert_fake_herdr "$fakebin" || fail "spawn fixture did not bind its isolated Herdr binary"
+  count="$TMP_ROOT/spawn/pane-count"
+  out=$(FM_FAKE_PANE_COUNTFILE="$count" FM_FAKE_PANE_STALE_READS=1 \
+    FM_FAKE_PANE_STALE=/tmp/stale FM_FAKE_PANE_PATH=/tmp/wt \
+    "$fakebin/herdr" pane get w1:p2 | jq -r '.result.pane.foreground_cwd')
+  [ "$out" = /tmp/stale ] || fail "first pane path should expose the configured stale value, got '$out'"
+  out=$(FM_FAKE_PANE_COUNTFILE="$count" FM_FAKE_PANE_STALE_READS=1 \
+    FM_FAKE_PANE_STALE=/tmp/stale FM_FAKE_PANE_PATH=/tmp/wt \
+    "$fakebin/herdr" pane get w1:p2 | jq -r '.result.pane.foreground_cwd')
   [ "$out" = /tmp/wt ] || fail "spawn Herdr pane path should be FM_FAKE_PANE_PATH, got '$out'"
   out=$("$fakebin/herdr" session list | jq -r '.sessions[0].name')
   [ "$out" = default ] || fail "spawn Herdr session should be named default, got '$out'"
+  FM_FAKE_HERDR_TASK_ID=isolated "$fakebin/herdr" tab create --workspace w1 --label fm-isolated >/dev/null
+  out=$(FM_FAKE_HERDR_TASK_ID=isolated "$fakebin/herdr" tab list --workspace w1 | \
+    jq -r '.result.tabs[] | select(.label == "fm-isolated") | .tab_id')
+  [ "$out" = w1:t2 ] || fail "spawn fixture did not publish the exact task-bound Herdr tab"
   FM_FAKE_LAUNCH_LOG="$log" "$fakebin/herdr" pane run w1:p2 'pi --model test'
   assert_grep 'pi --model test' "$log" "pane run payload was not logged"
   [ -x "$fakebin/treehouse" ] || fail "spawn fakebin should include Treehouse"

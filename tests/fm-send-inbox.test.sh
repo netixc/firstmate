@@ -49,6 +49,7 @@ set -u
 case "${1:-} ${2:-}" in
   "status --json") printf '{"client":{"version":"0.8.2","protocol":16},"server":{"running":true}}\n' ;;
   "pane get") printf '{"result":{"pane":{"pane_id":"w1:p1","workspace_id":"w1","tab_id":"w1:t1"}}}\n' ;;
+  "tab list") printf '{"result":{"tabs":[{"tab_id":"w1:t1","workspace_id":"w1","label":"fm-%s"}]}}\n' "${FM_FAKE_HERDR_TASK_ID:-t1}" ;;
   "pane read")
     if [ "${FM_FAKE_HERDR_COMPOSER:-}" = pending ]; then
       printf '╭──────────────╮\n│ leftover txt │\n╰──────────────╯\n'
@@ -97,6 +98,7 @@ run_send() {  # <case-dir> <err-file> [env...] -- <fm-send args...>
   : > "$dir/send.log"
   env PATH="$dir/fakebin:$PATH" \
     FM_ROOT_OVERRIDE="$dir/home" FM_HOME="$dir/home" FM_SEND_LOG="$dir/send.log" \
+    FM_FAKE_HERDR_TASK_ID="${1#fm-}" \
     FM_SEND_SETTLE=0 ${envs[@]+"${envs[@]}"} \
     "$SEND" "$@" >/dev/null 2>"$err"
 }

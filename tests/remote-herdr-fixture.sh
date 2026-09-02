@@ -82,7 +82,8 @@ case "${1:-} ${2:-}" in
     if [ "$(jq_state -r --arg p "$pane" '[.tabs[]|select(.pane_id==$p)]|length')" = 0 ]; then
       printf '{"error":{"code":"pane_not_found","message":"%s"}}\n' "$pane"
     else
-      printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "$pane"
+      jq_state --arg p "$pane" \
+        '{result:{pane:(.tabs[]|select(.pane_id==$p)|{pane_id:.pane_id,tab_id:.tab_id,workspace_id:.workspace_id})}}'
     fi
     ;;
   "pane close")
@@ -96,7 +97,7 @@ case "${1:-} ${2:-}" in
   "pane send-keys")
     [ ! -f "$SEND_FAIL" ] || exit 1
     jq_state --arg p "${3:-}" '.typed[$p] = true | .working[$p] = true' | save ;;
-  "pane read") printf '\n' ;;
+  "pane read") printf '╭─────╮\n│ >   │\n╰─────╯\n' ;;
   "pane process-info") printf '{"result":{"process":{"name":"codex"}}}\n' ;;
   "agent get")
     pane=${3:-}

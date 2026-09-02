@@ -213,6 +213,37 @@ esac
 exit 1
 SH
   chmod +x "$fakebin/tmux"
+  cat > "$fakebin/herdr" <<'SH'
+#!/usr/bin/env bash
+set -u
+case "${1:-} ${2:-}" in
+  "status --json") printf '%s\n' '{"client":{"version":"0.12.3","protocol":14},"server":{"running":true}}' ;;
+  "session list") printf '%s\n' '{"sessions":[{"name":"lab","running":true}]}' ;;
+  "pane get")
+    pane=${3:-w1:p2}
+    workspace=${pane%%:*}
+    printf '{"result":{"pane":{"pane_id":"%s","workspace_id":"%s","tab_id":"%s:t2"}}}\n' "$pane" "$workspace" "$workspace"
+    ;;
+  "tab list")
+    printf '{"result":{"tabs":[{"tab_id":"w1:t2","workspace_id":"w1","label":"fm-%s"}]}}\n' "${FM_FAKE_HERDR_TASK_ID:-task}"
+    ;;
+  "pane read")
+    [ "${FM_FAKE_HERDR_PANE_ALIVE:-1}" = 1 ] || exit 1
+    [ -z "${FM_FAKE_HERDR_CAPTURE:-}" ] || cat "$FM_FAKE_HERDR_CAPTURE"
+    exit 0
+    ;;
+  "pane send-text"|"pane send-keys") exit "${FM_FAKE_HERDR_SEND_RC:-0}" ;;
+  "agent get")
+    if [ "${FM_FAKE_HERDR_AGENT_MISSING:-0}" = 1 ]; then
+      printf '%s\n' '{"error":{"code":"agent_not_found"}}'
+    else
+      printf '{"result":{"agent":{"agent_status":"%s"}}}\n' "${FM_FAKE_HERDR_AGENT_STATUS:-idle}"
+    fi
+    ;;
+  *) exit 0 ;;
+esac
+SH
+  chmod +x "$fakebin/herdr"
   printf '%s\n' "$dir"
 }
 
@@ -274,6 +305,46 @@ esac
 exit 1
 SH
   chmod +x "$fakebin/tmux"
+  cat > "$fakebin/herdr" <<'SH'
+#!/usr/bin/env bash
+set -u
+COMPOSER="${FM_FAKE_COMPOSER:?FM_FAKE_COMPOSER unset}"
+write_composer() {
+  text=$1
+  width=$((${#text} + 4))
+  border= i=0
+  while [ "$i" -lt "$width" ]; do border="${border}─"; i=$((i + 1)); done
+  printf '╭%s╮\n│ > %s │\n╰%s╯\n' "$border" "$text" "$border" > "$COMPOSER"
+}
+case "${1:-} ${2:-}" in
+  "status --json") printf '%s\n' '{"client":{"version":"0.12.3","protocol":14},"server":{"running":true}}' ;;
+  "session list") printf '%s\n' '{"sessions":[{"name":"lab","running":true,"socket_path":"/tmp/fm-bordered-lab.sock"}]}' ;;
+  "workspace list") printf '%s\n' '{"result":{"workspaces":[{"workspace_id":"w1","label":"firstmate"}]}}' ;;
+  "pane get") printf '%s\n' '{"result":{"pane":{"pane_id":"w1:p2","workspace_id":"w1","tab_id":"w1:t2"}}}' ;;
+  "tab list") printf '{"result":{"tabs":[{"tab_id":"w1:t2","workspace_id":"w1","label":"fm-%s"}]}}\n' "${FM_FAKE_HERDR_TASK_ID:-task}" ;;
+  "pane read") cat "$COMPOSER" 2>/dev/null; exit 0 ;;
+  "agent get") printf '%s\n' '{"result":{"agent":{"agent_status":"idle"}}}' ;;
+  "pane send-text")
+    [ "${FM_FAKE_SEND_FAIL:-0}" != 1 ] || exit 1
+    text=${4:-}
+    [ -z "${FM_FAKE_SENT:-}" ] || printf '%s\n' "$text" >> "$FM_FAKE_SENT"
+    write_composer "$text"
+    ;;
+  "pane send-keys")
+    case "${4:-}" in enter|Enter)
+      if [ -n "${FM_FAKE_SWALLOW:-}" ] && [ -f "$FM_FAKE_SWALLOW" ]; then
+        [ "${FM_FAKE_PERSIST_SWALLOW:-0}" = 1 ] || rm -f "$FM_FAKE_SWALLOW"
+      else
+        [ -z "${FM_FAKE_SENT:-}" ] || printf '[ENTER]\n' >> "$FM_FAKE_SENT"
+        write_composer ""
+      fi
+      ;;
+    esac
+    ;;
+esac
+exit 0
+SH
+  chmod +x "$fakebin/herdr"
   printf '%s\n' "$dir"
 }
 

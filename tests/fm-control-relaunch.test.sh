@@ -19,8 +19,8 @@
 #      agent exited.
 set -u
 
-# shellcheck source=tests/lib.sh
-. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck source=tests/fixtures.sh
+. "$(dirname "${BASH_SOURCE[0]}")/fixtures.sh"
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-control-lib.sh"
 # shellcheck source=/dev/null
@@ -46,74 +46,70 @@ relaunch_cleanup() {
 }
 trap relaunch_cleanup EXIT
 
-# The same lifecycle-modelling tmux stub as tests/fm-control.test.sh: the
-# harness's exit command stops the agent, and a launch-brief literal starts the
-# harness named in `becomes`.
-make_tmux_stub() {  # <dir>
+# Native lifecycle fixture: /quit unregisters the agent and the launch command
+# registers its replacement on the same exact lab pane.
+make_herdr_stub() {  # <dir>
   local fb="$1/fakebin"
   mkdir -p "$fb"
-  cat > "$fb/tmux" <<'SH'
+  cat > "$fb/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
 D=$FM_FAKE_DIR
-case "${1:-}" in
-  send-keys)
-    shift
-    literal=0
-    while [ $# -gt 0 ]; do
-      case "$1" in
-        -t) shift 2 ;;
-        -l) literal=1; shift ;;
-        *) break ;;
-      esac
-    done
-    payload=${1:-}
-    if [ "$literal" = 1 ]; then
-      printf '%s\n' "$payload" >> "$D/literal"
-      case "$payload" in
-        /quit|/quit)
-          printf 'zsh' > "$D/command"
-          [ -z "${FM_FAKE_EXIT_TRANSPORT_FAIL_AFTER_STOP:-}" ] || exit 1
-          ;;
-        *'encode launch-brief'*)
-          cat "$D/becomes" > "$D/command"
-          [ -z "${FM_FAKE_LAUNCH_TRANSPORT_FAIL_AFTER_START:-}" ] || exit 1
-          ;;
-      esac
-    else
-      printf '%s\n' "$payload" >> "$D/keys"
-      case "$payload" in
-        'export GOTMPDIR='*)
-          if [ -n "${FM_FAKE_TRACE_PREPARE:-}" ]; then
-            : > "$FM_FAKE_TRACE_PREPARE"
-            while [ ! -e "$FM_FAKE_META_WRITER_READY" ]; do /bin/sleep 0.01; done
-          fi
-          ;;
-        'export TRACEPARENT='*)
-          [ -z "${FM_FAKE_TRACE_EXPORTED:-}" ] || : > "$FM_FAKE_TRACE_EXPORTED"
-          ;;
-      esac
+session=
+previous=
+for argument in "$@"; do [ "$previous" != --session ] || session=$argument; previous=$argument; done
+if [ "${1:-} ${2:-}" != 'status --json' ]; then
+  [ "$session" = lab ] || exit 64
+fi
+label=$(cat "$D/windows" 2>/dev/null)
+case "${1:-} ${2:-}" in
+  "status --json") printf '%s\n' '{"client":{"protocol":14,"version":"0.12.3"},"server":{"running":true,"protocol":14,"version":"0.12.3"}}' ;;
+  "session list") printf '%s\n' '{"sessions":[{"name":"lab","running":true,"socket_path":"/tmp/fm-control-relaunch-lab.sock"}]}' ;;
+  "workspace list") printf '%s\n' '{"result":{"workspaces":[{"workspace_id":"w1","label":"firstmate"}]}}' ;;
+  "tab list") printf '{"result":{"tabs":[{"tab_id":"w1:t2","workspace_id":"w1","label":"%s"}]}}\n' "$label" ;;
+  "tab get") printf '{"result":{"tab":{"tab_id":"w1:t2","workspace_id":"w1","label":"%s"}}}\n' "$label" ;;
+  "pane get")
+    if [ -n "${FM_FAKE_CWD_RACE_READY:-}" ]; then
+      : > "$FM_FAKE_CWD_RACE_READY"
+      /bin/sleep 1
     fi
-    exit 0 ;;
-  display-message)
-    for a in "$@"; do
-      case "$a" in
-        *pane_current_command*) cat "$D/command"; printf '\n'; exit 0 ;;
-        *pane_current_path*)
-          if [ -n "${FM_FAKE_CWD_RACE_READY:-}" ]; then
-            : > "$FM_FAKE_CWD_RACE_READY"
-            /bin/sleep 1
-          fi
-          cat "$D/cwd"; printf '\n'; exit 0 ;;
-      esac
-    done
-    printf 'fakepane\n'; exit 0 ;;
-  capture-pane) printf '╭────╮\n│    │\n╰────╯\n'; exit 0 ;;
-  list-windows) [ -f "$D/windows" ] && cat "$D/windows"; exit 0 ;;
+    printf '{"result":{"pane":{"pane_id":"w1:p2","tab_id":"w1:t2","workspace_id":"w1","foreground_cwd":"%s"}}}\n' "$(cat "$D/cwd")"
+    ;;
+  "pane read") printf '╭────╮\n│    │\n╰────╯\n' ;;
+  "agent get")
+    if [ "$(cat "$D/command")" = pi ]; then
+      printf '%s\n' '{"result":{"agent":{"agent_status":"idle"}}}'
+    else
+      printf '%s\n' '{"error":{"code":"agent_not_found"}}'
+      exit 1
+    fi
+    ;;
+  "pane send-text"|"pane run")
+    payload=${4:-}
+    printf '%s\n' "$payload" >> "$D/literal"
+    case "$payload" in
+      /quit)
+        printf 'zsh' > "$D/command"
+        [ -z "${FM_FAKE_EXIT_TRANSPORT_FAIL_AFTER_STOP:-}" ] || exit 1
+        ;;
+      *'encode launch-brief'*)
+        cat "$D/becomes" > "$D/command"
+        [ -z "${FM_FAKE_LAUNCH_TRANSPORT_FAIL_AFTER_START:-}" ] || exit 1
+        ;;
+      'export GOTMPDIR='*)
+        if [ -n "${FM_FAKE_TRACE_PREPARE:-}" ]; then
+          : > "$FM_FAKE_TRACE_PREPARE"
+          while [ ! -e "$FM_FAKE_META_WRITER_READY" ]; do /bin/sleep 0.01; done
+        fi
+        ;;
+      'export TRACEPARENT='*) [ -z "${FM_FAKE_TRACE_EXPORTED:-}" ] || : > "$FM_FAKE_TRACE_EXPORTED" ;;
+    esac
+    ;;
+  "pane send-keys") printf '%s\n' "${4:-}" >> "$D/keys" ;;
 esac
 exit 0
 SH
-  chmod +x "$fb/tmux"
+  chmod +x "$fb/herdr"
   cat > "$fb/sleep" <<'SH'
 #!/usr/bin/env bash
 exit 0
@@ -130,7 +126,7 @@ new_case() {
   printf 'pi' > "$dir/fake/command"
   printf 'pi' > "$dir/fake/becomes"
   printf '%s\n' "fm-$id" > "$dir/fake/windows"
-  make_tmux_stub "$dir"
+  make_herdr_stub "$dir"
   printf '%s\n' "$dir"
 }
 
@@ -141,19 +137,10 @@ add_ship_task() {
   fm_git_worktree "$proj" "$wt" "task-$id"
   mkdir -p "$home/data/$id"
   printf '# brief for %s\n\nDo the thing.\n' "$id" > "$home/data/$id/brief.md"
-  {
-    echo "window=fmses:fm-$id"
-    echo "endpoint_task_id=$id"
-    echo "worktree=$wt"
-    echo "project=$proj"
-    echo "harness=$harness"
-    echo "kind=ship"
-    echo "mode=no-mistakes"
-    echo "yolo=off"
-    echo "tasktmp=/tmp/fm-$id"
-    echo "model=default"
-    echo "effort=default"
-  } > "$home/state/$id.meta"
+  fm_write_herdr_task_meta "$home/state/$id.meta" \
+    "worktree=$wt" "project=$proj" "harness=$harness" "kind=ship" \
+    "mode=no-mistakes" "yolo=off" "tasktmp=/tmp/fm-$id" \
+    "model=default" "effort=default"
   printf '%s\n' "fm-$id" > "$dir/fake/windows"
   printf '%s' "$wt" > "$dir/fake/cwd"
   TASK_TMPS+=("/tmp/fm-$id")
@@ -162,7 +149,7 @@ add_ship_task() {
 run_control() {  # <case-dir> <args...>
   local dir=$1; shift
   env PATH="$dir/fakebin:$PATH" FM_HOME="$dir/home" FM_FAKE_DIR="$dir/fake" \
-    FM_SPAWN_NO_GUARD=1 \
+    HERDR_SESSION=lab FM_SPAWN_NO_GUARD=1 \
     FM_CONTROL_POLL=0.01 FM_CONTROL_EXIT_WAIT=0.05 FM_CONTROL_LAUNCH_WAIT=0.05 \
     FM_REAL_GIT="${FM_REAL_GIT:-}" FM_FAKE_GIT_FAILURE="${FM_FAKE_GIT_FAILURE:-}" \
     FM_REAL_MV="${FM_REAL_MV:-}" FM_FAKE_COMPLETE_JOURNAL_MV_FAIL="${FM_FAKE_COMPLETE_JOURNAL_MV_FAIL:-}" \
@@ -176,7 +163,7 @@ run_control() {  # <case-dir> <args...>
 run_spawn() {  # <case-dir> <args...>
   local dir=$1; shift
   env PATH="$dir/fakebin:$PATH" FM_HOME="$dir/home" FM_FAKE_DIR="$dir/fake" \
-    FM_SPAWN_NO_GUARD=1 \
+    HERDR_SESSION=lab FM_SPAWN_NO_GUARD=1 \
     "$SPAWN" "$@" 2>&1
 }
 
@@ -256,7 +243,7 @@ test_same_harness_relaunch_keeps_identity_and_reuses_the_endpoint() {
   out=$(run_control "$dir" rl1 relaunch --note "stopped mid-refactor"); rc=$?
   expect_code 0 "$rc" "a same-harness relaunch should succeed"$'\n'"$out"
   assert_contains "$out" "relaunched rl1 harness=pi from=pi" "the outcome should name the transition"
-  [ "$(meta_field "$dir" rl1 window)" = "fmses:fm-rl1" ] \
+  [ "$(meta_field "$dir" rl1 window)" = "lab:w1:p2" ] \
     || fail "the endpoint must be reused, not recreated"
   [ "$(meta_field "$dir" rl1 worktree)" = "$dir/wt" ] \
     || fail "the worktree must be reused, not reallocated"
@@ -406,7 +393,12 @@ test_secondmate_relaunch_picks_up_the_configured_harness_pin() {
   printf 'sm3\n' > "$dir/smhome/.fm-secondmate-home"
   printf '# agents\n' > "$dir/smhome/AGENTS.md"
   {
-    echo "window=fmses:fm-sm3"
+    echo "window=lab:w1:p2"
+    echo "backend=herdr"
+    echo "herdr_session=lab"
+    echo "herdr_workspace_id=w1"
+    echo "herdr_tab_id=w1:t2"
+    echo "herdr_pane_id=w1:p2"
     echo "endpoint_task_id=sm3"
     echo "worktree=$dir/smhome"
     echo "project=$dir/smhome"
@@ -445,7 +437,12 @@ test_secondmate_relaunch_ignores_invalid_configured_effort_before_stop() {
   printf 'sm6\n' > "$dir/smhome/.fm-secondmate-home"
   printf '# agents\n' > "$dir/smhome/AGENTS.md"
   {
-    echo "window=fmses:fm-sm6"
+    echo "window=lab:w1:p2"
+    echo "backend=herdr"
+    echo "herdr_session=lab"
+    echo "herdr_workspace_id=w1"
+    echo "herdr_tab_id=w1:t2"
+    echo "herdr_pane_id=w1:p2"
     echo "endpoint_task_id=sm6"
     echo "worktree=$dir/smhome"
     echo "project=$dir/smhome"
@@ -479,7 +476,12 @@ test_secondmate_relaunch_rejects_retired_config_before_stop() {
   printf '# secondmate brief\n' > "$home/data/sm7/brief.md"
   fm_git_worktree "$dir/proj" "$dir/smhome" sm-branch
   {
-    echo "window=fmses:fm-sm7"
+    echo "window=lab:w1:p2"
+    echo "backend=herdr"
+    echo "herdr_session=lab"
+    echo "herdr_workspace_id=w1"
+    echo "herdr_tab_id=w1:t2"
+    echo "herdr_pane_id=w1:p2"
     echo "endpoint_task_id=sm7"
     echo "worktree=$dir/smhome"
     echo "project=$dir/smhome"
@@ -765,7 +767,12 @@ test_secondmate_relaunch_checkpoints_child_work_and_spares_the_charter() {
   printf 'window=x:fm-c1\n' > "$dir/smhome/state/c1.meta"
   printf 'window=x:fm-c2\n' > "$dir/smhome/state/c2.meta"
   {
-    echo "window=fmses:fm-sm1"
+    echo "window=lab:w1:p2"
+    echo "backend=herdr"
+    echo "herdr_session=lab"
+    echo "herdr_workspace_id=w1"
+    echo "herdr_tab_id=w1:t2"
+    echo "herdr_pane_id=w1:p2"
     echo "endpoint_task_id=sm1"
     echo "worktree=$dir/smhome"
     echo "project=$dir/smhome"
@@ -804,7 +811,12 @@ test_secondmate_relaunch_refuses_an_unmarked_home() {
   mkdir -p "$dir/smhome/state"
   printf 'someone-else\n' > "$dir/smhome/.fm-secondmate-home"
   {
-    echo "window=fmses:fm-sm2"
+    echo "window=lab:w1:p2"
+    echo "backend=herdr"
+    echo "herdr_session=lab"
+    echo "herdr_workspace_id=w1"
+    echo "herdr_tab_id=w1:t2"
+    echo "herdr_pane_id=w1:p2"
     echo "endpoint_task_id=sm2"
     echo "worktree=$dir/smhome"
     echo "project=$dir/smhome"
@@ -832,7 +844,12 @@ test_secondmate_checkpoint_refuses_unreadable_child_state() {
   mkdir -p "$dir/smhome/state/bad.meta"
   printf 'sm5\n' > "$dir/smhome/.fm-secondmate-home"
   {
-    echo "window=fmses:fm-sm5"
+    echo "window=lab:w1:p2"
+    echo "backend=herdr"
+    echo "herdr_session=lab"
+    echo "herdr_workspace_id=w1"
+    echo "herdr_tab_id=w1:t2"
+    echo "herdr_pane_id=w1:p2"
     echo "endpoint_task_id=sm5"
     echo "worktree=$dir/smhome"
     echo "project=$dir/smhome"

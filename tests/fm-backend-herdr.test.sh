@@ -3340,28 +3340,21 @@ test_send_text_submit_idle_baseline_does_not_confirm_failed_enter() {
   pass "fm_backend_herdr_send_text_submit: a failed Enter cannot borrow a later native transition as delivery proof"
 }
 
-test_send_text_submit_idle_native_empty_composer_requires_transition() {
+test_send_text_submit_idle_native_empty_composer_confirms_delivery() {
   local dir log resp fb out enter_count
   dir="$TMP_ROOT/submit-idle-native-empty-composer"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
+  # After Enter, native wait_for_working stays idle and the composer clears:
+  # that empty verdict is positive delivery, not a swallow.
   printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/2.out"
   printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/4.out"
   printf '  \xe2\x9d\xaf\n' > "$resp/5.out"
-  printf '{"result":{"agent":{"agent_status":"working"}}}\n' > "$resp/7.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_BACKEND_HERDR_SUBMIT_POLLS=1 \
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_send_text_submit default:w1:p2 "hello captain" 3 0.01 0.01' "$ROOT" )
-  [ "$out" = empty ] || fail "the later native transition should confirm delivery, got '$out'"
+  [ "$out" = empty ] || fail "an idle native status plus a cleared composer must confirm delivery, got '$out'"
   enter_count=$(grep -c $'\x1f''pane'$'\x1f''send-keys'$'\x1f''w1:p2'$'\x1f''enter' "$log")
-  [ "$enter_count" -eq 2 ] || fail "an idle cleared composer should require another harmless Enter, sent $enter_count Enter(s)"
-
-  dir="$TMP_ROOT/submit-idle-native-empty-unconfirmed"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  for n in 2 4 7 10; do printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/$n.out"; done
-  for n in 5 8 11; do printf '  \xe2\x9d\xaf\n' > "$resp/$n.out"; done
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_BACKEND_HERDR_SUBMIT_POLLS=1 \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_send_text_submit default:w1:p2 "hello captain" 3 0.01 0.01' "$ROOT" )
-  [ "$out" = pending ] || fail "an always-idle cleared composer must remain unconfirmed, got '$out'"
-  pass "fm_backend_herdr_send_text_submit: idle cleared composer waits for native transition proof"
+  [ "$enter_count" -eq 1 ] || fail "a cleared composer should confirm without extra Enters, sent $enter_count Enter(s)"
+  pass "fm_backend_herdr_send_text_submit: idle native agent-state plus empty composer reports empty (landed Pi turn)"
 }
 
 test_composer_state_guard_still_refuses_real_pending_text_after_submit_confirmation_change() {
@@ -3370,7 +3363,7 @@ test_composer_state_guard_still_refuses_real_pending_text_after_submit_confirmat
   printf '  \xe2\x9d\xaf hello there this is a test message\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/fm-backend.sh"; fm_backend_composer_state herdr default:w1:p2' "$ROOT" )
+    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
   [ "$out" = pending ] || fail "the pre-injection empty-box guard must still refuse real unsubmitted composer text after this change, got '$out'"
   pass "fm_backend_composer_state (herdr): the pre-injection empty-box guard still refuses a genuinely non-empty composer, unaffected by the submit-confirmation change"
 }
@@ -3448,6 +3441,9 @@ test_dispatch_composer_state_routes_to_herdr() {
   (
     . "$ROOT/bin/fm-backend.sh"
     _FM_BACKEND_HERDR_SOURCED=1
+    fm_backend_validate_supervisor_endpoint() {
+      [ "$1" = herdr ] && [ "$2" = default:w1:p2 ]
+    }
     fm_backend_herdr_composer_state() {
       [ "$1" = "default:w1:p2" ] || fail "Herdr composer_state got wrong target: $1"
       printf 'empty'
@@ -3894,7 +3890,7 @@ test_send_text_submit_confirms_blocked_after_enter
 test_send_text_submit_preexisting_working_pending_is_queued_enter
 test_send_text_submit_preexisting_working_does_not_confirm_failed_enter
 test_send_text_submit_idle_baseline_does_not_confirm_failed_enter
-test_send_text_submit_idle_native_empty_composer_requires_transition
+test_send_text_submit_idle_native_empty_composer_confirms_delivery
 test_composer_state_guard_still_refuses_real_pending_text_after_submit_confirmation_change
 test_send_text_submit_slow_transition_within_one_enter_needs_no_extra_enter
 test_send_text_submit_send_failed

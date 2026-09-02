@@ -6,17 +6,17 @@
 # turn before its busy footer appears, so an immediate peek after fm-send returns
 # would see the stale idle pane. fm-send therefore pauses FM_SEND_SETTLE seconds
 # (default 1, 0 disables) after a successful typed submit, so the receiving turn
-# has time to visibly start. These tests use an explicit backend target to stay on
-# that plane and pin the behavior hermetically (stubbed tmux + sleep, no real
-# agent):
+# has time to visibly start. These tests use a recorded task and Pi skill text to
+# stay on that plane and pin the behavior hermetically with native Herdr and sleep
+# fixtures:
 #   1. A successful typed text send pauses for the FM_SEND_SETTLE value (default 1).
 #   2. FM_SEND_SETTLE=0 produces no pause at all (sleep is never invoked for it).
 #   3. The pause is tunable (FM_SEND_SETTLE=7 pauses 7).
 #   4. The --key path never pauses (it bypasses the submit/settle path entirely).
 set -u
 
-# shellcheck source=tests/lib.sh
-. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck source=tests/fixtures.sh
+. "$(dirname "${BASH_SOURCE[0]}")/fixtures.sh"
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-busy-lib.sh"
 
@@ -24,35 +24,13 @@ SEND="$ROOT/bin/fm-send.sh"
 
 TMP_ROOT=$(fm_test_tmproot fm-send-settle)
 
-# A fake tmux that lets fm-send's submit path reach a clean "empty" verdict, plus a
-# fake sleep that records every requested duration (one per line) instead of
-# sleeping. send-keys always succeeds; display-message yields a numeric cursor_y;
-# capture-pane returns an empty bordered composer so fm_tmux_composer_state reads
-# "empty" (submit landed) on the first Enter. The sleep log path comes from
-# FM_SLEEP_LOG.
+# Native Herdr returns an empty composer; fake sleep records every requested
+# duration instead of sleeping.
 make_stubs() {  # <dir> -> echoes fakebin dir
-  local dir=$1 fb="$1/fakebin"
-  mkdir -p "$fb"
-  cat > "$fb/tmux" <<'SH'
-#!/usr/bin/env bash
-set -u
-case "${1:-}" in
-  send-keys) exit 0 ;;
-  display-message)
-    for a in "$@"; do case "$a" in *cursor_y*) printf '1\n'; exit 0 ;; esac; done
-    printf 'fakepane\n'; exit 0 ;;
-  capture-pane) printf '╭────╮\n│    │\n╰────╯\n'; exit 0 ;;
-  list-windows) exit 0 ;;
-esac
-exit 0
-SH
-  chmod +x "$fb/tmux"
-  cat > "$fb/sleep" <<'SH'
-#!/usr/bin/env bash
-printf '%s\n' "${1:-}" >> "$FM_SLEEP_LOG"
-exit 0
-SH
-  chmod +x "$fb/sleep"
+  local dir=$1 fb
+  fb=$(fm_fakebin "$dir")
+  fm_test_fake_herdr "$fb"
+  fm_test_fake_sleep_log "$fb"
   printf '%s\n' "$fb"
 }
 
@@ -64,10 +42,12 @@ SH
 run_send() {
   local fb=$1 log=$2 home; shift 2
   home="$TMP_ROOT/home-$RANDOM"; mkdir -p "$home/state"
+  fm_write_herdr_task_meta "$home/state/t1.meta" "kind=ship" "harness=pi"
   : > "$log"
   env "$@" PATH="$fb:$PATH" \
     FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SLEEP_LOG="$log" \
-    "$SEND" "sess:win" "hello captain" 2>/dev/null
+    FM_FAKE_HERDR_DUPLICATE=1 FM_FAKE_HERDR_TASK_ID=t1 \
+    "$SEND" t1 "/supervision-model" 2>/dev/null
 }
 
 test_default_send_pauses_one_second() {

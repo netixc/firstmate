@@ -248,17 +248,41 @@ fm_write_meta() {
   done
 }
 
-# fm_write_secondmate_meta <file> <home> [window] [projects] [harness]: write the
-# standard kind=secondmate meta block used across the secondmate suites. Window
-# defaults to firstmate:fm-<id>, projects defaults to alpha, and harness defaults
-# to the sole supported worker identity, plain Pi.
-fm_write_secondmate_meta() {
-  local file=$1 home=$2 id window projects=${4:-alpha} harness=${5:-pi}
+# fm_write_herdr_task_meta <file> <key=val> ...: write one exact native Herdr
+# task hierarchy. Caller values may add retained behavior fields but may not
+# override the provider identity boundary.
+fm_write_herdr_task_meta() {
+  local file=$1 id session=lab workspace=w1 tab pane kv has_worktree=0 has_project=0
+  shift
   id=$(basename "$file" .meta)
-  window=${3:-firstmate:fm-$id}
-  fm_write_meta "$file" \
-    "window=$window" \
-    "endpoint_task_id=$id" \
+  tab="$workspace:t2"
+  pane="$workspace:p2"
+  : > "$file"
+  for kv in "$@"; do
+    case "$kv" in
+      backend=*|window=*|endpoint_task_id=*|herdr_session=*|herdr_workspace_id=*|herdr_tab_id=*|herdr_pane_id=*) ;;
+      worktree=*) has_worktree=1; printf '%s\n' "$kv" >> "$file" ;;
+      project=*) has_project=1; printf '%s\n' "$kv" >> "$file" ;;
+      *) printf '%s\n' "$kv" >> "$file" ;;
+    esac
+  done
+  [ "$has_worktree" = 1 ] || printf 'worktree=/tmp/fm-test-%s\n' "$id" >> "$file"
+  [ "$has_project" = 1 ] || printf 'project=/tmp/fm-test-project\n' >> "$file"
+  printf '%s\n' \
+    "backend=herdr" "window=$session:$pane" "endpoint_task_id=$id" \
+    "herdr_session=$session" "herdr_workspace_id=$workspace" \
+    "herdr_tab_id=$tab" "herdr_pane_id=$pane" >> "$file"
+}
+
+# fm_write_secondmate_meta <file> <home> [window] [projects] [harness]: write the
+# standard kind=secondmate meta block used across the secondmate suites. The
+# optional legacy window argument is ignored while callers migrate because the
+# helper always writes an exact native Herdr hierarchy. Projects defaults to
+# alpha and harness defaults to the sole supported worker identity, plain Pi.
+fm_write_secondmate_meta() {
+  local file=$1 home=$2 id projects=${4:-alpha} harness=${5:-pi}
+  id=$(basename "$file" .meta)
+  fm_write_herdr_task_meta "$file" \
     "worktree=$home" \
     "project=$home" \
     "harness=$harness" \

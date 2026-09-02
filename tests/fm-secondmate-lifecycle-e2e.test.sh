@@ -28,7 +28,8 @@ set -u
 . "$(dirname "${BASH_SOURCE[0]}")/secondmate-helpers.sh"
 
 TMP_ROOT=$(fm_test_tmproot fm-secondmate-lifecycle)
-export FM_BACKEND=tmux
+export FM_BACKEND=herdr
+export HERDR_SESSION=lab
 
 HOME_DIR="$TMP_ROOT/main home"
 SUB="$TMP_ROOT/design-home"
@@ -113,7 +114,7 @@ phase_seed() {
 phase_spawn() {
   : > "$LOG"
   PATH="$FAKEBIN:$PATH" FM_HOME="$HOME_DIR" FM_CONFIG_OVERRIDE="$HOME_DIR/parent-config" \
-    FM_FAKE_TMUX_LOG="$LOG" FM_FAKE_TMUX_CAPTURE="$PANE" \
+    FM_FAKE_LAUNCH_LOG="$LOG" \
     "$ROOT/bin/fm-spawn.sh" design "$SUB" pi --secondmate >/dev/null \
     || fail "secondmate spawn failed"
 
@@ -136,10 +137,8 @@ phase_spawn() {
 phase_send() {
   : > "$LOG"
   printf '❯\n' > "$PANE"
-  # The meta window (firstmate:fm-design) must win over a foreign same-named
-  # window returned by list-windows.
-  PATH="$FAKEBIN:$PATH" FM_HOME="$HOME_DIR" FM_FAKE_TMUX_WINDOW="other-session:fm-design" \
-    FM_FAKE_TMUX_LOG="$LOG" FM_FAKE_TMUX_CAPTURE="$PANE" \
+  PATH="$FAKEBIN:$PATH" FM_HOME="$HOME_DIR" \
+    FM_FAKE_LAUNCH_LOG="$LOG" \
     "$ROOT/bin/fm-send.sh" fm-design 'route this work' >/dev/null 2>&1 \
     || fail "fm-send failed for a bare firstmate window with home metadata"
   # design is a kind=secondmate target, so the durable inbox record carries the
@@ -150,10 +149,9 @@ phase_send() {
   body=$(bash -c '. "$1"; fm_task_inbox_body "$2"' _ "$ROOT/bin/fm-task-inbox-lib.sh" "$record")
   assert_contains "$body" '[fm-from-firstmate]' "the inbox request was not marked as from-firstmate"
   assert_contains "$body" 'route this work' "the original request text did not survive the marker"
-  assert_grep 'send-keys -t firstmate:fm-design -l Firstmate instruction waiting:' "$LOG" "send did not ring the window recorded in this home's meta"
+  assert_grep 'Firstmate instruction waiting:' "$LOG" "send did not ring the native endpoint recorded in this home's metadata"
   assert_no_grep 'route this work' "$LOG" "send typed the payload instead of only the doorbell"
-  assert_no_grep 'send-keys -t other-session:fm-design' "$LOG" "send targeted a foreign same-named window"
-  pass "send: a bare fm-<id> secondmate enqueues a marked request and rings the meta window"
+  pass "send: a bare fm-<id> secondmate enqueues a marked request and rings its native endpoint"
 }
 
 phase_handoff() {
@@ -176,8 +174,8 @@ phase_handoff() {
 - [x] old-task - shipped thing - local main (merged 2026-06-19)
 EOF
   local out before
-  out=$(PATH="$FAKEBIN:$PATH" FM_HOME="$HOME_DIR" FM_FAKE_TMUX_LOG="$LOG" \
-    FM_FAKE_TMUX_CAPTURE="$PANE" \
+  out=$(PATH="$FAKEBIN:$PATH" FM_HOME="$HOME_DIR" FM_FAKE_LAUNCH_LOG="$LOG" \
+    \
     "$ROOT/bin/fm-backlog-handoff.sh" design feat-x feat-y) \
     || fail "handoff failed for in-scope items"
   assert_contains "$out" "handed off 2 item(s) to design" "handoff did not report the moved items"
@@ -194,8 +192,8 @@ EOF
 
   # Idempotent: a second handoff neither errors nor duplicates, and leaves main alone.
   before=$(cat "$HOME_DIR/data/backlog.md")
-  PATH="$FAKEBIN:$PATH" FM_HOME="$HOME_DIR" FM_FAKE_TMUX_LOG="$LOG" \
-    FM_FAKE_TMUX_CAPTURE="$PANE" \
+  PATH="$FAKEBIN:$PATH" FM_HOME="$HOME_DIR" FM_FAKE_LAUNCH_LOG="$LOG" \
+    \
     "$ROOT/bin/fm-backlog-handoff.sh" design feat-x feat-y >/dev/null 2>&1 \
     || fail "idempotent re-run failed"
   [ "$(grep -cF -- '- [ ] feat-x - add feature x (repo: alpha)' "$SUB/data/backlog.md")" -eq 1 ] \
@@ -207,14 +205,16 @@ EOF
 phase_recovery() {
   # Simulate a restart: drop the live meta, then respawn from the registry +
   # persistent home (no explicit home argument).
-  rm -f "$HOME_DIR/state/design.meta"
-  PATH="$FAKEBIN:$PATH" FM_HOME="$HOME_DIR" FM_FAKE_TMUX_LOG="$LOG" FM_FAKE_TMUX_CAPTURE="$PANE" \
+  rm -f "$HOME_DIR/state/design.meta" "$FAKEBIN/herdr-tab-created"
+  PATH="$FAKEBIN:$PATH" FM_HOME="$HOME_DIR" FM_FAKE_LAUNCH_LOG="$LOG" \
     "$ROOT/bin/fm-spawn.sh" design pi --secondmate >/dev/null 2>&1 \
     || fail "recovery respawn failed"
   local meta="$HOME_DIR/state/design.meta"
   assert_grep "home=$SUB_ABS" "$meta" "respawn did not preserve the persistent home from the registry"
   assert_grep 'projects=alpha, beta, gamma' "$meta" "respawn did not preserve the project list from the registry"
-  assert_grep 'window=firstmate:fm-design' "$meta" "respawn did not reconstruct the direct-report window"
+  assert_grep 'backend=herdr' "$meta" "respawn did not preserve the native session provider"
+  assert_grep 'window=lab:w2:p2' "$meta" "respawn did not reconstruct the native direct-report target"
+  assert_grep 'herdr_tab_id=w2:t2' "$meta" "respawn did not bind the native tab identity"
   pass "recovery: respawns from the durable registry and persistent home"
 }
 
@@ -234,11 +234,12 @@ phase_teardown() {
     || fail "could not settle receiver wake retirement state"
   printf 'confirmed:%s\n' "$corr" > "$HOME_DIR/state/.backlog-handoff-design.wake-pending"
   : > "$LOG"
-  teardown_out=$(PATH="$FAKEBIN:$PATH" FM_HOME="$HOME_DIR" FM_FAKE_TMUX_LOG="$LOG" FM_FAKE_TMUX_CAPTURE="$PANE" \
+  teardown_out=$(PATH="$FAKEBIN:$PATH" FM_HOME="$HOME_DIR" FM_FAKE_LAUNCH_LOG="$LOG" \
     "$ROOT/bin/fm-teardown.sh" design 2>&1) \
     || fail "teardown failed for the empty secondmate home"
   printf '%s\n' "$teardown_out" | grep -F 'Backlog:' >/dev/null \
     && fail "secondmate teardown emitted a main-backlog completion reminder"
+  assert_present "$FAKEBIN/herdr-pane-closed" "teardown did not close the recorded native pane before removing durable records"
   assert_absent "$SUB" "teardown did not remove the retired secondmate home"
   assert_absent "$HOME_DIR/state/design.meta" "teardown did not clear the parent meta"
   assert_absent "$HOME_DIR/state/.backlog-handoff-design.wake-pending" \

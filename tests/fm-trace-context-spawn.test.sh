@@ -1,85 +1,22 @@
 #!/usr/bin/env bash
 # tests/fm-trace-context-spawn.test.sh - spawn-path integration regressions for
-# native W3C trace context using fake tmux panes and real isolated git worktrees.
+# native W3C trace context using native Herdr fixtures and real isolated git worktrees.
 # See docs/verification/trace-context.md for the maintained coverage inventory.
 set -u
 
-# shellcheck source=tests/lib.sh
-. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck source=tests/fixtures.sh
+. "$(dirname "${BASH_SOURCE[0]}")/fixtures.sh"
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-trace-context-lib.sh"
 
 SPAWN="$ROOT/bin/fm-spawn.sh"
 TMP_ROOT=$(fm_test_tmproot fm-trace-context-spawn)
 
-# Fake tmux: answers the pane-path query and logs every literal `send-keys -l`
-# argument (the GOTMPDIR export, the TRACEPARENT export, and the launch command)
-# one per line, in send order, so ordering is observable.
+# The native Herdr fixture logs pane run and pane send-text payloads one per
+# line, in send order, so carrier injection ordering remains observable.
 make_spawn_fakebin() {
-  local dir=$1 fakebin
-  fakebin=$(fm_fakebin "$dir")
-  cat > "$fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-set -u
-case "$*" in
-  *"#{pane_current_path}"*) printf '%s\n' "${FM_FAKE_PANE_PATH:-}"; exit 0 ;;
-esac
-case "${1:-}" in
-  display-message) printf 'firstmate\n'; exit 0 ;;
-  list-windows)
-    [ -z "${FM_FAKE_DUPLICATE_WINDOW:-}" ] || printf '%s\n' "$FM_FAKE_DUPLICATE_WINDOW"
-    exit 0
-    ;;
-  has-session|new-session|new-window|kill-window) exit 0 ;;
-  send-keys)
-    if [ "${FM_FAKE_TRACEPARENT_SEND_FAIL:-0}" = 1 ]; then
-      for a in "$@"; do
-        case "$a" in
-          "export TRACEPARENT="*) exit 1 ;;
-        esac
-      done
-    fi
-    if [ "${FM_FAKE_TRACEPARENT_SEND_UNSAFE:-0}" = 1 ]; then
-      for a in "$@"; do
-        case "$a" in
-          "export TRACEPARENT="*) exit 2 ;;
-        esac
-      done
-    fi
-    if [ "${FM_FAKE_TRACE_METADATA_APPEND_FAIL:-0}" = 1 ]; then
-      for a in "$@"; do
-        case "$a" in
-          "export TRACEPARENT="*)
-            chmod a-w "$FM_FAKE_META_PATH"
-            ;;
-        esac
-      done
-    fi
-    # Capture the text payload of both send forms: the literal launch
-    # (`send-keys -t <target> -l <text>`) and a text line
-    # (`send-keys -t <target> <text> Enter`). Skip the flags, the target, and
-    # the trailing key so only the payload is logged, one per line, in order.
-    if [ -n "${FM_FAKE_LAUNCH_LOG:-}" ]; then
-      shift
-      skip_next=
-      for a in "$@"; do
-        if [ -n "$skip_next" ]; then skip_next=; continue; fi
-        case "$a" in
-          -t) skip_next=1; continue ;;
-          -l) continue ;;
-          Enter|C-m) continue ;;
-          *) printf '%s\n' "$a" >> "$FM_FAKE_LAUNCH_LOG" ;;
-        esac
-      done
-    fi
-    exit 0
-    ;;
-esac
-exit 0
-SH
-  chmod +x "$fakebin/tmux"
-  fm_fake_exit0 "$fakebin" treehouse
-  printf '%s\n' "$fakebin"
+  local dir=$1
+  fm_test_make_spawn_fakebin "$dir"
 }
 
 make_spawn_case() {
@@ -92,6 +29,7 @@ make_spawn_case() {
   fakebin=$(make_spawn_fakebin "$case_dir/fake")
   mkdir -p "$home/data" "$home/projects" "$home/state" "$home/config"
   printf 'pi\n' > "$home/config/crew-harness"
+  printf 'off\n' > "$home/config/herdr-presentation-spaces"
   printf '%s\n' "$$" > "$home/state/.lock"
   printf '%s off\n' "$$" > "$home/state/.trace-context-effective"
   fm_git_worktree "$proj" "$wt" "wt-$name"
@@ -106,20 +44,22 @@ make_spawn_case() {
 # is decided ONLY by the home's config/trace-context, whether the runner's own
 # environment enables or disables trace context.
 run_spawn() {
-  local home=$1 wt=$2 fakebin=$3 launchlog=$4
+  local home=$1 wt=$2 fakebin=$3 launchlog=$4 delivery_args=(--mode no-mistakes --yolo off)
   shift 4
+  [ "${2:-}" != --relaunch ] || delivery_args=()
   : > "$launchlog"
+  fm_test_assert_fake_herdr "$fakebin" || return 1
   env -u FM_TRACE_CONTEXT \
     FM_ROOT_OVERRIDE='' FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
-    FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$wt" TMUX="fake,1,0" \
+    FM_SPAWN_NO_GUARD=1 HERDR_ENV=1 HERDR_SESSION=default HERDR_WORKSPACE_ID=w1 HERDR_TAB_ID=w1:t1 HERDR_PANE_ID=w1:p1 HERDR_SOCKET_PATH=/tmp/fake-herdr.sock FM_BACKEND=herdr FM_FAKE_HERDR_TASK_ID="${1:-task}" FM_FAKE_PANE_PATH="$wt" \
     FM_FAKE_TRACEPARENT_SEND_FAIL="${FM_FAKE_TRACEPARENT_SEND_FAIL:-0}" \
     FM_FAKE_TRACEPARENT_SEND_UNSAFE="${FM_FAKE_TRACEPARENT_SEND_UNSAFE:-0}" \
     FM_FAKE_TRACE_METADATA_APPEND_FAIL="${FM_FAKE_TRACE_METADATA_APPEND_FAIL:-0}" \
     FM_FAKE_META_PATH="$home/state/$1.meta" \
     FM_FAKE_LAUNCH_LOG="$launchlog" PATH="$fakebin:$PATH" \
-    "$SPAWN" "$@" --mode no-mistakes --yolo off 2>&1
+    "$SPAWN" "$@" "${delivery_args[@]}" 2>&1
 }
 
 # Same, but with an explicit FM_TRACE_CONTEXT override, to prove the env decides.
@@ -127,11 +67,12 @@ run_spawn_tc() {
   local tc=$1 home=$2 wt=$3 fakebin=$4 launchlog=$5
   shift 5
   : > "$launchlog"
+  fm_test_assert_fake_herdr "$fakebin" || return 1
   env FM_TRACE_CONTEXT="$tc" \
     FM_ROOT_OVERRIDE='' FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
-    FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$wt" TMUX="fake,1,0" \
+    FM_SPAWN_NO_GUARD=1 HERDR_ENV=1 HERDR_SESSION=default HERDR_WORKSPACE_ID=w1 HERDR_TAB_ID=w1:t1 HERDR_PANE_ID=w1:p1 HERDR_SOCKET_PATH=/tmp/fake-herdr.sock FM_BACKEND=herdr FM_FAKE_HERDR_TASK_ID="${1:-task}" FM_FAKE_PANE_PATH="$wt" \
     FM_FAKE_LAUNCH_LOG="$launchlog" PATH="$fakebin:$PATH" \
     "$SPAWN" "$@" --mode no-mistakes --yolo off 2>&1
 }
@@ -178,6 +119,7 @@ run_two_level() {
   sm="$base/sm"
   mkdir -p "$prim/config" "$prim/data" "$prim/state" "$prim/projects"
   printf 'pi\n' > "$prim/config/crew-harness"
+  printf 'off\n' > "$prim/config/herdr-presentation-spaces"
   [ "$pfile" = present ] && : > "$prim/config/trace-context"
   touch "$prim/state/.last-watcher-beat"
   start_trace_session "$prim" "$penv"
@@ -194,12 +136,13 @@ run_two_level() {
   printf 'charter brief\n' > "$prim/data/$sm_id/brief.md"
   smlog="$base/sm-launch.log"
   smfake=$(make_spawn_fakebin "$base/sm-fake")
+  fm_test_assert_fake_herdr "$smfake" || return 1
   : > "$smlog"
   env FM_TRACE_CONTEXT="$penv" \
     FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$prim" \
     FM_STATE_OVERRIDE="$prim/state" FM_DATA_OVERRIDE="$prim/data" \
     FM_PROJECTS_OVERRIDE="$prim/projects" FM_CONFIG_OVERRIDE="$prim/config" \
-    FM_SPAWN_NO_GUARD=1 CLAUDECODE=1 TMUX="fake,1,0" \
+    FM_SPAWN_NO_GUARD=1 HERDR_ENV=1 HERDR_SESSION=default HERDR_WORKSPACE_ID=w1 HERDR_TAB_ID=w1:t1 HERDR_PANE_ID=w1:p1 HERDR_SOCKET_PATH=/tmp/fake-herdr.sock FM_BACKEND=herdr FM_FAKE_HERDR_TASK_ID="$sm_id" CLAUDECODE=1 \
     FM_FAKE_LAUNCH_LOG="$smlog" PATH="$smfake:$PATH" \
     "$SPAWN" "$sm_id" "$sm" --secondmate >/dev/null 2>&1 || true
 
@@ -214,18 +157,20 @@ run_two_level() {
   wproj="$base/wproj"
   wwt="$base/wwt"
   fm_git_worktree "$wproj" "$wwt" "wt-$name"
-  mkdir -p "$sm/state" "$sm/projects" "$sm/data/$worker_id"
+  mkdir -p "$sm/state" "$sm/projects" "$sm/data/$worker_id" "$sm/config"
+  printf 'off\n' > "$sm/config/herdr-presentation-spaces"
   printf 'worker brief\n' > "$sm/data/$worker_id/brief.md"
   touch "$sm/state/.last-watcher-beat"
   start_trace_session "$sm" "$TL_ENV_TC"
   wlog="$base/worker-launch.log"
   wfake=$(make_spawn_fakebin "$base/w-fake")
+  fm_test_assert_fake_herdr "$wfake" || return 1
   : > "$wlog"
   env FM_TRACE_CONTEXT="$TL_ENV_TC" TRACEPARENT="$TL_CARRIER" \
     FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$sm" \
     FM_STATE_OVERRIDE="$sm/state" FM_DATA_OVERRIDE="$sm/data" \
     FM_PROJECTS_OVERRIDE="$sm/projects" FM_CONFIG_OVERRIDE="$sm/config" \
-    FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$wwt" TMUX="fake,1,0" \
+    FM_SPAWN_NO_GUARD=1 HERDR_ENV=1 HERDR_SESSION=default HERDR_WORKSPACE_ID=w1 HERDR_TAB_ID=w1:t1 HERDR_PANE_ID=w1:p1 HERDR_SOCKET_PATH=/tmp/fake-herdr.sock FM_BACKEND=herdr FM_FAKE_HERDR_TASK_ID="$worker_id" FM_FAKE_PANE_PATH="$wwt" \
     FM_FAKE_LAUNCH_LOG="$wlog" PATH="$wfake:$PATH" \
     "$SPAWN" "$worker_id" "$wproj" --mode no-mistakes --yolo off >/dev/null 2>&1 || true
 
@@ -357,6 +302,7 @@ test_duplicate_secondmate_spawn_does_not_converge_trace_context() {
   log="$base/launch.log"
   mkdir -p "$prim/config" "$prim/data/$id" "$prim/state" "$prim/projects"
   printf 'pi\n' > "$prim/config/secondmate-harness"
+  printf 'off\n' > "$prim/config/herdr-presentation-spaces"
   : > "$prim/config/trace-context"
   printf 'charter brief\n' > "$prim/data/$id/brief.md"
   touch "$prim/state/.last-watcher-beat"
@@ -366,13 +312,14 @@ test_duplicate_secondmate_spawn_does_not_converge_trace_context() {
   printf '%s\n' "$id" > "$sm/.fm-secondmate-home"
   printf 'charter\n' > "$sm/data/charter.md"
   fake=$(make_spawn_fakebin "$base/fake")
+  fm_test_assert_fake_herdr "$fake" || fail "duplicate fixture did not bind isolated Herdr"
 
   out=$(env -u FM_TRACE_CONTEXT \
     FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$prim" \
     FM_STATE_OVERRIDE="$prim/state" FM_DATA_OVERRIDE="$prim/data" \
     FM_PROJECTS_OVERRIDE="$prim/projects" FM_CONFIG_OVERRIDE="$prim/config" \
-    FM_SPAWN_NO_GUARD=1 CLAUDECODE=1 TMUX="fake,1,0" \
-    FM_FAKE_DUPLICATE_WINDOW="fm-$id" FM_FAKE_LAUNCH_LOG="$log" \
+    FM_SPAWN_NO_GUARD=1 HERDR_ENV=1 HERDR_SESSION=default HERDR_WORKSPACE_ID=w1 HERDR_TAB_ID=w1:t1 HERDR_PANE_ID=w1:p1 HERDR_SOCKET_PATH=/tmp/fake-herdr.sock FM_BACKEND=herdr FM_FAKE_HERDR_TASK_ID="$id" FM_FAKE_HERDR_DUPLICATE=1 CLAUDECODE=1 \
+    FM_FAKE_LAUNCH_LOG="$log" \
     PATH="$fake:$PATH" "$SPAWN" "$id" "$sm" --secondmate 2>&1)
   status=$?
 
@@ -401,7 +348,8 @@ test_relaunch_reuses_recorded_carrier() {
   # Relaunch the same task: the recorded carrier must be reused verbatim for both
   # the meta and the injected export, so an observer keeps one identity across
   # restarts.
-  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$CASE_ID" "$PROJ_DIR")
+  out=$(FM_FAKE_HERDR_AGENT_MISSING=1 \
+    run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$CASE_ID" --relaunch)
   status=$?
   expect_code 0 "$status" "relaunch spawn should succeed"
   assert_contains "$out" "spawned $CASE_ID" "relaunch spawn should report success"
@@ -480,7 +428,7 @@ test_secondmate_env_off_file_present_keeps_nested_worker_disabled() {
 # distinct traces, and neither may adopt the Secondmate's own trace id, while
 # each task still keeps one stable identity across its own relaunch.
 test_two_routed_tasks_through_one_secondmate_root_distinct_traces() {
-  local base sm fakebin sm_tp out status
+  local base sm fake_a fake_b sm_tp out status
   local id_a id_b proj_a proj_b wt_a wt_b log_a log_b
   local tp_a tp_b in_a in_b relaunch_tp relaunch_in
   base="$TMP_ROOT/routed-boundary"
@@ -488,6 +436,7 @@ test_two_routed_tasks_through_one_secondmate_root_distinct_traces() {
   mkdir -p "$sm/data" "$sm/projects" "$sm/state" "$sm/config"
   printf 'pi\n' > "$sm/config/crew-harness"
   : > "$sm/config/trace-context"
+  printf 'off\n' > "$sm/config/herdr-presentation-spaces"
   printf '%s\n' "$$" > "$sm/state/.lock"
   touch "$sm/state/.last-watcher-beat"
   start_trace_session "$sm"
@@ -495,7 +444,8 @@ test_two_routed_tasks_through_one_secondmate_root_distinct_traces() {
   # by the primary's spawn and inherited by every subprocess for the process's
   # whole life. Fixed here so any adoption of its trace id is unambiguous.
   sm_tp='00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab-bbbbbbbbbbbbbbbb-01'
-  fakebin=$(make_spawn_fakebin "$base/fake")
+  fake_a=$(make_spawn_fakebin "$base/fake-a")
+  fake_b=$(make_spawn_fakebin "$base/fake-b")
 
   id_a=routed-a-z1
   id_b=routed-b-z1
@@ -509,11 +459,11 @@ test_two_routed_tasks_through_one_secondmate_root_distinct_traces() {
   log_a="$base/launch-a.log"
   log_b="$base/launch-b.log"
 
-  out=$(TRACEPARENT="$sm_tp" run_spawn "$sm" "$wt_a" "$fakebin" "$log_a" "$id_a" "$proj_a")
+  out=$(TRACEPARENT="$sm_tp" run_spawn "$sm" "$wt_a" "$fake_a" "$log_a" "$id_a" "$proj_a")
   status=$?
   expect_code 0 "$status" "routed task A spawn should succeed"
   assert_contains "$out" "spawned $id_a" "routed task A spawn should report success"
-  out=$(TRACEPARENT="$sm_tp" run_spawn "$sm" "$wt_b" "$fakebin" "$log_b" "$id_b" "$proj_b")
+  out=$(TRACEPARENT="$sm_tp" run_spawn "$sm" "$wt_b" "$fake_b" "$log_b" "$id_b" "$proj_b")
   status=$?
   expect_code 0 "$status" "routed task B spawn should succeed"
   assert_contains "$out" "spawned $id_b" "routed task B spawn should report success"
@@ -535,7 +485,8 @@ test_two_routed_tasks_through_one_secondmate_root_distinct_traces() {
 
   # Same environment, same task: a relaunch must reuse task A's recorded
   # carrier verbatim, so the per-task boundary never costs recovery identity.
-  out=$(TRACEPARENT="$sm_tp" run_spawn "$sm" "$wt_a" "$fakebin" "$log_a" "$id_a" "$proj_a")
+  out=$(TRACEPARENT="$sm_tp" FM_FAKE_HERDR_AGENT_MISSING=1 \
+    run_spawn "$sm" "$wt_a" "$fake_a" "$log_a" "$id_a" --relaunch)
   status=$?
   expect_code 0 "$status" "routed task A relaunch should succeed"
   relaunch_tp=$(meta_traceparent "$sm/state/$id_a.meta")
