@@ -401,6 +401,26 @@ The registry read through `herdr pane report-agent` is the same source `fm_backe
 This control smoke is protocol evidence rather than the real-agent acceptance proof; the Herdr-only acceptance guard above supplies the real Pi and real-model evidence.
 Run both after every Herdr upgrade rather than trusting the version above.
 
+## Codex App host tools
+
+A reusable Desktop host-tool smoke ran on 2026-07-06 against Codex Desktop bundle version 26.623.101652, build 4674, bundle id `com.openai.codex`.
+Local paths and task-specific ids are intentionally not retained here.
+
+The host-tool sequence was:
+
+1. list a saved project;
+2. create a Desktop-owned worktree thread;
+3. recover and read the thread while active and after completion;
+4. verify the thread appended a Firstmate status line and wrote its report;
+5. send a follow-up to the same thread;
+6. read the completed follow-up;
+7. archive the exact thread;
+8. read the archived transcript with state `notLoaded`.
+
+Observed guarantee: a Desktop-owned thread can write Firstmate lifecycle files when the prompt provides an authorized absolute path, and create, send, read, and archive work at the Desktop host-tool layer.
+The missing guarantee remains a supported shell-callable bridge that lets Firstmate perform those operations against the same visible Desktop endpoint.
+App-server partial methods and raw socket experiments do not satisfy that bridge contract.
+
 ## Pi supervision branch
 
 The supervision-branch extension (`.pi/extensions/fm-branch-supervision.ts`, [docs/pi-supervision-branch.md](../pi-supervision-branch.md)) builds its persistent second session through the Pi SDK surface: `createAgentSession` (including its `model`, `modelRuntime`, and `thinkingLevel` options), `DefaultResourceLoader` with `extensionFactories`, `SessionManager`, `createBashToolDefinition` with a `spawnHook`, `sendCustomMessage`, the `before_provider_request` hook, the command context's model registry for picker candidates, a fresh `ModelRuntime` for isolated-branch resolution, and Pi's own `getSupportedThinkingLevels`/`clampThinkingLevel` plus its `getThinkingLevel` and `thinking_level_select` extension surface for effort.

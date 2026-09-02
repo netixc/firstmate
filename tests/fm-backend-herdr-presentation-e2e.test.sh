@@ -497,8 +497,8 @@ printf 'Projection E2E fixture.\n' > "$HOME_DIR/data/shape/brief.md"
 printf 'Projection ordering fixture A.\n' > "$HOME_DIR/data/order-a/brief.md"
 printf 'Projection ordering fixture B.\n' > "$HOME_DIR/data/order-b/brief.md"
 printf 'Projection ordering failure fixture.\n' > "$HOME_DIR/data/order-fail/brief.md"
-printf 'Hi Bit-style projection restart fixture.\n' > "$HOME_DIR/data/fm-hibit-resume-r1/brief.md"
-printf 'Wheelhouse-style projection restart fixture.\n' > "$HOME_DIR/data/wheelhouse-healing-r1/brief.md"
+printf 'Delivery contract: mode=no-mistakes\nHi Bit-style projection restart fixture.\n' > "$HOME_DIR/data/fm-hibit-resume-r1/brief.md"
+printf 'Delivery contract: mode=no-mistakes\nWheelhouse-style projection restart fixture.\n' > "$HOME_DIR/data/wheelhouse-healing-r1/brief.md"
 printf 'Projection active seeded fixture.\n' > "$HOME_DIR/data/active-seeded/brief.md"
 printf 'Projection abort fixture A.\n' > "$HOME_DIR/data/abort-a/brief.md"
 printf 'Projection abort fixture B.\n' > "$HOME_DIR/data/abort-b/brief.md"
@@ -1187,10 +1187,55 @@ for RESTART_ID in fm-hibit-resume-r1 wheelhouse-healing-r1; do
     || fail "could not reprovision the isolated session for $RESTART_ID validation"
   lab pane get "$OLD_RESTART_PANE" >/dev/null 2>&1 \
     || fail "$RESTART_ID restart did not preserve the projected pane structurally"
-  if lab agent get "$OLD_RESTART_PANE" >/dev/null 2>&1; then
-    fail "$RESTART_ID restart fixture unexpectedly retained a registered agent"
+  OLD_AGENT_GET=$(lab agent get "$OLD_RESTART_PANE" 2>&1) && OLD_AGENT_STATUS=0 || OLD_AGENT_STATUS=$?
+  if [ "$OLD_AGENT_STATUS" -eq 0 ] \
+    || ! printf '%s' "$OLD_AGENT_GET" | jq -e '.error.code == "agent_not_found"' >/dev/null 2>&1; then
+    fail "$RESTART_ID restart fixture did not prove structured agent_not_found: $OLD_AGENT_GET"
   fi
   RECLAIM_FOCUS=$(focus_snapshot)
+
+  # This is recovery lock/refusal/reclaim transport evidence, not Pi shutdown
+  # evidence. Hold the public canonical named-session lock around the first
+  # agent-free binding, prove the recovery entry refuses exactly and mutates
+  # nothing, then release it and exercise one ordinary reclaim below.
+  if [ "$RESTART_ID" = fm-hibit-resume-r1 ]; then
+    REFUSAL_META_BEFORE=$(cat "$RESTART_META")
+    REFUSAL_JOURNAL_BEFORE=$(cat "$HOME_DIR/state/$RESTART_ID.herdr-presentation")
+    REFUSAL_WORKSPACE_BEFORE=$(lab workspace get "$OLD_RESTART_WSID")
+    REFUSAL_TAB_ID=$(grep '^herdr_tab_id=' "$RESTART_META" | cut -d= -f2-)
+    REFUSAL_TAB_BEFORE=$(lab tab get "$REFUSAL_TAB_ID")
+    REFUSAL_PANE_BEFORE=$(lab pane get "$OLD_RESTART_PANE")
+    REFUSAL_LOCK_READY="$TMP_ROOT/$RESTART_ID-lock-ready"
+    REFUSAL_LOCK_RELEASE="$TMP_ROOT/$RESTART_ID-lock-release"
+    REFUSAL_LOCK_PATH=$(session_presentation_lock_path) \
+      || fail "could not resolve the recovery transport session lock"
+    ROOT="$ROOT" LOCK="$REFUSAL_LOCK_PATH" READY="$REFUSAL_LOCK_READY" RELEASE="$REFUSAL_LOCK_RELEASE" bash -c '
+      . "$ROOT/bin/fm-wake-lib.sh"
+      fm_lock_try_acquire "$LOCK" || exit 1
+      : > "$READY"
+      while [ ! -e "$RELEASE" ]; do sleep 0.05; done
+      fm_lock_release "$LOCK"
+    ' &
+    REFUSAL_LOCK_PID=$!
+    while [ ! -e "$REFUSAL_LOCK_READY" ] && kill -0 "$REFUSAL_LOCK_PID" 2>/dev/null; do sleep 0.01; done
+    [ -e "$REFUSAL_LOCK_READY" ] || fail "could not hold the recovery transport session lock"
+    if spawn_task "$RESTART_ID" "$HOME_DIR" "$PROJECT_DIR" > "$TMP_ROOT/$RESTART_ID-refusal.out" 2> "$TMP_ROOT/$RESTART_ID-refusal.err"; then
+      fail "$RESTART_ID recovery unexpectedly proceeded through its held session lock"
+    fi
+    [ "$(cat "$TMP_ROOT/$RESTART_ID-refusal.err")" = "error: herdr presentation recovery could not acquire its session lock; refusing a concurrent resume" ] \
+      || fail "$RESTART_ID recovery lock refusal was not exact: $(cat "$TMP_ROOT/$RESTART_ID-refusal.err")"
+    [ "$(cat "$RESTART_META")" = "$REFUSAL_META_BEFORE" ] \
+      && [ "$(cat "$HOME_DIR/state/$RESTART_ID.herdr-presentation")" = "$REFUSAL_JOURNAL_BEFORE" ] \
+      && [ "$(lab workspace get "$OLD_RESTART_WSID")" = "$REFUSAL_WORKSPACE_BEFORE" ] \
+      && [ "$(lab tab get "$REFUSAL_TAB_ID")" = "$REFUSAL_TAB_BEFORE" ] \
+      && [ "$(lab pane get "$OLD_RESTART_PANE")" = "$REFUSAL_PANE_BEFORE" ] \
+      && [ "$(focus_snapshot)" = "$RECLAIM_FOCUS" ] \
+      && [ "$(grep '^worktree=' "$RESTART_META" | cut -d= -f2-)" = "$OLD_RESTART_WT" ] \
+      || fail "$RESTART_ID bounded recovery refusal changed its exact binding, endpoint, focus, or isolated copy"
+    : > "$REFUSAL_LOCK_RELEASE"
+    wait "$REFUSAL_LOCK_PID" || fail "$RESTART_ID recovery lock owner failed"
+  fi
+
   spawn_task "$RESTART_ID" "$HOME_DIR" "$PROJECT_DIR" > "$TMP_ROOT/$RESTART_ID-reclaim.out" 2> "$TMP_ROOT/$RESTART_ID-reclaim.err" \
     || fail "$RESTART_ID same-identity reclaim failed: $(cat "$TMP_ROOT/$RESTART_ID-reclaim.err")"
   NEW_RESTART_WT=$(remember_meta_worktree "$RESTART_META")
@@ -1237,6 +1282,81 @@ for RESTART_ID in fm-hibit-resume-r1 wheelhouse-healing-r1; do
 done
 pass "real Herdr lab: Hi Bit and Wheelhouse-style same-identity restarts reclaim one nested space with exact focus and idempotence"
 
+# Real Pi lifecycle safety evidence is deliberately separate from recovery
+# transport evidence. Herdr 0.8.2 may retain a stale done registration after
+# Pi has exited to its shell; that known result must remain a refusal with no
+# recovery, cleanup, release, replacement, or identity mutation.
+LIFECYCLE_ID=presentation-agent-stop-r1
+mkdir -p "$HOME_DIR/data/$LIFECYCLE_ID"
+printf 'Delivery contract: mode=no-mistakes\nReal Pi lifecycle safety fixture.\n' > "$HOME_DIR/data/$LIFECYCLE_ID/brief.md"
+spawn_task "$LIFECYCLE_ID" "$HOME_DIR" "$PROJECT_DIR" > "$TMP_ROOT/$LIFECYCLE_ID-spawn.out" 2> "$TMP_ROOT/$LIFECYCLE_ID-spawn.err" \
+  || fail "$LIFECYCLE_ID fixture spawn failed: $(cat "$TMP_ROOT/$LIFECYCLE_ID-spawn.err")"
+LIFECYCLE_META="$HOME_DIR/state/$LIFECYCLE_ID.meta"
+LIFECYCLE_JOURNAL="$HOME_DIR/state/$LIFECYCLE_ID.herdr-presentation"
+LIFECYCLE_WT=$(remember_meta_worktree "$LIFECYCLE_META")
+LIFECYCLE_PANE=$(grep '^herdr_pane_id=' "$LIFECYCLE_META" | cut -d= -f2-)
+LIFECYCLE_TARGET=$(grep '^window=' "$LIFECYCLE_META" | cut -d= -f2-)
+LIFECYCLE_READY=unknown
+LIFECYCLE_READY_ATTEMPT=0
+while [ "$LIFECYCLE_READY_ATTEMPT" -lt 100 ]; do
+  LIFECYCLE_READY=$(FM_HOME="$HOME_DIR" FM_STATE_OVERRIDE="$HOME_DIR/state" PATH="$PATH" \
+    bash -c '. "$0/bin/fm-backend.sh"; fm_backend_agent_state herdr "$1"' "$ROOT" "$LIFECYCLE_TARGET")
+  [ "$LIFECYCLE_READY" = alive ] && break
+  sleep 0.1
+  LIFECYCLE_READY_ATTEMPT=$((LIFECYCLE_READY_ATTEMPT + 1))
+done
+[ "$LIFECYCLE_READY" = alive ] \
+  || fail "$LIFECYCLE_ID never reached a positively attributed live Pi endpoint: $LIFECYCLE_READY"
+LIFECYCLE_META_BEFORE=$(cat "$LIFECYCLE_META")
+LIFECYCLE_JOURNAL_BEFORE=$(cat "$LIFECYCLE_JOURNAL")
+LIFECYCLE_PANE_BEFORE=$(lab pane get "$LIFECYCLE_PANE")
+LIFECYCLE_FOCUS_BEFORE=$(focus_snapshot)
+if FM_HOME="$HOME_DIR" FM_STATE_OVERRIDE="$HOME_DIR/state" FM_DATA_OVERRIDE="$HOME_DIR/data" \
+  FM_CONFIG_OVERRIDE="$HOME_DIR/config" PATH="$PATH" \
+  "$ROOT/bin/fm-control.sh" "$LIFECYCLE_ID" exit > "$TMP_ROOT/$LIFECYCLE_ID-exit.out" 2> "$TMP_ROOT/$LIFECYCLE_ID-exit.err"; then
+  LIFECYCLE_AGENT=$(lab agent get "$LIFECYCLE_PANE" 2>&1) && LIFECYCLE_AGENT_STATUS=0 || LIFECYCLE_AGENT_STATUS=$?
+  if [ "$LIFECYCLE_AGENT_STATUS" -eq 0 ] \
+    || ! printf '%s' "$LIFECYCLE_AGENT" | jq -e '.error.code == "agent_not_found"' >/dev/null 2>&1; then
+    fail "$LIFECYCLE_ID normal exit did not converge to structured agent_not_found: $LIFECYCLE_AGENT"
+  fi
+  pass "real Herdr lab: production interrupt and /quit converged to structured agent_not_found"
+else
+  HERDR_VERSION=$(PATH="$HERDR_ORIGINAL_PATH" herdr --version 2>&1 | awk 'NR == 1 { print $NF }')
+  [ "$HERDR_VERSION" = 0.8.2 ] \
+    || fail "$LIFECYCLE_ID stale registration on herdr $HERDR_VERSION requires explicit reclassification: $(cat "$TMP_ROOT/$LIFECYCLE_ID-exit.err")"
+  grep -E 'agent did not stop within [0-9]+s$' "$TMP_ROOT/$LIFECYCLE_ID-exit.err" >/dev/null 2>&1 \
+    || fail "$LIFECYCLE_ID herdr 0.8.2 refusal was not the bounded production refusal: $(cat "$TMP_ROOT/$LIFECYCLE_ID-exit.err")"
+  LIFECYCLE_PROCESS=$(lab pane process-info --pane "$LIFECYCLE_PANE")
+  printf '%s' "$LIFECYCLE_PROCESS" | jq -e '
+    .result.process_info as $p
+    | ($p.foreground_processes | type) == "array"
+    and ($p.foreground_processes | length) == 1
+    and ($p.foreground_processes[0].name | type) == "string"
+    and ($p.foreground_processes[0].name | test("(^|/)(sh|bash|zsh|dash|ksh|fish)$"))
+    and ($p.foreground_processes[0].argv | type) == "array"
+    and ($p.foreground_processes[0].argv[0] | type) == "string"
+    and (($p.foreground_processes[0].argv | join(" ")) | test("(^|[ /])pi([[:space:]]|$)") | not)
+  ' >/dev/null 2>&1 || fail "$LIFECYCLE_ID did not prove Pi exited to the lone shell: $LIFECYCLE_PROCESS"
+  LIFECYCLE_CAPTURE=$(lab pane read "$LIFECYCLE_PANE" --source recent --lines 80)
+  printf '%s' "$LIFECYCLE_CAPTURE" | grep -E '(^|[[:space:]])(bash-[0-9.]+)?[$%#][[:space:]]*$' >/dev/null 2>&1 \
+    || fail "$LIFECYCLE_ID capture did not expose the returned shell prompt"
+  lab agent get "$LIFECYCLE_PANE" | jq -e '.result.agent.agent_status == "done"' >/dev/null 2>&1 \
+    || fail "$LIFECYCLE_ID herdr 0.8.2 stale registration was not exactly done"
+  [ "$(cat "$LIFECYCLE_META")" = "$LIFECYCLE_META_BEFORE" ] \
+    || fail "$LIFECYCLE_ID stale done refusal rewrote metadata"
+  [ "$(cat "$LIFECYCLE_JOURNAL")" = "$LIFECYCLE_JOURNAL_BEFORE" ] \
+    || fail "$LIFECYCLE_ID stale done refusal rewrote the presentation binding"
+  LIFECYCLE_PANE_AFTER=$(lab pane get "$LIFECYCLE_PANE")
+  [ "$(printf '%s' "$LIFECYCLE_PANE_AFTER" | jq -r '.result.pane | [.pane_id,.tab_id,.workspace_id] | @tsv')" = \
+    "$(printf '%s' "$LIFECYCLE_PANE_BEFORE" | jq -r '.result.pane | [.pane_id,.tab_id,.workspace_id] | @tsv')" ] \
+    || fail "$LIFECYCLE_ID stale done refusal changed exact pane identity"
+  [ "$(focus_snapshot)" = "$LIFECYCLE_FOCUS_BEFORE" ] \
+    || fail "$LIFECYCLE_ID stale done refusal changed focus"
+  [ "$(grep '^worktree=' "$LIFECYCLE_META" | cut -d= -f2-)" = "$LIFECYCLE_WT" ] \
+    || fail "$LIFECYCLE_ID stale done refusal changed the isolated copy"
+  pass "real Herdr lab: 0.8.2 stale done registration stays preserved after Pi exits to the shell"
+fi
+
 # A secondmate child binds and reclaims only inside its own home and parent.
 CROSS_RESTART_ID=wheel-child-resume
 mkdir -p "$SECOND_HOME_A/data/$CROSS_RESTART_ID"
@@ -1271,61 +1391,6 @@ teardown_task "$CROSS_RESTART_ID" "$SECOND_HOME_A" > "$TMP_ROOT/cross-restart-te
 "$REAL_TREEHOUSE" return --force "$CROSS_OLD_WT" >/dev/null 2>&1 || true
 "$REAL_TREEHOUSE" return --force "$CROSS_NEW_WT" >/dev/null 2>&1 || true
 pass "real Herdr lab: secondmate restart binding and reclaim stay isolated to the exact child home and parent"
-
-# Two homes recovering concurrently serialize on the named session lock and
-# each replace only their own exact husk.
-PRIMARY_WAVE_ID=resume-wave-primary
-BRAVO_WAVE_ID=resume-wave-bravo
-mkdir -p "$HOME_DIR/data/$PRIMARY_WAVE_ID" "$SECOND_HOME_B/data/$BRAVO_WAVE_ID"
-printf 'Concurrent primary recovery fixture.\n' > "$HOME_DIR/data/$PRIMARY_WAVE_ID/brief.md"
-printf 'Concurrent secondmate recovery fixture.\n' > "$SECOND_HOME_B/data/$BRAVO_WAVE_ID/brief.md"
-spawn_task "$PRIMARY_WAVE_ID" "$HOME_DIR" "$PROJECT_DIR" > "$TMP_ROOT/primary-wave-first.out" 2> "$TMP_ROOT/primary-wave-first.err" \
-  || fail "primary recovery-wave fixture failed: $(cat "$TMP_ROOT/primary-wave-first.err")"
-spawn_task "$BRAVO_WAVE_ID" "$SECOND_HOME_B" "$PROJECT_DIR" > "$TMP_ROOT/bravo-wave-first.out" 2> "$TMP_ROOT/bravo-wave-first.err" \
-  || fail "secondmate recovery-wave fixture failed: $(cat "$TMP_ROOT/bravo-wave-first.err")"
-PRIMARY_WAVE_META="$HOME_DIR/state/$PRIMARY_WAVE_ID.meta"
-BRAVO_WAVE_META="$SECOND_HOME_B/state/$BRAVO_WAVE_ID.meta"
-PRIMARY_WAVE_OLD_WT=$(remember_meta_worktree "$PRIMARY_WAVE_META")
-BRAVO_WAVE_OLD_WT=$(remember_meta_worktree "$BRAVO_WAVE_META")
-PRIMARY_WAVE_WSID=$(grep '^herdr_workspace_id=' "$PRIMARY_WAVE_META" | cut -d= -f2-)
-BRAVO_WAVE_WSID=$(grep '^herdr_workspace_id=' "$BRAVO_WAVE_META" | cut -d= -f2-)
-PRIMARY_WAVE_OLD_PANE=$(grep '^herdr_pane_id=' "$PRIMARY_WAVE_META" | cut -d= -f2-)
-BRAVO_WAVE_OLD_PANE=$(grep '^herdr_pane_id=' "$BRAVO_WAVE_META" | cut -d= -f2-)
-PATH="$HERDR_ORIGINAL_PATH" "$HERDR_LAB_HELPER" stop "$HERDR_LAB_SESSION" >/dev/null \
-  || fail "could not stop the isolated session for concurrent recovery"
-PATH="$HERDR_ORIGINAL_PATH" "$HERDR_LAB_HELPER" provision "$HERDR_LAB_SESSION" \
-  || fail "could not reprovision the isolated session for concurrent recovery"
-CONCURRENT_RECOVERY_FOCUS=$(focus_snapshot)
-spawn_task "$PRIMARY_WAVE_ID" "$HOME_DIR" "$PROJECT_DIR" > "$TMP_ROOT/primary-wave-resume.out" 2> "$TMP_ROOT/primary-wave-resume.err" &
-PRIMARY_WAVE_PID=$!
-spawn_task "$BRAVO_WAVE_ID" "$SECOND_HOME_B" "$PROJECT_DIR" > "$TMP_ROOT/bravo-wave-resume.out" 2> "$TMP_ROOT/bravo-wave-resume.err" &
-BRAVO_WAVE_PID=$!
-wait "$PRIMARY_WAVE_PID" || fail "concurrent primary recovery failed: $(cat "$TMP_ROOT/primary-wave-resume.err")"
-wait "$BRAVO_WAVE_PID" || fail "concurrent secondmate recovery failed: $(cat "$TMP_ROOT/bravo-wave-resume.err")"
-PRIMARY_WAVE_NEW_WT=$(remember_meta_worktree "$PRIMARY_WAVE_META")
-BRAVO_WAVE_NEW_WT=$(remember_meta_worktree "$BRAVO_WAVE_META")
-PRIMARY_WAVE_NEW_PANE=$(grep '^herdr_pane_id=' "$PRIMARY_WAVE_META" | cut -d= -f2-)
-BRAVO_WAVE_NEW_PANE=$(grep '^herdr_pane_id=' "$BRAVO_WAVE_META" | cut -d= -f2-)
-[ "$(grep '^herdr_workspace_id=' "$PRIMARY_WAVE_META" | cut -d= -f2-)" = "$PRIMARY_WAVE_WSID" ] \
-  && [ "$(grep '^herdr_workspace_id=' "$BRAVO_WAVE_META" | cut -d= -f2-)" = "$BRAVO_WAVE_WSID" ] \
-  || fail "concurrent recovery flattened one task into a different workspace"
-[ "$PRIMARY_WAVE_NEW_PANE" != "$PRIMARY_WAVE_OLD_PANE" ] \
-  && [ "$BRAVO_WAVE_NEW_PANE" != "$BRAVO_WAVE_OLD_PANE" ] \
-  || fail "concurrent recovery reused an old husk pane"
-if lab pane get "$PRIMARY_WAVE_OLD_PANE" >/dev/null 2>&1 \
-   || lab pane get "$BRAVO_WAVE_OLD_PANE" >/dev/null 2>&1; then
-  fail "concurrent recovery left an old husk pane behind"
-fi
-assert_focus_is "$CONCURRENT_RECOVERY_FOCUS" "concurrent cross-home recovery"
-teardown_task "$PRIMARY_WAVE_ID" "$HOME_DIR" > "$TMP_ROOT/primary-wave-teardown.out" 2> "$TMP_ROOT/primary-wave-teardown.err" \
-  || fail "concurrent primary recovery teardown failed"
-teardown_task "$BRAVO_WAVE_ID" "$SECOND_HOME_B" > "$TMP_ROOT/bravo-wave-teardown.out" 2> "$TMP_ROOT/bravo-wave-teardown.err" \
-  || fail "concurrent secondmate recovery teardown failed"
-"$REAL_TREEHOUSE" return --force "$PRIMARY_WAVE_OLD_WT" >/dev/null 2>&1 || true
-"$REAL_TREEHOUSE" return --force "$BRAVO_WAVE_OLD_WT" >/dev/null 2>&1 || true
-"$REAL_TREEHOUSE" return --force "$PRIMARY_WAVE_NEW_WT" >/dev/null 2>&1 || true
-"$REAL_TREEHOUSE" return --force "$BRAVO_WAVE_NEW_WT" >/dev/null 2>&1 || true
-pass "real Herdr lab: concurrent cross-home recoveries replace exact husks under one session lock with no focus drift"
 
 # Seed a legacy old-format primary projection and a flat secondmate tab; correction must not migrate them.
 LEGACY_OUT=$(lab workspace create --cwd "$PROJECT_DIR" --label "firstmate/legacy-seed · p:AbCdEfGhIjKlMnOpQrStUv" --no-focus) \
