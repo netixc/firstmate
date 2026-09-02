@@ -282,11 +282,11 @@ There is still one watcher process; the event reader is a bounded child of that 
 
 The away daemon supports Herdr supervisor panes only.
 Unsupported provider metadata is refused rather than applying another transport.
-For Herdr, target existence, native state, capture, composer state, and verified submit all route through the shared backend dispatcher and the explicit named-session CLI owner.
+For Herdr, one exact session/workspace/tab/pane supervisor record is passively validated before AFK mutation and revalidated immediately before injection; native state, capture, composer state, and verified submit all route through that shared boundary and the explicit named-session CLI owner.
 The pane-independent max-defer alert is configured in [`wedge-alarm.md`](wedge-alarm.md).
 
 Pi has no native tracked background-execution mechanism that can run the daemon in its terminal.
-`bin/fm-afk-launch.sh` therefore creates a dedicated unfocused Herdr workspace, runs the daemon there with an explicit supervisor target and backend, records the exact daemon pane, and closes only that pane on stop.
+`bin/fm-afk-launch.sh` therefore creates a dedicated unfocused Herdr workspace, runs the daemon there with the complete captain hierarchy, records the exact daemon pane, and closes only that pane on stop.
 It never splits the captain's active tab and never uses shell `&`.
 Recovery reconciles only the recorded exact id.
 

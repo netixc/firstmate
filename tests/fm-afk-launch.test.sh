@@ -26,6 +26,36 @@ FAILED=0
 fail() { printf 'not ok - %s\n' "$1" >&2; FAILED=1; }
 pass() { printf 'ok - %s\n' "$1"; }
 
+make_lab_supervisor_fake() {
+  local root=$1 fakebin="$1/fakebin"
+  mkdir -p "$fakebin"
+  cat > "$fakebin/herdr" <<'SH'
+#!/usr/bin/env bash
+set -u
+[ -z "${FM_FAKE_HERDR_LOG:-}" ] || printf '%s\n' "$*" >> "$FM_FAKE_HERDR_LOG"
+case "${1:-} ${2:-}" in
+  "status --json") printf '%s\n' '{"client":{"protocol":14,"version":"0.12.3"},"server":{"running":true,"protocol":14,"version":"0.12.3"}}' ;;
+  "session list") printf '%s\n' '{"sessions":[{"name":"lab","running":true,"socket_path":"/tmp/fm-afk-phase2-lab.sock"}]}' ;;
+  "pane get")
+    [ "${FM_FAKE_SUPERVISOR_UNREACHABLE:-0}" != 1 ] || exit 1
+    printf '{"result":{"pane":{"workspace_id":"%s","tab_id":"%s","pane_id":"%s"}}}\n' \
+      "${FM_FAKE_SUPERVISOR_WORKSPACE:-w1}" "${FM_FAKE_SUPERVISOR_TAB:-w1:t1}" "${FM_FAKE_SUPERVISOR_PANE:-w1:p2}"
+    ;;
+  *) exit 1 ;;
+esac
+SH
+  chmod +x "$fakebin/herdr"
+  printf '%s\n' "$fakebin"
+}
+
+run_with_lab_supervisor() {
+  local fakebin=$1
+  shift
+  PATH="$fakebin:$PATH" FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_SESSION=lab \
+    FM_SUPERVISOR_WORKSPACE_ID=w1 FM_SUPERVISOR_TAB_ID=w1:t1 \
+    FM_SUPERVISOR_PANE_ID=w1:p2 FM_SUPERVISOR_TARGET=lab:w1:p2 "$@"
+}
+
 SLEEPER=$(mktemp "${TMPDIR:-/tmp}/fm-afk-sleeper.XXXXXX")
 printf '#!/usr/bin/env bash\nexec sleep 600\n' > "$SLEEPER"
 chmod +x "$SLEEPER"
@@ -228,31 +258,88 @@ unit_failed_start_rolls_back_state() {
 unit_unreachable_captain_refuses_before_creation() {
   local st fakebin log
   st=$(mktemp -d "${TMPDIR:-/tmp}/fm-afk-unreachable-captain.XXXXXX")
-  fakebin="$st/fakebin"
+  fakebin=$(make_lab_supervisor_fake "$st")
   log="$st/herdr.log"
-  mkdir -p "$fakebin"
-  cat > "$fakebin/herdr" <<'SH'
-#!/usr/bin/env bash
-printf '%s\n' "$*" >> "$FM_FAKE_HERDR_LOG"
-case "${1:-} ${2:-}" in
-  "status --json") printf '%s\n' '{"client":{"protocol":16,"version":"0.8.2"},"server":{"running":true}}' ;;
-  "pane get") exit 1 ;;
-  *) exit 1 ;;
-esac
-SH
-  chmod +x "$fakebin/herdr"
-  if PATH="$fakebin:$PATH" FM_FAKE_HERDR_LOG="$log" FM_HOME="$st" \
-    FM_STATE_OVERRIDE="$st/state" FM_SUPERVISOR_TARGET=lab:w1:p9 \
-    FM_SUPERVISOR_BACKEND=herdr "$LAUNCH" start >/dev/null 2>&1; then
+  if env PATH="$fakebin:$PATH" FM_FAKE_HERDR_LOG="$log" FM_FAKE_SUPERVISOR_UNREACHABLE=1 \
+    FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" FM_SUPERVISOR_BACKEND=herdr \
+    FM_SUPERVISOR_SESSION=lab FM_SUPERVISOR_WORKSPACE_ID=w1 FM_SUPERVISOR_TAB_ID=w1:t1 \
+    FM_SUPERVISOR_PANE_ID=w1:p2 FM_SUPERVISOR_TARGET=lab:w1:p2 \
+    "$LAUNCH" start >/dev/null 2>&1; then
     fail "unreachable captain: away launch unexpectedly succeeded"
   elif [ -e "$st/state" ]; then
     fail "unreachable captain: away launch mutated lifecycle state"
-  elif grep -E '(^| )server( |$)|workspace create' "$log" >/dev/null 2>&1; then
-    fail "unreachable captain: away launch created another endpoint"
+  elif grep -E 'workspace create|pane run|pane send|server ensure|server start' "$log" >/dev/null 2>&1; then
+    fail "unreachable captain: away launch attempted a Herdr mutation"
   else
-    pass "unreachable captain: passive preflight refuses before state or endpoint creation"
+    pass "unreachable captain: passive exact-hierarchy preflight refuses before every mutation"
   fi
   rm -rf "$st"
+}
+
+unit_start_native_identity_refusals_are_pre_mutation() {
+  local case_name st fakebin log before after rc
+  for case_name in missing malformed wrong-session wrong-workspace wrong-tab reused-pane unreachable; do
+    st=$(mktemp -d "${TMPDIR:-/tmp}/fm-afk-native-preflight-$case_name.XXXXXX")
+    fakebin=$(make_lab_supervisor_fake "$st")
+    log="$st/herdr.log"
+    mkdir -p "$st/state"
+    printf 'sentinel-afk\n' > "$st/state/.afk"
+    printf 'sentinel-escalation\n' > "$st/state/.subsuper-escalations"
+    printf 'sentinel-wedge\n' > "$st/state/.subsuper-inject-wedged"
+    before=$(shasum -a 256 "$st/state/.afk" "$st/state/.subsuper-escalations" "$st/state/.subsuper-inject-wedged")
+    set +e
+    case "$case_name" in
+      missing)
+        env -u FM_SUPERVISOR_BACKEND -u FM_SUPERVISOR_SESSION -u FM_SUPERVISOR_WORKSPACE_ID \
+          -u FM_SUPERVISOR_TAB_ID -u FM_SUPERVISOR_PANE_ID -u FM_SUPERVISOR_TARGET \
+          -u HERDR_ENV -u HERDR_SESSION -u HERDR_WORKSPACE_ID -u HERDR_TAB_ID -u HERDR_PANE_ID \
+          PATH="$fakebin:$PATH" FM_FAKE_HERDR_LOG="$log" FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" \
+          "$LAUNCH" start-native >/dev/null 2>&1
+        ;;
+      malformed)
+        FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" FM_FAKE_HERDR_LOG="$log" \
+          FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_SESSION=lab FM_SUPERVISOR_WORKSPACE_ID=w1 \
+          FM_SUPERVISOR_TAB_ID=w1:t1 FM_SUPERVISOR_PANE_ID=w1:p2 FM_SUPERVISOR_TARGET=broken \
+          PATH="$fakebin:$PATH" "$LAUNCH" start-native >/dev/null 2>&1
+        ;;
+      wrong-session)
+        FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" FM_FAKE_HERDR_LOG="$log" \
+          FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_SESSION=other FM_SUPERVISOR_WORKSPACE_ID=w1 \
+          FM_SUPERVISOR_TAB_ID=w1:t1 FM_SUPERVISOR_PANE_ID=w1:p2 FM_SUPERVISOR_TARGET=lab:w1:p2 \
+          PATH="$fakebin:$PATH" "$LAUNCH" start-native >/dev/null 2>&1
+        ;;
+      wrong-workspace)
+        FM_FAKE_SUPERVISOR_WORKSPACE=w9 FM_FAKE_HERDR_LOG="$log" FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" \
+          run_with_lab_supervisor "$fakebin" "$LAUNCH" start-native >/dev/null 2>&1
+        ;;
+      wrong-tab)
+        FM_FAKE_SUPERVISOR_TAB=w1:t9 FM_FAKE_HERDR_LOG="$log" FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" \
+          run_with_lab_supervisor "$fakebin" "$LAUNCH" start-native >/dev/null 2>&1
+        ;;
+      reused-pane)
+        FM_FAKE_SUPERVISOR_PANE=w1:p9 FM_FAKE_HERDR_LOG="$log" FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" \
+          run_with_lab_supervisor "$fakebin" "$LAUNCH" start-native >/dev/null 2>&1
+        ;;
+      unreachable)
+        FM_FAKE_SUPERVISOR_UNREACHABLE=1 FM_FAKE_HERDR_LOG="$log" FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" \
+          run_with_lab_supervisor "$fakebin" "$LAUNCH" start-native >/dev/null 2>&1
+        ;;
+    esac
+    rc=$?
+    set +e
+    after=$(shasum -a 256 "$st/state/.afk" "$st/state/.subsuper-escalations" "$st/state/.subsuper-inject-wedged")
+    [ "$rc" -ne 0 ] || fail "start-native $case_name identity unexpectedly succeeded"
+    [ "$after" = "$before" ] || fail "start-native $case_name identity changed byte sentinels before refusal"
+    [ ! -e "$st/state/.afk-daemon-terminal" ] || fail "start-native $case_name identity published lifecycle state"
+    if grep -E 'workspace create|pane run|pane send|pane close|server ensure|server start' "$log" >/dev/null 2>&1; then
+      fail "start-native $case_name identity attempted a Herdr mutation"
+    fi
+    if grep -E -- '--session default|(^|[[:space:]])default([[:space:]]|$)' "$log" >/dev/null 2>&1; then
+      fail "start-native $case_name identity probed Herdr's default session"
+    fi
+    rm -rf "$st"
+  done
+  pass "start-native refuses every incomplete or contradictory hierarchy before byte or Herdr mutation"
 }
 
 unit_lock_initialization_grace() {
@@ -292,9 +379,9 @@ unit_signal_exits_with_lock_cleanup() {
   marker="$st/resumed"
   FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" bash -c '
     . "$1"
-    discover_supervisor_target() { printf "lab:w1:p2"; }
-    discover_supervisor_backend() { printf "herdr"; }
+    discover_supervisor_identity() { printf "herdr\tlab\tw1\tw1:t1\tw1:p2\tlab:w1:p2"; }
     fm_backend_validate_supervisor_endpoint() { return 0; }
+    FM_SUPERVISOR_SESSION=lab FM_SUPERVISOR_WORKSPACE_ID=w1 FM_SUPERVISOR_TAB_ID=w1:t1 FM_SUPERVISOR_PANE_ID=w1:p2
     fm_afk_launch_start() { sleep 30; }
     fm_afk_launch_main start
     : > "$2"
@@ -333,6 +420,7 @@ unit_herdr_partial_create_recovery() {
     FM_AFK_LAUNCH_LABEL=afk-exact-label RECORDED="$recorded" bash -c '
     . "$1"
     fm_backend_validate_supervisor_endpoint() { return 0; }
+    FM_SUPERVISOR_SESSION=lab FM_SUPERVISOR_WORKSPACE_ID=w1 FM_SUPERVISOR_TAB_ID=w1:t1 FM_SUPERVISOR_PANE_ID=w1:p2
     fm_backend_herdr_cli() {
       if [ "$2 $3" = "workspace create" ]; then
         printf %s '\''truncated'\''
@@ -360,6 +448,7 @@ unit_herdr_error_with_exact_ids_closes_exact() {
   FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" bash -c '
     . "$1"
     fm_backend_validate_supervisor_endpoint() { return 0; }
+    FM_SUPERVISOR_SESSION=lab FM_SUPERVISOR_WORKSPACE_ID=w1 FM_SUPERVISOR_TAB_ID=w1:t1 FM_SUPERVISOR_PANE_ID=w1:p2
     fm_backend_herdr_cli() {
       if [ "$2 $3" = "workspace create" ]; then
         printf %s '\''{"result":{"workspace":{"workspace_id":"ws-exact"},"root_pane":{"pane_id":"pane-exact"}}}'\''
@@ -386,6 +475,7 @@ unit_herdr_run_failure_preserves_unconfirmed_record() {
   FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" bash -c '
     . "$1"
     fm_backend_validate_supervisor_endpoint() { return 0; }
+    FM_SUPERVISOR_SESSION=lab FM_SUPERVISOR_WORKSPACE_ID=w1 FM_SUPERVISOR_TAB_ID=w1:t1 FM_SUPERVISOR_PANE_ID=w1:p2
     fm_backend_herdr_cli() {
       if [ "$2 $3" = "workspace create" ]; then
         printf %s '\''{"result":{"workspace":{"workspace_id":"ws-exact"},"root_pane":{"pane_id":"pane-exact"}}}'\''
@@ -465,15 +555,17 @@ unit_readiness_failure_preserves_unconfirmed_record() {
 }
 
 unit_native_lifecycle() {
-  local st
+  local st fakebin
   st=$(mktemp -d "${TMPDIR:-/tmp}/fm-afk-native.XXXXXX")
+  fakebin=$(make_lab_supervisor_fake "$st")
   mkdir -p "$st/state"
   : > "$st/state/.subsuper-escalations"
-  if FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" "$LAUNCH" start-native >/dev/null 2>&1 \
+  if FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" run_with_lab_supervisor "$fakebin" \
+    "$LAUNCH" start-native >/dev/null 2>&1 \
     && [ "$(cut -f1 "$st/state/.afk-daemon-terminal")" = none ] \
     && [ -e "$st/state/.afk" ] \
     && [ ! -e "$st/state/.subsuper-escalations" ]; then
-    pass "native lifecycle: launcher owns state with no terminal"
+    pass "native lifecycle: exact named-lab preflight precedes launcher-owned state"
   else
     fail "native lifecycle: state preparation or no-terminal record failed"
   fi
@@ -795,9 +887,10 @@ e2e_herdr() {
   before=$(fm_backend_herdr_cli "$SESSION" pane list --workspace "$cap_ws" 2>/dev/null | jq --arg t "$cap_tab" '[.result.panes[]?|select(.tab_id==$t)]|length')
   ws_before=$(fm_backend_herdr_cli "$SESSION" workspace list 2>/dev/null | jq '[.result.workspaces[]?]|length')
 
-  FM_HOME="$home_tmp" FM_STATE_OVERRIDE="$home_tmp/state" \
-    FM_SUPERVISOR_TARGET="$target" FM_SUPERVISOR_BACKEND=herdr FM_AFK_LAUNCH_ENTRY="$SLEEPER" \
-    "$LAUNCH" start >/dev/null 2>&1
+  FM_HOME="$home_tmp" FM_STATE_OVERRIDE="$home_tmp/state" FM_SUPERVISOR_BACKEND=herdr \
+    FM_SUPERVISOR_SESSION="$SESSION" FM_SUPERVISOR_WORKSPACE_ID="$cap_ws" \
+    FM_SUPERVISOR_TAB_ID="$cap_tab" FM_SUPERVISOR_PANE_ID="$cap_pane" FM_SUPERVISOR_TARGET="$target" \
+    FM_AFK_LAUNCH_ENTRY="$SLEEPER" "$LAUNCH" start >/dev/null 2>&1
 
   during=$(fm_backend_herdr_cli "$SESSION" pane list --workspace "$cap_ws" 2>/dev/null | jq --arg t "$cap_tab" '[.result.panes[]?|select(.tab_id==$t)]|length')
   ws_during=$(fm_backend_herdr_cli "$SESSION" workspace list 2>/dev/null | jq '[.result.workspaces[]?]|length')
@@ -828,6 +921,7 @@ unit_stop_ordering
 unit_stop_rejects_reused_pid
 unit_failed_start_rolls_back_state
 unit_unreachable_captain_refuses_before_creation
+unit_start_native_identity_refusals_are_pre_mutation
 unit_lock_initialization_grace
 unit_signal_exits_with_lock_cleanup
 unit_herdr_partial_create_recovery

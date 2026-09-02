@@ -118,12 +118,13 @@ Ad hoc or legacy provider targets are refused because they lack a durable Herdr 
 Destructive test cleanup must use the guarded named-lab path described in [`docs/herdr-backend.md`](herdr-backend.md), never ambient session state or server-global commands.
 `config/backend` and `config/herdr-presentation-spaces` are inherited into secondmate homes under the primary-authoritative contract owned by [`secondmate-provisioning`](../.agents/skills/secondmate-provisioning/SKILL.md).
 
-## Away-mode supervisor backend (FM_SUPERVISOR_BACKEND / FM_SUPERVISOR_TARGET)
+## Away-mode supervisor Herdr identity (FM_SUPERVISOR_*)
 
 The `/afk` sub-supervisor injects escalation digests into Firstmate's exact Herdr pane.
-`FM_SUPERVISOR_BACKEND`, when present, must be exactly `herdr`.
-`FM_SUPERVISOR_TARGET` may explicitly provide `"<session>:<pane-id>"`; otherwise discovery requires `HERDR_ENV=1` and `HERDR_PANE_ID` and uses `${HERDR_SESSION:-default}`.
-Missing, non-Herdr, or unprovable identity blocks startup without fallback.
+An explicit record consists of `FM_SUPERVISOR_BACKEND=herdr`, `FM_SUPERVISOR_SESSION`, `FM_SUPERVISOR_WORKSPACE_ID`, `FM_SUPERVISOR_TAB_ID`, `FM_SUPERVISOR_PANE_ID`, and the consistent `FM_SUPERVISOR_TARGET="<session>:<pane-id>"`.
+Otherwise discovery requires `HERDR_ENV=1` plus Herdr's complete injected session/workspace/tab/pane hierarchy.
+The exact live hierarchy is checked before AFK mutation and immediately before injection.
+Missing, partial, contradictory, non-Herdr, unreachable, or reused identity blocks the operation without inference, default-session probing, or fallback.
 
 ## Away-mode wedge alarm channels (config/wedge-alarm)
 
@@ -772,7 +773,7 @@ FM_SEND_SETTLE=1        # seconds fm-send waits after a successful typed-plane s
 FM_PENDING_REPLY_GRACE_SECS=120   # seconds after marked-request delivery before a completed turn without a correlated parent report is eligible for its one recovery repost
 # sub-supervisor (bin/fm-supervise-daemon.sh); presence-gated via /afk
 FM_SUPERVISOR_BACKEND=             # optional exact "herdr" assertion
-FM_SUPERVISOR_TARGET=              # optional Herdr <session>:<pane-id>, otherwise requires HERDR_ENV/HERDR_PANE_ID
+FM_SUPERVISOR_TARGET=              # with the complete FM_SUPERVISOR_{BACKEND,SESSION,WORKSPACE_ID,TAB_ID,PANE_ID} record
 FM_INJECT_SKIP=heartbeat           # |-prefixes force-self-handled bypassing classification; empty disables
 FM_ESCALATE_BATCH_SECS=90          # buffer window for batched escalation digests; 0 = flush immediately
 FM_MAX_DEFER_SECS=300              # max buffered escalation age before retry plus wedge alarm; 0 disables

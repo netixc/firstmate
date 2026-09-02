@@ -53,6 +53,8 @@ HERDR_SHIM_DIR=
 LOG_FILE=
 DAEMON_PID=
 SUPERVISOR_TARGET=
+SUPERVISOR_WORKSPACE_ID=
+SUPERVISOR_TAB_ID=
 PANE_ID=
 LOOP_SCRIPT=
 
@@ -88,11 +90,16 @@ CONTAINER=${CONTAINER_RAW%%$'\t'*}
 SEEDED_TAB_ID=${CONTAINER_RAW#*$'\t'}
 TASK_IDS=$(fm_backend_herdr_create_task "$CONTAINER" "fm-afk-e2e-supervisor" /tmp "$SEEDED_TAB_ID") \
   || fail "create_task for the scratch supervisor pane failed"
-read -r _TAB_ID PANE_ID <<EOF
+read -r SUPERVISOR_TAB_ID PANE_ID <<EOF
 $TASK_IDS
 EOF
-[ -n "$PANE_ID" ] || fail "create_task did not return a pane id"
+SUPERVISOR_WORKSPACE_ID=${CONTAINER#*:}
+[ -n "$SUPERVISOR_WORKSPACE_ID" ] && [ -n "$SUPERVISOR_TAB_ID" ] && [ -n "$PANE_ID" ] \
+  || fail "create_task did not return a complete supervisor hierarchy"
 SUPERVISOR_TARGET="$SESSION:$PANE_ID"
+export FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_SESSION="$SESSION"
+export FM_SUPERVISOR_WORKSPACE_ID="$SUPERVISOR_WORKSPACE_ID" FM_SUPERVISOR_TAB_ID="$SUPERVISOR_TAB_ID"
+export FM_SUPERVISOR_PANE_ID="$PANE_ID" FM_SUPERVISOR_TARGET="$SUPERVISOR_TARGET"
 
 # Herdr can return the created pane before its interactive shell is ready to
 # receive Enter. Require a stable shell-owned foreground before launching the

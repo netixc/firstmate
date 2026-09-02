@@ -254,15 +254,16 @@ fm_backend_source() {
   fi
 }
 
-fm_backend_validate_supervisor_endpoint() {  # <backend> <target>
-  local backend=$1 target=$2 session pane live state=0
+fm_backend_validate_supervisor_endpoint() {  # <backend> <target> <session> <workspace> <tab> <pane>
+  local backend=$1 target=$2 session=${3:-} workspace=${4:-} tab=${5:-} pane=${6:-} live state=0
   fm_backend_source "$backend" || return 1
-  session=${target%%:*}
-  pane=${target#*:}
-  [ -n "$session" ] && [ -n "$pane" ] && [ "$pane" != "$target" ] \
+  [ -n "$session" ] && [ -n "$workspace" ] && [ -n "$tab" ] && [ -n "$pane" ] \
+    && [ "$target" = "$session:$pane" ] \
     && fm_backend_endpoint_atom_valid "$session" \
-    && fm_backend_endpoint_child_valid "${pane%%:*}" "$pane" || {
-      echo "REFUSED: supervisor Herdr endpoint '$target' is malformed; no endpoint action was attempted." >&2
+    && fm_backend_endpoint_atom_valid "$workspace" \
+    && fm_backend_endpoint_child_valid "$workspace" "$tab" \
+    && fm_backend_endpoint_child_valid "$workspace" "$pane" || {
+      echo "REFUSED: supervisor Herdr identity for '$target' is missing, malformed, or inconsistent; no endpoint action was attempted." >&2
       return 1
     }
   fm_backend_herdr_version_check || return 1
@@ -275,9 +276,9 @@ fm_backend_validate_supervisor_endpoint() {  # <backend> <target>
     echo "REFUSED: supervisor Herdr pane '$pane' in session '$session' is unreachable; no endpoint action was attempted." >&2
     return 1
   }
-  printf '%s' "$live" | jq -e --arg pane "$pane" \
-    '.result.pane.pane_id == $pane and (.result.pane.workspace_id | type) == "string" and (.result.pane.workspace_id | length) > 0 and (.result.pane.tab_id | type) == "string" and (.result.pane.tab_id | length) > 0' >/dev/null 2>&1 || {
-      echo "REFUSED: live supervisor Herdr pane identity is malformed or contradicts '$target'; no endpoint action was attempted." >&2
+  printf '%s' "$live" | jq -e --arg workspace "$workspace" --arg tab "$tab" --arg pane "$pane" \
+    '.result.pane.workspace_id == $workspace and .result.pane.tab_id == $tab and .result.pane.pane_id == $pane' >/dev/null 2>&1 || {
+      echo "REFUSED: live supervisor Herdr hierarchy contradicts the recorded session/workspace/tab/pane identity for '$target'; no endpoint action was attempted." >&2
       return 1
     }
 }
@@ -285,7 +286,9 @@ fm_backend_validate_supervisor_endpoint() {  # <backend> <target>
 fm_backend_validate_task_operation() {  # <backend> <target> [expected-label] [explicit-meta]
   local backend=$1 target=$2 label=${3:-} explicit_meta=${4:-} id meta
   if [ -z "$label" ]; then
-    fm_backend_validate_supervisor_endpoint "$backend" "$target"
+    fm_backend_validate_supervisor_endpoint "$backend" "$target" \
+      "${FM_SUPERVISOR_SESSION:-}" "${FM_SUPERVISOR_WORKSPACE_ID:-}" \
+      "${FM_SUPERVISOR_TAB_ID:-}" "${FM_SUPERVISOR_PANE_ID:-}"
     return
   fi
   fm_backend_validate "$backend" || return 1

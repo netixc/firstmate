@@ -1358,7 +1358,7 @@ test_escalate_batches_into_one_digest() {
   escalate_add "$state" "event A: done: PR 1"
   escalate_add "$state" "event B: done: PR 2"
   afk_enter "$state"
-  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET=lab:w1:p2 \
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_SESSION=lab FM_SUPERVISOR_WORKSPACE_ID=w1 FM_SUPERVISOR_TAB_ID=w1:t2 FM_SUPERVISOR_PANE_ID=w1:p2 FM_SUPERVISOR_TARGET=lab:w1:p2 \
     FM_FAKE_COMPOSER="$capture" FM_FAKE_SENT="$sent" FM_ESCALATE_BATCH_SECS=0 escalate_flush "$state" \
     || fail "escalate_flush failed"
   grep -F 'FIRSTMATE_OP: v1 away-supervisor: ' "$sent" >/dev/null \
@@ -1385,7 +1385,7 @@ test_escalate_batch_age_uses_first_append() {
   escalate_add "$state" "event B: done: PR 2"
   echo $(( $(date +%s) - 100 )) > "$state/.subsuper-escalations.since"
   afk_enter "$state"
-  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET=lab:w1:p2 \
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_SESSION=lab FM_SUPERVISOR_WORKSPACE_ID=w1 FM_SUPERVISOR_TAB_ID=w1:t2 FM_SUPERVISOR_PANE_ID=w1:p2 FM_SUPERVISOR_TARGET=lab:w1:p2 \
     FM_FAKE_COMPOSER="$capture" FM_FAKE_SENT="$sent" FM_ESCALATE_BATCH_SECS=90 FM_HOUSEKEEPING_TICK=0 \
     housekeeping "$state"
   grep -F 'event A: done: PR 1 | event B: done: PR 2' "$sent" >/dev/null \
@@ -1522,7 +1522,7 @@ test_busy_guard_defers_when_supervisor_busy() {
   printf 'esc to interrupt\n' > "$capture"
   escalate_add "$state" "done: PR 1"
   afk_enter "$state"
-  if PATH="$fakebin:$PATH" FM_HOME="$dir" FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET=lab:w1:p2 \
+  if PATH="$fakebin:$PATH" FM_HOME="$dir" FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_SESSION=lab FM_SUPERVISOR_WORKSPACE_ID=w1 FM_SUPERVISOR_TAB_ID=w1:t2 FM_SUPERVISOR_PANE_ID=w1:p2 FM_SUPERVISOR_TARGET=lab:w1:p2 \
     FM_FAKE_HERDR_CAPTURE="$capture" FM_FAKE_HERDR_AGENT_STATUS=working FM_ESCALATE_BATCH_SECS=0 \
     escalate_flush "$state"; then
     fail "escalate_flush should defer when supervisor pane busy"
@@ -1622,7 +1622,7 @@ test_pane_input_pending_detects_partial_input() {
   # Line 3 (cursor_y=2) has human's partial text (no Enter) → pending.
   printf 'line one\nline two\nhuman draft text\n' > "$capture"
   PATH="$fakebin:$PATH" FM_FAKE_HERDR_CAPTURE="$capture" \
-    pane_input_pending "lab:w1:p2" herdr \
+    FM_SUPERVISOR_SESSION=lab FM_SUPERVISOR_WORKSPACE_ID=w1 FM_SUPERVISOR_TAB_ID=w1:t2 FM_SUPERVISOR_PANE_ID=w1:p2 pane_input_pending "lab:w1:p2" herdr \
     || fail "pane_input_pending should detect non-empty composer (human text)"
   pass "pane_input_pending detects partial input on the cursor line"
 }
@@ -1642,7 +1642,7 @@ test_pane_input_pending_blank_defers_strict() {
   capture="$dir/pane.txt"
   printf 'some output\nmore output\n\n' > "$capture"
   PATH="$fakebin:$PATH" FM_FAKE_HERDR_CAPTURE="$capture" \
-    pane_input_pending "lab:w1:p2" herdr \
+    FM_SUPERVISOR_SESSION=lab FM_SUPERVISOR_WORKSPACE_ID=w1 FM_SUPERVISOR_TAB_ID=w1:t2 FM_SUPERVISOR_PANE_ID=w1:p2 pane_input_pending "lab:w1:p2" herdr \
     || fail "a blank unidentified cursor row must defer under the strict rule, not read empty"
   pass "pane_input_pending: a blank unidentified cursor row defers (strict container-proof rule)"
 }
@@ -1656,13 +1656,13 @@ test_pane_input_pending_requires_proven_empty_prompt() {
   for prompt in '$' '>'; do
     printf 'output\noutput\n%s \n' "$prompt" > "$capture"
     PATH="$fakebin:$PATH" FM_FAKE_HERDR_CAPTURE="$capture" \
-      pane_input_pending "lab:w1:p2" herdr \
+      FM_SUPERVISOR_SESSION=lab FM_SUPERVISOR_WORKSPACE_ID=w1 FM_SUPERVISOR_TAB_ID=w1:t2 FM_SUPERVISOR_PANE_ID=w1:p2 pane_input_pending "lab:w1:p2" herdr \
       || fail "bare shell prompt '$prompt' should defer as unknown"
   done
   prompt=❯
   printf 'output\noutput\n%s \n' "$prompt" > "$capture"
   if PATH="$fakebin:$PATH" FM_FAKE_HERDR_CAPTURE="$capture" \
-    pane_input_pending "lab:w1:p2" herdr; then
+    FM_SUPERVISOR_SESSION=lab FM_SUPERVISOR_WORKSPACE_ID=w1 FM_SUPERVISOR_TAB_ID=w1:t2 FM_SUPERVISOR_PANE_ID=w1:p2 pane_input_pending "lab:w1:p2" herdr; then
     fail "proven empty agent prompt '$prompt' should not defer"
   fi
   pass "pane_input_pending: only proven empty agent prompts pass"
@@ -1680,7 +1680,7 @@ test_pane_input_pending_preserves_bright_placeholder_like_draft() {
   capture="$dir/pane.txt"
   printf '╭────────────────╮\n│ custom idle>   │\n╰────────────────╯\n' > "$capture"
   PATH="$fakebin:$PATH" FM_FAKE_HERDR_CAPTURE="$capture" \
-    FM_COMPOSER_IDLE_RE='^custom idle>$' pane_input_pending "lab:w1:p2" herdr \
+    FM_COMPOSER_IDLE_RE='^custom idle>$' FM_SUPERVISOR_SESSION=lab FM_SUPERVISOR_WORKSPACE_ID=w1 FM_SUPERVISOR_TAB_ID=w1:t2 FM_SUPERVISOR_PANE_ID=w1:p2 pane_input_pending "lab:w1:p2" herdr \
     || fail "bright placeholder-like input must remain pending in a styled capture"
   pass "pane_input_pending preserves bright placeholder-like drafts in styled captures"
 }
@@ -1802,7 +1802,7 @@ test_pane_input_pending_bordered_idle_not_pending() {
       '') printf '╭────────────╮\n│            │\n╰────────────╯\n' > "$capture" ;;
     esac
     if PATH="$fakebin:$PATH" FM_FAKE_HERDR_CAPTURE="$capture" \
-      pane_input_pending "lab:w1:p2" herdr; then
+      FM_SUPERVISOR_SESSION=lab FM_SUPERVISOR_WORKSPACE_ID=w1 FM_SUPERVISOR_TAB_ID=w1:t2 FM_SUPERVISOR_PANE_ID=w1:p2 pane_input_pending "lab:w1:p2" herdr; then
       fail "bordered idle composer falsely detected as pending: <$line>"
     fi
   done
@@ -1818,7 +1818,7 @@ test_pane_input_pending_bordered_with_text_is_pending() {
   state="$dir/state"; fakebin="$dir/fakebin"; capture="$dir/pane.txt"
   printf '╭────────────────────────────────────────────────╮\n│ > fix findings 1 and 3, skip 2                 │\n╰────────────────────────────────────────────────╯\n' > "$capture"
   PATH="$fakebin:$PATH" FM_FAKE_HERDR_CAPTURE="$capture" \
-    pane_input_pending "lab:w1:p2" herdr \
+    FM_SUPERVISOR_SESSION=lab FM_SUPERVISOR_WORKSPACE_ID=w1 FM_SUPERVISOR_TAB_ID=w1:t2 FM_SUPERVISOR_PANE_ID=w1:p2 pane_input_pending "lab:w1:p2" herdr \
     || fail "real text inside a bordered composer was not detected as pending"
   pass "pane_input_pending: text inside a bordered composer is still pending"
 }
@@ -1833,7 +1833,7 @@ test_max_defer_empty_swallow_types_once_and_alarms() {
   escalate_add "$state" "needs-decision: pick A"
   echo $(( $(date +%s) - 600 )) > "$state/.subsuper-escalations.since"
   afk_enter "$state"
-  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET=lab:w1:p2 \
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_SESSION=lab FM_SUPERVISOR_WORKSPACE_ID=w1 FM_SUPERVISOR_TAB_ID=w1:t2 FM_SUPERVISOR_PANE_ID=w1:p2 FM_SUPERVISOR_TARGET=lab:w1:p2 \
     FM_FAKE_COMPOSER="$dir/composer" FM_FAKE_SENT="$sent" \
     FM_FAKE_SWALLOW="$dir/.swallow" FM_FAKE_PERSIST_SWALLOW=1 FM_INJECT_CONFIRM_SLEEP=0.05 \
     FM_ESCALATE_BATCH_SECS=99999 FM_MAX_DEFER_SECS=60 housekeeping "$state"
@@ -1855,7 +1855,7 @@ test_max_defer_flushes_empty_idle_pane() {
   escalate_add "$state" "done: PR https://x/y/pull/1"
   echo $(( $(date +%s) - 600 )) > "$state/.subsuper-escalations.since"
   afk_enter "$state"
-  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET=lab:w1:p2 \
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_SESSION=lab FM_SUPERVISOR_WORKSPACE_ID=w1 FM_SUPERVISOR_TAB_ID=w1:t2 FM_SUPERVISOR_PANE_ID=w1:p2 FM_SUPERVISOR_TARGET=lab:w1:p2 \
     FM_FAKE_COMPOSER="$dir/composer" FM_FAKE_SENT="$sent" \
     FM_ESCALATE_BATCH_SECS=99999 FM_MAX_DEFER_SECS=60 FM_INJECT_CONFIRM_SLEEP=0.05 \
     housekeeping "$state"
@@ -1873,7 +1873,7 @@ test_max_defer_pending_composer_alarms_without_typing() {
   escalate_add "$state" "needs-decision: pick B"
   echo $(( $(date +%s) - 600 )) > "$state/.subsuper-escalations.since"
   afk_enter "$state"
-  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET=lab:w1:p2 \
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_SESSION=lab FM_SUPERVISOR_WORKSPACE_ID=w1 FM_SUPERVISOR_TAB_ID=w1:t2 FM_SUPERVISOR_PANE_ID=w1:p2 FM_SUPERVISOR_TARGET=lab:w1:p2 \
     FM_FAKE_COMPOSER="$dir/composer" FM_FAKE_SENT="$sent" \
     FM_ESCALATE_BATCH_SECS=99999 FM_MAX_DEFER_SECS=60 FM_INJECT_CONFIRM_SLEEP=0.05 \
     housekeeping "$state"
@@ -1892,7 +1892,7 @@ test_normal_flush_clears_stale_wedge_marker() {
   printf 'old wedge\n' > "$state/.subsuper-inject-wedged"
   escalate_add "$state" "done: PR https://x/y/pull/2"
   afk_enter "$state"
-  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET=lab:w1:p2 \
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_SESSION=lab FM_SUPERVISOR_WORKSPACE_ID=w1 FM_SUPERVISOR_TAB_ID=w1:t2 FM_SUPERVISOR_PANE_ID=w1:p2 FM_SUPERVISOR_TARGET=lab:w1:p2 \
     FM_FAKE_COMPOSER="$dir/composer" FM_FAKE_SENT="$sent" \
     FM_INJECT_CONFIRM_SLEEP=0.05 escalate_flush "$state" \
     || fail "normal escalate_flush failed"
@@ -2335,37 +2335,49 @@ test_fm_send_exits_nonzero_on_unproven_submit() {
 
 # --- Herdr supervisor discovery and transport -------------------------------
 
+use_test_supervisor_identity() {
+  export FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_SESSION=lab
+  export FM_SUPERVISOR_WORKSPACE_ID=w1 FM_SUPERVISOR_TAB_ID=w1:t2
+  export FM_SUPERVISOR_PANE_ID=w1:p2 FM_SUPERVISOR_TARGET=lab:w1:p2
+}
+
 test_discover_supervisor_backend_precedence() {
   local out
-  out=$(FM_SUPERVISOR_BACKEND=herdr HERDR_ENV=1 HERDR_PANE_ID=w1:p1 discover_supervisor_backend)
-  [ "$out" = herdr ] || fail "explicit Herdr provider was not honored: $out"
+  out=$(FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_SESSION=lab \
+    FM_SUPERVISOR_WORKSPACE_ID=w1 FM_SUPERVISOR_TAB_ID=w1:t2 \
+    FM_SUPERVISOR_PANE_ID=w1:p2 FM_SUPERVISOR_TARGET=lab:w1:p2 discover_supervisor_backend)
+  [ "$out" = herdr ] || fail "complete explicit Herdr identity was not honored: $out"
 
-  out=$(FM_SUPERVISOR_BACKEND='' HERDR_ENV=1 HERDR_PANE_ID=w1:p1 discover_supervisor_backend)
-  [ "$out" = herdr ] || fail "Herdr pane identity did not resolve to Herdr: $out"
+  out=$(FM_SUPERVISOR_BACKEND='' FM_SUPERVISOR_TARGET='' HERDR_ENV=1 HERDR_SESSION=lab \
+    HERDR_WORKSPACE_ID=w1 HERDR_TAB_ID=w1:t2 HERDR_PANE_ID=w1:p2 discover_supervisor_backend)
+  [ "$out" = herdr ] || fail "complete ambient Herdr hierarchy did not resolve: $out"
 
-  if out=$(FM_SUPERVISOR_BACKEND='' HERDR_ENV='' HERDR_PANE_ID='' discover_supervisor_backend 2>/dev/null); then
-    fail "an unproved provider should return non-zero"
+  if out=$(FM_SUPERVISOR_BACKEND='' FM_SUPERVISOR_TARGET='' HERDR_ENV=1 \
+    HERDR_SESSION=lab HERDR_WORKSPACE_ID='' HERDR_TAB_ID=w1:t2 HERDR_PANE_ID=w1:p2 \
+    discover_supervisor_backend 2>/dev/null); then
+    fail "a partial ambient hierarchy should return non-zero"
   fi
 
-  pass "discover_supervisor_backend accepts only explicit or ambient Herdr"
+  pass "discover_supervisor_backend accepts only complete explicit or ambient Herdr identity"
 }
 
 test_discover_supervisor_target_herdr() {
   local out
-  out=$(FM_SUPERVISOR_TARGET=explicit:w1:p9 FM_SUPERVISOR_BACKEND=herdr discover_supervisor_target)
-  [ "$out" = "explicit:w1:p9" ] || fail "explicit Herdr target was not honored: $out"
+  out=$(FM_SUPERVISOR_TARGET=lab:w1:p9 FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_SESSION=lab \
+    FM_SUPERVISOR_WORKSPACE_ID=w1 FM_SUPERVISOR_TAB_ID=w1:t9 FM_SUPERVISOR_PANE_ID=w1:p9 \
+    discover_supervisor_target)
+  [ "$out" = "lab:w1:p9" ] || fail "complete explicit Herdr target was not honored: $out"
 
-  out=$(FM_SUPERVISOR_TARGET='' HERDR_ENV=1 HERDR_PANE_ID=w1:p9 HERDR_SESSION='' discover_supervisor_target)
-  [ "$out" = "default:w1:p9" ] || fail "Herdr target should default HERDR_SESSION to default: $out"
+  out=$(FM_SUPERVISOR_TARGET='' FM_SUPERVISOR_BACKEND='' HERDR_ENV=1 HERDR_SESSION=iso1 \
+    HERDR_WORKSPACE_ID=w1 HERDR_TAB_ID=w1:t9 HERDR_PANE_ID=w1:p9 discover_supervisor_target)
+  [ "$out" = "iso1:w1:p9" ] || fail "complete ambient Herdr target did not use its named session: $out"
 
-  out=$(FM_SUPERVISOR_TARGET='' HERDR_ENV=1 HERDR_PANE_ID=w1:p9 HERDR_SESSION=iso1 discover_supervisor_target)
-  [ "$out" = "iso1:w1:p9" ] || fail "Herdr target should use the explicit named session: $out"
-
-  if out=$(FM_SUPERVISOR_TARGET='' HERDR_ENV='' HERDR_PANE_ID='' discover_supervisor_target 2>/dev/null); then
-    fail "an unproved Herdr target should return non-zero"
+  if out=$(FM_SUPERVISOR_TARGET='' FM_SUPERVISOR_BACKEND='' HERDR_ENV=1 HERDR_SESSION='' \
+    HERDR_WORKSPACE_ID=w1 HERDR_TAB_ID=w1:t9 HERDR_PANE_ID=w1:p9 discover_supervisor_target 2>/dev/null); then
+    fail "an absent ambient session should refuse instead of probing default"
   fi
 
-  pass "discover_supervisor_target accepts exact explicit or ambient Herdr identity"
+  pass "discover_supervisor_target requires exact session/workspace/tab/pane identity"
 }
 
 test_pane_is_busy_herdr_native_busy_state() {
@@ -2401,17 +2413,44 @@ test_pane_input_pending_herdr_dispatch() {
   pass "pane_input_pending: dispatches through fm_backend_composer_state for backend=herdr"
 }
 
+test_inject_msg_revalidates_complete_hierarchy_before_typing() {
+  local dir state seen
+  dir=$(make_supercase inject-herdr-hierarchy-refusal)
+  state="$dir/state"
+  seen="$dir/validated"
+  afk_enter "$state"
+  (
+    use_test_supervisor_identity
+    fm_backend_validate_supervisor_endpoint() {
+      [ "$1" = herdr ] && [ "$2" = lab:w1:p2 ] && [ "$3" = lab ] \
+        && [ "$4" = w1 ] && [ "$5" = w1:t2 ] && [ "$6" = w1:p2 ] \
+        || fail "injector omitted or changed a supervisor hierarchy axis"
+      : > "$seen"
+      return 1
+    }
+    pane_is_busy() { fail "busy guard ran after hierarchy refusal"; }
+    fm_backend_composer_state() { fail "composer read ran after hierarchy refusal"; }
+    fm_backend_send_text_submit() { fail "typing ran after hierarchy refusal"; }
+    if inject_msg "hello" "$state"; then
+      fail "injector accepted a hierarchy rejected at the immediate validation boundary"
+    fi
+  ) || fail "exact hierarchy injection refusal subshell failed"
+  [ -e "$seen" ] || fail "injector did not invoke the exact hierarchy validator"
+  pass "inject_msg revalidates session/workspace/tab/pane immediately before any read or typing"
+}
+
 test_inject_msg_herdr_busy_guard_defers() {
   local dir state
   dir=$(make_supercase inject-herdr-busy)
   state="$dir/state"
   afk_enter "$state"
   (
-    fm_backend_target_exists() { [ "$1" = herdr ] && [ "$2" = "default:w1:p2" ] || fail "unexpected target_exists args: $1 $2"; return 0; }
+    use_test_supervisor_identity
+    fm_backend_validate_supervisor_endpoint() { [ "$1" = herdr ] && [ "$2" = "lab:w1:p2" ] || fail "unexpected supervisor validation args: $1 $2"; return 0; }
     pane_is_busy() { return 0; }
     fm_backend_composer_state() { fail "composer_state should not be consulted once the busy-guard already deferred"; }
     fm_backend_send_text_submit() { fail "send_text_submit should not run when the busy-guard defers"; }
-    if FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET="default:w1:p2" inject_msg "hello" "$state"; then
+    if FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET="lab:w1:p2" inject_msg "hello" "$state"; then
       fail "inject_msg should defer (return non-zero) when the herdr supervisor pane is busy"
     fi
   ) || fail "herdr busy-guard inject_msg subshell failed"
@@ -2424,11 +2463,12 @@ test_inject_msg_herdr_composer_guard_defers() {
   state="$dir/state"
   afk_enter "$state"
   (
-    fm_backend_target_exists() { return 0; }
+    use_test_supervisor_identity
+    fm_backend_validate_supervisor_endpoint() { return 0; }
     pane_is_busy() { return 1; }
-    fm_backend_composer_state() { [ "$1" = herdr ] && [ "$2" = "default:w1:p2" ] || fail "unexpected composer_state args: $1 $2"; printf 'pending'; }
+    fm_backend_composer_state() { [ "$1" = herdr ] && [ "$2" = "lab:w1:p2" ] || fail "unexpected composer_state args: $1 $2"; printf 'pending'; }
     fm_backend_send_text_submit() { fail "send_text_submit should not run when the composer-guard defers"; }
-    if FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET="default:w1:p2" inject_msg "hello" "$state"; then
+    if FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET="lab:w1:p2" inject_msg "hello" "$state"; then
       fail "inject_msg should defer when the herdr composer has pending input"
     fi
   ) || fail "herdr composer-guard inject_msg subshell failed"
@@ -2441,10 +2481,11 @@ test_inject_msg_herdr_pane_gone_defers() {
   state="$dir/state"
   afk_enter "$state"
   (
-    fm_backend_target_exists() { return 1; }
+    use_test_supervisor_identity
+    fm_backend_validate_supervisor_endpoint() { return 1; }
     pane_is_busy() { fail "busy guard should not be consulted once the pane-exists check already failed"; }
     fm_backend_send_text_submit() { fail "send_text_submit should not run when the pane does not exist"; }
-    if FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET="default:w1:gone" inject_msg "hello" "$state"; then
+    if FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET="lab:w1:gone" inject_msg "hello" "$state"; then
       fail "inject_msg should defer when the herdr target does not exist"
     fi
   ) || fail "herdr pane-gone inject_msg subshell failed"
@@ -2457,15 +2498,16 @@ test_inject_msg_herdr_submits_through_backend_dispatch() {
   state="$dir/state"
   afk_enter "$state"
   (
-    fm_backend_target_exists() { return 0; }
+    use_test_supervisor_identity
+    fm_backend_validate_supervisor_endpoint() { return 0; }
     pane_is_busy() { return 1; }
     fm_backend_composer_state() { printf 'empty'; }
     fm_backend_send_text_submit() {
-      [ "$1" = herdr ] && [ "$2" = "default:w1:p2" ] || fail "unexpected send_text_submit args: $1 $2"
+      [ "$1" = herdr ] && [ "$2" = "lab:w1:p2" ] || fail "unexpected send_text_submit args: $1 $2"
       case "$3" in *"hello"*) : ;; *) fail "digest text missing from send_text_submit: $3" ;; esac
       printf 'empty'
     }
-    FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET="default:w1:p2" inject_msg "hello" "$state" \
+    FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET="lab:w1:p2" inject_msg "hello" "$state" \
       || fail "inject_msg should succeed when send_text_submit confirms empty"
   ) || fail "herdr successful-submit inject_msg subshell failed"
   pass "inject_msg: dispatches busy-guard/composer-guard/submit through the herdr backend and succeeds on a confirmed empty composer"
@@ -2482,11 +2524,12 @@ test_inject_msg_defers_on_dead_shell_unknown() {
   state="$dir/state"
   afk_enter "$state"
   (
-    fm_backend_target_exists() { return 0; }
+    use_test_supervisor_identity
+    fm_backend_validate_supervisor_endpoint() { return 0; }
     pane_is_busy() { return 1; }
     fm_backend_composer_state() { printf 'unknown'; }
     fm_backend_send_text_submit() { fail "send_text_submit must NOT run when the composer is a dead shell (unknown)"; }
-    if FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET="default:w1:p2" inject_msg "hello" "$state"; then
+    if FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET="lab:w1:p2" inject_msg "hello" "$state"; then
       fail "inject_msg should defer (never inject) when the composer reads unknown (dead shell / unreadable)"
     fi
   ) || fail "dead-shell inject_msg subshell failed"
@@ -2499,11 +2542,12 @@ test_inject_msg_defers_on_unrecognized_composer_state() {
   state="$dir/state"
   afk_enter "$state"
   (
-    fm_backend_target_exists() { return 0; }
+    use_test_supervisor_identity
+    fm_backend_validate_supervisor_endpoint() { return 0; }
     pane_is_busy() { return 1; }
     fm_backend_composer_state() { printf 'future-state'; }
     fm_backend_send_text_submit() { fail "send_text_submit must not run for an unrecognized composer state"; }
-    if FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET="default:w1:p2" inject_msg "hello" "$state"; then
+    if FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_TARGET="lab:w1:p2" inject_msg "hello" "$state"; then
       fail "inject_msg should defer on an unrecognized composer state"
     fi
   ) || fail "unrecognized composer-state inject_msg subshell failed"
@@ -2619,6 +2663,7 @@ test_discover_supervisor_backend_precedence
 test_discover_supervisor_target_herdr
 test_pane_is_busy_herdr_native_busy_state
 test_pane_input_pending_herdr_dispatch
+test_inject_msg_revalidates_complete_hierarchy_before_typing
 test_inject_msg_herdr_busy_guard_defers
 test_inject_msg_herdr_composer_guard_defers
 test_inject_msg_herdr_pane_gone_defers

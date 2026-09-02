@@ -68,11 +68,11 @@
 # Usage: fm-supervise-daemon.sh
 #          Long-lived background loop. Normally started by the /afk skill, which
 #          sets state/.afk first. Env knobs:
-#          FM_SUPERVISOR_TARGET     exact Herdr "<session>:<pane-id>" target;
-#                                   otherwise requires HERDR_ENV=1 and
-#                                   HERDR_PANE_ID. There is no fallback.
-#          FM_SUPERVISOR_BACKEND    optional exact `herdr` assertion; every
-#                                   other value is refused.
+#          FM_SUPERVISOR_TARGET, FM_SUPERVISOR_SESSION,
+#          FM_SUPERVISOR_WORKSPACE_ID, FM_SUPERVISOR_TAB_ID, and
+#          FM_SUPERVISOR_PANE_ID carry one exact Herdr hierarchy. Otherwise
+#          HERDR_ENV plus Herdr's complete injected hierarchy is required.
+#          FM_SUPERVISOR_BACKEND must be exact `herdr`; there is no fallback.
 #          FM_INJECT_SKIP           |-prefixes force-self-handle bypassing
 #                                   classification (default "heartbeat"); empty
 #                                   disables. Use sparingly: it overrides the
@@ -294,10 +294,9 @@ _collapse_newlines() {  # <text>
   printf '%s' "$s"
 }
 
-# discover_supervisor_target / discover_supervisor_backend are owned by
-# bin/fm-supervisor-target-lib.sh (sourced above). fm_super_main below calls
-# them exactly as before; the away launcher reuses the identical resolution to
-# pass the captain pane in as FM_SUPERVISOR_TARGET.
+# Complete supervisor hierarchy discovery is owned by
+# bin/fm-supervisor-target-lib.sh. fm_super_main and the away launcher use that
+# same narrow record and the backend's same exact live validator.
 
 # --- classification helpers (PURE: no side effects, testable) ---------------
 # last_status_line, status_is_captain_relevant, window_to_task, and the
@@ -1169,7 +1168,9 @@ inject_msg() {  # <message> [state]
   [ -n "$target" ] || return 1
   backend="${FM_SUPERVISOR_BACKEND:-herdr}"
   [ "$backend" = herdr ] || return 1
-  fm_backend_target_exists "$backend" "$target" || return 1
+  fm_backend_validate_supervisor_endpoint "$backend" "$target" \
+    "${FM_SUPERVISOR_SESSION:-}" "${FM_SUPERVISOR_WORKSPACE_ID:-}" \
+    "${FM_SUPERVISOR_TAB_ID:-}" "${FM_SUPERVISOR_PANE_ID:-}" >/dev/null 2>&1 || return 1
   # (3) Busy-guard: never inject into an in-use supervisor pane.
   if pane_is_busy "$target" "$backend"; then
     log "inject deferred: supervisor pane busy (agent mid-turn)"
@@ -1463,33 +1464,32 @@ fm_super_main() {
   echo "$$" > "$PIDFILE"
   fm_pid_identity "${BASHPID:-$$}" > "$LOCK/pid-identity" 2>/dev/null || true
 
-  # Resolve and validate the exact Herdr supervisor identity. Missing or
-  # non-Herdr identity is a blocker; no provider fallback is attempted.
-  local discovered_backend backend_source=herdr
-  discovered_backend=$(discover_supervisor_backend) || {
-    log "startup failed: supervisor provider is not provably Herdr"
+  # Resolve and validate the complete Herdr supervisor hierarchy. Missing or
+  # partial identity is a blocker; no provider or default-session fallback is attempted.
+  local identity BACKEND SUPERVISOR_SESSION SUPERVISOR_WORKSPACE SUPERVISOR_TAB SUPERVISOR_PANE TARGET
+  local backend_source=herdr target_source=herdr
+  identity=$(discover_supervisor_identity) || {
+    log "startup failed: complete supervisor Herdr hierarchy is unavailable"
     fm_lock_release "$LOCK" 2>/dev/null || true
     rm -f "$PIDFILE" 2>/dev/null || true
     exit 1
   }
-  FM_SUPERVISOR_BACKEND="$discovered_backend"
-  local BACKEND="$FM_SUPERVISOR_BACKEND"
-  [ "$BACKEND" = herdr ] || exit 1
+  IFS=$'\t' read -r BACKEND SUPERVISOR_SESSION SUPERVISOR_WORKSPACE SUPERVISOR_TAB SUPERVISOR_PANE TARGET <<EOF
+$identity
+EOF
+  FM_SUPERVISOR_BACKEND=$BACKEND
+  FM_SUPERVISOR_SESSION=$SUPERVISOR_SESSION
+  FM_SUPERVISOR_WORKSPACE_ID=$SUPERVISOR_WORKSPACE
+  FM_SUPERVISOR_TAB_ID=$SUPERVISOR_TAB
+  FM_SUPERVISOR_PANE_ID=$SUPERVISOR_PANE
+  FM_SUPERVISOR_TARGET=$TARGET
+  export FM_SUPERVISOR_BACKEND FM_SUPERVISOR_SESSION FM_SUPERVISOR_WORKSPACE_ID \
+    FM_SUPERVISOR_TAB_ID FM_SUPERVISOR_PANE_ID FM_SUPERVISOR_TARGET
 
-  local discovered target_source=herdr
-  discovered=$(discover_supervisor_target) || {
-    log "startup failed: supervisor Herdr pane identity is unavailable"
-    fm_lock_release "$LOCK" 2>/dev/null || true
-    rm -f "$PIDFILE" 2>/dev/null || true
-    exit 1
-  }
-  FM_SUPERVISOR_TARGET="$discovered"
-  local TARGET="$FM_SUPERVISOR_TARGET"
-
-  # Validate the exact Herdr pane at startup.
-  if ! fm_backend_target_exists "$BACKEND" "$TARGET"; then
-    echo "error: supervisor target '$TARGET' does not resolve to a $BACKEND pane; set FM_SUPERVISOR_TARGET" >&2
-    log "startup failed: target '$TARGET' not found (backend=$BACKEND)"
+  if ! fm_backend_validate_supervisor_endpoint "$BACKEND" "$TARGET" \
+    "$SUPERVISOR_SESSION" "$SUPERVISOR_WORKSPACE" "$SUPERVISOR_TAB" "$SUPERVISOR_PANE"; then
+    echo "error: supervisor hierarchy '$TARGET' does not resolve exactly; pass the complete recorded Herdr identity" >&2
+    log "startup failed: exact hierarchy for '$TARGET' is not reachable"
     fm_lock_release "$LOCK" 2>/dev/null || true
     rm -f "$PIDFILE" 2>/dev/null || true
     exit 1

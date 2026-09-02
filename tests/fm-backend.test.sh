@@ -83,8 +83,21 @@ assert_eq "$(fm_backend_resolve_selector task "$TMP/home/state")" lab:w1:p2 "tas
 fm_backend_target_exists herdr lab:w1:p2 fm-task || fail "exact live task hierarchy should exist"
 assert_eq "$(fm_backend_capture herdr lab:w1:p2 10 fm-task)" "task output" \
   "task-bound capture must accept the exact live task hierarchy"
+export FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_SESSION=lab \
+  FM_SUPERVISOR_WORKSPACE_ID=w1 FM_SUPERVISOR_TAB_ID=w1:t1 \
+  FM_SUPERVISOR_PANE_ID=w1:p2 FM_SUPERVISOR_TARGET=lab:w1:p2
 assert_eq "$(fm_backend_capture herdr lab:w1:p2 10)" "task output" \
-  "supervisor capture must accept an exact passively validated pane"
+  "supervisor capture must accept the exact recorded live hierarchy"
+export FM_FAKE_LIVE_WORKSPACE=w9
+if fm_backend_capture herdr lab:w1:p2 10 >"$TMP/out" 2>"$TMP/err"; then
+  fail "supervisor capture must reject a contradictory live workspace identity"
+fi
+unset FM_FAKE_LIVE_WORKSPACE
+export FM_FAKE_LIVE_TAB=w1:t9
+if fm_backend_capture herdr lab:w1:p2 10 >"$TMP/out" 2>"$TMP/err"; then
+  fail "supervisor capture must reject a contradictory live tab identity"
+fi
+unset FM_FAKE_LIVE_TAB
 export FM_FAKE_LIVE_PANE=w1:p9
 if fm_backend_capture herdr lab:w1:p2 10 >"$TMP/out" 2>"$TMP/err"; then
   fail "supervisor capture must reject a contradictory live pane identity"

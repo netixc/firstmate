@@ -41,6 +41,7 @@ CAPTURE="$TMP_ROOT/pi-prompts.jsonl"
 NOTIFY_LOG="$TMP_ROOT/wedge-notify.log"
 ORIGINAL_PATH=$PATH
 PRIMARY_PANE=
+PRIMARY_TAB=
 CHILD_PANE=
 PRIMARY_TARGET=
 DAEMON_STARTED=0
@@ -130,8 +131,12 @@ chmod +x "$TMP_ROOT/daemon-entry"
 
 PRIMARY_OUT=$("$LAB_HELPER" run "$SESSION" workspace create --cwd "$PROJECT" --label synthetic-primary --no-focus)
 WORKSPACE=$(printf '%s' "$PRIMARY_OUT" | jq -r '.result.workspace.workspace_id')
+PRIMARY_TAB=$(printf '%s' "$PRIMARY_OUT" | jq -r '.result.tab.tab_id')
 PRIMARY_PANE=$(printf '%s' "$PRIMARY_OUT" | jq -r '.result.root_pane.pane_id')
 PRIMARY_TARGET="$SESSION:$PRIMARY_PANE"
+export FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_SESSION="$SESSION"
+export FM_SUPERVISOR_WORKSPACE_ID="$WORKSPACE" FM_SUPERVISOR_TAB_ID="$PRIMARY_TAB"
+export FM_SUPERVISOR_PANE_ID="$PRIMARY_PANE" FM_SUPERVISOR_TARGET="$PRIMARY_TARGET"
 EXT="$CAPTURE_EXT"
 PI_CMD=$(printf 'exec env PI_CODING_AGENT_DIR=%q FM_HOME=%q FM_PI_CAPTURE_PATH=%q pi -e %q --no-context-files --no-session' "$PI_DIR" "$HOME_DIR" "$CAPTURE" "$EXT")
 "$LAB_HELPER" run "$SESSION" pane run "$PRIMARY_PANE" "$PI_CMD" >/dev/null
