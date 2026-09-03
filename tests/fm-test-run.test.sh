@@ -55,7 +55,15 @@ test_family_selection() {
   fam_count=$(printf '%s\n' "$listed" | wc -l | tr -d ' ')
   [ "$fam_count" -lt "$all_count" ] \
     || fail "pure-contract-unit must be a proper subset of --all"
-  pass "family selection returns a proper subset of the suite"
+  listed=$("$RUNNER" --list --family live-harness-optin)
+  for line in \
+    tests/fm-composer-matrix-live-e2e.test.sh \
+    tests/fm-send-inbox-doorbell-live-e2e.test.sh \
+    tests/fm-herdr-pi-real-model-e2e.test.sh; do
+    printf '%s\n' "$listed" | grep -Fqx "$line" \
+      || fail "live-harness-optin must include $line"
+  done
+  pass "family selection returns the required suite subsets"
 }
 
 test_single_script_selection() {

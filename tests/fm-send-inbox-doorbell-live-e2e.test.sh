@@ -40,6 +40,9 @@ cat > "$FAKEBIN/herdr" <<EOF
 set -u
 args=("\$@")
 n=\${#args[@]}
+if [ "\$n" -eq 2 ] && [ "\${args[0]}" = status ] && [ "\${args[1]}" = --json ]; then
+  exec env PATH="$ORIGINAL_PATH" herdr status --json
+fi
 if [ "\$n" -ge 2 ] && [ "\${args[\$((n-2))]}" = --session ]; then
   [ "\${args[\$((n-1))]}" = "$SESSION" ] || exit 97
   args=("\${args[@]:0:\$((n-2))}")

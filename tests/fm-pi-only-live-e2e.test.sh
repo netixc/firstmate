@@ -49,6 +49,9 @@ cat > "$FAKEBIN/herdr" <<EOF
 set -u
 args=("\$@")
 n=\${#args[@]}
+if [ "\$n" -eq 2 ] && [ "\${args[0]}" = status ] && [ "\${args[1]}" = --json ]; then
+  exec env PATH="$ORIGINAL_PATH" herdr status --json
+fi
 if [ "\$n" -ge 2 ] && [ "\${args[\$((n-2))]}" = --session ]; then
   [ "\${args[\$((n-1))]}" = "$SESSION" ] || exit 97
   args=("\${args[@]:0:\$((n-2))}")
@@ -75,6 +78,7 @@ FM_TEST_HERDR_SESSION=$SESSION FM_TEST_HERDR_WORKSPACE_ID=$WORKSPACE \
     "harness=pi" "mode=no-mistakes" "yolo=off" "model=openai-codex/gpt-5.6-sol" "effort=low"
 
 export PATH="$FAKEBIN:$ORIGINAL_PATH" FM_HOME="$HOME_DIR" FM_ROOT_OVERRIDE="$ROOT" \
+  FM_STATE_OVERRIDE="$HOME_DIR/state" FM_DATA_OVERRIDE="$HOME_DIR/data" \
   FM_BACKEND=herdr HERDR_SESSION="$SESSION" HERDR_WORKSPACE_ID="$WORKSPACE" \
   HERDR_TAB_ID="$TAB" HERDR_PANE_ID="$PANE" PI_CODING_AGENT_DIR="$PI_AGENT_DIR" \
   FM_GATE_REFUSE_BYPASS=1
@@ -87,8 +91,13 @@ out=$(cd "$ROOT" && "$PI_BIN" --print --approve --no-session --no-context-files 
 [ "$out" = pi ] || fail "real Pi returned $out instead of its plain-Pi identity"
 pass "real Pi supervision extensions preserve plain-Pi identity"
 
-lab pane run "$PANE" "PI_CODING_AGENT_DIR='$PI_AGENT_DIR' '$PI_BIN' --no-session --no-extensions -e '$ROOT/.pi/extensions/fm-primary-pi-watch.ts' -e '$ROOT/.pi/extensions/fm-primary-turnend-guard.ts'" >/dev/null \
-  || fail "could not launch Pi in the lifecycle pane"
+printf -v pane_command \
+  'env PATH=%q FM_HOME=%q FM_ROOT_OVERRIDE=%q FM_STATE_OVERRIDE=%q FM_DATA_OVERRIDE=%q FM_BACKEND=herdr HERDR_SESSION=%q HERDR_WORKSPACE_ID=%q HERDR_TAB_ID=%q HERDR_PANE_ID=%q PI_CODING_AGENT_DIR=%q %q --no-session --no-extensions -e %q -e %q' \
+  "$PATH" "$FM_HOME" "$FM_ROOT_OVERRIDE" "$FM_STATE_OVERRIDE" "$FM_DATA_OVERRIDE" \
+  "$HERDR_SESSION" "$HERDR_WORKSPACE_ID" "$HERDR_TAB_ID" "$HERDR_PANE_ID" \
+  "$PI_CODING_AGENT_DIR" "$PI_BIN" "$ROOT/.pi/extensions/fm-primary-pi-watch.ts" \
+  "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts"
+lab pane run "$PANE" "$pane_command" >/dev/null || fail "could not launch Pi in the lifecycle pane"
 interrupted=0
 for _ in $(seq 1 100); do
   if "$ROOT/bin/fm-control.sh" control interrupt >/dev/null 2>&1; then
