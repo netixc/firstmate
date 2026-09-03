@@ -939,8 +939,8 @@ presentation_enabled_verdict() {  # <config-dir> <fakebin> [state-dir] [session]
   ' "$ROOT" "$1" "${3:-}"
 }
 
-# The exact release identities measured against the real macOS aarch64 release
-# binaries on 2026-08-05 and recorded in docs/verification/runtime-backends.md.
+# The exact release identities measured against real macOS aarch64 release
+# binaries through 2026-09-03 and recorded in docs/verification/runtime-backends.md.
 AT_FLOOR_PROTOCOL=19
 AT_FLOOR_VERSION=0.8.0
 BELOW_FLOOR_PROTOCOL=17
@@ -1162,7 +1162,7 @@ release_floor_verdict() {  # <protocol> <version> -> above|below|indeterminate
 
 test_release_floor_verdict_matches_the_measured_releases() {
   local expected protocol version got case_line
-  # protocol<TAB>version<TAB>expected, from the 2026-08-05 measurement.
+  # protocol<TAB>version<TAB>expected, from measurements through 2026-09-03.
   while IFS=$'\t' read -r protocol version expected; do
     [ -n "$expected" ] || continue
     got=$(release_floor_verdict "$protocol" "$version")
@@ -1176,6 +1176,7 @@ test_release_floor_verdict_matches_the_measured_releases() {
 18	0.7.5-preview.2026-07-29-44b3adb12552	below
 19	0.8.0-preview.2026-08-04-d78e3d3b5126	above
 19	0.8.0	above
+20	0.8.2	above
 20	0.9.0	above
 CASES
   case_line=$(release_floor_verdict 19 '')

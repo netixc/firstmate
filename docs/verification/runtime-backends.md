@@ -267,7 +267,7 @@ This guard is the refresh command after any harness upgrade; it spends a small n
 ## Herdr
 
 The compatibility floor is protocol 14.
-The whole real-Herdr lane's latest active verification uses both Herdr 0.7.4 protocol 16 and Herdr 0.8.0 protocol 19 on macOS aarch64, while focused Herdr 0.7.5 protocol 17, earlier protocol-16, protocol-14, and 0.7.3 evidence is retained where it defines current behavior or fallbacks.
+The required real-Herdr lane installs exact Herdr 0.8.2 protocol 20, while focused Herdr 0.8.0 protocol 19, 0.7.5 protocol 17, earlier protocol-16, protocol-14, and 0.7.3 evidence is retained where it defines current behavior or fallbacks.
 Protocol 17 keeps every protocol-16 feature gate satisfied; the event and workspace-move floors remain 16.
 Default-on presentation projection has its own floor at Herdr 0.8.0, protocol 19, verified below.
 
@@ -301,6 +301,30 @@ The CLI matrix was checked directly:
 
 All destructive verification used `bin/fm-herdr-lab.sh` with a non-default `fm-lab-` name and a byte-identical default-session tripwire.
 No ambient `herdr server stop` command is a supported test operation.
+
+### Exact 0.8.2 release readiness
+
+The official v0.8.2 release was verified on 2026-09-03 through the GitHub release API and independent downloads of the four installer-supported assets: `herdr-linux-aarch64`, `herdr-linux-x86_64`, `herdr-macos-aarch64`, and `herdr-macos-x86_64`.
+The API's SHA-256 digests and the independently computed digests agreed with the pins owned by `bin/fm-install-herdr.sh` and the cross-release guard.
+The installed macOS aarch64 binary reported client and named-lab server version 0.8.2, protocol 20, and compatibility true:
+
+```sh
+HERDR_LAB_HELPER=bin/fm-herdr-lab.sh
+LAB_SESSION=$("$HERDR_LAB_HELPER" name fm-herdr-082-readiness)
+trap '"$HERDR_LAB_HELPER" teardown "$LAB_SESSION"' EXIT
+"$HERDR_LAB_HELPER" provision "$LAB_SESSION"
+"$HERDR_LAB_HELPER" run "$LAB_SESSION" status --json \
+  | jq -c '{client:{version:.client.version,protocol:.client.protocol},server:{version:.server.version,protocol:.server.protocol,compatible:.server.compatible}}'
+"$HERDR_LAB_HELPER" teardown "$LAB_SESSION"
+trap - EXIT
+```
+
+```text
+{"client":{"version":"0.8.2","protocol":20},"server":{"version":"0.8.2","protocol":20,"compatible":true}}
+```
+
+The helper's before/after default-session snapshots were byte-identical and the named lab was absent after cleanup.
+The release remains above the existing 0.8.0 presentation floor; the floor is not raised by the CI pin.
 
 ### Submit confirmation
 
@@ -516,7 +540,7 @@ The suite also cross-checks its own Part A measurement against the floor classif
 ### Presentation version floor
 
 Default-on presentation projection is floored at Herdr 0.8.0.
-The floor's structural signal is the selected running server's protocol number, falling back to the client protocol only when that selected session positively reports no running server, and the release mapping was measured on 2026-08-05 by running each pinned upstream macOS aarch64 release asset's own `status --json` through the guarded lab helper:
+The floor's structural signal is the selected running server's protocol number, falling back to the client protocol only when that selected session positively reports no running server, and the release mapping was measured through 2026-09-03 by running each pinned upstream macOS aarch64 release asset's own `status --json` through the guarded lab helper:
 
 | Release | Reported version | Protocol | Carries both upstream focus fixes | Floor verdict |
 |---|---|---|---|---|
@@ -527,6 +551,7 @@ The floor's structural signal is the selected running server's protocol number, 
 | preview-2026-07-29-44b3adb12552 | 0.7.5-preview.2026-07-29-44b3adb12552 | 18 | yes | below |
 | preview-2026-08-04-d78e3d3b5126 | 0.8.0-preview.2026-08-04-d78e3d3b5126 | 19 | yes | above |
 | v0.8.0 | 0.8.0 | 19 | yes | above |
+| v0.8.2 | 0.8.2 | 20 | yes | above |
 
 No build lacking both fixes reaches protocol 19, and every pre-fix build tops out at 17, so protocol 19 is a safe structural expression of the 0.8.0 floor.
 The one post-fix build below it is a preview that still reports a 0.7.5 version, so it is conservatively treated as below the floor, which costs a preview build its projection and never lets an unfixed build through.
@@ -547,7 +572,7 @@ tests/fm-backend-herdr.test.sh
 
 Observed guarantees: every measured release classifies as the table records; either the protocol or the version signal alone carries an at-or-above verdict, and each divergent pair flips once the carrying signal is removed; client and running selected-session server verdicts compose conservatively, an unreadable server-running state and losing both release signals report indeterminate and fall back flat, the default is rechecked after server ensure before projection publication, an unconfigured home is projected only at or above the floor, an explicit `on`, including the historical empty opt-in file, is honored below it, and the below-floor warning is emitted once per home per detected release rather than once per spawn.
 
-The whole real-Herdr lane was run on 2026-08-05 against both the CI-pinned Herdr 0.7.4 protocol 16, which is below the floor, and Herdr 0.8.0 protocol 19, which is at it:
+The whole real-Herdr lane was run on 2026-08-05 against both the then-CI-pinned Herdr 0.7.4 protocol 16, which is below the floor, and Herdr 0.8.0 protocol 19, which is at it:
 
 ```sh
 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh bin/fm-test-run.sh --lane real-herdr-gated
