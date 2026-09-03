@@ -1,0 +1,7 @@
+ok - real Pi 0.84.4 startup and idle remain healthy in the named Herdr lab
+ok - real Pi foreground remains healthy under native working status
+ok - real Pi normal exit cleans up to a confirmed agent-free pane
+ok - real Pi abrupt exit cleans up to a confirmed agent-free pane
+ok - real Pi slow working exit is interrupted and cleans up normally
+ok - synthetic stale registration is ambiguous without release, replacement, or cleanup
+# real Pi/Herdr liveness acceptance passed in fm-lab-herdr-liveness-r-60340-32707 from source /Users/control/.no-mistakes/worktrees/874f0de57f61/01M1JANM504XV2M9JWTX33Y3D1/bin/backends/herdr.sh; inherited incident not reproduced
