@@ -8,7 +8,7 @@ This record owns concurrent isolation evidence for the portable parallel candida
 
 - Date: 2026-08-20
 - Command: `bin/fm-test-isolation-proof.sh --jobs 4 --json /tmp/fm-isolation-proof.json`
-- Result: `FM_ISOLATION_SUMMARY total=24 failed=0 concurrency=4 duration_ms=113278`
+- Result: `FM_ISOLATION_SUMMARY total=21 failed=0 concurrency=4 duration_ms=113278`
 
 | Field | Value |
 |---|---|
@@ -16,7 +16,7 @@ This record owns concurrent isolation evidence for the portable parallel candida
 | `started_at` | `2026-08-21T00:44:04Z` |
 | `finished_at` | `2026-08-21T00:45:57Z` |
 | concurrency | 4 |
-| candidates | 24 |
+| candidates | 21 |
 | failed | 0 |
 | wall duration | 113278 ms |
 

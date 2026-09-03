@@ -342,11 +342,30 @@ fm_backend_target_exists() {
   live=$(fm_backend_herdr_cli "$session" pane get "$pane" 2>/dev/null) || return 1
   [ -n "$label" ] || return 0
   id=${label#fm-}
-  meta="$FM_HOME/state/$id.meta"
+  meta="${FM_STATE_OVERRIDE:-$FM_HOME/state}/$id.meta"
   fm_backend_live_pane_matches_task_endpoint "$meta" "$id" "$live" >/dev/null 2>&1
 }
 
 fm_backend_agent_state() { local backend=$1; shift; fm_backend_source "$backend" >/dev/null 2>&1 || { printf 'unverified'; return 0; }; fm_backend_herdr_agent_state "$@"; }
+
+fm_backend_task_agent_state() {  # <meta> <task-id>
+  local meta=$1 id=$2 backend target state
+  fm_backend_validate_task_endpoint "$meta" "$id" >/dev/null 2>&1 || { printf 'unverified'; return 0; }
+  backend=$FM_BACKEND_VALIDATED_BACKEND
+  target=$FM_BACKEND_VALIDATED_TARGET
+  state=$(fm_backend_agent_state "$backend" "$target" 2>/dev/null) || state=unreadable
+  case "$state" in
+    missing) printf 'missing' ;;
+    alive|dead)
+      fm_backend_validate_active_task_endpoint "$meta" "$id" >/dev/null 2>&1 \
+        && printf '%s' "$state" \
+        || printf 'unreadable'
+      ;;
+    ambiguous|unreadable) printf '%s' "$state" ;;
+    *) printf 'unverified' ;;
+  esac
+}
+
 fm_backend_agent_alive() { case "$(fm_backend_agent_state "$1" "$2")" in alive) printf alive ;; dead|missing) printf dead ;; *) printf unknown ;; esac; }
 fm_backend_has_push() { [ "${1:-}" = herdr ]; }
 fm_backend_events_capable() { local backend=$1; shift; fm_backend_source "$backend" && fm_backend_herdr_events_capable "$@"; }

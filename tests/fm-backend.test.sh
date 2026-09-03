@@ -81,6 +81,15 @@ assert_eq "$FM_BACKEND_VALIDATED_BACKEND" herdr "validated provider"
 assert_eq "$FM_BACKEND_VALIDATED_TARGET" lab:w1:p2 "validated target"
 assert_eq "$(fm_backend_resolve_selector task "$TMP/home/state")" lab:w1:p2 "task selectors must resolve through metadata"
 fm_backend_target_exists herdr lab:w1:p2 fm-task || fail "exact live task hierarchy should exist"
+mkdir -p "$TMP/override-state"
+cp "$TMP/home/state/task.meta" "$TMP/override-state/task.meta"
+FM_STATE_OVERRIDE="$TMP/override-state"
+export FM_STATE_OVERRIDE
+mv "$TMP/home/state/task.meta" "$TMP/home/state/task.meta.hidden"
+fm_backend_target_exists herdr lab:w1:p2 fm-task \
+  || fail "target existence must honor overridden task state"
+mv "$TMP/home/state/task.meta.hidden" "$TMP/home/state/task.meta"
+unset FM_STATE_OVERRIDE
 assert_eq "$(fm_backend_capture herdr lab:w1:p2 10 fm-task)" "task output" \
   "task-bound capture must accept the exact live task hierarchy"
 export FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_SESSION=lab \
@@ -139,5 +148,25 @@ for mismatch in 'herdr_tab_id=w2:t1' 'herdr_pane_id=w2:p2'; do
 done
 if fm_backend_resolve_selector 'legacy:0' "$TMP/home/state" 2>"$TMP/err"; then fail "ad hoc legacy endpoints must be refused"; fi
 grep -Eq "unsupported in the Herdr-only edition|explicit migration|unsupported session provider" "$TMP/err" || fail "ad hoc refusal must explain the boundary"
+
+fm_backend_herdr_agent_state() { printf '%s' "$FM_FAKE_AGENT_STATE"; }
+FM_FAKE_AGENT_STATE=dead
+export FM_FAKE_AGENT_STATE
+assert_eq "$(fm_backend_task_agent_state "$TMP/home/state/task.meta" task)" dead \
+  "an exact active Herdr husk must remain recoverable"
+FM_FAKE_LIVE_TAB=w1:t9
+export FM_FAKE_LIVE_TAB
+assert_eq "$(fm_backend_task_agent_state "$TMP/home/state/task.meta" task)" unreadable \
+  "a reachable pane outside its recorded hierarchy must never be recoverable as dead"
+FM_FAKE_AGENT_STATE=alive
+assert_eq "$(fm_backend_task_agent_state "$TMP/home/state/task.meta" task)" unreadable \
+  "a reachable mismatched pane must never be classified alive"
+FM_FAKE_AGENT_STATE=ambiguous
+assert_eq "$(fm_backend_task_agent_state "$TMP/home/state/task.meta" task)" ambiguous \
+  "an ambiguous endpoint must remain non-recoverable"
+FM_FAKE_AGENT_STATE=missing
+assert_eq "$(fm_backend_task_agent_state "$TMP/home/state/task.meta" task)" missing \
+  "a structurally exact missing pane must remain recoverable without active validation"
+unset FM_FAKE_AGENT_STATE FM_FAKE_LIVE_TAB
 
 echo "ok - Herdr-only provider selection and metadata migration"

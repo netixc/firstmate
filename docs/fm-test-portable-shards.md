@@ -6,7 +6,7 @@
 ## Verification inputs
 
 The current candidate timings came from the 2026-08-20 concurrent proof recorded in [fm-test-isolation-proof.md](fm-test-isolation-proof.md).
-The proof ran 24 candidates with four workers and no failures.
+The proof ran 21 candidates with four workers and no failures.
 
 | duration_ms | script |
 |---:|---|
@@ -38,9 +38,9 @@ The two parallel lanes use longest-processing-time assignment from those measure
 
 | Lane | Script count | Estimated duration |
 |---|---:|---:|
-| `portable-parallel-1` | 11 | 134295 ms (~134.3 s) |
-| `portable-parallel-2` | 13 | 126020 ms (~126.0 s) |
-| imbalance | | 8275 ms |
+| `portable-parallel-1` | 11 | 144079 ms (~144.1 s) |
+| `portable-parallel-2` | 10 | 99878 ms (~99.9 s) |
+| imbalance | | 44201 ms |
 
 `bin/fm-test-run.sh` contains the exact ordered memberships in `list_portable_parallel_1` and `list_portable_parallel_2`.
 
