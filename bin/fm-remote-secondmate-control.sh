@@ -97,8 +97,13 @@ remote_endpoint_load() {
       return 1
       ;;
   esac
+}
+
+remote_endpoint_load_active() {
+  local id=$1
+  remote_endpoint_load "$id" || return 1
   if ! fm_backend_validate_active_task_endpoint "$REMOTE_ENDPOINT_META" "$id" 2>/dev/null; then
-    REMOTE_ENDPOINT_ERROR="remote secondmate $id endpoint metadata is invalid; refusing access until it is explicitly migrated"
+    REMOTE_ENDPOINT_ERROR="remote secondmate $id active endpoint identity is unavailable or invalid; refusing access"
     return 1
   fi
   REMOTE_ENDPOINT_BACKEND=$FM_BACKEND_VALIDATED_BACKEND
@@ -106,11 +111,11 @@ remote_endpoint_load() {
 }
 
 remote_endpoint_require() {
-  remote_endpoint_load "$1" || die "$REMOTE_ENDPOINT_ERROR"
+  remote_endpoint_load_active "$1" || die "$REMOTE_ENDPOINT_ERROR"
 }
 
 state_value() { # <id>; prints recovery-grade state
-  local id=$1 meta
+  local id=$1 meta current
   meta=$(meta_path "$id")
   [ -f "$meta" ] && [ ! -L "$meta" ] || { printf 'missing\n'; return 0; }
   if ! remote_endpoint_load "$id"; then
@@ -118,7 +123,18 @@ state_value() { # <id>; prints recovery-grade state
     printf 'unverified\n'
     return 0
   fi
-  fm_backend_agent_state "$REMOTE_ENDPOINT_BACKEND" "$REMOTE_ENDPOINT_TARGET" 2>/dev/null || printf 'unreadable\n'
+  current=$(fm_backend_agent_state "$REMOTE_ENDPOINT_BACKEND" "$REMOTE_ENDPOINT_TARGET" 2>/dev/null || printf 'unreadable\n')
+  case "$current" in
+    missing|unreadable) printf '%s\n' "$current" ;;
+    *)
+      if remote_endpoint_load_active "$id"; then
+        printf '%s\n' "$current"
+      else
+        printf 'error: %s\n' "$REMOTE_ENDPOINT_ERROR" >&2
+        printf 'unverified\n'
+      fi
+      ;;
+  esac
 }
 
 print_route() { # <id>
@@ -160,14 +176,16 @@ cmd_launch() {
   mkdir -p "$CONTROL_STATE" "$CONTROL_DATA"
   meta=$(meta_path "$id")
   if [ -f "$meta" ]; then
-    remote_endpoint_require "$id"
+    remote_endpoint_load "$id" || die "$REMOTE_ENDPOINT_ERROR"
     current=$(fm_backend_agent_state "$REMOTE_ENDPOINT_BACKEND" "$REMOTE_ENDPOINT_TARGET" 2>/dev/null || printf 'unreadable\n')
     case "$current" in
       alive)
+        remote_endpoint_require "$id"
         print_route "$id"
         return 0
         ;;
       dead)
+        remote_endpoint_require "$id"
         fm_backend_kill "$REMOTE_ENDPOINT_BACKEND" "$REMOTE_ENDPOINT_TARGET" 2>/dev/null \
           || die "could not remove the confirmed agent-less endpoint"
         ;;
@@ -202,7 +220,7 @@ cmd_send() {
   meta_lock=$(fm_meta_lock_path "$meta") || die "remote secondmate metadata lock path is invalid"
   fm_task_inbox_lock_acquire "$meta_lock" \
     || die "remote secondmate endpoint metadata could not be locked for final delivery validation"
-  if ! remote_endpoint_load "$id"; then
+  if ! remote_endpoint_load_active "$id"; then
     fm_lock_release "$meta_lock"
     die "$REMOTE_ENDPOINT_ERROR"
   fi
@@ -243,7 +261,7 @@ cmd_key() {
   meta=$(meta_path "$id")
   meta_lock=$(fm_meta_lock_path "$meta") || die "remote secondmate metadata lock path is invalid"
   fm_task_inbox_lock_acquire "$meta_lock" || die "remote secondmate endpoint metadata could not be locked"
-  remote_endpoint_load "$id" || { fm_lock_release "$meta_lock"; die "$REMOTE_ENDPOINT_ERROR"; }
+  remote_endpoint_load_active "$id" || { fm_lock_release "$meta_lock"; die "$REMOTE_ENDPOINT_ERROR"; }
   fm_backend_send_key "$REMOTE_ENDPOINT_BACKEND" "$REMOTE_ENDPOINT_TARGET" "$key" "fm-$id" "$REMOTE_ENDPOINT_META" || rc=$?
   fm_lock_release "$meta_lock"
   return "$rc"
@@ -258,7 +276,7 @@ cmd_capture() {
   meta=$(meta_path "$id")
   meta_lock=$(fm_meta_lock_path "$meta") || die "remote secondmate metadata lock path is invalid"
   fm_task_inbox_lock_acquire "$meta_lock" || die "remote secondmate endpoint metadata could not be locked"
-  remote_endpoint_load "$id" || { fm_lock_release "$meta_lock"; die "$REMOTE_ENDPOINT_ERROR"; }
+  remote_endpoint_load_active "$id" || { fm_lock_release "$meta_lock"; die "$REMOTE_ENDPOINT_ERROR"; }
   out=$(fm_backend_capture "$REMOTE_ENDPOINT_BACKEND" "$REMOTE_ENDPOINT_TARGET" "$lines" "fm-$id" "$REMOTE_ENDPOINT_META") || rc=$?
   fm_lock_release "$meta_lock"
   [ "$rc" -eq 0 ] || return "$rc"

@@ -742,6 +742,40 @@ assert_no_grep 'pane send-keys .*--session default' "$HERDR_LOG" "valid remote k
 pass "remote spawn, capture, and key use one exact host-qualified fm-remote route"
 
 remote_route_meta="$REMOTE_HOME/state/parent-route/ios.meta"
+missing_pane=$(sed -n 's/^herdr_pane_id=//p' "$remote_route_meta")
+jq --arg pane "$missing_pane" \
+  '.tabs |= [.[] | select(.pane_id != $pane)]
+   | .typed |= with_entries(select(.key != $pane))
+   | .working |= with_entries(select(.key != $pane))' \
+  "$HERDR_STATE" > "$TMP_ROOT/herdr-missing-pane.state"
+mv -f "$TMP_ROOT/herdr-missing-pane.state" "$HERDR_STATE"
+cp "$HERDR_STATE" "$TMP_ROOT/herdr-before-missing-refusals.state"
+[ "$(remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh state ios)" = missing ] \
+  || fail "structurally valid metadata did not classify its absent remote pane as missing"
+if remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh route ios >/dev/null 2>&1 \
+  || remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh send ios probe >/dev/null 2>&1 \
+  || remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh key ios Enter >/dev/null 2>&1 \
+  || remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh capture ios >/dev/null 2>&1 \
+  || remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh observe ios >/dev/null 2>&1 \
+  || remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh retire ios --force >/dev/null 2>&1; then
+  fail "an active remote operation accepted an absent pane"
+fi
+cmp -s "$TMP_ROOT/herdr-before-missing-refusals.state" "$HERDR_STATE" \
+  || fail "an active remote operation mutated state for an absent pane"
+missing_launches_before=$(grep -c '^tab create' "$HERDR_LOG" || true)
+missing_route=$(remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh launch ios pi - - herdr) \
+  || fail "launch did not recover a confidently missing remote pane"
+missing_launches_after=$(grep -c '^tab create' "$HERDR_LOG" || true)
+[ "$missing_launches_after" -eq $((missing_launches_before + 1)) ] \
+  || fail "missing-pane recovery did not create exactly one replacement tab"
+assert_contains "$missing_route" 'target=fm-remote:' "missing-pane recovery returned the wrong route"
+[ "$(remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh state ios)" = alive ] \
+  || fail "replacement remote pane was not alive"
+replacement_pane=$(sed -n 's/^herdr_pane_id=//p' "$remote_route_meta")
+[ "$replacement_pane" != "$missing_pane" ] || fail "missing-pane recovery retained the absent pane identity"
+pass "missing remote panes relaunch while active operations remain refused"
+
+remote_route_meta="$REMOTE_HOME/state/parent-route/ios.meta"
 cp "$remote_route_meta" "$TMP_ROOT/remote-ios-before-default-session.meta"
 legacy_pane=$(sed -n 's/^herdr_pane_id=//p' "$remote_route_meta")
 awk -v pane="$legacy_pane" '
