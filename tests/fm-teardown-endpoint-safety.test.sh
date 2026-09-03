@@ -9,7 +9,7 @@ TEARDOWN="$ROOT/bin/fm-teardown.sh"
 TMP_ROOT=$(fm_test_tmproot fm-teardown-endpoint-safety)
 
 make_case() {
-  local name=$1 dir="$TMP_ROOT/$1"
+  local dir="$TMP_ROOT/$1"
   mkdir -p "$dir/home/state" "$dir/home/data" "$dir/home/config" \
     "$dir/fakebin" "$dir/worktree" "$dir/project"
   : > "$dir/worktree/sentinel"
