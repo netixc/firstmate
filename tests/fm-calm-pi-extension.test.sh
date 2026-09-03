@@ -3550,8 +3550,11 @@ JS
     --dump-dom \
     "file://$export_file" >"$export_dom" 2>/dev/null &
   chrome_pid=$!
+  # Browser startup can exceed ten seconds on a loaded CI host even though the
+  # page's virtual-time budget is only two seconds. Keep the wait bounded, but
+  # wait for the observable completed DOM rather than racing process startup.
   chrome_wait=0
-  while kill -0 "$chrome_pid" 2>/dev/null && [ "$chrome_wait" -lt 100 ]; do
+  while kill -0 "$chrome_pid" 2>/dev/null && [ "$chrome_wait" -lt 300 ]; do
     grep -Fq '</html>' "$export_dom" 2>/dev/null && break
     sleep 0.1
     chrome_wait=$((chrome_wait + 1))
