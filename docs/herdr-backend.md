@@ -259,7 +259,9 @@ Create replaces only a confidently dead or no-agent husk, creates the replacemen
 This prevents closing the workspace's last tab before a replacement exists.
 
 The generic Herdr agent-liveness probe reuses the same classifier.
-A structurally gone pane becomes `missing`, a restored agent-less shell becomes `dead`, and a registered agent remains `alive` unless the existing strict exact-pane proof positively shows one lone idle shell, in which case the contradictory observation becomes `ambiguous`.
+The task recovery view first validates the exact recorded session/workspace/tab/pane identity, then actively validates any reachable pane before accepting an `alive` or `dead` verdict.
+Only structured not-found for that exact pane becomes `missing`; a reachable pane whose live hierarchy or task tab binding disagrees with metadata remains unreadable and is never closed.
+A restored agent-less shell becomes `dead`, and a registered agent remains `alive` unless the strict exact-pane proof positively shows one lone idle shell, in which case the contradictory observation becomes `ambiguous`.
 Malformed or failed process evidence does not establish that narrow contradiction and preserves registry-only liveness; unexpected native API reads become `unreadable`.
 Ambiguity never releases an agent, closes a pane, authorizes replacement, or reports a successful stop.
 
@@ -334,6 +336,8 @@ tests/fm-herdr-session-cleanup.test.sh
 tests/fm-herdr-session-cleanup-e2e.test.sh
 tests/fm-afk-inject-herdr-e2e.test.sh
 tests/fm-afk-pi-herdr-return-e2e.test.sh
+FM_HERDR_LIVENESS_REAL_E2E=1 tests/fm-herdr-liveness-real-e2e.test.sh
+FM_HERDR_PI_REAL_MODEL_E2E=1 tests/fm-herdr-pi-real-model-e2e.test.sh
 ```
 
 Real Herdr tests use the named lab helper and default-session tripwire.

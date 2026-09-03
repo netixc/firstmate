@@ -16,6 +16,7 @@ done
 PI_BIN=$(command -v pi)
 PI_VERSION=$("$PI_BIN" --version 2>/dev/null || true)
 [ "$PI_VERSION" = 0.84.4 ] || fail "real Pi 0.84.4 required, found ${PI_VERSION:-unknown}"
+PANE_PATH="$(dirname "$PI_BIN"):$(dirname "$(command -v herdr)"):/usr/bin:/bin"
 
 LAB_HELPER=${HERDR_LAB_HELPER:-$ROOT/bin/fm-herdr-lab.sh}
 SESSION=$($LAB_HELPER name fm-herdr-pi-real-model-e2e)
@@ -92,8 +93,8 @@ watch_pid=$!
 sleep 0.5
 prompt='Use the bash tool to run sleep 3. Then reply with exactly the concatenation of FM_HERDR_ONLY_REAL_ and MODEL_OK, with no other text.'
 printf -v command \
-  'env FM_HOME=%q FM_ROOT_OVERRIDE=%q FM_STATE_OVERRIDE=%q FM_DATA_OVERRIDE=%q PI_CODING_AGENT_DIR=%q %q --approve --no-session --no-context-files --no-extensions --model %q --thinking low %q' \
-  "$FM_HOME" "$FM_ROOT_OVERRIDE" "$FM_STATE_OVERRIDE" "$FM_DATA_OVERRIDE" \
+  'env PATH=%q FM_HOME=%q FM_ROOT_OVERRIDE=%q FM_STATE_OVERRIDE=%q FM_DATA_OVERRIDE=%q PI_CODING_AGENT_DIR=%q %q --approve --no-session --no-context-files --no-extensions --model %q --thinking low %q' \
+  "$PANE_PATH" "$FM_HOME" "$FM_ROOT_OVERRIDE" "$FM_STATE_OVERRIDE" "$FM_DATA_OVERRIDE" \
   "$PI_CODING_AGENT_DIR" "$PI_BIN" "$MODEL" "$prompt"
 "$LAB_HELPER" run "$SESSION" pane run "$PANE" "$command" >/dev/null \
   || fail "could not launch real Pi in the isolated Herdr pane"

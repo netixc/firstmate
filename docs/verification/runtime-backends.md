@@ -7,6 +7,7 @@ Refresh Herdr evidence only through a named non-default lab using `bin/fm-herdr-
 
 The provider cut was reverified on 2026-09-01 with Herdr 0.8.2 and real Pi 0.84.4 in guarded, named, non-default labs.
 The real-model case used the authenticated `openai-codex/gpt-5.6-sol` provider from inside the exact Herdr pane and drove that real Pi through production metadata validation, native state, typed steering, recovery control, liveness, event-watcher continuity, and exact cleanup.
+Its pane uses the preflighted exact Pi binary, an isolated agent directory containing only copied authentication, explicit Firstmate home/state/data routing, and `--no-extensions` so user-level configuration cannot participate.
 The AFK injection case independently exercised production Herdr buffering, retry, wedge, and supervisor cleanup paths; model interpretation is not load-bearing for those terminal and state transitions.
 The adapter and control smokes additionally exercised isolation and restart behavior against the real Herdr release.
 
@@ -31,6 +32,13 @@ ok - real Pi 0.84.4 completes Herdr state, steering, control, watcher, and clean
 ```
 
 Each guard tears down only its generated lab name and uses the lab helper's default-fleet tripwire, so a pass also proves isolation and exact cleanup.
+
+The separate real-Pi liveness guard refreshes the recovery classifier against normal and abrupt exits, a slow controlled exit, and a synthetic registered-agent/lone-shell contradiction.
+It resolves and checks one exact Pi 0.84.4 executable, launches it with user-level extensions and context disabled from an isolated agent directory, and preserves every reachable ambiguous pane and registration.
+
+```sh
+FM_HERDR_LIVENESS_REAL_E2E=1 tests/fm-herdr-liveness-real-e2e.test.sh
+```
 
 ## Herdr
 

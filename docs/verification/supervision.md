@@ -2,22 +2,25 @@
 
 ## Real plain Pi model and identity
 
-Date: 2026-08-30.
-Version: Pi 0.84.4.
-Model: `openai-codex/gpt-5.6-sol` with low thinking.
+The current guard requires Pi 0.84.4 and runs the authenticated `openai-codex/gpt-5.6-sol` model with low thinking.
+It asks the model to execute the public harness detector from a Pi child process and requires exact `pi` output.
+It then validates extension registration, interrupt, exit, and transactional relaunch through exact task-bound metadata in a generated non-default Herdr lab.
+The pane launch uses the preflighted Pi executable, an isolated agent directory containing only copied authentication, explicit Firstmate home/state/data routing, and only the two supervision extensions named on the command line.
 
 ```sh
 FM_PI_ONLY_LIVE_E2E=1 tests/fm-pi-only-live-e2e.test.sh
 ```
 
+Current acceptance lines are:
+
 ```text
-ok - real Pi extensions register lifecycle identity (Pi 0.84.4)
-ok - real Pi interrupt and exit lifecycle control succeed (Pi 0.84.4)
-ok - real Pi transactional relaunch preserves profile metadata (Pi 0.84.4)
+ok - real Pi supervision extensions preserve plain-Pi identity
+ok - real Pi interrupt lifecycle control succeeds through Herdr
+ok - real Pi transactional relaunch preserves profile and exact Herdr identity
+ok - real Pi replacement exit lifecycle control succeeds through Herdr
 ```
 
-The test runs the real model through plain `pi`, asks it to execute the public harness detector from a Pi child process, and requires exact `pi` output.
-The production Herdr endpoint lifecycle is covered by `FM_HERDR_PI_REAL_MODEL_E2E=1 tests/fm-herdr-pi-real-model-e2e.test.sh`, including exact identity, steering, interrupt, native watcher delivery, liveness, and cleanup.
+The separate production Herdr model lifecycle guard is `FM_HERDR_PI_REAL_MODEL_E2E=1 tests/fm-herdr-pi-real-model-e2e.test.sh`; it covers exact identity, steering, interrupt, native watcher delivery, liveness, and cleanup with user-level extensions disabled.
 `tests/fm-pi-only-harness.test.sh` supplies portable public-interface coverage for exact identity, migration refusal, control, and semantic busy state.
 
 ## Wedge-alarm channels

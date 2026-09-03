@@ -21,6 +21,7 @@ done
 PI_BIN=$(command -v pi)
 PI_VERSION=$("$PI_BIN" --version 2>/dev/null || true)
 [ "$PI_VERSION" = 0.84.4 ] || fail "real Pi 0.84.4 required, found ${PI_VERSION:-unknown}"
+PANE_PATH="$(dirname "$PI_BIN"):$(dirname "$(command -v herdr)"):/usr/bin:/bin"
 
 LAB_HELPER=${HERDR_LAB_HELPER:-$ROOT/bin/fm-herdr-lab.sh}
 [ -x "$LAB_HELPER" ] || fail "the guarded Herdr lab helper is not executable at $LAB_HELPER"
@@ -151,7 +152,7 @@ launch_pi() {
   local pane_command
   printf -v pane_command \
     'env PATH=%q FM_HOME=%q FM_ROOT_OVERRIDE=%q FM_STATE_OVERRIDE=%q FM_DATA_OVERRIDE=%q PI_CODING_AGENT_DIR=%q %q --approve --no-session --no-context-files --no-extensions' \
-    "$PATH" "$FM_HOME" "$FM_ROOT_OVERRIDE" "$FM_STATE_OVERRIDE" "$FM_DATA_OVERRIDE" \
+    "$PANE_PATH" "$FM_HOME" "$FM_ROOT_OVERRIDE" "$FM_STATE_OVERRIDE" "$FM_DATA_OVERRIDE" \
     "$PI_CODING_AGENT_DIR" "$PI_BIN"
   lab pane run "$PANE" "$pane_command" >/dev/null \
     || fail "could not launch Pi in the isolated pane"

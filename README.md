@@ -106,9 +106,9 @@ Pi's `/supervision-model` command pins a cheaper model and a shallower reasoning
 > alright merge it
 ```
 
-### More backends
+### Session provider
 
-The Herdr setup and safety guide is linked in [Documentation](#documentation) below.
+The required Herdr setup and safety guide is linked in [Documentation](#documentation) below.
 
 ## How It Works
 
