@@ -649,7 +649,7 @@ case "\$cmd \$sub" in
     fi
     ;;
   "tab list")
-    printf '{"result":{"tabs":[{"tab_id":"wA:t2","label":"fm-sm-instr"}]}}\n'
+    printf '{"result":{"tabs":[{"tab_id":"w9:t9","label":"fm-sm-instr"},{"tab_id":"wA:t2","label":"fm-sm-instr"}]}}\n'
     ;;
   "agent get")
     if [ "\$arg" = "${stale#*:}" ]; then

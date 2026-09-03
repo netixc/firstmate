@@ -431,17 +431,13 @@ EOF
   printf '%s\n' pi > "$home/config/secondmate-harness"
   printf '%s\n' manual > "$home/config/backlog-backend"
   touch "$home/state/.last-watcher-beat"
-  {
-    printf 'window=default:ws1:p-old\n'
-    printf 'kind=secondmate\n'
-    printf 'harness=pi\n'
-    printf 'home=%s\n' "$mate"
-    printf 'backend=herdr\n'
-    printf 'herdr_session=default\n'
-    printf 'herdr_workspace_id=ws1\n'
-    printf 'herdr_tab_id=ws1:t-old\n'
-    printf 'herdr_pane_id=ws1:p-old\n'
-  } > "$home/state/$id.meta"
+  FM_TEST_HERDR_SESSION=default \
+    FM_TEST_HERDR_WORKSPACE_ID=ws1 \
+    FM_TEST_HERDR_TAB_ID=ws1:t-old \
+    FM_TEST_HERDR_PANE_ID=ws1:p-old \
+    fm_write_herdr_task_meta "$home/state/$id.meta" \
+      "kind=secondmate" "harness=pi" "home=$mate" \
+      "worktree=$mate" "project=$root"
   ln -s "$ROOT/bin" "$root/bin"
   make_fake_toolchain "$fakebin"
   make_fake_ps_pi "$fakebin"
