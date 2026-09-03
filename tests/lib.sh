@@ -252,7 +252,8 @@ fm_write_meta() {
 # task hierarchy. Caller values may add retained behavior fields but may not
 # override the provider identity boundary.
 fm_write_herdr_task_meta() {
-  local file=$1 id session=lab workspace=w1 tab pane kv has_worktree=0 has_project=0 n=2 candidate existing post_lines=
+  local file=$1 id session=${FM_TEST_HERDR_SESSION:-lab} workspace=${FM_TEST_HERDR_WORKSPACE_ID:-w1}
+  local tab pane kv has_worktree=0 has_project=0 n=2 candidate existing post_lines=
   shift
   id=$(basename "$file" .meta)
   while :; do
@@ -261,8 +262,8 @@ fm_write_herdr_task_meta() {
     [ -n "$existing" ] || break
     n=$((n + 1))
   done
-  tab="$workspace:t$n"
-  pane="$workspace:p$n"
+  tab=${FM_TEST_HERDR_TAB_ID:-$workspace:t$n}
+  pane=${FM_TEST_HERDR_PANE_ID:-$workspace:p$n}
   : > "$file"
   for kv in "$@"; do
     case "$kv" in

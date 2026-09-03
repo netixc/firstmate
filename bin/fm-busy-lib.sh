@@ -65,7 +65,7 @@ fm_busy_record_read() {
 }
 
 fm_busy_classify() {
-  local backend=$1 target=$2 harness=$3 id=$4 state=$5
+  local backend=$1 target=$2 harness=$3 id=$4 state=$5 explicit_meta=${7-}
   local out rc r_state r_source native
   if [ "$harness" != pi ]; then
     printf 'unknown unsupported-harness'
@@ -83,7 +83,7 @@ fm_busy_classify() {
   fi
   case "$out" in malformed|gen-mismatch) printf 'unknown %s' "$out"; return 0 ;; esac
   if [ "$backend" = herdr ] && command -v fm_backend_busy_state >/dev/null 2>&1; then
-    native=$(fm_backend_busy_state "$backend" "$target" "fm-$id" 2>/dev/null || true)
+    native=$(fm_backend_busy_state "$backend" "$target" "fm-$id" "$explicit_meta" 2>/dev/null || true)
     [ "$native" = busy ] && { printf 'busy herdr-native'; return 0; }
   fi
   printf 'unknown missing'
@@ -106,7 +106,7 @@ fm_busy_classify_meta() {
   harness=$(fm_meta_get "$meta" harness)
   [ "$harness" = pi ] || { printf 'unknown unsupported-harness'; return 0; }
   [ -n "$target" ] || { printf 'unknown no-target'; return 0; }
-  fm_busy_classify "$backend" "$target" "$harness" "$id" "$state"
+  fm_busy_classify "$backend" "$target" "$harness" "$id" "$state" "" "$meta"
 }
 
 fm_busy_is_busy() {

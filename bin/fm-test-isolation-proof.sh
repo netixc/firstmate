@@ -13,7 +13,7 @@
 # pool instead runs that family's exact membership and inherits its prerequisites.
 #
 # Usage:
-#   fm-test-isolation-proof.sh [--pool <name>] [--jobs N] [--json path] [--list]
+#   fm-test-isolation-proof.sh [--pool <name>] [--jobs N] [--json path] [--markdown path] [--list]
 #   fm-test-isolation-proof.sh --list-exclusions
 #   fm-test-isolation-proof.sh -h | --help
 #
@@ -27,6 +27,9 @@
 #   --json path  write a pool-scoped machine-readable proof artifact after the
 #                run; fm_test_run_jobs_enabled is true only for a successful
 #                concurrent run within that pool's recorded admission cap
+#   --markdown path
+#                write the portable proof's maintained narrative from the same
+#                run, preserving any recorded family-concurrency sections
 #   --list       print the proven candidate paths (one per line) and exit 0
 #   --list-exclusions
 #                print basename + reason for scripts deliberately kept serial
@@ -59,6 +62,7 @@ cd "$ROOT" || exit 1
 
 JOBS=4
 JSON_PATH=
+MARKDOWN_PATH=
 LIST_ONLY=0
 LIST_EXCLUSIONS=0
 POOL=portable
@@ -220,6 +224,64 @@ detect_gate_skip() {
   esac
 }
 
+write_markdown_artifact() { # <json-path> <markdown-path>
+  python3 - "$1" "$2" <<'PY'
+import json
+import pathlib
+import sys
+
+json_path, markdown_path = map(pathlib.Path, sys.argv[1:3])
+doc = json.loads(json_path.read_text(encoding="utf-8"))
+old = markdown_path.read_text(encoding="utf-8") if markdown_path.exists() else ""
+marker = "## Family concurrency proofs"
+tail = old[old.index(marker):] if marker in old else "## Scope\n\n"
+started = doc["started_at"]
+date = started[:10]
+summary = doc["summary"]
+scripts = sorted(doc["scripts"], key=lambda item: (-item["duration_ms"], item["path"]))
+lines = [
+    "# Firstmate test isolation proof",
+    "",
+    "This record owns concurrent isolation evidence for the portable parallel candidate set and admitted runner families.",
+    "`bin/fm-test-isolation-proof.sh` is the authoritative harness and `docs/fm-test-isolation-proof.json` is the portable pool's machine-readable result.",
+    "`bin/fm-test-run.sh` owns production lane partitioning and family concurrency admission.",
+    "",
+    "## Verification",
+    "",
+    f"- Date: {date}",
+    f"- Command: `bin/fm-test-isolation-proof.sh --jobs {doc['concurrency']} --json docs/fm-test-isolation-proof.json --markdown docs/fm-test-isolation-proof.md`",
+    f"- Result: `FM_ISOLATION_SUMMARY total={summary['total']} failed={summary['failed']} concurrency={doc['concurrency']} duration_ms={summary['duration_ms']}`",
+    "",
+    "| Field | Value |",
+    "|---|---|",
+    f"| `run_id` | `{doc['run_id']}` |",
+    f"| `started_at` | `{doc['started_at']}` |",
+    f"| `finished_at` | `{doc['finished_at']}` |",
+    f"| concurrency | {doc['concurrency']} |",
+    f"| candidates | {summary['total']} |",
+    f"| failed | {summary['failed']} |",
+    f"| wall duration | {summary['duration_ms']} ms |",
+    "",
+    "## Candidate set",
+    "",
+]
+lines.extend(f"- `{item['path']}`" for item in sorted(doc["scripts"], key=lambda item: item["path"]))
+lines.extend([
+    "",
+    "## Durations",
+    "",
+    "| duration_ms | exit | worker | script |",
+    "|---:|---:|---:|---|",
+])
+lines.extend(
+    f"| {item['duration_ms']} | {item['exit']} | {item['worker']} | `{item['path']}` |"
+    for item in scripts
+)
+markdown_path.parent.mkdir(parents=True, exist_ok=True)
+markdown_path.write_text("\n".join(lines) + "\n\n" + tail.rstrip() + "\n", encoding="utf-8")
+PY
+}
+
 write_json_artifact() {
   local out=$1 started=$2 finished=$3 run_id=$4 total=$5 failed=$6 concurrency=$7 duration=$8 records=$9 pool=${10} jobs_enabled=${11}
   python3 - "$out" "$started" "$finished" "$run_id" "$total" "$failed" "$concurrency" "$duration" "$records" "$pool" "$jobs_enabled" <<'PY'
@@ -281,6 +343,15 @@ while [ "$#" -gt 0 ]; do
       JSON_PATH=${1#--json=}
       shift
       ;;
+    --markdown)
+      [ "$#" -gt 1 ] || die "--markdown requires a path"
+      MARKDOWN_PATH=$2
+      shift 2
+      ;;
+    --markdown=*)
+      MARKDOWN_PATH=${1#--markdown=}
+      shift
+      ;;
     --pool)
       [ "$#" -gt 1 ] || die "--pool requires a name (portable, or a family name)"
       POOL=$2
@@ -315,6 +386,7 @@ case "$JOBS" in
   ''|*[!0-9]*) die "--jobs must be a positive integer" ;;
 esac
 [ "$JOBS" -ge 1 ] || die "--jobs must be >= 1"
+[ -z "$MARKDOWN_PATH" ] || [ -n "$JSON_PATH" ] || die "--markdown requires --json from the same run"
 
 if [ "$LIST_EXCLUSIONS" -eq 1 ]; then
   list_exclusions_for_report
@@ -564,6 +636,11 @@ if [ -n "$JSON_PATH" ]; then
     "$RUN_STARTED_ISO" "$RUN_FINISHED_ISO" "$RUN_ID" \
     "$TOTAL" "$FAILED" "$JOBS" "$RUN_DURATION" "$RECORDS" "$POOL" "$jobs_enabled"
   log "wrote isolation proof artifact: $JSON_PATH"
+  if [ -n "$MARKDOWN_PATH" ]; then
+    [ "$POOL" = portable ] || die "--markdown is only supported for the portable proof"
+    write_markdown_artifact "$JSON_PATH" "$MARKDOWN_PATH"
+    log "wrote isolation proof narrative: $MARKDOWN_PATH"
+  fi
 fi
 
 exit "$AGG_RC"

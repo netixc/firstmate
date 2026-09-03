@@ -6,19 +6,19 @@ This record owns concurrent isolation evidence for the portable parallel candida
 
 ## Verification
 
-- Date: 2026-08-20
-- Command: `bin/fm-test-isolation-proof.sh --jobs 4 --json /tmp/fm-isolation-proof.json`
-- Result: `FM_ISOLATION_SUMMARY total=21 failed=0 concurrency=4 duration_ms=113278`
+- Date: 2026-09-03
+- Command: `bin/fm-test-isolation-proof.sh --jobs 4 --json docs/fm-test-isolation-proof.json --markdown docs/fm-test-isolation-proof.md`
+- Result: `FM_ISOLATION_SUMMARY total=21 failed=0 concurrency=4 duration_ms=245891`
 
 | Field | Value |
 |---|---|
-| `run_id` | `fm-isolation-1787273044622-10250` |
-| `started_at` | `2026-08-21T00:44:04Z` |
-| `finished_at` | `2026-08-21T00:45:57Z` |
+| `run_id` | `fm-isolation-1788397878476-4830` |
+| `started_at` | `2026-09-03T01:11:18Z` |
+| `finished_at` | `2026-09-03T01:15:24Z` |
 | concurrency | 4 |
 | candidates | 21 |
 | failed | 0 |
-| wall duration | 113278 ms |
+| wall duration | 245891 ms |
 
 ## Candidate set
 
@@ -48,27 +48,27 @@ This record owns concurrent isolation evidence for the portable parallel candida
 
 | duration_ms | exit | worker | script |
 |---:|---:|---:|---|
-| 45356 | 0 | 2 | `tests/fm-backend-herdr.test.sh` |
-| 35415 | 0 | 24 | `tests/fm-x-mode.test.sh` |
-| 35095 | 0 | 4 | `tests/fm-captain-hold-lifecycle.test.sh` |
-| 27529 | 0 | 1 | `tests/fm-arm-pretool-check.test.sh` |
-| 20922 | 0 | 21 | `tests/fm-test-run.test.sh` |
-| 17558 | 0 | 8 | `tests/fm-crew-state.test.sh` |
-| 16582 | 0 | 5 | `tests/fm-cd-pretool-check.test.sh` |
-| 9766 | 0 | 12 | `tests/fm-lint.test.sh` |
-| 9562 | 0 | 11 | `tests/fm-herdr-lab.test.sh` |
-| 6290 | 0 | 14 | `tests/fm-pr-merge.test.sh` |
-| 4563 | 0 | 16 | `tests/fm-send-popup-settle.test.sh` |
-| 3544 | 0 | 7 | `tests/fm-composer-lib.test.sh` |
-| 3025 | 0 | 18 | `tests/fm-send-strict.test.sh` |
-| 2753 | 0 | 17 | `tests/fm-send-settle.test.sh` |
-| 2166 | 0 | 15 | `tests/fm-review-diff.test.sh` |
-| 1315 | 0 | 3 | `tests/fm-brief.test.sh` |
-| 975 | 0 | 19 | `tests/fm-spawn-batch.test.sh` |
-| 598 | 0 | 13 | `tests/fm-pi-primary-types.test.sh` |
-| 513 | 0 | 9 | `tests/fm-ensure-agents-md.test.sh` |
-| 331 | 0 | 20 | `tests/fm-supervision-instructions.test.sh` |
-| 99 | 0 | 23 | `tests/fm-transition-lib.test.sh` |
+| 180017 | 0 | 12 | `tests/fm-pr-merge.test.sh` |
+| 167188 | 0 | 4 | `tests/fm-captain-hold-lifecycle.test.sh` |
+| 114779 | 0 | 19 | `tests/fm-test-run.test.sh` |
+| 108167 | 0 | 2 | `tests/fm-backend-herdr.test.sh` |
+| 94813 | 0 | 21 | `tests/fm-x-mode.test.sh` |
+| 70615 | 0 | 7 | `tests/fm-crew-state.test.sh` |
+| 27935 | 0 | 10 | `tests/fm-lint.test.sh` |
+| 18612 | 0 | 9 | `tests/fm-herdr-lab.test.sh` |
+| 14774 | 0 | 16 | `tests/fm-send-strict.test.sh` |
+| 14580 | 0 | 17 | `tests/fm-spawn-batch.test.sh` |
+| 13351 | 0 | 14 | `tests/fm-send-popup-settle.test.sh` |
+| 11033 | 0 | 11 | `tests/fm-pi-primary-types.test.sh` |
+| 9858 | 0 | 15 | `tests/fm-send-settle.test.sh` |
+| 8404 | 0 | 13 | `tests/fm-review-diff.test.sh` |
+| 4992 | 0 | 6 | `tests/fm-composer-lib.test.sh` |
+| 4235 | 0 | 3 | `tests/fm-brief.test.sh` |
+| 1517 | 0 | 8 | `tests/fm-ensure-agents-md.test.sh` |
+| 485 | 0 | 18 | `tests/fm-supervision-instructions.test.sh` |
+| 380 | 0 | 20 | `tests/fm-transition-lib.test.sh` |
+| 203 | 0 | 1 | `tests/fm-arm-pretool-check.test.sh` |
+| 173 | 0 | 5 | `tests/fm-cd-pretool-check.test.sh` |
 
 ## Family concurrency proofs
 

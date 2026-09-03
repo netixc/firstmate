@@ -896,8 +896,14 @@ test_unknown_backend_state_uses_capture_fallback() {
       corr=$(fm_pending_reply_create "$home" "$state" "hibit" "$backend fallback")
       fm_pending_reply_mark_delivered "$state" "$corr"
       fm_write_secondmate_meta "$state/hibit.meta" "$sm_home" "lab:w1:p2" alpha pi
-      fm_backend_busy_state() { printf 'unknown'; }
-      fm_backend_capture() { printf '%s' "$FM_PENDING_TEST_CAPTURE"; }
+      fm_backend_busy_state() {
+        [ "$4" = "$state/hibit.meta" ] || fail "busy observation consulted the wrong metadata path: ${4:-missing}"
+        printf 'unknown'
+      }
+      fm_backend_capture() {
+        [ "$5" = "$state/hibit.meta" ] || fail "capture fallback consulted the wrong metadata path: ${5:-missing}"
+        printf '%s' "$FM_PENDING_TEST_CAPTURE"
+      }
       # Invoked indirectly through FM_PENDING_REPLY_SEND_HOOK.
       # shellcheck disable=SC2329
       recovery_hook() { :; }
