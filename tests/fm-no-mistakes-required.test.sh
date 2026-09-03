@@ -59,23 +59,22 @@ port_path.write_text(str(server.server_port), encoding="utf-8")
 server.handle_request()
 PY
   api_pid=$!
+  trap 'kill "$api_pid" 2>/dev/null || true; wait "$api_pid" 2>/dev/null || true' EXIT
   while [ ! -s "$API_PORT" ] && kill -0 "$api_pid" 2>/dev/null; do
     attempts=$((attempts + 1))
     [ "$attempts" -lt 100 ] || break
     sleep 0.05
   done
-  [ -s "$API_PORT" ] || {
-    kill "$api_pid" 2>/dev/null || true
-    wait "$api_pid" 2>/dev/null || true
-    fail "fake GitHub API did not start"
-  }
+  [ -s "$API_PORT" ] || fail "fake GitHub API did not start"
   rc=0
   output=$(env -u PR_BODY -u PR_HEAD_SHA \
     GITHUB_EVENT_PATH="$EVENT" GITHUB_TOKEN=test-token \
     GITHUB_REPOSITORY=example/project \
     GITHUB_API_URL="http://127.0.0.1:$(cat "$API_PORT")" \
     python3 "$VERIFY" 2>&1) || rc=$?
-  wait "$api_pid" || true
+  kill "$api_pid" 2>/dev/null || true
+  wait "$api_pid" 2>/dev/null || true
+  trap - EXIT
   printf '%s\n%s' "$rc" "$output"
 }
 
