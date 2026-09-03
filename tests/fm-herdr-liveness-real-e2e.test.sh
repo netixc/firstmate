@@ -18,7 +18,9 @@ fi
 for tool in herdr jq pi git; do
   command -v "$tool" >/dev/null 2>&1 || fail "$tool is required"
 done
-[ "$(pi --version 2>/dev/null)" = 0.84.4 ] || fail "real Pi 0.84.4 is required"
+PI_BIN=$(command -v pi)
+PI_VERSION=$("$PI_BIN" --version 2>/dev/null || true)
+[ "$PI_VERSION" = 0.84.4 ] || fail "real Pi 0.84.4 required, found ${PI_VERSION:-unknown}"
 
 LAB_HELPER=${HERDR_LAB_HELPER:-$ROOT/bin/fm-herdr-lab.sh}
 [ -x "$LAB_HELPER" ] || fail "the guarded Herdr lab helper is not executable at $LAB_HELPER"
@@ -27,9 +29,14 @@ TMP_ROOT=$(fm_test_tmproot fm-herdr-liveness-real-e2e)
 ORIGINAL_PATH=$PATH
 FAKEBIN="$TMP_ROOT/fakebin"
 HOME_DIR="$TMP_ROOT/home"
+PI_AGENT_DIR="$TMP_ROOT/pi-agent"
 PROJ="$TMP_ROOT/project"
 WT="$TMP_ROOT/worktree"
-mkdir -p "$FAKEBIN" "$HOME_DIR/state" "$HOME_DIR/data/live-real" "$PROJ"
+mkdir -p "$FAKEBIN" "$HOME_DIR/state" "$HOME_DIR/data/live-real" "$PI_AGENT_DIR" "$PROJ"
+source_pi_dir=${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}
+if [ -f "$source_pi_dir/auth.json" ]; then
+  cp "$source_pi_dir/auth.json" "$PI_AGENT_DIR/auth.json"
+fi
 printf '# liveness acceptance\n' > "$HOME_DIR/data/live-real/brief.md"
 
 git -C "$PROJ" init -q
@@ -97,7 +104,9 @@ herdr_tab_id=$TAB
 herdr_pane_id=$PANE
 EOF
 
-export PATH="$FAKEBIN:$ORIGINAL_PATH" FM_HOME="$HOME_DIR"
+export PATH="$FAKEBIN:$ORIGINAL_PATH" FM_HOME="$HOME_DIR" FM_ROOT_OVERRIDE="$ROOT" \
+  FM_STATE_OVERRIDE="$HOME_DIR/state" FM_DATA_OVERRIDE="$HOME_DIR/data" \
+  PI_CODING_AGENT_DIR="$PI_AGENT_DIR"
 # shellcheck source=bin/fm-backend.sh
 . "$ROOT/bin/fm-backend.sh"
 [ "$FM_BACKEND_LIB_DIR" = "$ROOT/bin" ] \
@@ -139,7 +148,12 @@ wait_idle_shell() { # <polls>
   return 1
 }
 launch_pi() {
-  lab pane run "$PANE" "pi --approve --no-session" >/dev/null \
+  local pane_command
+  printf -v pane_command \
+    'env PATH=%q FM_HOME=%q FM_ROOT_OVERRIDE=%q FM_STATE_OVERRIDE=%q FM_DATA_OVERRIDE=%q PI_CODING_AGENT_DIR=%q %q --approve --no-session --no-context-files --no-extensions' \
+    "$PATH" "$FM_HOME" "$FM_ROOT_OVERRIDE" "$FM_STATE_OVERRIDE" "$FM_DATA_OVERRIDE" \
+    "$PI_CODING_AGENT_DIR" "$PI_BIN"
+  lab pane run "$PANE" "$pane_command" >/dev/null \
     || fail "could not launch Pi in the isolated pane"
   wait_status idle 150 || fail "Pi did not reach native idle state"
   [ "$(fm_backend_agent_state herdr "$TARGET")" = alive ] \

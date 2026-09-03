@@ -13,7 +13,9 @@ fi
 for tool in herdr jq pi; do
   command -v "$tool" >/dev/null 2>&1 || fail "$tool is required"
 done
-[ "$(pi --version 2>/dev/null || true)" = 0.84.4 ] || fail "real Pi 0.84.4 is required"
+PI_BIN=$(command -v pi)
+PI_VERSION=$("$PI_BIN" --version 2>/dev/null || true)
+[ "$PI_VERSION" = 0.84.4 ] || fail "real Pi 0.84.4 required, found ${PI_VERSION:-unknown}"
 
 LAB_HELPER=${HERDR_LAB_HELPER:-$ROOT/bin/fm-herdr-lab.sh}
 SESSION=$($LAB_HELPER name fm-herdr-pi-real-model-e2e)
@@ -31,7 +33,9 @@ source_pi_dir=${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}
 if [ -f "$source_pi_dir/auth.json" ]; then
   cp "$source_pi_dir/auth.json" "$PI_AGENT_DIR/auth.json"
 fi
-export FM_HOME="$HOME_DIR" FM_ROOT_OVERRIDE="$ROOT"
+export FM_HOME="$HOME_DIR" FM_ROOT_OVERRIDE="$ROOT" \
+  FM_STATE_OVERRIDE="$HOME_DIR/state" FM_DATA_OVERRIDE="$HOME_DIR/data" \
+  PI_CODING_AGENT_DIR="$PI_AGENT_DIR"
 
 cleanup() {
   local rc=$?
@@ -87,8 +91,10 @@ watch_rc_file="$TMP_ROOT/watch.rc"
 watch_pid=$!
 sleep 0.5
 prompt='Use the bash tool to run sleep 3. Then reply with exactly the concatenation of FM_HERDR_ONLY_REAL_ and MODEL_OK, with no other text.'
-printf -v command 'PI_CODING_AGENT_DIR=%q pi --approve --no-session --no-context-files --no-extensions --model %q --thinking low %q' \
-  "$PI_AGENT_DIR" "$MODEL" "$prompt"
+printf -v command \
+  'env FM_HOME=%q FM_ROOT_OVERRIDE=%q FM_STATE_OVERRIDE=%q FM_DATA_OVERRIDE=%q PI_CODING_AGENT_DIR=%q %q --approve --no-session --no-context-files --no-extensions --model %q --thinking low %q' \
+  "$FM_HOME" "$FM_ROOT_OVERRIDE" "$FM_STATE_OVERRIDE" "$FM_DATA_OVERRIDE" \
+  "$PI_CODING_AGENT_DIR" "$PI_BIN" "$MODEL" "$prompt"
 "$LAB_HELPER" run "$SESSION" pane run "$PANE" "$command" >/dev/null \
   || fail "could not launch real Pi in the isolated Herdr pane"
 wait "$watch_pid"
