@@ -19,8 +19,8 @@
 #   6. The marker is the label plus terminal-safe U+2063 INVISIBLE SEPARATOR.
 set -u
 
-# shellcheck source=tests/lib.sh
-. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck source=tests/fixtures.sh
+. "$(dirname "${BASH_SOURCE[0]}")/fixtures.sh"
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-marker-lib.sh"
 
@@ -37,38 +37,8 @@ TMP_ROOT=$(fm_test_tmproot fm-send-marker)
 make_stubs() {  # <dir> -> echoes fakebin dir
   local dir=$1 fb="$1/fakebin"
   mkdir -p "$fb"
-  cat > "$fb/tmux" <<'SH'
-#!/usr/bin/env bash
-set -u
-case "${1:-}" in
-  send-keys)
-    shift
-    literal=0
-    while [ $# -gt 0 ]; do
-      case "$1" in
-        -t) shift 2 ;;
-        -l) literal=1; shift ;;
-        *) break ;;
-      esac
-    done
-    if [ "$literal" = 1 ]; then
-      printf '%s' "${1:-}" >> "$FM_SEND_LOG"
-    fi
-    exit 0 ;;
-  display-message)
-    for a in "$@"; do case "$a" in *cursor_y*) printf '1\n'; exit 0 ;; esac; done
-    printf 'fakepane\n'; exit 0 ;;
-  capture-pane) printf '╭────╮\n│    │\n╰────╯\n'; exit 0 ;;
-  list-windows) exit 0 ;;
-esac
-exit 0
-SH
-  chmod +x "$fb/tmux"
-  cat > "$fb/sleep" <<'SH'
-#!/usr/bin/env bash
-exit 0
-SH
-  chmod +x "$fb/sleep"
+  fm_test_fake_herdr "$fb"
+  fm_test_fake_sleep_noop "$fb"
   printf '%s\n' "$fb"
 }
 
@@ -83,7 +53,7 @@ run_send() {
   : > "$log"
   env PATH="$fb:$PATH" \
     FM_ROOT_OVERRIDE="$home" FM_HOME="$home" FM_SEND_LOG="$log" FM_SEND_SETTLE=0 \
-    "$SEND" "$@" 2>/dev/null
+    "$SEND" "$@"
 }
 
 # setup_home <name> -> echoes a fresh home dir with an empty state/.
@@ -161,8 +131,8 @@ test_crewmate_target_is_not_marked() {
   dir="$TMP_ROOT/crew"; mkdir -p "$dir"
   fb=$(make_stubs "$dir"); log="$dir/send.log"
   home=$(setup_home crew)
-  fm_write_meta "$home/state/build.meta" \
-    "window=sess:fm-build" "worktree=$home/wt" "project=$home/p" \
+  fm_write_herdr_task_meta "$home/state/build.meta" \
+    "worktree=$home/wt" "project=$home/p" \
     "harness=pi" "kind=ship" "mode=no-mistakes" "yolo=off"
   run_send "$fb" "$home" "$log" "fm-build" "fix the test"; rc=$?
   expect_code 0 "$rc" "send to a stable-label crewmate target should succeed"
@@ -177,27 +147,21 @@ test_crewmate_target_is_not_marked() {
   pass "fm-send: exact-id and stable-label kind=ship selectors are sent unmarked"
 }
 
-test_explicit_window_is_not_marked() {
-  local dir fb log home rc got
+test_explicit_window_is_refused() {
+  local dir fb log home rc
   dir="$TMP_ROOT/explicit"; mkdir -p "$dir"
   fb=$(make_stubs "$dir"); log="$dir/send.log"
   home=$(setup_home explicit)
-  # An explicit endpoint is not a task selector, so even matching secondmate
-  # metadata must not make fm-send guess the caller's intent and mark it.
-  fm_write_secondmate_meta "$home/state/win.meta" "$home" "other:win"
+  fm_write_secondmate_meta "$home/state/win.meta" "$home" "lab:w1:p2"
   run_send "$fb" "$home" "$log" "other:win" "ping"; rc=$?
-  expect_code 0 "$rc" "send to an explicit window with matching meta should succeed"
-  got=$(cat "$log")
-  [ "$got" = "ping" ] \
-    || fail "explicit session:window send with meta: expected bare text, got marker"$'\n'"--- bytes ---"$'\n'"$(printf '%s' "$got" | od -An -c)"
+  expect_code 1 "$rc" "an ad hoc endpoint with matching metadata should refuse"
+  [ ! -s "$log" ] || fail "a refused ad hoc endpoint received typed input"
 
   home=$(setup_home explicit-no-meta)
   run_send "$fb" "$home" "$log" "outside:window" "outside ping"; rc=$?
-  expect_code 0 "$rc" "send to an explicit window with no local meta should succeed"
-  got=$(cat "$log")
-  [ "$got" = "outside ping" ] \
-    || fail "explicit session:window send without meta: expected bare text, got marker"$'\n'"--- bytes ---"$'\n'"$(printf '%s' "$got" | od -An -c)"
-  pass "fm-send: explicit endpoints stay unmarked with or without local metadata"
+  expect_code 1 "$rc" "an ad hoc endpoint without local metadata should refuse"
+  [ ! -s "$log" ] || fail "an unrecorded ad hoc endpoint received typed input"
+  pass "fm-send: Herdr accepts only exact recorded task selectors"
 }
 
 test_marker_is_label_plus_invisible_separator() {
@@ -256,7 +220,7 @@ test_marked_send_preserves_trailing_newlines() {
 test_secondmate_target_is_marked
 test_exact_secondmate_task_id_is_marked
 test_crewmate_target_is_not_marked
-test_explicit_window_is_not_marked
+test_explicit_window_is_refused
 test_marker_is_label_plus_invisible_separator
 test_marker_transformation_is_idempotent
 test_marked_send_preserves_trailing_newlines

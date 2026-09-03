@@ -24,6 +24,8 @@ set -u
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 command -v python3 >/dev/null 2>&1 || { echo "skip: python3 not found"; exit 0; }
+python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' \
+  || { echo "skip: Python 3.10+ required for voice relay"; exit 0; }
 
 TMP_ROOT=$(fm_test_tmproot fm-voice-relay)
 HOME_FIXTURE="$TMP_ROOT/home"

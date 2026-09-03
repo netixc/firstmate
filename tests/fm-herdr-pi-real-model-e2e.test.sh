@@ -52,7 +52,8 @@ created=$("$LAB_HELPER" run "$SESSION" tab create --workspace "$WORKSPACE" --cwd
 PANE=$(printf '%s' "$created" | jq -r '.result.root_pane.pane_id // empty')
 TAB=$(printf '%s' "$created" | jq -r '.result.tab.tab_id // .result.root_pane.tab_id // empty')
 [ -n "$PANE" ] && [ -n "$TAB" ] || fail "the task tab omitted its exact tab or pane identity"
-pane_info=$("$LAB_HELPER" run "$SESSION" pane get "$PANE") || fail "could not read the exact endpoint identity"
+"$LAB_HELPER" run "$SESSION" pane get "$PANE" >/dev/null \
+  || fail "could not read the exact endpoint identity"
 cat > "$HOME_DIR/state/real-model.meta" <<EOF
 window=$SESSION:$PANE
 endpoint_task_id=real-model
@@ -66,6 +67,9 @@ herdr_workspace_id=$WORKSPACE
 herdr_tab_id=$TAB
 herdr_pane_id=$PANE
 EOF
+export FM_SUPERVISOR_BACKEND=herdr FM_SUPERVISOR_SESSION="$SESSION" \
+  FM_SUPERVISOR_WORKSPACE_ID="$WORKSPACE" FM_SUPERVISOR_TAB_ID="$TAB" \
+  FM_SUPERVISOR_PANE_ID="$PANE" FM_SUPERVISOR_TARGET="$SESSION:$PANE"
 
 # shellcheck source=bin/fm-backend.sh
 . "$ROOT/bin/fm-backend.sh"
@@ -76,23 +80,22 @@ fm_backend_validate_task_endpoint "$HOME_DIR/state/real-model.meta" real-model \
 fm_backend_events_capable herdr "$SESSION" || fail "native watcher events were unavailable"
 watch_out="$TMP_ROOT/watch.out"
 watch_rc_file="$TMP_ROOT/watch.rc"
+# Pi executes an ordinary bash tool call without asking for input. Its native
+# working -> idle edges must not be misreported as the watcher's actionable
+# blocked transition.
 ( fm_backend_wait_transition herdr "$SESSION" 60 "$HOME_DIR/state" "$SESSION:$PANE" >"$watch_out"; printf '%s\n' "$?" >"$watch_rc_file" ) &
 watch_pid=$!
 sleep 0.5
 prompt='Use the bash tool to run sleep 3. Then reply with exactly the concatenation of FM_HERDR_ONLY_REAL_ and MODEL_OK, with no other text.'
-printf -v command 'PI_CODING_AGENT_DIR=%q pi --no-session --no-context-files --no-extensions --model %q --thinking low %q' \
+printf -v command 'PI_CODING_AGENT_DIR=%q pi --approve --no-session --no-context-files --no-extensions --model %q --thinking low %q' \
   "$PI_AGENT_DIR" "$MODEL" "$prompt"
 "$LAB_HELPER" run "$SESSION" pane run "$PANE" "$command" >/dev/null \
   || fail "could not launch real Pi in the isolated Herdr pane"
 wait "$watch_pid"
 watch_rc=$(cat "$watch_rc_file" 2>/dev/null || true)
 watch_record=$(cat "$watch_out" 2>/dev/null || true)
-[ "$watch_rc" = 0 ] || fail "native watcher did not deliver the real Pi blocked transition (rc=${watch_rc:-missing})"
-[ "$(fm_transition_pane_id "$watch_record")" = "$PANE" ] \
-  && [ "$(fm_transition_to_status "$watch_record")" = blocked ] \
-  || fail "native watcher delivered the wrong real Pi transition"
-"$LAB_HELPER" run "$SESSION" pane send-keys "$PANE" Enter >/dev/null \
-  || fail "could not approve the real Pi tool call after its blocked transition"
+[ "$watch_rc" = 1 ] || fail "native watcher misclassified the real Pi working/idle turn (rc=${watch_rc:-missing})"
+[ -z "$watch_record" ] || fail "native watcher emitted an actionable record for a turn that never blocked"
 
 answered=0
 for _ in $(seq 1 180); do

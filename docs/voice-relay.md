@@ -80,6 +80,7 @@ The safer shape, with no credentials on the laptop, is not the slower one.
 
 ## Setting up this desktop
 
+The relay requires Python 3.10 or newer.
 The model is only reachable over HTTP/2 bidirectional streaming, which the AWS
 CLI cannot drive and `boto3` cannot either. It needs the experimental SDK, in a
 virtual environment of its own:

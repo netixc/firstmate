@@ -24,12 +24,14 @@
 #      gets its one repost
 set -u
 
-# shellcheck source=tests/lib.sh
-. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck source=tests/fixtures.sh
+. "$(dirname "${BASH_SOURCE[0]}")/fixtures.sh"
 # shellcheck source=bin/fm-marker-lib.sh
 . "$ROOT/bin/fm-marker-lib.sh"
 # shellcheck source=bin/fm-pending-reply-lib.sh
 . "$ROOT/bin/fm-pending-reply-lib.sh"
+# shellcheck source=bin/fm-composer-lib.sh
+. "$ROOT/bin/fm-composer-lib.sh"
 
 SEND="$ROOT/bin/fm-send.sh"
 REPORT="$ROOT/bin/fm-secondmate-report.sh"
@@ -43,38 +45,8 @@ export FM_SEND_SETTLE=0
 make_stubs() {  # <dir> -> fakebin
   local dir=$1 fb="$1/fakebin"
   mkdir -p "$fb"
-  cat > "$fb/tmux" <<'SH'
-#!/usr/bin/env bash
-set -u
-case "${1:-}" in
-  send-keys)
-    shift
-    literal=0
-    while [ $# -gt 0 ]; do
-      case "$1" in
-        -t) shift 2 ;;
-        -l) literal=1; shift ;;
-        *) break ;;
-      esac
-    done
-    if [ "$literal" = 1 ]; then
-      printf '%s' "${1:-}" >> "$FM_SEND_LOG"
-    fi
-    exit 0 ;;
-  display-message)
-    for a in "$@"; do case "$a" in *cursor_y*) printf '1\n'; exit 0 ;; esac; done
-    printf 'fakepane\n'; exit 0 ;;
-  capture-pane) printf '╭────╮\n│    │\n╰────╯\n'; exit 0 ;;
-  list-windows) exit 0 ;;
-esac
-exit 0
-SH
-  chmod +x "$fb/tmux"
-  cat > "$fb/sleep" <<'SH'
-#!/usr/bin/env bash
-exit 0
-SH
-  chmod +x "$fb/sleep"
+  fm_test_fake_herdr "$fb"
+  fm_test_fake_sleep_noop "$fb"
   printf '%s\n' "$fb"
 }
 
@@ -823,8 +795,8 @@ test_unmarked_captain_input_creates_no_expectation() {
   fb=$(make_stubs "$dir"); log="$dir/send.log"
   home=$(setup_parent unmarked)
   # Crewmate target stays unmarked and creates no pending-reply record.
-  fm_write_meta "$home/state/build.meta" \
-    "window=sess:fm-build" "worktree=$home/wt" "project=$home/p" \
+  fm_write_herdr_task_meta "$home/state/build.meta" \
+    "worktree=$home/wt" "project=$home/p" \
     "harness=pi" "kind=ship" "mode=no-mistakes" "yolo=off"
   run_send "$fb" "$home" "$log" "build" "captain says hello"; rc=$?
   expect_code 0 "$rc" "unmarked crewmate send should succeed"
@@ -910,9 +882,8 @@ test_busy_idle_observation_via_backend_abstraction() {
 }
 
 test_unknown_backend_state_uses_capture_fallback() {
-  local backend
-  for backend in tmux zellij; do
-    (
+  local backend=herdr
+  (
       local home state corr rec sm_home
       home=$(setup_parent "fallback-$backend")
       state="$home/state"
@@ -924,8 +895,7 @@ test_unknown_backend_state_uses_capture_fallback() {
       export FM_PENDING_REPLY_NOW=10000
       corr=$(fm_pending_reply_create "$home" "$state" "hibit" "$backend fallback")
       fm_pending_reply_mark_delivered "$state" "$corr"
-      fm_write_secondmate_meta "$state/hibit.meta" "$sm_home" "session:fm-hibit" alpha pi
-      [ "$backend" = tmux ] || printf 'backend=%s\n' "$backend" >> "$state/hibit.meta"
+      fm_write_secondmate_meta "$state/hibit.meta" "$sm_home" "lab:w1:p2" alpha pi
       fm_backend_busy_state() { printf 'unknown'; }
       fm_backend_capture() { printf '%s' "$FM_PENDING_TEST_CAPTURE"; }
       # Invoked indirectly through FM_PENDING_REPLY_SEND_HOOK.
@@ -953,9 +923,8 @@ test_unknown_backend_state_uses_capture_fallback() {
       fm_pending_reply_tick "$state"
       [ "$(phase_of "$state" "$corr")" = escalated ] \
         || fail "$backend capture busy-to-idle should complete recovery turn"
-    ) || fail "$backend unknown-state capture fallback failed"
-  done
-  pass "tmux and zellij unknown states use bounded capture fallback"
+  ) || fail "$backend unknown-state capture fallback failed"
+  pass "Herdr unknown state uses the bounded capture fallback"
 }
 
 test_tick_skips_terminal_and_reuses_target_observation() {

@@ -91,6 +91,9 @@ case "${1:-} ${2:-}" in
       '.tabs |= [.[]|select(.pane_id != $p)]
        | .typed |= with_entries(select(.key != $p))
        | .working |= with_entries(select(.key != $p))' | save ;;
+  "pane run")
+    [ ! -f "$SEND_FAIL" ] || exit 1
+    jq_state --arg p "${3:-}" '.typed[$p] = true' | save ;;
   "pane send-text")
     [ ! -f "$SEND_FAIL" ] || exit 1
     jq_state --arg p "${3:-}" '.typed[$p] = true' | save ;;
@@ -98,7 +101,7 @@ case "${1:-} ${2:-}" in
     [ ! -f "$SEND_FAIL" ] || exit 1
     jq_state --arg p "${3:-}" '.typed[$p] = true | .working[$p] = true' | save ;;
   "pane read") printf '╭─────╮\n│ >   │\n╰─────╯\n' ;;
-  "pane process-info") printf '{"result":{"process":{"name":"codex"}}}\n' ;;
+  "pane process-info") printf '{"result":{"process":{"name":"pi","command":"pi"}}}\n' ;;
   "agent get")
     pane=${3:-}
     if [ "$(jq_state -r --arg p "$pane" '.working[$p] // false')" = true ]; then

@@ -91,6 +91,9 @@ import time
 import traceback
 import uuid
 
+if sys.version_info < (3, 10):
+    raise SystemExit("fm-voice-relay requires Python 3.10 or newer")
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import fm_voice_frame as frame              # noqa: E402

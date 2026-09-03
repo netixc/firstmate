@@ -51,6 +51,7 @@ case "${1:-}" in
 esac
 exit 1
 SH
+  fm_test_fake_herdr "$fakebin"
   cat > "$fakebin/treehouse" <<'SH'
 #!/usr/bin/env bash
 set -u

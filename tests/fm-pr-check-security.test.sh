@@ -3,8 +3,8 @@
 # private atomic artifacts, authenticated custom checks, and teardown cleanup.
 set -u
 
-# shellcheck source=tests/lib.sh disable=SC1091
-. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck source=tests/fixtures.sh disable=SC1091
+. "$(dirname "${BASH_SOURCE[0]}")/fixtures.sh"
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-pr-lib.sh"
 # shellcheck source=/dev/null
@@ -165,6 +165,7 @@ printf '%s\n' "$*" >> "$FM_TEST_GLAB_LOG"
 printf 'title:\tfixture merge request\nstate:\t%s\nauthor:\tsomeone\n' "${FM_TEST_GLAB_STATE:-opened}"
 SH
   chmod +x "$fakebin/gh" "$fakebin/gh-axi" "$fakebin/glab"
+  fm_test_fake_herdr "$fakebin"
   : > "$dir/gh.log"
   : > "$dir/gh-axi.log"
   : > "$dir/glab.log"
@@ -174,9 +175,7 @@ SH
 
 write_task_meta() {
   local dir=$1 id=${2:-task-a}
-  fm_write_meta "$dir/home/state/$id.meta" \
-    "window=firstmate:fm-$id" \
-    "endpoint_task_id=$id" \
+  fm_write_herdr_task_meta "$dir/home/state/$id.meta" \
     "worktree=$dir/wt" \
     "project=$dir/project" \
     "kind=ship" \
@@ -548,37 +547,25 @@ test_valid_recording_and_merge_derivation() {
   fm_pr_poll_artifacts_valid "$dir/home/state" Task_A.1 "$POLL" \
     || fail "safe lifecycle-compatible task ID did not publish an authenticated poll"
   rm -rf "$dir/wt"
-  cat > "$dir/fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-exit 0
-SH
-  chmod 0700 "$dir/fakebin/tmux"
   touch "$dir/home/state/.last-watcher-beat"
-  FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" PATH="$dir/fakebin:$BASE_PATH" \
-    "$TEARDOWN" Task_A.1 --force > "$dir/teardown.out" 2> "$dir/teardown.err" \
+  FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" FM_FAKE_HERDR_AGENT_MISSING=1 \
+    PATH="$dir/fakebin:$BASE_PATH" "$TEARDOWN" Task_A.1 --force > "$dir/teardown.out" 2> "$dir/teardown.err" \
     || fail "safe lifecycle-compatible task ID could not be torn down"
   [ ! -e "$dir/home/state/Task_A.1.meta" ] \
     || fail "safe lifecycle-compatible task teardown retained metadata"
 
   for id in _noncanonical aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; do
     dir=$(make_case "legacy-teardown-${id:0:12}")
-    fm_write_meta "$dir/home/state/$id.meta" \
-      "window=firstmate:fm-$id" \
-      "endpoint_task_id=$id" \
+    fm_write_herdr_task_meta "$dir/home/state/$id.meta" \
       "worktree=$dir/missing-worktree" \
       "project=$dir/project" \
       'kind=ship' \
       'mode=local-only'
-    cat > "$dir/fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-exit 0
-SH
-    chmod 0700 "$dir/fakebin/tmux"
     touch "$dir/home/state/.last-watcher-beat"
     mkdir "$dir/home/state/$id.check.sh"
     set +e
-    FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" PATH="$dir/fakebin:$BASE_PATH" \
-      "$TEARDOWN" "$id" --force > "$dir/unsafe-teardown.out" 2> "$dir/unsafe-teardown.err"
+    FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" FM_FAKE_HERDR_AGENT_MISSING=1 \
+      PATH="$dir/fakebin:$BASE_PATH" "$TEARDOWN" "$id" --force > "$dir/unsafe-teardown.out" 2> "$dir/unsafe-teardown.err"
     rc=$?
     set -e
     [ "$rc" -ne 0 ] || fail "legacy task teardown accepted an unsafe direct artifact"
@@ -596,8 +583,8 @@ SH
       || fail "path-safe legacy task ID could not use the PR merge flow"
     fm_pr_poll_artifacts_valid "$dir/home/state" "$id" "$POLL" \
       || fail "path-safe legacy task ID did not publish an authenticated poll"
-    FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" PATH="$dir/fakebin:$BASE_PATH" \
-      "$TEARDOWN" "$id" --force > "$dir/teardown.out" 2> "$dir/teardown.err" \
+    FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" FM_FAKE_HERDR_AGENT_MISSING=1 \
+      PATH="$dir/fakebin:$BASE_PATH" "$TEARDOWN" "$id" --force > "$dir/teardown.out" 2> "$dir/teardown.err" \
       || fail "legacy path-safe task ID could not be torn down"
     [ ! -e "$dir/home/state/$id.meta" ] || fail "legacy task teardown retained metadata"
   done
@@ -1165,9 +1152,7 @@ test_teardown_removes_poll_artifacts() {
   local dir fakebin artifact counterpart rc
   dir=$(make_case teardown-cleanup)
   fakebin="$dir/fakebin"
-  fm_write_meta "$dir/home/state/task-a.meta" \
-    'window=firstmate:fm-task-a' \
-    'endpoint_task_id=task-a' \
+  fm_write_herdr_task_meta "$dir/home/state/task-a.meta" \
     "worktree=$dir/missing-worktree" \
     "project=$dir/project" \
     'kind=ship' \
@@ -1176,15 +1161,10 @@ test_teardown_removes_poll_artifacts() {
   printf 'data\n' > "$dir/home/state/task-a.pr-poll"
   printf 'registration\n' > "$dir/home/state/task-a.pr-poll-registration"
   printf 'trust\n' > "$dir/home/state/task-a.check-trust"
-  cat > "$fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-exit 0
-SH
-  chmod +x "$fakebin/tmux"
   touch "$dir/home/state/.last-watcher-beat"
 
-  FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" PATH="$fakebin:$BASE_PATH" \
-    "$TEARDOWN" task-a --force > "$dir/teardown.out" 2> "$dir/teardown.err" \
+  FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" FM_FAKE_HERDR_AGENT_MISSING=1 \
+    PATH="$fakebin:$BASE_PATH" "$TEARDOWN" task-a --force > "$dir/teardown.out" 2> "$dir/teardown.err" \
     || fail "teardown cleanup fixture failed"
   [ ! -e "$dir/home/state/task-a.check.sh" ] || fail "teardown left the runnable check"
   [ ! -e "$dir/home/state/task-a.pr-poll" ] || fail "teardown left the sidecar"
@@ -1193,9 +1173,7 @@ SH
 
   dir=$(make_case teardown-retirement-receipt)
   fakebin="$dir/fakebin"
-  fm_write_meta "$dir/home/state/task-a.meta" \
-    'window=firstmate:fm-task-a' \
-    'endpoint_task_id=task-a' \
+  fm_write_herdr_task_meta "$dir/home/state/task-a.meta" \
     "worktree=$dir/missing-worktree" \
     "project=$dir/project" \
     'kind=ship' \
@@ -1207,14 +1185,9 @@ SH
   fm_pr_poll_retirement_publish "$dir/home/state" task-a "$POLL" merged \
     || fail "could not publish teardown receipt fixture"
   rm -f "$dir/home/state/task-a.check.sh"
-  cat > "$fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-exit 0
-SH
-  chmod +x "$fakebin/tmux"
   touch "$dir/home/state/.last-watcher-beat"
-  FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" PATH="$fakebin:$BASE_PATH" \
-    "$TEARDOWN" task-a --force > "$dir/teardown.out" 2> "$dir/teardown.err" \
+  FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" FM_FAKE_HERDR_AGENT_MISSING=1 \
+    PATH="$fakebin:$BASE_PATH" "$TEARDOWN" task-a --force > "$dir/teardown.out" 2> "$dir/teardown.err" \
     || fail "teardown could not finish a valid crash-left retirement receipt"
   assert_poll_absent "$dir/home/state" task-a
   [ ! -e "$dir/home/state/task-a.meta" ] || fail "receipt-aware teardown left task metadata"
@@ -1222,9 +1195,7 @@ SH
   for artifact in check.sh pr-poll; do
     dir=$(make_case "teardown-final-directory-${artifact//./-}")
     fakebin="$dir/fakebin"
-    fm_write_meta "$dir/home/state/task-a.meta" \
-      'window=firstmate:fm-task-a' \
-      'endpoint_task_id=task-a' \
+    fm_write_herdr_task_meta "$dir/home/state/task-a.meta" \
       "worktree=$dir/missing-worktree" \
       "project=$dir/project" \
       'kind=ship' \
@@ -1237,15 +1208,9 @@ SH
     mkdir "$dir/home/state/task-a.$artifact"
     printf 'directory sentinel\n' > "$dir/home/state/task-a.$artifact/sentinel"
     printf 'counterpart sentinel\n' > "$dir/home/state/task-a.$counterpart"
-    cat > "$fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-printf '%s\n' "$*" >> "${FM_FAKE_TMUX_LOG:?}"
-exit 0
-SH
-    chmod +x "$fakebin/tmux"
     touch "$dir/home/state/.last-watcher-beat"
     set +e
-    FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" FM_FAKE_TMUX_LOG="$dir/tmux.log" \
+    FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" FM_FAKE_HERDR_LOG="$dir/herdr.log" \
       PATH="$fakebin:$BASE_PATH" "$TEARDOWN" task-a --force \
       > "$dir/teardown.out" 2> "$dir/teardown.err"
     rc=$?
@@ -1256,8 +1221,8 @@ SH
       || fail "teardown changed the directory-shaped $artifact"
     [ "$(cat "$dir/home/state/task-a.$counterpart")" = 'counterpart sentinel' ] \
       || fail "teardown removed the counterpart before $artifact refusal"
-    grep -F 'kill-window' "$dir/tmux.log" >/dev/null 2>&1 \
-      && fail "teardown killed the endpoint before $artifact refusal"
+    grep -F 'pane close' "$dir/herdr.log" >/dev/null 2>&1 \
+      && fail "teardown closed the endpoint before $artifact refusal"
   done
 
   pass "teardown removes safe poll artifacts and refuses directory-shaped check files without traversal"

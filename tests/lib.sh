@@ -252,17 +252,24 @@ fm_write_meta() {
 # task hierarchy. Caller values may add retained behavior fields but may not
 # override the provider identity boundary.
 fm_write_herdr_task_meta() {
-  local file=$1 id session=lab workspace=w1 tab pane kv has_worktree=0 has_project=0
+  local file=$1 id session=lab workspace=w1 tab pane kv has_worktree=0 has_project=0 n=2 candidate existing post_lines=
   shift
   id=$(basename "$file" .meta)
-  tab="$workspace:t2"
-  pane="$workspace:p2"
+  while :; do
+    candidate="$workspace:t$n"
+    existing=$(grep -l "^herdr_tab_id=$candidate$" "$(dirname "$file")"/*.meta 2>/dev/null | grep -Fvx "$file" | head -1 || true)
+    [ -n "$existing" ] || break
+    n=$((n + 1))
+  done
+  tab="$workspace:t$n"
+  pane="$workspace:p$n"
   : > "$file"
   for kv in "$@"; do
     case "$kv" in
       backend=*|window=*|endpoint_task_id=*|herdr_session=*|herdr_workspace_id=*|herdr_tab_id=*|herdr_pane_id=*) ;;
       worktree=*) has_worktree=1; printf '%s\n' "$kv" >> "$file" ;;
       project=*) has_project=1; printf '%s\n' "$kv" >> "$file" ;;
+      pr=*|pr_head=*) post_lines="${post_lines}${kv}\n" ;;
       *) printf '%s\n' "$kv" >> "$file" ;;
     esac
   done
@@ -272,6 +279,7 @@ fm_write_herdr_task_meta() {
     "backend=herdr" "window=$session:$pane" "endpoint_task_id=$id" \
     "herdr_session=$session" "herdr_workspace_id=$workspace" \
     "herdr_tab_id=$tab" "herdr_pane_id=$pane" >> "$file"
+  [ -z "$post_lines" ] || printf '%b' "$post_lines" >> "$file"
 }
 
 # fm_write_secondmate_meta <file> <home> [window] [projects] [harness]: write the

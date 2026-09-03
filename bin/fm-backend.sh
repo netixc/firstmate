@@ -194,7 +194,7 @@ fm_backend_validate_active_task_endpoint() {
 }
 
 fm_backend_meta_for_window() {
-  local target=$1 state=$2 meta window match= count=0
+  local target=$1 state=$2 meta window match='' count=0
   for meta in "$state"/*.meta; do
     [ -e "$meta" ] || continue
     window=$(fm_backend_meta_exact_value "$meta" window 2>/dev/null || true)
@@ -257,15 +257,15 @@ fm_backend_source() {
 fm_backend_validate_supervisor_endpoint() {  # <backend> <target> <session> <workspace> <tab> <pane>
   local backend=$1 target=$2 session=${3:-} workspace=${4:-} tab=${5:-} pane=${6:-} live state=0
   fm_backend_source "$backend" || return 1
-  [ -n "$session" ] && [ -n "$workspace" ] && [ -n "$tab" ] && [ -n "$pane" ] \
+  if ! { [ -n "$session" ] && [ -n "$workspace" ] && [ -n "$tab" ] && [ -n "$pane" ] \
     && [ "$target" = "$session:$pane" ] \
     && fm_backend_endpoint_atom_valid "$session" \
     && fm_backend_endpoint_atom_valid "$workspace" \
     && fm_backend_endpoint_child_valid "$workspace" "$tab" \
-    && fm_backend_endpoint_child_valid "$workspace" "$pane" || {
-      echo "REFUSED: supervisor Herdr identity for '$target' is missing, malformed, or inconsistent; no endpoint action was attempted." >&2
-      return 1
-    }
+    && fm_backend_endpoint_child_valid "$workspace" "$pane"; }; then
+    echo "REFUSED: supervisor Herdr identity for '$target' is missing, malformed, or inconsistent; no endpoint action was attempted." >&2
+    return 1
+  fi
   fm_backend_herdr_version_check || return 1
   fm_backend_herdr_server_running "$session" >/dev/null || state=$?
   if [ "$state" -ne 0 ]; then
@@ -296,7 +296,7 @@ fm_backend_validate_task_operation() {  # <backend> <target> [expected-label] [e
   if [ -n "$explicit_meta" ]; then
     meta=$explicit_meta
   else
-    meta="$FM_HOME/state/$id.meta"
+    meta="${FM_STATE_OVERRIDE:-$FM_HOME/state}/$id.meta"
   fi
   fm_backend_validate_active_task_endpoint "$meta" "$id" || return 1
   if [ "$FM_BACKEND_VALIDATED_TARGET" != "$target" ]; then
@@ -322,8 +322,8 @@ fm_backend_send_text_submit() {
 }
 fm_backend_kill() { local backend=$1; shift; [ -n "${1:-}" ] || return 1; fm_backend_source "$backend" && fm_backend_herdr_kill "$@"; }
 fm_backend_busy_state() {
-  local backend=$1 target=$2 label=${3:-}
-  fm_backend_validate_task_operation "$backend" "$target" "$label" >/dev/null 2>&1 \
+  local backend=$1 target=$2 label=${3:-} explicit_meta=${4:-}
+  fm_backend_validate_task_operation "$backend" "$target" "$label" "$explicit_meta" >/dev/null 2>&1 \
     || { printf 'unknown'; return 0; }
   fm_backend_herdr_busy_state "$target"
 }

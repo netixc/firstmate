@@ -5,13 +5,15 @@
 # compatibility for pre-collapse decision identities.
 set -u
 
-# shellcheck source=tests/lib.sh
+# shellcheck source=tests/fixtures.sh
 # shellcheck disable=SC1091
-. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/fixtures.sh"
 
 TEARDOWN="$ROOT/bin/fm-teardown.sh"
 BEARINGS="$ROOT/bin/fm-bearings-snapshot.sh"
 TMP_ROOT=$(fm_test_tmproot fm-captain-hold)
+mkdir -p "$TMP_ROOT"
+TMP_ROOT=$(cd "$TMP_ROOT" && pwd -P)
 TASKS_AXI_BIN=$(command -v tasks-axi || true)
 
 command -v jq >/dev/null 2>&1 || { echo "skip: jq not found"; exit 0; }
@@ -29,7 +31,8 @@ make_home() {  # <name>
 ## Done
 EOF
   fakebin=$(fm_fakebin "$home")
-  fm_fake_exit0 "$fakebin" legacy-provider treehouse no-mistakes gh gh-axi
+  fm_fake_exit0 "$fakebin" treehouse no-mistakes gh gh-axi
+  fm_test_fake_herdr "$fakebin"
   printf '%s\n' "$home"
 }
 
@@ -55,7 +58,8 @@ run_teardown() {  # <home> <id>
   local home=$1 id=$2
   PATH="$home/fakebin:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
-    FM_CONFIG_OVERRIDE="$home/config" "$TEARDOWN" "$id"
+    FM_CONFIG_OVERRIDE="$home/config" FM_FAKE_HERDR_AGENT_MISSING=1 \
+    "$TEARDOWN" "$id"
 }
 
 tasks_in() {  # <home> <tasks-axi args...>
@@ -84,8 +88,7 @@ run_shim() {  # <home> <command args...>
 
 write_origin_meta() {  # <home> <id> [kind]
   local home=$1 id=$2 kind=${3:-scout}
-  fm_write_meta "$home/state/$id.meta" \
-    "window=firstmate:fm-$id" \
+  fm_write_herdr_task_meta "$home/state/$id.meta" \
     "worktree=$home/projects/missing-$id" \
     "project=$home/projects/sample" \
     "harness=pi" \
@@ -590,7 +593,8 @@ test_secondmate_hold_stays_in_authoritative_home() {
 ## Done
 EOF
   fakebin=$(fm_fakebin "$mate")
-  fm_fake_exit0 "$fakebin" legacy-provider treehouse no-mistakes gh gh-axi
+  fm_fake_exit0 "$fakebin" treehouse no-mistakes gh gh-axi
+  fm_test_fake_herdr "$fakebin"
   origin=sample-mate-review
   mkdir -p "$mate/data/$origin"
   tasks_in "$mate" add "$origin" "Investigate secondmate sample" --kind scout --repo sample --start >/dev/null
@@ -700,6 +704,7 @@ exit 2
 SH
   chmod +x "$home/adapter-root/bin/fm-procevent-fixturechan.sh"
   mkdir -p "$home/procevent-claims"
+  chmod 0700 "$home/procevent-claims"
   run_captain "$home" bind "$fixture_sid" >/dev/null \
     || fail "could not bind the fixture channel"
   PATH="$home/fakebin:$PATH" FM_ROOT_OVERRIDE="$home/adapter-root" FM_HOME="$home" \
@@ -707,14 +712,23 @@ SH
     FM_PROCEVENT_CLAIM_ROOT="$home/procevent-claims" \
     "$ROOT/bin/fm-procevent.sh" register fixturechan "$fixture_sid" -- cat "$result" >/dev/null \
     || fail "could not register the fixture channel source"
+  set +e
   PATH="$home/fakebin:$PATH" FM_ROOT_OVERRIDE="$home/adapter-root" FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_PROCEVENT_CLAIM_ROOT="$home/procevent-claims" PI_CODING_AGENT=true \
-    "$ROOT/bin/fm-procevent.sh" start "$fixture_sid" >/dev/null 2>&1
+    "$ROOT/bin/fm-procevent.sh" start "$fixture_sid" \
+    > "$home/fixture-start.out" 2> "$home/fixture-start.err"
+  rc=$?
+  set -e
+  [ "$rc" -eq 0 ] || fail "the isolated fixture source did not start: $(cat "$home/fixture-start.err")"
+  for _ in $(seq 1 200); do
+    [ -f "$home/state/procevent-inbox/$fixture_sid.1.result" ] && break
+    sleep 0.02
+  done
   assert_absent "$home/state/procevent-inbox/$fixture_sid.1.handled" \
     "feeding a captain answer retired the notification firstmate still needs"
   assert_present "$home/state/procevent-inbox/$fixture_sid.1.result" \
-    "the fixture channel captured no result to feed"
+    "the isolated fixture channel captured no result to feed"
 
   show=$(tasks_in "$home" show sample-membership-call --full)
   assert_contains "$show" "state: done" "capturing the captain's answer left the membership call open"

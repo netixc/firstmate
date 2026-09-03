@@ -374,17 +374,8 @@ SH
 # for a herdr endpoint liveness read. No version/server-start calls: a
 # liveness check must never auto-start a server (fm-backend.sh's contract).
 make_fake_herdr() {
-  local fakebin=$1 live=$2
-  cat > "$fakebin/herdr" <<SH
-#!/usr/bin/env bash
-set -u
-if [ "\${1:-}" = pane ] && [ "\${2:-}" = get ]; then
-  [ "\${3:-}" = "$live" ] && exit 0
-  exit 1
-fi
-exit 1
-SH
-  chmod +x "$fakebin/herdr"
+  local fakebin=$1
+  fm_test_fake_herdr "$fakebin"
 }
 
 # run_session_start <home> <root> <path> [pi-harness]
@@ -1014,14 +1005,15 @@ $rec
 EOF
   make_fake_toolchain "$fakebin"
   make_fake_ps_pi "$fakebin"
-  make_fake_herdr "$fakebin" "p-live"
+  make_fake_herdr "$fakebin"
 
-  printf 'window=sess:p-live\nkind=ship\nbackend=herdr\n' > "$home/state/task-live.meta"
-  printf 'window=sess:p-dead\nkind=ship\nbackend=herdr\n' > "$home/state/task-dead.meta"
+  fm_write_herdr_task_meta "$home/state/task-live.meta" "kind=ship" "harness=pi"
+  fm_write_herdr_task_meta "$home/state/task-dead.meta" \
+    "kind=ship" "harness=pi" "fixture_herdr_presence=dead"
 
   out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
-  assert_contains "$out" "endpoint: alive (backend=herdr window=sess:p-live)" "live herdr endpoint not reported alive"
-  assert_contains "$out" "endpoint: dead (backend=herdr window=sess:p-dead)" "dead herdr endpoint not reported dead"
+  assert_contains "$out" "endpoint: alive (backend=herdr window=lab:w1:p2)" "live herdr endpoint not reported alive"
+  assert_contains "$out" "endpoint: dead (backend=herdr window=lab:w1:p3)" "dead herdr endpoint not reported dead"
 
   pass "herdr endpoint liveness is reported per task: alive for a live pane, dead for a gone one"
 }

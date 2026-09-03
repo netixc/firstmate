@@ -4,8 +4,8 @@
 # watcher/daemon/composer behavior, so they live here rather than in the generic
 # tests/lib.sh. Generic reporters/assertions come from lib.sh, pulled in below.
 
-# shellcheck source=tests/lib.sh
-. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck source=tests/fixtures.sh
+. "$(dirname "${BASH_SOURCE[0]}")/fixtures.sh"
 
 # fm-wake-drain.sh now calls fm-guard.sh to assert watcher liveness on every
 # drain. fm-guard.sh's first check warns when the firstmate PRIMARY checkout
@@ -81,6 +81,7 @@ fi
 exit 1
 SH
   chmod +x "$fakebin/tmux"
+  fm_test_fake_herdr "$fakebin"
   make_fake_crew_state "$fakebin" >/dev/null
   printf '%s\n' "$dir"
 }
@@ -229,10 +230,18 @@ case "${1:-} ${2:-}" in
     ;;
   "pane read")
     [ "${FM_FAKE_HERDR_PANE_ALIVE:-1}" = 1 ] || exit 1
-    [ -z "${FM_FAKE_HERDR_CAPTURE:-}" ] || cat "$FM_FAKE_HERDR_CAPTURE"
+    capture=${FM_FAKE_HERDR_CAPTURE:-${FM_FAKE_TMUX_CAPTURE:-}}
+    [ -z "$capture" ] || cat "$capture"
     exit 0
     ;;
-  "pane send-text"|"pane send-keys") exit "${FM_FAKE_HERDR_SEND_RC:-0}" ;;
+  "pane send-text")
+    [ "${FM_FAKE_HERDR_SEND_RC:-0}" = 0 ] || exit "$FM_FAKE_HERDR_SEND_RC"
+    printf '%s\n' "${4:-}" >> "${FM_FAKE_HERDR_SENT:-/dev/null}"
+    ;;
+  "pane send-keys")
+    [ "${FM_FAKE_HERDR_SEND_RC:-0}" = 0 ] || exit "$FM_FAKE_HERDR_SEND_RC"
+    printf '[ENTER]\n' >> "${FM_FAKE_HERDR_SENT:-/dev/null}"
+    ;;
   "agent get")
     if [ "${FM_FAKE_HERDR_AGENT_MISSING:-0}" = 1 ]; then
       printf '%s\n' '{"error":{"code":"agent_not_found"}}'

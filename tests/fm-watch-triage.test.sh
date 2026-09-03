@@ -26,6 +26,8 @@ WATCH="$ROOT/bin/fm-watch.sh"
 DRAIN="$ROOT/bin/fm-wake-drain.sh"
 
 TMP_ROOT=$(fm_test_tmproot fm-watch-triage-tests)
+mkdir -p "$TMP_ROOT"
+TMP_ROOT=$(cd "$TMP_ROOT" && pwd -P)
 
 ack_stopped_cycle() {  # <state>
   local state=$1 err sequence generation
@@ -295,14 +297,17 @@ test_malformed_seen_signature_reads_the_whole_log() {
 test_stale_is_terminal_classifier() {
   local dir state
   dir=$(make_case classify-stale); state="$dir/state"
+  fm_write_herdr_task_meta "$state/term.meta" "kind=ship" "harness=pi"
   printf 'done: ready in branch fm/x\n' > "$state/term.status"
-  stale_is_terminal "sess:fm-term" "$state" || fail "terminal stale status not classified terminal"
-  fm_write_meta "$state/herdr-term.meta" "window=default:w1:p2" "backend=herdr"
+  stale_is_terminal "lab:w1:p2" "$state" || fail "terminal stale status not classified terminal"
+  fm_write_herdr_task_meta "$state/herdr-term.meta" "kind=ship" "harness=pi"
   printf 'done: ready in branch fm/herdr\n' > "$state/herdr-term.status"
-  stale_is_terminal "default:w1:p2" "$state" || fail "terminal herdr stale status not resolved through metadata"
+  stale_is_terminal "lab:w1:p3" "$state" || fail "terminal herdr stale status not resolved through metadata"
+  fm_write_herdr_task_meta "$state/nonterm.meta" "kind=ship" "harness=pi"
   printf 'working: compiling\n' > "$state/nonterm.status"
-  stale_is_terminal "sess:fm-nonterm" "$state" && fail "non-terminal stale classified terminal"
-  stale_is_terminal "sess:fm-missing" "$state" && fail "stale with no status classified terminal"
+  stale_is_terminal "lab:w1:p4" "$state" && fail "non-terminal stale classified terminal"
+  fm_write_herdr_task_meta "$state/missing.meta" "kind=ship" "harness=pi"
+  stale_is_terminal "lab:w1:p5" "$state" && fail "stale with no status classified terminal"
   pass "stale_is_terminal: terminal status surfaces, non-terminal and no-status are benign"
 }
 
@@ -332,9 +337,9 @@ test_classifier_primitives() {
   status_is_captain_relevant "merged" || fail "legacy bare merged free-text not captain-relevant"
   status_is_captain_relevant "PR ready https://x/pull/2" \
     || fail "legacy bare PR ready free-text not captain-relevant"
-  [ "$(window_to_task "sess:fm-fix-login-k3")" = "fix-login-k3" ] || fail "window_to_task did not strip session+fm- prefix"
-  fm_write_meta "$state/herdr-task.meta" "window=default:w1:p2" "backend=herdr"
-  [ "$(window_to_task "default:w1:p2" "$state")" = "herdr-task" ] || fail "window_to_task did not resolve opaque backend target through metadata"
+  fm_write_herdr_task_meta "$state/fix-login-k3.meta" "kind=ship" "harness=pi"
+  [ "$(window_to_task "lab:w1:p2" "$state")" = "fix-login-k3" ] \
+    || fail "window_to_task did not resolve the exact Herdr target through metadata"
   FM_CAPTAIN_RE='custom-verb:' status_is_captain_relevant "custom-verb: x" || fail "FM_CAPTAIN_RE override not honored"
   FM_CAPTAIN_RE='custom-verb:' status_is_captain_relevant "done: x" && fail "FM_CAPTAIN_RE override did not replace the default verb set"
   FM_CAPTAIN_RE='merged|custom-verb:' status_is_captain_relevant "working: rebased onto merged #76" \
@@ -1002,17 +1007,18 @@ test_terminal_stale_surfaced() {
   local dir state fakebin out drain_out capture_file window key pane_hash sig pid
   dir=$(make_case terminal-stale); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; drain_out="$dir/drain.out"; capture_file="$dir/pane.txt"
-  window="test:fm-done"
+  window="lab:w1:p2"
   printf 'finished, awaiting review' > "$capture_file"
-  printf 'window=%s\nkind=ship\n' "$window" > "$state/done.meta"
+  fm_write_herdr_task_meta "$state/done.meta" "kind=ship" "harness=pi"
   printf 'done: PR https://example.test/pr/3\n' > "$state/done.status"
   sig=$(seen_sig "$state/done.status"); printf '%s' "$sig" > "$state/.seen-done_status"
   key=$(printf '%s' "$window" | tr ':/.' '___')
   pane_hash=$(hash_text "finished, awaiting review")
   printf '%s' "$pane_hash" > "$state/.hash-$key"
   printf '1\n' > "$state/.count-$key"
-  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
-    FM_STATE_OVERRIDE="$state" FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_FAKE_HERDR_TASK_ID='done' \
+    FM_FAKE_HERDR_CAPTURE="$capture_file" FM_STATE_OVERRIDE="$state" FM_POLL=1 \
+    FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
   pid=$!
   wait_for_exit "$pid" 100 || fail "watcher did not exit for a stale pane on a terminal status"
   grep -Fx "stale: $window" "$out" >/dev/null || fail "watcher did not print the terminal stale wake"
@@ -1035,9 +1041,9 @@ test_stale_terminal_status_overridden_by_active_run() {
   local dir state fakebin out drain_out capture_file window key pane_hash sig pid
   dir=$(make_case terminal-stale-overridden); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; drain_out="$dir/drain.out"; capture_file="$dir/pane.txt"
-  window="test:fm-validating"
+  window="lab:w1:p2"
   printf 'no-mistakes axi run: validating...' > "$capture_file"
-  printf 'window=%s\nkind=ship\n' "$window" > "$state/validating.meta"
+  fm_write_herdr_task_meta "$state/validating.meta" "kind=ship" "harness=pi"
   # The crew reported done BEFORE firstmate triggered no-mistakes validation;
   # this line never gets superseded by a newer status-log entry while the
   # pipeline itself runs.
@@ -1051,8 +1057,9 @@ test_stale_terminal_status_overridden_by_active_run() {
 
   # Phase A: a high escalation threshold means the first sighting is absorbed,
   # not surfaced, despite the captain-relevant "done:" status-log line.
-  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
-    FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=999 FM_POLL=1 FM_SIGNAL_GRACE=1 \
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_FAKE_HERDR_TASK_ID=validating \
+    FM_FAKE_HERDR_CAPTURE="$capture_file" FM_STATE_OVERRIDE="$state" \
+    FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=999 FM_POLL=1 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
   pid=$!
   if ! wait_poll_cycle "$state" "$pid"; then
@@ -1070,8 +1077,9 @@ test_stale_terminal_status_overridden_by_active_run() {
   # wedges and the next poll escalates exactly like the non-terminal case.
   echo $(( $(date +%s) - 500 )) > "$state/.stale-since-$key"
   : > "$out"
-  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
-    FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=240 FM_POLL=1 FM_SIGNAL_GRACE=1 \
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_FAKE_HERDR_TASK_ID=validating \
+    FM_FAKE_HERDR_CAPTURE="$capture_file" FM_STATE_OVERRIDE="$state" \
+    FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=240 FM_POLL=1 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
   pid=$!
   wait_for_exit "$pid" 100 || fail "watcher did not escalate an overridden stale terminal status past the threshold"
@@ -1090,9 +1098,9 @@ test_nonterminal_stale_provably_working_absorbed_then_escalated() {
   local dir state fakebin out drain_out capture_file window key pane_hash sig pid
   dir=$(make_case nonterminal-stale-working); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; drain_out="$dir/drain.out"; capture_file="$dir/pane.txt"
-  window="test:fm-quiet"
+  window="lab:w1:p2"
   printf 'idle building output' > "$capture_file"
-  printf 'window=%s\nkind=ship\n' "$window" > "$state/quiet.meta"
+  fm_write_herdr_task_meta "$state/quiet.meta" "kind=ship" "harness=pi"
   # Non-terminal status, and prime .seen-* so the signal scan does not pre-empt
   # the stale path.
   printf 'working: still compiling\n' > "$state/quiet.status"
@@ -1105,8 +1113,9 @@ test_nonterminal_stale_provably_working_absorbed_then_escalated() {
   export FM_FAKE_CREW_STATE='state: working · source: run-step · ci running'
 
   # Phase A: a high escalation threshold means the first sighting is absorbed.
-  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
-    FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=999 FM_POLL=1 FM_SIGNAL_GRACE=1 \
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_FAKE_HERDR_TASK_ID=quiet \
+    FM_FAKE_HERDR_CAPTURE="$capture_file" FM_STATE_OVERRIDE="$state" \
+    FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=999 FM_POLL=1 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
   pid=$!
   if ! wait_poll_cycle "$state" "$pid"; then
@@ -1123,8 +1132,9 @@ test_nonterminal_stale_provably_working_absorbed_then_escalated() {
   # (The subsequent-sight timer path does not re-read the crew state.)
   echo $(( $(date +%s) - 500 )) > "$state/.stale-since-$key"
   : > "$out"
-  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
-    FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=240 FM_POLL=1 FM_SIGNAL_GRACE=1 \
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_FAKE_HERDR_TASK_ID=quiet \
+    FM_FAKE_HERDR_CAPTURE="$capture_file" FM_STATE_OVERRIDE="$state" \
+    FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=240 FM_POLL=1 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
   pid=$!
   wait_for_exit "$pid" 100 || fail "watcher did not escalate a provably-working non-terminal stale past the threshold"
@@ -1146,9 +1156,9 @@ test_nonterminal_stale_not_working_surfaced() {
   local dir state fakebin out drain_out capture_file window key pane_hash sig pid
   dir=$(make_case nonterminal-stale-stopped); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; drain_out="$dir/drain.out"; capture_file="$dir/pane.txt"
-  window="test:fm-stopped"
+  window="lab:w1:p2"
   printf 'idle prompt, finished' > "$capture_file"
-  printf 'window=%s\nkind=ship\n' "$window" > "$state/stopped.meta"
+  fm_write_herdr_task_meta "$state/stopped.meta" "kind=ship" "harness=pi"
   # Non-terminal status (the crew never wrote a captain-relevant verb), .seen-*
   # primed so the signal scan does not pre-empt the stale path.
   printf 'working: implementing\n' > "$state/stopped.status"
@@ -1161,8 +1171,9 @@ test_nonterminal_stale_not_working_surfaced() {
   export FM_FAKE_CREW_STATE='state: unknown · source: none · no current-state source available'
 
   # Even with a high wedge threshold, a not-provably-working stale surfaces at once.
-  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
-    FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=999 FM_POLL=1 FM_SIGNAL_GRACE=1 \
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_FAKE_HERDR_TASK_ID=stopped \
+    FM_FAKE_HERDR_CAPTURE="$capture_file" FM_STATE_OVERRIDE="$state" \
+    FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=999 FM_POLL=1 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
   pid=$!
   wait_for_exit "$pid" 100 || fail "watcher did not surface a not-provably-working non-terminal stale at once"
@@ -1187,9 +1198,10 @@ test_nonterminal_stale_paused_absorbed_then_resurfaced() {
   local dir state fakebin out drain_out capture_file window key pane_hash sig pid back statusf
   dir=$(make_case nonterminal-stale-paused); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; drain_out="$dir/drain.out"; capture_file="$dir/pane.txt"
-  window="test:fm-held"
+  window="lab:w1:p2"
   printf 'idle, holding for upstream' > "$capture_file"
-  printf 'window=%s\nkind=ship\n' "$window" > "$state/held.meta"
+  fm_write_herdr_task_meta "$state/held.meta" "kind=ship" "harness=pi" \
+    "fixture_herdr_agent=missing"
   statusf="$state/held.status"
   # A DECLARED pause (not captain-relevant), .seen-* primed so the signal scan does
   # not pre-empt the stale path.
@@ -1256,9 +1268,10 @@ test_exited_declared_pause_is_bounded_but_live_gate_surfaces() {
   local dir state fakebin out capture_file statusf window key pane_hash sig pid back round wakes bare
   dir=$(make_case exited-declared-pause); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; capture_file="$dir/pane.txt"; statusf="$state/held.status"
-  window="test:fm-held"
+  window="lab:w1:p2"
   printf 'idle bare shell after agent exit\n' > "$capture_file"
-  printf 'window=%s\nkind=ship\nharness=pi\nbackend=tmux\n' "$window" > "$state/held.meta"
+  fm_write_herdr_task_meta "$state/held.meta" "kind=ship" "harness=pi" \
+    "fixture_herdr_agent=missing"
   printf 'paused: held per captain while an external decision is pending\n' > "$statusf"
   back=$(( $(date +%s) - 500 ))
   if [ "$(uname)" = Darwin ]; then touch -mt "$(date -r "$back" '+%Y%m%d%H%M.%S')" "$statusf"
@@ -1302,9 +1315,10 @@ test_exited_declared_pause_is_bounded_but_live_gate_surfaces() {
 
   dir=$(make_case exited-captain-held); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; capture_file="$dir/pane.txt"; statusf="$state/held.status"
-  window="test:fm-held"
+  window="lab:w1:p2"
   printf 'idle bare shell after captain-held transfer\n' > "$capture_file"
-  printf 'window=%s\nkind=ship\nharness=pi\nbackend=tmux\n' "$window" > "$state/held.meta"
+  fm_write_herdr_task_meta "$state/held.meta" "kind=ship" "harness=pi" \
+    "fixture_herdr_agent=missing"
   printf 'captain-held [key=route]: tracked by held-decision-route\n' > "$statusf"
   back=$(( $(date +%s) - 500 ))
   if [ "$(uname)" = Darwin ]; then touch -mt "$(date -r "$back" '+%Y%m%d%H%M.%S')" "$statusf"
@@ -1327,9 +1341,9 @@ test_exited_declared_pause_is_bounded_but_live_gate_surfaces() {
 
   dir=$(make_case alive-decision-gate); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; capture_file="$dir/pane.txt"; statusf="$state/gate.status"
-  window="test:fm-gate"
+  window="lab:w1:p2"
   printf 'idle external-decision gate\n' > "$capture_file"
-  printf 'window=%s\nkind=ship\nharness=pi\nbackend=tmux\n' "$window" > "$state/gate.meta"
+  fm_write_herdr_task_meta "$state/gate.meta" "kind=ship" "harness=pi"
   printf 'paused: waiting at an active external-decision gate\n' > "$statusf"
   sig=$(seen_sig "$statusf"); printf '%s' "$sig" > "$state/.seen-gate_status"
   key=$(printf '%s' "$window" | tr ':/.' '___')
@@ -1375,9 +1389,9 @@ test_secondmate_paused_resurfaces_in_normal_mode() {
   local dir state fakebin out capture_file statusf window key pane_hash sig pid back
   dir=$(make_case secondmate-paused-resurface); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; capture_file="$dir/pane.txt"; statusf="$state/secondmate-held.status"
-  window="test:fm-secondmate-held"
+  window="lab:w1:p2"
   printf 'idle awaiting external\n' > "$capture_file"
-  printf 'window=%s\nkind=secondmate\n' "$window" > "$state/secondmate-held.meta"
+  fm_write_herdr_task_meta "$state/secondmate-held.meta" "kind=secondmate" "harness=pi"
   printf 'paused: awaiting the upstream release\n' > "$statusf"
   back=$(( $(date +%s) - 500 ))
   if [ "$(uname)" = Darwin ]; then touch -mt "$(date -r "$back" '+%Y%m%d%H%M.%S')" "$statusf"
@@ -1409,9 +1423,9 @@ test_secondmate_captain_held_resurfaces_in_normal_mode() {
   local dir state fakebin out capture_file statusf window key pane_hash sig pid back
   dir=$(make_case secondmate-held-resurface); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; capture_file="$dir/pane.txt"; statusf="$state/secondmate-hold.status"
-  window="test:fm-secondmate-hold"
+  window="lab:w1:p2"
   printf 'idle awaiting the captain\n' > "$capture_file"
-  printf 'window=%s\nkind=secondmate\n' "$window" > "$state/secondmate-hold.meta"
+  fm_write_herdr_task_meta "$state/secondmate-hold.meta" "kind=secondmate" "harness=pi"
   printf 'captain-held [key=route]: tracked by task-decision-route\n' > "$statusf"
   back=$(( $(date +%s) - 500 ))
   if [ "$(uname)" = Darwin ]; then touch -mt "$(date -r "$back" '+%Y%m%d%H%M.%S')" "$statusf"
@@ -1439,9 +1453,9 @@ test_secondmate_nonpaused_stale_remains_suppressed() {
   local dir state fakebin out capture_file statusf window key pane_hash sig pid
   dir=$(make_case secondmate-stale-suppressed); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; capture_file="$dir/pane.txt"; statusf="$state/secondmate-working.status"
-  window="test:fm-secondmate-working"
+  window="lab:w1:p2"
   printf 'idle while the parent supervises\n' > "$capture_file"
-  printf 'window=%s\nkind=secondmate\n' "$window" > "$state/secondmate-working.meta"
+  fm_write_herdr_task_meta "$state/secondmate-working.meta" "kind=secondmate" "harness=pi"
   printf 'working: the parent supervises this secondmate\n' > "$statusf"
   sig=$(seen_sig "$statusf"); printf '%s' "$sig" > "$state/.seen-secondmate-working_status"
   key=$(printf '%s' "$window" | tr '.:/' '___')
@@ -1462,8 +1476,8 @@ test_secondmate_nonpaused_stale_remains_suppressed() {
 test_secondmate_unpause_clears_pause_tracking() {
   local dir state fakebin out statusf window key pid
   dir=$(make_case secondmate-unpause-clears); state="$dir/state"; fakebin="$dir/fakebin"
-  out="$dir/watch.out"; statusf="$state/secondmate-resumed.status"; window="test:fm-secondmate-resumed"
-  printf 'window=%s\nkind=secondmate\n' "$window" > "$state/secondmate-resumed.meta"
+  out="$dir/watch.out"; statusf="$state/secondmate-resumed.status"; window="lab:w1:p2"
+  fm_write_herdr_task_meta "$state/secondmate-resumed.meta" "kind=secondmate" "harness=pi"
   printf 'working: upstream landed\n' > "$statusf"
   printf '%s' "$(seen_sig "$statusf")" > "$state/.seen-secondmate-resumed_status"
   key=${window//:/_}
@@ -1488,9 +1502,9 @@ test_secondmate_unpause_clears_pause_tracking() {
 test_nonterminal_stale_pause_transitions_reclassify_unchanged_hash() {
   local dir state fakebin out capture_file window key pane_hash sig pid i
   dir=$(make_case nonterminal-stale-pause-transition); state="$dir/state"; fakebin="$dir/fakebin"
-  out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="test:fm-transition"
+  out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="lab:w1:p2"
   printf 'idle awaiting external\n' > "$capture_file"
-  printf 'window=%s\nkind=ship\n' "$window" > "$state/transition.meta"
+  fm_write_herdr_task_meta "$state/transition.meta" "kind=ship" "harness=pi"
   printf 'paused: awaiting the upstream release\n' > "$state/transition.status"
   sig=$(seen_sig "$state/transition.status"); printf '%s' "$sig" > "$state/.seen-transition_status"
   key=$(printf '%s' "$window" | tr ':/.' '___')
@@ -1545,9 +1559,9 @@ test_nonterminal_stale_pause_transitions_reclassify_unchanged_hash() {
 test_nonterminal_paused_rechecks_authoritative_state() {
   local dir state fakebin out capture_file window key pane_hash sig pid
   dir=$(make_case nonterminal-paused-recheck); state="$dir/state"; fakebin="$dir/fakebin"
-  out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="test:fm-pause-recheck"
+  out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="lab:w1:p2"
   printf 'idle awaiting external\n' > "$capture_file"
-  printf 'window=%s\nkind=ship\n' "$window" > "$state/pause-recheck.meta"
+  fm_write_herdr_task_meta "$state/pause-recheck.meta" "kind=ship" "harness=pi"
   printf 'paused: awaiting the upstream release\n' > "$state/pause-recheck.status"
   sig=$(seen_sig "$state/pause-recheck.status"); printf '%s' "$sig" > "$state/.seen-pause-recheck_status"
   key=$(printf '%s' "$window" | tr ':/.' '___')
@@ -1575,9 +1589,9 @@ test_nonterminal_paused_rechecks_authoritative_state() {
 test_paused_authoritative_working_preserves_wedge_timer() {
   local dir state fakebin out capture_file window key pane_hash sig pid since
   dir=$(make_case paused-working-preserves-wedge-timer); state="$dir/state"; fakebin="$dir/fakebin"
-  out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="test:fm-paused-working"
+  out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="lab:w1:p2"
   printf 'idle awaiting external\n' > "$capture_file"
-  printf 'window=%s\nkind=ship\n' "$window" > "$state/paused-working.meta"
+  fm_write_herdr_task_meta "$state/paused-working.meta" "kind=ship" "harness=pi"
   printf 'paused: awaiting the upstream release\n' > "$state/paused-working.status"
   sig=$(seen_sig "$state/paused-working.status"); printf '%s' "$sig" > "$state/.seen-paused-working_status"
   key=$(printf '%s' "$window" | tr ':/.' '___')
@@ -1628,9 +1642,9 @@ test_wedge_escalation_marks_demand_deep_inspection_after_threshold() {
   local dir state fakebin out capture_file window key pane_hash sig pid n
   dir=$(make_case wedge-escalation); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; capture_file="$dir/pane.txt"
-  window="test:fm-wedged"
+  window="lab:w1:p2"
   printf 'idle building output' > "$capture_file"
-  printf 'window=%s\nkind=ship\n' "$window" > "$state/wedged.meta"
+  fm_write_herdr_task_meta "$state/wedged.meta" "kind=ship" "harness=pi"
   printf 'working: still monitoring ci\n' > "$state/wedged.status"
   sig=$(seen_sig "$state/wedged.status"); printf '%s' "$sig" > "$state/.seen-wedged_status"
   key=$(printf '%s' "$window" | tr ':/.' '___')
@@ -1643,8 +1657,9 @@ test_wedge_escalation_marks_demand_deep_inspection_after_threshold() {
   # Priming round: first sighting of this stale hash classifies and absorbs it
   # (establishing .stale-$key and starting the wedge timer) without going
   # through wedge_timer_check at all - mirrors the existing wedge tests' Phase A.
-  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
-    FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=999 FM_POLL=1 FM_SIGNAL_GRACE=1 \
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_FAKE_HERDR_TASK_ID=wedged \
+    FM_FAKE_HERDR_CAPTURE="$capture_file" FM_STATE_OVERRIDE="$state" \
+    FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=999 FM_POLL=1 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
   pid=$!
   if ! wait_poll_cycle "$state" "$pid"; then
@@ -1660,8 +1675,9 @@ test_wedge_escalation_marks_demand_deep_inspection_after_threshold() {
     # path does not re-read the crew state).
     echo $(( $(date +%s) - 500 )) > "$state/.stale-since-$key"
     : > "$out"
-    PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
-      FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=240 FM_POLL=1 FM_SIGNAL_GRACE=1 \
+    PATH="$fakebin:$PATH" FM_HOME="$dir" FM_FAKE_HERDR_TASK_ID=wedged \
+      FM_FAKE_HERDR_CAPTURE="$capture_file" FM_STATE_OVERRIDE="$state" \
+      FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=240 FM_POLL=1 FM_SIGNAL_GRACE=1 \
       FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
     pid=$!
     wait_for_exit "$pid" 100 || fail "watcher did not escalate on consecutive wedge round $n: $(cat "$out")"
@@ -1683,9 +1699,9 @@ test_wedge_escalation_resets_when_pane_becomes_active() {
   local dir state fakebin out capture_file window key pane_hash sig pid
   dir=$(make_case wedge-escalation-reset); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; capture_file="$dir/pane.txt"
-  window="test:fm-wedged-reset"
+  window="lab:w1:p2"
   printf 'idle building output' > "$capture_file"
-  printf 'window=%s\nkind=ship\n' "$window" > "$state/wedged-reset.meta"
+  fm_write_herdr_task_meta "$state/wedged-reset.meta" "kind=ship" "harness=pi"
   printf 'working: still monitoring ci\n' > "$state/wedged-reset.status"
   sig=$(seen_sig "$state/wedged-reset.status"); printf '%s' "$sig" > "$state/.seen-wedged-reset_status"
   key=$(printf '%s' "$window" | tr ':/.' '___')
@@ -1699,8 +1715,9 @@ test_wedge_escalation_resets_when_pane_becomes_active() {
   # The pane content changes (the crew is active again): the hash no longer
   # matches, so the watcher resets escalation bookkeeping instead of escalating.
   printf 'new output, crew active again' > "$capture_file"
-  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
-    FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=240 FM_POLL=1 FM_SIGNAL_GRACE=1 \
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_FAKE_HERDR_TASK_ID=wedged-reset \
+    FM_FAKE_HERDR_CAPTURE="$capture_file" FM_STATE_OVERRIDE="$state" \
+    FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=240 FM_POLL=1 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
   pid=$!
   if ! wait_poll_cycle "$state" "$pid"; then
@@ -1728,9 +1745,9 @@ test_wedge_escalation_resets_when_pane_becomes_active() {
 test_busy_pane_below_turn_age_bound_is_absorbed() {
   local dir state fakebin out capture_file window key sig pid
   dir=$(make_case busy-below-turn-age); state="$dir/state"; fakebin="$dir/fakebin"
-  out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="test:fm-busy-fresh"
+  out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="lab:w1:p2"
   printf 'Working... (12.3s)' > "$capture_file"
-  printf 'window=%s\nkind=ship\nharness=pi\n' "$window" > "$state/busy-fresh.meta"
+  fm_write_herdr_task_meta "$state/busy-fresh.meta" "kind=ship" "harness=pi" "fixture_herdr_agent=working"
   record_pi_busy "$state" busy-fresh
   printf 'working: setup complete\n' > "$state/busy-fresh.status"
   sig=$(seen_sig "$state/busy-fresh.status"); printf '%s' "$sig" > "$state/.seen-busy-fresh_status"
@@ -1754,9 +1771,9 @@ test_busy_pane_below_turn_age_bound_is_absorbed() {
 test_busy_pane_stable_hash_escalates_past_turn_age_bound() {
   local dir state fakebin out capture_file window key pane_hash sig pid
   dir=$(make_case busy-stable-hash-turn-age); state="$dir/state"; fakebin="$dir/fakebin"
-  out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="test:fm-busy-stable"
+  out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="lab:w1:p2"
   printf 'Working...' > "$capture_file"
-  printf 'window=%s\nkind=ship\nharness=pi\n' "$window" > "$state/busy-stable.meta"
+  fm_write_herdr_task_meta "$state/busy-stable.meta" "kind=ship" "harness=pi" "fixture_herdr_agent=working"
   record_pi_busy "$state" busy-stable
   printf 'working: setup complete\n' > "$state/busy-stable.status"
   sig=$(seen_sig "$state/busy-stable.status"); printf '%s' "$sig" > "$state/.seen-busy-stable_status"
@@ -1799,9 +1816,9 @@ test_busy_pane_stable_hash_escalates_past_turn_age_bound() {
 test_busy_pane_changing_hash_escalates_past_turn_age_bound() {
   local dir state fakebin out capture_file window key pid
   dir=$(make_case busy-changing-hash-turn-age); state="$dir/state"; fakebin="$dir/fakebin"
-  out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="test:fm-busy-ticking"
+  out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="lab:w1:p2"
   printf 'Working... (3600.1s)' > "$capture_file"
-  printf 'window=%s\nkind=ship\nharness=pi\n' "$window" > "$state/busy-ticking.meta"
+  fm_write_herdr_task_meta "$state/busy-ticking.meta" "kind=ship" "harness=pi" "fixture_herdr_agent=working"
   record_pi_busy "$state" busy-ticking
   printf 'working: setup complete\n' > "$state/busy-ticking.status"
   sig=$(seen_sig "$state/busy-ticking.status"); printf '%s' "$sig" > "$state/.seen-busy-ticking_status"
@@ -1841,9 +1858,9 @@ test_busy_pane_changing_hash_escalates_past_turn_age_bound() {
 test_busy_pane_turn_end_touch_resets_age() {
   local dir state fakebin out capture_file window key pane_hash sig pid
   dir=$(make_case busy-turn-end-resets-age); state="$dir/state"; fakebin="$dir/fakebin"
-  out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="test:fm-busy-reset"
+  out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="lab:w1:p2"
   printf 'Working...' > "$capture_file"
-  printf 'window=%s\nkind=ship\nharness=pi\n' "$window" > "$state/busy-reset.meta"
+  fm_write_herdr_task_meta "$state/busy-reset.meta" "kind=ship" "harness=pi" "fixture_herdr_agent=working"
   record_pi_busy "$state" busy-reset
   printf 'working: setup complete\n' > "$state/busy-reset.status"
   sig=$(seen_sig "$state/busy-reset.status"); printf '%s' "$sig" > "$state/.seen-busy-reset_status"
@@ -1875,9 +1892,9 @@ test_busy_pane_turn_end_touch_resets_age() {
 test_busy_pane_repeated_escalation_reaches_demand_deep_inspection() {
   local dir state fakebin out capture_file window key pane_hash sig pid n
   dir=$(make_case busy-turn-age-demand-inspect); state="$dir/state"; fakebin="$dir/fakebin"
-  out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="test:fm-busy-demand-inspect"
+  out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="lab:w1:p2"
   printf 'Working...' > "$capture_file"
-  printf 'window=%s\nkind=ship\nharness=pi\n' "$window" > "$state/busy-demand.meta"
+  fm_write_herdr_task_meta "$state/busy-demand.meta" "kind=ship" "harness=pi" "fixture_herdr_agent=working"
   record_pi_busy "$state" busy-demand
   printf 'working: setup complete\n' > "$state/busy-demand.status"
   sig=$(seen_sig "$state/busy-demand.status"); printf '%s' "$sig" > "$state/.seen-busy-demand_status"
@@ -1934,10 +1951,10 @@ test_busy_pane_repeated_escalation_reaches_demand_deep_inspection() {
 test_busy_declared_pause_is_rechecked_not_wedge_escalated() {
   local dir state fakebin out capture_file window key sig pid statusf back
   dir=$(make_case busy-declared-pause); state="$dir/state"; fakebin="$dir/fakebin"
-  out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="test:fm-review-scout"
+  out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="lab:w1:p2"
   statusf="$state/review-scout.status"
   printf 'Working... (7200.4s) lavish-axi poll' > "$capture_file"
-  printf 'window=%s\nkind=scout\nharness=pi\n' "$window" > "$state/review-scout.meta"
+  fm_write_herdr_task_meta "$state/review-scout.meta" "kind=scout" "harness=pi" "fixture_herdr_agent=working"
   record_pi_busy "$state" review-scout
   printf 'paused: hosting the Lavish review, awaiting captain feedback\n' > "$statusf"
   sig=$(seen_sig "$statusf"); printf '%s' "$sig" > "$state/.seen-review-scout_status"
@@ -2041,10 +2058,11 @@ test_busy_declared_pause_is_rechecked_not_wedge_escalated() {
 test_afk_busy_declared_pause_hands_off_plain_stale() {
   local dir state fakebin out capture_file window key sig pid statusf
   dir=$(make_case afk-busy-declared-pause); state="$dir/state"; fakebin="$dir/fakebin"
-  out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="test:fm-afk-review-scout"
+  out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="lab:w1:p2"
   statusf="$state/afk-review-scout.status"
   printf 'Working... (7200.4s) lavish-axi poll' > "$capture_file"
-  printf 'window=%s\nkind=scout\nharness=pi\n' "$window" > "$state/afk-review-scout.meta"
+  fm_write_herdr_task_meta "$state/afk-review-scout.meta" "kind=scout" "harness=pi" \
+    "fixture_herdr_agent=working"
   record_pi_busy "$state" afk-review-scout
   printf 'paused: hosting the Lavish review, awaiting captain feedback\n' > "$statusf"
   sig=$(seen_sig "$statusf"); printf '%s' "$sig" > "$state/.seen-afk-review-scout_status"
@@ -2127,7 +2145,7 @@ test_afk_busy_declared_pause_hands_off_plain_stale() {
 test_afk_busy_declared_pause_ticking_pane_hands_off_once() {
   local dir state fakebin out drain_out window key sig pid statusf ticks round prev_hash cur_hash prev_ticks
   dir=$(make_case afk-busy-declared-pause-ticking); state="$dir/state"; fakebin="$dir/fakebin"
-  out="$dir/watch.out"; drain_out="$dir/drain.out"; window="test:fm-afk-ticking-scout"
+  out="$dir/watch.out"; drain_out="$dir/drain.out"; window="lab:w1:p2"
   statusf="$state/afk-ticking-scout.status"; ticks="$dir/ticks"
   cat > "$fakebin/tmux" <<'SH'
 #!/usr/bin/env bash
@@ -2149,7 +2167,8 @@ esac
 exit 1
 SH
   chmod +x "$fakebin/tmux"
-  printf 'window=%s\nkind=scout\nharness=pi\n' "$window" > "$state/afk-ticking-scout.meta"
+  fm_write_herdr_task_meta "$state/afk-ticking-scout.meta" "kind=scout" "harness=pi" \
+    "fixture_herdr_agent=working"
   record_pi_busy "$state" afk-ticking-scout
   printf 'paused: hosting the Lavish review, awaiting captain feedback\n' > "$statusf"
   sig=$(seen_sig "$statusf"); printf '%s' "$sig" > "$state/.seen-afk-ticking-scout_status"
@@ -2232,9 +2251,10 @@ SH
 test_busy_pane_default_turn_age_bound_is_3600s() {
   local dir state fakebin out capture_file window key pane_hash sig pid
   dir=$(make_case busy-default-turn-age); state="$dir/state"; fakebin="$dir/fakebin"
-  out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="test:fm-busy-default"
+  out="$dir/watch.out"; capture_file="$dir/pane.txt"; window="lab:w1:p2"
   printf 'Working...' > "$capture_file"
-  printf 'window=%s\nkind=ship\nharness=pi\n' "$window" > "$state/busy-default.meta"
+  fm_write_herdr_task_meta "$state/busy-default.meta" "kind=ship" "harness=pi" \
+    "fixture_herdr_agent=working"
   record_pi_busy "$state" busy-default
   printf 'working: setup complete\n' > "$state/busy-default.status"
   sig=$(seen_sig "$state/busy-default.status"); printf '%s' "$sig" > "$state/.seen-busy-default_status"
@@ -2275,9 +2295,9 @@ test_nonterminal_stale_repairs_missing_or_corrupt_timer() {
   local dir state fakebin out capture_file window key pane_hash sig pid since
   dir=$(make_case nonterminal-stale-timer-repair); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; capture_file="$dir/pane.txt"
-  window="test:fm-quiet-timer"
+  window="lab:w1:p2"
   printf 'idle building output' > "$capture_file"
-  printf 'window=%s\nkind=ship\n' "$window" > "$state/quiet-timer.meta"
+  fm_write_herdr_task_meta "$state/quiet-timer.meta" "kind=ship" "harness=pi"
   printf 'working: still compiling\n' > "$state/quiet-timer.status"
   sig=$(seen_sig "$state/quiet-timer.status"); printf '%s' "$sig" > "$state/.seen-quiet-timer_status"
   key=$(printf '%s' "$window" | tr ':/.' '___')
@@ -2330,10 +2350,10 @@ test_wedge_escalation_deferred_while_worktree_is_written() {
   local dir state fakebin out drain_out capture_file window key pane_hash sig pid wt back
   dir=$(make_case wedge-worktree-writes); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; drain_out="$dir/drain.out"; capture_file="$dir/pane.txt"
-  window="test:fm-writing"; wt="$dir/wt"
+  window="lab:w1:p2"; wt="$dir/wt"
   mkdir -p "$wt/src"
   printf 'idle building output' > "$capture_file"
-  printf 'window=%s\nkind=ship\nworktree=%s\n' "$window" "$wt" > "$state/writing.meta"
+  fm_write_herdr_task_meta "$state/writing.meta" "kind=ship" "harness=pi" "worktree=$wt"
   printf 'working: implementing\n' > "$state/writing.status"
   sig=$(seen_sig "$state/writing.status"); printf '%s' "$sig" > "$state/.seen-writing_status"
   key=$(printf '%s' "$window" | tr ':/.' '___')
@@ -2398,10 +2418,10 @@ test_write_deferral_resurfaces_on_the_bounded_cadence() {
   local dir state fakebin out drain_out capture_file window key pane_hash sig pid wt back
   dir=$(make_case wedge-worktree-resurface); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; drain_out="$dir/drain.out"; capture_file="$dir/pane.txt"
-  window="test:fm-churn"; wt="$dir/wt"
+  window="lab:w1:p2"; wt="$dir/wt"
   mkdir -p "$wt/src"
   printf 'idle building output' > "$capture_file"
-  printf 'window=%s\nkind=ship\nworktree=%s\n' "$window" "$wt" > "$state/churn.meta"
+  fm_write_herdr_task_meta "$state/churn.meta" "kind=ship" "harness=pi" "worktree=$wt"
   printf 'working: implementing\n' > "$state/churn.status"
   sig=$(seen_sig "$state/churn.status"); printf '%s' "$sig" > "$state/.seen-churn_status"
   key=$(printf '%s' "$window" | tr ':/.' '___')
@@ -2443,11 +2463,12 @@ test_secondmate_home_supervision_churn_is_not_write_evidence() {
   local dir state fakebin out drain_out capture_file window key sig pid home back
   dir=$(make_case secondmate-home-churn); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; drain_out="$dir/drain.out"; capture_file="$dir/pane.txt"
-  window="test:fm-mate"; home="$dir/mate-home"
+  window="lab:w1:p2"; home="$dir/mate-home"
   mkdir -p "$home/state"
   printf 'sm-mate\n' > "$home/.fm-secondmate-home"
   printf 'Working... (12.3s)' > "$capture_file"
-  printf 'window=%s\nkind=ship\nharness=pi\nworktree=%s\n' "$window" "$home" > "$state/mate.meta"
+  fm_write_herdr_task_meta "$state/mate.meta" "kind=ship" "harness=pi" \
+    "worktree=$home" "fixture_herdr_agent=working"
   record_pi_busy "$state" mate
   # An ordinary crew recording a provisioned mate home is the route that actually
   # reaches the probe: a kind=secondmate window of its own is triaged only under a
@@ -2493,10 +2514,10 @@ test_timer_repair_drops_a_finished_write_deferral_chain() {
   local dir state fakebin out capture_file window key pane_hash sig pid wt back
   dir=$(make_case wedge-write-chain-timer-repair); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; capture_file="$dir/pane.txt"
-  window="test:fm-chain-repair"; wt="$dir/wt"
+  window="lab:w1:p2"; wt="$dir/wt"
   mkdir -p "$wt/src"
   printf 'idle building output' > "$capture_file"
-  printf 'window=%s\nkind=ship\nworktree=%s\n' "$window" "$wt" > "$state/chain-repair.meta"
+  fm_write_herdr_task_meta "$state/chain-repair.meta" "kind=ship" "harness=pi" "worktree=$wt"
   printf 'working: implementing\n' > "$state/chain-repair.status"
   sig=$(seen_sig "$state/chain-repair.status"); printf '%s' "$sig" > "$state/.seen-chain-repair_status"
   key=$(printf '%s' "$window" | tr ':/.' '___')
@@ -2562,10 +2583,10 @@ test_terminal_first_sight_drops_a_finished_write_deferral_chain() {
   local dir state fakebin out capture_file window key pane_hash sig pid wt back
   dir=$(make_case wedge-write-chain-first-sight); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; capture_file="$dir/pane.txt"
-  window="test:fm-chain-firstsight"; wt="$dir/wt"
+  window="lab:w1:p2"; wt="$dir/wt"
   mkdir -p "$wt/src"
   printf 'no-mistakes axi run: validating...' > "$capture_file"
-  printf 'window=%s\nkind=ship\nworktree=%s\n' "$window" "$wt" > "$state/chain-first.meta"
+  fm_write_herdr_task_meta "$state/chain-first.meta" "kind=ship" "harness=pi" "worktree=$wt"
   printf 'done: implementation complete, ready to validate\n' > "$state/chain-first.status"
   sig=$(seen_sig "$state/chain-first.status"); printf '%s' "$sig" > "$state/.seen-chain-first_status"
   key=$(printf '%s' "$window" | tr ':/.' '___')
@@ -3085,9 +3106,9 @@ test_afk_paused_changed_pane_hands_off_plain_stale() {
   local dir state fakebin out drain_out capture_file statusf window key sig pid back
   dir=$(make_case afk-paused-changed-pane); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; drain_out="$dir/drain.out"; capture_file="$dir/pane.txt"
-  window="test:fm-afk-held"
+  window="lab:w1:p2"
   printf 'idle, awaiting upstream\n' > "$capture_file"
-  printf 'window=%s\nkind=ship\n' "$window" > "$state/afk-held.meta"
+  fm_write_herdr_task_meta "$state/afk-held.meta" "kind=ship" "harness=pi"
   statusf="$state/afk-held.status"
   printf 'paused: awaiting the upstream tool release\n' > "$statusf"
   back=$(( $(date +%s) - 500 ))

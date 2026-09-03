@@ -10,6 +10,8 @@ set -u
 
 BOARD="$ROOT/bin/fm-bearings-board.sh"
 TMP_ROOT=$(fm_test_tmproot fm-bearings-board)
+mkdir -p "$TMP_ROOT"
+TMP_ROOT=$(cd "$TMP_ROOT" && pwd -P)
 
 command -v jq >/dev/null 2>&1 || { echo "skip: jq not found"; exit 0; }
 

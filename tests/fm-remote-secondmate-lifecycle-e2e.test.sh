@@ -39,7 +39,7 @@ cleanup() {
       sleep 0.05
     done
   fi
-  rm -rf -- "$TMP_ROOT"
+  [ "${FM_TEST_KEEP_ARTIFACTS:-0}" = 1 ] || rm -rf -- "$TMP_ROOT"
 }
 trap cleanup EXIT
 
@@ -121,7 +121,7 @@ cat > "$PARENT/data/projects.md" <<EOF
 - alpha [direct-PR] - alpha project (added 2026-08-02)
 EOF
 printf 'pi\n' > "$PARENT/config/secondmate-harness"
-printf 'tmux\n' > "$PARENT/config/backend"
+printf 'herdr\n' > "$PARENT/config/backend"
 printf 'primary harness defaults\n' > "$PARENT/config/crew-harness"
 
 cat > "$FAKEBIN/fake-ssh" <<'SH'
@@ -729,8 +729,9 @@ publish_healthy_watcher_identity "$PARENT/state" "$PARENT" "$ROOT/bin/fm-watch.s
   || fail "remote endpoint was not projected alive from its own host"
 # Herdr reports a native agent state, so the delivery observation resolves
 # without the rendered-output fallback a tmux endpoint needs.
-[ "$(remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh observe ios)" = idle ] \
-  || fail "remote endpoint delivery observation did not execute on its own host"
+observe_out=$(remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh observe ios)
+[ "$observe_out" = idle ] \
+  || fail "remote endpoint delivery observation did not execute on its own host: $observe_out"
 capture_out=$(remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh capture ios 20) \
   || fail "valid remote capture did not pass route-aware endpoint validation"
 assert_contains "$capture_out" '│ >   │' "valid remote capture did not return the exact fm-remote pane"

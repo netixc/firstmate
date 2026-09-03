@@ -19,8 +19,8 @@
 #      while fm-send's marking of the same task is untouched.
 set -u
 
-# shellcheck source=tests/lib.sh
-. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck source=tests/fixtures.sh
+. "$(dirname "${BASH_SOURCE[0]}")/fixtures.sh"
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-control-lib.sh"
 # shellcheck source=/dev/null
@@ -43,81 +43,18 @@ VERIFIED_HARNESSES="pi"
 # its composer empty on cancel.
 verified_adapter_contract() {  # <harness> -> exit command, interrupt key, repeat, clear key
   case "$1" in
-    pi) printf '/quit\tEscape\t1\t\n' ;;
+    pi) printf '/quit\tescape\t1\t\n' ;;
     *) return 1 ;;
   esac
 }
 
 # --- fake session provider --------------------------------------------------
-#
-# A tmux stub whose whole model is four files under $FM_FAKE_DIR:
-#   command  the pane's foreground process name, which IS the agent-state
-#            classifier's input (bin/backends/tmux.sh).
-#   cwd      the pane's current path.
-#   literal  every `send-keys -l` payload, one per line - exactly what was
-#            typed into the composer.
-#   keys     every named key send, one per line.
-#   pane     optional capture-pane override, for an adapter whose busy verdict
-#            is read from the rendered tail.
-# Two transitions make it a lifecycle model rather than a recorder: a literal
-# that is the harness's exit command flips `command` to a shell (the agent
-# stopped), and a literal carrying a launch brief flips it to the value in
-# `becomes` (a new agent came up). FM_FAKE_NEVER_DIES suppresses the first, so
-# a stubborn agent can be tested too.
-make_tmux_stub() {  # <dir> -> echoes fakebin dir
+# The shared Herdr fixture models exact hierarchy, composer input, lifecycle
+# keys, and structured agent disappearance using files under FM_FAKE_DIR.
+make_herdr_stub() {  # <dir> -> echoes fakebin dir
   local dir=$1 fb="$1/fakebin"
   mkdir -p "$fb"
-  cat > "$fb/tmux" <<'SH'
-#!/usr/bin/env bash
-set -u
-D=$FM_FAKE_DIR
-case "${1:-}" in
-  send-keys)
-    shift
-    literal=0
-    while [ $# -gt 0 ]; do
-      case "$1" in
-        -t) shift 2 ;;
-        -l) literal=1; shift ;;
-        *) break ;;
-      esac
-    done
-    payload=${1:-}
-    if [ "$literal" = 1 ]; then
-      printf '%s\n' "$payload" >> "$D/literal"
-      if [ -z "${FM_FAKE_NEVER_DIES:-}" ] \
-         && { [ "$payload" = /quit ] || [ "$payload" = /quit ]; }; then
-        printf 'zsh' > "$D/command"
-      fi
-      case "$payload" in
-        *'encode launch-brief'*) cat "$D/becomes" > "$D/command" ;;
-      esac
-    else
-      printf '%s\n' "$payload" >> "$D/keys"
-      if [ -n "${FM_FAKE_INTERRUPT_STOPS_AGENT:-}" ] \
-         && { [ "$payload" = Escape ] || [ "$payload" = C-c ]; }; then
-        printf 'zsh' > "$D/command"
-      fi
-    fi
-    exit 0 ;;
-  display-message)
-    for a in "$@"; do
-      case "$a" in
-        *pane_current_command*) cat "$D/command"; printf '\n'; exit 0 ;;
-        *pane_current_path*) cat "$D/cwd"; printf '\n'; exit 0 ;;
-      esac
-    done
-    printf 'fakepane\n'; exit 0 ;;
-  capture-pane)
-    if [ -f "$D/pane" ]; then cat "$D/pane"; else printf '╭────╮\n│    │\n╰────╯\n'; fi
-    exit 0 ;;
-  list-windows)
-    if [ -f "$D/windows" ]; then cat "$D/windows"; fi
-    exit 0 ;;
-esac
-exit 0
-SH
-  chmod +x "$fb/tmux"
+  fm_test_fake_herdr "$fb"
   printf '%s\n' "$fb"
 }
 
@@ -129,7 +66,7 @@ new_case() {
   : > "$dir/fake/keys"
   printf 'zsh' > "$dir/fake/command"
   printf 'pi' > "$dir/fake/becomes"
-  make_tmux_stub "$dir" >/dev/null
+  make_herdr_stub "$dir" >/dev/null
   printf '%s\n' "$dir"
 }
 
@@ -137,26 +74,21 @@ new_case() {
 # Builds the task's worktree (a real git worktree so the relaunch checkpoint
 # has something to account for), its brief, and its state/<id>.meta.
 add_task() {
-  local dir=$1 id=$2 harness=$3 kind=${4:-ship} backend=${5:-tmux}
-  local window=${6:-fmses:fm-$id}
+  local dir=$1 id=$2 harness=$3 kind=${4:-ship} backend=${5:-herdr}
+  local window=${6:-lab:w1:p2}
   local home="$dir/home" proj="$dir/proj-$id" wt="$dir/wt-$id"
   fm_git_worktree "$proj" "$wt" "task-$id"
   mkdir -p "$home/data/$id"
   printf '# brief for %s\n' "$id" > "$home/data/$id/brief.md"
-  {
-    echo "window=$window"
-    echo "endpoint_task_id=$id"
-    echo "worktree=$wt"
-    echo "project=$proj"
-    echo "harness=$harness"
-    echo "kind=$kind"
-    echo "mode=no-mistakes"
-    echo "yolo=off"
-    echo "model=default"
-    echo "effort=default"
-    [ "$backend" = tmux ] || echo "backend=$backend"
-  } > "$home/state/$id.meta"
-  printf '%s\n' "fm-$id" > "$dir/fake/windows"
+  if [ "$backend" = herdr ]; then
+    fm_write_herdr_task_meta "$home/state/$id.meta" \
+      "worktree=$wt" "project=$proj" "harness=$harness" "kind=$kind" \
+      "mode=no-mistakes" "yolo=off" "model=default" "effort=default"
+  else
+    fm_write_meta "$home/state/$id.meta" "window=$window" "endpoint_task_id=$id" \
+      "worktree=$wt" "project=$proj" "harness=$harness" "kind=$kind" \
+      "mode=no-mistakes" "yolo=off" "model=default" "effort=default" "backend=$backend"
+  fi
   printf '%s' "$wt" > "$dir/fake/cwd"
 }
 
@@ -164,7 +96,8 @@ add_task() {
 # the stubbed provider on PATH. Echoes combined output; returns its exit code.
 run_control() {
   local dir=$1; shift
-  env PATH="$dir/fakebin:$PATH" FM_HOME="$dir/home" FM_FAKE_DIR="$dir/fake" \
+  env PATH="$dir/fakebin:$PATH" FM_HOME="$dir/home" FM_STATE_OVERRIDE="$dir/home/state" \
+    FM_FAKE_DIR="$dir/fake" FM_FAKE_HERDR_TASK_ID=t1 \
     FM_CONTROL_POLL=0.01 FM_CONTROL_SETTLE_WAIT=0.05 \
     FM_CONTROL_EXIT_WAIT=0.05 FM_CONTROL_LAUNCH_WAIT=0.05 \
     FM_FAKE_MUSE_LOG="${FM_FAKE_MUSE_LOG:-}" \
@@ -184,7 +117,7 @@ literals() {  # <case-dir>
 # Every named key EXCEPT Enter, which is submission mechanics shared with every
 # text send rather than a control-plane key.
 keys_sent() {  # <case-dir>
-  grep -v '^Enter$' "$1/fake/keys" || true
+  grep -v -E '^(Enter|enter)$' "$1/fake/keys" || true
 }
 
 # --- 1. adapter contract across every verified harness -----------------------
@@ -256,21 +189,15 @@ test_unverified_harness_is_refused() {
 
 test_backend_key_capability_matrix() {
   local backend key
-  for backend in tmux herdr zellij cmux; do
-    # Every retained terminal session provider but Orca normalizes these keys
-    # through bin/backends/*.sh.
-    for key in Escape Enter C-c C-u; do
-      fm_control_backend_supports_key "$backend" "$key" \
-        || fail "$backend should be able to deliver $key"
-    done
+  for key in Escape Enter C-c C-u; do
+    fm_control_backend_supports_key herdr "$key" \
+      || fail "Herdr should be able to deliver $key"
   done
-  fm_control_backend_supports_key orca Escape \
-    && fail "orca's terminal API has no Escape and must not claim it"
-  fm_control_backend_supports_key orca C-u \
-    && fail "orca's terminal API has no composer clear and must not claim one"
-  fm_control_backend_supports_key orca C-c || fail "orca should deliver C-c"
-  fm_control_backend_supports_key orca Enter || fail "orca should deliver Enter"
-  pass "fm-control-lib: the backend key matrix matches each adapter's real send-key surface"
+  for backend in tmux zellij cmux orca; do
+    fm_control_backend_supports_key "$backend" Enter \
+      && fail "$backend is excluded and must not claim a control-key surface"
+  done
+  pass "fm-control-lib: only Herdr claims the retained send-key surface"
 }
 
 # Harness support remains explicit for every retained task kind so relaunch can
@@ -301,7 +228,8 @@ test_orca_refuses_an_escape_harness_interrupt() {
   sed 's|^window=.*|window=fm-t1|' "$dir/home/state/t1.meta.new" > "$dir/home/state/t1.meta"
   out=$(run_control "$dir" t1 interrupt); rc=$?
   expect_code 1 "$rc" "an Escape harness on orca should refuse"
-  assert_contains "$out" "cannot deliver" "refusal should name the undeliverable key"
+  assert_contains "$out" "explicit migration to Herdr metadata is required" \
+    "excluded provider refusal should require native Herdr metadata"
   pass "fm-control interrupt: a backend that cannot deliver the harness's key refuses instead of sending another"
 }
 
@@ -325,26 +253,25 @@ test_unverified_state_backends_refuse_stop_verbs() {
     fi
     out=$(run_control "$dir" t1 exit); rc=$?
     expect_code 1 "$rc" "exit on $backend should refuse"$'\n'"$out"
-    assert_contains "$out" "no recovery-grade agent-state classifier" \
-      "the $backend refusal should name the missing stop proof"
+    assert_contains "$out" "explicit migration to Herdr metadata is required" \
+      "the excluded $backend refusal should require native Herdr metadata"
     [ -z "$(literals "$dir")" ] || fail "$backend must receive no exit command"
     out=$(run_control "$dir" t1 relaunch --note x); rc=$?
     expect_code 1 "$rc" "relaunch on $backend should refuse"$'\n'"$out"
-    assert_contains "$out" "no recovery-grade agent-state classifier" \
-      "the $backend relaunch refusal should name the missing stop proof"
+    assert_contains "$out" "explicit migration to Herdr metadata is required" \
+      "the excluded $backend relaunch refusal should require native Herdr metadata"
   done
   pass "fm-control: a backend that cannot prove an agent stopped refuses exit and relaunch"
 }
 
-test_state_verified_backends_are_exactly_tmux_and_herdr() {
-  fm_control_backend_state_verified tmux || fail "tmux has a recovery-grade classifier"
-  fm_control_backend_state_verified herdr || fail "herdr has a recovery-grade classifier"
+test_state_verified_backends_are_exactly_herdr() {
+  fm_control_backend_state_verified herdr || fail "Herdr has a recovery-grade classifier"
   local backend
-  for backend in zellij orca cmux; do
+  for backend in tmux zellij orca cmux; do
     fm_control_backend_state_verified "$backend" \
-      && fail "$backend has no recovery-grade classifier and must not claim one"
+      && fail "$backend is excluded and must not claim an agent-state classifier"
   done
-  pass "fm-control-lib: stop-proving verbs are gated on the backends that really classify agent state"
+  pass "fm-control-lib: stop-proving verbs are gated on native Herdr state"
 }
 
 # --- 3. exact-id scoping ----------------------------------------------------
@@ -536,10 +463,10 @@ test_missing_endpoint_refuses() {
   local dir out rc
   dir=$(new_case gone)
   add_task "$dir" t1 pi
-  : > "$dir/fake/windows"
+  touch "$dir/fakebin/herdr-pane-closed"
   out=$(run_control "$dir" t1 exit); rc=$?
   expect_code 1 "$rc" "a missing endpoint should refuse"
-  assert_contains "$out" "recorded endpoint is gone" "the refusal should name the missing endpoint"
+  assert_contains "$out" "is unreachable for task t1" "the refusal should name the missing endpoint"
   pass "fm-control exit: a vanished endpoint refuses instead of silently succeeding"
 }
 
@@ -578,7 +505,7 @@ test_busy_agent_is_interrupted_before_the_exit_command() {
   printf 'busy_gen=%s\n' "$gen" >> "$dir/home/state/t1.meta"
   out=$(run_control "$dir" t1 exit); rc=$?
   expect_code 0 "$rc" "exiting a busy agent should succeed"$'\n'"$out"
-  [ "$(keys_sent "$dir")" = "Escape" ] \
+  [ "$(keys_sent "$dir")" = "escape" ] \
     || fail "a busy agent should be interrupted once before its exit command, got: $(keys_sent "$dir")"
   [ "$(literals "$dir")" = "/quit" ] || fail "the exit command should follow the interrupt"
   pass "fm-control exit: a busy agent receives interrupt delivery before the exit command"
@@ -632,7 +559,7 @@ test_exit_accepts_agent_stopped_by_busy_interrupt() {
   expect_code 0 "$rc" "exit should accept a busy agent stopped by interrupt"$'\n'"$out"
   assert_contains "$out" "stopped t1 harness=pi" \
     "the authoritative gone-state should complete exit successfully"
-  [ "$(keys_sent "$dir")" = Escape ] \
+  [ "$(keys_sent "$dir")" = escape ] \
     || fail "exit should deliver the busy agent's interrupt sequence"
   [ -z "$(literals "$dir")" ] \
     || fail "exit should not type a command after interrupt already stopped the agent"
@@ -657,7 +584,7 @@ test_agent_that_does_not_stop_fails_closed() {
     "the failure should distinguish delivered lifecycle input from the unconfirmed exit"
   assert_not_contains "$out" "nothing was changed" \
     "the failure must not deny the lifecycle input that was delivered"
-  [ "$(keys_sent "$dir")" = Escape ] \
+  [ "$(keys_sent "$dir")" = escape ] \
     || fail "a stubborn busy agent should receive its interrupt sequence"
   [ "$(literals "$dir")" = /quit ] \
     || fail "a stubborn busy agent should receive its exit command"
@@ -720,7 +647,7 @@ test_backend_key_capability_matrix
 test_harness_kind_capability
 test_orca_refuses_an_escape_harness_interrupt
 test_unverified_state_backends_refuse_stop_verbs
-test_state_verified_backends_are_exactly_tmux_and_herdr
+test_state_verified_backends_are_exactly_herdr
 test_window_label_is_refused_with_the_exact_id
 test_explicit_endpoint_is_refused
 test_unknown_task_is_refused

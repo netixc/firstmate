@@ -5,8 +5,8 @@
 # is built from, and the bound that keeps one slow home from blocking the sweep.
 set -u
 
-# shellcheck source=tests/lib.sh
-. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck source=tests/fixtures.sh
+. "$(dirname "${BASH_SOURCE[0]}")/fixtures.sh"
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 CASCADE="$ROOT/bin/fm-stow-cascade.sh"
@@ -50,23 +50,8 @@ esac
 SH
 chmod +x "$FAKEBIN/fake-ssh"
 
-# A tmux whose pane reports a running agent, so the local endpoint probe has a
-# real backend read to classify rather than a stubbed verdict.
-cat > "$FAKEBIN/tmux" <<'SH'
-#!/usr/bin/env bash
-set -u
-case "$*" in
-  *list-windows*) printf '%s\n' "${FM_FAKE_TMUX_WINDOW:-}" ;;
-  *list-panes*) printf '%s\n' "${FM_FAKE_TMUX_PANE:-}" ;;
-  *display-message*'#{pane_current_command}'*) printf '%s\n' "${FM_FAKE_TMUX_COMMAND:-pi}" ;;
-  *display-message*'#{pane_pid}'*) printf '%s\n' "$$" ;;
-  *display-message*'#{pane_id}'*) printf '%s\n' '%1' ;;
-  *display-message*'#{cursor_y}'*) printf '%s\n' 0 ;;
-  *capture-pane*) printf '❯\n' ;;
-esac
-exit 0
-SH
-chmod +x "$FAKEBIN/tmux"
+# The shared native fixture reports complete hierarchy and a registered agent.
+fm_test_fake_herdr "$FAKEBIN"
 
 # new_home <name> [budget] -> path to a seeded local secondmate home.
 new_home() {
@@ -104,6 +89,7 @@ run_cascade() { # <primary-home> [env assignments...]
     HOME="${HOME:-/tmp}" \
     TMPDIR="${TMPDIR:-/tmp}" \
     FM_HOME="$home" \
+    FM_STATE_OVERRIDE="$home/state" \
     FM_SSH_BIN="$FAKEBIN/fake-ssh" \
     "$@" \
     "$CASCADE"
@@ -219,7 +205,6 @@ test_transport_routes_by_placement_and_liveness() {
 
   set +e
   out=$(run_cascade "$primary" \
-    FM_FAKE_TMUX_WINDOW='fm-live-local' \
     FM_FAKE_REMOTE_BUDGET="$TMP_ROOT/remote-budget.txt" \
     FM_FAKE_REMOTE_AGENT_STATE=alive)
   set -e
@@ -239,7 +224,6 @@ test_transport_routes_by_placement_and_liveness() {
 
   set +e
   out=$(run_cascade "$primary" \
-    FM_FAKE_TMUX_WINDOW='fm-live-local' \
     FM_FAKE_REMOTE_BUDGET="$TMP_ROOT/remote-budget.txt" \
     FM_FAKE_REMOTE_AGENT_STATE=dead)
   set -e

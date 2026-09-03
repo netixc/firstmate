@@ -18,6 +18,8 @@ set -u
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 TMP_ROOT=$(fm_test_tmproot fm-procevent-tests)
+mkdir -p "$TMP_ROOT"
+TMP_ROOT=$(cd "$TMP_ROOT" && pwd -P)
 export FM_PROCEVENT_CLAIM_ROOT="$TMP_ROOT/claims"
 
 BLOCKER="$TMP_ROOT/blocker.sh"
@@ -1287,15 +1289,19 @@ pass "healthy runtime behavior remains registration-only"
 # --- argv boundaries, stderr, exit status, bounds, malformed output ---------
 HD="$TMP_ROOT/hd"; new_home "$HD"
 TRIG3="$TMP_ROOT/trigger-three"
-pe_register "$HD" lavish argv-src -- "$BLOCKER" "$TRIG3" "one arg with spaces" "second; rm -rf /tmp/nope" >/dev/null
+ARGV_SENTINEL="$TMP_ROOT/no-shell-interpretation"
+pe_register "$HD" lavish argv-src -- "$BLOCKER" "$TRIG3" "one arg with spaces" \
+  "second; touch $ARGV_SENTINEL" >/dev/null
 pe "$HD" reconcile >/dev/null
 : > "$TRIG3"
 wait_for "$HD/state/.wake-queue" || fail "argv source published no event"
 R=$(first_result "$HD" argv-src || true)
 assert_grep 'one arg with spaces' "$R" "an argument containing spaces survives as one argument"
-assert_grep 'second; rm -rf /tmp/nope' "$R" "a shell-looking argument is passed literally, never interpreted"
-assert_absent /tmp/nope "no shell interpretation occurred"
-assert_not_contains "$(wake_payloads "$HD")" "rm -rf" "argv content never reaches the event line"
+assert_grep "second; touch $ARGV_SENTINEL" "$R" \
+  "a shell-looking argument is passed literally, never interpreted"
+assert_absent "$ARGV_SENTINEL" "no shell interpretation occurred"
+assert_not_contains "$(wake_payloads "$HD")" "touch $ARGV_SENTINEL" \
+  "argv content never reaches the event line"
 
 newline_status=0
 newline_out=$(pe_register "$HD" lavish newline-src -- /bin/echo $'first\nsecond' 2>&1) || newline_status=$?

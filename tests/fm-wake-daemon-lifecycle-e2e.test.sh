@@ -32,6 +32,8 @@ if [ -z "${FM_TEST_DAEMON_SOURCED:-}" ]; then
 fi
 
 TMP_ROOT=$(fm_test_tmproot fm-wake-daemon-e2e)
+mkdir -p "$TMP_ROOT"
+TMP_ROOT=$(cd "$TMP_ROOT" && pwd -P)
 
 # Run the daemon-managed watcher once: under the supervise-daemon (away mode) the
 # watcher is one-shot - it exits with a single reason line on EVERY wake and the
@@ -110,8 +112,11 @@ test_routine_then_terminal_after_restart() {
   sent="$dir/sent.log"; : > "$sent"
   printf '❯\n' > "$dir/pane.txt"
   afk_enter "$state"
-  PATH="$fakebin:$PATH" FM_FAKE_TMUX_PANE_ALIVE=1 FM_FAKE_TMUX_SENT="$sent" \
-    FM_FAKE_TMUX_CAPTURE="$dir/pane.txt" FM_ESCALATE_BATCH_SECS=0 escalate_flush "$state" \
+  PATH="$fakebin:$PATH" FM_FAKE_HERDR_PANE_ALIVE=1 FM_FAKE_HERDR_SENT="$sent" \
+    FM_FAKE_HERDR_CAPTURE="$dir/pane.txt" FM_SUPERVISOR_BACKEND=herdr \
+    FM_SUPERVISOR_SESSION=lab FM_SUPERVISOR_WORKSPACE_ID=w1 FM_SUPERVISOR_TAB_ID=w1:t2 \
+    FM_SUPERVISOR_PANE_ID=w1:p2 FM_SUPERVISOR_TARGET=lab:w1:p2 \
+    FM_ESCALATE_BATCH_SECS=0 escalate_flush "$state" \
     || fail "escalate_flush failed for the buffered digest"
   [ "$(grep -c '\[ENTER\]' "$sent")" -eq 1 ] || fail "buffered digest was not submitted exactly once"
   [ ! -s "$state/.subsuper-escalations" ] || fail "buffer not cleared after a successful flush"
@@ -124,8 +129,9 @@ test_stale_pane_transient_persistent_resume() {
   dir=$(make_supercase wd-stale)
   state="$dir/state"
   fakebin="$dir/fakebin"
-  win="sess:fm-stale-w2"
+  win="lab:w1:p2"
   key=$(printf '%s' "stale-w2" | tr ':/.' '___')
+  fm_write_herdr_task_meta "$state/stale-w2.meta" "worktree=$dir/wt" "kind=ship" "harness=pi"
   printf 'working: compiling\n' > "$state/stale-w2.status"
 
   # Transient: first stale observation self-handles and records a marker.
@@ -142,8 +148,8 @@ test_stale_pane_transient_persistent_resume() {
   echo $(( $(date +%s) - 500 )) > "$state/.subsuper-stale-$key"
   : > "$state/.subsuper-escalations" 2>/dev/null || true
   PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$win" FM_FAKE_TMUX_CAPTURE="$dir/pane.txt" \
-    FM_STATE_OVERRIDE="$state" FM_STALE_ESCALATE_SECS=240 housekeeping "$state" \
-    2>"$dir/housekeeping.err"
+    FM_FAKE_HERDR_TASK_ID=stale-w2 FM_STATE_OVERRIDE="$state" \
+    FM_STALE_ESCALATE_SECS=240 housekeeping "$state" 2>"$dir/housekeeping.err"
   [ ! -s "$dir/housekeeping.err" ] \
     || fail "missing task metadata leaked a raw read error: $(cat "$dir/housekeeping.err")"
   [ -s "$state/.subsuper-escalations" ] || fail "persistent stale did not escalate"
@@ -155,13 +161,13 @@ test_stale_pane_transient_persistent_resume() {
   stale_marker_record "$win" "$state"
   echo $(( $(date +%s) - 500 )) > "$state/.subsuper-stale-$key"
   printf 'Working...\n' > "$dir/pane.txt"
-  fm_write_meta "$state/stale-w2.meta" "window=$win" "worktree=$dir/wt" "kind=ship" "harness=pi"
   resumed_gen=$("$ROOT/bin/fm-busy-event.sh" arm "$state" stale-w2)
   "$ROOT/bin/fm-busy-event.sh" apply "$state" stale-w2 busy --gen "$resumed_gen" \
     --source pi-ext --event agent-start
   : > "$state/.subsuper-escalations"
   PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$win" FM_FAKE_TMUX_CAPTURE="$dir/pane.txt" \
-    FM_STATE_OVERRIDE="$state" FM_STALE_ESCALATE_SECS=240 housekeeping "$state"
+    FM_FAKE_HERDR_TASK_ID=stale-w2 FM_FAKE_HERDR_AGENT_STATUS=working FM_STATE_OVERRIDE="$state" \
+    FM_STALE_ESCALATE_SECS=240 housekeeping "$state"
   [ ! -e "$state/.subsuper-stale-$key" ] || fail "resumed stale marker was not cleared"
   [ ! -s "$state/.subsuper-escalations" ] || fail "resumed (busy) stale was escalated"
   pass "lifecycle: stale pane transient self-handles, persistent escalates once and clears, resumed clears quietly"

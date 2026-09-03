@@ -6,9 +6,14 @@
 # report pointers.
 set -u
 
-# shellcheck source=tests/lib.sh
+# shellcheck source=tests/fixtures.sh
 # shellcheck disable=SC1091
-. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/fixtures.sh"
+
+# Every task record in this suite is a native endpoint success fixture.
+fm_write_meta() {
+  fm_write_herdr_task_meta "$@"
+}
 
 BEARINGS="$ROOT/bin/fm-bearings-snapshot.sh"
 TMP_ROOT=$(fm_test_tmproot fm-bearings)
@@ -31,19 +36,8 @@ make_fakebin() {  # <dir>
 [ "${FAKE_NM_SLEEP:-0}" = 1 ] && sleep 30
 exit 0
 SH
-  cat > "$fb/legacy-provider" <<'SH'
-#!/usr/bin/env bash
-case "${1:-}" in
-  display-message) case "$*" in *dead-*) exit 1 ;; *) printf '%%1\n' ;; esac ;;
-  capture-pane)
-    case "$*" in
-      *fm-domain-alpha*) printf 'stale terminal summary: Phase 7 started\n> \n' ;;
-      *) printf 'all quiet\n> \n' ;;
-    esac
-    ;;
-esac
-exit 0
-SH
+  fm_test_fake_herdr "$fb"
+  printf 'stale terminal summary: Phase 7 started\n> \n' > "$fb/herdr-capture-domain-alpha"
   cat > "$fb/gh" <<'SH'
 #!/usr/bin/env bash
 echo "gh $*" >> "$NET_LOG"
@@ -70,7 +64,7 @@ SH
 echo "curl $*" >> "$NET_LOG"
 exit 1
 SH
-  chmod +x "$fb/no-mistakes" "$fb/legacy-provider" "$fb/gh" "$fb/gh-axi" "$fb/curl"
+  chmod +x "$fb/no-mistakes" "$fb/gh" "$fb/gh-axi" "$fb/curl"
   printf '%s\n' "$fb"
 }
 
@@ -1093,6 +1087,7 @@ write_large_fixture() {  # <home> <count>
       "harness=pi" \
       "kind=scout" \
       "mode=scout" \
+      "fixture_herdr_presence=dead" \
       "pr=https://github.com/acme/repo-$i/pull/$i"
     printf 'needs-decision [key=q%s]: choose %s\n' "$i" "$i" > "$home/state/$id.status"
     i=$((i + 1))

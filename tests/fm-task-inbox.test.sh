@@ -48,48 +48,11 @@ inbox_lib() {  # <state> <function> [args...]
   ' _ "$ROOT/bin/fm-task-inbox-lib.sh" "$@"
 }
 
-# A fake tmux for the watcher cases: capture-pane replays FM_FAKE_TMUX_CAPTURE,
-# display-message yields a numeric cursor row, and every literal send-keys is
-# logged to FM_SEND_LOG so a doorbell ring is observable.
+# The shared native Herdr fixture exposes composer reads and records doorbells.
 make_watch_stubs() {  # <dir> -> echoes fakebin dir
   local dir=$1 fb="$1/fakebin"
   mkdir -p "$fb"
-  cat > "$fb/tmux" <<'SH'
-#!/usr/bin/env bash
-set -u
-case "${1:-}" in
-  send-keys)
-    shift
-    literal=0
-    while [ $# -gt 0 ]; do
-      case "$1" in
-        -t) shift 2 ;;
-        -l) literal=1; shift ;;
-        *) break ;;
-      esac
-    done
-    if [ "$literal" = 1 ]; then
-      printf '%s\n' "${1:-}" >> "${FM_SEND_LOG:-/dev/null}"
-      if [ -n "${FM_ACK_RECORD:-}" ] && [ -f "$FM_ACK_RECORD" ]; then
-        mv "$FM_ACK_RECORD" "${FM_ACK_RECORD%/*}/handled/"
-      fi
-    fi
-    exit 0 ;;
-  display-message)
-    for a in "$@"; do case "$a" in *cursor_y*) printf '1\n'; exit 0 ;; esac; done
-    printf 'fakepane\n'; exit 0 ;;
-  capture-pane)
-    if [ -n "${FM_FAKE_TMUX_CAPTURE:-}" ] && [ -f "$FM_FAKE_TMUX_CAPTURE" ]; then
-      cat "$FM_FAKE_TMUX_CAPTURE"
-    else
-      printf '╭────╮\n│    │\n╰────╯\n'
-    fi
-    exit 0 ;;
-  list-windows) exit 0 ;;
-esac
-exit 0
-SH
-  chmod +x "$fb/tmux"
+  fm_test_fake_herdr "$fb"
   make_fake_crew_state "$fb" >/dev/null
   printf '%s\n' "$fb"
 }
@@ -97,7 +60,7 @@ SH
 watch_bg() {  # <state> <fakebin> <out> [extra env assignments...]
   local state=$1 fakebin=$2 out=$3
   shift 3
-  PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state" \
+  PATH="$fakebin:$PATH" FM_HOME="${state%/state}" FM_STATE_OVERRIDE="$state" \
     FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" \
     FM_FAKE_CREW_STATE='state: working · source: run-step · validating (running)' \
     FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 \
@@ -340,7 +303,7 @@ setup_watch_case() {  # <name> -> echoes case dir; state in <dir>/state
   dir="$TMP_ROOT/$name"
   mkdir -p "$dir/state"
   make_watch_stubs "$dir" >/dev/null
-  fm_write_meta "$dir/state/t1.meta" "window=sess:fm-t1" "kind=ship" "harness=pi"
+  fm_write_herdr_task_meta "$dir/state/t1.meta" "kind=ship" "harness=pi"
   printf '%s\n' "$dir"
 }
 
@@ -356,7 +319,7 @@ test_watcher_rerings_idle_pane_quietly() {
   rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
   age_path "$rec"
   watch_bg "$state" "$dir/fakebin" "$out" \
-    FM_SEND_LOG="$log" FM_FAKE_TMUX_CAPTURE="$(idle_capture "$dir")" \
+    FM_SEND_LOG="$log" FM_FAKE_HERDR_CAPTURE="$(idle_capture "$dir")" \
     FM_TASK_INBOX_RING_MAX=99
   pid=$!
   local i=0
@@ -367,7 +330,7 @@ test_watcher_rerings_idle_pane_quietly() {
     i=$((i + 1))
   done
   grep -qF "Firstmate instruction waiting: list $state/t1.inbox/*.msg" "$log" \
-    || { kill "$pid" 2>/dev/null; fail "the watcher never re-rang the doorbell:"$'\n'"$(cat "$log")"; }
+    || { kill "$pid" 2>/dev/null; fail "the watcher never re-rang the doorbell:"$'\n'"$(cat "$log")"$'\n'"$(cat "$out")"$'\n'"$(cat "$state/.watch-triage.log" 2>/dev/null)"; }
   kill -0 "$pid" 2>/dev/null \
     || fail "a healthy re-ring must not wake firstmate (watcher exited):"$'\n'"$(cat "$out")"
   [ ! -s "$state/.wake-queue" ] \
@@ -392,7 +355,7 @@ test_watcher_waits_on_busy_pane() {
   rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
   age_path "$rec"
   watch_bg "$state" "$dir/fakebin" "$out" \
-    FM_SEND_LOG="$log" FM_FAKE_TMUX_CAPTURE="$dir/busy.capture" \
+    FM_SEND_LOG="$log" FM_FAKE_HERDR_CAPTURE="$dir/busy.capture" \
     FM_BUSY_REGEX=BUSYTOKEN FM_TASK_INBOX_RING_MAX=99
   pid=$!
   sleep 4
@@ -408,7 +371,7 @@ test_watcher_quiet_on_healthy_inbox() {
   state="$dir/state"; out="$dir/watch.out"; log="$dir/send.log"; : > "$log"
   mkdir -p "$state/t1.inbox/handled"
   watch_bg "$state" "$dir/fakebin" "$out" \
-    FM_SEND_LOG="$log" FM_FAKE_TMUX_CAPTURE="$(idle_capture "$dir")" \
+    FM_SEND_LOG="$log" FM_FAKE_HERDR_CAPTURE="$(idle_capture "$dir")" \
     FM_TASK_INBOX_RING_MAX=99
   pid=$!
   sleep 4
@@ -427,7 +390,7 @@ test_watcher_ack_silences_unwritable_ladder() {
   age_path "$rec"
   mkdir "$state/t1.inbox/.ring-state"
   watch_bg "$state" "$dir/fakebin" "$out" \
-    FM_SEND_LOG="$log" FM_FAKE_TMUX_CAPTURE="$(idle_capture "$dir")" \
+    FM_SEND_LOG="$log" FM_FAKE_HERDR_CAPTURE="$(idle_capture "$dir")" \
     FM_ACK_RECORD="$rec" FM_TASK_INBOX_RING_MAX=99
   pid=$!
   while [ "$i" -lt 100 ]; do
@@ -457,7 +420,7 @@ test_watcher_surfaces_unwritable_ladder() {
   age_path "$rec"
   mkdir "$state/t1.inbox/.ring-state"
   watch_bg "$state" "$dir/fakebin" "$out" \
-    FM_SEND_LOG="$log" FM_FAKE_TMUX_CAPTURE="$(idle_capture "$dir")" \
+    FM_SEND_LOG="$log" FM_FAKE_HERDR_CAPTURE="$(idle_capture "$dir")" \
     FM_TASK_INBOX_RING_MAX=99
   pid=$!
   wait_watcher_gone "$pid" \
@@ -482,7 +445,7 @@ test_watcher_escalates_once_after_budget() {
   rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
   age_path "$rec"
   watch_bg "$state" "$dir/fakebin" "$out" \
-    FM_SEND_LOG="$log" FM_FAKE_TMUX_CAPTURE="$(idle_capture "$dir")" \
+    FM_SEND_LOG="$log" FM_FAKE_HERDR_CAPTURE="$(idle_capture "$dir")" \
     FM_TASK_INBOX_RING_MAX=1
   pid=$!
   wait_watcher_gone "$pid" \

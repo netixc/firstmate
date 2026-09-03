@@ -28,15 +28,8 @@ make_main_home() {  # <name> <mate-id>
   abs=$(cd "$mate" && pwd -P)
   printf -- '- %s - fixture domain (home: %s; scope: fixture; projects: sample; added 2026-08-26)\n' \
     "$id" "$abs" > "$home/data/secondmates.md"
-  cat > "$home/state/$id.meta" <<META
-window=firstmate:fm-$id
-kind=secondmate
-harness=pi
-backend=tmux
-spawn_gen=spawn-$id
-home=$abs
-worktree=$abs
-META
+  fm_write_secondmate_meta "$home/state/$id.meta" "$abs"
+  printf 'spawn_gen=spawn-%s\n' "$id" >> "$home/state/$id.meta"
   fakebin=$(make_fake_tmux "$TMP_ROOT/$1-fake")
   printf '%s\n' "$home" "$mate" "$fakebin"
 }
@@ -88,10 +81,14 @@ while IFS= read -r -d '' a; do rargs+=("$a"); done \
 cmd=${rargs[0]}
 rc=0
 env FM_HOME="$remote_home" FM_ROOT_OVERRIDE="$FM_REMOTE_CODE_ROOT" \
+  FM_FAKE_HERDR_REQUIRE_SESSION=fm-remote FM_FAKE_HERDR_SOCKET=/tmp/fake-herdr-remote.sock \
+  FM_FAKE_HERDR_LOG="$remote_home/state/herdr.log" FM_FAKE_HERDR_DUPLICATE=1 \
+  FM_FAKE_HERDR_TASK_ID="$(cat "$remote_home/.fm-secondmate-home")" \
   "$FM_REMOTE_CODE_ROOT/bin/$cmd" "${rargs[@]:1}" || rc=$?
 exit "$rc"
 SH
   chmod +x "$fb/fake-ssh"
+  fm_test_fake_herdr "$fb"
   printf '%s\n' "$fb"
 }
 
@@ -103,7 +100,7 @@ make_remote_secondmate_home() {  # <name> -> echoes remote home dir
   printf '%s\n' "$1" > "$rh/.fm-secondmate-home"
   printf '# remote secondmate home fixture\n' > "$rh/AGENTS.md"
   cat > "$rh/state/parent-route/$1.meta" <<META
-window=fm-remote:p1
+window=fm-remote:w1:p2
 worktree=-
 project=-
 backend=herdr
@@ -111,8 +108,8 @@ endpoint_task_id=$1
 harness=pi
 herdr_session=fm-remote
 herdr_workspace_id=w1
-herdr_tab_id=t1
-herdr_pane_id=p1
+herdr_tab_id=w1:t2
+herdr_pane_id=w1:p2
 META
   printf '%s\n' "$rh"
 }
@@ -137,7 +134,7 @@ remote_host=$host
 remote_root=/remote/root
 remote_backend=herdr
 remote_herdr_session=fm-remote
-remote_target=fm-remote:p1
+remote_target=fm-remote:w1:p2
 META
   cat > "$home/data/secondmates.md" <<EOF
 - $id - remote fixture domain (host: $host; root: /remote/root; home: $rhome; scope: remote fixture; projects: sample; added 2026-08-26)
@@ -146,7 +143,7 @@ EOF
 }
 
 remote_inbox_records() {  # <remote-home> <mate-id>
-  find "$1/state/parent-route/$2.inbox" -maxdepth 1 -type f -name '*.msg' 2>/dev/null
+  find "$1/state/$2.inbox" -maxdepth 1 -type f -name '*.msg' 2>/dev/null
 }
 
 run_remote_notify() {  # <home> <fakebin> <snapshot>
@@ -167,9 +164,7 @@ run_notify() {  # <home> <fakebin> <name> <snapshot> [extra args...]
   shift 4
   PATH="$fakebin:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
     FM_STATE_OVERRIDE="$home/state" \
-    FM_FAKE_TMUX_WINDOW="firstmate:fm-mate" \
-    FM_FAKE_TMUX_LOG="$TMP_ROOT/$name-tmux.log" \
-    FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/$name-fake/pane.txt" \
+    FM_SEND_LOG="$TMP_ROOT/$name-herdr.log" \
     "$RECONCILE" notify --snapshot "$snap" "$@"
 }
 
@@ -298,8 +293,8 @@ test_each_home_carries_its_own_cooldown() {
   local home mate fakebin snap out
   { read -r home; read -r mate; read -r fakebin; } < <(make_main_home perhome mate)
   # A second registered mate in the same home, so one nudge cannot silence the other.
-  cp "$home/state/mate.meta" "$home/state/other.meta"
-  sed -i.bak 's/fm-mate/fm-other/' "$home/state/other.meta" && rm -f "$home/state/other.meta.bak"
+  fm_write_secondmate_meta "$home/state/other.meta" "$mate"
+  printf 'spawn_gen=spawn-mate\n' >> "$home/state/other.meta"
   snap="$home/snapshot.json"
   jq -n '{schema:"fm-fleet-snapshot.v1", generated:"2026-08-26T00:00:00Z",
     secondmate_current:{records:[
@@ -346,10 +341,7 @@ test_the_ask_never_arms_a_reply_expectation_or_a_re_ring() {
   # Divergence check, so the assertion above cannot pass for the wrong reason:
   # the same inbox, same grace, with an ordinary unhandled steer added.
   PATH="$fakebin:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
-    FM_STATE_OVERRIDE="$home/state" \
-    FM_FAKE_TMUX_WINDOW="firstmate:fm-mate" \
-    FM_FAKE_TMUX_LOG="$TMP_ROOT/fireforget-tmux.log" \
-    FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/fireforget-fake/pane.txt" \
+    FM_STATE_OVERRIDE="$home/state" FM_SEND_LOG="$TMP_ROOT/fireforget-herdr.log" \
     "$ROOT/bin/fm-send.sh" mate "an ordinary steer that does expect handling" >/dev/null 2>&1 \
     || fail "the control steer could not be recorded"
   ladder=$(FM_TASK_INBOX_GRACE_SECS=0 bash -c '. "$1"; fm_task_inbox_due_action "$2" "$3"' _ \
@@ -510,19 +502,19 @@ test_teardown_cannot_leave_its_replacement_in_cooldown() {
   lifecycle_done="$home/lifecycle-done"
   cooldown="$home/state/mate.reconcile-nudged"
   write_snapshot "$snap" mate '{"kind":"orphan_in_flight","ids":["ghost"]}'
-  mv "$fakebin/tmux" "$fakebin/tmux-real"
-  cat > "$fakebin/tmux" <<'SH'
+  mv "$fakebin/herdr" "$fakebin/herdr-real"
+  cat > "$fakebin/herdr" <<'SH'
 #!/usr/bin/env bash
 set -u
-if [ "${1:-}" = send-keys ]; then
-  : > "$FM_FAKE_TMUX_SEND_SIGNAL"
-  while [ ! -f "$FM_FAKE_TMUX_SEND_RELEASE" ]; do sleep 0.01; done
+if [ "${1:-} ${2:-}" = "pane send-text" ]; then
+  : > "$FM_FAKE_HERDR_SEND_SIGNAL"
+  while [ ! -f "$FM_FAKE_HERDR_SEND_RELEASE" ]; do sleep 0.01; done
 fi
-exec "$(dirname "$0")/tmux-real" "$@"
+exec "$(dirname "$0")/herdr-real" "$@"
 SH
-  chmod +x "$fakebin/tmux"
+  chmod +x "$fakebin/herdr"
 
-  FM_FAKE_TMUX_SEND_SIGNAL="$signal" FM_FAKE_TMUX_SEND_RELEASE="$release" \
+  FM_FAKE_HERDR_SEND_SIGNAL="$signal" FM_FAKE_HERDR_SEND_RELEASE="$release" \
     run_notify "$home" "$fakebin" lifecycle "$snap" >/dev/null 2>&1 &
   notify_pid=$!
   while [ ! -f "$signal" ]; do sleep 0.01; done
@@ -533,15 +525,8 @@ SH
     fm_lock_acquire_wait "$home/state/.meta-mate.lock"
     rm -rf "$home/state/mate.inbox"
     rm -f "$home/state/mate.meta" "$home/state/mate.reconcile-nudged"
-    cat > "$home/state/mate.meta" <<META
-window=firstmate:fm-mate
-kind=secondmate
-harness=pi
-backend=tmux
-spawn_gen=spawn-replacement
-home=$mate
-worktree=$mate
-META
+    fm_write_secondmate_meta "$home/state/mate.meta" "$mate"
+    printf 'spawn_gen=spawn-replacement\n' >> "$home/state/mate.meta"
     fm_lock_release "$home/state/.meta-mate.lock"
     fm_lock_release "$home/state/.control-mate.lock"
     : > "$lifecycle_done"

@@ -20,7 +20,6 @@ The proof ran 24 candidates with four workers and no failures.
 | 9766 | `tests/fm-lint.test.sh` |
 | 9562 | `tests/fm-herdr-lab.test.sh` |
 | 6290 | `tests/fm-pr-merge.test.sh` |
-| 5569 | `tests/fm-composer-ghost.test.sh` |
 | 4563 | `tests/fm-send-popup-settle.test.sh` |
 | 3544 | `tests/fm-composer-lib.test.sh` |
 | 3025 | `tests/fm-send-strict.test.sh` |

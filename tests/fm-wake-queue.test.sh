@@ -16,6 +16,8 @@ DRAIN="$ROOT/bin/fm-wake-drain.sh"
 GRANT="$ROOT/bin/fm-wake-grant.sh"
 
 TMP_ROOT=$(fm_test_tmproot fm-wake-tests)
+mkdir -p "$TMP_ROOT"
+TMP_ROOT=$(cd "$TMP_ROOT" && pwd -P)
 
 
 test_concurrent_append_and_drain() {
@@ -93,9 +95,9 @@ test_stale_enqueue_before_suppressor() {
   out="$dir/watch.out"
   drain_out="$dir/drain.out"
   capture_file="$dir/pane.txt"
-  window="test:fm-stale"
+  window="lab:w1:p2"
   printf 'idle prompt' > "$capture_file"
-  printf 'window=%s\nkind=ship\n' "$window" > "$state/stale.meta"
+  fm_write_herdr_task_meta "$state/stale.meta" "kind=ship" "harness=pi"
   # A stale pane sitting on a captain-relevant status is actionable when the crew
   # is not provably working, so give the window one and prime the .seen-* marker
   # to its current signature so the per-poll signal scan does not pre-empt the
@@ -127,9 +129,9 @@ test_not_working_stale_enqueue_before_suppressor() {
   out="$dir/watch.out"
   drain_out="$dir/drain.out"
   capture_file="$dir/pane.txt"
-  window="test:fm-stopped"
+  window="lab:w1:p2"
   printf 'idle prompt, finished' > "$capture_file"
-  printf 'window=%s\nkind=ship\n' "$window" > "$state/stopped.meta"
+  fm_write_herdr_task_meta "$state/stopped.meta" "kind=ship" "harness=pi"
   # Non-terminal status (no captain-relevant verb); prime .seen-* so the per-poll
   # signal scan does not pre-empt the stale path.
   printf 'working: implementing\n' > "$state/stopped.status"

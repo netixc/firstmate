@@ -725,13 +725,13 @@ fm_pending_reply_fallback_idle_eligible() {  # <record-path>
 # global OR of every vendor signature), so one harness's output cannot make
 # another read busy, and a weak rendered idle degrades to `fallback-idle`,
 # which the caller accepts as idle only after its grace window.
-fm_pending_reply_backend_observation() {  # <backend> <target> [expected-label] [harness]
-  local backend=$1 target=$2 expected_label=${3-} harness=${4-} native tail40
-  native=$(fm_backend_busy_state "$backend" "$target" 2>/dev/null || printf 'unknown')
+fm_pending_reply_backend_observation() {  # <backend> <target> [expected-label] [harness] [explicit-meta]
+  local backend=$1 target=$2 expected_label=${3-} harness=${4-} explicit_meta=${5-} native tail40
+  native=$(fm_backend_busy_state "$backend" "$target" "$expected_label" "$explicit_meta" 2>/dev/null || printf 'unknown')
   case "$native" in
     busy|idle) printf '%s' "$native"; return 0 ;;
   esac
-  tail40=$(fm_backend_capture "$backend" "$target" 40 "$expected_label" 2>/dev/null) \
+  tail40=$(fm_backend_capture "$backend" "$target" 40 "$expected_label" "$explicit_meta" 2>/dev/null) \
     || { printf 'unknown'; return 0; }
   if printf '%s' "$tail40" | grep -v '^[[:space:]]*$' | tail -6 \
     | fm_busy_lines_match "$harness"; then
