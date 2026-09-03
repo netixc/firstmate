@@ -28,6 +28,7 @@ MOVE_CALL_LOG="$TMP_ROOT/workspace-move-calls.log"
 FOCUS_AUDIT_LOG="$TMP_ROOT/focus-audit.log"
 ACTIVE_SEEDED_CONTROL="$TMP_ROOT/active-seeded-control"
 POST_CREATE_ABORT_CONTROL="$TMP_ROOT/post-create-abort-control"
+RECOVERY_LOCK_CONTROL="$TMP_ROOT/recovery-lock-control"
 mkdir -p "$FAKEBIN"
 : > "$HERDR_CALL_LOG"
 : > "$TREEHOUSE_CALL_LOG"
@@ -35,7 +36,7 @@ mkdir -p "$FAKEBIN"
 : > "$FOCUS_AUDIT_LOG"
 REAL_MOVER="$ROOT/bin/backends/herdr-workspace-move.py"
 export REAL_HERDR REAL_TREEHOUSE REAL_MOVER HERDR_CALL_LOG TREEHOUSE_CALL_LOG MOVE_CALL_LOG FOCUS_AUDIT_LOG HERDR_ORIGINAL_PATH HERDR_LAB_HELPER
-export ACTIVE_SEEDED_CONTROL POST_CREATE_ABORT_CONTROL TMP_ROOT
+export ACTIVE_SEEDED_CONTROL POST_CREATE_ABORT_CONTROL RECOVERY_LOCK_CONTROL TMP_ROOT
 
 # Log every production-adapter call, remove its already-validated trailing
 # session flag, and send the operation through the lab helper so that helper
@@ -111,6 +112,18 @@ arg_value() {
 }
 
 label=$(arg_value --label "$@" || true)
+if [ "${1:-} ${2:-}" = "tab create" ] \
+   && [ -e "$RECOVERY_LOCK_CONTROL/armed" ]; then
+  case "$label" in
+    fm-resume-wave-primary|fm-resume-wave-bravo)
+      if mkdir "$RECOVERY_LOCK_CONTROL/winner" 2>/dev/null; then
+        printf '%s\n' "$label" > "$RECOVERY_LOCK_CONTROL/winner/label"
+        : > "$RECOVERY_LOCK_CONTROL/winner/lock-held"
+        sleep 6
+      fi
+      ;;
+  esac
+fi
 if [ "${1:-} ${2:-}" = "workspace list" ] && [ -d "$ACTIVE_SEEDED_CONTROL" ]; then
   stage=$(cat "$ACTIVE_SEEDED_CONTROL/stage" 2>/dev/null || true)
   if [ "$stage" = task-created ]; then
@@ -441,6 +454,29 @@ finish_concurrent_teardown() {  # <id> <status> <stdout> <stderr>
     || fail "projected teardown $id failed unexpectedly: $(cat "$err")"
   teardown_task "$id" "$HOME_DIR" > "$out" 2> "$err" \
     || fail "projected teardown $id retry failed after presentation cleanup completed: $(cat "$err")"
+}
+
+assert_recovery_binding() {  # <home> <id> <workspace> <tab> <pane>
+  local home=$1 id=$2 workspace=$3 tab=$4 pane=$5 journal token
+  journal="$home/state/$id.herdr-presentation"
+  if ! {
+    grep -Fx "home=$(cd "$home" && pwd -P)" "$journal" >/dev/null \
+      && grep -Fx "session=$HERDR_LAB_SESSION" "$journal" >/dev/null \
+      && grep -Fx "workspace_id=$workspace" "$journal" >/dev/null \
+      && grep -Fx "tab_id=$tab" "$journal" >/dev/null \
+      && grep -Fx "pane_id=$pane" "$journal" >/dev/null \
+      && grep -Fx "task_id=$id" "$journal" >/dev/null
+  }; then
+    fail "post-retry presentation binding lost exact home, session, workspace, tab, pane, or task identity for $id"
+  fi
+  token=$(grep '^projection_id=' "$journal" | cut -d= -f2-)
+  [ "$(lab workspace list | jq --arg suffix " · p:$token" '[.result.workspaces[]? | select(.label | endswith($suffix))] | length')" -eq 1 ] \
+    || fail "post-retry presentation for $id has a duplicate workspace or binding"
+  lab tab list --workspace "$workspace" \
+    | jq -e --arg tab "$tab" '([.result.tabs[]?] | length) == 1 and .result.tabs[0].tab_id == $tab' >/dev/null \
+    || fail "post-retry workspace for $id contains a duplicate or foreign tab"
+  [ "$(lab pane list --workspace "$workspace" | jq '[.result.panes[]?] | length')" -eq 1 ] \
+    || fail "post-retry workspace for $id contains a duplicate pane or agent endpoint"
 }
 
 normalize_meta() {  # <meta>
@@ -1284,8 +1320,10 @@ teardown_task "$CROSS_RESTART_ID" "$SECOND_HOME_A" > "$TMP_ROOT/cross-restart-te
 "$REAL_TREEHOUSE" return --force "$CROSS_NEW_WT" >/dev/null 2>&1 || true
 pass "real Herdr lab: secondmate restart binding and reclaim stay isolated to the exact child home and parent"
 
-# Two homes recovering concurrently serialize on the named session lock and
-# each replace only their own exact husk.
+# Two homes recovering concurrently serialize on the named session lock.
+# The winner deliberately holds it beyond the existing bounded wait, so one
+# first attempt must refuse exactly; that task then retries through fm-spawn
+# only after the winner releases and replaces only its own exact husk.
 PRIMARY_WAVE_ID=resume-wave-primary
 BRAVO_WAVE_ID=resume-wave-bravo
 mkdir -p "$HOME_DIR/data/$PRIMARY_WAVE_ID" "$SECOND_HOME_B/data/$BRAVO_WAVE_ID"
@@ -1308,16 +1346,60 @@ PATH="$HERDR_ORIGINAL_PATH" "$HERDR_LAB_HELPER" stop "$HERDR_LAB_SESSION" >/dev/
 PATH="$HERDR_ORIGINAL_PATH" "$HERDR_LAB_HELPER" provision "$HERDR_LAB_SESSION" \
   || fail "could not reprovision the isolated session for concurrent recovery"
 CONCURRENT_RECOVERY_FOCUS=$(focus_snapshot)
+CONCURRENT_RECOVERY_CALL_START=$(log_line_count)
+mkdir -p "$RECOVERY_LOCK_CONTROL"
+: > "$RECOVERY_LOCK_CONTROL/armed"
 spawn_task "$PRIMARY_WAVE_ID" "$HOME_DIR" "$PROJECT_DIR" > "$TMP_ROOT/primary-wave-resume.out" 2> "$TMP_ROOT/primary-wave-resume.err" &
 PRIMARY_WAVE_PID=$!
 spawn_task "$BRAVO_WAVE_ID" "$SECOND_HOME_B" "$PROJECT_DIR" > "$TMP_ROOT/bravo-wave-resume.out" 2> "$TMP_ROOT/bravo-wave-resume.err" &
 BRAVO_WAVE_PID=$!
-wait "$PRIMARY_WAVE_PID" || fail "concurrent primary recovery failed: $(cat "$TMP_ROOT/primary-wave-resume.err")"
-wait "$BRAVO_WAVE_PID" || fail "concurrent secondmate recovery failed: $(cat "$TMP_ROOT/bravo-wave-resume.err")"
+if wait "$PRIMARY_WAVE_PID"; then PRIMARY_WAVE_STATUS=0; else PRIMARY_WAVE_STATUS=$?; fi
+if wait "$BRAVO_WAVE_PID"; then BRAVO_WAVE_STATUS=0; else BRAVO_WAVE_STATUS=$?; fi
+rm -f "$RECOVERY_LOCK_CONTROL/armed"
+[ -s "$RECOVERY_LOCK_CONTROL/winner/label" ] \
+  || fail "concurrent recovery did not establish a deterministic long lock owner"
+if [ "$PRIMARY_WAVE_STATUS" -eq 0 ] && [ "$BRAVO_WAVE_STATUS" -ne 0 ]; then
+  [ "$(cat "$RECOVERY_LOCK_CONTROL/winner/label")" = "fm-$PRIMARY_WAVE_ID" ] \
+    || fail "the successful recovery was not the deterministic long lock owner"
+  REFUSED_WAVE_ID=$BRAVO_WAVE_ID
+  REFUSED_WAVE_HOME=$SECOND_HOME_B
+  REFUSED_WAVE_OUT="$TMP_ROOT/bravo-wave-resume.out"
+  REFUSED_WAVE_ERR="$TMP_ROOT/bravo-wave-resume.err"
+elif [ "$BRAVO_WAVE_STATUS" -eq 0 ] && [ "$PRIMARY_WAVE_STATUS" -ne 0 ]; then
+  [ "$(cat "$RECOVERY_LOCK_CONTROL/winner/label")" = "fm-$BRAVO_WAVE_ID" ] \
+    || fail "the successful recovery was not the deterministic long lock owner"
+  REFUSED_WAVE_ID=$PRIMARY_WAVE_ID
+  REFUSED_WAVE_HOME=$HOME_DIR
+  REFUSED_WAVE_OUT="$TMP_ROOT/primary-wave-resume.out"
+  REFUSED_WAVE_ERR="$TMP_ROOT/primary-wave-resume.err"
+else
+  fail "concurrent recovery expected one success and one bounded refusal, got primary=$PRIMARY_WAVE_STATUS bravo=$BRAVO_WAVE_STATUS"
+fi
+EXPECTED_REFUSAL='error: herdr presentation recovery could not acquire its session lock; refusing a concurrent resume'
+[ "$(grep -Fxc "$EXPECTED_REFUSAL" "$REFUSED_WAVE_ERR")" -eq 1 ] \
+  || fail "concurrent recovery returned an unexpected refusal: $(cat "$REFUSED_WAVE_ERR")"
+[ "$(grep -c '^error:' "$REFUSED_WAVE_ERR")" -eq 1 ] \
+  || fail "concurrent recovery mixed another error into the bounded lock refusal: $(cat "$REFUSED_WAVE_ERR")"
+FIRST_ATTEMPT_MUTATIONS=$(sed -n "$((CONCURRENT_RECOVERY_CALL_START + 1)),\$p" "$HERDR_CALL_LOG" \
+  | awk -F '\t' '$1 == "tab" && $2 == "create" && ($0 ~ /--label\tfm-resume-wave-primary/ || $0 ~ /--label\tfm-resume-wave-bravo/) { n += 1 } END { print n + 0 }')
+[ "$FIRST_ATTEMPT_MUTATIONS" -eq 1 ] \
+  || fail "concurrent first attempts performed $FIRST_ATTEMPT_MUTATIONS recovery mutations instead of only the lock winner"
+spawn_task "$REFUSED_WAVE_ID" "$REFUSED_WAVE_HOME" "$PROJECT_DIR" > "$REFUSED_WAVE_OUT" 2> "$REFUSED_WAVE_ERR" \
+  || fail "refused recovery retry failed after the session lock released: $(cat "$REFUSED_WAVE_ERR")"
 PRIMARY_WAVE_NEW_WT=$(remember_meta_worktree "$PRIMARY_WAVE_META")
 BRAVO_WAVE_NEW_WT=$(remember_meta_worktree "$BRAVO_WAVE_META")
+PRIMARY_WAVE_NEW_TAB=$(grep '^herdr_tab_id=' "$PRIMARY_WAVE_META" | cut -d= -f2-)
+BRAVO_WAVE_NEW_TAB=$(grep '^herdr_tab_id=' "$BRAVO_WAVE_META" | cut -d= -f2-)
 PRIMARY_WAVE_NEW_PANE=$(grep '^herdr_pane_id=' "$PRIMARY_WAVE_META" | cut -d= -f2-)
 BRAVO_WAVE_NEW_PANE=$(grep '^herdr_pane_id=' "$BRAVO_WAVE_META" | cut -d= -f2-)
+RECOVERY_MUTATIONS=$(sed -n "$((CONCURRENT_RECOVERY_CALL_START + 1)),\$p" "$HERDR_CALL_LOG" \
+  | awk -F '\t' '$1 == "tab" && $2 == "create" && ($0 ~ /--label\tfm-resume-wave-primary/ || $0 ~ /--label\tfm-resume-wave-bravo/) { n += 1 } END { print n + 0 }')
+[ "$RECOVERY_MUTATIONS" -eq 2 ] \
+  || fail "refusal and retry performed $RECOVERY_MUTATIONS total recovery mutations instead of exactly one per task"
+assert_recovery_binding \
+  "$HOME_DIR" "$PRIMARY_WAVE_ID" "$PRIMARY_WAVE_WSID" "$PRIMARY_WAVE_NEW_TAB" "$PRIMARY_WAVE_NEW_PANE"
+assert_recovery_binding \
+  "$SECOND_HOME_B" "$BRAVO_WAVE_ID" "$BRAVO_WAVE_WSID" "$BRAVO_WAVE_NEW_TAB" "$BRAVO_WAVE_NEW_PANE"
 [ "$(grep '^herdr_workspace_id=' "$PRIMARY_WAVE_META" | cut -d= -f2-)" = "$PRIMARY_WAVE_WSID" ] \
   && [ "$(grep '^herdr_workspace_id=' "$BRAVO_WAVE_META" | cut -d= -f2-)" = "$BRAVO_WAVE_WSID" ] \
   || fail "concurrent recovery flattened one task into a different workspace"
@@ -1337,7 +1419,7 @@ teardown_task "$BRAVO_WAVE_ID" "$SECOND_HOME_B" > "$TMP_ROOT/bravo-wave-teardown
 "$REAL_TREEHOUSE" return --force "$BRAVO_WAVE_OLD_WT" >/dev/null 2>&1 || true
 "$REAL_TREEHOUSE" return --force "$PRIMARY_WAVE_NEW_WT" >/dev/null 2>&1 || true
 "$REAL_TREEHOUSE" return --force "$BRAVO_WAVE_NEW_WT" >/dev/null 2>&1 || true
-pass "real Herdr lab: concurrent cross-home recoveries replace exact husks under one session lock with no focus drift"
+pass "real Herdr lab: concurrent cross-home recovery accepts one bounded refusal, retries once after lock release, and preserves exact identity and focus"
 
 # Seed a legacy old-format primary projection and a flat secondmate tab; correction must not migrate them.
 LEGACY_OUT=$(lab workspace create --cwd "$PROJECT_DIR" --label "firstmate/legacy-seed · p:AbCdEfGhIjKlMnOpQrStUv" --no-focus) \
