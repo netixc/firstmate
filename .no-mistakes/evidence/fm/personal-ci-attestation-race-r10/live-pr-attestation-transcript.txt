@@ -1,0 +1,12 @@
+Scenario: archived synchronize-era event is stale, while the current pull request has a newer valid attestation
+Archived event head: 1111111111111111111111111111111111111111
+Archived event body: stale archived body without a compliant attestation
+Live pull-request head: 2222222222222222222222222222222222222222
+Live pull-request attestation: head_sha=2222222222222222222222222222222222222222; review=completed; test=completed; document=completed
+
+Verifier output:
+Found no-mistakes signature in PR #3006 body.
+Found structurally compliant pipeline step attestation.
+::warning::PR-body attestation is author-editable and is not cryptographic proof that no-mistakes produced it.
+Observed API request: /repos/example/project/pulls/3006
+Result: accepted the live current-head attestation rather than rejecting the immutable stale event payload.

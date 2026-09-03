@@ -1,0 +1,11 @@
+{
+  "workflow": "Require no-mistakes",
+  "pull_request_event_types": [
+    "opened",
+    "edited",
+    "reopened"
+  ],
+  "synchronize_creates_attestation_check": false,
+  "edited_creates_attestation_check": true,
+  "live_pull_request_read_permission": "read"
+}
