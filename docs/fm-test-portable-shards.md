@@ -38,9 +38,9 @@ The two parallel lanes use longest-processing-time assignment from those measure
 
 | Lane | Script count | Estimated duration |
 |---|---:|---:|
-| `portable-parallel-1` | 11 | 512906 ms (~512.9 s) |
-| `portable-parallel-2` | 10 | 353205 ms (~353.2 s) |
-| imbalance | | 159701 ms |
+| `portable-parallel-1` | 11 | 433056 ms (~433.1 s) |
+| `portable-parallel-2` | 10 | 433055 ms (~433.1 s) |
+| imbalance | | 1 ms |
 
 `bin/fm-test-run.sh` contains the exact ordered memberships in `list_portable_parallel_1` and `list_portable_parallel_2`.
 
@@ -106,7 +106,7 @@ Portable shards, each portable serial shard, and the Herdr lane upload runner-ge
 
 | Lane | Bound | Rationale |
 |---|---|---|
-| portable parallel 1/2 | job `timeout-minutes: 10` | The measured shard sums are about three minutes and the timeout is a hang tripwire. |
+| portable parallel 1/2 | job `timeout-minutes: 10` | The measured shard sums are about seven minutes and the timeout is a hang tripwire. |
 | portable serial 1-4 | job `timeout-minutes: 20` | Each balanced shard is about eleven minutes of measured script time, leaving roughly 2x hang-tripwire margin for job setup and runner-speed spread. |
 | Herdr | family-run step `timeout-minutes: 20`; job `timeout-minutes: 75` backstop | Healthy runs finish around 7 minutes, so the step bound is the hang tripwire (cleanup and timing artifacts still upload) while the job cap stays a last-resort backstop. |
 
