@@ -12,7 +12,8 @@ fi
 for tool in herdr jq pi; do
   command -v "$tool" >/dev/null 2>&1 || fail "FM_COMPOSER_MATRIX_LIVE=1 but $tool is not installed"
 done
-PI_VERSION=$(pi --version 2>/dev/null || true)
+PI_BIN=$(command -v pi)
+PI_VERSION=$($PI_BIN --version 2>/dev/null || true)
 [ "$PI_VERSION" = 0.84.4 ] || fail "exact Pi 0.84.4 required, found ${PI_VERSION:-unknown}"
 
 LAB_HELPER=${HERDR_LAB_HELPER:-$ROOT/bin/fm-herdr-lab.sh}
@@ -21,7 +22,12 @@ TMP_ROOT=$(fm_test_tmproot fm-composer-live)
 ORIGINAL_PATH=$PATH
 FAKEBIN="$TMP_ROOT/fakebin"
 HOME_DIR="$TMP_ROOT/home"
-mkdir -p "$FAKEBIN" "$HOME_DIR/state"
+PI_AGENT_DIR="$TMP_ROOT/pi-agent"
+mkdir -p "$FAKEBIN" "$HOME_DIR/state" "$HOME_DIR/data" "$PI_AGENT_DIR"
+source_pi_dir=${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}
+if [ -f "$source_pi_dir/auth.json" ]; then
+  cp "$source_pi_dir/auth.json" "$PI_AGENT_DIR/auth.json"
+fi
 cleanup() {
   local rc=$?
   trap - EXIT
@@ -63,10 +69,18 @@ FM_TEST_HERDR_SESSION=$SESSION FM_TEST_HERDR_WORKSPACE_ID=$WORKSPACE \
   FM_TEST_HERDR_TAB_ID=$PI_TAB FM_TEST_HERDR_PANE_ID=$PI_PANE \
   fm_write_herdr_task_meta "$PI_META" "worktree=$ROOT" "project=$ROOT" "kind=ship" "harness=pi"
 
-export PATH="$FAKEBIN:$ORIGINAL_PATH" FM_HOME="$HOME_DIR" FM_ROOT_OVERRIDE="$ROOT"
+export PATH="$FAKEBIN:$ORIGINAL_PATH" FM_HOME="$HOME_DIR" FM_ROOT_OVERRIDE="$ROOT" \
+  FM_STATE_OVERRIDE="$HOME_DIR/state" FM_DATA_OVERRIDE="$HOME_DIR/data" \
+  FM_BACKEND=herdr HERDR_SESSION="$SESSION" HERDR_WORKSPACE_ID="$WORKSPACE" \
+  HERDR_TAB_ID="$PI_TAB" HERDR_PANE_ID="$PI_PANE" PI_CODING_AGENT_DIR="$PI_AGENT_DIR"
 # shellcheck source=bin/fm-backend.sh
 . "$ROOT/bin/fm-backend.sh"
-lab pane run "$PI_PANE" "pi --approve --no-session" >/dev/null || fail "could not launch Pi"
+printf -v pane_command \
+  'env PATH=%q FM_HOME=%q FM_ROOT_OVERRIDE=%q FM_STATE_OVERRIDE=%q FM_DATA_OVERRIDE=%q FM_BACKEND=herdr HERDR_SESSION=%q HERDR_WORKSPACE_ID=%q HERDR_TAB_ID=%q HERDR_PANE_ID=%q PI_CODING_AGENT_DIR=%q %q --approve --no-session' \
+  "$PATH" "$FM_HOME" "$FM_ROOT_OVERRIDE" "$FM_STATE_OVERRIDE" "$FM_DATA_OVERRIDE" \
+  "$HERDR_SESSION" "$HERDR_WORKSPACE_ID" "$HERDR_TAB_ID" "$HERDR_PANE_ID" \
+  "$PI_CODING_AGENT_DIR" "$PI_BIN"
+lab pane run "$PI_PANE" "$pane_command" >/dev/null || fail "could not launch Pi"
 verdict=unknown
 for _ in $(seq 1 "${FM_COMPOSER_MATRIX_LIVE_POLLS:-90}"); do
   verdict=$(fm_backend_composer_state herdr "$SESSION:$PI_PANE" fm-live-pi "$PI_META")
