@@ -980,10 +980,12 @@ fmx_meta_followups_set() {
 # x_request/x_request_ts/x_followups and reply-platform lines while preserving
 # every other meta line. With expected-request, a present link is cleared only
 # when its request identity matches, and absence succeeds only when the
-# authorized parent directory can be inspected safely. That guarded mode also
-# bounds its lock wait (FMX_LINK_CLEAR_LOCK_TIMEOUT, default 10 seconds) so an
-# unattended remote clear refuses instead of hanging. Unguarded calls remain
-# idempotent when <meta> is missing and keep the ordinary unbounded wait.
+# authorized parent directory can be inspected safely. Disappearance before
+# the authoritative locked read is benign, while an existing symlink or
+# non-regular record is refused. Guarded mode also bounds its lock wait
+# (FMX_LINK_CLEAR_LOCK_TIMEOUT, default 10 seconds) so an unattended remote
+# clear refuses instead of hanging. Unguarded calls remain idempotent when
+# <meta> is missing and keep the ordinary unbounded wait.
 fmx_meta_link_clear() {
   local meta=$1 expected_set=0 expected='' tmp lock line rid='' link_present=0 parent
   local lock_timeout

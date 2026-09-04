@@ -8,7 +8,7 @@ This record supports six active guarantees for promised public replies made thro
 2. A home that never opted into the relay pays nothing for any of it.
 3. Delivering a final does not close the public loop: the registration is retained as `state=delivered` until `retire --reason`, session start surfaces an `open-loop` line, and `rechain` can bind follow-on work to the same thread.
 4. A first registration with no registry lock already held succeeds under stock macOS Bash 3.2 with `set -u`.
-5. A public loop whose work lives in a REMOTE secondmate home retires when readable remote state proves no link exists, or after readable and writable remote state clears the matching bound legacy Relay link; unreadable state, a non-writable matching link, an identity mismatch, a metadata lock it cannot acquire within its bound, or unconfirmed completion retains the loop instead of hanging, and `--force` still covers only the unresolved obligation.
+5. A public loop whose work lives in a REMOTE secondmate home retires when readable remote state proves no link exists, including when the record disappears during clearing, or after readable and writable remote state clears the matching bound legacy Relay link; unreadable state, a non-writable matching link, a symlink or non-regular record, an identity mismatch, a metadata lock it cannot acquire within its bound, or unconfirmed completion retains the loop instead of hanging, and `--force` still covers only the unresolved obligation.
 6. Work bound to a REMOTE secondmate home can report its typed terminal result: the instructions name paths that exist on the worker's own machine, the owning home collects results for open registrations over that route, an unreachable route fails loudly, an empty reachable route is a healthy no-op, and a non-open registration is skipped without contact.
 
 [`docs/configuration.md`](../configuration.md#promised-public-replies-statepublic-followup) owns the operator-facing contract, [`docs/architecture.md`](../architecture.md#optional-relay) owns the mechanism boundary, and `tasks-axi public-followup --help` owns the typed obligation schema.
@@ -36,6 +36,7 @@ ok - a relay transport failure is held as retryable with no false completion, an
 ok - a dry-run records no public delivery and leaves the commitment retryable
 ok - a late success receipt closes the exact attempt with no second post, and a mismatched attempt is refused
 ok - typed terminal cleanup clears the legacy link without posting
+ok - unguarded clear promptly refuses non-regular records and accepts absence
 ok - a delivery interrupted between post and receipt refuses to repost
 ok - a child home reports typed results but can never become the outward-post owner
 ok - typed delivery refuses to post when its cleanup registration is missing
@@ -82,6 +83,7 @@ ok - pre-change registrations are open loops and un-rechainable, never a crash
 ok - teardown reports an unreconciled legacy Relay link
 ok - secondmate promotion matches teardown parent resolution
 ok - a public loop bound to a remote secondmate home delivers and retires
+ok - remote clear accepts benign disappearance and preserves unsafe-record refusal
 ok - delivered remote registrations skip offline collection routes
 ok - --force still covers only the unresolved obligation, not the link clear
 ok - retire fails closed when a remote route is reassigned
@@ -114,10 +116,12 @@ The concurrency and interrupted-bind cases verify that one delivered source cann
 A pre-change on-disk record (no `state=`, no `request_context_b64`) is an open loop and un-rechainable rather than a crash.
 The stock macOS Bash lane in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) sets `FM_TEST_ONLY=test_first_register_succeeds_with_empty_lock_list_under_bash32` and runs `tests/fm-public-followup.test.sh` through real `/bin/bash` 3.2, proving the first `register` path is safe when its registry lock list starts empty.
 
-The eight remote-route cases are the proof of guarantee 5.
+The nine remote-route cases are the proof of guarantee 5.
 A remote secondmate home exists only on its own machine, so its registration records no local path, and every close that must first clear the bound legacy Relay link had nothing local to act on.
 The first case pins that empty recorded path so it cannot go vacuous, then drives `deliver` and `retire` end to end and asserts the matching link inside the remote home is actually gone and the retirement receipt is written.
-The second case shows `--force` still governs only the unresolved-obligation refusal: a plain `retire` of an unresolved remote loop is still refused with the remote link untouched, while a forced one closes and clears it.
+The concurrent-clear case removes the regular record after clearing begins and proves disappearance is benign, then proves symlink and non-regular replacements fail closed with their registrations and targets preserved.
+The separate unguarded-clear regression proves a local clear promptly refuses a non-regular record even when its parent is non-writable, while genuine absence remains idempotent.
+The second remote case shows `--force` still governs only the unresolved-obligation refusal: a plain `retire` of an unresolved remote loop is still refused with the remote link untouched, while a forced one closes and clears it.
 The reassignment case replaces a delivered loop's route with a remote home whose reused work ID carries another Relay request and asserts that retirement retains the registration and leaves the replacement link untouched.
 The unreadable-state case makes the remote state directory non-searchable while it still contains a matching link and proves that an unconfirmable path fails closed without mutation.
 The two non-writable-state cases prove that a matching link refuses before lock acquisition because mutation is impossible, while a confirmed absent link succeeds because no mutation is needed.
