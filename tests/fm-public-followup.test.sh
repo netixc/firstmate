@@ -580,6 +580,31 @@ test_typed_terminal_clear_only_removes_legacy_link() {
   pass "typed terminal cleanup clears the legacy link without posting"
 }
 
+test_unguarded_clear_promptly_refuses_nonregular_record() {
+  local home meta out rc
+  home=$(make_home nonregular-clear)
+  meta="$home/state/work-nonregular.meta"
+  mkdir "$meta"
+  chmod 500 "$home/state"
+
+  rc=0
+  out=$(fm_run_timed 2 env PATH="$home/fakebin:$PATH" FM_ROOT_OVERRIDE="$ROOT" \
+    FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" \
+    "$ROOT/bin/fm-x-followup.sh" --clear work-nonregular 2>&1) || rc=$?
+  chmod 700 "$home/state"
+  [ "$rc" -ne 0 ] || fail "an unguarded clear of a non-regular record must refuse"
+  [ "$rc" -ne 124 ] || fail "an unguarded clear of a non-regular record must not hang"
+  assert_contains "$out" "task record is not a regular file at $meta" \
+    "an unguarded clear must report the concrete invalid record"
+  [ -d "$meta" ] || fail "an unguarded refusal must preserve the non-regular record"
+
+  out=$(PATH="$home/fakebin:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" \
+    FM_STATE_OVERRIDE="$home/state" "$ROOT/bin/fm-x-followup.sh" --clear work-missing) \
+    || fail "an unguarded clear must remain idempotent for an absent record"
+  [ "$out" = work-missing ] || fail "an absent clear must identify the task"
+  pass "unguarded clear promptly refuses non-regular records and accepts absence"
+}
+
 # A crash between the post and its receipt is the one case where we cannot know
 # whether the thread already got a reply. Delivery must refuse rather than guess.
 test_interrupted_delivery_refuses_to_repost() {
@@ -2468,6 +2493,89 @@ test_remote_secondmate_loop_delivers_and_retires() {
   pass "a public loop bound to a remote secondmate home delivers and retires"
 }
 
+# The clear request begins while the remote record exists, then a one-shot
+# canonicalization wrapper removes that exact record before the guarded clear
+# can act on it. Before clear mode delegated directly to the guarded operation,
+# the redundant generic preflight converted this benign disappearance into a
+# stale regular-file refusal and left the registration open.
+test_remote_retire_accepts_record_disappearing_during_clear() {
+  local home remote meta marker real_perl unsafe_meta unsafe_target nonregular_meta
+  remote_fixture_prepare
+  home=$(make_home remote-clear-race)
+  remote=$(make_remote_route "$home" mini-default)
+  seed_repro_commitment "$home" pf-remote-clear-race req-remote-clear-race \
+    secondmate:mini-default work-clear-race
+  meta="$remote/state/work-clear-race.meta"
+  marker="$home/clear-race-observed"
+  fm_write_meta "$meta" \
+    "status=done" "x_request=req-remote-clear-race" "x_request_ts=1700000000" "x_followups=1"
+  assert_grep 'x_request=req-remote-clear-race' "$meta" \
+    "the clear race must begin with the remote link present"
+
+  real_perl=$(command -v perl) || fail "the clear race fixture requires perl"
+  cat > "$REMOTE_FIXTURE_ROOT/bin/perl" <<EOF
+#!/usr/bin/env bash
+"$real_perl" "\$@"
+rc=\$?
+target=
+for target in "\$@"; do :; done
+if [ "\$rc" -eq 0 ] && [ "\$target" = '$meta' ] && [ ! -e '$marker' ]; then
+  : > '$marker'
+  /bin/rm -f -- "\$target"
+fi
+exit "\$rc"
+EOF
+  chmod +x "$REMOTE_FIXTURE_ROOT/bin/perl"
+
+  run_pf_remote "$home" retire pf-remote-clear-race \
+    --reason "concurrent remote cleanup" --force >/dev/null \
+    || fail "a benign concurrent disappearance must not retain the registration"
+  assert_present "$marker" \
+    "the fixture must observe and remove the exact remote record during clearing"
+  assert_absent "$meta" \
+    "the concurrent actor must leave the remote record absent"
+  assert_present "$home/state/public-followup/retired/pf-remote-clear-race" \
+    "a benign disappearance must still record retirement"
+  assert_absent "$home/state/public-followup/registry/pf-remote-clear-race" \
+    "a benign disappearance must retire the legacy registration"
+  rm -f "$REMOTE_FIXTURE_ROOT/bin/perl"
+  seed_repro_commitment "$home" pf-remote-clear-unsafe req-remote-clear-unsafe \
+    secondmate:mini-default work-clear-unsafe
+  unsafe_meta="$remote/state/work-clear-unsafe.meta"
+  unsafe_target="$home/outside-clear-record"
+  fm_write_meta "$unsafe_target" "status=done" "x_request=req-remote-clear-unsafe"
+  ln -s "$unsafe_target" "$unsafe_meta"
+  expect_failure "an unsafe remote record must still refuse guarded clearing" \
+    run_pf_remote "$home" retire pf-remote-clear-unsafe \
+      --reason "unsafe remote cleanup" --force
+  assert_contains "$EXPECT_OUT" \
+    "fm-x-followup: could not clear the link in state/work-clear-unsafe.meta: task record " \
+    "the remote refusal must preserve a concrete guarded-clear error"
+  assert_present "$home/state/public-followup/registry/pf-remote-clear-unsafe" \
+    "a concrete unsafe-record failure must retain the registration"
+  assert_absent "$home/state/public-followup/retired/pf-remote-clear-unsafe" \
+    "an unsafe record must not create a retirement receipt"
+  [ -L "$unsafe_meta" ] || fail "an unsafe-path refusal must preserve the symlink"
+  assert_grep 'x_request=req-remote-clear-unsafe' "$unsafe_target" \
+    "an unsafe-path refusal must leave the linked target untouched"
+  seed_repro_commitment "$home" pf-remote-clear-nonregular req-remote-clear-nonregular \
+    secondmate:mini-default work-clear-nonregular
+  nonregular_meta="$remote/state/work-clear-nonregular.meta"
+  mkdir "$nonregular_meta"
+  expect_failure "a non-regular remote record must refuse guarded clearing" \
+    run_pf_remote "$home" retire pf-remote-clear-nonregular \
+      --reason "non-regular remote cleanup" --force
+  assert_contains "$EXPECT_OUT" \
+    "task record is not a regular file at $nonregular_meta" \
+    "the non-regular refusal must report the concrete invalid record"
+  assert_present "$home/state/public-followup/registry/pf-remote-clear-nonregular" \
+    "a non-regular record must retain the registration"
+  assert_absent "$home/state/public-followup/retired/pf-remote-clear-nonregular" \
+    "a non-regular record must not create a retirement receipt"
+  [ -d "$nonregular_meta" ] || fail "a non-regular refusal must preserve the task record"
+  pass "remote clear accepts benign disappearance and preserves unsafe-record refusal"
+}
+
 test_delivered_remote_registration_skips_offline_route() {
   local home remote log out registry
   remote_fixture_prepare
@@ -3103,6 +3211,7 @@ test_relay_failure_holds_without_false_completion
 test_dry_run_does_not_close_commitment
 test_late_receipt_closes_the_exact_attempt_without_reposting
 test_typed_terminal_clear_only_removes_legacy_link
+test_unguarded_clear_promptly_refuses_nonregular_record
 test_interrupted_delivery_refuses_to_repost
 test_outward_delivery_stays_with_the_owning_home
 test_delivery_requires_registration_before_posting
@@ -3149,6 +3258,7 @@ test_prechange_registration_is_open_and_unrechainable
 test_x_request_teardown_warns_when_final_unposted
 test_secondmate_promotion_uses_teardown_parent_resolution
 test_remote_secondmate_loop_delivers_and_retires
+test_remote_retire_accepts_record_disappearing_during_clear
 test_delivered_remote_registration_skips_offline_route
 test_remote_retire_force_semantics_unchanged
 test_remote_retire_refuses_reassigned_route
