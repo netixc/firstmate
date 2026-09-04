@@ -168,20 +168,20 @@ case "$ID" in
 esac
 
 META="$STATE/$ID.meta"
-if [ -e "$META" ] || [ -L "$META" ]; then
-  fm_backlog_record_present "$META" "task record" "$STATE" \
-    || { echo "fm-x-followup: unsafe task record in state/$ID.meta" >&2; exit 1; }
-fi
 if [ "$MODE" = clear ]; then
   if [ "$EXPECT_REQUEST_SET" -eq 1 ]; then
     fmx_meta_link_clear "$META" "$EXPECT_REQUEST" \
-      || { echo "fm-x-followup: could not clear the link in state/$ID.meta" >&2; exit 1; }
+      || { echo "fm-x-followup: could not clear the link in state/$ID.meta${FM_BACKLOG_TRANSITION_ERROR:+: $FM_BACKLOG_TRANSITION_ERROR}" >&2; exit 1; }
   else
     fmx_meta_link_clear "$META" \
-      || { echo "fm-x-followup: could not clear the link in state/$ID.meta" >&2; exit 1; }
+      || { echo "fm-x-followup: could not clear the link in state/$ID.meta${FM_BACKLOG_TRANSITION_ERROR:+: $FM_BACKLOG_TRANSITION_ERROR}" >&2; exit 1; }
   fi
   printf '%s\n' "$ID"
   exit 0
+fi
+if [ -e "$META" ] || [ -L "$META" ]; then
+  fm_backlog_record_present "$META" "task record" "$STATE" \
+    || { echo "fm-x-followup: unsafe task record in state/$ID.meta" >&2; exit 1; }
 fi
 
 RID=$(fmx_meta_get "$META" x_request)
