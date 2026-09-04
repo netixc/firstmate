@@ -1023,6 +1023,9 @@ fmx_meta_link_clear() {
     fi
   elif [ ! -e "$meta" ] && [ ! -L "$meta" ]; then
     return 0
+  elif [ ! -f "$meta" ] || [ -L "$meta" ]; then
+    FM_BACKLOG_TRANSITION_ERROR="task record is not a regular file at $meta"
+    return 1
   fi
   lock=$(fm_meta_lock_path "$meta") || {
     FM_BACKLOG_TRANSITION_ERROR="task record has no valid lock path at $meta"

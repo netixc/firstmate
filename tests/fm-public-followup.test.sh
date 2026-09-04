@@ -580,6 +580,31 @@ test_typed_terminal_clear_only_removes_legacy_link() {
   pass "typed terminal cleanup clears the legacy link without posting"
 }
 
+test_unguarded_clear_promptly_refuses_nonregular_record() {
+  local home meta out rc
+  home=$(make_home nonregular-clear)
+  meta="$home/state/work-nonregular.meta"
+  mkdir "$meta"
+  chmod 500 "$home/state"
+
+  rc=0
+  out=$(fm_run_timed 2 env PATH="$home/fakebin:$PATH" FM_ROOT_OVERRIDE="$ROOT" \
+    FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" \
+    "$ROOT/bin/fm-x-followup.sh" --clear work-nonregular 2>&1) || rc=$?
+  chmod 700 "$home/state"
+  [ "$rc" -ne 0 ] || fail "an unguarded clear of a non-regular record must refuse"
+  [ "$rc" -ne 124 ] || fail "an unguarded clear of a non-regular record must not hang"
+  assert_contains "$out" "task record is not a regular file at $meta" \
+    "an unguarded clear must report the concrete invalid record"
+  [ -d "$meta" ] || fail "an unguarded refusal must preserve the non-regular record"
+
+  out=$(PATH="$home/fakebin:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" \
+    FM_STATE_OVERRIDE="$home/state" "$ROOT/bin/fm-x-followup.sh" --clear work-missing) \
+    || fail "an unguarded clear must remain idempotent for an absent record"
+  [ "$out" = work-missing ] || fail "an absent clear must identify the task"
+  pass "unguarded clear promptly refuses non-regular records and accepts absence"
+}
+
 # A crash between the post and its receipt is the one case where we cannot know
 # whether the thread already got a reply. Delivery must refuse rather than guess.
 test_interrupted_delivery_refuses_to_repost() {
@@ -3186,6 +3211,7 @@ test_relay_failure_holds_without_false_completion
 test_dry_run_does_not_close_commitment
 test_late_receipt_closes_the_exact_attempt_without_reposting
 test_typed_terminal_clear_only_removes_legacy_link
+test_unguarded_clear_promptly_refuses_nonregular_record
 test_interrupted_delivery_refuses_to_repost
 test_outward_delivery_stays_with_the_owning_home
 test_delivery_requires_registration_before_posting
