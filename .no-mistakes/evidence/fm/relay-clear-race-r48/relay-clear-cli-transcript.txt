@@ -1,0 +1,13 @@
+$ fm-x-followup.sh --clear linked-task
+linked-task
+$ persisted state/linked-task.meta
+status=done
+
+$ fm-x-followup.sh --clear missing-task
+missing-task
+postcondition: state/missing-task.meta remains absent
+
+$ fm-x-followup.sh --clear corrupt-task  # directory record, non-writable state parent
+fm-x-followup: could not clear the link in state/corrupt-task.meta: task record is not a regular file at <HOME>/state/corrupt-task.meta
+exit=1 elapsed=0s
+postcondition: corrupt directory record remains intact
