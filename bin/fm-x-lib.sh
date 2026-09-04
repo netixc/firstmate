@@ -987,28 +987,47 @@ fmx_meta_followups_set() {
 fmx_meta_link_clear() {
   local meta=$1 expected_set=0 expected='' tmp lock line rid='' link_present=0 parent
   local lock_timeout
+  FM_BACKLOG_TRANSITION_ERROR=
+  parent=${meta%/*}
+  [ "$parent" != "$meta" ] || parent=.
   if [ "$#" -ge 2 ]; then
     expected_set=1
     expected=$2
-    parent=${meta%/*}
-    [ "$parent" != "$meta" ] || parent=.
-    [ -d "$parent" ] && [ ! -L "$parent" ] && [ -r "$parent" ] \
-      && [ -x "$parent" ] || return 1
-    fm_backlog_record_parent_authorized "$meta" "task record" "$STATE" || return 1
+    if [ ! -d "$parent" ] || [ -L "$parent" ] || [ ! -r "$parent" ] \
+      || [ ! -x "$parent" ]; then
+      FM_BACKLOG_TRANSITION_ERROR="task record parent cannot be inspected safely at $parent"
+      return 1
+    fi
+    if [ ! -w "$parent" ]; then
+      fm_backlog_record_parent_authorized "$meta" "task record" "$STATE" || return 1
+      if [ ! -e "$meta" ] && [ ! -L "$meta" ]; then
+        return 0
+      fi
+      if [ ! -f "$meta" ] || [ -L "$meta" ]; then
+        FM_BACKLOG_TRANSITION_ERROR="task record is not a regular file at $meta"
+        return 1
+      fi
+      while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in
+          x_request=*) link_present=1; rid=${line#*=} ;;
+        esac
+      done < "$meta" || {
+        FM_BACKLOG_TRANSITION_ERROR="task record could not be read at $meta"
+        return 1
+      }
+      [ "$link_present" -eq 0 ] || {
+        FM_BACKLOG_TRANSITION_ERROR="task record parent is not writable at $parent"
+        return 1
+      }
+      return 0
+    fi
+  elif [ ! -e "$meta" ] && [ ! -L "$meta" ]; then
+    return 0
   fi
-  [ ! -L "$meta" ] || return 1
-  [ -f "$meta" ] || return 0
-  if [ "$expected_set" -eq 1 ]; then
-    while IFS= read -r line || [ -n "$line" ]; do
-      case "$line" in
-        x_request=*) link_present=1; rid=${line#*=} ;;
-      esac
-    done < "$meta" || return 1
-    [ "$link_present" -eq 1 ] || return 0
-    [ -n "$expected" ] && [ -n "$rid" ] && [ "$rid" = "$expected" ] || return 1
-    [ -w "$parent" ] || return 1
-  fi
-  lock=$(fm_meta_lock_path "$meta") || return 1
+  lock=$(fm_meta_lock_path "$meta") || {
+    FM_BACKLOG_TRANSITION_ERROR="task record has no valid lock path at $meta"
+    return 1
+  }
   if [ "$expected_set" -eq 1 ]; then
     # A guarded clear runs unattended over the secondmate transport, so it must
     # refuse rather than wedge. The parent's writability can flip between the
@@ -1018,23 +1037,45 @@ fmx_meta_link_clear() {
     # into a refusal. Unguarded local callers keep the ordinary wait unchanged.
     lock_timeout=${FMX_LINK_CLEAR_LOCK_TIMEOUT:-10}
     case "$lock_timeout" in ''|*[!0-9]*|0) lock_timeout=10 ;; esac
-    fm_lock_acquire_wait_bounded "$lock" "$lock_timeout" || return 1
+    if ! fm_lock_acquire_wait_bounded "$lock" "$lock_timeout"; then
+      FM_BACKLOG_TRANSITION_ERROR="task record lock could not be acquired at $lock"
+      return 1
+    fi
   else
     fm_lock_acquire_wait "$lock"
   fi
-  [ ! -L "$meta" ] || { fm_lock_release "$lock"; return 1; }
-  [ -f "$meta" ] || { fm_lock_release "$lock"; return 0; }
+  fm_backlog_record_parent_authorized "$meta" "task record" "$STATE" \
+    || { fm_lock_release "$lock"; return 1; }
+  if [ ! -e "$meta" ] && [ ! -L "$meta" ]; then
+    fm_lock_release "$lock"
+    return 0
+  fi
+  if [ ! -f "$meta" ] || [ -L "$meta" ]; then
+    FM_BACKLOG_TRANSITION_ERROR="task record is not a regular file at $meta"
+    fm_lock_release "$lock"
+    return 1
+  fi
   if [ "$expected_set" -eq 1 ]; then
-    link_present=0
-    rid=
     while IFS= read -r line || [ -n "$line" ]; do
       case "$line" in
         x_request=*) link_present=1; rid=${line#*=} ;;
       esac
-    done < "$meta" || { fm_lock_release "$lock"; return 1; }
+    done < "$meta" || {
+      if [ ! -e "$meta" ] && [ ! -L "$meta" ]; then
+        fm_lock_release "$lock"
+        return 0
+      fi
+      FM_BACKLOG_TRANSITION_ERROR="task record could not be read at $meta"
+      fm_lock_release "$lock"
+      return 1
+    }
     [ "$link_present" -eq 0 ] || {
       [ -n "$expected" ] && [ -n "$rid" ] && [ "$rid" = "$expected" ] \
-        || { fm_lock_release "$lock"; return 1; }
+        || {
+          FM_BACKLOG_TRANSITION_ERROR="task record request identity did not match at $meta"
+          fm_lock_release "$lock"
+          return 1
+        }
     }
     [ "$link_present" -eq 1 ] || { fm_lock_release "$lock"; return 0; }
   fi

@@ -2474,7 +2474,7 @@ test_remote_secondmate_loop_delivers_and_retires() {
 # the redundant generic preflight converted this benign disappearance into a
 # stale regular-file refusal and left the registration open.
 test_remote_retire_accepts_record_disappearing_during_clear() {
-  local home remote meta marker real_perl unsafe_meta unsafe_target
+  local home remote meta marker real_perl unsafe_meta unsafe_target nonregular_meta
   remote_fixture_prepare
   home=$(make_home remote-clear-race)
   remote=$(make_remote_route "$home" mini-default)
@@ -2513,6 +2513,7 @@ EOF
     "a benign disappearance must still record retirement"
   assert_absent "$home/state/public-followup/registry/pf-remote-clear-race" \
     "a benign disappearance must retire the legacy registration"
+  rm -f "$REMOTE_FIXTURE_ROOT/bin/perl"
   seed_repro_commitment "$home" pf-remote-clear-unsafe req-remote-clear-unsafe \
     secondmate:mini-default work-clear-unsafe
   unsafe_meta="$remote/state/work-clear-unsafe.meta"
@@ -2532,6 +2533,21 @@ EOF
   [ -L "$unsafe_meta" ] || fail "an unsafe-path refusal must preserve the symlink"
   assert_grep 'x_request=req-remote-clear-unsafe' "$unsafe_target" \
     "an unsafe-path refusal must leave the linked target untouched"
+  seed_repro_commitment "$home" pf-remote-clear-nonregular req-remote-clear-nonregular \
+    secondmate:mini-default work-clear-nonregular
+  nonregular_meta="$remote/state/work-clear-nonregular.meta"
+  mkdir "$nonregular_meta"
+  expect_failure "a non-regular remote record must refuse guarded clearing" \
+    run_pf_remote "$home" retire pf-remote-clear-nonregular \
+      --reason "non-regular remote cleanup" --force
+  assert_contains "$EXPECT_OUT" \
+    "task record is not a regular file at $nonregular_meta" \
+    "the non-regular refusal must report the concrete invalid record"
+  assert_present "$home/state/public-followup/registry/pf-remote-clear-nonregular" \
+    "a non-regular record must retain the registration"
+  assert_absent "$home/state/public-followup/retired/pf-remote-clear-nonregular" \
+    "a non-regular record must not create a retirement receipt"
+  [ -d "$nonregular_meta" ] || fail "a non-regular refusal must preserve the task record"
   pass "remote clear accepts benign disappearance and preserves unsafe-record refusal"
 }
 
