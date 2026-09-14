@@ -63,7 +63,7 @@ fm_control_verb_allowed() {  # <verb>
 # than guessed at, exactly as a spawn on it would be.
 fm_control_harness_supported() {  # <harness>
   case "${1-}" in
-    claude|codex|opencode|pi|pi-signed|grok|kimi|cursor|gemini|muse|rovo|omp|agy) return 0 ;;
+    claude|codex|opencode|pi|pi-signed|grok|kimi|gemini|muse|rovo|omp|agy) return 0 ;;
   esac
   return 1
 }
@@ -88,7 +88,6 @@ fm_control_harness_family() {  # <recorded-harness>
     opencode*) printf 'opencode' ;;
     grok*) printf 'grok' ;;
     kimi*) printf 'kimi' ;;
-    cursor*) printf 'cursor' ;;
     gemini*) printf 'gemini' ;;
     muse*) printf 'muse' ;;
     rovo*) printf 'rovo' ;;
@@ -123,7 +122,7 @@ fm_control_harness_supports_kind() {  # <harness> <kind>
 # through Herdr).
 fm_control_interrupt_key() {  # <harness>
   case "${1-}" in
-    claude|codex|opencode|pi|pi-signed|omp|kimi|cursor|gemini|muse|rovo|agy) printf 'Escape' ;;
+    claude|codex|opencode|pi|pi-signed|omp|kimi|gemini|muse|rovo|agy) printf 'Escape' ;;
     grok) printf 'C-c' ;;
     *) return 1 ;;
   esac
@@ -134,7 +133,7 @@ fm_control_interrupt_key() {  # <harness>
 fm_control_interrupt_repeat() {  # <harness>
   case "${1-}" in
     opencode) printf '2' ;;
-    claude|codex|pi|pi-signed|omp|grok|kimi|cursor|gemini|muse|rovo|agy) printf '1' ;;
+    claude|codex|pi|pi-signed|omp|grok|kimi|gemini|muse|rovo|agy) printf '1' ;;
     *) return 1 ;;
   esac
 }
@@ -144,10 +143,8 @@ fm_control_interrupt_repeat() {  # <harness>
 # RESTORES the cancelled prompt into its composer as real bright text, so an
 # interrupt is not complete until Ctrl+U has cleared it; leaving it there would
 # make the next submitted line - a steer, or this plane's own exit command -
-# concatenate onto it. cursor was checked for exactly that behaviour and does
-# NOT repollute: after a single Escape its composer shows only the `Add a
-# follow-up` placeholder, so it needs no clear key. gemini was checked the
-# same way and also does not repollute: after a single Escape it prints
+# concatenate onto it. gemini was checked for the same behaviour and does not
+# repollute: after a single Escape it prints
 # `Request cancelled.` and its composer shows only the `Type your message
 # or @path/to/file` placeholder. Prints the key or nothing;
 # a harness with no verified mechanics returns nonzero, matching the tables
@@ -155,7 +152,7 @@ fm_control_interrupt_repeat() {  # <harness>
 fm_control_interrupt_clear_key() {  # <harness>
   case "${1-}" in
     muse) printf 'C-u' ;;
-    claude|codex|opencode|pi|pi-signed|omp|grok|kimi|cursor|gemini|rovo|agy) ;;
+    claude|codex|opencode|pi|pi-signed|omp|grok|kimi|gemini|rovo|agy) ;;
     *) return 1 ;;
   esac
 }
@@ -163,14 +160,10 @@ fm_control_interrupt_clear_key() {  # <harness>
 fm_control_interrupt_ack_source() {  # <harness>
   case "${1-}" in
     muse) printf 'muse-session-terminal' ;;
-    # cursor's transcript DOES type an aborted close, but its write latency
-    # after an interrupt was measured as variable - sometimes seconds, sometimes
-    # not within 20 - so a cancellation claim built on it would be unreliable.
-    # Normal turn completion is prompt, which is what the busy fold depends on.
-    # rovo's TUI prints "Agent cancelled" on Escape, but for parity with
-    # claude/cursor this stays 'none': the ack is a rendered string, not a
-    # recorded state source, and rovo has no busy wiring to confirm against.
-    claude|codex|opencode|pi|pi-signed|omp|grok|kimi|cursor|gemini|rovo|agy) printf 'none' ;;
+    # rovo's TUI prints "Agent cancelled" on Escape, but this stays 'none': the
+    # acknowledgement is a rendered string, not a recorded state source, and
+    # rovo has no busy wiring to confirm against.
+    claude|codex|opencode|pi|pi-signed|omp|grok|kimi|gemini|rovo|agy) printf 'none' ;;
     *) return 1 ;;
   esac
 }
@@ -178,7 +171,7 @@ fm_control_interrupt_ack_source() {  # <harness>
 # The command that exits the agent from its own composer.
 fm_control_exit_command() {  # <harness>
   case "${1-}" in
-    claude|opencode|grok|kimi|cursor|muse|rovo) printf '/exit' ;;
+    claude|opencode|grok|kimi|muse|rovo) printf '/exit' ;;
     codex|pi|pi-signed|omp|gemini|agy) printf '/quit' ;;
     *) return 1 ;;
   esac
@@ -243,7 +236,6 @@ fm_control_harness_wiring_paths() {  # <harness> <worktree> <state-dir> <id>
       printf '%s\n' "$state/$id.muse-session"
       printf '%s\n' "$state/$id.muse-session-current"
       ;;
-    cursor) printf '%s\n' "$state/$id.cursor-session" ;;
     # gemini's busy-state and turn-end hooks live in a firstmate-owned
     # settings file the launch reaches through GEMINI_CLI_SYSTEM_SETTINGS_PATH,
     # so retiring that one file retires the whole incarnation's wiring. Nothing

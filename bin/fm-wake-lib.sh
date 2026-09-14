@@ -185,7 +185,7 @@ fm_watcher_healthy() {
 
 # fm_supervision_model
 # Print the supervision model of this home's PRIMARY harness:
-#   autoarm     Claude's Stop-hook auto-arm and Cursor's stop-hook park: the
+#   autoarm     Claude's Stop-hook auto-arm: the
 #               watcher is armed at each turn end and exits on its wake, so it
 #               runs only BETWEEN turns. Mid-turn a fresh beacon with no live
 #               watcher process is healthy, and a stale beacon is still healthy
@@ -209,7 +209,7 @@ fm_supervision_model() {
   esac
   harness=$("$FM_WAKE_LIB_DIR/fm-harness.sh" 2>/dev/null || printf unknown)
   case "$harness" in
-    claude|cursor) printf 'autoarm\n' ;;
+    claude) printf 'autoarm\n' ;;
     pi|pi-signed|omp) printf 'extension\n' ;;
     *) printf 'persistent\n' ;;
   esac
@@ -1541,9 +1541,8 @@ fm_autoarm_claim_open() {  # <state-dir> [grace]
 #
 # A missing generation, a failed or exhausted episode, an open arming claim, a
 # changed or dead session lock, a moved recovery generation, or an absent/later
-# beacon all fail it, so a genuine lapse stays loud. Cursor autoarm homes have no
-# Claude epoch ledger and fail this, keeping their existing fresh-beacon-only
-# pull-guard contract. The rewake and beacon may both be older than grace: a
+# beacon all fail it, so a genuine lapse stays loud. The rewake and beacon may
+# both be older than grace: a
 # legitimate handling turn can outrun grace, which is the false alarm this
 # exists to stop.
 fm_autoarm_midturn_healthy() {  # <state-dir> [grace]

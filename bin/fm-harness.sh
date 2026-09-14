@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Detect the agent harness this process tree runs on.
-# Usage: fm-harness.sh                  print own harness: claude|codex|opencode|pi|pi-signed|grok|kimi|cursor|gemini|muse|rovo|omp|agy|unknown
+# Usage: fm-harness.sh                  print own harness: claude|codex|opencode|pi|pi-signed|grok|kimi|gemini|muse|rovo|omp|agy|unknown
 #        fm-harness.sh crew             print the effective CREWMATE harness
 #                                        (config/crew-harness; "default" resolves to own)
 #        fm-harness.sh secondmate       print the harness the PRIMARY uses to launch
@@ -62,8 +62,6 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 
-# shellcheck source=bin/fm-cursor-lib.sh
-. "$SCRIPT_DIR/fm-cursor-lib.sh"
 # shellcheck source=bin/fm-gemini-lib.sh
 . "$SCRIPT_DIR/fm-gemini-lib.sh"
 
@@ -71,17 +69,7 @@ CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 # marker is present. Markers only report what the environment CLAIMS; detect_own
 # decides whether that claim survives contradicting ancestry.
 harness_marker() {
-  # Cursor is tested BEFORE claude, deliberately. cursor-agent does NOT clear an
-  # inherited CLAUDECODE, so a cursor session started by hand from a claude
-  # primary carries BOTH markers and whichever is tested first wins. This
-  # ordering only settles the case where ancestry finds nothing to arbitrate
-  # with; a nearer claude ancestor still outranks both in detect_own.
-  # Verified live on cursor-agent 2026.08.11-e8db854: CURSOR_INVOKED_AS=cursor-agent
-  # is set on the agent process itself, and CURSOR_AGENT=1 is set for the
-  # child/tool processes this script runs as.
-  [ "${CURSOR_AGENT:-}" = "1" ] && { echo cursor; return; }
-  [ "${CURSOR_INVOKED_AS:-}" = "cursor-agent" ] && { echo cursor; return; }
-  # Gemini is checked BEFORE claude for exactly cursor's reason above: the
+  # Gemini is checked BEFORE claude because the
   # Gemini CLI does NOT clear an inherited CLAUDECODE, so a gemini worker
   # launched from a claude primary carries BOTH markers and whichever is
   # tested first wins. Verified live on gemini-cli 0.58.0: a tool process
@@ -89,7 +77,7 @@ harness_marker() {
   # AND CLAUDECODE=1 together. GEMINI_CLI is gemini's own and is unset in the
   # launching environment, so ordering it first is what makes the verdict
   # correct; bin/fm-spawn.sh additionally clears the foreign markers at the
-  # launch boundary. Both are kept for the same reason cursor keeps both.
+  # launch boundary.
   # AI_AGENT is deliberately NOT used: it was present in that same process
   # carrying the claude primary's value (claude-code_2-1-260_agent), so it is
   # an inherited launcher marker, not a Gemini identity.
@@ -98,7 +86,7 @@ harness_marker() {
   # AGENT=rovodev_cli on its tool subprocesses (verified, rovo 202609.1.2). It does
   # NOT scrub an inherited CLAUDECODE, so a rovo worker launched from a claude
   # session carries both markers - this must be tested BEFORE the CLAUDECODE line,
-  # the same ordering hazard cursor documents above (see issue #3517). bin/fm-spawn.sh
+  # the same inherited-marker ordering hazard (see issue #3517). bin/fm-spawn.sh
   # additionally clears foreign markers at rovo's launch boundary as defense in depth.
   [ "${ATLASSIAN_AGENT_TYPE:-}" = "rovo" ] && { echo rovo; return; }
   [ "${ROVODEV_CLI:-}" = "1" ] && { echo rovo; return; }
@@ -168,13 +156,8 @@ ancestry_names_omp() {
 #          (any node process holding a harness-shaped path matches it), so it is
 #          used only when no marker is present.
 harness_process_verdict() {  # <pid>
-  local pid=$1 comm args argv0
+  local pid=$1 comm args
   comm=$(ps -o comm= -p "$pid" 2>/dev/null) || return 0
-  argv0=$(fm_cursor_argv0_for_pid "$pid" "$comm" 2>/dev/null || true)
-  if fm_cursor_process_matches "$comm" '' "$argv0"; then
-    echo "comm cursor"
-    return
-  fi
   if fm_gemini_path_is_gemini "$comm"; then
     echo "comm gemini"
     return
@@ -389,8 +372,7 @@ harness_family() {
 #     (pi-signed, which ancestry can only see as pi).
 #   - Different harness, structural ancestor: ancestry wins. This is what stops
 #     an inherited or multiplexer-retained CLAUDECODE from renaming a markerless
-#     codex, opencode, kimi, or muse session, and symmetrically stops a retained
-#     CURSOR_AGENT from renaming a claude worker nested under cursor.
+#     codex, opencode, kimi, or muse session.
 #   - Different harness, interpreter-args ancestor only: the marker wins, because
 #     a harness-shaped path in some node process's arguments is weaker evidence
 #     than a harness publishing its own identity.
