@@ -31,7 +31,6 @@
 #   pi-ext           Pi/pi-signed per-task extension (agent_start/agent_settled)
 #   omp-ext          omp (Oh My Pi) per-task extension (agent_start/agent_end without willContinue)
 #   opencode-plugin  OpenCode per-task plugin (session.status)
-#   claude-hook      Claude lifecycle hooks (UserPromptSubmit/Stop/StopFailure/SessionEnd)
 #   gemini-hook      Gemini agent hooks (BeforeAgent opens; AfterAgent and
 #                    SessionEnd close)
 #   codex-hook, codex-appserver  reserved: Codex, gated by
@@ -39,7 +38,6 @@
 #   kimi-wire, kimi-hook  reserved: standalone Kimi, gated by fm_busy_kimi_verified
 # Firstmate-owned sources accepted for every converted adapter:
 #   fm-spawn         the launch-brief turn seeded at spawn
-#   fm-interrupt     the legacy Claude fm-send --key Escape idle event
 #   fm-recovery      a documented recovery reset after relaunch
 # Classifier-only sources (never written into a record):
 #   endpoint-gone, herdr-native, grok-regex, rovo-regex, agy-regex, muse-session-log,
@@ -191,7 +189,6 @@ fm_busy_current_gen() {  # <state-dir> <id>
 fm_busy_sources_for_harness() {  # <harness>
   local adapter=
   case "${1:-}" in
-    claude*) adapter=claude-hook ;;
     codex*)
       fm_busy_codex_semantic_source || { printf ''; return 0; }
       adapter='codex-hook codex-appserver'
@@ -206,7 +203,7 @@ fm_busy_sources_for_harness() {  # <harness>
       ;;
     *) printf ''; return 0 ;;
   esac
-  printf '%s fm-spawn fm-interrupt fm-recovery' "$adapter"
+  printf '%s fm-spawn fm-recovery' "$adapter"
 }
 
 fm_busy_source_trusted() {  # <harness> <source>
@@ -283,16 +280,16 @@ fm_busy_record_read() {  # <state-dir> <id>
 #   {"payload":{"kind":"run","run_id":"<uuid>","event":{"kind":"started",...
 #   {"payload":{"kind":"run","run_id":"<uuid>","event":{"kind":"terminal",
 #     "terminal":"completed"|"cancelled",...
-# An Escape interrupt closes its run with terminal=cancelled, so unlike Claude's
-# Stop hook this source covers the interrupt path itself. Any later
+# An Escape interrupt closes its run with terminal=cancelled, so this source
+# covers the interrupt path itself. Any later
 # run_retracted records follow the terminal rather than replacing it.
 #
 # Both halves of the fold are trusted. An open run is positive proof a turn is
 # in flight, and a settled log is idle: the credentialed multi-step smoke showed
 # one run pair spans a whole multi-step turn, including an Escape interrupt that
 # closes the run with terminal=cancelled instead of continuing the turn in
-# another run. This gives the settled log the same idle trust as the Claude and
-# Pi push sources. A version allowlist would be false precision and a maintenance
+# another run. This gives the settled log the same idle trust as the Pi push
+# source. A version allowlist would be false precision and a maintenance
 # treadmill for an auto-updating vendor binary: busy classification receives
 # only the normalized muse harness identity, while session metadata records
 # semver 0.1.0 plus a build SHA that cannot be matched against it. Resolution
@@ -621,8 +618,8 @@ fm_busy_muse_run_terminal() {  # <session-log> <run-id>
 #   {"role":"assistant", ...}                               <- work
 #   {"type":"turn_ended","status":"success"}                <- turn closes
 # An Escape interrupt closes the turn with status "aborted", so like muse's
-# session log - and unlike Claude's Stop hook - this source covers the manual
-# interrupt path. Nothing is installed and no trust grant is needed: cursor
+# session log and covers the manual interrupt path. Nothing is installed and no
+# trust grant is needed: cursor
 # writes this transcript on its own.
 #
 # Resolution deliberately does NOT reconstruct cursor's workspace-slug directory

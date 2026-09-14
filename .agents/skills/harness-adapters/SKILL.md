@@ -3,7 +3,7 @@ name: harness-adapters
 description: >-
   Agent-only reference for firstmate harness operations.
   Use before spawning or recovering a crewmate or secondmate, handling a trust dialog, sending a harness-specific skill invocation, interrupting or exiting an agent, resuming an exited agent, or verifying a new harness adapter.
-  Contains verified facts for claude, codex, opencode, pi, pi-signed, grok, kimi, cursor, gemini, muse, rovo, omp, and agy.
+  Contains verified facts for codex, opencode, pi, pi-signed, grok, kimi, cursor, gemini, muse, rovo, omp, and agy.
 user-invocable: false
 metadata:
   internal: true
@@ -20,7 +20,7 @@ Files under `references/` are resources of this skill, not additional catalogued
 
 The skill directory is the directory containing this `SKILL.md`.
 Resolve on-demand reference links and relative links to their executable, documentation, or sibling-skill owners against the skill directory, including links named by a nested reference.
-Operational paths keep the context named by their owner: `config/` and active-home settings belong to the active Firstmate home, `state/` belongs to that home, and project settings such as `.claude/settings.json` belong to the target project.
+Operational paths keep the context named by their owner: `config/` and active-home settings belong to the active Firstmate home, `state/` belongs to that home, and project settings belong to the target project.
 
 ## Non-negotiable safety
 
@@ -83,7 +83,6 @@ A new tool remains undispatchable until the `verify` plan, its harness entry, ev
     "verify": {"default": ["references/common/dispatch.md", "references/common/control-and-recovery.md", "references/common/primary-hooks.md", "references/common/model-and-effort.md"]}
   },
   "harnesses": {
-    "claude": "references/harness/claude.md",
     "codex": "references/harness/codex.md",
     "opencode": "references/harness/opencode.md",
     "pi": "references/harness/pi.md",

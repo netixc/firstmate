@@ -13,11 +13,11 @@ The router owns Muse's task-kind boundary.
 | Busy | Durable session event log folded by `../../../bin/fm-busy-lib.sh`; no hook or plugin writer, arming, or seeded busy record. |
 | Exit | `/exit`, one Enter; prints `To continue this session, run muse resume <session-uuid>`. |
 | Interrupt | Single Escape records `terminal: cancelled` and restores bright prompt text, so control follows with `Ctrl+U`; the legacy typed key path uses the same clear table. |
-| Skill | `/<skill>`, the Claude or Grok form. |
+| Skill | `/<skill>`, the verified Muse form. |
 | Resume | `muse resume --last` or `muse resume <session-uuid>`; bare `muse resume` opens a picker. |
 | Autonomy | `--yolo` disables approval and sandbox and trusts the workspace. |
 | Trust | Dialog `Do you trust this workspace?`, choice `1 Trust and continue` preselected for Enter; `--yolo` suppresses it, which fresh task paths require. |
-| Marker | None; identity comes from anchored `muse-bin-*` ancestry, which `../../../bin/fm-harness.sh` keeps a retained foreign marker from overriding, while `MUSE_CURRENT_SESSION_LOG` is a path rather than identity and its export to tools is unverified. |
+| Marker | None; identity comes from anchored `muse-bin-*` ancestry, while `MUSE_CURRENT_SESSION_LOG` is a path rather than identity and its export to tools is unverified. |
 | Composer | Bordered `⟩`, truecolor `38;2;90;160;255`, luminance about 149.9 and narrowly above ghost threshold 128; typed text is `38;2;204;211;219`, about 209.8, with no observed placeholder or ghost. |
 | Effort | `--reasoning-effort`, default `high`, accepts `none\|minimal\|low\|medium\|high\|xhigh\|ultra`; shared values expose low through xhigh, explicit captain `max` maps to `ultra`, and `none` or `minimal` remain unreachable. |
 
@@ -34,8 +34,8 @@ Before escalating the refusal as a needed credential, check the [worker launch e
 
 ## Foreign personal context
 
-Muse sends operator rules from `~/.claude` to Meta-hosted inference on every run.
-Its notice names Claude personal rules and `/settings` but appears only once through `tui.foreign_context_notice_shown`, so later silence proves nothing; isolated `XDG_CONFIG_HOME` does not prevent loading.
+Muse can send operator rules from foreign tool configuration to Meta-hosted inference on every run.
+Its notice appears only once through `tui.foreign_context_notice_shown`, so later silence proves nothing; isolated `XDG_CONFIG_HOME` does not prevent loading.
 
 Interactive Muse rejects exec-only `--no-foreign-personal-context`.
 The pane control is `MUSE_EXPERIMENTAL_FOREIGN_PERSONAL_CONTEXT_KILL=on`, set on every spawn and verified to remove foreign `rules_file` while retaining project `AGENTS.md`.
@@ -47,7 +47,7 @@ The spawn writes `state/<id>.muse-session` with root, worktree, binding incarnat
 It folds that path while the bounded current-day main namespace is unchanged and resolves again if the namespace changes, path disappears, or a newer binding wins.
 
 Turns are bracketed by `{"payload":{"kind":"run","run_id":"<uuid>","event":{"kind":"started"` and matching `"event":{"kind":"terminal"`, observed as `completed` or `cancelled`.
-Interrupt therefore has a real terminal, unlike Claude Stop.
+Interrupt therefore has a real terminal event.
 Never use `--no-session-log`, which removes Muse's only busy source.
 
 The fold must reject nested `"record":{"kind":"terminal"}` cleanup effects and depth-bound away native sub-agent logs under `subagent/<child-session-id>/session.jsonl`.
@@ -58,8 +58,7 @@ An open run is trusted busy and settled log trusted idle; missing binding or mat
 ## Native sub-agents and worktrees
 
 Native children use per-child worktrees only with opt-in `--subagent-worktree-isolation`; capability says default-on while omission stays shared, and verified labs produced no nested copy.
-`../../../bin/fm-teardown.sh` excludes no Muse path.
-It excludes `.claude/settings.local.json` because Firstmate writes it, but Muse scratch is worker output and must refuse cleanup when uncommitted.
+`../../../bin/fm-teardown.sh` excludes no Muse path; Muse scratch is worker output and must refuse cleanup when uncommitted.
 Inspect, never force past, that refusal.
 
 ## Maturity and primary limit

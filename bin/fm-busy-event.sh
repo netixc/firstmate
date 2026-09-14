@@ -18,8 +18,7 @@
 #       Append one lifecycle event: validate the gen against the armed
 #       sidecar, advance seq under the lock, atomically replace the record.
 #       Adapter wiring passes the exact --gen embedded at arm time, so a
-#       hook that outlives its incarnation fails closed here. The legacy
-#       Claude fm-send --key Escape path (fm-interrupt) and firstmate recovery
+#       hook that outlives its incarnation fails closed here. Firstmate recovery
 #       paths (fm-recovery) may pass --current-gen to bind to the incarnation
 #       armed right now.
 #

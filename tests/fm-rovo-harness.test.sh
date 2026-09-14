@@ -8,10 +8,10 @@ set -u
 # bin/fm-harness.sh checks verified ENV markers before ancestry, but that
 # ordering settles the marker layer only: a structural (comm-strength)
 # ancestor of a different harness still outranks either marker. A suite run
-# from inside Cursor, Claude, Pi, or Grok inherits those markers, which outrank
+# from inside Cursor, Codex, Pi, or Grok inherits those markers, which outrank
 # the fake ancestry the detection cases set up. Drop the ambient markers so the
 # asserted verdict does not depend on which harness launched the suite.
-unset CLAUDECODE PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT CURSOR_AGENT CURSOR_INVOKED_AS \
+unset PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT CURSOR_AGENT CURSOR_INVOKED_AS \
   ATLASSIAN_AGENT_TYPE ROVODEV_CLI
 
 SPAWN="$ROOT/bin/fm-spawn.sh"
@@ -200,7 +200,7 @@ test_rovo_launch_then_send_is_verified() {
   assert_not_contains "$launch" "encode launch-brief" "rovo launch carried a positional brief instead of launching bare"
   assert_not_contains "$launch" "brief for rovo" "rovo launch embedded the brief body as a positional argument"
   assert_contains "$launch" "--model 'auto'" "rovo launch omitted the requested model"
-  assert_contains "$launch" "env -u CLAUDECODE -u PI_CODING_AGENT -u GROK_AGENT -u FM_PI_HARNESS" \
+  assert_contains "$launch" "env -u PI_CODING_AGENT -u GROK_AGENT -u FM_PI_HARNESS" \
     "rovo launch did not clear foreign primary markers"
   assert_contains "$launch" "env -u CURSOR_AGENT -u CURSOR_INVOKED_AS" \
     "rovo launch did not clear cursor's markers via the shared outer wrap"
@@ -373,32 +373,21 @@ esac
 SH
   chmod +x "$fakebin/ps"
 
-  out=$(env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
+  out=$(env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
     -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u ATLASSIAN_AGENT_TYPE -u ROVODEV_CLI \
     PATH="$fakebin:$BASE_PATH" FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh")
   [ "$out" = rovo ] || fail "rovo ancestry detection returned '$out'"
 
   out=$(env -u CURSOR_AGENT -u CURSOR_INVOKED_AS \
-    ATLASSIAN_AGENT_TYPE=rovo CLAUDECODE=1 \
+    ATLASSIAN_AGENT_TYPE=rovo \
     PATH="$fakebin:$BASE_PATH" FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh")
-  [ "$out" = rovo ] || fail "rovo's ATLASSIAN_AGENT_TYPE marker did not outrank an inherited CLAUDECODE, got '$out'"
+  [ "$out" = rovo ] || fail "rovo's ATLASSIAN_AGENT_TYPE marker resolved '$out'"
 
   out=$(env -u CURSOR_AGENT -u CURSOR_INVOKED_AS \
-    ROVODEV_CLI=1 CLAUDECODE=1 \
+    ROVODEV_CLI=1 \
     PATH="$fakebin:$BASE_PATH" FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh")
-  [ "$out" = rovo ] || fail "rovo's ROVODEV_CLI marker did not outrank an inherited CLAUDECODE, got '$out'"
-
-  # CLAUDECODE alone, with no rovo marker, is a marker-layer question, not an
-  # ancestry one: blind the walk so the rovo-resolving fake ps above (needed
-  # for the markerless-ancestry and marker+ancestry cases) cannot also decide
-  # this assertion, matching the sibling-file pattern.
-  local blind_fakebin
-  blind_fakebin=$(fm_fakebin "$dir/blind-ancestry")
-  fm_fake_blind_ancestry "$blind_fakebin"
-  out=$(env -u CURSOR_AGENT -u CURSOR_INVOKED_AS \
-    CLAUDECODE=1 PATH="$blind_fakebin:$BASE_PATH" FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh")
-  [ "$out" = claude ] || fail "verified env-marker precedence changed, got '$out'"
-  pass "fm-harness: rovo's markers outrank an inherited CLAUDECODE, and markerless ancestry still resolves rovo"
+  [ "$out" = rovo ] || fail "rovo's ROVODEV_CLI marker resolved '$out'"
+  pass "fm-harness: rovo's markers and markerless ancestry resolve rovo"
 }
 
 test_rovo_control_lib_table() {

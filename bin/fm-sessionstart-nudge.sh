@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Print the one-line session-start instruction only for a genuine firstmate
 # primary whose current harness session has not already acquired the home lock.
-# Every silence and error path exits 0 because Claude SessionStart exit 2 blocks
-# session initialization.
+# Every silence and error path exits 0 so the hook cannot block session initialization.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

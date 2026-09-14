@@ -61,7 +61,7 @@ make_home() {  # <name> [task-id...]
   fakebin=$(fm_fakebin "$case_dir")
   mkdir -p "$home/state" "$home/config" "$home/data" "$home/projects"
   touch "$home/state/.last-watcher-beat"
-  printf '%s\n' claude > "$home/config/crew-harness"
+  printf '%s\n' pi > "$home/config/crew-harness"
   printf '%s\n' '# Backlog' '' '## In flight' '' '## Queued' '' '## Done' \
     > "$home/data/backlog.md"
   # Pin the adapter per case: without it fm_tasks_axi_backend would fall through
@@ -583,7 +583,7 @@ write_task_meta() {  # <case-dir> <id> <kind> <mode> [extra-line...]
     "endpoint_task_id=$id" \
     "worktree=$case_dir/absent-worktree" \
     "project=$case_dir/absent-project" \
-    "harness=claude" \
+    "harness=pi" \
     "kind=$kind" \
     "mode=$mode" \
     "yolo=off" \
@@ -593,13 +593,10 @@ write_task_meta() {  # <case-dir> <id> <kind> <mode> [extra-line...]
 run_spawn() {  # <case-dir> <args...>
   local case_dir=$1
   shift
-  # A claude spawn pre-registers workspace trust in the launching user's own
-  # store (bin/fm-claude-trust.sh), so it runs against a throwaway HOME;
-  # without it this suite would write the developer's real ~/.claude.json.
+  # Keep spawn-time writes inside a throwaway home.
   mkdir -p "$case_dir/user-home"
   FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$(home_of "$case_dir")" HOME="$case_dir/user-home" \
     FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$case_dir/wt" TMUX="fake,1,0" \
-    CLAUDE_CONFIG_DIR='' \
     PATH="$case_dir/fakebin:$PATH" \
     "$SPAWN" "$@" 2>&1
 }
@@ -1480,7 +1477,7 @@ test_deferred_signal_verification_outlives_an_unresponsive_tasks_axi() {
   mkdir -p "$case_dir/user-home"
   out=$(FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$(home_of "$case_dir")" \
     HOME="$case_dir/user-home" FM_SPAWN_NO_GUARD=1 \
-    FM_FAKE_PANE_PATH="$case_dir/wt" TMUX="fake,1,0" CLAUDE_CONFIG_DIR='' \
+    FM_FAKE_PANE_PATH="$case_dir/wt" TMUX="fake,1,0" \
     FM_TASKS_AXI_TIMEOUT=3 PATH="$case_dir/fakebin:$PATH" \
     timeout -k 5 30 "$SPAWN" "$id" "$case_dir/project" \
     --mode no-mistakes --yolo off 2>&1) || rc=$?
@@ -2654,7 +2651,7 @@ test_no_backlog_teardown_refuses_a_symlinked_task_record_at_entry() {
   fm_write_meta "$target" \
     "window=firstmate:fm-$id" "endpoint_task_id=$id" \
     "worktree=$foreign_worktree" "project=$case_dir/foreign-project" \
-    "harness=claude" "kind=ship" "mode=local-only" "yolo=off"
+    "harness=pi" "kind=ship" "mode=local-only" "yolo=off"
   ln -s "$target" "$home/state/$id.meta"
   track_teardown_resource_actions "$case_dir"
 
@@ -2684,7 +2681,7 @@ test_teardown_rechecks_record_parent_after_lock_acquisition() {
   fm_write_meta "$foreign_state/$id.meta" \
     "window=firstmate:fm-$id" "endpoint_task_id=$id" \
     "worktree=$foreign_worktree" "project=$case_dir/foreign-project" \
-    "harness=claude" "kind=ship" "mode=local-only" "yolo=off"
+    "harness=pi" "kind=ship" "mode=local-only" "yolo=off"
   track_teardown_resource_actions "$case_dir"
   real_ln=$(command -v ln)
   cat > "$case_dir/fakebin/ln" <<SH
@@ -2725,7 +2722,7 @@ test_teardown_refuses_a_symlinked_state_directory_at_entry() {
   fm_write_meta "$external_state/$id.meta" \
     "window=firstmate:fm-$id" "endpoint_task_id=$id" \
     "worktree=$case_dir/foreign-worktree" "project=$case_dir/foreign-project" \
-    "harness=claude" "kind=ship" "mode=local-only" "yolo=off"
+    "harness=pi" "kind=ship" "mode=local-only" "yolo=off"
   ln -s "$external_state" "$home/state"
   track_teardown_resource_actions "$case_dir"
 
@@ -2777,7 +2774,6 @@ test_spawn_refuses_a_special_file_tasks_config() {
 
   out=$(FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" \
     FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$case_dir/wt" TMUX="fake,1,0" \
-    CLAUDE_CONFIG_DIR='' \
     PATH="$case_dir/fakebin:$PATH" \
     timeout 60 "$SPAWN" "$id" "$case_dir/project" --mode no-mistakes --yolo off 2>&1) || rc=$?
   [ "$rc" -ne 124 ] || fail "spawn hung reading a special-file tasks-axi config"

@@ -6,107 +6,6 @@ This record contains reusable version-scoped evidence for active runtime guarant
 The backend guides own current setup, safety boundaries, and limitations.
 Exact task chronology, branch names, temporary homes, local paths, process ids, thread ids, and delivery transcripts remain in private reports or PR evidence.
 
-## Harness detection precedence
-
-Firstmate's own harness comes from two kinds of evidence, and `bin/fm-harness.sh` owns how they combine: an environment marker names its harness, and the nearest harness process in the parent chain proves who owns the process tree.
-A marker alone is not proof of ownership, because it is ordinary environment state that a child inherits and a terminal multiplexer can replay into an unrelated session.
-Verified on 2026-09-02 on Linux 7.1.12 with the portable regression, which builds every case from real renamed processes and no installed harness:
-
-```sh
-bin/fm-test-run.sh tests/fm-harness-precedence.test.sh
-```
-
-Observed output:
-
-```text
-ok - a markerless harness keeps its identity under an inherited foreign marker
-ok - a harness that publishes a marker inside its own process tree is unchanged
-ok - with ancestry silent, the marker layer and its cursor-first ordering still decide
-ok - a retained cursor marker does not rename a nested claude worker
-ok - an agreeing marker keeps Pi's finer identity that ancestry cannot prove
-ok - an interpreter script-path match answers alone but never outranks a marker
-ok - a native harness binary under an interpreter shim decides at comm strength
-ok - a harness that is pid 1 of its own namespace is examined, not skipped
-ok - the descent probe reaches comm strength where the top-of-session probe sees only args
-ok - the descent probe reports no verdict from a sibling branch detection cannot reach
-ok - a foreign args-only verdict at the deepest vantage leaves the comm-strength identity intact
-ok - equal-depth descent ties prefer the comm-strength leaf regardless of spawn order
-ok - session start renders the Codex protocol for a Codex primary holding a retained CLAUDECODE
-FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=3666
-```
-
-Before that boundary existed, a Codex session started from an environment that had retained `CLAUDECODE=1` reported `claude`, and session start emitted Claude's Stop-owned supervision protocol to a Codex primary.
-The same live shape, reproduced with a real process named `codex` and no installed harness, now reports `codex` with the marker present and `claude` with the marker present and ancestry blinded, which is what proves the case is not vacuous.
-
-### A real Codex session holding a retained Claude marker
-
-The portable regression builds its process tree from renamed executables, so the same guarantee is proven again against the real installed Codex.
-`codex sandbox` runs a command under the installed native binary with no model turn, inside a PID namespace where that binary is pid 1 and the command is pid 2.
-Verified on 2026-09-01 with codex-cli 0.152.0 on Linux 7.1.10, with both Claude markers retained in the launching environment:
-
-```sh
-CLAUDECODE=1 CLAUDE_CODE_ENTRYPOINT=cli codex sandbox bash -c \
-  'cd <checkout> && bin/fm-harness.sh; bin/fm-harness.sh ancestry; bin/fm-supervision-instructions.sh'
-```
-
-Against the parent commit, with `CLAUDECODE=1` and `CLAUDE_CODE_ENTRYPOINT=cli` confirmed present in the probe's own environment and the chain reading pid 2 `bash` to pid 1 `codex`:
-
-```text
-verdict=claude
-SUPERVISION OPERATING INSTRUCTIONS - primary harness: claude
-Mode: Claude Stop-hook-owned supervision.
-```
-
-With the current boundaries in place, from the same command and the same process chain:
-
-```text
-verdict=codex
-ancestry=comm codex
-SUPERVISION OPERATING INSTRUCTIONS - primary harness: codex
-Mode: Codex foreground checkpoint.
-```
-
-Two boundaries are load-bearing here, and the marker-versus-ancestry precedence above is only the first.
-The walk also used to stop as soon as the next pid was 1, on the assumption that pid 1 is always init.
-That assumption inverts inside a PID namespace, where the harness is pid 1: the walk returned no ancestry at all, so the retained marker won by default even with precedence corrected.
-The walk now examines that top process before stopping, which costs one `ps` call and can introduce no false positive, because a host's real pid 1 (init, systemd, launchd) matches no harness name.
-The portable regression asserts both directions of that case: a host-shaped pid 1 still leaves the marker to answer, and a harness at pid 1 outranks it.
-
-Run on the host under Claude Code 2.1.252 with the same two markers set, the same probe reports `claude`, `comm claude`, and Claude's Stop-owned protocol, so the correction does not trade one misidentification for its inverse.
-
-### Real harness process names behind the walk
-
-The detection half of the opt-in drift guard asks the ancestry walk what it makes of each INSTALLED harness's real running process:
-
-```sh
-FM_HARNESS_LIVENESS_DRIFT=1 bin/fm-test-run.sh tests/fm-harness-liveness-drift-live-e2e.test.sh
-```
-
-The guard probes the upward path between the deepest foreground descendant of the pane process and the pane process itself, and reports each distinct verdict that vantage set produces.
-Observed on 2026-09-02 for the harnesses installed on that machine:
-
-```text
-# claude 2.1.258 (Claude Code): title='claude' foreground=[claude ]
-# claude 2.1.258 (Claude Code): ancestry verdicts=[comm claude]
-# codex codex-cli 0.152.0: title='node' foreground=[node codex ]
-# codex codex-cli 0.152.0: ancestry verdicts=[comm codex;args codex]
-```
-
-The verdicts are reported deepest first, so Codex's native child answers before the shim above it.
-When eligible foreground descendants tie at the greatest depth, the probe prefers a leaf whose own verdict reaches comm strength; if none does, it keeps the first leaf, so process-table ordering cannot hide an equally deep native harness binary behind an args-strength interpreter.
-
-Codex ships as a `node` npm shim that spawns its native `codex` binary as a foreground child, which is why its two verdicts differ: the pane process is identified only from the shim's script path, and the native child is what carries the process name.
-That difference is the reason the guard cannot probe the pane process alone.
-The guarantee this guard holds is a strength claim, not only an identity one, because `detect_own` hands an args-strength verdict straight back to a retained foreign marker.
-A pane-only probe would have observed `args codex`, passed, and gone on passing if a later release stopped spawning the native child, while real sessions silently regressed to the original bug.
-Probing from below asks the question from the vantage a tool subprocess actually occupies, so the guard can require comm strength somewhere in the session and require every comm-strength vantage to name the same harness.
-The vantage set stops at the upward path rather than the whole subtree, because `harness_ancestry` only ever climbs and a sibling branch is therefore a vantage firstmate's own detection can never occupy.
-The reject-other-harness cross-check judges comm-strength vantages only, because an args-strength verdict is path-ambiguous by construction: a harness-spawned MCP server running as `node <home>/.claude/mcp/<server>.js` answers `args claude` purely from the `.claude` path component, and such a server is normally a child of the agent binary, so it can be the deepest descendant and sit on this path.
-That narrowing changes only which vantages the cross-check judges; the comm-strength requirement itself is unchanged.
-A single-process harness has no descendant that adds a distinct verdict, which is why `claude` reports one.
-The portable regression pins every half without any harness installed: `tests/fm-harness-precedence.test.sh` asserts that this two-process topology decides at comm strength, that the descent probe reaches a strength the top-of-session probe cannot, that a sibling branch answering a foreign harness contributes no verdict, that a foreign args-only verdict at the deepest vantage leaves the comm-strength identity intact, and that equal-depth ties choose the comm-strength leaf regardless of process ordering.
-The run did not reach `opencode`, `pi`, `pi-signed`, `grok`, `kimi`, or `muse`, which were not installed, and stopped at the same pre-existing liveness failure for `cursor` 3.18.9, whose resolved binary on that machine is the editor rather than `cursor-agent`; those adapters are unverified by this run.
-
 ## tmux
 
 Foreground-process behavior was verified on 2026-07-07 with tmux 3.6a on macOS.
@@ -148,7 +47,6 @@ Observed identities, and the resulting verdict:
 
 | Harness | Version | `#{pane_current_command}` | Foreground `comm` | Verdict |
 | --- | --- | --- | --- | --- |
-| claude | 2.1.220 | `2.1.220` | `claude` | alive |
 | codex | codex-cli 0.146.0 | `codex` | `codex` | alive |
 | opencode | 1.18.11 | `opencode` | `opencode` | alive |
 | pi | 0.82.0 | `pi-launcher` | `pi-signed`, `pi` | alive |
@@ -156,7 +54,6 @@ Observed identities, and the resulting verdict:
 | grok | 0.2.118 | `grok-0.2.118-ma` | `grok` | alive |
 | kimi | 0.31.1 | `kimi` | `kimi` | alive |
 
-In that 2026-08-03 seven-adapter run, Claude Code was the only harness whose title did not attribute it; every other adapter was attributed by both sources.
 Codex reported `codex-aarch64-a` at 0.145.0 and `codex` at 0.146.0, and Kimi Code reported `kimi-code` as its foreground `comm` at 0.29.1 and `kimi` at 0.31.1, so these identities move between ordinary patch releases in both directions.
 That is the evidence for treating any single process name as a surface under vendor control rather than a stable contract.
 
@@ -198,7 +95,6 @@ FM_HARNESS_LIVENESS_DRIFT=1 bin/fm-test-run.sh tests/fm-harness-liveness-drift-l
 Running the guard with no variable set on macOS 26.5.2 arm64 checked 8 installed harnesses and classified every one `alive`:
 
 ```text
-# claude 2.1.263 (Claude Code): title='2.1.263' foreground=[/Users/kunchen/.local/bin/claude <defunct> <defunct> ]
 # codex codex-cli 0.147.0: title='codex' foreground=[/opt/homebrew/bin/codex ]
 # opencode 1.18.29: title='opencode' foreground=[/opt/homebrew/bin/opencode ]
 # pi 0.84.4: title='pi-launcher' foreground=[/opt/homebrew/bin/pi-signed .../pi ]
@@ -217,9 +113,7 @@ The guard now asks `fm_cursor_resolve_binary` first for `cursor`, which is the s
 Bounded output from the 2026-08-03 run that produced the first table above:
 
 ```text
-ok - harness liveness: claude 2.1.220 (Claude Code) classifies alive
-# claude 2.1.220 (Claude Code): title='2.1.220' foreground=[claude ]
-# checked 7 installed harness(es)
+# checked 6 installed harness(es)
 ```
 
 Installed-wrapper checks:
@@ -250,13 +144,12 @@ FM_HARNESS_ADAPTER_INSTRUCTION_EVAL=1 FM_HARNESS_ADAPTER_LOCAL_MODEL=ambient-rou
 
 That local evaluation demonstrates instruction-driven scenario selection, but it does not claim that a native harness loaded the selected files.
 The guard prints the exact installed version or unavailable status for every native harness so absent tools and unexercised provider transports remain explicit rather than becoming passes.
-Native loader behavior still requires the applicable live agent-tool check; no uniform deterministic zero-provider transport currently spans Claude, Codex, OpenCode, and Pi, and the other five tools remain unavailable where their binaries are absent.
+Native loader behavior still requires the applicable live agent-tool check; no uniform deterministic zero-provider transport currently spans Codex, OpenCode, and Pi, and other tools remain unavailable where their binaries are absent.
 
 Bounded output from the 2026-08-29 local run:
 
 ```text
-ok - local model ambient-router-gemma4:e4b selected every operation scenario and all nine harness identities
-# native loader not claimed: claude 2.1.220 (Claude Code) is installed, but this harness-neutral evaluation does not exercise its provider transport
+ok - local model ambient-router-gemma4:e4b selected every operation scenario and all remaining harness identities
 # native loader not claimed: codex 0.147.0-alpha.6+local.4 is installed, but this harness-neutral evaluation does not exercise its provider transport
 # native loader not claimed: opencode 1.14.48 is installed, but this harness-neutral evaluation does not exercise its provider transport
 # native loader not claimed: pi 0.84.0 is installed, but this harness-neutral evaluation does not exercise its provider transport
@@ -301,7 +194,7 @@ Zellij has no verified recovery-grade agent process probe, while Orca and cmux d
 
 The current classifier matrix and its refresh guard are recorded in [Composer classification matrix](#composer-classification-matrix), with portable shape coverage in `tests/fm-composer-lib.test.sh` and `tests/fm-composer-ghost.test.sh`.
 Kimi pointer delivery and OpenCode 1.18.4 busy-queue behavior remain pinned by `tests/fm-kimi-harness.test.sh`, `tests/fm-tmux-submit-busy.test.sh`, and `tests/fm-composer-lib.test.sh`.
-Herdr's Claude idle-native submit confirmation is pinned by `tests/fm-backend-herdr.test.sh` and refreshed by `FM_HERDR_SUBMIT_CONFIRM_LIVE=1 tests/fm-herdr-submit-confirm-live-e2e.test.sh`.
+Herdr's idle-native submit confirmation is pinned by `tests/fm-backend-herdr.test.sh`.
 
 ### Cleanup endpoint identity
 
@@ -329,128 +222,13 @@ ok - fm-teardown: dedicated-socket invalid cleanup preserves target/control and 
 The dedicated tmux cell removed ambient tmux variables, required a socket-bound wrapper, kept one target and one independent control window, and proved the wrapper was not called for invalid metadata or a direct empty target.
 Valid cleanup removed only the exact task-bound target and left the control window live.
 The metadata-only validation covers tmux, Herdr, Zellij, Orca, and cmux before backend dispatch.
-Claude, Codex, OpenCode, Pi, pi-signed, Grok, Kimi, Cursor, and Muse share that backend cleanup boundary; their harness-specific hook files, tokens, transcript bindings, and session-log sidecars are cleaned only after it, so no harness needs a separate endpoint parser.
-
-## Claude workspace trust
-
-Verified 2026-09-03 on Claude Code 2.1.259.
-Claude gates a folder it has never seen behind an interactive workspace-trust dialog, and the CLI documents the only bypass as non-interactive mode, which a crewmate pane is not.
-
-```sh
-claude --version
-claude --help | grep -A 5 'workspace trust dialog'
-```
-
-```
-2.1.259 (Claude Code)
-                                        pipes). Note: The workspace trust dialog
-                                        is skipped when Claude is run in
-                                        non-interactive mode (via -p, or when
-                                        stdout is not a TTY, e.g. piped or
-                                        redirected output). Only use this in
-                                        directories you trust. Settings files
-```
-
-`--dangerously-skip-permissions` is a permission control and is absent from that bypass, so an interactive worker in a fresh worktree still reaches the dialog.
-Firstmate cannot answer it either, because its key plane carries only Enter, Escape, and C-c with no arrow navigation.
-Suppression itself was then observed directly on the same date and version, with a control arm and a treatment arm.
-
-The control arm launched a fresh linked worktree with no pre-registration, the way `bin/fm-spawn.sh` launches one.
-
-```sh
-tmux new-session -d -s tp-a -c /tmp/trustproof/wt-a \
-  "CLAUDE_CONFIG_DIR=<cfg> CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false claude --dangerously-skip-permissions '<brief>'"
-```
-
-```
-Accessing workspace: /tmp/trustproof/wt-a
-Quick safety check: Is this a project you created or one you trust? ...
-Claude Code'll be able to read, edit, and execute files here.
-> No, exit
-  Yes, I trust this folder
-Enter to confirm . Esc to cancel
-```
-
-That pane confirms two load-bearing claims at once: the dialog fires despite `--dangerously-skip-permissions`, and the selection cursor sits on `No, exit`, so a sent Enter would have exited the worker.
-
-The treatment arm pre-registered an equivalent fresh worktree and launched it identically against the operator's real config.
-
-```sh
-bin/fm-claude-trust.sh /tmp/trustproof/wt-c /tmp/trustproof/proj
-tmux new-session -d -s tp-c -c /tmp/trustproof/wt-c \
-  "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false claude --dangerously-skip-permissions 'reply with exactly: BRIEF-REACHED'"
-```
-
-```
-trusted: /tmp/trustproof/wt-c
-```
-
-```
-Claude Code v2.1.259 ... /tmp/trustproof/wt-c
-> reply with exactly: BRIEF-REACHED
-. BRIEF-REACHED
-```
-
-No dialog appeared and the worker executed its brief with zero keypresses.
-The scratch repo was deleted and the test entries were removed from the store and verified absent.
-That verification is point-in-time rather than a durable guarantee, because a concurrent Claude session can re-add a path it visited: one entry reappeared after an earlier zero-residual check, most plausibly flushed by a session as it exited, and was removed again.
-
-One limitation belongs beside that result.
-An intermediate arm run against an isolated `CLAUDE_CONFIG_DIR` holding only a copied `.claude.json` cleared the trust dialog but then surfaced the separate machine-scoped Bypass Permissions warning.
-That warning rendered in the same shape as the trust dialog, with the selection cursor on `No, exit` and the footer `Enter to confirm . Esc to cancel`, so a sent Enter would end that worker too.
-That gate is not a production blocker, because a normal environment has already accepted it and the treatment arm above ran against the real config and saw neither dialog.
-This change does not address that warning and does not claim to.
-
-### Secondmate homes
-
-Verified 2026-09-11 on Claude Code 2.1.269.
-A secondmate launches in its own firstmate home rather than a task worktree, and that home meets the same gate.
-The control arm launched a standalone-clone secondmate home that the store had no entry for, the way `bin/fm-spawn.sh --secondmate` launches one.
-
-```sh
-tmux -L <sock> new-session -d -s ctrl -x 180 -y 44 -c <home> \
-  "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false claude --dangerously-skip-permissions"
-```
-
-```
- Accessing workspace:
- /private/tmp/fm-sm-trust-live-69759/fm-homes/livemate-n1
- Quick safety check: Is this a project you created or one you trust? ...
- ❯ No, exit
-   Yes, I trust this folder
-```
-
-The treatment arm pre-registered that same home through the secondmate-home mode and launched it identically against the operator's real config.
-
-```sh
-bin/fm-claude-trust.sh --secondmate-home <home> livemate-n1
-```
-
-```
-trusted: /private/tmp/fm-sm-trust-live-69759/fm-homes/livemate-n1
-```
-
-```
- ▐▛███▛█   Claude Code v2.1.269
-▝▜██████▀  Opus 4.8 with high effort · Claude Max
-  ▝▝ ▝▝    /private/tmp/fm-sm-trust-live-69759/fm-homes/livemate-n1
-...
-❯
-  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
-```
-
-No dialog appeared, the composer was reached, and neither did the machine-scoped bypass warning, because this ran against the real config.
-The lab home was deleted and the test entry was removed from the store and verified absent, with the same point-in-time caveat as the worktree arms above.
-
-`bin/fm-spawn.sh` therefore pre-registers the directory every claude launch starts in through `bin/fm-claude-trust.sh` before launch, and `tests/fm-claude-trust.test.sh` pins both halves of the scope contract for both shapes: a fresh worktree and a seeded secondmate home are trusted, and an out-of-scope path is refused.
-That automated spawn case runs against a fake claude, so it asserts the store entry and the launch command and nothing more; the live arms above are what establish that the entry actually suppresses the dialog.
-The composer-classification record below observes the same gate from the other side, where an untrusted worktree left Claude, Grok, and Muse unverified because the guard reads a first-launch trust dialog as an unreadable composer.
+Codex, OpenCode, Pi, pi-signed, Grok, Kimi, Cursor, and Muse share that backend cleanup boundary; their harness-specific hook files, tokens, transcript bindings, and session-log sidecars are cleaned only after it, so no harness needs a separate endpoint parser.
 
 ## Composer classification matrix
 
 The shared composer classifier (`bin/fm-composer-lib.sh`, `fm_composer_classify_screen`) owns every composer shape fleet-wide; each backend contributes only a capture and a capability descriptor.
 The live half of that guarantee was verified on 2026-08-10 from an already-trusted checkout at the branch's final validated head, against every installed harness then covered by the empty-composer matrix on tmux 3.6a, macOS arm64, on an isolated private socket, with no prompt submitted to any harness.
-An earlier untrusted-worktree run left Claude, Grok, and Muse unverified because the guard treats first-launch trust dialogs as an unreadable-composer state and never confirms them; this trusted-checkout rerun supersedes those missing results.
+An earlier untrusted-worktree run left Grok and Muse unverified because the guard treats first-launch trust dialogs as an unreadable-composer state and never confirms them; this trusted-checkout rerun supersedes those missing results.
 
 ```sh
 FM_COMPOSER_MATRIX_LIVE=1 tests/fm-composer-matrix-live-e2e.test.sh
@@ -459,7 +237,6 @@ FM_COMPOSER_MATRIX_LIVE=1 tests/fm-composer-matrix-live-e2e.test.sh
 Observed output:
 
 ```text
-ok - claude (2.1.227 (Claude Code)): real idle composer classifies empty
 ok - codex (codex-cli 0.146.0): real idle composer classifies empty
 ok - opencode (1.14.46): real idle composer classifies empty
 ok - pi (0.84.0): real idle composer classifies empty
@@ -471,14 +248,14 @@ ok - zellij (zellij 0.44.0): unrelated pane change never confirms delivery (verd
 ok - live composer-matrix guard verified 8 live surface(s)
 ```
 
-All six installed harnesses' real idle composers reached a proven `empty` (Claude auto-updated to 2.1.227 between the audit and this rerun, so the shipped classifier is proven against the newer release as well), including Pi through the tmux foreground-process identity probe, Grok through the titled-bottom-border tolerance, and OpenCode through the left-bar shape; Codex and OpenCode first parked on vendor update-available modals that the strict classifier correctly refused until the guard's single non-submitting Escape dismissed them.
+All remaining installed harnesses' real idle composers reached a proven `empty`, including Pi through the tmux foreground-process identity probe, Grok through the titled-bottom-border tolerance, and OpenCode through the left-bar shape; Codex and OpenCode first parked on vendor update-available modals that the strict classifier correctly refused until the guard's single non-submitting Escape dismissed them.
 The strict blank-row posture held live (a blank shell row deferred injection), and a zellij pane changing for reasons unrelated to submission never confirmed a delivery, replacing the retired content-diff heuristic's false positive.
 Kimi was not installed on the verification machine; its bordered shape is pinned by the portable byte-capture regressions in `tests/fm-composer-lib.test.sh`, which also carry the other five adapters' capability profiles for every harness under both a UTF-8 locale and `LC_ALL=C`.
 This guard is the refresh command after an upgrade to any matrix-covered harness; rerun it and update the versions above rather than trusting this table across releases.
 Known staleness: on 2026-08-23 the steering-inbox doorbell run observed grok 1.0.5's idle composer classifying `unknown` (and sometimes pending-family), never `empty`, so the grok row above is stale for 1.0.5 and owes a refresh; steering is unaffected because the send path's composer check is advisory, but empty-requiring consumers (away-daemon injection, spawn readiness) should not trust the 1.0.0 grok result.
 Cursor is deliberately outside this cursor-anchored empty-composer matrix because its terminal cursor is parked outside the composer; tmux's Cursor-specific, process-identity-gated cursorless fallback is covered by the [Cursor Agent CLI](#cursor-agent-cli) section's separate live evidence and drift guard.
 
-`zellij action dump-screen --pane-id <id> --ansi` was verified at zellij 0.44.0 to preserve ANSI styling (real Claude Code rendered inside a zellij pane dumped `ESC[m` `❯` U+00A0 for its idle composer row), which is the capability the zellij composer classifier reads.
+`zellij action dump-screen --pane-id <id> --ansi` was verified at zellij 0.44.0 to preserve ANSI styling, which is the capability the zellij composer classifier reads.
 
 ## Steering-inbox doorbell
 
@@ -491,7 +268,6 @@ FM_SEND_INBOX_LIVE_E2E=1 tests/fm-send-inbox-doorbell-live-e2e.test.sh
 Observed output (combined across the full run and the grok rerun after the advisory-skip narrowing landed):
 
 ```text
-ok - claude (2.1.241 (Claude Code)): the doorbell reached a real worker, which acted and acked with the mv
 ok - codex (codex-cli 0.147.0): the doorbell reached a real worker, which acted and acked with the mv
 ok - opencode (1.18.21): the doorbell reached a real worker, which acted and acked with the mv
 ok - pi (0.84.1): the doorbell reached a real worker, which acted and acked with the mv
@@ -608,22 +384,19 @@ after interrupt: v1 gen=... state=idle source=gemini-hook event=after-agent
 stopped gm-e2e harness=gemini backend=tmux endpoint=... worktree=...
 ```
 
-The interrupt line is the one worth keeping: `AfterAgent` closed the record on a CANCELLED turn, which is why a gemini interrupt needs no `fm-interrupt` fallback event.
+The interrupt line is the one worth keeping: `AfterAgent` closed the record on a CANCELLED turn, which is why a Gemini interrupt needs no synthetic fallback event.
 A single Escape on a long turn printed `ℹ Request cancelled.`, dropped the busy token, and left the agent running; `/quit` then exited with status 0 and printed `To resume this session: gemini --resume <session-id>`, and resuming by that id restored the full transcript.
 
 ### Identity markers
 
-Env var NAMES were read from a real Gemini tool process launched under a Claude primary; no value of `GEMINI_API_KEY` was read.
+Environment variable names were read from a real Gemini tool process; no value of `GEMINI_API_KEY` was read.
 
 ```text
 GEMINI_CLI=[1]
-AI_AGENT=[claude-code_2-1-260_agent]
 TRUSTWS=[true]
-CLAUDECODE=[1]
 ```
 
-`GEMINI_CLI` is unset in the launching environment, so it is Gemini's own; `CLAUDECODE` is inherited, which is why `bin/fm-harness.sh` tests `GEMINI_CLI` first.
-`AI_AGENT` carried the CLAUDE primary's value and is therefore an inherited launcher marker, never a Gemini identity.
+`GEMINI_CLI` is unset in the launching environment, so it is Gemini's own identity marker.
 
 Ancestry cannot substitute for the marker on this platform:
 
@@ -674,7 +447,7 @@ The credential must also be present before the session-provider daemon starts, s
 
 ### Settings placement
 
-Firstmate's hooks are NOT written into the worktree's `.gemini/settings.json`, because unlike Claude's `settings.local.json` that path is the project's own committed settings file.
+Firstmate's hooks are NOT written into the worktree's `.gemini/settings.json`, because that path is the project's own committed settings file.
 They go to a firstmate-owned `state/<id>.gemini-settings.json` reached through `GEMINI_CLI_SYSTEM_SETTINGS_PATH`.
 Two measurements support that choice.
 Hooks from the system layer fired under `--skip-trust` in an untrusted folder, so the busy contract does not depend on the trust decision:
@@ -742,53 +515,12 @@ The CLI matrix was checked directly:
 | Literal send | `herdr pane send-text <pane> <text> --session <name>` | Left text unsubmitted until Enter. |
 | Keys | `herdr pane send-keys <pane> enter|escape|ctrl+c --session <name>` | Enter and Escape worked; Ctrl-C interrupted foreground work. |
 | Capture | `herdr pane read <pane> --source recent --lines N` | Small N could return empty below viewport height; a 200-line request plus local trim was stable. |
-| Native state | `herdr agent get <pane>` | Working and done transitions were visible on some harnesses; live Claude Code 2.1.236 on Herdr 0.8.0 kept `agent_status=idle` for an entire landed turn, including a multi-second tool call, so submit confirmation falls through to the shared composer verdict. Native `busy` remains positive activity evidence, while native `idle` cannot close a turn and the adapter's semantic lifecycle decides worker state. |
+| Native state | `herdr agent get <pane>` | Working and done transitions are visible on some harnesses, while others can keep `agent_status=idle` for an entire landed turn, so submit confirmation falls through to the shared composer verdict. Native `busy` remains positive activity evidence, while native `idle` cannot close a turn and the adapter's semantic lifecycle decides worker state. |
 | Restart | guarded named-session stop then start | Workspace, tab, pane, and labels persisted; the agent process and registration did not. |
 | Close | `herdr pane close <pane> --session <name>` | The exact one-pane task tab closed; closing a final tab could remove the workspace. |
 
 All destructive verification used `bin/fm-herdr-lab.sh` with a non-default `fm-lab-` name and a byte-identical default-session tripwire.
 No ambient `herdr server stop` command is a supported test operation.
-
-### fm-remote server birth and login-keychain access
-
-Measured 2026-09-09 on macOS 26 (Darwin 25.6.0) aarch64 with Claude Code 2.1.266 and Herdr 0.9.0, the guarantee behind `bin/fm-remote-herdr-guard.sh` and the doctor's `herdr-server` check: login-keychain access follows the audit session a process was born into, never the launch shape or the shell.
-
-Same user, same `HOME`, same login keychain item, three births, probed with `launchctl managername`, `getaudit_addr` (a compiled probe), `security find-generic-password -a "$USER" -w -s "Claude Code-credentials"` (output withheld), and `claude auth status`:
-
-| Birth | `managername` | audit session | `security ... -w` | `claude auth status` |
-| --- | --- | --- | --- | --- |
-| `gui/501` LaunchAgent, bare `ProgramArguments`, `launchctl bootstrap` + `kickstart -k` mid-session | Aqua | asid 100038 (the `gui/501` asid), `HAS_GRAPHIC_ACCESS HAS_TTY HAS_CONSOLE_ACCESS HAS_AUTHENTICATED` | exit 0 | `loggedIn: true` |
-| `gui/501` LaunchAgent, `zsh -l -c 'exec ...'`, same reload | Aqua | asid 100038, same flags | exit 0 | `loggedIn: true` |
-| `user/501` LaunchAgent (`LimitLoadToSessionType=Background`), same reload | Background | asid 100056, flags `0x0` | exit 36 `User interaction is not allowed.`, item metadata still readable | `loggedIn: false`, `authMethod: none` |
-
-Claude Code 2.1.266 maps that exit 36 (and 44) to "no keychain data" and reads `~/.claude/.credentials.json` instead; with a stale file it prints `Failed to authenticate: OAuth session expired and could not be refreshed` (interactive: `Login expired · Please run /login`).
-
-Candidate birth markers were read with `ps -Eww -o command= -p <pid>` for own-uid processes, noting that macOS hides the environment of Apple platform binaries such as `/bin/sleep` and that a herdr server is never one.
-
-```text
-launchd-born herdr server (child of launchd, gui/501):  XPC_SERVICE_NAME=org.nix-community.home.herdr-server  no SSH_*
-SSH-born herdr server (child of `herdr --session fm-remote remote-client-bridge` under `sshd-session: user@notty`):  SSH_CLIENT=... SSH_CONNECTION=...  no XPC_SERVICE_NAME
-```
-
-`XPC_SERVICE_NAME` identifies a launchd label but does not identify its domain, because the Background `user/501` job also carried that variable while lacking keychain access.
-The owner classifier therefore accepts that label only when `launchctl print gui/<uid>/<label>` identifies the owner pid or the label is loaded in `gui/<uid>` but not `user/<uid>`.
-`XPC_SERVICE_NAME=0`, including a value inherited by a herdr live-handoff child, remains unknown.
-`FM_REMOTE_JOB_ACTIVE=1` proves the Aqua worker only when `dev.firstmate.remote-job` is loaded in `gui/<uid>` but not `user/<uid>`.
-
-The SSH-born row was read on the remote host whose `dev.firstmate.herdr.fm-remote` job showed `state = spawn scheduled`, `runs = 239`, `last exit code = 1` and a log repeating `error: herdr server is already running`: herdr's remote attach had started the session's server as its own child before the login session existed, and launchd's copy lost the socket on every retry.
-`pgrep -f` did not list the herdr server's argv on macOS; `lsof -U -a -c herdr -F pn` named the socket owner.
-
-A separate foreground-supervision check ran on 2026-09-09 on macOS 26 (Darwin 25.6.0) with Herdr 0.9.0 using the throwaway Aqua launch agent `dev.fm-rca.herdr-fg`.
-Its `ProgramArguments` ran `/run/current-system/sw/bin/zsh -l -c "exec /etc/profiles/per-user/kunchen/bin/herdr server --session fm-lab-fg-90381-18985"`, with `KeepAlive={SuccessfulExit=false}` and `ThrottleInterval=10`, after `launchctl bootstrap gui/501 <plist>` and `launchctl kickstart -k gui/501/dev.fm-rca.herdr-fg`.
-`launchctl print gui/501/dev.fm-rca.herdr-fg` reported `state = running` and `pid = 4806`.
-`lsof -U -a -c herdr -F pn` named pid 4806 as the owner of `~/.config/herdr/sessions/fm-lab-fg-90381-18985/herdr.sock`.
-`ps -o pid,ppid,command -p 4806` reported `4806 1 /etc/profiles/per-user/kunchen/bin/herdr server --session fm-lab-fg-90381-18985`, and its environment carried `XPC_SERVICE_NAME=dev.fm-rca.herdr-fg`.
-No other herdr process existed for that session, and after 15 seconds the job remained running with pid 4806.
-After a guarded `herdr session stop`, the job reported `state = not running` and `last exit code = 0`, and it stayed at rest through the throttle interval.
-A second `launchctl kickstart -k gui/501/dev.fm-rca.herdr-fg` started pid 45574, which was also the new socket owner.
-This proves that `herdr server` remains in the foreground as the launchd job, so the guard's final `exec` supplies the intended supervision and the earlier server that survived `launchctl bootout` was the unrelated SSH-bridge-born process.
-
-`bin/fm-test-run.sh tests/fm-remote-herdr-guard.test.sh` pins the resulting decision table against real marker-carrying processes, and `tests/fm-remote-doctor.test.sh` pins the doctor's verdicts on the same markers.
 
 ### Client selection
 
@@ -811,25 +543,6 @@ rc=1
 
 The refusal is a JSON error on stderr with exit 1 and empty stdout, and both client generations report `.server.compatible` and `.server.protocol` per named session, which is what the selection in `bin/backends/herdr.sh` reads.
 `tests/fm-backend-herdr.test.sh` pins the bypass, same-process same-session caching, cross-session isolation, forced reselection, and both status shapes against fakes; `tests/fm-backend-herdr-smoke.test.sh` refreshes the real status normalization against the installed binary's running lab server.
-
-### Submit confirmation
-
-Measured 2026-08-19 against Herdr 0.8.0 and Claude Code 2.1.236 in an isolated `fm-lab-` session.
-
-`herdr agent get` reported `agent_status=idle` on every sample across a landed one-word turn and an 8-second `sleep` tool call, while the pane rendered `Pontificating…` then `Sock-hopping… (11s · ↓ 234 tokens)`.
-`fm_backend_herdr_send_text_submit` therefore cannot treat native idle as proof of a swallow.
-The portable regressions in `tests/fm-backend-herdr.test.sh` and `tests/fm-composer-lib.test.sh` pin the verdicts: native idle plus a cleared composer is delivery, proven pending plus idle is a swallow, and proven pending plus a generating busy signal is a queued Enter.
-Refresh the live Claude proof with:
-
-```sh
-FM_HERDR_SUBMIT_CONFIRM_LIVE=1 tests/fm-herdr-submit-confirm-live-e2e.test.sh
-```
-
-Observed 2026-08-19:
-
-```text
-ok - live Herdr submit confirm: Claude Code (2.1.236 (Claude Code)) on herdr 0.8.0 reports empty for a landed idle steer
-```
 
 ### Prune and respawn
 
@@ -1145,7 +858,7 @@ ok - forced teardown retains a nested secondmate home and its grandchild's Herdr
 
 Real captures verified these active distinctions:
 
-- Claude and Codex use bare `❯` and `›` agent composers.
+- omp and Codex use bare `❯` and `›` agent composers.
 - Pi uses content between complete separator rows and requires exact native Pi identity.
 - Dim or faint suggestion text is ghost content, while normally styled text is pending input.
 - Grok dark truecolor placeholders are ghost content, while bright truecolor typed input remains pending.
@@ -1296,7 +1009,7 @@ The registration is still present after the wait, and Herdr's own `pane report-a
 
 Two vendor facts the fix rests on, both read from the outputs above and from `fm_backend_herdr_pane_process_state`'s `pane process-info` parse:
 
-- Pi's process presents with kernel name `node` and argv0 `pi` (its foreground group also carries Pi's child `node` helpers with argv0 such as `npm view ... version`), so a running Pi is attributed by argv[0] exactly as the tmux probe attributes it; a symlink named `claude` to `sleep` presents as name `sleep`, argv0 `claude`.
+- Pi's process presents with kernel name `node` and argv0 `pi` (its foreground group also carries Pi's child `node` helpers with argv0 such as `npm view ... version`), so a running Pi is attributed by argv[0] exactly as the tmux probe attributes it; a symlink named `codex` to `sleep` presents as name `sleep`, argv0 `codex`.
 - Herdr creates the record with its own placeholder `agent_status` of `unknown` the moment it notices Pi, before Pi's extension reports `idle`; that transient reads `unknown` in the pane classifier as it always did, and only a lifecycle status is subject to the process-level proof.
 
 Subcommand presence below the 0.9.0 measurement, checked 2026-09-10 on macOS aarch64 against the pinned upstream release clients fetched from `https://github.com/ogulcancelik/herdr/releases/download/v<version>/herdr-macos-aarch64`:
@@ -1462,7 +1175,6 @@ A selected non-last workspace closed directly, proving that window cardinality r
 
 Source inspection confirmed each workspace constructor creates a new UUID with no restored-id input.
 Recovery therefore remains title-based.
-The bundled Claude wrapper was observed stripping `CMUX_*` variables on its failed socket-probe path while retaining the app bundle id, supporting the macOS-only bundle-id and ancestry fallbacks.
 
 ```sh
 tests/fm-backend-cmux.test.sh
@@ -1470,21 +1182,6 @@ tests/fm-backend-cmux-smoke.test.sh
 ```
 
 The real smoke proves socket access, fresh readiness, current-path probing, send and keys, bounded capture, title identity, and guarded exact cleanup.
-
-### Claude composer confirmation
-
-The borderless Claude composer confirmation was verified on 2026-08-09 with cmux 0.64.22 build 102 and Claude Code 2.1.226 on macOS aarch64.
-An isolated real Claude worker rendered a bare `❯` plus U+00A0 row between horizontal rules.
-The cmux classifier returned `empty`, and one `fm-send.sh --resolve-key <key> ALBATROSS` command - which used the typed path before ordinary task steers moved to the inbox - appended the matching `resolved` event before the worker reported completion.
-The terminal capture contained exactly one submitted `❯ ALBATROSS` row.
-The dated proof used this command:
-
-```sh
-FM_CMUX_CLAUDE_COMPOSER_LIVE=1 bin/fm-test-run.sh tests/fm-cmux-claude-composer-live-e2e.test.sh
-```
-
-That guard still addresses the worker by task selector, so it no longer reaches the typed submit path and is not a current refresh entry point for this guarantee.
-The portable classifier regression is `tests/fm-backend-cmux.test.sh`.
 
 ## Codex App host tools
 
@@ -1542,9 +1239,7 @@ Read from the live agent process and from a tool subprocess it spawned:
 | `CURSOR_CONVERSATION_ID=<uuid>` | child/tool processes |
 | `AGENT_TRANSCRIPTS=<projects-root>/<slug>/agent-transcripts` | child/tool processes |
 
-Cursor does not clear an inherited `CLAUDECODE`, so ordering decides the verdict within the marker layer.
-With both markers set and ancestry silent, `bin/fm-harness.sh` reports `cursor`; with `CLAUDECODE` alone it still reports `claude`.
-[Harness detection precedence](#harness-detection-precedence) owns what happens when a structural ancestor of another harness is present, which outranks either marker.
+`bin/fm-harness.sh` checks Cursor's own markers before process ancestry.
 
 ### Composer
 
@@ -1655,7 +1350,7 @@ The rest of the lifecycle was driven end to end on that worker:
 5. `bin/fm-teardown.sh` refused until the scout's report and decision gate were satisfied, then removed the session record and returned the worktree.
 
 Other harnesses on Herdr are unaffected by the edge-detector change.
-All seven live panes of the running default session - one Pi, four Claude, two plain shells - classified identically under the pre-fix and current classifiers.
+All live Pi and plain-shell panes of the running default session classified identically under the pre-fix and current classifiers.
 
 **Typed-submit confirmation is verified on tmux and Herdr only.**
 Zellij, cmux, and Orca share a submit core that never consults the busy footer, so a typed-plane Cursor send there lands but `fm-send` reports delivery unconfirmed and exits non-zero; ordinary text steers ride the durable inbox and exit 0 at enqueue.
@@ -1865,7 +1560,7 @@ The evidence below was produced on 2026-09-05 against omp 18.1.11 (`~/.local/bin
 
 `ps -o comm=` reports the bare name `omp` for the agent process, from both its `!` bash path and the model's bash tool, so identity is the anchored name; `ompd` and `comp` never match.
 omp publishes no harness marker: `PI_CODING_AGENT` is absent from the binary, and the default profile sets neither `PI_CODING_AGENT_DIR` nor `OMP_PROFILE` in the process environment.
-`FM_OMP_HARNESS=omp` is Firstmate's own launch marker and wins over an inherited `CLAUDECODE` only under a real omp ancestor; `tests/fm-omp-harness.test.sh` pins both directions with real processes.
+`FM_OMP_HARNESS=omp` is Firstmate's own launch marker and is accepted only under a real omp ancestor; `tests/fm-omp-harness.test.sh` pins both directions with real processes.
 
 ### Composer
 

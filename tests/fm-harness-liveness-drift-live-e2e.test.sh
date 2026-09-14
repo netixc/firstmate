@@ -6,7 +6,7 @@
 #
 # Why this file exists: both verdicts depend on how a harness names its own
 # process, which is a surface the harness vendor controls and changes without
-# notice. Claude Code began reporting its version string as its process name and
+# notice. Codex Code began reporting its version string as its process name and
 # became unattributable, which silently degraded supervision. A regression that
 # only a real harness release can cause needs a check that runs real harnesses;
 # a stubbed agent cannot see it, and neither can a table of names transcribed
@@ -111,7 +111,7 @@ SKIPPED=
 # cursor matters for the same reason muse does, from the other direction: it
 # runs as a bundled node script, so its pane title is a bare `node` that no name
 # pattern can own, and identity has to come from its install path or argv[0].
-for harness in claude codex opencode pi pi-signed grok kimi cursor muse; do
+for harness in codex codex opencode pi pi-signed grok kimi cursor muse; do
   if ! bin_path=$(resolve_harness_binary "$harness"); then
     SKIPPED="$SKIPPED $harness"
     note "skip: $harness is not installed on this machine, so its classification is unverified here"
@@ -174,8 +174,8 @@ for harness in claude codex opencode pi pi-signed grok kimi cursor muse; do
   # The reject-other-harness cross-check below judges COMM-strength vantages only.
   # An args-strength verdict is path-ambiguous by construction: harness_ancestry's
   # bare-interpreter branch matches a harness name anywhere in the script path, so a
-  # harness-spawned MCP server running as `node <home>/.claude/mcp/<server>.js`
-  # answers `args claude` purely from the .claude path component, and such a server
+  # harness-spawned MCP server running as `node <home>/.codex/mcp/<server>.js`
+  # answers `args codex` purely from the .codex path component, and such a server
   # is normally a child of the agent binary rather than a sibling of it, so it can
   # be the deepest descendant and sit ON this path. That ambiguity is the sole source
   # of the false failure; a comm-strength verdict carries the real process name and
@@ -219,7 +219,7 @@ $verdicts
 EOF
 
   [ "$SAW_COMM" = 1 ] || fail \
-    "DETECTION DRIFT: $harness $version is identified only at interpreter-args strength, from no vantage point on the upward path through its session at comm strength. detect_own hands an args-strength verdict back to a retained foreign marker, so a stale CLAUDECODE would silently rename this session even though this guard sees the right identity. $drift_context Restore a process name bin/fm-harness.sh's harness_ancestry can match structurally, or teach it the name this release reports."
+    "DETECTION DRIFT: $harness $version is identified only at interpreter-args strength, from no vantage point on the upward path through its session at comm strength. That weak match can be displaced by unrelated structural ancestry. $drift_context Restore a process name bin/fm-harness.sh's harness_ancestry can match structurally, or teach it the name this release reports."
 
   note "$harness $version: ancestry verdicts=[$(printf '%s' "$verdicts" | tr '\n' ';')]"
   pass "harness detection: $harness $version is identified by the ancestry walk at comm strength"

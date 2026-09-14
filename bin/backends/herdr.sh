@@ -1659,7 +1659,7 @@ fm_backend_herdr_server_ensure() {  # <session>
   [ "$running" = "true" ] && return 0
   (
     unset FM_HOME FM_ROOT_OVERRIDE FM_STATE_OVERRIDE FM_DATA_OVERRIDE FM_PROJECTS_OVERRIDE FM_CONFIG_OVERRIDE \
-      CURSOR_AGENT CURSOR_INVOKED_AS CLAUDECODE PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT FM_SUPERVISION_MODEL
+      CURSOR_AGENT CURSOR_INVOKED_AS PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT FM_SUPERVISION_MODEL
     fm_backend_herdr_cli "$session" server >/dev/null 2>&1 &
   ) || return 1
   for i in $(seq 1 20); do
@@ -3109,22 +3109,22 @@ fm_backend_herdr_rendered_busy_state() {  # <target> [harness] -> busy|idle|unkn
 # fm_composer_queued_enter_verdict confirms delivery. Verified hazard
 # (herdr-verification-p2.md "slash/$ autocomplete popup"): a `/`- or
 # `$`-prefixed send opens a completion popup within ~0.1s, exactly like tmux's
-# claude/codex popups, so the caller's <settle> before the first Enter matters
+# Codex popup, so the caller's <settle> before the first Enter matters
 # here the same way it does for tmux.
 #
 # Confirmation signal: when the target is legibly idle before Enter,
 # submission is confirmed by fm_backend_herdr_wait_for_working observing a
-# submit-active agent_status after Enter. Live Claude on Herdr 0.8.0 can
-# keep agent_status idle for a whole landed turn, so an idle native result
-# falls through to the shared composer verdict: empty is positive delivery,
+# submit-active agent_status after Enter. A runtime may keep agent_status idle
+# for a whole landed turn, so an idle native result falls through to the shared
+# composer verdict: empty is positive delivery,
 # proven pending retries Enter, and retries-exhausted pending plus a
 # generating busy signal is a queued Enter via
 # fm_composer_queued_enter_verdict (bin/fm-composer-lib.sh).
 #
 # Incident (2026-07-07, followed up on 2026-07-08): a redelivery loop in the
 # away-mode daemon. Root cause: composer-content submit confirmation was too
-# sensitive to harness rendering details. Real claude/codex use bare prompt
-# rows, and real codex adds dynamic idle suggestions after `›`; the later
+# sensitive to harness rendering details. Some runtimes use bare prompt rows,
+# and Codex adds dynamic idle suggestions after `›`; the later
 # ANSI-aware composer classifier now handles that Codex shape, and idle-baseline
 # submit confirmation still prefers native agent-state so a faint idle tip
 # cannot block a landed send. Composer content is consulted only after native
@@ -3173,7 +3173,7 @@ fm_backend_herdr_rendered_busy_state() {  # <target> [harness] -> busy|idle|unkn
 # pending composer plus native agent_status=working is delivered, not swallowed.
 # blocked is not working, so a Cursor pane that is blocked in every state does
 # not receive this conversion. On an idle native baseline, a rendered busy
-# footer may supply the same generating signal because live Claude never leaves
+# footer may supply the same generating signal when the native state never leaves
 # idle. The policy is fm_composer_queued_enter_verdict; this adapter only
 # supplies the busy primitive.
 # Echoes empty|pending|unknown|send-failed, a subset of the proof-carrying
@@ -3184,8 +3184,7 @@ fm_backend_herdr_rendered_busy_state() {  # <target> [harness] -> busy|idle|unkn
 # conversion. Native agent_status=working is generating; blocked is not (a
 # permission prompt, or Cursor's always-blocked native state, is not a queued
 # mid-turn). When <allow-rendered> is 1, an idle native baseline may also take
-# the pane's rendered busy footer, because live Claude keeps agent_status idle
-# through a whole turn.
+# the pane's rendered busy footer when agent_status stays idle through a turn.
 fm_backend_herdr_queued_enter_busy() {  # <target> <allow-rendered>
   local target=$1 allow_rendered=${2:-0} raw
   raw=$(fm_backend_herdr_agent_status_raw "$FM_BACKEND_HERDR_SESSION" "$FM_BACKEND_HERDR_PANE")
@@ -3234,8 +3233,8 @@ fm_backend_herdr_send_text_submit() {  # <target> <text> <retries> <enter-sleep>
         busy) printf 'empty'; return 0 ;;
         unknown) printf 'unknown'; return 0 ;;
       esac
-      # Native stayed idle. Composer empty is positive delivery (a landed
-      # Claude turn that never flipped agent_status). Proven pending retries.
+      # Native stayed idle. Composer empty is positive delivery even when the
+      # landed turn never flipped agent_status. Proven pending retries.
       verdict=$(fm_backend_herdr_composer_state "$target")
       case "$verdict" in
         empty) printf 'empty'; return 0 ;;

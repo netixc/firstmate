@@ -1,6 +1,6 @@
 # Grok Build
 
-The xAI `grok` TUI is Claude-Code-compatible.
+The xAI `grok` TUI is a verified Firstmate runtime.
 Verified initially on 2026-06-29 with 0.2.73, slash submission on 2026-07-03 with 0.2.82, effort on 2026-07-13 with 0.2.99, and exit on 2026-07-19 with 0.2.103.
 Launch shape: `grok --always-approve "$(cat <brief>)"`.
 
@@ -13,7 +13,7 @@ Launch shape: `grok --always-approve "$(cat <brief>)"`.
 | Interrupt | Single `Ctrl+C`; Escape only focuses scrollback. |
 | Skill | `/<skill>`, for example `/no-mistakes`, with end-to-end user-skill discovery, invocation, and real `no-mistakes axi run` evidence; the popup may consume Enter and fill an argument placeholder, requiring a real second Enter. |
 | Autonomy | `--always-approve`, footer `· always-approve`, verified unattended; `--permission-mode bypassPermissions` is stronger equivalent. |
-| Marker | `GROK_AGENT=1` on child or tool processes in 0.2.73 and no `CLAUDECODE`; a 1.0.0 hook instead had `GROK_HOOK_EVENT`, `GROK_HOOK_NAME`, `GROK_SESSION_ID`, and `GROK_WORKSPACE_ROOT` without `GROK_AGENT`, so ancestry guarantees identity. |
+| Marker | `GROK_AGENT=1` on child or tool processes in 0.2.73; a 1.0.0 hook instead had `GROK_HOOK_EVENT`, `GROK_HOOK_NAME`, `GROK_SESSION_ID`, and `GROK_WORKSPACE_ROOT` without `GROK_AGENT`, so ancestry guarantees identity. |
 | Resume | `grok --resume <session-id>`, or `grok -c` / `--continue` for cwd latest; `--fork-session` creates a new id. |
 | Model | `--model <model>`; discover current account models with `grok models`. |
 | Effort | `--reasoning-effort <low\|medium\|high>`, alias `--effort`; version 0.2.99 rejects `xhigh` and `max` with `use one of: high, medium, low`; `references/common/model-and-effort.md` owns fallback and unsupported-value handling. |
@@ -63,7 +63,6 @@ Verified on 2026-07-28 with 0.2.112 and genuine pre-native 0.2.73.
 The exact running Stop payload selects same-process continuation on 0.2.112; 0.2.73 omits that capability and needs one guarded `grok --resume`.
 `../../../docs/turnend-guard.md` owns adaptive and malformed-input behavior.
 
-Grok also loads Claude project settings, so Claude entries for Grok-covered events stand down under `GROK_AGENT` or `GROK_HOOK_EVENT`; that owner records the exact set and why `GROK_SESSION_ID` is excluded.
 Project-local hooks require launch-time `--trust`; without it the guard steps aside and `../../../bin/fm-guard.sh` is the next-command alarm.
 Watcher supervision remains tracked background notification around `../../../bin/fm-watch-arm.sh`, not Pi-style extension ownership.
 PreToolUse blocks directly, but every `$VAR` in a hook command needs inline `:-default` or Grok refuses the hook.

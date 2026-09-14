@@ -33,7 +33,7 @@ Firstmate's OWN busy hooks do not depend on this, because they ride the system s
 Trusting the workspace loads that project's `.gemini/settings.json`, hooks, MCP servers, and skills, which is the same posture the other adapters already run under in a task worktree.
 
 The interactive trust dialog is `Do you trust the files in this folder?` with three choices.
-Unlike Claude's, its default selection is the SAFE one: `● 1. Trust folder (<name>)`, with `2. Trust parent folder (<parent>)` and `3. Don't trust` unselected.
+Its default selection is the SAFE one: `● 1. Trust folder (<name>)`, with `2. Trust parent folder (<parent>)` and `3. Don't trust` unselected.
 Accepting persists to `~/.gemini/trustedFolders.json`, so the spawn's environment variable is preferred: it is per-session and leaves no growing global record of disposable worktree paths.
 
 ## Credential precondition, and the wedge it causes
@@ -56,8 +56,8 @@ It hides `~/.agents/skills`, so `/no-mistakes` and every other user skill silent
 
 ## Detection
 
-`GEMINI_CLI=1` is load-bearing rather than a fast path, so `../../../../../bin/fm-harness.sh` checks it BEFORE `CLAUDECODE`.
-Gemini does not clear an inherited `CLAUDECODE`, so a gemini worker under a claude primary carries both markers and whichever is tested first wins; the spawn additionally clears the foreign markers at the launch boundary.
+`GEMINI_CLI=1` is load-bearing rather than a fast path, so `../../../../../bin/fm-harness.sh` checks it before process ancestry.
+The spawn additionally clears foreign runtime markers at the launch boundary.
 
 Ancestry cannot cover the gap.
 The shipped CLI is a node bundle (`~/.local/bin/gemini` -> `@google/gemini-cli/bundle/gemini.js`) and modern Node on Linux reports `comm` as `MainThread` rather than `node` (measured on Node v24.20.0), so neither the command-name arm nor the interpreter arm matches a live gemini process.
@@ -65,7 +65,7 @@ Do not close that by matching `MainThread`: it would make every node process's a
 `../../../../../tests/fm-gemini-harness.test.sh` pins both the marker precedence and this ancestry boundary.
 
 `AI_AGENT` must never be promoted to a marker.
-The same verified tool process carried the CLAUDE primary's value (`claude-code_2-1-260_agent`), so it identifies the launcher, not the running harness.
+A verified tool process also carried an inherited launcher's value, so `AGENT` identifies the launcher, not the running harness.
 
 Pane liveness has the same problem and needs its own answer, because the marker is not visible to a process scan.
 A live gemini pane's foreground group reads `comm=MainThread` and `argv0=<node path>`, so neither of `bin/backends/tmux.sh`'s existing name sources can see it, and `bin/fm-control.sh` refused every lifecycle verb with `endpoint reads 'ambiguous'` until this was closed.
@@ -78,7 +78,7 @@ A bare interpreter, an unrelated node script, and a gemini name appearing later 
 `../../../../../bin/fm-spawn.sh` writes a firstmate-owned per-task settings file at `state/<id>.gemini-settings.json` with three hooks bound to the minted busy generation, and the launch reaches it through `GEMINI_CLI_SYSTEM_SETTINGS_PATH`.
 This wiring belongs only to the canonical exact `gemini` adapter template, which receives busy-state wiring, the turn-end hook, and trusted busy state together.
 A raw Gemini-shaped launch is an unverified escape hatch: it receives no busy-state wiring or turn-end hook and therefore has no trusted busy state.
-It is deliberately NOT the worktree's `.gemini/settings.json`: unlike Claude's `settings.local.json`, that path is the PROJECT's own committed settings file, so writing it would clobber a project's configuration and retiring it would delete a tracked file.
+It is deliberately NOT the worktree's `.gemini/settings.json`: that path is the PROJECT's own committed settings file, so writing it would clobber a project's configuration and retiring it would delete a tracked file.
 Hook arrays MERGE across Gemini's settings layers rather than overriding, so a project's own hooks still run alongside firstmate's; both were observed firing for one turn.
 `../../../../../bin/fm-teardown.sh` removes the file, so nothing survives into a pooled worktree.
 `BeforeAgent` records busy, `AfterAgent` records idle and keeps the `state/<id>.turn-ended` touch as the watcher NOTIFICATION, and `SessionEnd` records idle so an abnormal end cannot strand a busy record.
@@ -86,7 +86,7 @@ Each hook command prints the empty JSON object Gemini's hook contract requires a
 
 Two quirks are wired for deliberately.
 `SessionEnd` was observed firing TWICE for one `/quit`; the repeated idle event is idempotent and is not de-duplicated.
-`AfterAgent` fires on a manual Escape interrupt as well as on normal completion, which is better than Claude, whose interrupt emits no hook and usually leaves `claude-hook` busy.
+`AfterAgent` fires on a manual Escape interrupt as well as on normal completion, so the interrupt closes Gemini's busy record.
 
 The system settings layer also makes the busy contract independent of the trust decision: its hooks were verified firing under `--skip-trust` in an untrusted folder, and they need no entry in Gemini's per-workspace `~/.gemini/trusted_hooks.json`, which only records PROJECT hooks.
 Workspace trust therefore buys skills, not state.
@@ -99,7 +99,6 @@ While a hook runs, the status row shows `Executing Hook: <name>` and the `(esc t
 Gemini discovers user skills from `~/.gemini/skills/` or `~/.agents/skills/` and workspace skills from `.gemini/skills/` or `.agents/skills/`.
 `~/.agents/skills/no-mistakes` is therefore discovered as a user skill and loads even in an untrusted folder, which is what keeps firstmate's delivery path available.
 Workspace skills need the workspace trust the launch already grants, which is what makes a firstmate-repo task's own `.agents/skills` reachable.
-Gemini does NOT read `.claude/skills`.
 
 ## Primary integration
 

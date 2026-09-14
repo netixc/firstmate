@@ -15,7 +15,7 @@
 # fast settle) touches the terminal:
 #   /...            -> 1.2  (universal; `/` only starts a command, never plain text)
 #   $... to codex   -> 1.2  (scoped: codex opens a `$<skill>` popup)
-#   $... to claude  -> inbox plane (NOT codex: `$` commonly starts plain text)
+#   $... to codex  -> inbox plane (NOT codex: `$` commonly starts plain text)
 #   $... explicit   -> 0.3  (session:window target has no meta -> harness unknown
 #                            -> non-codex safe default, still typed)
 #   plain text      -> inbox plane for a selector, 0.3 typed for an explicit target
@@ -144,21 +144,18 @@ first_settle 1.2 'codex $skill -> long settle' codex '$no-mistakes'
 # task id, not only by the legacy `fm-<id>` window label.
 first_settle 1.2 'codex $skill exact task id -> long settle' codex '$no-mistakes' exact
 
-# Same `$` message to claude is ordinary text there: it rides the inbox and
-# only the fast doorbell touches the terminal.
-rides_inbox 'claude $-message' claude '$no-mistakes'
-
-# `$`-prefixed plain text to claude (a price) is likewise ordinary text - the
-# regression the codex scoping exists to prevent can no longer slow it.
-rides_inbox 'claude "$5/month"' claude '$5/month is cheap'
+# The same `$` messages to Pi are ordinary text: they ride the inbox and only
+# the fast doorbell touches the terminal.
+rides_inbox 'pi $-message' pi '$no-mistakes'
+rides_inbox 'pi "$5/month"' pi '$5/month is cheap'
 
 # An explicit session:window target has no meta, so the harness is unknown and
 # treated as non-codex: the safe default keeps the fast path even for a `$` message.
 first_settle 0.3 'explicit target $message -> fast path (unknown harness)' --explicit '$no-mistakes'
 
 # The `/` slash case stays universal and unchanged: long settle regardless of
-# harness (here a non-codex claude target).
-first_settle 1.2 'claude /command -> long settle (slash unchanged)' claude '/no-mistakes'
+# harness (here a non-Codex Pi target).
+first_settle 1.2 'pi /command -> long settle (slash unchanged)' pi '/no-mistakes'
 
 # A `/` to codex is likewise still the long settle (slash path untouched).
 first_settle 1.2 'codex /command -> long settle (slash unchanged)' codex '/help'

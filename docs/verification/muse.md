@@ -48,7 +48,7 @@ $ grep -nE 'muse-bin|exec ' launcher.sh
 
 `ps -o comm= -p <pid>` returns the full executable path, whose basename is `muse-bin-<version>`.
 That is why both `bin/fm-harness.sh` and `bin/backends/tmux.sh` match the anchored prefix `muse-bin-*` rather than an exact name, and why neither can rely on an install-path component: `~/.local/bin/muse-bin-<version>` contains no `muse` path component.
-The Muse launch clears `CLAUDECODE`, `PI_CODING_AGENT`, `GROK_AGENT`, `FM_PI_HARNESS`, `CURSOR_AGENT`, and `CURSOR_INVOKED_AS` before the worker starts, which is the verified launch behavior rather than what detection depends on.
+The Muse launch clears foreign runtime markers before the worker starts, which is the verified launch behavior rather than what detection depends on.
 [Harness detection precedence](runtime-backends.md#harness-detection-precedence) owns why a retained foreign marker cannot override the versioned ancestry.
 
 [`runtime-backends.md`](runtime-backends.md#agent-liveness-name-sources) owns the resulting tmux liveness verdict and its relationship to the portable decoy regression.
@@ -126,7 +126,7 @@ invalid TUI options: error: unexpected argument '--no-foreign-personal-context' 
 ```
 
 `MUSE_EXPERIMENTAL_FOREIGN_PERSONAL_CONTEXT_KILL` is the control that works in TUI mode.
-Comparing the `context_block_diagnostic` block ids emitted by otherwise identical runs, with the operator's real `~/.claude` rules present and no project `AGENTS.md`:
+Comparing the `context_block_diagnostic` block ids emitted by otherwise identical runs, with operator foreign rules present and no project `AGENTS.md`:
 
 ```
 base     blocks=rules_file,workspace_identity,security_mode,skills_catalog,session_identity,subagent_delegation
@@ -160,7 +160,7 @@ After a single Escape the interrupted prompt is restored into the composer at th
 This was the one item deferred until a `META_API_KEY` was available, because it is what decides whether a settled log may classify `idle`.
 An open run was always positive proof of a turn in flight, but a settled log only proves no run is open at that instant, so the classifier held idle behind an opt-in in case a real turn spanned several runs.
 The smoke below answered that: one run brackets a whole multi-step turn, and an Escape interrupt closes that run with `terminal=cancelled` rather than leaving the turn to continue in another run.
-The credentialed result gives a settled Muse log the same idle trust as the Claude and Pi push sources, so the opt-in was removed and `bin/fm-busy-lib.sh` classifies a settled log `idle` outright.
+The credentialed result gives a settled Muse log the same idle trust as the Pi push source, so the opt-in was removed and `bin/fm-busy-lib.sh` classifies a settled log `idle` outright.
 Muse auto-updates its vendor binary underneath the fleet, firstmate normalizes the versioned process identity to the `muse` harness before busy classification, and the session log's own metadata carries semver `0.1.0` plus a build SHA that cannot be matched to that normalized identity.
 A verified-build allowlist against this coarse identity would be false precision because it could not distinguish the running build, as well as a maintenance treadmill against the auto-updating binary.
 

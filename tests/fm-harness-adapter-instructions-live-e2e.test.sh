@@ -29,7 +29,7 @@ jq -e --arg model "$MODEL" '.models | any(.name == $model)' "$TMP_ROOT/tags.json
 cat > "$EXPECTED_JSON" <<'JSON'
 {
   "cases": [
-    {"id":"start.default","common":["references/common/dispatch.md","references/common/model-and-effort.md"],"harness":"references/harness/claude.md"},
+    {"id":"start.default","common":["references/common/dispatch.md","references/common/model-and-effort.md"],"harness":"references/harness/codex.md"},
     {"id":"start.trust-dialog","common":["references/common/control-and-recovery.md"],"harness":"references/harness/codex.md"},
     {"id":"trust.default","common":["references/common/control-and-recovery.md"],"harness":"references/harness/opencode.md"},
     {"id":"skill.default","common":["references/common/control-and-recovery.md"],"harness":"references/harness/pi.md"},
@@ -38,7 +38,7 @@ cat > "$EXPECTED_JSON" <<'JSON'
     {"id":"resume.default","common":["references/common/control-and-recovery.md"],"harness":"references/harness/kimi.md"},
     {"id":"recovery.default","common":["references/common/control-and-recovery.md"],"harness":"references/harness/cursor.md"},
     {"id":"recovery.replacement-profile","common":["references/common/control-and-recovery.md","references/common/dispatch.md","references/common/model-and-effort.md"],"harness":"references/harness/muse.md"},
-    {"id":"recovery.secondmate","common":["references/common/control-and-recovery.md","references/common/primary-hooks.md"],"harness":"references/harness/claude.md"},
+    {"id":"recovery.secondmate","common":["references/common/control-and-recovery.md","references/common/primary-hooks.md"],"harness":"references/harness/codex.md"},
     {"id":"recovery.replacement-secondmate","common":["references/common/control-and-recovery.md","references/common/dispatch.md","references/common/model-and-effort.md","references/common/primary-hooks.md"],"harness":"references/harness/codex.md"},
     {"id":"primary.default","common":["references/common/primary-hooks.md"],"harness":"references/harness/opencode.md"},
     {"id":"model-effort.default","common":["references/common/model-and-effort.md"],"harness":"references/harness/pi.md"},
@@ -54,7 +54,7 @@ JSON
   printf '%s\n' 'Copy harness paths literally from the router map; never construct a filename from an identity, including when two identities share one path.'
   printf '%s\n' 'The requests, in output order, are:'
   printf '%s\n' \
-    'start.default claude' \
+    'start.default codex' \
     'start.trust-dialog codex' \
     'trust.default opencode' \
     'skill.default pi' \
@@ -63,7 +63,7 @@ JSON
     'resume.default kimi' \
     'recovery.default cursor' \
     'recovery.replacement-profile muse' \
-    'recovery.secondmate claude' \
+    'recovery.secondmate codex' \
     'recovery.replacement-secondmate codex' \
     'primary.default opencode' \
     'model-effort.default pi' \
@@ -115,7 +115,7 @@ resolve_native_binary() {
   return 1
 }
 
-for harness in claude codex opencode pi pi-signed grok kimi cursor muse; do
+for harness in codex codex opencode pi pi-signed grok kimi cursor muse; do
   if binary=$(resolve_native_binary "$harness"); then
     version=$("$binary" --version 2>/dev/null | head -1 | tr -d '\r') || version=unknown
     printf '# native loader not claimed: %s %s is installed, but this harness-neutral evaluation does not exercise its provider transport\n' "$harness" "$version"

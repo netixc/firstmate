@@ -14,11 +14,11 @@ set -u
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 # bin/fm-harness.sh checks verified ENV markers before ancestry. Muse is
-# markerless, so an inherited Cursor/Claude/Pi/Grok marker would outrank the
+# markerless, so an inherited Cursor/Codex/Pi/Grok marker would outrank the
 # versioned muse-bin ancestor these detection cases launch. Drop the ambient
 # markers so the asserted verdict does not depend on which harness launched
 # the suite.
-unset CLAUDECODE PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT CURSOR_AGENT CURSOR_INVOKED_AS
+unset PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT CURSOR_AGENT CURSOR_INVOKED_AS
 
 SPAWN="$ROOT/bin/fm-spawn.sh"
 TEARDOWN="$ROOT/bin/fm-teardown.sh"
@@ -182,7 +182,7 @@ test_detects_versioned_process_ancestor() {
   mkdir -p "$dir"
   for bin in muse-bin-0.1.0-R708.1 muse-bin-9.9.9-RZZZ.9 muse; do
     cp "$(command -v bash)" "$dir/$bin"
-    out=$(env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
+    out=$(env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
       -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u GEMINI_CLI \
       "$dir/$bin" -c "r=\$(\"$HARNESS\"); printf '%s' \"\$r\"")
     [ "$out" = muse ] || fail "fm-harness.sh under process '$bin' reported '$out', expected muse"
@@ -198,7 +198,7 @@ test_detection_is_anchored() {
   mkdir -p "$dir"
   for bin in musescore amuse notmuse-bin muse-binary muse-bind; do
     cp "$(command -v bash)" "$dir/$bin"
-    out=$(env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
+    out=$(env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
       -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u GEMINI_CLI \
       "$dir/$bin" -c "r=\$(\"$HARNESS\"); printf '%s' \"\$r\"")
     [ "$out" != muse ] || fail "fm-harness.sh misdetected unrelated process '$bin' as muse"
@@ -213,7 +213,7 @@ test_spawn_clears_inherited_foreign_harness_markers() {
 $rec
 EOF
   result="$case_dir/harness-result"
-  out=$(CLAUDECODE=1 PI_CODING_AGENT=true GROK_AGENT=1 FM_PI_HARNESS=pi-signed \
+  out=$(PI_CODING_AGENT=true GROK_AGENT=1 FM_PI_HARNESS=pi-signed \
     CURSOR_AGENT=1 CURSOR_INVOKED_AS=cursor-agent \
     FM_FAKE_EXECUTE_MUSE_LAUNCH=1 FM_FAKE_HARNESS_RESULT="$result" \
     run_muse_spawn "$home" "$proj" "$wt" "$fakebin" "$id" --mode no-mistakes --yolo off)
@@ -379,9 +379,7 @@ EOF
   pass "muse resolves relative XDG roots before preflight and launch"
 }
 
-# muse has no primary supervision protocol, and its Claude-compatible hook
-# dialect rejects the model-reawakening handlers a firstmate primary needs, so a
-# secondmate on muse could never arm a supervision cycle.
+# Muse has no primary supervision protocol, so it cannot host a secondmate.
 test_spawn_refuses_secondmate() {
   local case_dir home fakebin id out status
   case_dir="$TMP_ROOT/secondmate"
