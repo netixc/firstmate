@@ -101,7 +101,7 @@ GRACE=${FM_GUARD_GRACE:-$(fm_poll_derived_grace)}
 
 # Consume the Stop payload once. The decisions below are state-based; the
 # payload is read so a slow writer can never wedge on a full pipe.
-PAYLOAD=$(cat 2>/dev/null || true)
+cat >/dev/null 2>&1 || true
 
 # --- scope: genuine primary checkout only -----------------------------------
 fm_primary_scope_matches "$FM_ROOT" "$STATE" || exit 0
