@@ -70,7 +70,7 @@ The same verified tool process carried the CLAUDE primary's value (`claude-code_
 Pane liveness has the same problem and needs its own answer, because the marker is not visible to a process scan.
 A live gemini pane's foreground group reads `comm=MainThread` and `argv0=<node path>`, so neither of `bin/backends/tmux.sh`'s existing name sources can see it, and `bin/fm-control.sh` refused every lifecycle verb with `endpoint reads 'ambiguous'` until this was closed.
 `../../../../../bin/fm-gemini-lib.sh` owns the narrow structural rule that fixes it: identity comes from argv[1], the script argument, accepted only when it is named `gemini` or lives under `@google/gemini-cli/`.
-It is structural and runs no subprocess, for the same reason cursor's rule does not: probing a stranger's binary during a liveness poll is the hazard being avoided.
+It is structural and runs no subprocess: probing a stranger's binary during a liveness poll is the hazard being avoided.
 A bare interpreter, an unrelated node script, and a gemini name appearing later on a command line are all rejected, so a stranger's node pane is never reported as a live agent.
 
 ## Worker busy state and turn end

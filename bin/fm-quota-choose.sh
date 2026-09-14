@@ -330,7 +330,6 @@ provider_for_harness() {
     pi|pi-signed) printf 'pi\n' ;;
     grok)         printf 'grok\n' ;;
     kimi)         printf 'kimi\n' ;;
-    cursor)       printf 'cursor\n' ;;
     muse)         printf 'meta\n' ;;
     *)            return 1 ;;
   esac

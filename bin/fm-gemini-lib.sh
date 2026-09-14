@@ -15,7 +15,7 @@
 # `comm` is MainThread because modern Node renames its main thread, and argv[0]
 # is the interpreter. Only argv[1] - the script path - carries the identity, so
 # the liveness classifier has to read the arguments rather than the name. This
-# is the same hazard bin/fm-cursor-lib.sh exists to close for cursor-agent, and
+# is the same hazard every structural harness identity rule must close, and
 # the rule here is deliberately the same shape: structural only, no subprocess,
 # because probing a stranger's binary during a liveness poll is exactly what
 # must not happen.

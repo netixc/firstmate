@@ -91,8 +91,6 @@ esac
 . "$SCRIPT_DIR/fm-wake-lib.sh"
 # shellcheck source=bin/fm-session-lock-lib.sh
 . "$SCRIPT_DIR/fm-session-lock-lib.sh"
-# shellcheck source=bin/fm-hook-host-lib.sh
-. "$SCRIPT_DIR/fm-hook-host-lib.sh"
 
 # fm-watch.sh touches the liveness beacon once per cycle, immediately before
 # its terminal wait, so a healthy watcher's beacon can legitimately age up to
@@ -102,17 +100,8 @@ esac
 GRACE=${FM_GUARD_GRACE:-$(fm_poll_derived_grace)}
 
 # Consume the Stop payload once. The decisions below are state-based; the
-# payload is read so a slow writer can never wedge on a full pipe, and its host
-# is inspected before anything else runs.
-PAYLOAD=$(cat 2>/dev/null || true)
-
-# Cursor loads the tracked Claude settings too. Cursor has no asyncRewake, so if
-# a future Cursor build starts firing the Claude-shaped Stop entry, this arm
-# would run SYNCHRONOUSLY inside Cursor's stop step and hold that turn open for
-# the declared multi-hour timeout - the exact wedge grok 1.0.0 produced
-# (docs/turnend-guard.md "Harness integrations"). Cursor's own park adapter owns
-# its turn boundary, so stand down on a Cursor-delivered payload.
-fm_hook_payload_is_foreign_host "$PAYLOAD" && exit 0
+# payload is read so a slow writer can never wedge on a full pipe.
+cat >/dev/null 2>&1 || true
 
 # --- scope: genuine primary checkout only -----------------------------------
 fm_primary_scope_matches "$FM_ROOT" "$STATE" || exit 0
