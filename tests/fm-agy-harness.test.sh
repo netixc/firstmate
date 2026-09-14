@@ -8,7 +8,7 @@
 #      so detection is ancestry alone on the anchored process name `agy`.
 #   2. The anchored match must never claim unrelated commands containing the
 #      fragment, and a structural agy ancestor now outranks a retained or
-#      inherited CLAUDECODE - tests/fm-harness-precedence.test.sh owns the
+#      inherited - tests/fm-harness-precedence.test.sh owns the
 #      general boundary.
 #   3. The launch carries the brief via --prompt-interactive with --model,
 #      --effort, and --dangerously-skip-permissions; a requested model a
@@ -41,7 +41,7 @@ set -u
 # from inside another harness inherits those markers, which outrank the fake
 # ancestry the detection cases set up. Drop the ambient markers so the asserted
 # verdict does not depend on which harness launched the suite.
-unset CLAUDECODE PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT \
+unset PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT \
   ATLASSIAN_AGENT_TYPE ROVODEV_CLI GEMINI_CLI AGENT FM_OMP_HARNESS
 
 # shellcheck source=/dev/null
@@ -125,11 +125,11 @@ test_agy_claims_no_inherited_launcher_marker() {
   out=$(AGENT=1 "$HARNESS")
   [ "$out" != agy ] \
     || fail "an inherited AGENT=1 must never claim the agy identity, got '$out'"
-  # Drive the hazard the other way: agy does not clear an inherited CLAUDECODE,
+  # Drive the hazard the other way: agy does not clear an inherited foreign marker,
   # so a structural agy ancestor must still outrank the retained marker rather
   # than being renamed away from it. Pin both halves so neither can rot
   # silently.
-  fakebin=$(fm_fakebin "$TMP_ROOT/anc-claude")
+  fakebin=$(fm_fakebin "$TMP_ROOT/anc-codex")
   cat > "$fakebin/ps" <<'SH'
 #!/usr/bin/env bash
 case "$*" in
@@ -139,9 +139,9 @@ esac
 exit 1
 SH
   chmod +x "$fakebin/ps"
-  out=$(CLAUDECODE=1 PATH="$fakebin:$PATH" "$HARNESS")
+  out=$(PATH="$fakebin:$PATH" "$HARNESS")
   [ "$out" = agy ] \
-    || fail "a structural agy ancestor must outrank an inherited CLAUDECODE, got '$out'"
+    || fail "a structural agy ancestor must outrank an inherited foreign marker, got '$out'"
   pass "fm-harness.sh: no inherited launcher marker claims the agy identity"
 }
 
@@ -627,7 +627,7 @@ test_agy_launch_carries_the_brief_with_model_effort_and_autonomy() {
   assert_contains "$launch" "--model 'gemini-3.8-flash-low'" "agy launch did not carry the requested model"
   assert_contains "$launch" "--effort 'low'" "agy launch did not carry the requested effort"
   assert_contains "$launch" "--dangerously-skip-permissions" "agy launch omitted unattended autonomy"
-  assert_contains "$launch" "env -u CLAUDECODE" "agy launch did not clear the inherited launcher marker"
+  assert_contains "$launch" "env" "agy launch did not clear the inherited launcher marker"
   assert_not_contains "$launch" "__AGYBIN__" "agy launch left its binary placeholder unsubstituted"
   assert_not_contains "$launch" "__MODELFLAG__" "agy launch left its model placeholder unsubstituted"
   assert_not_contains "$launch" "__BRIEF__" "agy launch left its brief placeholder unsubstituted"

@@ -270,11 +270,11 @@ test_send_stubs_and_ssh() {
 
 test_spawn_home_layout() {
   local home="$TMP_ROOT/home"
-  fm_test_spawn_home "$home" claude
+  fm_test_spawn_home "$home" codex
   fm_test_spawn_brief "$home" t1 'do the thing'
   assert_present "$home/data" "spawn home missing data/"
   assert_present "$home/state/.last-watcher-beat" "spawn home missing watcher beat"
-  assert_grep claude "$home/config/crew-harness" "crew-harness was not pinned"
+  assert_grep codex "$home/config/crew-harness" "crew-harness was not pinned"
   assert_grep 'do the thing' "$home/data/t1/brief.md" "brief text was not written"
   pass "spawn-home layout writes harness pin, beat, and brief"
 }

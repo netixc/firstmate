@@ -6,11 +6,11 @@ set -u
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 # bin/fm-harness.sh answers from environment markers and process ancestry. A
-# suite run from inside Claude, Pi, or Grok inherits those markers and its own
+# suite run from inside Codex, Pi, or Grok inherits those markers and its own
 # real ancestry, either of which can decide a case the detection cases
 # meant to control. Drop the ambient markers so the asserted verdict does not
 # depend on which harness launched the suite.
-unset CLAUDECODE PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT
+unset PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT
 
 SPAWN="$ROOT/bin/fm-spawn.sh"
 TEARDOWN="$ROOT/bin/fm-teardown.sh"
@@ -18,7 +18,21 @@ KIMI_HOOK="$ROOT/bin/fm-kimi-turnend-hook.sh"
 TMP_ROOT=$(fm_test_tmproot fm-kimi-harness)
 KIMI_RUNTIME_TASK_TMP=
 PYTHON_BIN=$(command -v python3) || fail "test needs python3"
-PYTHON_BIN_DIR=$(dirname "$PYTHON_BIN")
+if ! "$PYTHON_BIN" -c 'import tomllib' >/dev/null 2>&1; then
+  for candidate in /opt/homebrew/bin/python3.12 /usr/local/bin/python3; do
+    if [ -x "$candidate" ] && "$candidate" -c 'import tomllib' >/dev/null 2>&1; then
+      PYTHON_BIN=$candidate
+      break
+    fi
+  done
+fi
+"$PYTHON_BIN" -c 'import tomllib' >/dev/null 2>&1 \
+  || fail "test needs a Python interpreter with tomllib"
+PYTHON_BIN_DIR="$TMP_ROOT/python-bin"
+mkdir -p "$PYTHON_BIN_DIR"
+ln -s "$PYTHON_BIN" "$PYTHON_BIN_DIR/python3"
+PATH="$PYTHON_BIN_DIR:$PATH"
+export PATH
 JQ_BIN=$(command -v jq) || fail "test needs jq"
 BASE_PATH=${FM_TEST_BASE_PATH:-$PYTHON_BIN_DIR:/usr/bin:/bin:/usr/sbin:/sbin}
 
@@ -549,16 +563,16 @@ esac
 SH
   chmod +x "$fakebin/ps"
 
-  out=$(env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
+  out=$(env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
     -u GEMINI_CLI \
     PATH="$fakebin:$BASE_PATH" FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh")
   [ "$out" = kimi ] || fail "kimi ancestry detection returned '$out'"
-  # Kimi publishes no identity marker, so an inherited CLAUDECODE used to rename
+  # Kimi publishes no identity marker, so an inherited used to rename
   # it outright. A structural kimi ancestor now outranks that marker;
   # tests/fm-harness-precedence.test.sh owns the general boundary.
   out=$(env -u GEMINI_CLI \
-    CLAUDECODE=1 PATH="$fakebin:$BASE_PATH" FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh")
-  [ "$out" = kimi ] || fail "an inherited CLAUDECODE renamed markerless kimi, got '$out'"
+    PATH="$fakebin:$BASE_PATH" FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh")
+  [ "$out" = kimi ] || fail "an inherited renamed markerless kimi, got '$out'"
   pass "fm-harness: markerless kimi keeps its ancestry identity under an inherited marker"
 }
 

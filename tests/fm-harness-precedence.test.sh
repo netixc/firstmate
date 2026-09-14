@@ -2,10 +2,8 @@
 # Behavior tests for bin/fm-harness.sh's marker-vs-ancestry precedence boundary,
 # and for the supervision protocol session start selects from it.
 #
-# The bug this pins: a Codex session started from an environment that had
-# retained CLAUDECODE=1 detected as claude, because a verified marker outranked
-# ancestry unconditionally. Session start then emitted Claude's Stop-owned
-# supervision protocol to a Codex primary, which blocked every turn end.
+# Structural ancestry must outrank unrelated inherited markers, while a marker
+# still decides when ancestry is genuinely silent.
 #
 # Every case drives the two evidence layers APART deliberately and asserts each
 # one alone as well as the combination, so no case can pass vacuously if a layer
@@ -24,7 +22,7 @@ set -u
 
 # This suite states the markers it means to test in every case. Drop the ambient
 # ones so a verdict never depends on which harness launched the suite.
-unset CLAUDECODE PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT
+unset PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT
 
 HARNESS="$ROOT/bin/fm-harness.sh"
 RENDER="$ROOT/bin/fm-supervision-instructions.sh"
@@ -38,7 +36,7 @@ BASE_PATH=${FM_TEST_BASE_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
 under_process() {  # <named-executable> [VAR=VAL ...]
   local bin=$1
   shift
-  env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
+  env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
     "$@" \
     "$bin" -c "r=\$(\"$HARNESS\"); printf '%s' \"\$r\""
 }
@@ -101,7 +99,7 @@ under_fake_ps() {  # <fakebin> <VAR=VAL ...> -- [harness args]
     shift
   done
   [ "${1:-}" = -- ] && shift
-  env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
+  env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
     "${assignments[@]}" \
     PATH="$fakebin:$BASE_PATH" "$HARNESS" "$@"
 }
@@ -109,7 +107,7 @@ under_fake_ps() {  # <fakebin> <VAR=VAL ...> -- [harness args]
 with_blind_ancestry() {  # <fakebin> [VAR=VAL ...]
   local fakebin=$1
   shift
-  env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
+  env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
     "$@" \
     PATH="$fakebin:$BASE_PATH" "$HARNESS"
 }
@@ -122,10 +120,8 @@ named_bin() {  # <dir> <name>
 
 # --- 1. A foreign marker never renames a markerless harness -----------------
 
-# codex, opencode, kimi, muse, and agy publish no identity marker, so before
-# this boundary existed ANY retained marker renamed them outright. This is the
-# reported live failure, generalized to every markerless adapter and to a
-# foreign marker that can be retained.
+# Codex, OpenCode, Kimi, Muse, and Agy publish no identity marker. An inherited
+# foreign marker must not rename those structurally identified runtimes.
 test_markerless_ancestry_outranks_foreign_marker() {
   local dir fakebin bin got name
   dir="$TMP_ROOT/markerless"
@@ -139,13 +135,9 @@ test_markerless_ancestry_outranks_foreign_marker() {
     [ "$got" = "$expect" ] \
       || fail "$name ancestry alone resolved '$got', expected $expect (the ancestry signal is not live)"
 
-    got=$(with_blind_ancestry "$fakebin" CLAUDECODE=1)
-    [ "$got" = claude ] \
-      || fail "an inherited CLAUDECODE alone resolved '$got', expected claude (the marker signal is not live)"
-
-    got=$(under_process "$bin" CLAUDECODE=1)
-    [ "$got" = "$expect" ] \
-      || fail "$name ancestry with an inherited CLAUDECODE resolved '$got', expected $expect"
+    got=$(with_blind_ancestry "$fakebin" GROK_AGENT=1)
+    [ "$got" = grok ] \
+      || fail "an inherited Grok marker alone resolved '$got', expected grok"
 
   done
   pass "a markerless harness keeps its identity under an inherited foreign marker"
@@ -157,9 +149,9 @@ test_genuine_marker_and_ancestry_agree() {
   local dir bin got
   dir="$TMP_ROOT/genuine"
 
-  bin=$(named_bin "$dir/claude-tree" claude)
-  got=$(under_process "$bin" CLAUDECODE=1)
-  [ "$got" = claude ] || fail "a genuine claude session resolved '$got', expected claude"
+  bin=$(named_bin "$dir/codex-tree" codex)
+  got=$(under_process "$bin" )
+  [ "$got" = codex ] || fail "a genuine codex session resolved '$got', expected codex"
 
   bin=$(named_bin "$dir/grok-tree" grok)
   got=$(under_process "$bin" GROK_AGENT=1)
@@ -212,15 +204,14 @@ test_interpreter_args_match_does_not_outrank_a_marker() {
 r=\$("$HARNESS"); printf '%s' "\$r"
 SH
 
-  got=$(env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
+  got=$(env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
     "$node" "$script")
   [ "$got" = codex ] \
     || fail "an unmarked interpreter holding a codex-shaped script path resolved '$got', expected codex"
 
-  got=$(env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
-    CLAUDECODE=1 "$node" "$script")
-  [ "$got" = claude ] \
-    || fail "a published CLAUDECODE lost to a codex-shaped script path, resolving '$got'"
+  got=$(env -u PI_CODING_AGENT -u FM_PI_HARNESS GROK_AGENT=1 "$node" "$script")
+  [ "$got" = grok ] \
+    || fail "a Grok marker lost to a codex-shaped script path, resolving '$got'"
   pass "an interpreter script-path match answers alone but never outranks a marker"
 }
 
@@ -260,7 +251,7 @@ SH
   # the shim entry point directly below, so this helper stays the plain no-marker
   # launch.
   run_shim() {
-    env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
+    env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
       \
       FM_TEST_HARNESS="$HARNESS" FM_TEST_NATIVE="$native" FM_TEST_PROBE="$probe" \
       "$node" "$entry"
@@ -270,12 +261,7 @@ SH
   [ "$got" = codex ] \
     || fail "the shim topology without a marker resolved '$got', expected codex"
 
-  got=$(env CLAUDECODE=1 FM_TEST_HARNESS="$HARNESS" FM_TEST_NATIVE="$native" \
-    FM_TEST_PROBE="$probe" "$node" "$entry")
-  [ "$got" = codex ] \
-    || fail "the real Codex shim topology with a retained CLAUDECODE resolved '$got', expected codex"
-
-  got=$(env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
+  got=$(env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
     \
     FM_TEST_HARNESS="$HARNESS" FM_TEST_NATIVE="$native" FM_TEST_PROBE="$probe" \
     "$node" "$entry" ancestry)
@@ -295,22 +281,16 @@ test_harness_at_namespace_pid1_is_examined() {
   local fakebin got
   fakebin=$(namespace_ancestry_bin "$TMP_ROOT/namespace-pid1")
 
-  # Non-vacuity, both directions: with a host-shaped pid 1 the marker is the
-  # only evidence and must still answer, so the case below cannot pass by the
-  # ancestry layer simply matching everything.
-  got=$(under_fake_ps "$fakebin" FM_TEST_PID1_COMM=init CLAUDECODE=1 --)
-  [ "$got" = claude ] \
-    || fail "a host-shaped pid 1 resolved '$got', expected claude (the marker layer is not live)"
+  # Non-vacuity: with a host-shaped pid 1 only an explicit marker can answer.
+  got=$(under_fake_ps "$fakebin" FM_TEST_PID1_COMM=init GROK_AGENT=1 --)
+  [ "$got" = grok ] \
+    || fail "a host-shaped pid 1 with a Grok marker resolved '$got', expected grok"
 
   got=$(under_fake_ps "$fakebin" FM_TEST_PID1_COMM=codex --)
   [ "$got" = codex ] \
     || fail "a Codex session at namespace pid 1 resolved '$got' with no marker, expected codex"
 
-  got=$(under_fake_ps "$fakebin" FM_TEST_PID1_COMM=codex CLAUDECODE=1 --)
-  [ "$got" = codex ] \
-    || fail "a Codex session at namespace pid 1 holding a retained CLAUDECODE resolved '$got', expected codex"
-
-  got=$(under_fake_ps "$fakebin" FM_TEST_PID1_COMM=codex CLAUDECODE=1 -- ancestry)
+  got=$(under_fake_ps "$fakebin" FM_TEST_PID1_COMM=codex -- ancestry)
   [ "$got" = "comm codex" ] \
     || fail "the namespace pid 1 harness must decide at comm strength, got '$got'"
 
@@ -319,9 +299,9 @@ test_harness_at_namespace_pid1_is_examined() {
 
 # --- 6. The vantage point a probe asks from decides what strength it can see --
 
-# The shipped guarantee is a strength claim, not just an identity one: detect_own
-# hands an args-strength verdict back to a retained marker, so a harness is only
-# protected where the walk reaches it at comm strength. Which strength is even
+# The shipped guarantee is a strength claim, not just an identity one: a harness
+# is structurally proven only where the walk reaches it at comm strength. Which
+# strength is even
 # REACHABLE depends on where the question is asked from. Under an interpreter
 # shim the top of the session is the shim, whose own script path is args
 # strength, while the native binary that carries comm strength is its CHILD.
@@ -353,7 +333,7 @@ SH
 wait "$!"
 SH
 
-  env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
+  env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
     \
     FM_TEST_NATIVE="$native" FM_TEST_HOLD="$hold" FM_TEST_READY="$ready" \
     "$node" "$entry" &
@@ -396,8 +376,8 @@ EOF
 # The other half of the vantage question: which vantages a probe must NOT ask
 # from. harness_ancestry only ever climbs, so firstmate's own detection can never
 # occupy a SIBLING branch of the process that runs it. A harness routinely spawns
-# such branches - an MCP server started as `node <home>/.claude/mcp/<server>.js`
-# matches *claude* on its script path in the bare-interpreter branch of the walk -
+# such branches - an MCP server started as `node <home>/.codex/mcp/<server>.js`
+# matches *codex* on its script path in the bare-interpreter branch of the walk -
 # and a probe that reported every descendant would answer a foreign harness from a
 # process no real tool subprocess can ask from. The descent probe asks only the
 # vantages on the upward path from the deepest descendant, which is exactly the set
@@ -411,7 +391,7 @@ test_descent_probe_ignores_a_sibling_branch_the_walk_cannot_reach() {
   worker=$(named_bin "$dir/vendor" worker)
   ready="$dir/ready"
   fifo="$dir/fifo"
-  mkdir -p "$dir/.claude/mcp"
+  mkdir -p "$dir/.codex/mcp"
   mkfifo "$fifo"
 
   # Both leaves park on a fifo nothing ever writes, so they hold their position in
@@ -422,7 +402,7 @@ read -r _ < "$FM_TEST_FIFO"
 SH
   # The MCP server is the sibling branch: a bare interpreter whose script path
   # carries a harness name it does not belong to.
-  mcp_script="$dir/.claude/mcp/foo.js"
+  mcp_script="$dir/.codex/mcp/foo.js"
   cp "$block" "$mcp_script"
 
   # The native binary keeps a child of its own, so the deepest descendant is
@@ -443,7 +423,7 @@ printf '%s\n' "$!" > "$FM_TEST_DIR/mcp.pid"
 wait
 SH
 
-  env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
+  env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
     \
     FM_TEST_DIR="$dir" FM_TEST_NODE="$node" FM_TEST_NATIVE="$native" \
     FM_TEST_WORKER="$worker" FM_TEST_HOLD="$hold" FM_TEST_BLOCK="$block" \
@@ -467,10 +447,10 @@ SH
   mcp_pid=$(cat "$dir/mcp.pid")
 
   # Non-vacuity: the sibling really does answer a foreign harness when asked, so a
-  # probe that reported every descendant would have reported claude here.
+  # probe that reported every descendant would have reported codex here.
   got=$("$HARNESS" ancestry "$mcp_pid")
-  [ "$got" = "args claude" ] \
-    || { release_sibling_fixture; fail "the sibling MCP process reported '$got', expected 'args claude'; this case proves nothing unless that branch really names a foreign harness"; }
+  [ "$got" = "args codex" ] \
+    || { release_sibling_fixture; fail "the sibling MCP process reported '$got', expected 'args codex'; this case proves nothing unless that branch really names a foreign harness"; }
 
   got=$("$HARNESS" ancestry-descent "$shim_pid")
   case "$got" in
@@ -494,13 +474,13 @@ EOF
 # spawns its MCP servers from the AGENT BINARY, not from the npm shim, so the real
 # Codex topology is shim -> native codex -> mcp server: the server inherits its
 # parent's process group, passes the foreground filter, and is the deepest eligible
-# descendant, which puts its own `args claude` vantage ON the descent path rather
+# descendant, which puts its own `args codex` vantage ON the descent path rather
 # than off it. An args-strength verdict is path-ambiguous by construction - the
 # bare-interpreter branch of the walk matches a harness name anywhere in the script
 # path - so it is the comm-strength verdicts that carry a real process name and are
 # the ones worth cross-checking. This case pins that the path still reaches
 # `comm codex`, that every comm-strength vantage on it names codex, and that an
-# `args claude` vantage really is present, which is what a cross-check applied to
+# `args codex` vantage really is present, which is what a cross-check applied to
 # args strength would have rejected.
 test_descent_probe_tolerates_an_args_only_foreign_verdict_at_the_deepest_vantage() {
   local dir node native mcp_script hold entry ready fifo
@@ -510,10 +490,10 @@ test_descent_probe_tolerates_an_args_only_foreign_verdict_at_the_deepest_vantage
   native=$(named_bin "$dir/vendor" codex)
   ready="$dir/ready"
   fifo="$dir/fifo"
-  mkdir -p "$dir/.claude/mcp"
+  mkdir -p "$dir/.codex/mcp"
   mkfifo "$fifo"
 
-  mcp_script="$dir/.claude/mcp/foo.js"
+  mcp_script="$dir/.codex/mcp/foo.js"
   cat > "$mcp_script" <<'SH'
 read -r _ < "$FM_TEST_FIFO"
 SH
@@ -534,7 +514,7 @@ printf '%s\n' "$!" > "$FM_TEST_DIR/native.pid"
 wait
 SH
 
-  env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
+  env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
     \
     FM_TEST_DIR="$dir" FM_TEST_NODE="$node" FM_TEST_NATIVE="$native" \
     FM_TEST_HOLD="$hold" FM_TEST_MCP="$mcp_script" FM_TEST_READY="$ready" \
@@ -557,12 +537,12 @@ SH
   mcp_pid=$(cat "$dir/mcp.pid")
 
   got=$("$HARNESS" ancestry "$mcp_pid")
-  [ "$got" = "args claude" ] \
-    || { release_deep_mcp_fixture; fail "the MCP server reported '$got', expected 'args claude'; this case proves nothing unless the deepest vantage really answers a foreign harness"; }
+  [ "$got" = "args codex" ] \
+    || { release_deep_mcp_fixture; fail "the MCP server reported '$got', expected 'args codex'; this case proves nothing unless the deepest vantage really answers a foreign harness"; }
 
   got=$("$HARNESS" ancestry-descent "$shim_pid")
   case "$got" in
-    *"args claude"*) ;;
+    *"args codex"*) ;;
     *) release_deep_mcp_fixture; fail "the descent path did not include the MCP server's foreign args verdict, got '$got'; a cross-check restricted to comm strength is untested unless that vantage is on the path" ;;
   esac
   case "$got" in
@@ -600,14 +580,14 @@ test_descent_probe_prefers_comm_strength_when_deepest_leaves_tie() {
     native=$(named_bin "$dir/vendor" codex)
     ready="$dir/ready"
     fifo="$dir/fifo"
-    mkdir -p "$dir/.claude/mcp"
+    mkdir -p "$dir/.grok/mcp"
     mkfifo "$fifo"
 
     block="$dir/block.sh"
     cat > "$block" <<'SH'
 read -r _ < "$FM_TEST_FIFO"
 SH
-    mcp_script="$dir/.claude/mcp/foo.js"
+    mcp_script="$dir/.grok/mcp/foo.js"
     cp "$block" "$mcp_script"
     entry="$dir/codex-cli-entry.sh"
     cat > "$entry" <<'SH'
@@ -626,7 +606,7 @@ touch "$FM_TEST_READY"
 wait
 SH
 
-    env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
+    env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
       \
       FM_TEST_ORDER="$order" FM_TEST_DIR="$dir" FM_TEST_NODE="$node" \
       FM_TEST_NATIVE="$native" FM_TEST_BLOCK="$block" FM_TEST_MCP="$mcp_script" \
@@ -649,8 +629,8 @@ SH
       || { release_equal_depth_fixture; fail "the $order equal-depth fixture never reached both leaves"; }
 
     got=$("$HARNESS" ancestry "$mcp_pid")
-    [ "$got" = "args claude" ] \
-      || { release_equal_depth_fixture; fail "the $order MCP leaf reported '$got', expected 'args claude'"; }
+    [ "$got" = "args grok" ] \
+      || { release_equal_depth_fixture; fail "the $order MCP leaf reported '$got', expected 'args grok'"; }
     got=$("$HARNESS" ancestry "$native_pid")
     [ "$got" = "comm codex" ] \
       || { release_equal_depth_fixture; fail "the $order native leaf reported '$got', expected 'comm codex'"; }
@@ -661,7 +641,7 @@ SH
       *) release_equal_depth_fixture; fail "the $order equal-depth tie did not choose the comm-strength native leaf, got '$got'" ;;
     esac
     case "$got" in
-      *"args claude"*) release_equal_depth_fixture; fail "the $order equal-depth tie chose the foreign args-strength leaf" ;;
+      *"args grok"*) release_equal_depth_fixture; fail "the $order equal-depth tie chose the foreign args-strength leaf" ;;
     esac
 
     release_equal_depth_fixture
@@ -671,33 +651,22 @@ SH
 
 # --- 7. Session start's supervision protocol follows the corrected verdict ---
 
-# The consequence the captain actually hit: the wrong verdict emitted Claude's
-# Stop-owned protocol to a Codex primary, so every turn end was blocked for
-# missing Claude recovery.
+# The selected supervision protocol must follow the structurally detected
+# primary runtime.
 test_supervision_protocol_follows_corrected_verdict() {
-  local dir home fakebin bin got
+  local dir home bin got
   dir="$TMP_ROOT/supervision"
   home="$dir/home"
   mkdir -p "$home/state" "$home/config"
   bin=$(named_bin "$dir/codex-tree" codex)
-  fakebin=$(blind_ancestry_bin "$dir/blind")
 
-  got=$(env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
-    CLAUDECODE=1 FM_HOME="$home" \
-    PATH="$fakebin:$BASE_PATH" "$RENDER")
-  assert_contains "$got" "primary harness: claude" \
-    "with ancestry blinded, the retained marker must still render claude (the case is otherwise vacuous)"
-
-  got=$(env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
-    CLAUDECODE=1 FM_HOME="$home" \
+  got=$(env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT FM_HOME="$home" \
     "$bin" -c "r=\$(\"$RENDER\"); printf '%s' \"\$r\"")
   assert_contains "$got" "primary harness: codex" \
-    "a Codex primary carrying a retained CLAUDECODE did not render the Codex protocol"
+    "a Codex primary did not render the Codex protocol"
   assert_contains "$got" "Mode: Codex foreground checkpoint." \
     "the rendered block is not Codex's foreground-checkpoint protocol"
-  assert_not_contains "$got" "Mode: Claude Stop-hook-owned supervision." \
-    "the rendered block still carries Claude's Stop-owned protocol"
-  pass "session start renders the Codex protocol for a Codex primary holding a retained CLAUDECODE"
+  pass "session start renders the Codex protocol for a Codex primary"
 }
 
 test_markerless_ancestry_outranks_foreign_marker

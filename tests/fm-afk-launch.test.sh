@@ -26,7 +26,18 @@ CONTRACT="$ROOT/bin/fm-afk-contract.sh"
 # The daemon paths refuse on a Pi primary, so pin a daemon-running harness for
 # every unit below; the Pi refusal has its own units (unit_pi_never_launches_the_daemon).
 unset PI_CODING_AGENT FM_PI_HARNESS GEMINI_CLI ATLASSIAN_AGENT_TYPE ROVODEV_CLI
-export CLAUDECODE=1
+export GROK_AGENT=1
+HARNESS_BIN=$(mktemp -d "${TMPDIR:-/tmp}/fm-afk-harness.XXXXXX")
+cat > "$HARNESS_BIN/ps" <<'SH'
+#!/usr/bin/env bash
+case "$*" in
+  *comm=*|*args=*) printf 'grok\n' ;;
+  *) /bin/ps "$@" ;;
+esac
+SH
+chmod +x "$HARNESS_BIN/ps"
+PATH="$HARNESS_BIN:$PATH"
+export PATH
 
 FAILED=0
 fail() { printf 'not ok - %s\n' "$1" >&2; FAILED=1; }
@@ -38,6 +49,7 @@ chmod +x "$SLEEPER"
 TRACK_TMUX_SESSIONS=""
 GLOBAL_CLEANUP() {
   rm -f "$SLEEPER" 2>/dev/null || true
+  rm -rf "$HARNESS_BIN" 2>/dev/null || true
   local s
   for s in $TRACK_TMUX_SESSIONS; do
     tmux kill-session -t "$s" 2>/dev/null || true

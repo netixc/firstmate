@@ -402,7 +402,7 @@ SH
 # bin/fm-session-lock-lib.sh, bin/fm-sessionstart-nudge.sh and bin/fm-backend.sh's
 # cmux ancestor detection - reports a bash ancestor terminating at pid 1, so ancestry
 # proves nothing and the marker a case sets is the only evidence left. A case that pins
-# its harness with a marker (CLAUDECODE=1 and friends) needs this, because a structural
+# its harness with a marker (and friends) needs this, because a structural
 # ancestor of a DIFFERENT harness outranks a marker - without it, the harness the SUITE
 # was launched from decides the verdict.
 # Every other ps query reaches the real ps untouched, and the pid-first form is

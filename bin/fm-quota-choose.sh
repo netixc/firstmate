@@ -324,7 +324,6 @@ provider_for_harness() {
         *)               return 1 ;;
       esac
       ;;
-    claude)       printf 'claude\n' ;;
     codex)        printf 'codex\n' ;;
     opencode)     printf 'codex\n' ;;
     pi|pi-signed) printf 'pi\n' ;;

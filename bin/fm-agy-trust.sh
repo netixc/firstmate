@@ -24,7 +24,7 @@
 # dialog if one renders anyway and never counts a busy turn as ready on a path
 # that was neither pre-registered here nor answered there.
 #
-# THE SCOPE TEST IS THE SAFETY PROPERTY and mirrors bin/fm-claude-trust.sh:
+# THE SCOPE TEST IS THE SAFETY PROPERTY:
 # <worktree> must be a LINKED git worktree - its own git dir, sharing
 # <project>'s common dir - whose top level is exactly the resolved argument. A
 # primary checkout, a worktree of an unrelated repo, a subdirectory of a
@@ -103,7 +103,7 @@ if [ -e "$STORE" ]; then
 fi
 
 # Read-modify-write with a fingerprint check before the rename and a readback
-# after it, the bin/fm-claude-trust.sh shape: agy itself rewrites this file
+# after it: agy itself rewrites this file
 # when a worker answers a dialog or changes a setting, so a store that moved
 # under us is retried once and then refused rather than clobbered.
 if ! node - "$STORE" "$WT_LOGICAL" "$WT_REAL" <<'NODE'
