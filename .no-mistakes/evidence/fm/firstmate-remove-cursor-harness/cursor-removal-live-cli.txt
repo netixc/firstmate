@@ -1,0 +1,33 @@
+Firstmate Cursor-removal live CLI verification
+commit=8661970f60287d29e99fca529dc14e37df914e50
+
+SCENARIO 1: retired Cursor environment markers no longer identify a Cursor harness
+command: CURSOR_AGENT=1 CURSOR_INVOKED_AS=cursor-agent ./bin/fm-harness.sh
+observed harness: pi
+PASS: retired markers do not select cursor
+
+SCENARIO 2: configured Cursor dispatch is rejected by bootstrap
+command: FM_BOOTSTRAP_DETECT_ONLY=1 FM_BOOTSTRAP_NETWORK=skip ./bin/fm-bootstrap.sh
+observable: CREW_DISPATCH: invalid config/crew-dispatch.json - unverified harness: cursor
+PASS: cursor dispatch is unsupported
+
+SCENARIO 3: configured Cursor secondmate spawn refuses before launch or metadata publication
+command: config/secondmate-harness=cursor; ./bin/fm-spawn.sh cursor-retired --secondmate
+exit: 1
+observable: error: no launch template for harness 'cursor' (from config/secondmate-harness (falling back to config/crew-harness) or detection); pass a raw launch command to use an unverified adapter
+metadata published: no
+PASS: cursor secondmate cannot launch
+
+SCENARIO 4: legacy Cursor task lifecycle is refused instead of sending guessed control input
+command: ./bin/fm-control.sh legacy-cursor exit
+exit: 1
+observable: error: task legacy-cursor records harness 'cursor', which has no verified control mechanics; fm-control refuses to guess an interrupt key or exit command
+PASS: cursor lifecycle control is unsupported
+
+SCENARIO 5: Claude primary support still renders its native supervision protocol
+command: ./bin/fm-supervision-instructions.sh --harness claude
+observable: SUPERVISION OPERATING INSTRUCTIONS - primary harness: claude
+observable: Mode: Claude Stop-hook-owned supervision.
+command: ./bin/fm-supervision-instructions.sh --harness cursor
+observable: SUPERVISION OPERATING INSTRUCTIONS - primary harness: unknown
+PASS: Claude remains supported while Cursor falls back to unknown
