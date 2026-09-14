@@ -41,7 +41,7 @@ set -u
 # from inside another harness inherits those markers, which outrank the fake
 # ancestry the detection cases set up. Drop the ambient markers so the asserted
 # verdict does not depend on which harness launched the suite.
-unset PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT CURSOR_AGENT CURSOR_INVOKED_AS \
+unset PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT \
   ATLASSIAN_AGENT_TYPE ROVODEV_CLI GEMINI_CLI AGENT FM_OMP_HARNESS
 
 # shellcheck source=/dev/null
@@ -125,7 +125,7 @@ test_agy_claims_no_inherited_launcher_marker() {
   out=$(AGENT=1 "$HARNESS")
   [ "$out" != agy ] \
     || fail "an inherited AGENT=1 must never claim the agy identity, got '$out'"
-  # Drive the hazard the other way: agy does not clear an inherited removed foreign marker,
+  # Drive the hazard the other way: agy does not clear an inherited foreign marker,
   # so a structural agy ancestor must still outrank the retained marker rather
   # than being renamed away from it. Pin both halves so neither can rot
   # silently.
@@ -141,7 +141,7 @@ SH
   chmod +x "$fakebin/ps"
   out=$(PATH="$fakebin:$PATH" "$HARNESS")
   [ "$out" = agy ] \
-    || fail "a structural agy ancestor must outrank an inherited removed foreign marker, got '$out'"
+    || fail "a structural agy ancestor must outrank an inherited foreign marker, got '$out'"
   pass "fm-harness.sh: no inherited launcher marker claims the agy identity"
 }
 

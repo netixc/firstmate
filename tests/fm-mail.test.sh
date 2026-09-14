@@ -882,7 +882,7 @@ printf '77\t2026-09-05T00:00:00Z\tfrom@x\tRe: hi\tretry\n'
 SH
   chmod +x "$fakebin/python3"
 
-  # Cursor records the uid from the earlier degraded wake; retry set exists.
+  # The cursor records the uid from the earlier degraded wake; retry set exists.
   printf 'uidvalidity=90009\n77\n' > "$test_home/state/.mail-seen"
   printf '77\n' > "$test_home/state/.mail-retry"
 

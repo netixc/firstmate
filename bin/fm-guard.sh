@@ -10,9 +10,8 @@
 # delimited banner so the agent cannot skim past
 # it in the tool output of whatever it was doing - the one channel every harness
 # has. Supervision health is MODEL-AWARE (fm_watcher_supervision_verdict in
-# bin/fm-wake-lib.sh): under Cursor's stop-hook model the watcher runs only
-# between turns; under the Pi extension model the extension tears the watcher
-# down and respawns it on every
+# bin/fm-wake-lib.sh): under the Pi extension model the extension tears the
+# watcher down and respawns it on every
 # actionable wake, so a fresh beacon with a genuinely unheld lock is healthy
 # while that live Pi session provably owns continuity; any held but unhealthy
 # lock is down; under every

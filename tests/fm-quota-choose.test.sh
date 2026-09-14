@@ -131,7 +131,7 @@ cat > "$FIXTURE" <<'JSON'
       }
     },
     {
-      "provider": "cursor",
+      "provider": "grok",
       "windows": [],
       "quotaSemantics": {
         "status": "unknown",
@@ -531,7 +531,7 @@ fi
 [ "$out" = "none" ] || fail "quoted exhausted model scope returned: $out"
 ok "quoted TOON scope vetoes dispatch"
 
-if out=$(call_choose --snapshot "$LAB/captured.json" --candidate cursor:default 2>/dev/null); then
+if out=$(call_choose --snapshot "$LAB/captured.json" --candidate grok:default 2>/dev/null); then
   fail "provider-level unknown quota unexpectedly dispatched"
 fi
 [ "$out" = "none" ] || fail "provider-level unknown quota returned: $out"

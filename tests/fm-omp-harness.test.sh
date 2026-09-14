@@ -16,7 +16,7 @@
 #   1. omp publishes no marker; the anchored process name `omp` is the ancestry
 #      evidence, and ompd/comp never identify.
 #   2. FM_OMP_HARNESS=omp is a precedence override that needs a real omp
-#      ancestor: it beats an inherited Cursor marker under omp and is inert
+#      ancestor: it beats an inherited foreign marker under omp and is inert
 #      when it leaks into another worker.
 #   3. Every omp launch clears foreign markers, carries the tracked posture
 #      overlay, --auto-approve, --cwd, and (for a crewmate) one -e pointing at
@@ -67,23 +67,23 @@ test_detection_anchored_name_and_marker_precedence() {
   local bin out
   bin=$(make_named_shells "$TMP_ROOT/named")
   # shellcheck disable=SC2016 # the quoted body expands inside the named shell
-  out=$(env -u FM_OMP_HARNESS -u PI_CODING_AGENT -u CURSOR_AGENT -u CURSOR_INVOKED_AS \
+  out=$(env -u FM_OMP_HARNESS -u PI_CODING_AGENT \
     "$bin/omp" -c '"$1"; :' _ "$HARNESS")
   [ "$out" = omp ] || fail "a process named omp must detect as omp, got '$out'"
   for decoy in ompd comp; do
     # shellcheck disable=SC2016 # the quoted body expands inside the named shell
-    out=$(env -u FM_OMP_HARNESS -u PI_CODING_AGENT -u CURSOR_AGENT -u CURSOR_INVOKED_AS \
+    out=$(env -u FM_OMP_HARNESS -u PI_CODING_AGENT \
       "$bin/$decoy" -c '"$1"; :' _ "$HARNESS")
     [ "$out" != omp ] || fail "'$decoy' merely contains omp and must not detect as omp"
   done
-  # The marker beats an inherited Cursor marker only under a real omp ancestor.
+  # The marker beats an inherited foreign marker only under a real omp ancestor.
   # shellcheck disable=SC2016 # the quoted body expands inside the named shell
-  out=$(env -u PI_CODING_AGENT -u CURSOR_INVOKED_AS CURSOR_AGENT=1 FM_OMP_HARNESS=omp \
+  out=$(env -u PI_CODING_AGENT GROK_AGENT=1 FM_OMP_HARNESS=omp \
     "$bin/omp" -c '"$1"; :' _ "$HARNESS")
-  [ "$out" = omp ] || fail "FM_OMP_HARNESS under an omp ancestor must outrank an inherited Cursor marker, got '$out'"
+  [ "$out" = omp ] || fail "FM_OMP_HARNESS under an omp ancestor must outrank an inherited foreign marker, got '$out'"
   # ...and is inert when it leaks into a worker with no omp ancestor.
   # shellcheck disable=SC2016 # the quoted body expands inside the named shell
-  out=$(env -u PI_CODING_AGENT -u CURSOR_AGENT -u CURSOR_INVOKED_AS FM_OMP_HARNESS=omp \
+  out=$(env -u PI_CODING_AGENT -u GROK_AGENT FM_OMP_HARNESS=omp \
     "$bin/codex" -c '"$1"; :' _ "$HARNESS")
   [ "$out" = codex ] || fail "a leaked FM_OMP_HARNESS without an omp ancestor must not relabel a Codex worker, got '$out'"
   pass "fm-harness: omp detects by its anchored name; the marker is a precedence override that needs real omp ancestry"
@@ -163,7 +163,7 @@ test_spawn_launch_line_and_worker_wiring() {
   assert_grep "effort=medium" "$state/$id.meta" "meta missing the pinned effort"
   assert_present "$state/$id.omp-ext.ts" "omp spawn did not write the per-task extension"
   launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "env -u PI_CODING_AGENT -u GROK_AGENT -u FM_PI_HARNESS -u GEMINI_CLI -u CURSOR_AGENT -u CURSOR_INVOKED_AS FM_OMP_HARNESS=omp OMP_SKIP_SETUP=1 '$FAKEBIN_DIR/omp'" \
+  assert_contains "$launch" "env -u PI_CODING_AGENT -u GROK_AGENT -u FM_PI_HARNESS -u GEMINI_CLI FM_OMP_HARNESS=omp OMP_SKIP_SETUP=1 '$FAKEBIN_DIR/omp'" \
     "omp launch did not clear foreign markers and establish its own at the launch boundary"
   assert_contains "$launch" "--config '$ROOT/.omp/fm-worker-overlay.yml' --auto-approve --cwd '$WT_DIR'" \
     "omp launch did not carry the tracked posture overlay, --auto-approve, and the pinned working directory"
@@ -360,7 +360,7 @@ test_control_composer_and_model_tables() {
   local bin out
   bin=$(make_named_shells "$TMP_ROOT/named-model")
   # shellcheck disable=SC2016 # the quoted body expands inside the named shell
-  out=$(env -u FM_OMP_HARNESS -u PI_CODING_AGENT -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u FM_SUPERVISION_MODEL \
+  out=$(env -u FM_OMP_HARNESS -u PI_CODING_AGENT -u FM_SUPERVISION_MODEL \
     "$bin/omp" -c '. "$1"; fm_supervision_model' _ "$ROOT/bin/fm-wake-lib.sh")
   [ "$out" = extension ] || fail "an omp primary must run the extension supervision model, got '$out'"
   pass "control, composer, and supervision-model tables carry omp's verified values"

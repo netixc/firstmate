@@ -295,7 +295,7 @@ family_for_basename() {
       printf '%s\n' pure-contract-unit
       ;;
     fm-daemon.test.sh|fm-guard-stale-banner.test.sh|fm-pi-watch-extension.test.sh|\
-    fm-session-lock-ancestry.test.sh|fm-cursor-primary.test.sh|\
+    fm-session-lock-ancestry.test.sh|\
     fm-supervision-events.test.sh|fm-turnend-guard.test.sh|fm-wake-daemon-lifecycle-e2e.test.sh|\
     fm-wake-drain-unread-status.test.sh|\
     fm-tool-update-check.test.sh|\
@@ -340,7 +340,6 @@ family_for_basename() {
     fm-bearings-board-lavish-live-e2e.test.sh|\
     fm-composer-matrix-live-e2e.test.sh|\
     fm-codex-continuity-live-e2e.test.sh|fm-grok-continuity-live-e2e.test.sh|\
-    fm-cursor-primary-live-e2e.test.sh|\
     fm-grok-stop-live-e2e.test.sh|fm-harness-adapter-instructions-live-e2e.test.sh|\
     fm-harness-liveness-drift-live-e2e.test.sh|\
     fm-muse-signals-live-e2e.test.sh|fm-rovo-signals-live-e2e.test.sh|fm-agy-signals-live-e2e.test.sh|\
@@ -387,7 +386,6 @@ family_for_basename() {
       ;;
     fm-branch-supervision.test.sh|fm-busy-adapter-wiring.test.sh|\
     fm-busy-state.test.sh|fm-classify-corr-token.test.sh|\
-    fm-cursor-harness.test.sh|\
     fm-extension-binding.test.sh|fm-gitignore-config.test.sh|\
     fm-no-mistakes-required.test.sh|fm-peek-remote.test.sh|\
     fm-pending-reply.test.sh|fm-pi-branch-extension.test.sh|\
@@ -684,9 +682,6 @@ tests/fm-codex-continuity-live-e2e.test.sh 21
 tests/fm-composer-matrix-live-e2e.test.sh 23
 tests/fm-control-relaunch.test.sh 48210
 tests/fm-control.test.sh 54301
-tests/fm-cursor-harness.test.sh 30103
-tests/fm-cursor-primary-live-e2e.test.sh 21
-tests/fm-cursor-primary.test.sh 54947
 tests/fm-daemon.test.sh 26870
 tests/fm-documentation-audiences.test.sh 732
 tests/fm-extension-binding.test.sh 7398

@@ -16,8 +16,7 @@
 // owns that postcondition).
 //
 // Session-start delivery: omp's session_start payload carries no reason field
-// (verified: keys are `type` only), so the source is derived here, following
-// the Cursor precedent in docs/sessionstart-nudge.md. The first session_start
+// (verified: keys are `type` only), so the source is derived here. The first session_start
 // of the process is `startup` (or `resume` when the launch line named
 // --continue/-c or --resume/-r); a later session_start in the same process is
 // an in-process replacement (/new, /resume, /fork) and maps to `clear`, whose

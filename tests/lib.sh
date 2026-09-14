@@ -406,9 +406,9 @@ SH
 # ancestor of a DIFFERENT harness outranks a marker - without it, the harness the SUITE
 # was launched from decides the verdict.
 # Every other ps query reaches the real ps untouched, and the pid-first form is
-# deliberately among them: bin/fm-tmux-lib.sh and bin/backends/tmux.sh read pane and
-# cursor identity with `ps -p <pid> -o args=`, so intercepting that shape too would make
-# a pane assertion under a PATH-wide blind read `bash` and reject every cursor pane.
+# deliberately among them: bin/backends/tmux.sh reads pane process identity with
+# `ps -p <pid> -o args=`, so intercepting that shape too would make a pane assertion
+# under a PATH-wide blind read `bash` and reject every live pane.
 fm_fake_blind_ancestry() {
   local fakebin=$1 real_ps
   real_ps=$(command -v ps) || return 1

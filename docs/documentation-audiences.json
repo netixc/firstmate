@@ -185,10 +185,6 @@
       "audience": "agent-runtime"
     },
     {
-      "path": ".agents/skills/harness-adapters/references/harness/cursor.md",
-      "audience": "agent-runtime"
-    },
-    {
       "path": ".agents/skills/harness-adapters/references/harness/gemini.md",
       "audience": "agent-runtime"
     },
@@ -386,10 +382,6 @@
     },
     {
       "path": "docs/supervision-protocols/codex.md",
-      "audience": "agent-runtime"
-    },
-    {
-      "path": "docs/supervision-protocols/cursor.md",
       "audience": "agent-runtime"
     },
     {

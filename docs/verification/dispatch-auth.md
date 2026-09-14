@@ -37,7 +37,7 @@ Three properties follow and are load-bearing for dispatch:
 - A `model:`-scoped entry is an additional bound for that one model. `model:codex_bengalfox` is the GPT-5.3-Codex-Spark window and bounds nothing else.
 - A named-model window can be tighter than the account bound, so it must not be read across models. In the same snapshot Claude reported `all_models` with `effectivePercentRemaining` 10 while `model:fable` reported 4, limited by the `model:fable` window itself. A non-Fable Claude model reads 10, not 4.
 
-`quotaSemantics.status` is `unknown` with no `effectiveAvailability` entries at all for providers whose vendor exposes no window (observed for `cursor` and `copilot`).
+`quotaSemantics.status` is `unknown` with no `effectiveAvailability` entries at all for providers whose vendor exposes no window (observed for `copilot`).
 `state.authStatus` is present only for some providers (observed for `grok` alone), so its absence is missing evidence, not a credential fault.
 
 ## Completion-runway and selection shape the judgment depends on

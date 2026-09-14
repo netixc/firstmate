@@ -14,11 +14,11 @@ set -u
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 # bin/fm-harness.sh checks verified ENV markers before ancestry. Muse is
-# markerless, so an inherited Cursor/Codex/Pi/Grok marker would outrank the
-# versioned muse-bin ancestor these detection cases launch. Drop the ambient
+# markerless, so an inherited Codex/Pi/Grok marker would outrank the versioned
+# muse-bin ancestor these detection cases launch. Drop the ambient
 # markers so the asserted verdict does not depend on which harness launched
 # the suite.
-unset PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT CURSOR_AGENT CURSOR_INVOKED_AS
+unset PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT
 
 SPAWN="$ROOT/bin/fm-spawn.sh"
 TEARDOWN="$ROOT/bin/fm-teardown.sh"
@@ -168,8 +168,8 @@ run_muse_spawn() {  # <home> <proj> <wt> <fakebin> <id> [extra args...]
 # string, so each case launches an actual renamed executable and asks
 # fm-harness.sh from a child of it.
 #
-# The foreign env markers, including Cursor's, are cleared because muse is
-# markerless and the marker layer deliberately outranks ancestry: with one
+# The foreign environment markers are cleared because muse is markerless and
+# the marker layer deliberately outranks ancestry: with one
 # retained, these cases would assert the marker's verdict instead of the
 # ancestry match they exist to pin.
 # The command substitution around the probe is load-bearing: a bare `-c <cmd>`
@@ -183,7 +183,7 @@ test_detects_versioned_process_ancestor() {
   for bin in muse-bin-0.1.0-R708.1 muse-bin-9.9.9-RZZZ.9 muse; do
     cp "$(command -v bash)" "$dir/$bin"
     out=$(env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
-      -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u GEMINI_CLI \
+      -u GEMINI_CLI \
       "$dir/$bin" -c "r=\$(\"$HARNESS\"); printf '%s' \"\$r\"")
     [ "$out" = muse ] || fail "fm-harness.sh under process '$bin' reported '$out', expected muse"
   done
@@ -199,7 +199,7 @@ test_detection_is_anchored() {
   for bin in musescore amuse notmuse-bin muse-binary muse-bind; do
     cp "$(command -v bash)" "$dir/$bin"
     out=$(env -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
-      -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u GEMINI_CLI \
+      -u GEMINI_CLI \
       "$dir/$bin" -c "r=\$(\"$HARNESS\"); printf '%s' \"\$r\"")
     [ "$out" != muse ] || fail "fm-harness.sh misdetected unrelated process '$bin' as muse"
   done
@@ -214,7 +214,6 @@ $rec
 EOF
   result="$case_dir/harness-result"
   out=$(PI_CODING_AGENT=true GROK_AGENT=1 FM_PI_HARNESS=pi-signed \
-    CURSOR_AGENT=1 CURSOR_INVOKED_AS=cursor-agent \
     FM_FAKE_EXECUTE_MUSE_LAUNCH=1 FM_FAKE_HARNESS_RESULT="$result" \
     run_muse_spawn "$home" "$proj" "$wt" "$fakebin" "$id" --mode no-mistakes --yolo off)
   status=$?

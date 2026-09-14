@@ -3,10 +3,9 @@
 #
 # The facts pinned here are the ones a Gemini release could silently change and
 # the ones a wrong guess would make dangerous:
-#   1. GEMINI_CLI=1 is Gemini's own child/tool-process marker, and it outranks an
-#      inherited removed foreign marker, because gemini does NOT clear one (verified live on
-#      gemini-cli 0.58.0 under a codex primary, where a gemini tool process
-#      carried GEMINI_CLI=1 and together).
+#   1. GEMINI_CLI=1 is Gemini's own child/tool-process marker and remains the
+#      load-bearing detection signal when process ancestry cannot identify the
+#      bundled Node process.
 #   2. AI_AGENT is NOT a Gemini identity. That same process carried the codex
 #      primary's AI_AGENT value, so it is an inherited launcher marker and must
 #      never be promoted to a detection source.
@@ -35,12 +34,12 @@ test_gemini_does_not_claim_inherited_ai_agent() {
   # AI_AGENT was observed carrying the CODEX primary's value inside a gemini
   # tool process, so it proves nothing about which harness is running. A session
   # with AI_AGENT but no GEMINI_CLI must not be read as gemini.
-  out=$(env -u GEMINI_CLI -u CURSOR_AGENT -u CURSOR_INVOKED_AS \
+  out=$(env -u GEMINI_CLI \
         -u PI_CODING_AGENT -u GROK_AGENT AI_AGENT=gemini-cli_0-58-0_agent "$HARNESS")
   [ "$out" != gemini ] \
     || fail "AI_AGENT must never claim the gemini identity, got '$out'"
   # A non-1 GEMINI_CLI is not the verified marker value either.
-  out=$(env -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u GEMINI_CLI \
+  out=$(env -u GEMINI_CLI \
         -u PI_CODING_AGENT -u GROK_AGENT GEMINI_CLI=0 "$HARNESS")
   [ "$out" != gemini ] \
     || fail "GEMINI_CLI=0 must not claim the gemini identity, got '$out'"
@@ -62,7 +61,7 @@ esac
 exit 1
 SH
   chmod +x "$fakebin/ps"
-  out=$(env -u GEMINI_CLI -u CURSOR_AGENT -u CURSOR_INVOKED_AS \
+  out=$(env -u GEMINI_CLI \
         -u PI_CODING_AGENT -u GROK_AGENT PATH="$fakebin:$PATH" "$HARNESS")
   [ "$out" = gemini ] \
     || fail "a natively-named gemini command must be detected by ancestry, got '$out'"
@@ -82,13 +81,13 @@ exit 1
 SH
   chmod +x "$fakebin/ps"
 
-  out=$(env -u GEMINI_CLI -u CURSOR_AGENT -u CURSOR_INVOKED_AS \
+  out=$(env -u GEMINI_CLI \
         -u PI_CODING_AGENT -u GROK_AGENT FAKE_PS_COMM=gemini-helper \
         FAKE_PS_ARGS='gemini-helper --serve' PATH="$fakebin:$PATH" "$HARNESS")
   [ "$out" != gemini ] \
     || fail "an unrelated gemini-helper command must not detect gemini, got '$out'"
 
-  out=$(env -u GEMINI_CLI -u CURSOR_AGENT -u CURSOR_INVOKED_AS \
+  out=$(env -u GEMINI_CLI \
         -u PI_CODING_AGENT -u GROK_AGENT FAKE_PS_COMM=node \
         FAKE_PS_ARGS='node server.js --model gemini' PATH="$fakebin:$PATH" "$HARNESS")
   [ "$out" != gemini ] \
@@ -113,8 +112,7 @@ test_gemini_node_bundle_is_not_ancestry_detectable() {
     cat > "$dir/gemini" <<'JS'
 const { spawnSync } = require('child_process');
 const env = { ...process.env };
-for (const k of ['GEMINI_CLI', 'CURSOR_AGENT', 'CURSOR_INVOKED_AS',
-                 'PI_CODING_AGENT', 'GROK_AGENT']) delete env[k];
+for (const k of ['GEMINI_CLI', 'PI_CODING_AGENT', 'GROK_AGENT']) delete env[k];
 const r = spawnSync(process.env.FM_HARNESS_BIN, { env, encoding: 'utf8' });
 process.stdout.write(r.stdout || '');
 JS
@@ -129,8 +127,7 @@ JS
   cat > "$dir/gemini" <<'JS'
 const { spawnSync } = require('child_process');
 const env = { ...process.env };
-for (const k of ['GEMINI_CLI', 'CURSOR_AGENT', 'CURSOR_INVOKED_AS',
-                 'PI_CODING_AGENT', 'GROK_AGENT']) delete env[k];
+for (const k of ['GEMINI_CLI', 'PI_CODING_AGENT', 'GROK_AGENT']) delete env[k];
 const r = spawnSync(process.env.FM_HARNESS_BIN, { env, encoding: 'utf8' });
 process.stdout.write(r.stdout || '');
 JS

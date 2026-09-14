@@ -133,7 +133,7 @@
 #   profile consultation. A --secondmate spawn is exempt and resolves the SECONDMATE
 #   harness (config/secondmate-harness -> config/crew-harness -> own), so the
 #   secondmate-vs-crewmate split is DURABLE across every respawn (recovery,
-#   /updatefirstmate, restart). A bare adapter name (codex|opencode|pi|pi-signed|grok|kimi|cursor|gemini|muse|rovo|omp|agy)
+#   /updatefirstmate, restart). A bare adapter name (codex|opencode|pi|pi-signed|grok|kimi|gemini|muse|rovo|omp|agy)
 #   overrides it for this spawn (either kind). A non-flag string containing
 #   whitespace is treated as a RAW launch command - the escape hatch for verifying
 #   new adapters. For pi and pi-signed, fm-spawn resolves the selected executable
@@ -266,7 +266,6 @@
 #     __OMPWORKERCFG__ absolute path to the tracked .omp/fm-worker-overlay.yml posture overlay
 #     __OPINPUT__   absolute path to the canonical operational-input encoder
 #     __WORKTREE__  absolute path to the task worktree
-#     __CURSORBIN__ resolved, cursor-verified executable for a cursor launch
 #     __GEMINISETTINGS__ firstmate-owned per-task gemini settings file (busy-state hooks)
 #     __ROVOBIN__   resolved, rovo-verified executable for a rovo launch
 #     __AGYBIN__    resolved, agy-verified executable for an agy launch
@@ -293,13 +292,6 @@
 # busy turn - answering the dialog first if it renders anyway - before
 # reporting success (the rovo/kimi launch-then-confirm shape). Its busy state
 # is a screen-scrape fallback like grok and rovo, and it is crewmate/scout only.
-# cursor installs no per-task hook either: it writes state/<id>.cursor-session to
-# bind the pane to cursor's own conversation transcript (projects root, the exact
-# workspace path cursor records in .workspace-trusted, and the conversations that
-# already existed for that workspace). It is launched through the verified binary
-# resolver because `cursor` is not the CLI name. A cursor SECONDMATE instead runs
-# the tracked project-scope .cursor/hooks.json in its own home, whose stop-hook
-# park owns that home's supervision (docs/supervision-protocols/cursor.md).
 # Publishing the record and moving this home's backlog item to In flight are one
 # step, not two: bin/fm-backlog-transition-lib.sh owns that invariant, and this
 # script performs the transition under the task's own meta lock before it reports
@@ -429,8 +421,6 @@ fm_backlog_directory_present "$STATE" "state directory" || {
 . "$SCRIPT_DIR/fm-gate-refuse-lib.sh"
 # shellcheck source=bin/fm-busy-lib.sh
 . "$SCRIPT_DIR/fm-busy-lib.sh"
-# shellcheck source=bin/fm-cursor-lib.sh
-. "$SCRIPT_DIR/fm-cursor-lib.sh"
 # shellcheck source=bin/fm-pr-lib.sh
 . "$SCRIPT_DIR/fm-pr-lib.sh"
 # shellcheck source=bin/fm-dod-lib.sh
@@ -620,7 +610,7 @@ spawn_remote_secondmate() {
     harness=$("$FM_ROOT/bin/fm-harness.sh" secondmate)
   fi
   case "$harness" in
-    codex|opencode|pi|pi-signed|grok|kimi|cursor) ;;
+    codex|opencode|pi|pi-signed|grok|kimi) ;;
     *)
       fm_lock_release "$registry_lock" || true
       fm_lock_release "$SPAWN_TASK_LOCK" || true
@@ -1349,7 +1339,7 @@ if [ "$RELAUNCH" -eq 1 ]; then
   }
 elif [ "$KIND" = secondmate ]; then
   case "${POS[1]:-}" in
-    ''|codex|opencode|pi|pi-signed|grok|kimi|cursor|gemini|muse|rovo|omp|agy)
+    ''|codex|opencode|pi|pi-signed|grok|kimi|gemini|muse|rovo|omp|agy)
       ARG3=${POS[1]:-}
       ;;
     *' '*)
@@ -1493,7 +1483,7 @@ launch_template() {
     # naming them with -e as well loads each twice (verified), doubling every
     # session_stop continuation.
     omp)
-      printf '%s' 'env -u PI_CODING_AGENT -u GROK_AGENT -u FM_PI_HARNESS -u GEMINI_CLI -u CURSOR_AGENT -u CURSOR_INVOKED_AS FM_OMP_HARNESS=omp OMP_SKIP_SETUP=1 __OMPBIN__ --config __OMPWORKERCFG__ --auto-approve --cwd __WORKTREE__'
+      printf '%s' 'env -u PI_CODING_AGENT -u GROK_AGENT -u FM_PI_HARNESS -u GEMINI_CLI FM_OMP_HARNESS=omp OMP_SKIP_SETUP=1 __OMPBIN__ --config __OMPWORKERCFG__ --auto-approve --cwd __WORKTREE__'
       if [ "$kind" = secondmate ]; then
         printf '%s' ' __MODELFLAG____EFFORTFLAG__"$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
       else
@@ -1517,7 +1507,8 @@ launch_template() {
     # (agy_wait_for_working) answers the preselected safe default ("Yes, I
     # trust this folder") with a single Enter if the dialog renders anyway,
     # then requires the busy signature before the spawn reports success.
-    # Foreign primary markers are cleared because agy publishes no marker of its
+    # Foreign primary markers are cleared because agy publishes no marker
+    # of its
     # own, so bin/fm-harness.sh must not read an agy worker as its launcher.
     # agy exposes no hook surface, so busy state is a rendered-tail fallback
     # (bin/fm-busy-lib.sh) and nothing is armed below.
@@ -1529,18 +1520,6 @@ launch_template() {
     # launch command - it is a Stop-event hook installed below (global hook +
     # per-task pointer), so the template is identical for ship/scout/secondmate.
     grok) printf '%s' 'grok --always-approve __MODELFLAG____EFFORTFLAG__"$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
-    # Cursor Agent CLI. --trust suppresses the workspace-trust prompt, which
-    # --yolo does NOT cover and which would otherwise block every spawn, since
-    # each task gets a fresh worktree path cursor has never seen. --yolo is the
-    # --force alias whose TUI label is "Run Everything". --workspace pins the
-    # exact worktree. -w/--worktree is deliberately never passed: it allocates a
-    # SECOND worktree under ~/.cursor/worktrees and would break firstmate's
-    # isolation contract. The binary is resolved rather than named because
-    # `cursor` is not the CLI (the installed names are cursor-agent and the
-    # legacy alias agent), and foreign primary markers are cleared at the launch
-    # boundary. Cursor exposes no effort flag, so the shared
-    # effort axis is deliberately omitted and stays in task metadata only.
-    cursor) printf '%s' 'env -u PI_CODING_AGENT -u GROK_AGENT -u FM_PI_HARNESS -u GEMINI_CLI -u CURSOR_INVOKED_AS __CURSORBIN__ --trust --yolo __MODELFLAG__--workspace __WORKTREE__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
     # gemini (Google Gemini CLI): a positional query starts the supervised
     # interactive session and auto-submits it, so the brief rides the launch
     # command directly (verified: a multi-line
@@ -1603,8 +1582,8 @@ launch_template() {
     # codex, opencode, and kimi are markerless too and inherit foreign markers the
     # same way, but detection no longer depends on this launch-side clearing:
     # bin/fm-harness.sh lets a markerless harness's structural ancestor outrank an
-    # inherited marker. The clearing stays on the cursor and muse templates as the
-    # verified launch behavior their evidence records, not as the only thing
+    # inherited marker. The clearing stays on the muse template as verified
+    # launch behavior, not as the only thing
     # standing between a retained marker and a misidentified worker.
     muse) printf '%s' 'env -u PI_CODING_AGENT -u GROK_AGENT -u FM_PI_HARNESS XDG_CONFIG_HOME=__MUSECONFIG__ XDG_DATA_HOME=__MUSEDATA__ MUSE_EXPERIMENTAL_FOREIGN_PERSONAL_CONTEXT_KILL=on __MUSEBIN__ --yolo __MODELFLAG____EFFORTFLAG__"$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
     # rovo (Atlassian Rovo CLI): a positional brief is dead-on-arrival - rovo
@@ -1618,8 +1597,7 @@ launch_template() {
     # scout tasks never touch. --startup-receipt is not used either: it requires
     # "prompt-free interactive mode", so it cannot gate a launch that will have a
     # message typed into it. Foreign primary markers are cleared here as
-    # defense in depth; CURSOR_AGENT/CURSOR_INVOKED_AS are cleared by the shared
-    # outer wrap below, like every other non-cursor harness. rovo has no
+    # defense in depth. rovo has no
     # turn-end hook (its eventHooks fire at tool granularity only, never
     # turn-end), so no launch placeholder for one exists.
     # __ROVOCONFIGOVERRIDE__ (not __EFFORTFLAG__) carries rovo's single
@@ -1710,22 +1688,6 @@ case "$HARNESS" in
     fi
     LAUNCH=${LAUNCH//__PITUIMODE__/$PI_TUI_MODE}
     LAUNCH="FM_PI_HARNESS=$HARNESS $LAUNCH"
-    ;;
-  cursor)
-    # `cursor` is not the CLI name, and the legacy alias `agent` is far too
-    # generic to launch on its name alone, so resolution runs through the
-    # verified owner rather than a bare command lookup. Refusing here keeps a
-    # missing install a loud spawn refusal instead of a pane that dies with a
-    # command-not-found the supervisor would read as a wedged worker.
-    CURSOR_BIN=$(fm_cursor_resolve_binary) || exit 1
-    if [ -n "$MODEL" ] && [ "$MODEL" != default ]; then
-      if CURSOR_MODELS=$(fm_cursor_list_models "$CURSOR_BIN"); then
-        if ! printf '%s\n' "$CURSOR_MODELS" | fm_cursor_catalog_has_model "$MODEL"; then
-          echo "error: Cursor model '$MODEL' is not available from '$CURSOR_BIN --list-models'; choose an id listed by that command or omit --model" >&2
-          exit 1
-        fi
-      fi
-    fi
     ;;
   omp)
     OMP_BIN=$(resolve_pi_executable omp) || {
@@ -1894,7 +1856,7 @@ model_flag_for_harness() {
   local harness=$1 model=$2
   [ -n "$model" ] && [ "$model" != default ] || return 0
   case "$harness" in
-    codex|opencode|pi|pi-signed|grok|kimi|cursor|gemini|muse|rovo|omp|agy)
+    codex|opencode|pi|pi-signed|grok|kimi|gemini|muse|rovo|omp|agy)
       printf -- '--model %s ' "$(shell_quote "$model")"
       ;;
   esac
@@ -1968,9 +1930,7 @@ effort_flag_for_harness() {
     # flag but no verified effort flag. Its `opencode run --variant` flag belongs
     # to a different, non-interactive launch mode, so fm-spawn does not pass it.
     # kimi likewise has no reasoning-effort flag; the requested axis stays in
-    # task metadata but never reaches the launch command. Cursor encodes effort
-    # in model ids such as cursor-grok-4.5-high, so it also receives no separate
-    # effort flag.
+    # task metadata but never reaches the launch command.
   esac
 }
 
@@ -3632,29 +3592,6 @@ $(fm_busy_muse_matching_logs "$MUSE_SESSIONS_ROOT" "$WT" || true)
 EOF
       } > "$STATE/$ID.muse-session"
       ;;
-    cursor*)
-      # Cursor's turn lifecycle is neither a hook nor a launch flag: it writes
-      # its own durable per-conversation transcript and brackets every turn
-      # there (bin/fm-busy-lib.sh owns the fold). Like muse that is a PULL
-      # source with no writer, so nothing is armed and no record is seeded.
-      # This sidecar is the whole binding. It pins the projects root and the
-      # exact workspace path cursor records in each project's
-      # .workspace-trusted, plus every conversation that already exists for
-      # that workspace, so a relaunch into a reused worktree folds its OWN
-      # conversation instead of its predecessor's. The classifier then accepts
-      # only one remaining conversation and never guesses between incarnations.
-      CURSOR_PROJECTS_ROOT="${CURSOR_PROJECTS_ROOT_OVERRIDE:-$HOME/.cursor/projects}"
-      {
-        printf 'projects_root=%s\n' "$CURSOR_PROJECTS_ROOT"
-        printf 'workspace_root=%s\n' "$WT"
-        if CURSOR_PRIOR_PROJECT=$(fm_busy_cursor_project_dir "$CURSOR_PROJECTS_ROOT" "$WT" 2>/dev/null); then
-          for CURSOR_PRIOR_DIR in "$CURSOR_PRIOR_PROJECT"/agent-transcripts/*/; do
-            [ -d "$CURSOR_PRIOR_DIR" ] || continue
-            printf 'prior_conversation=%s\n' "$(basename -- "${CURSOR_PRIOR_DIR%/}")"
-          done
-        fi
-      } > "$STATE/$ID.cursor-session"
-      ;;
     kimi*)
       # Kimi's Stop hook is global, but it is inert unless cwd contains this
       # task's token pointer and the token resolves through Firstmate's private
@@ -3910,7 +3847,6 @@ LAUNCH=${LAUNCH//__OMPWORKERCFG__/$sq_ompcfg}
 LAUNCH=${LAUNCH//__OPINPUT__/$sq_opinput}
 case "$HARNESS" in
   pi|pi-signed) LAUNCH=${LAUNCH//__PIBIN__/"$(shell_quote "$PI_BIN")"} ;;
-  cursor) LAUNCH=${LAUNCH//__CURSORBIN__/"$(shell_quote "$CURSOR_BIN")"} ;;
   gemini) LAUNCH=${LAUNCH//__GEMINISETTINGS__/"$(shell_quote "$STATE_REAL/$ID.gemini-settings.json")"} ;;
   omp) LAUNCH=${LAUNCH//__OMPBIN__/"$(shell_quote "$OMP_BIN")"} ;;
   agy) LAUNCH=${LAUNCH//__AGYBIN__/"$(shell_quote "$AGY_BIN")"} ;;
@@ -3918,20 +3854,17 @@ esac
 LAUNCH=${LAUNCH//__WORKTREE__/$sq_worktree}
 case "$HARNESS" in
   codex|opencode|pi|pi-signed|grok|kimi|gemini|muse|rovo|agy)
-    LAUNCH="env -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u GEMINI_CLI $LAUNCH"
+    LAUNCH="env -u GEMINI_CLI $LAUNCH"
     ;;
 esac
 if [ "$KIND" = secondmate ]; then
   sq_home=$(shell_quote "$PROJ_ABS")
   sq_primary_home=$(shell_quote "$FM_HOME")
-  # Keep this in step with fm_supervision_model (bin/fm-wake-lib.sh): Cursor's
-  # stop-hook park runs the watcher only between turns, so a fresh beacon with
-  # no live watcher is its healthy mid-turn state.
+  # Keep this in step with fm_supervision_model (bin/fm-wake-lib.sh).
   # Pi and pi-signed secondmates previously received persistent here and now
   # receive extension to match fm_supervision_model's own table, so their pull
   # guard tolerates the extension hand-off exactly as a Pi primary does.
   case "$HARNESS" in
-    cursor) supervision_model=autoarm ;;
     pi|pi-signed|omp) supervision_model=extension ;;
     *) supervision_model=persistent ;;
   esac

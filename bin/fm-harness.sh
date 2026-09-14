@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Detect the agent harness this process tree runs on.
-# Usage: fm-harness.sh                  print own harness: codex|opencode|pi|pi-signed|grok|kimi|cursor|gemini|muse|rovo|omp|agy|unknown
+# Usage: fm-harness.sh                  print own harness: codex|opencode|pi|pi-signed|grok|kimi|gemini|muse|rovo|omp|agy|unknown
 #        fm-harness.sh crew             print the effective CREWMATE harness
 #                                        (config/crew-harness; "default" resolves to own)
 #        fm-harness.sh secondmate       print the harness the PRIMARY uses to launch
@@ -62,8 +62,6 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 
-# shellcheck source=bin/fm-cursor-lib.sh
-. "$SCRIPT_DIR/fm-cursor-lib.sh"
 # shellcheck source=bin/fm-gemini-lib.sh
 . "$SCRIPT_DIR/fm-gemini-lib.sh"
 
@@ -71,11 +69,6 @@ CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 # marker is present. Markers only report what the environment CLAIMS; detect_own
 # decides whether that claim survives contradicting ancestry.
 harness_marker() {
-  # Verified live on cursor-agent 2026.08.11-e8db854: CURSOR_INVOKED_AS=cursor-agent
-  # is set on the agent process itself, and CURSOR_AGENT=1 is set for the
-  # child/tool processes this script runs as.
-  [ "${CURSOR_AGENT:-}" = "1" ] && { echo cursor; return; }
-  [ "${CURSOR_INVOKED_AS:-}" = "cursor-agent" ] && { echo cursor; return; }
   # Gemini's GEMINI_CLI marker is load-bearing because its bundled Node process
   # does not expose a stable harness name through process ancestry.
   # AI_AGENT is deliberately not used because it identifies the launcher rather
@@ -145,13 +138,8 @@ ancestry_names_omp() {
 #          (any node process holding a harness-shaped path matches it), so it is
 #          used only when no marker is present.
 harness_process_verdict() {  # <pid>
-  local pid=$1 comm args argv0
+  local pid=$1 comm args
   comm=$(ps -o comm= -p "$pid" 2>/dev/null) || return 0
-  argv0=$(fm_cursor_argv0_for_pid "$pid" "$comm" 2>/dev/null || true)
-  if fm_cursor_process_matches "$comm" '' "$argv0"; then
-    echo "comm cursor"
-    return
-  fi
   if fm_gemini_path_is_gemini "$comm"; then
     echo "comm gemini"
     return
