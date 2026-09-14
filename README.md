@@ -83,7 +83,7 @@ git clone https://github.com/kunchenguid/firstmate
 cd firstmate
 ```
 
-Then launch one of the co-primary harnesses; AGENTS.md takes over from there:
+Then launch one of these recommended primary harnesses; AGENTS.md takes over from there:
 
 **Claude Code**
 
