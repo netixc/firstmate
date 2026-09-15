@@ -9,8 +9,9 @@
 #
 # The readiness-owning fm-remote-doctor.sh runs in this plain SSH bootstrap so
 # check mode can inspect worker gaps without changing them and --fix can repair
-# them. Every invocation rejects an unsupported remote host before protocol
-# staging. Every other command is staged after the worker is ready. On Darwin,
+# them. Every invocation rejects an unsupported remote host or mismatched
+# transport protocol before protocol staging. Every other command is staged
+# after the worker is ready. On Darwin,
 # a missing Aqua session fails before staging with the doctor-actionable
 # console-login diagnostic. Linux uses the same queue and worker shape without
 # an Aqua requirement.

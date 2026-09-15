@@ -2,11 +2,14 @@
 # Self-update a running firstmate and its secondmates to the latest origin.
 #
 # Mechanical half of the /updatefirstmate skill. Fast-forwards the running
-# firstmate repo's default branch from origin, then fast-forwards every
+# firstmate repo's default branch from origin, then fast-forwards every eligible
 # registered secondmate home. Local homes are treehouse worktrees or standalone
-# clones; remote routes update their configured code root on that host and then
-# fast-forward the persistent home to that root. FAST-FORWARD ONLY, exactly like
-# fm-fleet-sync.sh: never force, never create a merge commit, never stash;
+# clones; current-protocol remote routes update their configured code root on
+# that host and then fast-forward the persistent home to that root. Legacy
+# remote entrypoints refuse before staging until the operator completes the
+# attended-upgrade prerequisite in docs/remote-secondmates.md.
+# FAST-FORWARD ONLY, exactly like fm-fleet-sync.sh: never force, never create a
+# merge commit, never stash;
 # advance a target only when it is a clean fast-forward, otherwise skip and
 # report. A tracked-files fast-forward never touches the gitignored operational
 # dirs (data/, state/, config/, projects/, .no-mistakes/), so a secondmate's
@@ -199,11 +202,10 @@ if [ -f "$SECONDMATES_MD" ]; then
         case "$remote_result" in
           synced:*)
             remote_detail=${remote_result#synced: }
-            # The host reports its advance as "<commit> instr=<paths>"; a host
-            # whose Firstmate copy predates that suffix reports the commit alone.
-            # The suffix is now reporting detail only: the routing below no longer
-            # reads it, so an older host's silence can no longer downgrade a
-            # restartable mate to a steer.
+            # The host normally reports its advance as "<commit> instr=<paths>".
+            # The suffix is reporting detail only: the routing below does not
+            # read it, so an omitted suffix cannot downgrade a restartable mate
+            # to a steer.
             case "$remote_detail" in
               *' instr='*)
                 remote_instr=${remote_detail##* instr=}

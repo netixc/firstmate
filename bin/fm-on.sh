@@ -11,7 +11,10 @@
 # bin/fm-*.sh namespace. No per-command table exists.
 #
 # argv is encoded as one NUL-delimited stream and passed through the fixed
-# fm-remote-entrypoint.sh. The remote command's stdin is /dev/null by default,
+# fm-remote-entrypoint.sh using the current transport protocol. A legacy
+# entrypoint rejects that protocol before staging; docs/remote-secondmates.md
+# owns the attended-upgrade prerequisite.
+# The remote command's stdin is /dev/null by default,
 # because remote staging captures stdin to EOF and an open caller stream would
 # block staging indefinitely; a payload caller passes --stdin to forward its
 # own stream as the job's bounded input. stdout and stderr remain separate, and
