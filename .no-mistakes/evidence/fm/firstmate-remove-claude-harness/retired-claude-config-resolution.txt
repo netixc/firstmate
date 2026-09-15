@@ -1,0 +1,4 @@
+retired-config-live-check
+crew=codex
+secondmate=codex
+secondmate-model=
