@@ -8,7 +8,7 @@
 // structurally enforced here rather than requested. Verified on omp 18.1.11:
 // a { continue: true, additionalContext } return started a fresh agent loop,
 // and the continuation's own session_stop carried stop_hook_active=true, which
-// bin/fm-turnend-guard.sh reads exactly as it reads Claude's payload, bounding
+// bin/fm-turnend-guard.sh reads this shared payload format, bounding
 // the guard to one forced continuation per turn (omp's own cap of 8
 // consecutive continuations is the second backstop). session_stop does not
 // fire for an interrupted turn or for task/subagent sessions, so a
@@ -456,7 +456,7 @@ async function claimSessionstartMessage(
   return sessionstartMessage(generation, result);
 }
 
-// The shared guard reads stop_hook_active exactly as it does from Claude's
+// The shared guard reads stop_hook_active directly from this
 // payload: a true value allows the stop, which is what bounds omp to one
 // forced continuation per turn.
 function runGuard(stopHookActive: boolean): Promise<{ code: number; stderr: string }> {

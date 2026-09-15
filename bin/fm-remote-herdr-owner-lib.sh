@@ -13,9 +13,8 @@
 # UI prompt. A server started over SSH - herdr's own remote attach does this
 # when it finds no server, and it wins the socket at boot because sshd accepts
 # connections before the login session exists - runs in sshd's audit session,
-# where `security find-generic-password -w` exits 36 (interaction not allowed)
-# and every claude pane silently falls back to a stale plaintext credentials
-# file and reports "Login expired". docs/verification/runtime-backends.md
+# where `security find-generic-password -w` exits 36 (interaction not allowed),
+# preventing worker credentials from being read. docs/verification/runtime-backends.md
 # ("fm-remote server birth and login-keychain access") holds the dated
 # evidence for every marker read here.
 #

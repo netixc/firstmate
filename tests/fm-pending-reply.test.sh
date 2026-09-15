@@ -18,7 +18,7 @@
 #   9. Direct unmarked captain input creates no expectation
 #  10. fm-send secondmate path embeds corr and creates durable pending records
 #  11. Backend busy/idle observation works through the shared busy abstraction
-#      used by Pi/Claude secondmate backends (no conversation scrape)
+#      used by Pi/Codex secondmate backends (no conversation scrape)
 #  12. A remote mate's repost waits for its asynchronous reply mirror to be read
 #      past the turn, so a mirrored reply is never nagged and a real miss still
 #      gets its one repost
@@ -923,7 +923,7 @@ test_busy_idle_observation_via_backend_abstraction() {
   export FM_PENDING_REPLY_NOW=9200
   corr=$(fm_pending_reply_create "$home" "$state" "hibit" "backend turn")
   fm_pending_reply_mark_delivered "$state" "$corr"
-  # Simulates Pi/Claude secondmate busy_state from fm_backend_busy_state without
+  # Simulates Pi/Codex secondmate busy_state from fm_backend_busy_state without
   # reading conversation text (herdr native idle/busy or tmux unknown fallback).
   fm_pending_reply_observe_busy "$state" "$corr" unknown
   [ -z "$(fm_pending_reply_get "$(fm_pending_reply_path "$state" "$corr")" request_turn_completed_epoch)" ] \
@@ -932,7 +932,7 @@ test_busy_idle_observation_via_backend_abstraction() {
   fm_pending_reply_observe_busy "$state" "$corr" idle
   [ -n "$(fm_pending_reply_get "$(fm_pending_reply_path "$state" "$corr")" request_turn_completed_epoch)" ] \
     || fail "busy->idle must prove turn completion"
-  pass "backend busy/idle observation covers Pi/Claude paths without conversation scrape"
+  pass "backend busy/idle observation covers Pi/Codex paths without conversation scrape"
 }
 
 test_unknown_backend_state_uses_capture_fallback() {
@@ -1183,7 +1183,7 @@ test_remote_repost_waits_for_the_reply_channel() {
   export FM_PENDING_REPLY_SEND_HOOK=remote_repost_hook
 
   fm_write_meta "$state/ios.meta" \
-    "window=fm-remote:w1:p1" "harness=claude" "kind=secondmate" "mode=secondmate" \
+    "window=fm-remote:w1:p1" "harness=codex" "kind=secondmate" "mode=secondmate" \
     "remote_host=remote-mac" "remote_root=/remote/root" "remote_backend=herdr"
   corr=$(fm_pending_reply_create "$home" "$state" "ios" "status of the iOS build")
   fm_pending_reply_mark_delivered "$state" "$corr"
@@ -1241,7 +1241,7 @@ test_mirrored_remote_reply_never_triggers_a_repost() {
   export FM_PENDING_REPLY_SEND_HOOK=mirrored_reply_hook
 
   fm_write_meta "$state/ios.meta" \
-    "window=fm-remote:w1:p1" "harness=claude" "kind=secondmate" "mode=secondmate" \
+    "window=fm-remote:w1:p1" "harness=codex" "kind=secondmate" "mode=secondmate" \
     "remote_host=remote-mac" "remote_root=/remote/root" "remote_backend=herdr"
   corr=$(fm_pending_reply_create "$home" "$state" "ios" "did the build go green")
   fm_pending_reply_mark_delivered "$state" "$corr"

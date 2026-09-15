@@ -222,6 +222,27 @@ printf 'n%s\n' "$FM_FAKE_HERDR_SOCKET"
 SH
   chmod +x "$CASE_BIN/lsof"
 
+  cat > "$CASE_BIN/ps" <<'SH'
+#!/usr/bin/env bash
+set -u
+pid=${*: -1}
+case "$*" in
+  *'-Eww -o command='*)
+    case "$pid" in
+      "$FM_FAKE_AQUA_PID"|"$FM_FAKE_BACKGROUND_PID") printf '/usr/bin/jq XPC_SERVICE_NAME=dev.firstmate.herdr.fm-remote\n' ;;
+      "$FM_FAKE_XPC_ZERO_PID") printf '/usr/bin/jq XPC_SERVICE_NAME=0\n' ;;
+      "$FM_FAKE_WORKER_PID") printf '/usr/bin/jq FM_REMOTE_JOB_ACTIVE=1\n' ;;
+      "$FM_FAKE_SSH_PID") printf '/usr/bin/jq SSH_CONNECTION=100.102.217.78\n' ;;
+      *) printf '/usr/bin/jq\n' ;;
+    esac
+    ;;
+  *'-o ppid=,command='*) printf '1 /usr/bin/jq\n' ;;
+  *'-o command='*) printf 'herdr server fm-remote\n' ;;
+  *) /bin/ps "$@" ;;
+esac
+SH
+  chmod +x "$CASE_BIN/ps"
+
   cat > "$CASE_BIN/dscl" <<'SH'
 #!/usr/bin/env bash
 set -u
@@ -282,11 +303,11 @@ SH
 #!/usr/bin/env bash
 exit 0
 SH
-  cat > "$CASE_BIN/claude" <<'SH'
+  cat > "$CASE_BIN/codex" <<'SH'
 #!/usr/bin/env bash
 exit 0
 SH
-  chmod +x "$CASE_BIN/uname" "$CASE_BIN/launchctl" "$CASE_BIN/dscl" "$CASE_BIN/tasks-axi" "$CASE_BIN/treehouse" "$CASE_BIN/claude"
+  chmod +x "$CASE_BIN/uname" "$CASE_BIN/launchctl" "$CASE_BIN/dscl" "$CASE_BIN/tasks-axi" "$CASE_BIN/treehouse" "$CASE_BIN/codex"
   cat > "$CASE_BIN/sleep" <<'SH'
 #!/usr/bin/env bash
 exit 0
@@ -310,6 +331,10 @@ doctor() {
     FM_FAKE_HERDR_SOCKET="$CASE_STATE/herdr.sock" \
     FM_FAKE_GUARD="$GUARD" \
     FM_FAKE_AQUA_PID="$AQUA_HOLDER_PID" \
+    FM_FAKE_BACKGROUND_PID="$BACKGROUND_HOLDER_PID" \
+    FM_FAKE_XPC_ZERO_PID="$XPC_ZERO_HOLDER_PID" \
+    FM_FAKE_WORKER_PID="$WORKER_HOLDER_PID" \
+    FM_FAKE_SSH_PID="$SSH_HOLDER_PID" \
     FM_FAKE_PLIST="$CASE_PLIST" \
     FM_FAKE_JOB_PLIST="$CASE_JOB_PLIST" \
     FM_FAKE_JOB_WORKER="$ROOT/bin/fm-remote-job-worker.sh" \
@@ -802,10 +827,10 @@ assert_grep '# Firstmate remote tool wrapper v1' "$CASE_HOME/.local/bin/tasks-ax
   "the generated wrapper is not marked Firstmate-owned"
 assert_grep "$MANAGER_BIN/tasks-axi" "$CASE_HOME/.local/bin/tasks-axi" \
   "the generated wrapper does not execute the discovered absolute target"
-assert_absent "$CASE_HOME/.local/bin/codex" "--fix wrapped an alternate harness when claude already satisfied readiness"
-assert_absent "$CASE_HOME/.local/bin/grok" "--fix wrapped an alternate harness when claude already satisfied readiness"
+assert_absent "$CASE_HOME/.local/bin/codex" "--fix wrapped an alternate harness when codex already satisfied readiness"
+assert_absent "$CASE_HOME/.local/bin/grok" "--fix wrapped an alternate harness when codex already satisfied readiness"
 
-rm -f "$CASE_BIN/claude"
+rm -f "$CASE_BIN/codex"
 doctor --fix
 expect_code 0 "$DOCTOR_RC" "--fix did not wrap one discoverable harness when none resolved"
 assert_present "$CASE_HOME/.local/bin/codex" "--fix did not create the first needed harness wrapper"
@@ -827,7 +852,7 @@ CASE_REMOTE_JOB_ACTIVE=
 CASE_PLATFORM_OVERRIDE=Linux
 rm -f "$CASE_BIN/sleep" "$CASE_BIN/uname"
 mkdir -p "$CASE_HOME/.local/bin"
-for tool in herdr tasks-axi treehouse claude; do
+for tool in herdr tasks-axi treehouse codex; do
   ln -s "$CASE_BIN/$tool" "$CASE_HOME/.local/bin/$tool"
 done
 HOME="$CASE_HOME" FM_ROOT_OVERRIDE="$ROOT" FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux \

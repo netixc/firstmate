@@ -38,7 +38,7 @@ trap cleanup_all EXIT
 
 # A `tmux` shim on PATH so bin/backends/tmux.sh's bare `tmux` calls reach the
 # private socket and never touch the host's real sessions.
-mkdir -p "$LAB/shim" "$LAB/bin" "$LAB/bin/claude" "$LAB/bin/decoy" "$LAB/wt"
+mkdir -p "$LAB/shim" "$LAB/bin" "$LAB/bin/codex" "$LAB/bin/decoy" "$LAB/wt"
 cat > "$LAB/shim/tmux" <<SH
 #!/usr/bin/env bash
 exec "$REAL_TMUX" -L "$SOCKET" "\$@"
@@ -51,7 +51,7 @@ export PATH
 # binary, never copies: a copied platform binary fails code-signing validation
 # and is killed on macOS arm64. The symlink name is what the kernel records as
 # the executable identity, which is exactly the signal under test.
-ln -s "$SLEEP_BIN" "$LAB/bin/claude-link"
+ln -s "$SLEEP_BIN" "$LAB/bin/codex-link"
 ln -s "$SLEEP_BIN" "$LAB/bin/pi"
 ln -s "$SLEEP_BIN" "$LAB/bin/notaharness"
 # omp (Oh My Pi) is a single binary whose live process name is the bare word
@@ -60,9 +60,9 @@ ln -s "$SLEEP_BIN" "$LAB/bin/omp"
 ln -s "$SLEEP_BIN" "$LAB/bin/ompd"
 ln -s "$SLEEP_BIN" "$LAB/bin/comp"
 # muse's installed binary is muse-bin-<version>: the launcher execs it, so the
-# version is the LIVE process name and it changes on every auto-update. Unlike
-# Claude Code's version-named binary there is no `muse` path component to fall
-# back on (~/.local/bin/muse-bin-<version>), so the executable name is the ONLY
+# version is the LIVE process name and it changes on every auto-update. There
+# is no separate `muse` path component to fall back on
+# (~/.local/bin/muse-bin-<version>), so the executable name is the ONLY
 # signal, and `muse` alone is a common English fragment that must not widen into
 # a substring match. The last two names are the decoys that would be misread.
 ln -s "$SLEEP_BIN" "$LAB/bin/muse-bin-0.1.0-R708.1"
@@ -155,7 +155,7 @@ assert_sources_disagree() {  # <target> <label>
 # tmux and ps, while Linux can expose the symlink name through both, so the
 # version-string case below owns the cross-platform divergence assertion.
 
-new_window agent "$LAB/bin/claude-link" 900
+new_window agent "$LAB/bin/codex-link" 900
 wait_for_state "$SESSION:agent" alive \
   || fail "a running harness-named foreground process must classify alive"
 pass "tmux liveness: a harness-named foreground process classifies alive"
@@ -194,35 +194,9 @@ for decoy in ompd comp; do
 done
 pass "tmux liveness: unrelated omp-containing command names stay ambiguous"
 
-# --- a version name blinds one source ---------------------------------------
-# Giving a genuine harness-named executable the version-string argv[0] that
-# Claude Code 2.1.220 reports drives the two sources apart on both supported
-# platforms and proves the surviving source carries the verdict. This needs a
-# real executable file rather than a symlink, because macOS takes the title
-# from the resolved target's name, so it is skipped where no C compiler exists.
-
-CC_BIN=$(command -v cc 2>/dev/null || command -v gcc 2>/dev/null || true)
-if [ -n "$CC_BIN" ] &&
-  printf '%s\n' '#include <unistd.h>' 'int main(void){for(;;)sleep(60);return 0;}' > "$LAB/spin.c" &&
-  "$CC_BIN" -o "$LAB/bin/claude/2.1.220" "$LAB/spin.c" 2>/dev/null &&
-  "$CC_BIN" -o "$LAB/bin/decoy/2.1.220" "$LAB/spin.c" 2>/dev/null; then
-  new_window titled "$LAB/bin/claude/2.1.220"
-  wait_for_state "$SESSION:titled" alive \
-    || fail "a version-named executable under a harness install path must classify alive"
-  assert_sources_disagree "$SESSION:titled" "version-string process name"
-  pass "tmux liveness: a version-named executable under a harness install path classifies alive"
-
-  new_window path-decoy "$LAB/bin/decoy/2.1.220"
-  wait_for_state "$SESSION:path-decoy" ambiguous \
-    || fail "a version-named executable without a whole harness path component must stay ambiguous"
-  pass "tmux liveness: a version-named executable under a decoy path stays ambiguous"
-else
-  echo "skip: no C compiler, so the version-string process-name case cannot build its executable"
-fi
-
 # --- neither source names a harness: no invented agent ----------------------
 
-new_window unknown bash -c "exec -a 2.1.220 '$LAB/bin/notaharness' 900"
+new_window unknown bash -c "exec -a 9.9.9 '$LAB/bin/notaharness' 900"
 wait_for_state "$SESSION:unknown" ambiguous \
   || fail "a foreground process no name source attributes must stay ambiguous"
 pass "tmux liveness: a process neither name source attributes stays ambiguous rather than inventing an agent"
@@ -250,7 +224,7 @@ pass "tmux liveness: an idle shell pane classifies dead"
 # `set -m` gives the background job its own process group, which is what an
 # interactive shell does for a job an exited agent left behind.
 
-new_window background bash -c "set -m; '$LAB/bin/claude-link' 900 & printf '%s\n' \"\$!\" > '$LAB/bg.pid'; exec /bin/sh"
+new_window background bash -c "set -m; '$LAB/bin/codex-link' 900 & printf '%s\n' \"\$!\" > '$LAB/bg.pid'; exec /bin/sh"
 bg_pid=
 for _ in $(seq 1 100); do
   [ -s "$LAB/bg.pid" ] && bg_pid=$(cat "$LAB/bg.pid") && break

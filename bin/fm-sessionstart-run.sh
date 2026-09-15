@@ -13,7 +13,7 @@
 #
 # Usage: fm-sessionstart-run.sh [--source <source>] [--pi-prerequisite]
 #   --source  The harness's own session-open source. When omitted, the source is
-#             read from a Claude/Codex-shaped JSON hook payload on stdin
+#             read from a Codex-shaped JSON hook payload on stdin
 #             (the `source` field). An unreadable or unrecognized source is
 #             treated as `startup`, because taking the helm redundantly is
 #             cheap and idempotent while not taking it is the whole bug.
@@ -35,8 +35,8 @@
 #                           process resumed an old session (the nudge fires).
 #
 # Every ordinary transport path exits 0, exactly like the nudge wrapper: a
-# Claude SessionStart exit 2 blocks session initialization, so a failed session
-# start must reach the agent as digest text it can act on, never as a refusal to
+# A SessionStart refusal can block initialization, so a failed session start
+# must reach the agent as digest text it can act on, never as a refusal to
 # open the session. The internal Pi prerequisite's silent exit 3 never reaches a
 # harness hook; it only distinguishes intentional ineligibility before provider
 # preflight. A lock another live session holds and a truncated digest are
@@ -99,8 +99,8 @@ session_start_completed() {
 }
 
 if [ -z "$SOURCE" ] && [ ! -t 0 ]; then
-  # Claude and Codex both deliver a JSON SessionStart payload on stdin whose
-  # `source` field carries startup|resume|clear|compact. Parsed without jq so a
+  # Codex delivers a JSON SessionStart payload on stdin whose `source` field
+  # carries startup|resume|clear|compact. Parsed without jq so a
   # host missing it still gets correct routing rather than silent full runs.
   # A terminal stdin is skipped outright: a hook always pipes its payload, and
   # an operator running this by hand must not be left waiting on a read.

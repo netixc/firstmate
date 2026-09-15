@@ -16,8 +16,8 @@
 #   1. omp publishes no marker; the anchored process name `omp` is the ancestry
 #      evidence, and ompd/comp never identify.
 #   2. FM_OMP_HARNESS=omp is a precedence override that needs a real omp
-#      ancestor: it beats an inherited CLAUDECODE under omp and is inert when it
-#      leaks into a worker whose ancestry holds no omp.
+#      ancestor: it beats an inherited foreign marker under omp and is inert
+#      when it leaks into another worker.
 #   3. Every omp launch clears foreign markers, carries the tracked posture
 #      overlay, --auto-approve, --cwd, and (for a crewmate) one -e pointing at
 #      state/<id>.omp-ext.ts; a secondmate launch names no -e at all.
@@ -55,7 +55,7 @@ export NODE_NO_WARNINGS=1
 make_named_shells() {  # <dir> -> echoes <bindir>
   local dir=$1 name
   mkdir -p "$dir"
-  for name in omp ompd comp; do
+  for name in omp ompd comp codex; do
     ln -sf /bin/bash "$dir/$name"
   done
   printf '%s' "$dir"
@@ -67,25 +67,25 @@ test_detection_anchored_name_and_marker_precedence() {
   local bin out
   bin=$(make_named_shells "$TMP_ROOT/named")
   # shellcheck disable=SC2016 # the quoted body expands inside the named shell
-  out=$(env -u CLAUDECODE -u FM_OMP_HARNESS -u PI_CODING_AGENT \
+  out=$(env -u FM_OMP_HARNESS -u PI_CODING_AGENT \
     "$bin/omp" -c '"$1"; :' _ "$HARNESS")
   [ "$out" = omp ] || fail "a process named omp must detect as omp, got '$out'"
   for decoy in ompd comp; do
     # shellcheck disable=SC2016 # the quoted body expands inside the named shell
-    out=$(env -u CLAUDECODE -u FM_OMP_HARNESS -u PI_CODING_AGENT \
+    out=$(env -u FM_OMP_HARNESS -u PI_CODING_AGENT \
       "$bin/$decoy" -c '"$1"; :' _ "$HARNESS")
     [ "$out" != omp ] || fail "'$decoy' merely contains omp and must not detect as omp"
   done
-  # The marker beats an inherited CLAUDECODE only under a real omp ancestor.
+  # The marker beats an inherited foreign marker only under a real omp ancestor.
   # shellcheck disable=SC2016 # the quoted body expands inside the named shell
-  out=$(env -u PI_CODING_AGENT CLAUDECODE=1 FM_OMP_HARNESS=omp \
+  out=$(env -u PI_CODING_AGENT GROK_AGENT=1 FM_OMP_HARNESS=omp \
     "$bin/omp" -c '"$1"; :' _ "$HARNESS")
-  [ "$out" = omp ] || fail "FM_OMP_HARNESS under an omp ancestor must outrank an inherited CLAUDECODE, got '$out'"
+  [ "$out" = omp ] || fail "FM_OMP_HARNESS under an omp ancestor must outrank an inherited foreign marker, got '$out'"
   # ...and is inert when it leaks into a worker with no omp ancestor.
   # shellcheck disable=SC2016 # the quoted body expands inside the named shell
-  out=$(env -u PI_CODING_AGENT CLAUDECODE=1 FM_OMP_HARNESS=omp \
-    bash -c '"$1"; :' _ "$HARNESS")
-  [ "$out" = claude ] || fail "a leaked FM_OMP_HARNESS without an omp ancestor must not relabel a claude worker, got '$out'"
+  out=$(env -u PI_CODING_AGENT -u GROK_AGENT FM_OMP_HARNESS=omp \
+    "$bin/codex" -c '"$1"; :' _ "$HARNESS")
+  [ "$out" = codex ] || fail "a leaked FM_OMP_HARNESS without an omp ancestor must not relabel a Codex worker, got '$out'"
   pass "fm-harness: omp detects by its anchored name; the marker is a precedence override that needs real omp ancestry"
 }
 
@@ -127,7 +127,7 @@ make_spawn_case() {  # <name> <harness> <id>
   home="$case_dir/home"
   proj="$case_dir/project"
   wt="$case_dir/wt"
-  fakebin=$(make_spawn_fakebin "$case_dir/fake" claude)
+  fakebin=$(make_spawn_fakebin "$case_dir/fake" codex)
   make_fake_omp "$fakebin"
   fm_test_spawn_home "$home" "$harness"
   fm_git_worktree "$proj" "$wt" "wt-$name"
@@ -163,7 +163,7 @@ test_spawn_launch_line_and_worker_wiring() {
   assert_grep "effort=medium" "$state/$id.meta" "meta missing the pinned effort"
   assert_present "$state/$id.omp-ext.ts" "omp spawn did not write the per-task extension"
   launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "env -u CLAUDECODE -u PI_CODING_AGENT -u GROK_AGENT -u FM_PI_HARNESS -u GEMINI_CLI FM_OMP_HARNESS=omp OMP_SKIP_SETUP=1 '$FAKEBIN_DIR/omp'" \
+  assert_contains "$launch" "env -u PI_CODING_AGENT -u GROK_AGENT -u FM_PI_HARNESS -u GEMINI_CLI FM_OMP_HARNESS=omp OMP_SKIP_SETUP=1 '$FAKEBIN_DIR/omp'" \
     "omp launch did not clear foreign markers and establish its own at the launch boundary"
   assert_contains "$launch" "--config '$ROOT/.omp/fm-worker-overlay.yml' --auto-approve --cwd '$WT_DIR'" \
     "omp launch did not carry the tracked posture overlay, --auto-approve, and the pinned working directory"
@@ -220,13 +220,13 @@ test_secondmate_launch_relies_on_discovery() {
   printf '# Firstmate\n' > "$home/AGENTS.md"
   printf 'sm\n' > "$home/.fm-secondmate-home"
   printf 'charter\n' > "$home/data/charter.md"
-  fakebin=$(make_spawn_fakebin "$world/fake" claude)
+  fakebin=$(make_spawn_fakebin "$world/fake" codex)
   make_fake_omp "$fakebin"
   launchlog="$world/launch.log"
   : > "$launchlog"
   # FM_BACKEND=tmux pins the fake tmux even where the developer shell carries a
   # live Herdr environment; without it auto-detection would spawn a real pane.
-  out=$(PATH="$fakebin:$PATH" TMUX='fake,1,0' FM_BACKEND=tmux CLAUDECODE=1 \
+  out=$(PATH="$fakebin:$PATH" TMUX='fake,1,0' FM_BACKEND=tmux \
     FM_ROOT_OVERRIDE='' FM_HOME="$world/home" \
     FM_STATE_OVERRIDE="$world/home/state" FM_DATA_OVERRIDE="$world/home/data" \
     FM_PROJECTS_OVERRIDE="$world/home/projects" FM_CONFIG_OVERRIDE="$world/home/config" \
@@ -259,11 +259,11 @@ test_secondmate_config_pinned_model_is_validated() {
   printf 'sm\n' > "$home/.fm-secondmate-home"
   printf 'charter\n' > "$home/data/charter.md"
   printf 'omp openai-codex/gpt-nope\n' > "$world/home/config/secondmate-harness"
-  fakebin=$(make_spawn_fakebin "$world/fake" claude)
+  fakebin=$(make_spawn_fakebin "$world/fake" codex)
   make_fake_omp "$fakebin"
   launchlog="$world/launch.log"
   : > "$launchlog"
-  out=$(PATH="$fakebin:$PATH" TMUX='fake,1,0' FM_BACKEND=tmux CLAUDECODE=1 \
+  out=$(PATH="$fakebin:$PATH" TMUX='fake,1,0' FM_BACKEND=tmux \
     FM_ROOT_OVERRIDE='' FM_HOME="$world/home" \
     FM_STATE_OVERRIDE="$world/home/state" FM_DATA_OVERRIDE="$world/home/data" \
     FM_PROJECTS_OVERRIDE="$world/home/projects" FM_CONFIG_OVERRIDE="$world/home/config" \
@@ -356,11 +356,11 @@ test_control_composer_and_model_tables() {
   printf ' ⠧ 11s  · gpt-6-astra\n' | fm_busy_lines_match omp || fail "omp busy regex must match the braille spinner plus elapsed cell"
   printf ' ⣾ 3s  · gpt-6-astra\n' | fm_busy_lines_match omp || fail "omp busy regex must match the status-set spinner frames, not only the activity set"
   printf ' 󰵗  · gpt-6-astra · 36.7%%/41K\n' | fm_busy_lines_match omp && fail "an idle omp status row must not read busy"
-  printf 'esc to interrupt\n' | fm_busy_lines_match omp && fail "omp must not borrow Claude's footer"
+  printf 'esc to interrupt\n' | fm_busy_lines_match omp && fail "omp must not borrow another runtime's footer"
   local bin out
   bin=$(make_named_shells "$TMP_ROOT/named-model")
   # shellcheck disable=SC2016 # the quoted body expands inside the named shell
-  out=$(env -u CLAUDECODE -u FM_OMP_HARNESS -u PI_CODING_AGENT -u FM_SUPERVISION_MODEL \
+  out=$(env -u FM_OMP_HARNESS -u PI_CODING_AGENT -u FM_SUPERVISION_MODEL \
     "$bin/omp" -c '. "$1"; fm_supervision_model' _ "$ROOT/bin/fm-wake-lib.sh")
   [ "$out" = extension ] || fail "an omp primary must run the extension supervision model, got '$out'"
   pass "control, composer, and supervision-model tables carry omp's verified values"

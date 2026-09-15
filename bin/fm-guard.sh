@@ -10,12 +10,8 @@
 # delimited banner so the agent cannot skim past
 # it in the tool output of whatever it was doing - the one channel every harness
 # has. Supervision health is MODEL-AWARE (fm_watcher_supervision_verdict in
-# bin/fm-wake-lib.sh): under the Claude Stop auto-arm model the watcher runs only
-# between turns, so mid-turn a fresh beacon with no live watcher is healthy, and
-# a stale beacon is still healthy while fm_autoarm_midturn_healthy proves a
-# Claude auto-arm generation explains the gap; only a stale beacon with no such
-# generation is a genuine lapse; under the Pi
-# extension model the extension tears the watcher down and respawns it on every
+# bin/fm-wake-lib.sh): under the Pi extension model the extension tears the
+# watcher down and respawns it on every
 # actionable wake, so a fresh beacon with a genuinely unheld lock is healthy
 # while that live Pi session provably owns continuity; any held but unhealthy
 # lock is down; under every
@@ -72,11 +68,11 @@ STALE_BANNER_MARKER="$STATE/.guard-watcher-stale-banner"
 GUARD_ACTOR=$(fm_lease_actor 2>/dev/null) || GUARD_ACTOR=main
 
 # Deterministic episode key from the qualitative down-state (the failing
-# condition), NOT the beacon mtime: under the auto-arm model a healthy
-# between-turns watcher advances that mtime every poll, which made the "same
-# episode" key change every turn and re-print the full banner. Keying on the
-# failing condition keeps one continuous down-episode stable, while positive
-# recovery clears the marker (below) and re-arms the next episode.
+# condition), NOT the beacon mtime: a watcher can advance that mtime without
+# changing the failing condition, which made the "same episode" key change and
+# re-print the full banner. Keying on the failing condition keeps one continuous
+# down-episode stable, while positive recovery clears the marker (below) and
+# re-arms the next episode.
 fm_guard_stale_episode_key() {
   printf '%s\n' "$1"
 }

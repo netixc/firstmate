@@ -25,7 +25,7 @@
 #      and the send keeps the loud exit-1 verdict=unknown refusal.
 #   4. agy target whose busy footer never renders: no confirmation is
 #      fabricated - exit 1 verdict=unknown.
-#   5. claude target, same late-busy pane: the shared 3-retry default is
+#   5. codex target, same late-busy pane: the shared 3-retry default is
 #      untouched, so the send still exits 1 verdict=unknown.
 set -u
 
@@ -155,11 +155,11 @@ expect_code 0 "$(printf '%s' "$out" | sed -n 's/^rc //p')" \
   "agy typed send with long-brief late busy footer confirms and exits 0"
 pass "agy typed send: long-brief render (15th poll) still confirms idle-to-busy"
 
-# claude on the identical late-busy pane: the shared 3-retry default is
+# codex on the identical late-busy pane: the shared 3-retry default is
 # untouched, so the same latency still refuses - the raised budget is
 # agy-scoped, not a global slowdown.
-out=$(run_send claude 6)
+out=$(run_send codex 6)
 expect_code 1 "$(printf '%s' "$out" | sed -n 's/^rc //p')" \
-  "claude typed send keeps the shared 3-retry default"
-grep -q 'verdict=unknown' "$TMP_ROOT"/*/err || fail "claude typed send: expected verdict=unknown refusal"
-pass "claude typed send: late busy footer still refuses (agy budget is agy-scoped)"
+  "codex typed send keeps the shared 3-retry default"
+grep -q 'verdict=unknown' "$TMP_ROOT"/*/err || fail "codex typed send: expected verdict=unknown refusal"
+pass "codex typed send: late busy footer still refuses (agy budget is agy-scoped)"

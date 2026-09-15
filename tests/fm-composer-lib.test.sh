@@ -9,7 +9,7 @@
 #      (unsafe-for-injection), never `empty`. This is the safety fix.
 #   2. The SAME shell glyph INSIDE a bordered composer box is the harness's own
 #      prompt and still reads `empty` (existing behavior preserved).
-#   3. The AGENT prompt glyphs `❯` (claude), `›` (codex), and `⟩` (muse) are a
+#   3. The AGENT prompt glyphs `❯` (omp), `›` (codex), and `⟩` (muse) are a
 #      genuine empty agent composer either way, bordered or bare.
 #   4. Real unsubmitted text reads `pending`; a known idle placeholder reads
 #      `empty`.
@@ -71,20 +71,20 @@ test_bordered_shell_glyph_is_empty() {
     [ "$out" = empty ] \
       || fail "a shell glyph '$g' inside a bordered composer box must read empty, got '$out'"
   done
-  pass "fm_composer_classify_content: a bare prompt glyph inside a bordered composer box reads empty (claude's own idle composer)"
+  pass "fm_composer_classify_content: a bare prompt glyph inside a bordered composer box reads empty (omp's own idle composer)"
 }
 
 # --- Agent glyphs are empty either way --------------------------------------
 
 test_agent_glyphs_are_empty_bordered_and_bare() {
   local out
-  out=$(classify 0 '❯'); [ "$out" = empty ] || fail "bare claude '❯' should read empty, got '$out'"
+  out=$(classify 0 '❯'); [ "$out" = empty ] || fail "bare omp '❯' should read empty, got '$out'"
   out=$(classify 0 '›'); [ "$out" = empty ] || fail "bare codex '›' should read empty, got '$out'"
-  out=$(classify 1 '❯'); [ "$out" = empty ] || fail "bordered claude '❯' should read empty, got '$out'"
+  out=$(classify 1 '❯'); [ "$out" = empty ] || fail "bordered omp '❯' should read empty, got '$out'"
   out=$(classify 1 '›'); [ "$out" = empty ] || fail "bordered codex '›' should read empty, got '$out'"
   out=$(classify 0 '⟩'); [ "$out" = empty ] || fail "bare muse '⟩' should read empty, got '$out'"
   out=$(classify 1 '⟩'); [ "$out" = empty ] || fail "bordered muse '⟩' should read empty, got '$out'"
-  pass "fm_composer_classify_content: agent prompt glyphs (❯ claude, › codex, ⟩ muse) read empty bordered or bare"
+  pass "fm_composer_classify_content: agent prompt glyphs (❯ omp, › codex, ⟩ muse) read empty bordered or bare"
 }
 
 # --- Empty content and idle placeholder -------------------------------------
@@ -140,10 +140,10 @@ test_real_text_is_pending() {
 # fm-composer-thin-adapter-refactor-r1).
 #
 # Fixtures are the audit's byte-level captures of six REAL idle harnesses:
-# claude 2.1.226 (bare `❯` + U+00A0 NO-BREAK SPACE), codex 0.146.0 (bold `›`
+# omp 2.1.226 (bare `❯` + U+00A0 NO-BREAK SPACE), codex 0.146.0 (bold `›`
 # + SGR-2 dim hint), muse (truecolor `⟩`, 38;2;90;160;255), pi (blank row
 # between solid `─` rules), opencode 1.14.46 (left-bar `┃` rows), and grok
-# 1.0.0 (bordered box with a TITLED bottom border), plus claude captured
+# 1.0.0 (bordered box with a TITLED bottom border), plus omp captured
 # inside zellij through `dump-screen --ansi` (`ESC[m` `❯` U+00A0).
 #
 # Capability profiles mirror the real adapters' descriptors: tmux
@@ -170,22 +170,22 @@ assert_screen() {
   [ "$out" = "$want" ] || fail "$label under LC_ALL=C: expected $want, got '$out'"
 }
 
-test_matrix_claude_bare_nbsp_row() {
-  # Real idle claude: `❯` + U+00A0, borderless, between horizontal rules.
+test_matrix_omp_bare_nbsp_row() {
+  # Real idle omp: `❯` + U+00A0, borderless, between horizontal rules.
   # The audit's headline defect: this row read `pending` under LC_ALL=C
   # (issue #1988), deferring every away-mode escalation in daemon contexts.
   local screen typed
   screen=$'transcript line\n────────────────────────\n❯'"$NBSP"$'\n────────────────────────\n  bypass permissions'
-  assert_screen "claude idle on tmux" empty "$CAPS_TMUX" "$screen" 2 probe-absent
-  assert_screen "claude idle on herdr" empty "$CAPS_STYLED" "$screen" '' probe-absent
-  assert_screen "claude idle on zellij" empty "$CAPS_STYLED_NOID" "$screen"
-  assert_screen "claude idle on cmux/orca" empty "$CAPS_PLAIN" "$screen"
+  assert_screen "omp idle on tmux" empty "$CAPS_TMUX" "$screen" 2 probe-absent
+  assert_screen "omp idle on herdr" empty "$CAPS_STYLED" "$screen" '' probe-absent
+  assert_screen "omp idle on zellij" empty "$CAPS_STYLED_NOID" "$screen"
+  assert_screen "omp idle on cmux/orca" empty "$CAPS_PLAIN" "$screen"
   typed=$'────────────────────────\n❯ fix the login bug\n────────────────────────'
-  assert_screen "claude typed on tmux" pending "$CAPS_TMUX" "$typed" 1 probe-absent
-  # Plain capture cannot tell typed text from claude's rotating suggestion:
+  assert_screen "omp typed on tmux" pending "$CAPS_TMUX" "$typed" 1 probe-absent
+  # Plain capture cannot tell typed text from omp's rotating suggestion:
   # the styled=0 degradation defers instead of fabricating pending.
-  assert_screen "claude typed on plain backends" unknown "$CAPS_PLAIN" "$typed"
-  pass "matrix: claude's ❯+NBSP row reads empty on every profile in both locales (#1988)"
+  assert_screen "omp typed on plain backends" unknown "$CAPS_PLAIN" "$typed"
+  pass "matrix: omp's ❯+NBSP row reads empty on every profile in both locales (#1988)"
 }
 
 test_matrix_codex_dim_hint_row() {
@@ -385,17 +385,17 @@ test_matrix_kimi_bordered_shell_glyph_box() {
   pass "matrix: kimi's bordered shell-glyph box reads empty through the shared owner (spawn's fourth copy retired)"
 }
 
-test_matrix_claude_inside_zellij_ansi_dump() {
-  # Real claude captured through `zellij action dump-screen --ansi`
+test_matrix_omp_inside_zellij_ansi_dump() {
+  # Real omp captured through `zellij action dump-screen --ansi`
   # (capability established by the audit): `ESC[m` `❯` U+00A0.
   local screen plain
   screen=$'zellij pane transcript\n'"${ESC}[m❯${NBSP}"
   plain=$'zellij pane transcript\n❯'"$NBSP"
-  assert_screen "claude-in-zellij on tmux" empty "$CAPS_TMUX" "$screen" 1
-  assert_screen "claude-in-zellij on herdr" empty "$CAPS_STYLED" "$screen"
-  assert_screen "claude-in-zellij on zellij" empty "$CAPS_STYLED_NOID" "$screen"
-  assert_screen "claude-in-zellij on plain backends" empty "$CAPS_PLAIN" "$plain"
-  pass "matrix: the real claude-in-zellij --ansi dump reads empty in both locales"
+  assert_screen "omp-in-zellij on tmux" empty "$CAPS_TMUX" "$screen" 1
+  assert_screen "omp-in-zellij on herdr" empty "$CAPS_STYLED" "$screen"
+  assert_screen "omp-in-zellij on zellij" empty "$CAPS_STYLED_NOID" "$screen"
+  assert_screen "omp-in-zellij on plain backends" empty "$CAPS_PLAIN" "$plain"
+  pass "matrix: the real omp-in-zellij --ansi dump reads empty in both locales"
 }
 
 test_strict_blank_row_divergence() {
@@ -483,10 +483,10 @@ test_cursorless_bare_wrap_region_classifies() {
   assert_screen "blank-separated codex status on zellij" empty "$CAPS_STYLED_NOID" "$status"
   assert_screen "blank-separated codex status on cmux/orca" empty "$CAPS_PLAIN" "$status"
 
-  bounded=$'────────────────────────\n❯\n────────────────────────\nClaude 4.1'
-  assert_screen "rule-bounded claude footer on herdr" empty "$CAPS_STYLED" "$bounded" '' probe-absent
-  assert_screen "rule-bounded claude footer on zellij" empty "$CAPS_STYLED_NOID" "$bounded"
-  assert_screen "rule-bounded claude footer on cmux/orca" empty "$CAPS_PLAIN" "$bounded"
+  bounded=$'────────────────────────\n❯\n────────────────────────\nOMP 4.1'
+  assert_screen "rule-bounded omp footer on herdr" empty "$CAPS_STYLED" "$bounded" '' probe-absent
+  assert_screen "rule-bounded omp footer on zellij" empty "$CAPS_STYLED_NOID" "$bounded"
+  assert_screen "rule-bounded omp footer on cmux/orca" empty "$CAPS_PLAIN" "$bounded"
 
   ghost=$'❯ '"${ESC}[2ma long rotating suggestion that${ESC}[0m"$'\n'"${ESC}[2mwraps onto the next line${ESC}[0m"
   out=$(fm_composer_classify_screen "$CAPS_STYLED" "$ghost")
@@ -523,7 +523,7 @@ test_bottom_most_candidate_wins() {
   # below it - the confidently-wrong orca case from the audit.
   local screen out
   screen=$'╭────────────────────────╮\n│ permissions: YOLO mode │\n╰────────────────────────╯\n❯'"$NBSP"
-  assert_screen "banner above live claude row" empty "$CAPS_PLAIN" "$screen"
+  assert_screen "banner above live omp row" empty "$CAPS_PLAIN" "$screen"
   out=$(fm_composer_classify_screen "$CAPS_PLAIN" $'╭────────────────────────╮\n│ permissions: YOLO mode │\n╰────────────────────────╯\n› Use /skills to list available skills')
   [ "$out" != pending ] || fail "a stale banner must never classify as pending composer text"
   screen=$'❯ old draft\n\n❯'
@@ -608,7 +608,7 @@ test_empty_content_is_empty
 test_idle_placeholder_is_empty
 test_idle_placeholder_case_mode_is_explicit
 test_real_text_is_pending
-test_matrix_claude_bare_nbsp_row
+test_matrix_omp_bare_nbsp_row
 test_matrix_codex_dim_hint_row
 test_matrix_muse_truecolor_glyph_survives_signal_loss
 test_matrix_omp_status_row_bounds_bare_composer
@@ -616,7 +616,7 @@ test_matrix_pi_separated_needs_identity
 test_matrix_opencode_leftbar_signals
 test_matrix_grok_titled_bottom_border
 test_matrix_kimi_bordered_shell_glyph_box
-test_matrix_claude_inside_zellij_ansi_dump
+test_matrix_omp_inside_zellij_ansi_dump
 test_strict_blank_row_divergence
 test_bare_wrap_region_classifies
 test_contiguous_transcript_reanchors_on_live_prompt

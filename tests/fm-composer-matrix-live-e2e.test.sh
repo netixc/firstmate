@@ -13,8 +13,7 @@
 #     cursor row must classify unknown and defer injection;
 #   - the zellij false-positive regression live (when zellij is installed): a
 #     pane whose content changes for reasons unrelated to submission must NOT
-#     report a delivered send, and a real claude-in-zellij `dump-screen
-#     --ansi` capture must classify empty through the zellij thin adapter.
+#     report a delivered send through the zellij thin adapter.
 #
 # Run explicitly with FM_COMPOSER_MATRIX_LIVE=1. No prompt is ever submitted
 # to any harness, so no model tokens are spent. An absent harness is reported
@@ -115,7 +114,7 @@ check_harness_idle_empty() {  # <name> <launch-cmd...>
 }
 
 # --- 1. Every installed verified harness must reach a proven-empty composer --
-for h in claude codex opencode pi grok kimi muse; do
+for h in omp codex opencode pi grok kimi muse; do
   if command -v "$h" >/dev/null 2>&1; then
     check_harness_idle_empty "$h" "$h"
   else

@@ -32,7 +32,7 @@ fm_brief_worker_role() {
   cat <<'EOF'
 # Current worker role contract
 When this task works on Firstmate itself, this section supersedes every earlier brief instruction about your role and identity.
-When this task works on Firstmate itself, the repository root `AGENTS.md` (also imported by `CLAUDE.md`) is the primary/secondmate supervisor's contract: follow this brief instead of that supervisor contract.
+When this task works on Firstmate itself, the repository root `AGENTS.md` is the primary/secondmate supervisor's contract: follow this brief instead of that supervisor contract.
 For that Firstmate task, do the assigned work yourself and report to firstmate; do not adopt the supervisor identity, delegate the task, run fleet supervision, or address the captain.
 This exception preserves this brief's safety and authority boundaries and applicable contributor guidance, including `CONTRIBUTING.md` and `firstmate-coding-guidelines` for Firstmate changes.
 Other projects retain their own instructions unchanged.
@@ -232,8 +232,8 @@ When the captain's intent refers to a report, decision, or PR ("do items 1, 2, 3
 This replaces the no-mistakes skill's advice to enrich \`--intent\` with decisions and tradeoffs; that advice does not apply to Firstmate-dispatched work.
 Do not hand-edit, commit, or fix findings yourself while a run is active - the pipeline applies every fix.
 
-One drive call blocks until the next gate or outcome, which routinely outlives what your harness lets a single command run: Claude Code kills a command at ten minutes maximum, while one fix round is capped around thirty minutes and up to three rounds chain.
-So background the drive call and poll \`no-mistakes axi status\` from a separate call instead of sitting in one blocking hold your harness will kill.
+One drive call blocks until the next gate or outcome, which can outlive a worker tool's command limit while one fix round runs for up to thirty minutes and up to three rounds chain.
+So background the drive call and poll \`no-mistakes axi status\` from a separate call instead of sitting in one blocking hold the worker tool may kill.
 Where a harness's own command limit is not established, assume it bounds commands and use that same background-and-poll shape.
 A killed or timed-out call is never evidence the daemon died: the daemon accepts your response immediately and runs the round in the background, so the call was only ever waiting for a read while the run kept working.
 Reattach and keep going rather than reporting the pipeline blocked; rule 7 owns the checks that decide when a pipeline block is real.
