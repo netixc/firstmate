@@ -133,7 +133,7 @@
 #   profile consultation. A --secondmate spawn is exempt and resolves the SECONDMATE
 #   harness (config/secondmate-harness -> config/crew-harness -> own), so the
 #   secondmate-vs-crewmate split is DURABLE across every respawn (recovery,
-#   /updatefirstmate, restart). A bare adapter name (codex|opencode|pi|pi-signed|grok|kimi|gemini|rovo|agy)
+#   /updatefirstmate, restart). A bare adapter name (codex|opencode|pi|pi-signed|grok|kimi|rovo|agy)
 #   overrides it for this spawn (either kind). A non-flag string containing
 #   whitespace is treated as a RAW launch command - the escape hatch for verifying
 #   new adapters. For pi and pi-signed, fm-spawn resolves the selected executable
@@ -240,7 +240,6 @@
 #     __PIWATCH__   absolute path to .pi/extensions/fm-primary-pi-watch.ts in a pi secondmate home
 #     __OPINPUT__   absolute path to the canonical operational-input encoder
 #     __WORKTREE__  absolute path to the task worktree
-#     __GEMINISETTINGS__ firstmate-owned per-task gemini settings file (busy-state hooks)
 #     __ROVOBIN__   resolved, rovo-verified executable for a rovo launch
 #     __AGYBIN__    resolved, agy-verified executable for an agy launch
 # Verified per-harness turn-end hooks are installed automatically where enabled; some live outside the worktree.
@@ -1310,7 +1309,7 @@ if [ "$RELAUNCH" -eq 1 ]; then
   }
 elif [ "$KIND" = secondmate ]; then
   case "${POS[1]:-}" in
-    ''|codex|opencode|pi|pi-signed|grok|kimi|gemini|rovo|agy)
+    ''|codex|opencode|pi|pi-signed|grok|kimi|rovo|agy)
       ARG3=${POS[1]:-}
       ;;
     *' '*)
@@ -1443,40 +1442,6 @@ launch_template() {
     # launch command - it is a Stop-event hook installed below (global hook +
     # per-task pointer), so the template is identical for ship/scout/secondmate.
     grok) printf '%s' 'grok --always-approve __MODELFLAG____EFFORTFLAG__"$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
-    # gemini (Google Gemini CLI): a positional query starts the supervised
-    # interactive session and auto-submits it, so the brief rides the launch
-    # command directly (verified: a multi-line
-    # brief submitted itself with no extra Enter, gemini-cli 0.58.0).
-    # -y (--yolo) auto-approves every tool call, which an unattended crewmate
-    # needs; the footer renders ` YOLO Ctrl+Y` while it is on and a WriteFile
-    # was verified to land with no approval gate.
-    # Every task worktree is a fresh path, so gemini refuses to start at all
-    # without a trust control. GEMINI_CLI_TRUST_WORKSPACE=true - NOT
-    # --skip-trust - is the one used, and the difference is load-bearing
-    # rather than cosmetic: the CLI's refusal message offers the two as
-    # equivalents, but a controlled A/B on one worktree (same config home,
-    # same prompt) showed --skip-trust runs the turn while leaving PROJECT
-    # configuration unloaded, so the project's own .agents/skills are never
-    # discovered. A firstmate-repo task needs exactly those, so the workspace
-    # is trusted.
-    # GEMINI_CLI_SYSTEM_SETTINGS_PATH points gemini at the firstmate-owned
-    # per-task settings file written below. It is deliberately NOT the
-    # worktree's .gemini/settings.json because that path is the PROJECT's own
-    # committed settings file, so writing it
-    # would clobber a project's configuration and removing it at teardown
-    # would delete a tracked file. The system layer also makes the busy
-    # contract independent of the trust decision above (its hooks were
-    # verified firing under --skip-trust in an untrusted folder), and hook
-    # arrays MERGE across settings layers rather than overriding, so a
-    # project's own hooks still run alongside firstmate's.
-    # Foreign primary markers are cleared so bin/fm-harness.sh cannot read a
-    # gemini worker as its launcher.
-    # gemini exposes no reasoning-effort flag (checked against 0.58.0
-    # --help), so the shared effort axis is deliberately omitted here and
-    # stays in task metadata only, per the record-and-omit contract.
-    # Its turn-end and busy-state signals do NOT ride the launch command:
-    # they are project hooks written into the worktree below.
-    gemini) printf '%s' 'env -u PI_CODING_AGENT -u GROK_AGENT -u FM_PI_HARNESS GEMINI_CLI_TRUST_WORKSPACE=true GEMINI_CLI_SYSTEM_SETTINGS_PATH=__GEMINISETTINGS__ gemini -y __MODELFLAG__"$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
     # Kimi Code rejects a positional prompt, so it launches bare and receives
     # only an absolute brief pointer after the TUI readiness gate below.
     # Its turn-end signal is a globally configured Stop hook plus a guarded
@@ -1547,13 +1512,11 @@ case "$ARG3" in
     ;;
 esac
 
-# Gemini and agy are verified as CREWMATE/SCOUT adapters only. A secondmate is
-# a firstmate instance, so it needs a primary supervision protocol.
-# Gemini has none: docs/supervision-protocols/ carries no Gemini wake protocol,
-# so a Gemini secondmate is refused rather than stood up on an unverified path.
-# Agy likewise exposes no hook surface for primary supervision and
-# docs/supervision-protocols/ carries no agy wake protocol (agy 1.2.0).
-if [ "$KIND" = secondmate ] && { [ "$HARNESS" = gemini ] || [ "$HARNESS" = agy ]; }; then
+# Agy is verified as a CREWMATE/SCOUT adapter only. A secondmate is a
+# firstmate instance, so it needs a primary supervision protocol. Agy exposes
+# no hook surface for primary supervision and docs/supervision-protocols/
+# carries no agy wake protocol (agy 1.2.0).
+if [ "$KIND" = secondmate ] && [ "$HARNESS" = agy ]; then
   echo "error: $HARNESS is a verified crewmate/scout adapter only and cannot run a secondmate; it has no primary supervision protocol. Select a harness verified for secondmates." >&2
   exit 1
 fi
@@ -1678,7 +1641,7 @@ model_flag_for_harness() {
   local harness=$1 model=$2
   [ -n "$model" ] && [ "$model" != default ] || return 0
   case "$harness" in
-    codex|opencode|pi|pi-signed|grok|kimi|gemini|rovo|agy)
+    codex|opencode|pi|pi-signed|grok|kimi|rovo|agy)
       printf -- '--model %s ' "$(shell_quote "$model")"
       ;;
   esac
@@ -3077,9 +3040,7 @@ if [ "$KIND" != secondmate ]; then
   # embedded into each adapter's wiring so an event from a superseded
   # incarnation is rejected as stale. Grok and rovo stay on their isolated
   # rendered-tail fallbacks and standalone Kimi stays unknown until
-  # fm_busy_kimi_verified opens, so none of the three is armed here. Gemini IS
-  # armed: its BeforeAgent / AfterAgent / SessionEnd hooks are a verified
-  # open-close pair.
+  # fm_busy_kimi_verified opens, so none of the three is armed here.
   BUSY_GEN=
   case "$HARNESS" in
     codex*)
@@ -3097,15 +3058,6 @@ if [ "$KIND" != secondmate ]; then
       }
       [ "$RELAUNCH" -ne 1 ] || RELAUNCH_REPLACEMENT_BUSY_GEN=$BUSY_GEN
       ;;
-    gemini)
-      if [ "$RAW_LAUNCH" -eq 0 ]; then
-        BUSY_GEN=$("$FM_ROOT/bin/fm-busy-event.sh" arm "$STATE_REAL" "$ID") || {
-          echo "error: failed to arm the busy-state contract for $ID" >&2
-          exit 1
-        }
-        [ "$RELAUNCH" -ne 1 ] || RELAUNCH_REPLACEMENT_BUSY_GEN=$BUSY_GEN
-      fi
-      ;;
     kimi*)
       # Standalone Kimi stays unknown until fm_busy_kimi_verified opens on a
       # live-verified installed version (bin/fm-busy-lib.sh owns the gate and
@@ -3118,40 +3070,6 @@ if [ "$KIND" != secondmate ]; then
       ;;
   esac
   case "$HARNESS" in
-    gemini)
-      if [ "$RAW_LAUNCH" -eq 0 ]; then
-      # Semantic busy-state hooks (bin/fm-busy-lib.sh): BeforeAgent opens a
-      # turn and AfterAgent closes it, with SessionEnd closing on process
-      # shutdown so an abnormal end can never leave a stale busy record.
-      # Verified live on gemini-cli 0.58.0 as a clean open/close pair:
-      # mid-turn only BeforeAgent had fired, and AfterAgent followed at turn
-      # end. AfterAgent ALSO fires on a manual Escape interrupt (carrying
-      # prompt_response "[no response text]"), so a cancelled gemini turn
-      # closes its own record instead of leaving it busy.
-      # SessionEnd was observed firing TWICE for one /quit; the busy writer is
-      # idempotent for a repeated idle event, so the duplicate is harmless and
-      # deliberately not de-duplicated here.
-      # These are written into a FIRSTMATE-OWNED settings file under state/,
-      # reached through GEMINI_CLI_SYSTEM_SETTINGS_PATH on the launch command,
-      # never into the worktree's own .gemini/settings.json - that path is the
-      # PROJECT's committed settings file, so writing it would clobber a
-      # project's configuration and retiring it would delete a tracked file.
-      # Hook arrays MERGE across gemini's settings layers rather than
-      # overriding, so a project's own hooks still run alongside these.
-      # AfterAgent keeps the turn-ended NOTIFICATION touch for the watcher.
-      # Every hook command tolerates a refused event (|| true) so a stale-gen
-      # writer can never break gemini's own lifecycle, and each prints the
-      # empty JSON object gemini's hook contract requires on stdout.
-      busy_cmd_prefix="$(shell_quote "$FM_ROOT/bin/fm-busy-event.sh") apply $(shell_quote "$STATE_REAL") $(shell_quote "$ID")"
-      busy_suffix="--gen $(shell_quote "$BUSY_GEN") --source gemini-hook"
-      g_before=$(json_escape "$busy_cmd_prefix busy $busy_suffix --event before-agent >/dev/null 2>&1 || true; printf '{}'")
-      g_after=$(json_escape "touch $(shell_quote "$TURNEND"); $busy_cmd_prefix idle $busy_suffix --event after-agent >/dev/null 2>&1 || true; printf '{}'")
-      g_sessionend=$(json_escape "$busy_cmd_prefix idle $busy_suffix --event session-end >/dev/null 2>&1 || true; printf '{}'")
-      cat > "$STATE_REAL/$ID.gemini-settings.json" <<EOF
-{"hooks":{"BeforeAgent":[{"hooks":[{"type":"command","command":"$g_before"}]}],"AfterAgent":[{"hooks":[{"type":"command","command":"$g_after"}]}],"SessionEnd":[{"hooks":[{"type":"command","command":"$g_sessionend"}]}]}}
-EOF
-      fi
-      ;;
     opencode*)
       mkdir -p "$WT/.opencode/plugins"
       cat > "$WT/.opencode/plugins/fm-busy-state.js" <<EOF
@@ -3559,15 +3477,9 @@ LAUNCH=${LAUNCH//__PIWATCH__/$sq_piwatch}
 LAUNCH=${LAUNCH//__OPINPUT__/$sq_opinput}
 case "$HARNESS" in
   pi|pi-signed) LAUNCH=${LAUNCH//__PIBIN__/"$(shell_quote "$PI_BIN")"} ;;
-  gemini) LAUNCH=${LAUNCH//__GEMINISETTINGS__/"$(shell_quote "$STATE_REAL/$ID.gemini-settings.json")"} ;;
   agy) LAUNCH=${LAUNCH//__AGYBIN__/"$(shell_quote "$AGY_BIN")"} ;;
 esac
 LAUNCH=${LAUNCH//__WORKTREE__/$sq_worktree}
-case "$HARNESS" in
-  codex|opencode|pi|pi-signed|grok|kimi|gemini|rovo|agy)
-    LAUNCH="env -u GEMINI_CLI $LAUNCH"
-    ;;
-esac
 if [ "$KIND" = secondmate ]; then
   sq_home=$(shell_quote "$PROJ_ABS")
   sq_primary_home=$(shell_quote "$FM_HOME")

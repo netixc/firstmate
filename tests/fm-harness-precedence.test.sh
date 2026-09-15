@@ -146,16 +146,26 @@ test_markerless_ancestry_outranks_foreign_marker() {
   pass "a markerless harness keeps its identity under an inherited foreign marker"
 }
 
-# Retired Muse names must contribute no ancestry identity of their own.
-test_retired_muse_ancestry_is_not_recognized() {
-  local bin got name
-  for name in muse muse-bin-1.0.3-R2198.1; do
-    bin=$(named_bin "$TMP_ROOT/retired-$name-tree" "$name")
-    got=$(under_process "$bin")
-    [ "$got" != muse ] \
-      || fail "retired Muse process '$name' still resolved as a supported Muse harness"
+# Retired harness names and markers must contribute no identity of their own.
+test_retired_harness_identity_is_not_recognized() {
+  local bin fakebin got name retired
+  for retired in muse gemini; do
+    for name in "$retired" "$retired-cli-0.58.0"; do
+      bin=$(named_bin "$TMP_ROOT/retired-$name-tree" "$name")
+      got=$(under_process "$bin")
+      [ "$got" != "$retired" ] \
+        || fail "retired $retired process '$name' still resolved as a supported harness"
+    done
   done
-  pass "retired Muse process names no longer identify a supported harness"
+
+  fakebin=$(blind_ancestry_bin "$TMP_ROOT/retired-gemini-marker")
+  got=$(with_blind_ancestry "$fakebin" GEMINI_CLI=1)
+  [ "$got" = unknown ] \
+    || fail "retired GEMINI_CLI marker still selected a harness, got '$got'"
+  got=$(with_blind_ancestry "$fakebin" GEMINI_CLI=1 PI_CODING_AGENT=true FM_PI_HARNESS=pi-signed)
+  [ "$got" = pi-signed ] \
+    || fail "retired GEMINI_CLI marker hid a retained Pi-signed marker, got '$got'"
+  pass "retired harness process names and the Gemini CLI marker no longer identify an adapter"
 }
 
 # --- 2. A genuine harness in its own process tree still wins ----------------
@@ -686,7 +696,7 @@ test_supervision_protocol_follows_corrected_verdict() {
 }
 
 test_markerless_ancestry_outranks_foreign_marker
-test_retired_muse_ancestry_is_not_recognized
+test_retired_harness_identity_is_not_recognized
 test_genuine_marker_and_ancestry_agree
 test_pi_signed_survives_agreeing_ancestry
 test_interpreter_args_match_does_not_outrank_a_marker

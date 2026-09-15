@@ -27,7 +27,7 @@ Rovo CLI: 202609.1.2
 
 ## Launch: bare launch-then-send, the kimi shape
 
-`fm-spawn.sh` builds a launch that clears foreign runtime markers before `<rovo-bin> run --yolo <model/effort flags>` - BARE, with no positional brief - wrapped by the shared `env -u GEMINI_CLI` prefix.
+`fm-spawn.sh` builds a launch that clears foreign runtime markers before `<rovo-bin> run --yolo <model/effort flags>` - BARE, with no positional brief.
 The brief is then typed in after the TUI comes up, the same launch-then-send shape kimi uses, through the same shared readers (`fm_backend_capture`, `fm_backend_composer_state`, `fm_backend_send_text_submit`):
 
 1. `rovo_wait_for_ready` polls for the `Welcome to Rovo!` banner (primary) or a composer-empty verdict (weaker fallback, see the composer-ghost-text gap below).

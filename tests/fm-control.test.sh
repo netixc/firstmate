@@ -260,6 +260,10 @@ test_harness_family_resolution() {
     && fail "the retired Muse adapter must not resolve to a control family"
   fm_control_harness_family muse-bin-1.0.3-R2198.1 \
     && fail "a retired versioned Muse binary must not resolve to a control family"
+  fm_control_harness_family gemini \
+    && fail "the retired Gemini CLI adapter must not resolve to a control family"
+  fm_control_harness_family gemini-cli-0.58.0 \
+    && fail "a retired versioned Gemini CLI binary must not resolve to a control family"
   pass "fm-control-lib: a recorded harness resolves to its verified adapter without guessing"
 }
 
@@ -308,7 +312,7 @@ test_opencode_interrupts_twice_and_others_once() {
 
 test_unverified_harness_is_refused() {
   local harness dir out rc
-  for harness in omp muse; do
+  for harness in omp muse gemini; do
     dir=$(new_case "unverified-$harness")
     add_task "$dir" t1 "$harness"
     alive_as "$dir" "$harness"
@@ -319,7 +323,7 @@ test_unverified_harness_is_refused() {
     [ -f "$dir/home/state/t1.meta" ] || fail "a retired harness refusal must preserve the task record"
     [ -d "$dir/wt-t1" ] || fail "a retired harness refusal must preserve the local copy"
   done
-  pass "fm-control: stale OMP and Muse tasks are refused without sending bytes or removing retained work"
+  pass "fm-control: stale OMP, Muse, and Gemini CLI tasks are refused without sending bytes or removing retained work"
 }
 
 # --- 2. backend capability matrix -------------------------------------------
@@ -352,8 +356,6 @@ test_harness_kind_capability() {
     fm_control_harness_supports_kind "$harness" scout \
       || fail "$harness should be able to run a scout task"
   done
-  fm_control_harness_supports_kind gemini secondmate \
-    && fail "Gemini has no primary supervision protocol and must not claim a secondmate"
   for harness in pi codex opencode pi-signed grok kimi; do
     fm_control_harness_supports_kind "$harness" secondmate \
       || fail "$harness should be able to run a secondmate"
