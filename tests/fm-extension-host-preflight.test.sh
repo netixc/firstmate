@@ -161,6 +161,14 @@ run_unsupported_case() {
   install_fixture "$fixture"
   install_fake_uname "$fixture" "$platform"
   install_runtime_scripts "$fixture"
+  out=$(PATH="$fixture/fakebin:$PATH" FM_HOME="$fixture/extension-home" \
+    node "$ROOT/bin/fm-extension.mjs" list 2>&1)
+  status=$?
+  expect_code 1 "$status" "$platform external-extension CLI refusal"
+  assert_contains "$out" "UNSUPPORTED_HOST: $platform" \
+    "$platform external-extension CLI refusal was not actionable"
+  assert_absent "$fixture/extension-home" "$platform external-extension CLI created local state"
+
   out=$(PATH="$fixture/fakebin:$PATH" FIXTURE="$fixture" FM_HOME="$fixture/home" \
     FM_ROOT_OVERRIDE="$fixture" FM_EXTENSION_SCRIPT_LOG="$fixture/script.log" FM_TEST_PLATFORM="$platform" \
     node --input-type=module 2>&1 <<'JS'
@@ -259,6 +267,14 @@ run_supported_case() {
   install_fixture "$fixture"
   install_fake_uname "$fixture" "$platform"
   install_runtime_scripts "$fixture"
+  mkdir -p "$fixture/extension-home"
+  out=$(PATH="$fixture/fakebin:$PATH" FM_HOME="$fixture/extension-home" \
+    node "$ROOT/bin/fm-extension.mjs" list 2>&1)
+  status=$?
+  expect_code 0 "$status" "$platform external-extension CLI acceptance"
+  [ "$out" = "no extension bindings" ] || fail "$platform supported external-extension CLI output changed: $out"
+  assert_absent "$fixture/extension-home/config" "$platform external-extension CLI created binding state while listing no bindings"
+
   mkdir -p "$fixture/home/state"
   out=$(PATH="$fixture/fakebin:$PATH" FIXTURE="$fixture" FM_HOME="$fixture/home" \
     FM_ROOT_OVERRIDE="$fixture" FM_EXTENSION_SCRIPT_LOG="$fixture/script.log" FM_TEST_PLATFORM="$platform" \
@@ -343,6 +359,9 @@ JS
   pass "extensions preserve $platform behavior and fail closed when a checker cannot execute"
 }
 
+# Fixture-local environment exports are intentionally confined to command
+# substitutions that exercise wrapper text from hooks.json.
+# shellcheck disable=SC2030,SC2031
 run_unsupported_shell_case() {
   local platform=$1 fixture="$TMP_ROOT/unsupported-shell-$1" out status guard harness payload
   local -a args
@@ -451,6 +470,7 @@ run_unsupported_shell_case() {
   pass "shell harness boundaries reject $platform before state or temporary-file mutation"
 }
 
+# shellcheck disable=SC2030,SC2031
 run_supported_shell_case() {
   local platform=$1 fixture="$TMP_ROOT/supported-shell-$1" out status guard
   install_fake_uname "$fixture" "$platform"

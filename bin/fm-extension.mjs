@@ -140,6 +140,31 @@ function fail(code, message) {
   throw new HostError(code, message);
 }
 
+async function requireSupportedFirstmateHost() {
+  const script = path.join(CODE_ROOT, "bin", "fm-host-platform-lib.sh");
+  const child = spawn("bash", [script], {
+    env: process.env,
+    shell: false,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const chunks = [];
+  let bytes = 0;
+  const collect = (chunk) => {
+    bytes += chunk.length;
+    if (bytes <= MAX_STDERR_BYTES) chunks.push(chunk);
+  };
+  child.stdout.on("data", collect);
+  child.stderr.on("data", collect);
+  const outcome = await new Promise((resolve) => {
+    child.once("error", (error) => resolve({ code: null, signal: null, error }));
+    child.once("close", (code, signal) => resolve({ code, signal, error: null }));
+  });
+  if (outcome.code === 0 && !outcome.signal) return;
+  const output = bytes <= MAX_STDERR_BYTES ? Buffer.concat(chunks).toString("utf8").trim() : "";
+  const detail = output || outcome.error?.message || `exit status ${outcome.code ?? "unknown"}`;
+  fail("platform-unsupported", detail);
+}
+
 async function readPinnedDescriptor(fd, limit) {
   const chunks = [];
   let size = 0;
@@ -2543,6 +2568,7 @@ The manifest file is firstmate-extension.json. Supported consent facts are netwo
 }
 
 async function main() {
+  await requireSupportedFirstmateHost();
   if (process.env.FM_EXTENSION_RETIREMENT_MODE) {
     await runInheritedLifecycleRetirement(process.argv.slice(2));
     return;
