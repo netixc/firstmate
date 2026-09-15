@@ -25,8 +25,9 @@
 #   ALLOW - exit 0 and no output.
 #   DENY - exit 2, a Claude-shaped deny object on stderr, and a Grok-shaped
 #          deny object on stdout unless --claude was supplied.
-#   FAIL OPEN - malformed or empty stdin, missing jq for stdin transport,
-#               missing Node or policy owner, or an invalid policy response.
+#   FAIL OPEN - on a supported host, malformed or empty stdin, missing jq for
+#               stdin transport, missing Node or command-policy owner, or an
+#               invalid command-policy response.
 #
 # Claude requires stdout to remain empty on deny.
 # Codex blocks on exit 2 and displays stderr.
@@ -48,7 +49,7 @@ toolInput.command, or Claude/Codex tool_input.command).
 Exits 0 to allow and 2 to deny.
 The deny reason is written to stderr, with a Grok decision object on stdout
 unless --claude is supplied.
-Malformed transport and an unavailable classifier runtime fail open.
+On a supported host, malformed transport and an unavailable classifier runtime fail open.
 EOF
 }
 
@@ -89,6 +90,13 @@ while [ "$#" -gt 0 ]; do
       ;;
   esac
 done
+
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd -P) || exit 2
+# shellcheck source=bin/fm-host-platform-lib.sh disable=SC1091
+. "$SCRIPT_DIR/fm-host-platform-lib.sh" || exit 2
+fm_host_platform_pretool_require "$CLAUDE_MODE"
+HOST_RC=$?
+[ "$HOST_RC" -eq 0 ] || exit "$HOST_RC"
 
 if [ "$CMD_SET" -eq 0 ]; then
   PAYLOAD=$(cat 2>/dev/null || true)
@@ -142,7 +150,6 @@ case "$CMD" in
     ;;
 esac
 
-SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd -P) || exit 0
 ROOT=$(CDPATH='' cd -- "$SCRIPT_DIR/.." 2>/dev/null && pwd -P) || exit 0
 ACTIVE_HOME=${FM_HOME:-$ROOT}
 POLICY="$ROOT/bin/fm-arm-command-policy.mjs"

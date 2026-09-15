@@ -167,7 +167,8 @@ A tool removed from the schema stays removed, so a genuinely intended use of a l
 - Default deny mode also writes `{"decision":"deny","reason":"[subagent-dispatch] ..."}` to stdout for Grok.
 - `--claude` suppresses stdout completely, because Claude Code ignores a PreToolUse deny when stdout is nonempty.
   This is the same verified quirk recorded in [`arm-pretool-check.md`](arm-pretool-check.md), and the tracked Claude hook therefore passes `--claude`.
-- Malformed or empty stdin, invalid JSON, a payload with no tool name, and missing `jq` for stdin transport all fail open with exit 0 and no output.
+- On a supported host, malformed or empty stdin, invalid JSON, a payload with no tool name, and missing `jq` for stdin transport all fail open with exit 0 and no output.
+- An unsupported host returns the harness-specific exit-2 deny before tool classification or local state work.
 
 The deny message names the real dispatch path.
 When `bin/fm-scout.sh` exists in the home the message first defers to the `AGENTS.md` intake classification, then routes work already classified as a scout there and authorized ship work with its bounded research to `bin/fm-brief.sh` then `bin/fm-spawn.sh`.

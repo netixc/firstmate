@@ -26,8 +26,9 @@
 #          deny object on stdout unless --claude was supplied.
 #   INERT - not the real primary checkout (a crewmate/scout task worktree or a
 #           non-firstmate repo): exit 0 with no output, exactly like ALLOW.
-#   FAIL OPEN - malformed or empty stdin, missing jq for stdin transport,
-#               missing Node or policy owner, or an invalid policy response.
+#   FAIL OPEN - on a supported host, malformed or empty stdin, missing jq for
+#               stdin transport, missing Node or command-policy owner, or an
+#               invalid command-policy response.
 #
 # Claude requires stdout to remain empty on deny.
 # Codex blocks on exit 2 and displays stderr.
@@ -50,7 +51,7 @@ crewmate/scout task worktree or any non-firstmate repo.
 Exits 0 to allow and 2 to deny a persistent top-level cwd change.
 The deny reason is written to stderr, with a Grok decision object on stdout
 unless --claude is supplied.
-Malformed transport and an unavailable classifier runtime fail open.
+On a supported host, malformed transport and an unavailable classifier runtime fail open.
 EOF
 }
 
@@ -82,6 +83,13 @@ while [ "$#" -gt 0 ]; do
       ;;
   esac
 done
+
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd -P) || exit 2
+# shellcheck source=bin/fm-host-platform-lib.sh disable=SC1091
+. "$SCRIPT_DIR/fm-host-platform-lib.sh" || exit 2
+fm_host_platform_pretool_require "$CLAUDE_MODE"
+HOST_RC=$?
+[ "$HOST_RC" -eq 0 ] || exit "$HOST_RC"
 
 if [ "$CMD_SET" -eq 0 ]; then
   PAYLOAD=$(cat 2>/dev/null || true)
@@ -120,7 +128,6 @@ case "$CMD" in
     ;;
 esac
 
-SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd -P) || exit 0
 FM_ROOT=${FM_ROOT_OVERRIDE:-$(CDPATH='' cd -- "$SCRIPT_DIR/.." 2>/dev/null && pwd -P)} || exit 0
 
 # Scope to a plain, non-worktree firstmate checkout, where git-dir equals

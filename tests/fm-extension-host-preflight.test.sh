@@ -102,6 +102,34 @@ SH
   chmod +x "$fixture/fakebin/uname"
 }
 
+install_codex_shell_fixture() {
+  local fixture=$1
+  mkdir -p "$fixture/.codex" "$fixture/bin" "$fixture/fakebin"
+  cp "$ROOT/.codex/hooks.json" "$fixture/.codex/hooks.json"
+  cp "$ROOT/bin/fm-host-platform-lib.sh" \
+    "$ROOT/bin/fm-sessionstart-run.sh" \
+    "$ROOT/bin/fm-arm-pretool-check.sh" \
+    "$ROOT/bin/fm-cd-pretool-check.sh" \
+    "$ROOT/bin/fm-turnend-guard.sh" \
+    "$fixture/bin/"
+  : > "$fixture/AGENTS.md"
+  chmod +x "$fixture/bin/"*.sh
+  cat > "$fixture/fakebin/bash" <<'SH'
+#!/bin/bash
+if [ "${1:-}" = -lc ]; then
+  shift
+  exec /bin/bash -c "$1"
+fi
+exec /bin/bash "$@"
+SH
+  cat > "$fixture/fakebin/jq" <<'SH'
+#!/bin/bash
+: > "${FM_TEST_JQ_CALLED:?}"
+exit 1
+SH
+  chmod +x "$fixture/fakebin/bash" "$fixture/fakebin/jq"
+}
+
 install_runtime_scripts() {
   local fixture=$1 script
   for script in fm-arm-pretool-check.sh fm-cd-pretool-check.sh; do
@@ -316,16 +344,102 @@ JS
 }
 
 run_unsupported_shell_case() {
-  local platform=$1 fixture="$TMP_ROOT/unsupported-shell-$1" out status
+  local platform=$1 fixture="$TMP_ROOT/unsupported-shell-$1" out status guard harness payload
+  local -a args
   install_fake_uname "$fixture" "$platform"
 
   out=$(PATH="$fixture/fakebin:$PATH" FM_HOME="$fixture/home" FM_ROOT_OVERRIDE="$fixture/root" \
     "$ROOT/bin/fm-sessionstart-run.sh" --source startup 2>&1)
   status=$?
-  expect_code 0 "$status" "$platform session-start wrapper refusal"
+  expect_code 1 "$status" "$platform session-start wrapper refusal"
   assert_contains "$out" "UNSUPPORTED_HOST: $platform" "$platform session-start wrapper refusal was not actionable"
   assert_absent "$fixture/home" "$platform session-start wrapper created home state"
   assert_absent "$fixture/root" "$platform session-start wrapper reached scope work"
+
+  local codex_fixture="$fixture/codex" hook_command hook_label query
+  local -a codex_queries codex_labels
+  install_fake_uname "$codex_fixture" "$platform"
+  install_codex_shell_fixture "$codex_fixture"
+  codex_queries=(
+    '.hooks.SessionStart[0].hooks[0].command'
+    '.hooks.PreToolUse[0].hooks[0].command'
+    '.hooks.PreToolUse[0].hooks[1].command'
+    '.hooks.Stop[0].hooks[0].command'
+  )
+  codex_labels=(session-start arm-guard cd-guard turn-end)
+  for query in "${!codex_queries[@]}"; do
+    hook_command=$(jq -r "${codex_queries[$query]}" "$codex_fixture/.codex/hooks.json")
+    hook_label=${codex_labels[$query]}
+    out=$(
+      {
+        cd "$codex_fixture" || exit 99
+        export PATH="$codex_fixture/fakebin:/usr/bin:/bin"
+        export FM_TEST_JQ_CALLED="$codex_fixture/jq-called"
+        printf '{"source":"startup","tool_input":{"command":"bin/fm-lock.sh status"}}' | eval "$hook_command"
+      } 2>&1
+    )
+    status=$?
+    expect_code 2 "$status" "$platform Codex $hook_label wrapper refusal"
+    assert_contains "$out" "UNSUPPORTED_HOST: $platform" "$platform Codex $hook_label refusal was not actionable"
+    assert_absent "$codex_fixture/jq-called" "$platform Codex $hook_label parsed transport before host refusal"
+    assert_absent "$codex_fixture/state" "$platform Codex $hook_label created state"
+  done
+
+  for guard in fm-arm-pretool-check.sh fm-cd-pretool-check.sh; do
+    for harness in claude codex grok; do
+      args=()
+      case "$harness" in
+        claude)
+          payload='{"tool_input":{"command":"bin/fm-lock.sh status"}}'
+          args=(--claude)
+          ;;
+        codex)
+          payload='{"tool_input":{"command":"bin/fm-lock.sh status"}}'
+          ;;
+        grok)
+          payload='{"toolInput":{"command":"bin/fm-lock.sh status"}}'
+          ;;
+      esac
+      out=$(printf '%s' "$payload" | PATH="$fixture/fakebin:$PATH" FM_HOME="$fixture/guard-home" \
+        "$ROOT/bin/$guard" "${args[@]}" 2>&1)
+      status=$?
+      expect_code 2 "$status" "$platform $harness $guard refusal"
+      assert_contains "$out" "UNSUPPORTED_HOST: $platform" "$platform $harness $guard refusal was not actionable"
+      assert_absent "$fixture/guard-home" "$platform $harness $guard created state"
+    done
+  done
+
+  out=$(PATH="$fixture/fakebin:$PATH" FM_HOME="$fixture/guard-home" \
+    "$ROOT/bin/fm-subagent-pretool-check.sh" --claude --tool Bash 2>&1)
+  status=$?
+  expect_code 2 "$status" "$platform delegation guard refusal"
+  assert_contains "$out" "UNSUPPORTED_HOST: $platform" "$platform delegation guard refusal was not actionable"
+  assert_absent "$fixture/guard-home" "$platform delegation guard created state"
+
+  out=$(PATH="$fixture/fakebin:$PATH" FM_HOME="$fixture/nudge-home" FM_ROOT_OVERRIDE="$fixture/root" \
+    "$ROOT/bin/fm-sessionstart-nudge.sh" 2>&1)
+  status=$?
+  expect_code 1 "$status" "$platform session-start nudge refusal"
+  assert_contains "$out" "UNSUPPORTED_HOST: $platform" "$platform session-start nudge refusal was not actionable"
+  assert_absent "$fixture/nudge-home" "$platform session-start nudge created state"
+
+  out=$(printf '{}' | PATH="$fixture/fakebin:$PATH" FM_HOME="$fixture/turnend-home" \
+    "$ROOT/bin/fm-turnend-guard.sh" --claude 2>&1)
+  status=$?
+  expect_code 2 "$status" "$platform turn-end guard refusal"
+  assert_contains "$out" "UNSUPPORTED_HOST: $platform" "$platform turn-end guard refusal was not actionable"
+  assert_absent "$fixture/turnend-home" "$platform turn-end guard created state"
+
+  mkdir -p "$fixture/grok-tmp"
+  out=$(printf '{"sessionId":"legacy"}' | PATH="$fixture/fakebin:$PATH" TMPDIR="$fixture/grok-tmp" \
+    GROK_WORKSPACE_ROOT="$ROOT" FM_HOME="$fixture/grok-home" "$ROOT/bin/fm-turnend-guard-grok.sh" 2>&1)
+  status=$?
+  expect_code 2 "$status" "$platform Grok turn-end refusal"
+  assert_contains "$out" "UNSUPPORTED_HOST: $platform" "$platform Grok turn-end refusal was not actionable"
+  assert_absent "$fixture/grok-home" "$platform Grok turn-end guard created state"
+  if find "$fixture/grok-tmp" -mindepth 1 -print -quit | grep -q .; then
+    fail "$platform Grok turn-end guard created a temporary file"
+  fi
 
   out=$(PATH="$fixture/fakebin:$PATH" FM_HOME="$fixture/wake-home" \
     bash -c '. "$1"; : > "$2"' _ "$ROOT/bin/fm-wake-lib.sh" "$fixture/after-source" 2>&1)
@@ -334,11 +448,11 @@ run_unsupported_shell_case() {
   assert_contains "$out" "UNSUPPORTED_HOST: $platform" "$platform wake library refusal was not actionable"
   assert_absent "$fixture/wake-home" "$platform wake library created state"
   assert_absent "$fixture/after-source" "$platform wake library returned to its caller"
-  pass "session and wake entrypoints reject $platform before mutation"
+  pass "shell harness boundaries reject $platform before state or temporary-file mutation"
 }
 
 run_supported_shell_case() {
-  local platform=$1 fixture="$TMP_ROOT/supported-shell-$1" out status
+  local platform=$1 fixture="$TMP_ROOT/supported-shell-$1" out status guard
   install_fake_uname "$fixture" "$platform"
 
   out=$(PATH="$fixture/fakebin:$PATH" FM_HOME="$fixture/session-home" FM_ROOT_OVERRIDE="$fixture/root" \
@@ -347,6 +461,36 @@ run_supported_shell_case() {
   expect_code 3 "$status" "$platform session-start wrapper acceptance"
   [ -z "$out" ] || fail "$platform supported session-start wrapper printed output: $out"
 
+  local codex_fixture="$fixture/codex" hook_command
+  install_fake_uname "$codex_fixture" "$platform"
+  install_codex_shell_fixture "$codex_fixture"
+  hook_command=$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$codex_fixture/.codex/hooks.json")
+  out=$(
+    {
+      cd "$codex_fixture" || exit 99
+      export PATH="$codex_fixture/fakebin:/usr/bin:/bin"
+      export FM_TEST_JQ_CALLED="$codex_fixture/jq-called"
+      printf '{"tool_input":{"command":"bin/fm-lock.sh status"}}' | eval "$hook_command"
+    } 2>&1
+  )
+  status=$?
+  expect_code 0 "$status" "$platform Codex checker-owned fail-open"
+  [ -z "$out" ] || fail "$platform supported Codex fail-open printed output: $out"
+  assert_present "$codex_fixture/jq-called" "$platform Codex wrapper did not reach supported-host transport validation"
+
+  for guard in fm-arm-pretool-check.sh fm-cd-pretool-check.sh; do
+    out=$(PATH="$fixture/fakebin:$PATH" FM_HOME="$fixture/guard-home" \
+      "$ROOT/bin/$guard" --claude --command 'bin/fm-lock.sh status' 2>&1)
+    status=$?
+    expect_code 0 "$status" "$platform $guard acceptance"
+    [ -z "$out" ] || fail "$platform supported $guard printed output: $out"
+  done
+  out=$(PATH="$fixture/fakebin:$PATH" FM_HOME="$fixture/guard-home" \
+    "$ROOT/bin/fm-subagent-pretool-check.sh" --claude --tool Bash 2>&1)
+  status=$?
+  expect_code 0 "$status" "$platform delegation guard acceptance"
+  [ -z "$out" ] || fail "$platform supported delegation guard printed output: $out"
+
   out=$(PATH="$fixture/fakebin:$PATH" FM_HOME="$fixture/wake-home" \
     bash -c '. "$1"; : > "$2"' _ "$ROOT/bin/fm-wake-lib.sh" "$fixture/after-source" 2>&1)
   status=$?
@@ -354,7 +498,7 @@ run_supported_shell_case() {
   [ -z "$out" ] || fail "$platform supported wake library printed output: $out"
   assert_present "$fixture/wake-home/state" "$platform wake library did not preserve state initialization"
   assert_present "$fixture/after-source" "$platform wake library did not return to its caller"
-  pass "session and wake entrypoints preserve $platform behavior"
+  pass "session, guard, and wake entrypoints preserve $platform behavior"
 }
 
 for platform in MINGW64_NT-10.0 MSYS_NT-10.0 CYGWIN_NT-10.0 FreeBSD; do

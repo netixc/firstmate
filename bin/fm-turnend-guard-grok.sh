@@ -8,6 +8,13 @@
 # precedence over the legacy snake-case spelling when both are present.
 set -u
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=bin/fm-host-platform-lib.sh disable=SC1091
+. "$SCRIPT_DIR/fm-host-platform-lib.sh"
+if ! fm_host_platform_require >&2; then
+  exit 2
+fi
+
 PAYLOAD=$(cat 2>/dev/null || true)
 [ -n "$PAYLOAD" ] || exit 0
 

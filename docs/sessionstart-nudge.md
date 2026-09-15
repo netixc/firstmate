@@ -51,6 +51,7 @@ The deferred startup stage deliberately runs in its own process group under its 
 
 ## Shared wrapper and safety
 
+Both wrappers first apply the macOS-or-Linux host owner and refuse unsupported hosts nonzero before scope inspection or local mutation.
 `bin/fm-sessionstart-run.sh` and `bin/fm-sessionstart-nudge.sh` share the same two eligibility owners.
 They source `bin/fm-gate-refuse-lib.sh` and stay silent for a no-mistakes gate agent identified by `NO_MISTAKES_GATE` or a `.no-mistakes/repos/*.git` git-common-dir.
 They share `bin/fm-primary-scope-lib.sh` with `bin/fm-turnend-guard.sh`, so every hook uses one primary-detection owner.

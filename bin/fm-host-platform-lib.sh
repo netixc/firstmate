@@ -52,6 +52,15 @@ fm_host_platform_require() { # [raw-platform]
   return 1
 }
 
+fm_host_platform_pretool_require() { # [claude-mode]
+  local claude_mode=${1:-0} diagnostic escaped
+  diagnostic=$(fm_host_platform_require 2>&1) && return 0
+  escaped=$(printf '%s' "$diagnostic" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | tr '\n' ' ')
+  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"%s"}\n' "$escaped" >&2
+  [ "$claude_mode" = 1 ] || printf '{"decision":"deny","reason":"%s"}\n' "$escaped"
+  return 2
+}
+
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   fm_host_platform_require "$@" >&2
   exit $?

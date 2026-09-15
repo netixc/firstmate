@@ -49,8 +49,9 @@ The marker guard closes the static gap anyway because it is cheap and provable p
 Tripwire: if a third strict-superset gap is ever found after this marker generalization, that falsifies the "provable per encoding class" claim and the decision flips to Option B - drop the prefilter and always invoke the classifier.
 Deeper decode-required obfuscation beyond the coupled marker set stays the classifier's and the post-arm liveness guards' responsibility.
 
-Malformed or empty stdin, invalid JSON, missing `jq` for stdin transport, missing Node, a missing classifier, or an invalid classifier response fail open with exit 0 and no output.
-This transport behavior prevents a broken hook from denying every shell tool call.
+On a supported host, malformed or empty stdin, invalid JSON, missing `jq` for stdin transport, missing Node, a missing classifier, or an invalid classifier response fail open with exit 0 and no output.
+Before that compatibility behavior applies, the wrapper rejects an unsupported host with exit 2 and the harness-specific deny payload, without creating local state.
+This transport behavior prevents a broken command classifier from denying every shell tool call.
 Malformed or unsupported shell syntax that contains a protected command is a semantic classification result and fails closed.
 
 ## Command-position classification

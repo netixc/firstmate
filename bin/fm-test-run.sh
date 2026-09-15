@@ -1531,6 +1531,7 @@ families_for_changed_path() {
     bin/fm-primary-scope-lib.sh|bin/fm-project-mode.sh|bin/fm-promote.sh|\
     bin/fm-ff-lib.sh|bin/fm-gotmp*|bin/*pretool*)
       printf '%s\n' pure-contract-unit
+      case "$path" in bin/*pretool*) printf '%s\n' __script__:fm-extension-host-preflight.test.sh ;; esac
       ;;
     .agents/skills/quota-array-dispatch/SKILL.md)
       printf '%s\n' pure-contract-unit

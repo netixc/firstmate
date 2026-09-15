@@ -34,21 +34,23 @@
 #                           silent) and a plain instruction is enough when a new
 #                           process resumed an old session (the nudge fires).
 #
-# Every ordinary transport path exits 0, exactly like the nudge wrapper: a
-# Claude SessionStart exit 2 blocks session initialization, so a failed session
-# start must reach the agent as digest text it can act on, never as a refusal to
-# open the session. The internal Pi prerequisite's silent exit 3 never reaches a
-# harness hook; it only distinguishes intentional ineligibility before provider
-# preflight. A lock another live session holds and a truncated digest are
-# reported inside the digest, while broken GitHub auth arrives through the
-# deferred network result inline or as a wake, for exactly that reason.
+# Every supported-host ordinary transport path exits 0, exactly like the nudge
+# wrapper: a Claude SessionStart exit 2 blocks session initialization, so a
+# failed session start must reach the agent as digest text it can act on, never
+# as a refusal to open the session. Unsupported hosts refuse nonzero before that
+# compatibility contract applies. The internal Pi prerequisite's silent exit 3
+# never reaches a harness hook; it only distinguishes intentional ineligibility
+# before provider preflight. A lock another live session holds and a truncated
+# digest are reported inside the digest, while broken GitHub auth arrives
+# through the deferred network result inline or as a wake, for exactly that
+# reason.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=bin/fm-host-platform-lib.sh disable=SC1091
 . "$SCRIPT_DIR/fm-host-platform-lib.sh"
 if ! fm_host_platform_require; then
-  exit 0
+  exit 1
 fi
 FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"

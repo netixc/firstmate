@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 # Print the one-line session-start instruction only for a genuine firstmate
 # primary whose current harness session has not already acquired the home lock.
-# Every silence and error path exits 0 because Claude SessionStart exit 2 blocks
-# session initialization.
+# Supported-host silence and error paths exit 0 because Claude SessionStart
+# exit 2 blocks session initialization.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=bin/fm-host-platform-lib.sh disable=SC1091
+. "$SCRIPT_DIR/fm-host-platform-lib.sh"
+if ! fm_host_platform_require; then
+  exit 1
+fi
 FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"

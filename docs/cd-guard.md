@@ -82,11 +82,12 @@ It does not permit `cd /home/project`, because an absolute-path `cd` remains a p
 - OpenCode sends the exact command string through `--command <exact string>`.
 - Pi, pi-signed, and omp send the exact command string through `--command <exact string>`.
 
-Processing order is cheapest-first: a strict-superset prefilter, then the primary-checkout scope, then the Node policy owner.
+Processing order is cheapest-first after the mandatory host preflight: a strict-superset prefilter, then the primary-checkout scope, then the Node policy owner.
 The prefilter removes ordinary single quotes, double quotes, backslashes, carriage returns, and newlines before fast-allowing any command that carries no `cd`, `pushd`, or `popd` substring and no quoting-decoder marker (`$'` ANSI-C or `$"` locale), so quoted or escaped command-word fragments delegate to the policy while most commands never pay for the git scoping calls or the Node process.
 The quoting-decoder marker set is coupled to the classifier's decoder set in `bin/fm-arm-command-policy.mjs`: adding any new quote or expansion form the classifier decodes requires extending the prefilter marker set in the same change, or it stops being a strict superset.
 
-Empty stdin, unparseable JSON, missing `jq` on the stdin path, missing Node, a missing policy owner, or an invalid policy response are checker-owned validation failures and return exit 0 with no output.
+On a supported host, empty stdin, unparseable JSON, missing `jq` on the stdin path, missing Node, a missing policy owner, or an invalid policy response are checker-owned validation failures and return exit 0 with no output.
+An unsupported host instead returns the harness-specific exit-2 deny before command classification or local state work.
 That checker-owned fail-open behavior prevents malformed hook input from denying every shell tool call.
 It is distinct from a Pi, omp, or OpenCode adapter failing to spawn the checker or receiving an unexpected nonzero status, which those adapters deny because they cannot obtain an allow verdict.
 
