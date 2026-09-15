@@ -336,6 +336,39 @@ test_active_dispatch_profile_allows_raw_launch_command() {
 }
 
 
+test_retired_gemini_harness_refuses_without_touching_settings() {
+  local selection rec id out status project_before user_before
+  for selection in configured explicit; do
+    id="retired-gemini-$selection"
+    rec=$(make_spawn_case "$id" gemini "$id")
+    read_case_record "$rec"
+    mkdir -p "$WT_DIR/.gemini" "$HOME_DIR/user/.gemini"
+    printf '%s\n' '{"project":"keep-byte-for-byte"}' > "$WT_DIR/.gemini/settings.json"
+    printf '%s\n' '{"user":"keep-byte-for-byte"}' > "$HOME_DIR/user/.gemini/settings.json"
+    project_before="$CASE_DIR/project-settings.before"
+    user_before="$CASE_DIR/user-settings.before"
+    cp "$WT_DIR/.gemini/settings.json" "$project_before"
+    cp "$HOME_DIR/user/.gemini/settings.json" "$user_before"
+    if [ "$selection" = configured ]; then
+      out=$(HOME="$HOME_DIR/user" run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
+        "$id" "$PROJ_DIR" 2>&1)
+    else
+      out=$(HOME="$HOME_DIR/user" run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
+        "$id" "$PROJ_DIR" --harness gemini 2>&1)
+    fi
+    status=$?
+    expect_code 1 "$status" "retired Gemini CLI $selection selection should refuse"
+    assert_contains "$out" "harness 'gemini'" "retired Gemini CLI refusal did not name the stale harness"
+    assert_absent "$HOME_DIR/state/$id.meta" "retired Gemini CLI refusal published task metadata"
+    [ ! -s "$LAUNCH_LOG" ] || fail "retired Gemini CLI refusal typed a launch command"
+    cmp -s "$project_before" "$WT_DIR/.gemini/settings.json" \
+      || fail "retired Gemini CLI refusal rewrote project .gemini settings"
+    cmp -s "$user_before" "$HOME_DIR/user/.gemini/settings.json" \
+      || fail "retired Gemini CLI refusal rewrote user .gemini settings"
+  done
+  pass "retired Gemini CLI config and explicit selections refuse before launch and byte-preserve unrelated settings"
+}
+
 test_codex_omits_invalid_max_effort() {
   local rec id out status launch
   id=profile-codex-max-z4
@@ -967,6 +1000,7 @@ test_active_dispatch_profile_requires_explicit_harness_for_scout
 test_active_dispatch_profile_allows_explicit_harness
 test_active_dispatch_profile_allows_positional_harness
 test_active_dispatch_profile_allows_raw_launch_command
+test_retired_gemini_harness_refuses_without_touching_settings
 test_codex_omits_invalid_max_effort
 test_grok_threads_model_and_reasoning_effort
 test_grok_omits_invalid_max_reasoning_effort

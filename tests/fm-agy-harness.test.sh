@@ -42,7 +42,7 @@ set -u
 # ancestry the detection cases set up. Drop the ambient markers so the asserted
 # verdict does not depend on which harness launched the suite.
 unset PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT \
-  ATLASSIAN_AGENT_TYPE ROVODEV_CLI GEMINI_CLI AGENT
+  ATLASSIAN_AGENT_TYPE ROVODEV_CLI AGENT
 
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-control-lib.sh"
@@ -121,7 +121,7 @@ SH
 test_agy_claims_no_inherited_launcher_marker() {
   local fakebin out
   # AGENT=1 was observed on a live agy TUI as inherited launcher state, so it
-  # must never promote to an agy identity the way GEMINI_CLI does for gemini.
+  # must never promote to an agy identity.
   out=$(AGENT=1 "$HARNESS")
   [ "$out" != agy ] \
     || fail "an inherited AGENT=1 must never claim the agy identity, got '$out'"

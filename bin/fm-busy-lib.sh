@@ -30,8 +30,6 @@
 # never classify another adapter):
 #   pi-ext           Pi/pi-signed per-task extension (agent_start/agent_settled)
 #   opencode-plugin  OpenCode per-task plugin (session.status)
-#   gemini-hook      Gemini agent hooks (BeforeAgent opens; AfterAgent and
-#                    SessionEnd close)
 #   codex-hook, codex-appserver  reserved: Codex, gated by
 #                    fm_busy_codex_semantic_source
 #   kimi-wire, kimi-hook  reserved: standalone Kimi, gated by fm_busy_kimi_verified
@@ -176,7 +174,6 @@ fm_busy_sources_for_harness() {  # <harness>
       adapter='codex-hook codex-appserver'
       ;;
     opencode*) adapter=opencode-plugin ;;
-    gemini*) adapter=gemini-hook ;;
     pi|pi-signed) adapter=pi-ext ;;
     kimi*)
       fm_busy_kimi_verified || { printf ''; return 0; }

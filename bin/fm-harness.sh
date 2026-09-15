@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Detect the agent harness this process tree runs on.
-# Usage: fm-harness.sh                  print own harness: codex|opencode|pi|pi-signed|grok|kimi|gemini|rovo|agy|unknown
+# Usage: fm-harness.sh                  print own harness: codex|opencode|pi|pi-signed|grok|kimi|rovo|agy|unknown
 #        fm-harness.sh crew             print the effective CREWMATE harness
 #                                        (config/crew-harness; "default" resolves to own)
 #        fm-harness.sh secondmate       print the harness the PRIMARY uses to launch
@@ -62,18 +62,10 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 
-# shellcheck source=bin/fm-gemini-lib.sh
-. "$SCRIPT_DIR/fm-gemini-lib.sh"
-
 # Print the harness named by a verified environment marker, or nothing when no
 # marker is present. Markers only report what the environment CLAIMS; detect_own
 # decides whether that claim survives contradicting ancestry.
 harness_marker() {
-  # Gemini's GEMINI_CLI marker is load-bearing because its bundled Node process
-  # does not expose a stable harness name through process ancestry.
-  # AI_AGENT is deliberately not used because it identifies the launcher rather
-  # than the running harness.
-  [ "${GEMINI_CLI:-}" = "1" ] && { echo gemini; return; }
   # rovo (Atlassian Rovo CLI) sets ATLASSIAN_AGENT_TYPE=rovo, ROVODEV_CLI=1, and
   # AGENT=rovodev_cli on its tool subprocesses (verified, rovo 202609.1.2).
   [ "${ATLASSIAN_AGENT_TYPE:-}" = "rovo" ] && { echo rovo; return; }
@@ -107,22 +99,7 @@ harness_marker() {
 harness_process_verdict() {  # <pid>
   local pid=$1 comm args
   comm=$(ps -o comm= -p "$pid" 2>/dev/null) || return 0
-  if fm_gemini_path_is_gemini "$comm"; then
-    echo "comm gemini"
-    return
-  fi
   case "$(basename -- "$comm")" in
-    # This arm covers a natively-named gemini binary only.
-    # It does NOT reach the currently installed CLI, which is a node bundle
-    # (~/.local/bin/gemini -> @google/gemini-cli/bundle/gemini.js): modern
-    # Node on Linux reports `comm` as MainThread rather than node (measured
-    # on Node v24.20.0), so neither this arm nor the node interpreter arm
-    # below matches a live gemini process. GEMINI_CLI above is therefore
-    # load-bearing for gemini rather than a fast path, which is why gemini
-    # is not offered as a primary or secondmate harness. Do NOT add
-    # MainThread to the interpreter arm to close this: that would make the
-    # args of EVERY node process searchable and let an unrelated node
-    # command carrying a harness name in its arguments claim an identity.
     *codex*) echo "comm codex"; return ;;
     *opencode*) echo "comm opencode"; return ;;
     *grok*) echo "comm grok"; return ;;
@@ -145,10 +122,6 @@ harness_process_verdict() {  # <pid>
     node*|python*)
       # Bare interpreter: match the harness name in its script path.
       args=$(ps -o args= -p "$pid" 2>/dev/null)
-      if fm_gemini_args_are_gemini "$args"; then
-        echo "args gemini"
-        return
-      fi
       case "$args" in
         *codex*) echo "args codex"; return ;;
         *opencode*) echo "args opencode"; return ;;

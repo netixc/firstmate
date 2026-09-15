@@ -67,6 +67,9 @@ ln -s "$SLEEP_BIN" "$LAB/bin/musescore"
 ln -s "$SLEEP_BIN" "$LAB/bin/amuse"
 ln -s "$SLEEP_BIN" "$LAB/bin/muse-binary"
 ln -s "$SLEEP_BIN" "$LAB/bin/muse-bind"
+# Retired Gemini CLI executable names must remain unclassified, too.
+ln -s "$SLEEP_BIN" "$LAB/bin/gemini"
+ln -s "$SLEEP_BIN" "$LAB/bin/gemini-cli-0.58.0"
 
 # A launcher whose own process identity is a bare shell, running the harness as
 # a child in the same foreground process group - the shape the real Pi Launcher
@@ -166,6 +169,14 @@ for retired in muse muse-bin-0.1.0-R708.1 musescore amuse muse-binary muse-bind;
     || fail "'$retired' must not classify as a verified live agent pane"
 done
 pass "tmux liveness: stale Muse and unrelated similarly named processes stay ambiguous"
+
+# --- retired Gemini CLI process identity -----------------------------------
+for retired in gemini gemini-cli-0.58.0; do
+  new_window "retired-$retired" "$LAB/bin/$retired" 900
+  wait_for_state "$SESSION:retired-$retired" ambiguous \
+    || fail "'$retired' must not classify as a verified live agent pane"
+done
+pass "tmux liveness: stale Gemini CLI process names stay ambiguous"
 
 # --- retired OMP process identity ------------------------------------------
 # A stale OMP task must never make the tmux classifier treat its retired

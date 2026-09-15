@@ -1134,6 +1134,7 @@ codex harness ultra is refused^{"default":{"harness":"codex","model":"codex-nati
 pi max effort is accepted^{"rules":[{"when":"deep coding","use":{"harness":"pi","model":"openai-codex/gpt-5.6-sol","effort":"max"}}]}^empty^
 pi-signed max effort is accepted^{"rules":[{"when":"signed coding","use":{"harness":"pi-signed","model":"openai-codex/gpt-5.6-sol","effort":"max"}}]}^empty^
 retired Muse dispatch harness is rejected^{"rules":[{"when":"old Muse config","use":{"harness":"muse","effort":"high"}}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - unverified harness: muse
+retired Gemini CLI dispatch harness is rejected^{"rules":[{"when":"old Gemini CLI config","use":{"harness":"gemini","model":"gemini-2.5-pro"}}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - unverified harness: gemini
 agy model profile is accepted^{"rules":[{"when":"agy work","use":{"harness":"agy","model":"gemini-3.8-flash-high"}}]}^empty^
 agy low medium high efforts are accepted^{"rules":[{"when":"agy low","use":{"harness":"agy","effort":"low"}},{"when":"agy medium","use":{"harness":"agy","effort":"medium"}},{"when":"agy high","use":{"harness":"agy","effort":"high"}}]}^empty^
 unsupported agy xhigh effort is flagged^{"rules":[{"when":"agy xhigh","use":{"harness":"agy","effort":"xhigh"}}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - invalid effort: agy:xhigh

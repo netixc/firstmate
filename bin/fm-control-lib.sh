@@ -63,7 +63,7 @@ fm_control_verb_allowed() {  # <verb>
 # than guessed at, exactly as a spawn on it would be.
 fm_control_harness_supported() {  # <harness>
   case "${1-}" in
-    codex|opencode|pi|pi-signed|grok|kimi|gemini|rovo|agy) return 0 ;;
+    codex|opencode|pi|pi-signed|grok|kimi|rovo|agy) return 0 ;;
   esac
   return 1
 }
@@ -85,14 +85,13 @@ fm_control_harness_family() {  # <recorded-harness>
     opencode*) printf 'opencode' ;;
     grok*) printf 'grok' ;;
     kimi*) printf 'kimi' ;;
-    gemini*) printf 'gemini' ;;
     rovo*) printf 'rovo' ;;
     *) return 1 ;;
   esac
 }
 
-# Which task kinds an adapter is verified to run. gemini, rovo, and agy are
-# crewmate/scout adapters only: none has a primary supervision protocol,
+# Which task kinds an adapter is verified to run. rovo and agy are
+# crewmate/scout adapters only: neither has a primary supervision protocol,
 # and bin/fm-spawn.sh refuses a --secondmate launch on any of them. The control
 # plane asks this BEFORE it stops anything, so an incompatible relaunch target is
 # refused while the current agent is still running rather than after it has
@@ -101,22 +100,20 @@ fm_control_harness_supports_kind() {  # <harness> <kind>
   local harness=${1-} kind=${2-}
   fm_control_harness_supported "$harness" || return 1
   case "$harness" in
-    gemini|rovo|agy) [ "$kind" != secondmate ] || return 1 ;;
+    rovo|agy) [ "$kind" != secondmate ] || return 1 ;;
   esac
   return 0
 }
 
 # The key that cancels a running turn. Escape for every adapter except grok,
 # whose Esc only moves focus to the scrollback; grok cancels on Ctrl+C.
-# gemini names its own key in the running turn's status row
-# (`(esc to cancel, <n>s)`), and a single Escape was verified to cancel it.
-# rovo cancels on a single Escape too, printing "Agent cancelled" (verified,
+# rovo cancels on a single Escape, printing "Agent cancelled" (verified,
 # 202609.1.2). agy cancels on a single Escape, printing the Interrupted row
 # with an idle composer and no repollution (verified live, agy 1.2.0 through
 # Herdr).
 fm_control_interrupt_key() {  # <harness>
   case "${1-}" in
-    codex|opencode|pi|pi-signed|kimi|gemini|rovo|agy) printf 'Escape' ;;
+    codex|opencode|pi|pi-signed|kimi|rovo|agy) printf 'Escape' ;;
     grok) printf 'C-c' ;;
     *) return 1 ;;
   esac
@@ -127,20 +124,17 @@ fm_control_interrupt_key() {  # <harness>
 fm_control_interrupt_repeat() {  # <harness>
   case "${1-}" in
     opencode) printf '2' ;;
-    codex|pi|pi-signed|grok|kimi|gemini|rovo|agy) printf '1' ;;
+    codex|pi|pi-signed|grok|kimi|rovo|agy) printf '1' ;;
     *) return 1 ;;
   esac
 }
 
 # The key that must follow the interrupt key to leave the composer empty, or
-# nothing when the adapter needs none. Gemini was checked for composer
-# repollution and does not do it: after a single Escape it prints
-# `Request cancelled.` and its composer shows only the `Type your message
-# or @path/to/file` placeholder. Prints the key or nothing; a harness with no
-# verified mechanics returns nonzero, matching the tables above.
+# nothing when the adapter needs none. Prints the key or nothing; a harness
+# with no verified mechanics returns nonzero, matching the tables above.
 fm_control_interrupt_clear_key() {  # <harness>
   case "${1-}" in
-    codex|opencode|pi|pi-signed|grok|kimi|gemini|rovo|agy) ;;
+    codex|opencode|pi|pi-signed|grok|kimi|rovo|agy) ;;
     *) return 1 ;;
   esac
 }
@@ -150,7 +144,7 @@ fm_control_interrupt_ack_source() {  # <harness>
     # rovo's TUI prints "Agent cancelled" on Escape, but this stays 'none': the
     # acknowledgement is a rendered string, not a recorded state source, and
     # rovo has no busy wiring to confirm against.
-    codex|opencode|pi|pi-signed|grok|kimi|gemini|rovo|agy) printf 'none' ;;
+    codex|opencode|pi|pi-signed|grok|kimi|rovo|agy) printf 'none' ;;
     *) return 1 ;;
   esac
 }
@@ -159,7 +153,7 @@ fm_control_interrupt_ack_source() {  # <harness>
 fm_control_exit_command() {  # <harness>
   case "${1-}" in
     opencode|grok|kimi|rovo) printf '/exit' ;;
-    codex|pi|pi-signed|gemini|agy) printf '/quit' ;;
+    codex|pi|pi-signed|agy) printf '/quit' ;;
     *) return 1 ;;
   esac
 }
@@ -213,12 +207,6 @@ fm_control_harness_wiring_paths() {  # <harness> <worktree> <state-dir> <id>
       printf '%s\n' "$wt/.fm-kimi-turnend"
       printf '%s\n' "$state/$id.kimi-turnend-token"
       ;;
-    # gemini's busy-state and turn-end hooks live in a firstmate-owned
-    # settings file the launch reaches through GEMINI_CLI_SYSTEM_SETTINGS_PATH,
-    # so retiring that one file retires the whole incarnation's wiring. Nothing
-    # is written into the worktree, whose own .gemini/settings.json belongs to
-    # the project, and nothing global is installed.
-    gemini) printf '%s\n' "$state/$id.gemini-settings.json" ;;
   esac
 }
 
