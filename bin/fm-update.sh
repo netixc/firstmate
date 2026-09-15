@@ -163,9 +163,7 @@ claim_settled_secondmate() {  # <id>
 # bin/fm-ff-lib.sh calls this for each local home it left AT the base with a live
 # endpoint - status "updated" or "current" alike. A skipped home never gets here.
 remote_update_preflight() {  # <id>
-  local id=$1 out rc=0 line platform='' platform_count=0
-  local contract='' contract_count=0 legacy_worker_active=0
-  local legacy_worker_retired=0 legacy_probe_inactive=0
+  local id=$1 out rc=0 line platform='' platform_count=0 contract='' contract_count=0
   REMOTE_UPDATE_PREFLIGHT_ERROR=
   out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-doctor.sh < /dev/null 2>&1) || rc=$?
   case "$rc" in
@@ -185,47 +183,27 @@ remote_update_preflight() {  # <id>
         contract_count=$((contract_count + 1))
         contract=${line#host-platform-contract=}
         ;;
-      check\ remote-job-worker=ok:*Linux\ remote\ job\ worker\ is\ running*|check\ remote-job-worker=fixable:*running\ remote\ job\ worker*)
-        legacy_worker_active=1
-        ;;
-      check\ remote-job-worker-loaded=ok:*)
-        legacy_worker_active=1
-        ;;
-      check\ remote-job-worker=fixable:*Linux\ remote\ job\ worker\ is\ not\ running*|check\ remote-job-worker-loaded=fixable:*not\ loaded*)
-        legacy_worker_retired=1
-        ;;
-      check\ remote-job-probe=fixable:*has\ not\ reported\ a\ fresh\ probe*)
-        legacy_probe_inactive=1
-        ;;
     esac
   done <<< "$out"
+  if [ "$contract_count" -eq 0 ]; then
+    REMOTE_UPDATE_PREFLIGHT_ERROR="remote checkout predates the trusted host-update contract; manually verify the real host is macOS or Linux, retire every legacy worker and lane, then perform an attended upgrade"
+    return 1
+  fi
+  if [ "$contract_count" -ne 1 ] || [ "$contract" != darwin-linux-v1 ]; then
+    REMOTE_UPDATE_PREFLIGHT_ERROR="read-only remote doctor reported an ambiguous host-platform contract"
+    return 1
+  fi
   if [ "$platform_count" -ne 1 ]; then
     REMOTE_UPDATE_PREFLIGHT_ERROR="read-only remote doctor did not report one exact host platform"
     return 1
   fi
   case "$platform" in
-    darwin|linux) ;;
+    darwin|linux) return 0 ;;
     *)
       REMOTE_UPDATE_PREFLIGHT_ERROR="unsupported remote host platform '$platform'; manually retire every legacy remote job worker before changing its checkout"
       return 1
       ;;
   esac
-  if [ "$contract_count" -gt 0 ]; then
-    if [ "$contract_count" -eq 1 ] && [ "$contract" = darwin-linux-v1 ]; then
-      return 0
-    fi
-    REMOTE_UPDATE_PREFLIGHT_ERROR="read-only remote doctor reported an ambiguous host-platform contract"
-    return 1
-  fi
-  if [ "$legacy_worker_active" -eq 1 ]; then
-    REMOTE_UPDATE_PREFLIGHT_ERROR="legacy remote job worker is still active; manually retire it before changing the remote checkout"
-    return 1
-  fi
-  if [ "$legacy_worker_retired" -ne 1 ] || [ "$legacy_probe_inactive" -ne 1 ]; then
-    REMOTE_UPDATE_PREFLIGHT_ERROR="read-only remote doctor could not verify that the legacy worker is fully retired"
-    return 1
-  fi
-  return 0
 }
 
 fm_ff_after_secondmate_settled() {  # <id> <home> <window> <status> <instr>

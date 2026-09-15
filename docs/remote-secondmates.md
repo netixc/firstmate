@@ -15,7 +15,7 @@ Local second mates are unaffected and keep their ordinary backend and session se
 
 ### Retire a legacy worker before upgrade
 
-Before upgrading a Firstmate checkout on a host that is no longer supported, manually retire every remote job worker while the old checkout is still present.
+Before upgrading any remote Firstmate checkout that predates the trusted host-update contract, manually verify that its real host is macOS or Linux and retire every remote job worker and active lane while the old checkout is still present.
 First retire or stop its remote second mates and wait for every queued or running remote job to finish, so this deliberate retirement does not interrupt active work.
 If `$HOME/.firstmate/remote-job/worker.pid` exists, run this from the old Firstmate code root before any fetch, pull, or fast-forward:
 
@@ -29,9 +29,10 @@ bash -c '. "$1/bin/fm-remote-job-lib.sh"; fm_remote_job_stop_worker_tree "$2"' _
 Do not upgrade until that command exits successfully, the recorded PID is no longer live, and no worker heartbeat or active lane remains.
 If the worker cannot be retired cleanly, leave the checkout unchanged and stop the exact worker tree with that host's process manager before retrying the verification.
 `bin/fm-update.sh` refuses unsupported hosts before fetching or changing a checkout and points to this prerequisite; it never retires a worker automatically.
-Before dispatching an update to a remote route, it runs only the old checkout's read-only doctor bootstrap and requires one exact macOS or Linux identity.
-A doctor that predates the enforced host-platform contract must also report its legacy worker stopped, so an unsupported, ambiguous, or still-active legacy route is skipped without changing its code root or home.
-After a supported remote checkout reports the enforced contract, later updates retain normal worker-backed behavior and do not require repeated manual retirement.
+Before dispatching an update to a remote route, it runs only the installed checkout's read-only doctor bootstrap.
+Any doctor that predates the enforced host-platform contract is refused regardless of its platform, worker, or heartbeat report, because those legacy reports do not attest the real host and every surviving lane.
+After manually verifying the host and retiring all legacy activity, perform the first upgrade attentively rather than through the fleet updater.
+Once a supported remote checkout reports the enforced contract and one exact macOS or Linux identity, later updates retain normal worker-backed behavior and do not require repeated manual retirement.
 WSL2 reports Linux from inside its Linux environment and does not use this unsupported-host retirement path.
 
 Configure an SSH alias in the primary account's normal OpenSSH configuration.

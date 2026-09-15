@@ -255,10 +255,8 @@ test_dead_secondmate_gets_no_action() {
   pass "T3d an already-stopped secondmate is left to startup recovery"
 }
 
-# --- T3e: a legacy remote advance still restarts ---------------------------
-# The host's instr= suffix is reporting detail; the parent no longer routes on it,
-# so an older host that cannot report a diff can no longer suppress the restart.
-test_legacy_remote_advance_restarts() {
+# --- T3e: remote updates require the trustworthy doctor contract -----------
+test_remote_update_contract_preflight() {
   local w out fake_ssh calls
   w=$(new_world t3e)
   fake_ssh="$w/fakebin/fake-ssh"
@@ -316,38 +314,42 @@ EOF
   : > "$calls"
   out=$(FM_FAKE_REMOTE_CALLS="$calls" FM_FAKE_REMOTE_PLATFORM=MINGW64_NT-10.0 \
     FM_FAKE_LEGACY_WORKER_ACTIVE=1 FM_TEST_SSH_BIN="$fake_ssh" run_update_capture_all "$w")
-  assert_contains "$out" "unsupported remote host platform 'MINGW64_NT-10.0'" \
-    "unsupported remote update was not rejected with retirement guidance"
+  assert_contains "$out" "remote checkout predates the trusted host-update contract" \
+    "unsupported legacy remote did not require an attended upgrade"
+  assert_contains "$out" "manually verify the real host is macOS or Linux, retire every legacy worker and lane" \
+    "legacy refusal omitted the host and complete retirement instructions"
   assert_no_grep 'fm-remote-secondmate-control.sh update' "$calls" \
-    "unsupported remote update reached the mutating command"
-
-  : > "$calls"
-  out=$(FM_FAKE_REMOTE_CALLS="$calls" FM_FAKE_REMOTE_PLATFORM=linux \
-    FM_FAKE_LEGACY_WORKER_ACTIVE=1 FM_TEST_SSH_BIN="$fake_ssh" run_update_capture_all "$w")
-  assert_contains "$out" "legacy remote job worker is still active" \
-    "active legacy worker did not block the remote update"
-  assert_no_grep 'fm-remote-secondmate-control.sh update' "$calls" \
-    "active legacy worker reached the mutating update command"
-
-  : > "$calls"
-  FM_FAKE_REMOTE_CALLS="$calls" FM_FAKE_REMOTE_PLATFORM=linux \
-    FM_FAKE_REMOTE_CONTRACT=1 FM_FAKE_LEGACY_WORKER_ACTIVE=1 \
-    FM_TEST_SSH_BIN="$fake_ssh" run_update_capture_all "$w" >/dev/null
-  assert_grep 'fm-remote-secondmate-control.sh update' "$calls" \
-    "current supported remote did not retain normal update behavior"
+    "unsupported legacy remote reached the mutating command"
 
   : > "$calls"
   out=$(FM_FAKE_REMOTE_CALLS="$calls" FM_FAKE_REMOTE_PLATFORM=linux \
     FM_FAKE_LEGACY_WORKER_ACTIVE=0 FM_TEST_SSH_BIN="$fake_ssh" run_update_capture_all "$w")
+  assert_contains "$out" "remote checkout predates the trusted host-update contract" \
+    "a retired legacy report was trusted without the new contract"
+  assert_no_grep 'fm-remote-secondmate-control.sh update' "$calls" \
+    "legacy worker-idle claims reached the mutating update command"
+
+  : > "$calls"
+  out=$(FM_FAKE_REMOTE_CALLS="$calls" FM_FAKE_REMOTE_PLATFORM=MINGW64_NT-10.0 \
+    FM_FAKE_REMOTE_CONTRACT=1 FM_TEST_SSH_BIN="$fake_ssh" run_update_capture_all "$w")
+  assert_contains "$out" "unsupported remote host platform 'MINGW64_NT-10.0'" \
+    "new-contract unsupported remote did not fail its exact identity check"
+  assert_no_grep 'fm-remote-secondmate-control.sh update' "$calls" \
+    "new-contract unsupported remote reached the mutating update command"
+
+  : > "$calls"
+  out=$(FM_FAKE_REMOTE_CALLS="$calls" FM_FAKE_REMOTE_PLATFORM=linux \
+    FM_FAKE_REMOTE_CONTRACT=1 FM_FAKE_LEGACY_WORKER_ACTIVE=1 \
+    FM_TEST_SSH_BIN="$fake_ssh" run_update_capture_all "$w")
   assert_grep 'fm-remote-secondmate-control.sh update' "$calls" \
-    "retired supported remote did not reach its update command"
+    "current supported remote did not retain normal update behavior"
   assert_contains "$out" "remote secondmate sm1: updated on remote-mac" \
-    "the legacy remote advance was not accepted"
+    "the current-contract remote advance was not accepted"
   assert_contains "$out" "restart-secondmates: fm-sm1" \
-    "a live remote mate on the new tip must restart even when the host reports no instruction diff"
+    "a live remote mate on the new tip was not restarted"
   assert_contains "$out" "nudge-secondmates: none" \
-    "a restarted remote mate must not also be steered"
-  pass "T3e a legacy remote advance still restarts the live remote mate"
+    "a restarted remote mate was also steered"
+  pass "T3e legacy remotes refuse until attended contract migration"
 }
 
 # --- T4: dirty secondmate is skipped, its edit preserved -------------------
@@ -595,7 +597,7 @@ test_reread_gate_is_instruction_only
 test_bin_only_advance_restarts
 test_unprovable_runtime_gets_fallback_nudge
 test_dead_secondmate_gets_no_action
-test_legacy_remote_advance_restarts
+test_remote_update_contract_preflight
 test_dirty_secondmate_skipped
 test_diverged_secondmate_skipped
 test_already_current_secondmate_still_restarts
