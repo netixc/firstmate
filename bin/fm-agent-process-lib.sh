@@ -26,7 +26,7 @@ fm_agent_process_classify_name() {  # <path> [argv0] -> agent|shell|other
   base=${path##*/}
   base=${base#-}
   case "$base" in
-    *codex*|*opencode*|*grok*|*kimi*|*rovo*|pi|pi-signed|pi-launcher|Pi) printf 'agent' ;;
+    *codex*|*opencode*|*grok*|*kimi*|pi|pi-signed|pi-launcher|Pi) printf 'agent' ;;
     # agy (Antigravity CLI) is anchored because its live process name is the
     # bare word `agy` (verified, agy 1.2.0: a Go-compiled single binary,
     # comm=agy with argv[0]=agy), and a glob would claim unrelated commands
