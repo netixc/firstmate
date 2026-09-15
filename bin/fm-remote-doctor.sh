@@ -31,6 +31,7 @@
 #   path=<the child PATH this command inherited>
 #   entrypoint=yes|no
 #   platform=darwin|linux|<uname -s>|unknown
+#   host-platform-contract=darwin-linux-v1
 #   UNSUPPORTED_HOST: <uname -s> - <supported-host guidance>
 #   required <tool>=<path>|MISSING
 #   optional <tool>=<path>|absent
@@ -107,6 +108,7 @@ if ! fm_remote_job_platform_supported; then
     printf 'entrypoint=no\n'
   fi
   printf 'platform=%s\n' "$PLATFORM"
+  printf 'host-platform-contract=darwin-linux-v1\n'
   fm_host_platform_diagnostic "$(fm_remote_job_platform_raw)"
   printf 'action: host-platform: run the remote home on macOS or Linux; use WSL2 only through its Linux environment\n'
   exit 1
@@ -908,6 +910,7 @@ else
   printf 'note: not launched through the fixed remote entrypoint; the reported PATH is this caller environment.\n' >&2
 fi
 printf 'platform=%s\n' "$PLATFORM"
+printf 'host-platform-contract=darwin-linux-v1\n'
 
 LAUNCH_AGENT_SHELL=
 if [ "$PLATFORM" = darwin ]; then

@@ -76,7 +76,8 @@ SH
   mkdir -p "$w/seed/bin" "$w/seed/.agents/skills"
   printf 'echo a\n' > "$w/seed/bin/tool.sh"
   printf '#!/usr/bin/env bash\nexit 0\n' > "$w/seed/bin/fm-remote-secondmate-control.sh"
-  chmod +x "$w/seed/bin/fm-remote-secondmate-control.sh"
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$w/seed/bin/fm-remote-doctor.sh"
+  chmod +x "$w/seed/bin/fm-remote-secondmate-control.sh" "$w/seed/bin/fm-remote-doctor.sh"
   printf 's1\n' > "$w/seed/.agents/skills/note.md"
   git -C "$w/seed" add -A
   git -C "$w/seed" commit -qm c1
@@ -136,6 +137,17 @@ run_update() {
   PATH="$w/fakebin:$PATH" FM_FAKE_DIR="$w/fake" \
     FM_SSH_BIN="${FM_TEST_SSH_BIN:-ssh}" \
     FM_ROOT_OVERRIDE="$w/main" FM_HOME="$w/home" "$UPDATE" 2>/dev/null
+}
+
+run_update_capture_all() {
+  local w=$1
+  PATH="$w/fakebin:$PATH" FM_FAKE_DIR="$w/fake" \
+    FM_SSH_BIN="${FM_TEST_SSH_BIN:-ssh}" \
+    FM_FAKE_REMOTE_CALLS="${FM_FAKE_REMOTE_CALLS:-}" \
+    FM_FAKE_REMOTE_PLATFORM="${FM_FAKE_REMOTE_PLATFORM:-}" \
+    FM_FAKE_REMOTE_CONTRACT="${FM_FAKE_REMOTE_CONTRACT:-0}" \
+    FM_FAKE_LEGACY_WORKER_ACTIVE="${FM_FAKE_LEGACY_WORKER_ACTIVE:-0}" \
+    FM_ROOT_OVERRIDE="$w/main" FM_HOME="$w/home" "$UPDATE" 2>&1
 }
 
 # --- T1: main + secondmate behind, instruction change; FF, not a merge ------
@@ -247,9 +259,10 @@ test_dead_secondmate_gets_no_action() {
 # The host's instr= suffix is reporting detail; the parent no longer routes on it,
 # so an older host that cannot report a diff can no longer suppress the restart.
 test_legacy_remote_advance_restarts() {
-  local w out fake_ssh
+  local w out fake_ssh calls
   w=$(new_world t3e)
   fake_ssh="$w/fakebin/fake-ssh"
+  calls="$w/fake/remote-calls"
   cat > "$fake_ssh" <<'SH'
 #!/usr/bin/env bash
 set -u
@@ -262,9 +275,26 @@ argv_b64=$4
 decode() { printf '%s' "$1" | base64 --decode 2>/dev/null || printf '%s' "$1" | base64 -D; }
 rargs=()
 while IFS= read -r -d '' a; do rargs+=("$a"); done < <(decode "$argv_b64")
-case "${rargs[1]:-}" in
-  update) printf 'synced: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n' ;;
-  state) printf 'alive\n' ;;
+printf '%s\n' "${rargs[*]}" >> "$FM_FAKE_REMOTE_CALLS"
+case "${rargs[0]:-}:${rargs[1]:-}" in
+  fm-remote-doctor.sh:)
+    printf 'mode=check\nplatform=%s\n' "${FM_FAKE_REMOTE_PLATFORM:-linux}"
+    [ "${FM_FAKE_REMOTE_CONTRACT:-0}" != 1 ] || printf 'host-platform-contract=darwin-linux-v1\n'
+    if [ "${FM_FAKE_LEGACY_WORKER_ACTIVE:-0}" = 1 ]; then
+      printf 'check remote-job-worker=ok: the Linux remote job worker is running\n'
+      printf 'check remote-job-probe=ok: the remote job worker published a fresh heartbeat\n'
+    else
+      printf 'check remote-job-worker=fixable: the Linux remote job worker is not running\n'
+      printf 'check remote-job-probe=fixable: the remote job worker has not reported a fresh probe\n'
+    fi
+    exit 1
+    ;;
+  fm-remote-secondmate-control.sh:update)
+    printf 'synced: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n'
+    ;;
+  fm-remote-secondmate-control.sh:state)
+    printf 'alive\n'
+    ;;
   *) exit 91 ;;
 esac
 SH
@@ -283,8 +313,34 @@ EOF
   printf -- '- sm1 - remote domain (host: remote-mac; root: /srv/fm; home: /srv/sm1; scope: things; projects: p; added 2026-09-03)\n' \
     > "$w/home/data/secondmates.md"
 
-  out=$(FM_TEST_SSH_BIN="$fake_ssh" run_update "$w")
+  : > "$calls"
+  out=$(FM_FAKE_REMOTE_CALLS="$calls" FM_FAKE_REMOTE_PLATFORM=MINGW64_NT-10.0 \
+    FM_FAKE_LEGACY_WORKER_ACTIVE=1 FM_TEST_SSH_BIN="$fake_ssh" run_update_capture_all "$w")
+  assert_contains "$out" "unsupported remote host platform 'MINGW64_NT-10.0'" \
+    "unsupported remote update was not rejected with retirement guidance"
+  assert_no_grep 'fm-remote-secondmate-control.sh update' "$calls" \
+    "unsupported remote update reached the mutating command"
 
+  : > "$calls"
+  out=$(FM_FAKE_REMOTE_CALLS="$calls" FM_FAKE_REMOTE_PLATFORM=linux \
+    FM_FAKE_LEGACY_WORKER_ACTIVE=1 FM_TEST_SSH_BIN="$fake_ssh" run_update_capture_all "$w")
+  assert_contains "$out" "legacy remote job worker is still active" \
+    "active legacy worker did not block the remote update"
+  assert_no_grep 'fm-remote-secondmate-control.sh update' "$calls" \
+    "active legacy worker reached the mutating update command"
+
+  : > "$calls"
+  FM_FAKE_REMOTE_CALLS="$calls" FM_FAKE_REMOTE_PLATFORM=linux \
+    FM_FAKE_REMOTE_CONTRACT=1 FM_FAKE_LEGACY_WORKER_ACTIVE=1 \
+    FM_TEST_SSH_BIN="$fake_ssh" run_update_capture_all "$w" >/dev/null
+  assert_grep 'fm-remote-secondmate-control.sh update' "$calls" \
+    "current supported remote did not retain normal update behavior"
+
+  : > "$calls"
+  out=$(FM_FAKE_REMOTE_CALLS="$calls" FM_FAKE_REMOTE_PLATFORM=linux \
+    FM_FAKE_LEGACY_WORKER_ACTIVE=0 FM_TEST_SSH_BIN="$fake_ssh" run_update_capture_all "$w")
+  assert_grep 'fm-remote-secondmate-control.sh update' "$calls" \
+    "retired supported remote did not reach its update command"
   assert_contains "$out" "remote secondmate sm1: updated on remote-mac" \
     "the legacy remote advance was not accepted"
   assert_contains "$out" "restart-secondmates: fm-sm1" \

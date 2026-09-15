@@ -29,6 +29,9 @@ bash -c '. "$1/bin/fm-remote-job-lib.sh"; fm_remote_job_stop_worker_tree "$2"' _
 Do not upgrade until that command exits successfully, the recorded PID is no longer live, and no worker heartbeat or active lane remains.
 If the worker cannot be retired cleanly, leave the checkout unchanged and stop the exact worker tree with that host's process manager before retrying the verification.
 `bin/fm-update.sh` refuses unsupported hosts before fetching or changing a checkout and points to this prerequisite; it never retires a worker automatically.
+Before dispatching an update to a remote route, it runs only the old checkout's read-only doctor bootstrap and requires one exact macOS or Linux identity.
+A doctor that predates the enforced host-platform contract must also report its legacy worker stopped, so an unsupported, ambiguous, or still-active legacy route is skipped without changing its code root or home.
+After a supported remote checkout reports the enforced contract, later updates retain normal worker-backed behavior and do not require repeated manual retirement.
 WSL2 reports Linux from inside its Linux environment and does not use this unsupported-host retirement path.
 
 Configure an SSH alias in the primary account's normal OpenSSH configuration.
