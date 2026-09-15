@@ -43,7 +43,7 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 REG="$DATA/secondmates.md"
-PROTOCOL=1
+PROTOCOL=2:MANUAL_UPGRADE_REQUIRED:verify_Darwin_or_Linux,retire_all_legacy_worker_and_lane_activity,perform_attended_upgrade
 
 # shellcheck source=bin/fm-secondmate-registry-lib.sh
 . "$SCRIPT_DIR/fm-secondmate-registry-lib.sh"

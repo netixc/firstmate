@@ -108,6 +108,18 @@ case "${FM_FAKE_SSH_MODE:-normal}" in
     "$FM_FAKE_REMOTE_ENTRYPOINT" "$@"
     exit 255
     ;;
+  legacy)
+    if [ "$1" != 1 ]; then
+      printf 'error: incompatible remote protocol: local=%s remote=1\n' "$1" >&2
+      exit 64
+    fi
+    : > "$FM_FAKE_LEGACY_STAGE"
+    exit 93
+    ;;
+  remote-unsupported)
+    PATH="$FM_FAKE_REMOTE_HOST_BIN:$PATH" TMPDIR="$FM_FAKE_REMOTE_TMP" \
+      exec "$FM_FAKE_REMOTE_ENTRYPOINT" "$@"
+    ;;
   *) exec "$FM_FAKE_REMOTE_ENTRYPOINT" "$@" ;;
 esac
 SH
@@ -128,6 +140,9 @@ fm_on() {
   FM_FAKE_SSH_COUNT="$SSH_COUNT" \
   FM_FAKE_SSH_LOG="$SSH_LOG" \
   FM_FAKE_REMOTE_ENTRYPOINT="$REMOTE_ROOT/bin/fm-remote-entrypoint.sh" \
+  FM_FAKE_LEGACY_STAGE="${FM_FAKE_LEGACY_STAGE:-}" \
+  FM_FAKE_REMOTE_HOST_BIN="${FM_FAKE_REMOTE_HOST_BIN:-$HOST_BIN}" \
+  FM_FAKE_REMOTE_TMP="${FM_FAKE_REMOTE_TMP:-$TMP_ROOT}" \
   FM_REMOTE_JOB_STATE_ROOT="$TMP_ROOT/remote-jobs" \
   "$ROOT/bin/fm-on.sh" "$@"
 }
@@ -158,6 +173,42 @@ cmp -s "$TMP_ROOT/unsupported-registry-before" "$LOCAL_HOME/data/secondmates.md"
 assert_absent "$LOCAL_HOME/state" "unsupported local hosts created local records"
 assert_absent "$unsupported_mutation" "unsupported local hosts mutated the remote fixture"
 pass "fm-on refuses unsupported local hosts before local or remote mutation"
+
+legacy_stage="$TMP_ROOT/legacy-stage"
+ssh_before=$(cat "$SSH_COUNT" 2>/dev/null || printf '0\n')
+set +e
+legacy_out=$(FM_FAKE_SSH_MODE=legacy FM_FAKE_LEGACY_STAGE="$legacy_stage" \
+  fm_on ios fm-mutate.sh "$unsupported_mutation" 2>&1)
+legacy_rc=$?
+set -e
+expect_code 64 "$legacy_rc" "legacy remote protocol refusal"
+assert_contains "$legacy_out" \
+  'MANUAL_UPGRADE_REQUIRED:verify_Darwin_or_Linux,retire_all_legacy_worker_and_lane_activity,perform_attended_upgrade' \
+  "legacy protocol mismatch omitted attended migration guidance"
+assert_absent "$legacy_stage" "legacy entrypoint staged a protocol 2 request"
+assert_absent "$unsupported_mutation" "legacy entrypoint ran the rejected command"
+ssh_after=$(cat "$SSH_COUNT")
+[ "$ssh_after" -eq $((ssh_before + 1)) ] || fail "legacy refusal triggered a follow-up SSH request"
+pass "legacy remote protocol refuses before staging with attended migration guidance"
+
+remote_unsupported_bin=$(fm_fakebin "$TMP_ROOT/remote-unsupported-host")
+fm_fake_uname "$remote_unsupported_bin" MINGW64_NT-10.0
+remote_tmp="$TMP_ROOT/remote-tmp"
+mkdir -p "$remote_tmp"
+set +e
+remote_unsupported_out=$(FM_FAKE_SSH_MODE=remote-unsupported \
+  FM_FAKE_REMOTE_HOST_BIN="$remote_unsupported_bin" FM_FAKE_REMOTE_TMP="$remote_tmp" \
+  fm_on ios fm-mutate.sh "$unsupported_mutation" 2>&1)
+remote_unsupported_rc=$?
+set -e
+expect_code 64 "$remote_unsupported_rc" "current unsupported remote refusal"
+assert_contains "$remote_unsupported_out" 'UNSUPPORTED_HOST: MINGW64_NT-10.0' \
+  "current unsupported remote refusal was not actionable"
+assert_absent "$TMP_ROOT/remote-jobs" "current unsupported remote created job state"
+assert_absent "$unsupported_mutation" "current unsupported remote ran the requested command"
+[ -z "$(find "$remote_tmp" -mindepth 1 -print -quit)" ] \
+  || fail "current unsupported remote created protocol staging"
+pass "current unsupported remote refuses before protocol staging"
 
 # The pre-feature user path had no executable transport at all. The regression
 # exercises the adopted public surface end to end through a deterministic SSH
@@ -446,7 +497,8 @@ untracked_argv_b64=$(printf '%s\0' fm-untracked.sh | base64 | tr -d '\n')
 set +e
 out=$(PATH="$HOST_BIN:$PATH" FM_GIT_SHADOW_LOG="$GIT_SHADOW_LOG" \
   FM_REMOTE_JOB_STATE_ROOT="$TMP_ROOT/remote-jobs" "$REMOTE_ROOT/bin/fm-remote-entrypoint.sh" \
-  1 "$untracked_root_b64" "$untracked_home_b64" "$untracked_argv_b64" 2>&1)
+  2:MANUAL_UPGRADE_REQUIRED:verify_Darwin_or_Linux,retire_all_legacy_worker_and_lane_activity,perform_attended_upgrade \
+  "$untracked_root_b64" "$untracked_home_b64" "$untracked_argv_b64" 2>&1)
 rc=$?
 set -e
 if [ "$rc" -eq 0 ]; then
@@ -507,11 +559,13 @@ pass "transport rejects shell escape, traversal, symlink, and option-injection s
 root_b64=$(printf '%s' "$REMOTE_ROOT" | base64 | tr -d '\n')
 home_b64=$(printf '%s' "$REMOTE_HOME" | base64 | tr -d '\n')
 argv_b64=$(printf '%s\0' fm-probe-two.sh | base64 | tr -d '\n')
-if "$REMOTE_ROOT/bin/fm-remote-entrypoint.sh" 2 "$root_b64" "$home_b64" "$argv_b64" >/dev/null 2>&1; then
+if "$REMOTE_ROOT/bin/fm-remote-entrypoint.sh" 1 "$root_b64" "$home_b64" "$argv_b64" >/dev/null 2>&1; then
   fail "an incompatible transport protocol was accepted"
 fi
 traversal_root_b64=$(printf '%s' "$REMOTE_ROOT/../remote-root" | base64 | tr -d '\n')
-if "$REMOTE_ROOT/bin/fm-remote-entrypoint.sh" 1 "$traversal_root_b64" "$home_b64" "$argv_b64" >/dev/null 2>&1; then
+if "$REMOTE_ROOT/bin/fm-remote-entrypoint.sh" \
+  2:MANUAL_UPGRADE_REQUIRED:verify_Darwin_or_Linux,retire_all_legacy_worker_and_lane_activity,perform_attended_upgrade \
+  "$traversal_root_b64" "$home_b64" "$argv_b64" >/dev/null 2>&1; then
   fail "the fixed entrypoint accepted traversal in the configured root"
 fi
 pass "the fixed entrypoint refuses incompatible protocols and unsafe roots"

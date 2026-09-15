@@ -76,8 +76,7 @@ SH
   mkdir -p "$w/seed/bin" "$w/seed/.agents/skills"
   printf 'echo a\n' > "$w/seed/bin/tool.sh"
   printf '#!/usr/bin/env bash\nexit 0\n' > "$w/seed/bin/fm-remote-secondmate-control.sh"
-  printf '#!/usr/bin/env bash\nexit 0\n' > "$w/seed/bin/fm-remote-doctor.sh"
-  chmod +x "$w/seed/bin/fm-remote-secondmate-control.sh" "$w/seed/bin/fm-remote-doctor.sh"
+  chmod +x "$w/seed/bin/fm-remote-secondmate-control.sh"
   printf 's1\n' > "$w/seed/.agents/skills/note.md"
   git -C "$w/seed" add -A
   git -C "$w/seed" commit -qm c1
@@ -144,9 +143,9 @@ run_update_capture_all() {
   PATH="$w/fakebin:$PATH" FM_FAKE_DIR="$w/fake" \
     FM_SSH_BIN="${FM_TEST_SSH_BIN:-ssh}" \
     FM_FAKE_REMOTE_CALLS="${FM_FAKE_REMOTE_CALLS:-}" \
-    FM_FAKE_REMOTE_PLATFORM="${FM_FAKE_REMOTE_PLATFORM:-}" \
-    FM_FAKE_REMOTE_CONTRACT="${FM_FAKE_REMOTE_CONTRACT:-0}" \
-    FM_FAKE_LEGACY_WORKER_ACTIVE="${FM_FAKE_LEGACY_WORKER_ACTIVE:-0}" \
+    FM_FAKE_REMOTE_PLATFORM="${FM_FAKE_REMOTE_PLATFORM:-Linux}" \
+    FM_FAKE_REMOTE_VERSION="${FM_FAKE_REMOTE_VERSION:-current}" \
+    FM_FAKE_REMOTE_STAGE="${FM_FAKE_REMOTE_STAGE:-}" \
     FM_ROOT_OVERRIDE="$w/main" FM_HOME="$w/home" "$UPDATE" 2>&1
 }
 
@@ -255,8 +254,8 @@ test_dead_secondmate_gets_no_action() {
   pass "T3d an already-stopped secondmate is left to startup recovery"
 }
 
-# --- T3e: remote updates require the trustworthy doctor contract -----------
-test_remote_update_contract_preflight() {
+# --- T3e: remote updates require protocol 2 admission ----------------------
+test_remote_protocol_admission() {
   local w out fake_ssh calls
   w=$(new_world t3e)
   fake_ssh="$w/fakebin/fake-ssh"
@@ -269,24 +268,29 @@ while [ "$#" -gt 0 ]; do
   case "$1" in -o) shift 2 ;; --) shift; break ;; *) exit 90 ;; esac
 done
 shift 2
+protocol=$1
+printf 'protocol=%s\n' "$protocol" >> "$FM_FAKE_REMOTE_CALLS"
+if [ "$FM_FAKE_REMOTE_VERSION" = legacy ]; then
+  if [ "$protocol" != 1 ]; then
+    printf 'error: incompatible remote protocol: local=%s remote=1\n' "$protocol" >&2
+    exit 64
+  fi
+  [ -z "$FM_FAKE_REMOTE_STAGE" ] || : > "$FM_FAKE_REMOTE_STAGE"
+else
+  case "$FM_FAKE_REMOTE_PLATFORM" in
+    Darwin|Linux) ;;
+    *)
+      printf 'UNSUPPORTED_HOST: %s - Firstmate supports macOS and Linux hosts; on Windows, run Firstmate inside WSL2 rather than native Windows, Git Bash, MSYS, or Cygwin.\n' "$FM_FAKE_REMOTE_PLATFORM" >&2
+      exit 64
+      ;;
+  esac
+fi
 argv_b64=$4
 decode() { printf '%s' "$1" | base64 --decode 2>/dev/null || printf '%s' "$1" | base64 -D; }
 rargs=()
 while IFS= read -r -d '' a; do rargs+=("$a"); done < <(decode "$argv_b64")
-printf '%s\n' "${rargs[*]}" >> "$FM_FAKE_REMOTE_CALLS"
+printf 'command=%s\n' "${rargs[*]}" >> "$FM_FAKE_REMOTE_CALLS"
 case "${rargs[0]:-}:${rargs[1]:-}" in
-  fm-remote-doctor.sh:)
-    printf 'mode=check\nplatform=%s\n' "${FM_FAKE_REMOTE_PLATFORM:-linux}"
-    [ "${FM_FAKE_REMOTE_CONTRACT:-0}" != 1 ] || printf 'host-platform-contract=darwin-linux-v1\n'
-    if [ "${FM_FAKE_LEGACY_WORKER_ACTIVE:-0}" = 1 ]; then
-      printf 'check remote-job-worker=ok: the Linux remote job worker is running\n'
-      printf 'check remote-job-probe=ok: the remote job worker published a fresh heartbeat\n'
-    else
-      printf 'check remote-job-worker=fixable: the Linux remote job worker is not running\n'
-      printf 'check remote-job-probe=fixable: the remote job worker has not reported a fresh probe\n'
-    fi
-    exit 1
-    ;;
   fm-remote-secondmate-control.sh:update)
     printf 'synced: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n'
     ;;
@@ -312,39 +316,34 @@ EOF
     > "$w/home/data/secondmates.md"
 
   : > "$calls"
-  out=$(FM_FAKE_REMOTE_CALLS="$calls" FM_FAKE_REMOTE_PLATFORM=MINGW64_NT-10.0 \
-    FM_FAKE_LEGACY_WORKER_ACTIVE=1 FM_TEST_SSH_BIN="$fake_ssh" run_update_capture_all "$w")
-  assert_contains "$out" "remote checkout predates the trusted host-update contract" \
-    "unsupported legacy remote did not require an attended upgrade"
-  assert_contains "$out" "manually verify the real host is macOS or Linux, retire every legacy worker and lane" \
-    "legacy refusal omitted the host and complete retirement instructions"
-  assert_no_grep 'fm-remote-secondmate-control.sh update' "$calls" \
-    "unsupported legacy remote reached the mutating command"
+  out=$(FM_FAKE_REMOTE_CALLS="$calls" FM_FAKE_REMOTE_VERSION=legacy \
+    FM_FAKE_REMOTE_STAGE="$w/fake/legacy-stage" FM_TEST_SSH_BIN="$fake_ssh" run_update_capture_all "$w")
+  assert_contains "$out" "MANUAL_UPGRADE_REQUIRED:verify_Darwin_or_Linux,retire_all_legacy_worker_and_lane_activity,perform_attended_upgrade" \
+    "legacy protocol refusal omitted the attended migration instructions"
+  assert_grep 'protocol=2:MANUAL_UPGRADE_REQUIRED:' "$calls" \
+    "fleet update did not use the protocol 2 admission boundary"
+  assert_no_grep 'command=' "$calls" \
+    "legacy entrypoint reached command decoding after its protocol refusal"
+  [ "$(grep -c '^protocol=' "$calls")" -eq 1 ] \
+    || fail "legacy protocol refusal triggered a follow-up SSH request"
+  assert_absent "$w/fake/legacy-stage" \
+    "legacy entrypoint staged the rejected protocol request"
 
   : > "$calls"
-  out=$(FM_FAKE_REMOTE_CALLS="$calls" FM_FAKE_REMOTE_PLATFORM=linux \
-    FM_FAKE_LEGACY_WORKER_ACTIVE=0 FM_TEST_SSH_BIN="$fake_ssh" run_update_capture_all "$w")
-  assert_contains "$out" "remote checkout predates the trusted host-update contract" \
-    "a retired legacy report was trusted without the new contract"
-  assert_no_grep 'fm-remote-secondmate-control.sh update' "$calls" \
-    "legacy worker-idle claims reached the mutating update command"
+  out=$(FM_FAKE_REMOTE_CALLS="$calls" FM_FAKE_REMOTE_VERSION=current \
+    FM_FAKE_REMOTE_PLATFORM=MINGW64_NT-10.0 FM_TEST_SSH_BIN="$fake_ssh" run_update_capture_all "$w")
+  assert_contains "$out" "UNSUPPORTED_HOST: MINGW64_NT-10.0" \
+    "current unsupported remote did not fail its real-host preflight"
+  assert_no_grep 'command=' "$calls" \
+    "current unsupported remote reached command decoding"
 
   : > "$calls"
-  out=$(FM_FAKE_REMOTE_CALLS="$calls" FM_FAKE_REMOTE_PLATFORM=MINGW64_NT-10.0 \
-    FM_FAKE_REMOTE_CONTRACT=1 FM_TEST_SSH_BIN="$fake_ssh" run_update_capture_all "$w")
-  assert_contains "$out" "unsupported remote host platform 'MINGW64_NT-10.0'" \
-    "new-contract unsupported remote did not fail its exact identity check"
-  assert_no_grep 'fm-remote-secondmate-control.sh update' "$calls" \
-    "new-contract unsupported remote reached the mutating update command"
-
-  : > "$calls"
-  out=$(FM_FAKE_REMOTE_CALLS="$calls" FM_FAKE_REMOTE_PLATFORM=linux \
-    FM_FAKE_REMOTE_CONTRACT=1 FM_FAKE_LEGACY_WORKER_ACTIVE=1 \
-    FM_TEST_SSH_BIN="$fake_ssh" run_update_capture_all "$w")
-  assert_grep 'fm-remote-secondmate-control.sh update' "$calls" \
+  out=$(FM_FAKE_REMOTE_CALLS="$calls" FM_FAKE_REMOTE_VERSION=current \
+    FM_FAKE_REMOTE_PLATFORM=Linux FM_TEST_SSH_BIN="$fake_ssh" run_update_capture_all "$w")
+  assert_grep 'command=fm-remote-secondmate-control.sh update' "$calls" \
     "current supported remote did not retain normal update behavior"
   assert_contains "$out" "remote secondmate sm1: updated on remote-mac" \
-    "the current-contract remote advance was not accepted"
+    "the protocol 2 remote advance was not accepted"
   assert_contains "$out" "restart-secondmates: fm-sm1" \
     "a live remote mate on the new tip was not restarted"
   assert_contains "$out" "nudge-secondmates: none" \
@@ -597,7 +596,7 @@ test_reread_gate_is_instruction_only
 test_bin_only_advance_restarts
 test_unprovable_runtime_gets_fallback_nudge
 test_dead_secondmate_gets_no_action
-test_remote_update_contract_preflight
+test_remote_protocol_admission
 test_dirty_secondmate_skipped
 test_diverged_secondmate_skipped
 test_already_current_secondmate_still_restarts

@@ -162,50 +162,6 @@ claim_settled_secondmate() {  # <id>
 
 # bin/fm-ff-lib.sh calls this for each local home it left AT the base with a live
 # endpoint - status "updated" or "current" alike. A skipped home never gets here.
-remote_update_preflight() {  # <id>
-  local id=$1 out rc=0 line platform='' platform_count=0 contract='' contract_count=0
-  REMOTE_UPDATE_PREFLIGHT_ERROR=
-  out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-doctor.sh < /dev/null 2>&1) || rc=$?
-  case "$rc" in
-    0|1) ;;
-    *)
-      REMOTE_UPDATE_PREFLIGHT_ERROR="read-only remote doctor bootstrap failed with exit $rc"
-      return 1
-      ;;
-  esac
-  while IFS= read -r line || [ -n "$line" ]; do
-    case "$line" in
-      platform=*)
-        platform_count=$((platform_count + 1))
-        platform=${line#platform=}
-        ;;
-      host-platform-contract=*)
-        contract_count=$((contract_count + 1))
-        contract=${line#host-platform-contract=}
-        ;;
-    esac
-  done <<< "$out"
-  if [ "$contract_count" -eq 0 ]; then
-    REMOTE_UPDATE_PREFLIGHT_ERROR="remote checkout predates the trusted host-update contract; manually verify the real host is macOS or Linux, retire every legacy worker and lane, then perform an attended upgrade"
-    return 1
-  fi
-  if [ "$contract_count" -ne 1 ] || [ "$contract" != darwin-linux-v1 ]; then
-    REMOTE_UPDATE_PREFLIGHT_ERROR="read-only remote doctor reported an ambiguous host-platform contract"
-    return 1
-  fi
-  if [ "$platform_count" -ne 1 ]; then
-    REMOTE_UPDATE_PREFLIGHT_ERROR="read-only remote doctor did not report one exact host platform"
-    return 1
-  fi
-  case "$platform" in
-    darwin|linux) return 0 ;;
-    *)
-      REMOTE_UPDATE_PREFLIGHT_ERROR="unsupported remote host platform '$platform'; manually retire every legacy remote job worker before changing its checkout"
-      return 1
-      ;;
-  esac
-}
-
 fm_ff_after_secondmate_settled() {  # <id> <home> <window> <status> <instr>
   # Same bin/-changed-out-from-under-a-watch problem as the primary home
   # above, for a local secondmate's own worktree; "current" means bin/ did
@@ -238,10 +194,6 @@ if [ -f "$SECONDMATES_MD" ]; then
     id=$SECONDMATE_REGISTRY_ID
     home=$SECONDMATE_REGISTRY_HOME
     if [ "$SECONDMATE_REGISTRY_REMOTE" -eq 1 ]; then
-      if ! remote_update_preflight "$id"; then
-        echo "remote secondmate $id: skipped on $SECONDMATE_REGISTRY_HOST: $REMOTE_UPDATE_PREFLIGHT_ERROR; follow docs/remote-secondmates.md#retire-a-legacy-worker-before-upgrade" >&2
-        continue
-      fi
       if remote_out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh update "$id" < /dev/null 2>&1); then
         remote_result=$(printf '%s\n' "$remote_out" | tail -1)
         case "$remote_result" in
