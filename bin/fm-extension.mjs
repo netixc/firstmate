@@ -140,6 +140,10 @@ function fail(code, message) {
   throw new HostError(code, message);
 }
 
+function unavailableHostPolicyDiagnostic(detail) {
+  return `UNSUPPORTED_HOST: Node ${process.platform} (host policy unavailable: ${detail}) - Firstmate hosts require macOS or Linux; native Windows, Git Bash, MSYS, and Cygwin are unsupported. WSL2 remains supported when Firstmate runs inside its Linux environment.`;
+}
+
 async function requireSupportedFirstmateHost() {
   const script = path.join(CODE_ROOT, "bin", "fm-host-platform-lib.sh");
   const child = spawn("bash", [script], {
@@ -161,8 +165,8 @@ async function requireSupportedFirstmateHost() {
   });
   if (outcome.code === 0 && !outcome.signal) return;
   const output = bytes <= MAX_STDERR_BYTES ? Buffer.concat(chunks).toString("utf8").trim() : "";
-  const detail = output || outcome.error?.message || `exit status ${outcome.code ?? "unknown"}`;
-  fail("platform-unsupported", detail);
+  const detail = outcome.error?.message || `exit status ${outcome.code ?? "unknown"}`;
+  fail("platform-unsupported", output || unavailableHostPolicyDiagnostic(detail));
 }
 
 async function readPinnedDescriptor(fd, limit) {
@@ -906,7 +910,7 @@ let activeLifecycleLock = null;
 let cachedSelfIdentity = null;
 
 function groupAlive(pid) {
-  if (!pid || process.platform === "win32") return false;
+  if (!pid) return false;
   try {
     process.kill(-pid, 0);
     return true;
@@ -1224,7 +1228,6 @@ async function finalizeInvocation(invocation) {
 }
 
 async function reserveInvocation(home, record, verb, request, statePath) {
-  if (process.platform === "win32") fail("platform-unsupported", "extension launch cleanup requires POSIX process groups");
   const root = await invocationRoot(home, true);
   const token = makeRequestId();
   const paths = invocationPaths(root, token);

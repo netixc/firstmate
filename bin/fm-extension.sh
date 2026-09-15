@@ -4,6 +4,10 @@ set -eu
 set -o pipefail
 
 SCRIPT_DIR=$(CDPATH='' cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+# shellcheck source=bin/fm-host-platform-lib.sh
+. "$SCRIPT_DIR/fm-host-platform-lib.sh"
+fm_host_platform_require >&2 || exit $?
+
 if [ "${1:-}" = remote-bind ]; then
   [ "$#" -ge 4 ] || { printf 'usage: %s remote-bind <secondmate-id> <package-root> <bind-options...>\n' "$0" >&2; exit 2; }
   route=$2

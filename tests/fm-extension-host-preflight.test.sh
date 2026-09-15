@@ -102,6 +102,26 @@ SH
   chmod +x "$fixture/fakebin/uname"
 }
 
+install_extension_wrapper_fixture() {
+  local fixture=$1
+  mkdir -p "$fixture/bin"
+  cp "$ROOT/bin/fm-extension.sh" "$ROOT/bin/fm-host-platform-lib.sh" "$fixture/bin/"
+  cat > "$fixture/bin/fm-extension.mjs" <<'SH'
+#!/usr/bin/env bash
+mkdir -p "${FM_EXTENSION_WRAPPER_MARKERS:?}"
+printf '%s\n' "$*" > "$FM_EXTENSION_WRAPPER_MARKERS/local-command"
+printf 'transfer payload\n'
+SH
+  cat > "$fixture/bin/fm-on.sh" <<'SH'
+#!/usr/bin/env bash
+mkdir -p "${FM_EXTENSION_WRAPPER_MARKERS:?}"
+printf '%s\n' "$*" > "$FM_EXTENSION_WRAPPER_MARKERS/remote-command"
+cat > "$FM_EXTENSION_WRAPPER_MARKERS/remote-input"
+printf 'remote bind complete\n'
+SH
+  chmod +x "$fixture/bin/"*
+}
+
 install_codex_shell_fixture() {
   local fixture=$1
   mkdir -p "$fixture/.codex" "$fixture/bin" "$fixture/fakebin"
@@ -161,6 +181,17 @@ run_unsupported_case() {
   install_fixture "$fixture"
   install_fake_uname "$fixture" "$platform"
   install_runtime_scripts "$fixture"
+
+  local wrapper="$fixture/remote-wrapper"
+  install_fake_uname "$wrapper" "$platform"
+  install_extension_wrapper_fixture "$wrapper"
+  out=$(PATH="$wrapper/fakebin:$PATH" FM_EXTENSION_WRAPPER_MARKERS="$wrapper/markers" \
+    "$wrapper/bin/fm-extension.sh" remote-bind ios "$wrapper/package" --adapter example 2>&1)
+  status=$?
+  expect_code 1 "$status" "$platform remote-bind wrapper refusal"
+  assert_contains "$out" "UNSUPPORTED_HOST: $platform" "$platform remote-bind refusal was not actionable"
+  assert_absent "$wrapper/markers" "$platform remote-bind started local packing or remote transport"
+
   out=$(PATH="$fixture/fakebin:$PATH" FM_HOME="$fixture/extension-home" \
     node "$ROOT/bin/fm-extension.mjs" list 2>&1)
   status=$?
@@ -267,6 +298,23 @@ run_supported_case() {
   install_fixture "$fixture"
   install_fake_uname "$fixture" "$platform"
   install_runtime_scripts "$fixture"
+
+  local wrapper="$fixture/remote-wrapper"
+  install_fake_uname "$wrapper" "$platform"
+  install_extension_wrapper_fixture "$wrapper"
+  out=$(PATH="$wrapper/fakebin:$PATH" FM_EXTENSION_WRAPPER_MARKERS="$wrapper/markers" \
+    "$wrapper/bin/fm-extension.sh" remote-bind ios "$wrapper/package" --adapter example 2>&1)
+  status=$?
+  expect_code 0 "$status" "$platform remote-bind wrapper acceptance"
+  [ "$out" = "remote bind complete" ] || fail "$platform remote-bind output changed: $out"
+  assert_contains "$(cat "$wrapper/markers/local-command")" "pack-transfer $wrapper/package" \
+    "$platform remote-bind did not pack the local package"
+  assert_contains "$(cat "$wrapper/markers/remote-command")" \
+    "--stdin ios fm-extension.sh receive-transfer-bind --adapter example" \
+    "$platform remote-bind did not preserve the addressed transport command"
+  [ "$(cat "$wrapper/markers/remote-input")" = "transfer payload" ] \
+    || fail "$platform remote-bind did not pipe the package transfer"
+
   mkdir -p "$fixture/extension-home"
   out=$(PATH="$fixture/fakebin:$PATH" FM_HOME="$fixture/extension-home" \
     node "$ROOT/bin/fm-extension.mjs" list 2>&1)
@@ -521,6 +569,50 @@ run_supported_shell_case() {
   pass "session, guard, and wake entrypoints preserve $platform behavior"
 }
 
+run_missing_bash_case() {
+  local fixture="$TMP_ROOT/missing-bash" node_bin node_platform out status
+  node_bin=$(command -v node)
+  node_platform=$("$node_bin" -p 'process.platform')
+  install_fixture "$fixture"
+  mkdir -p "$fixture/empty-bin"
+
+  out=$(PATH="$fixture/empty-bin" FM_HOME="$fixture/extension-home" \
+    "$node_bin" "$ROOT/bin/fm-extension.mjs" list 2>&1)
+  status=$?
+  expect_code 1 "$status" "external-extension CLI missing-bash refusal"
+  assert_contains "$out" "UNSUPPORTED_HOST: Node $node_platform" \
+    "external-extension CLI missing-bash refusal omitted the Node platform"
+  assert_contains "$out" "Firstmate hosts require macOS or Linux" \
+    "external-extension CLI missing-bash refusal omitted supported-host guidance"
+  assert_contains "$out" "WSL2 remains supported" \
+    "external-extension CLI missing-bash refusal omitted WSL2 guidance"
+  assert_absent "$fixture/extension-home" "external-extension CLI missing-bash refusal created state"
+
+  out=$(PATH="$fixture/empty-bin" FIXTURE="$fixture" FM_HOME="$fixture/home" \
+    "$node_bin" --input-type=module 2>&1 <<'JS'
+import { pathToFileURL } from "node:url";
+
+const fixture = process.env.FIXTURE;
+const handlers = new Map();
+const mod = await import(`${pathToFileURL(`${fixture}/.pi/extensions/fm-primary-turnend-guard.ts`).href}?case=missing-bash`);
+mod.default({ on(event, handler) { handlers.set(event, handler); } });
+const result = await handlers.get("tool_call")?.({ type: "tool_call", toolName: "bash", input: { command: "ls" } });
+if (result?.block !== true || !result.reason.includes(`UNSUPPORTED_HOST: Node ${process.platform}`)) {
+  throw new Error(`Pi command guard did not return the missing-bash refusal: ${JSON.stringify(result)}`);
+}
+if (!result.reason.includes("Firstmate hosts require macOS or Linux") || !result.reason.includes("WSL2 remains supported")) {
+  throw new Error(`Pi missing-bash refusal was not actionable: ${result.reason}`);
+}
+JS
+  )
+  status=$?
+  expect_code 0 "$status" "Pi extension missing-bash refusal: $out"
+  assert_contains "$out" "UNSUPPORTED_HOST: Node $node_platform" \
+    "Pi extension missing-bash refusal omitted the Node platform"
+  assert_absent "$fixture/home" "Pi extension missing-bash refusal created state"
+  pass "Node entrypoints fail closed with actionable guidance when bash is unavailable"
+}
+
 for platform in MINGW64_NT-10.0 MSYS_NT-10.0 CYGWIN_NT-10.0 FreeBSD; do
   FM_TEST_PLATFORM=$platform run_unsupported_case "$platform"
   run_unsupported_shell_case "$platform"
@@ -529,3 +621,4 @@ for platform in Darwin Linux; do
   FM_TEST_PLATFORM=$platform run_supported_case "$platform"
   run_supported_shell_case "$platform"
 done
+run_missing_bash_case
