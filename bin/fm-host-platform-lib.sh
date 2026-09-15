@@ -51,3 +51,8 @@ fm_host_platform_require() { # [raw-platform]
   fm_host_platform_diagnostic "$raw"
   return 1
 }
+
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  fm_host_platform_require "$@" >&2
+  exit $?
+fi

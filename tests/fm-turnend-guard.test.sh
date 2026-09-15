@@ -1005,6 +1005,7 @@ test_opencode_plugin_anchors_guard_to_worktree() {
   worktree_dir="$parent/nested/opencode-plugin-worktree"
   wrong_dir="$TMP_ROOT/opencode-plugin-cwd/subdir"
   mkdir -p "$worktree_dir/bin" "$wrong_dir"
+  cp "$ROOT/bin/fm-host-platform-lib.sh" "$worktree_dir/bin/"
   cat > "$worktree_dir/bin/fm-turnend-guard.sh" <<'EOF'
 #!/usr/bin/env bash
 cat >/dev/null
@@ -1063,8 +1064,9 @@ test_pi_extension_injects_once_per_logical_agent_run() {
   log="$TMP_ROOT/pi-logical-run-guard.log"
   mkdir -p "$repo/.pi/extensions/lib" "$repo/bin" "$home/state"
   cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$ext"
-  cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$repo/.pi/extensions/lib/fm-operational-input.ts"
-  cp "$ROOT/bin/fm-operational-input.sh" "$repo/bin/fm-operational-input.sh"
+  cp "$ROOT/.pi/extensions/lib/fm-host-platform.ts" "$ROOT/.pi/extensions/lib/fm-operational-input.ts" \
+    "$repo/.pi/extensions/lib/"
+  cp "$ROOT/bin/fm-host-platform-lib.sh" "$ROOT/bin/fm-operational-input.sh" "$repo/bin/"
   cat > "$repo/bin/fm-turnend-guard.sh" <<'SH'
 #!/usr/bin/env bash
 cat >/dev/null
@@ -1129,8 +1131,9 @@ test_pi_extension_retries_after_followup_delivery_failure() {
   ext="$repo/.pi/extensions/fm-primary-turnend-guard.ts"
   mkdir -p "$repo/.pi/extensions/lib" "$repo/bin" "$home/state"
   cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$ext"
-  cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$repo/.pi/extensions/lib/fm-operational-input.ts"
-  cp "$ROOT/bin/fm-operational-input.sh" "$repo/bin/fm-operational-input.sh"
+  cp "$ROOT/.pi/extensions/lib/fm-host-platform.ts" "$ROOT/.pi/extensions/lib/fm-operational-input.ts" \
+    "$repo/.pi/extensions/lib/"
+  cp "$ROOT/bin/fm-host-platform-lib.sh" "$ROOT/bin/fm-operational-input.sh" "$repo/bin/"
   cat > "$repo/bin/fm-turnend-guard.sh" <<'SH'
 #!/usr/bin/env bash
 cat >/dev/null

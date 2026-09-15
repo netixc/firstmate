@@ -1,6 +1,10 @@
 import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawn } from "node:child_process";
+import {
+  firstmateHostPreflight,
+  reportFirstmateHostRefusal,
+} from "../../.pi/extensions/lib/fm-host-platform.ts";
 
 // PreToolUse seatbelt for OpenCode: block a stray persistent top-level `cd` in
 // the primary firstmate checkout before the agent's bash tool relocates the
@@ -22,8 +26,8 @@ function runProcess(command, args) {
     child.stderr.on("data", (chunk) => {
       stderr += chunk.toString();
     });
-    child.on("error", () => resolvePromise({ code: 0, stdout: "", stderr: "" }));
-    child.on("close", (code) => resolvePromise({ code: code ?? 0, stdout, stderr }));
+    child.on("error", (error) => resolvePromise({ code: 127, stdout: "", stderr: error.message }));
+    child.on("close", (code) => resolvePromise({ code: code ?? 127, stdout, stderr }));
   });
 }
 
@@ -47,17 +51,20 @@ export const FmPrimaryCdCheck = async ({ directory, worktree }) => {
       return resolve(worktree);
     }
   })() : await resolveRoot(directory);
+  const hostPreflight = firstmateHostPreflight(root);
+  if (!hostPreflight.supported) reportFirstmateHostRefusal(hostPreflight);
 
   return {
     "tool.execute.before": async (input, output) => {
       if (!root || input?.tool !== "bash") return;
+      if (!hostPreflight.supported) throw new Error(hostPreflight.diagnostic);
       const command = output?.args?.command;
       if (!command || typeof command !== "string") return;
 
       const result = await runProcess(`${root}/bin/fm-cd-pretool-check.sh`, ["--command", command]);
-      if (result.code !== 2) return;
+      if (result.code === 0) return;
 
-      const reason = result.stderr.trim() || "denied by the cd-guard PreToolUse seatbelt";
+      const reason = result.stderr.trim() || "denied because the cd-guard PreToolUse seatbelt failed";
       throw new Error(reason);
     },
   };

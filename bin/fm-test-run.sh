@@ -1381,6 +1381,7 @@ families_for_changed_path() {
       ;;
     bin/fm-host-platform-lib.sh)
       printf '%s\n' session-bootstrap
+      printf '%s\n' __script__:fm-extension-host-preflight.test.sh
       printf '%s\n' __script__:fm-remote-job.test.sh
       printf '%s\n' __script__:fm-remote-doctor.test.sh
       printf '%s\n' __script__:fm-remote-entrypoint.test.sh
@@ -1428,6 +1429,10 @@ families_for_changed_path() {
       # a real Pi TUI can answer, so the live guards are selected too.
       printf '%s\n' live-harness-optin
       ;;
+    .pi/extensions/lib/fm-host-platform.ts)
+      printf '%s\n' __script__:fm-extension-host-preflight.test.sh
+      printf '%s\n' __script__:fm-pi-primary-types.test.sh
+      ;;
     .pi/extensions/lib/fm-operational-input.ts)
       # The same rule for the operational-input library, whose reach is wider:
       # every Pi extension that classifies or encodes operational text.
@@ -1445,6 +1450,7 @@ families_for_changed_path() {
       # The run tier's two harness-supplied facts (source vocabulary and
       # context-reset stdout injection) only show up against a real harness.
       printf '%s\n' session-bootstrap
+      printf '%s\n' __script__:fm-extension-host-preflight.test.sh
       printf '%s\n' live-harness-optin
       ;;
     bin/fm-extension.mjs|bin/fm-extension.sh|docs/examples/process-event-extension/*)

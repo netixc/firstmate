@@ -55,9 +55,10 @@ cp "$ROOT/.pi/extensions/lib/fm-native-contract.ts" "$repo/.pi/extensions/lib/fm
 cp "$ROOT/.pi/extensions/lib/fm-async-exec.ts" "$repo/.pi/extensions/lib/fm-async-exec.ts"
 cp "$ROOT/.pi/extensions/lib/fm-branch-model-picker.ts" "$repo/.pi/extensions/lib/fm-branch-model-picker.ts"
 cp "$ROOT/.pi/extensions/lib/fm-calm-visibility.ts" "$repo/.pi/extensions/lib/fm-calm-visibility.ts"
+cp "$ROOT/.pi/extensions/lib/fm-host-platform.ts" "$repo/.pi/extensions/lib/fm-host-platform.ts"
 cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$repo/.pi/extensions/lib/fm-operational-input.ts"
 mkdir -p "$repo/bin"
-cp "$ROOT/bin/fm-operational-input.sh" "$repo/bin/fm-operational-input.sh"
+cp "$ROOT/bin/fm-host-platform-lib.sh" "$ROOT/bin/fm-operational-input.sh" "$repo/bin/"
 cat > "$repo/bin/fm-watch-arm.sh" <<'SH'
 #!/usr/bin/env bash
 if [ "${1:-}" = --handling-delivered ]; then

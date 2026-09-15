@@ -48,6 +48,10 @@ import { fileURLToPath } from "node:url";
 // typebox resolves inside omp's extension loader (verified, omp 18.1.11); the
 // injected TypeBox compatibility shim keeps it available for tool parameters.
 import { Type } from "typebox";
+import {
+  firstmateHostPreflight,
+  reportFirstmateHostRefusal,
+} from "../../.pi/extensions/lib/fm-host-platform.ts";
 // The operational-input encoder is shared with the omp extensions; its owner
 // resolves bin/fm-operational-input.sh relative to its own location, which is
 // the same repository root this file lives in.
@@ -128,6 +132,7 @@ const marker = `${state}/.omp-watch-extension-loaded`;
 const handoffDir = `${state}/extensions/omp-primary-watch`;
 const actionableHandoff = `${handoffDir}/session-replacement-actionable.json`;
 const extensionVersion = `sha256:${createHash("sha256").update(readFileSync(extensionFile)).digest("hex")}`;
+const hostPreflight = firstmateHostPreflight(fmRoot);
 const retryBaseMs = positiveInteger("FM_WATCH_REARM_RETRY_BASE_MS", 250);
 const retryMaxMs = positiveInteger("FM_WATCH_REARM_RETRY_MAX_MS", 4000);
 const retryLimit = positiveInteger("FM_WATCH_REARM_RETRY_LIMIT", 5);
@@ -475,9 +480,14 @@ async function stopSessionGeneration(generation: SessionGeneration, replacement:
 const cleanupOnProcessExit = () => {
   if (activeGeneration) stopGeneration(activeGeneration);
 };
-process.once("exit", cleanupOnProcessExit);
 
 export default function (pi: ExtensionAPI) {
+  if (!hostPreflight.supported) {
+    reportFirstmateHostRefusal(hostPreflight);
+    return;
+  }
+  process.once("exit", cleanupOnProcessExit);
+
   let generation = createGeneration();
   activateGeneration(generation);
 

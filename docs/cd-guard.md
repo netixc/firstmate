@@ -120,6 +120,7 @@ The cd-guard never duplicates shell lexing; it adds only the cd-specific decisio
 | omp | `.omp/extensions/fm-primary-turnend-guard.ts` `tool_call` handler | Returns `{block: true, reason}` and omp surfaces the reason to the model; runs before the watcher-arm seatbelt in the same auto-discovered extension, so no `-e` flag is needed. |
 
 Each harness runs the cd-guard alongside the watcher-arm seatbelt; the two are independent checks, and either deny blocks the command.
+The Pi, omp, and OpenCode adapters also block when either checker exits unexpectedly or cannot execute, so a missing guard cannot grant permission.
 Every shell variable reference in the Grok hook command carries an inline default (`${GROK_WORKSPACE_ROOT:-}`) because Grok expands the raw hook command before `bash -lc` runs it, the same requirement documented in `docs/arm-pretool-check.md`.
 
 ## Automated validation

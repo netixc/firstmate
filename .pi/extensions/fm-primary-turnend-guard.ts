@@ -5,6 +5,10 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
+  firstmateHostPreflight,
+  reportFirstmateHostRefusal,
+} from "./lib/fm-host-platform.ts";
+import {
   classifyFirstmateCurrentOperationalText,
   encodeFirstmateOperationalInput,
 } from "./lib/fm-operational-input.ts";
@@ -20,6 +24,7 @@ const fmHome = process.env.FM_HOME || process.env.FM_ROOT_OVERRIDE || root;
 const state = process.env.FM_STATE_OVERRIDE || `${fmHome}/state`;
 const marker = `${state}/.pi-turnend-extension-loaded`;
 const extensionVersion = `sha256:${createHash("sha256").update(readFileSync(extensionFile)).digest("hex")}`;
+const hostPreflight = firstmateHostPreflight(root);
 
 function parentPid(pid: string): string {
   const result = spawnSync("ps", ["-o", "ppid=", "-p", pid], { encoding: "utf8" });
@@ -421,16 +426,17 @@ function runChecker(script: string, command: string): Promise<{ code: number; st
       child = spawn(`${root}/bin/${script}`, ["--command", command], {
         stdio: ["ignore", "ignore", "pipe"],
       });
-    } catch {
-      resolveResult({ code: 0, stderr: "" });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      resolveResult({ code: 127, stderr: `${script} checker could not execute: ${detail}` });
       return;
     }
     let stderr = "";
     child.stderr?.on("data", (chunk) => {
       stderr += chunk.toString();
     });
-    child.on("error", () => resolveResult({ code: 0, stderr: "" }));
-    child.on("close", (code) => resolveResult({ code: code ?? 0, stderr }));
+    child.on("error", (error) => resolveResult({ code: 127, stderr: `${script} checker could not execute: ${error.message}` }));
+    child.on("close", (code) => resolveResult({ code: code ?? 127, stderr }));
   });
 }
 
@@ -443,6 +449,15 @@ function runCdCheck(command: string): Promise<{ code: number; stderr: string }> 
 }
 
 export default function (pi: ExtensionAPI) {
+  if (!hostPreflight.supported) {
+    reportFirstmateHostRefusal(hostPreflight);
+    pi.on?.("tool_call", (event) => {
+      if (event.type !== "tool_call" || event.toolName !== "bash") return {};
+      return { block: true, reason: hostPreflight.diagnostic };
+    });
+    return;
+  }
+
   let sessionstartGeneration: SessionstartGeneration | null = null;
   let sessionstartExitListenerRegistered = false;
   const cleanupSessionstartOnProcessExit = (): void => {
@@ -522,12 +537,12 @@ export default function (pi: ExtensionAPI) {
     const command = String((event.input as { command?: unknown })?.command ?? "");
     if (!command) return {};
     const cdResult = await runCdCheck(command);
-    if (cdResult.code === 2) {
-      return { block: true, reason: cdResult.stderr.trim() || "denied by the cd-guard PreToolUse seatbelt" };
+    if (cdResult.code !== 0) {
+      return { block: true, reason: cdResult.stderr.trim() || "denied because the cd-guard PreToolUse seatbelt failed" };
     }
     const result = await runPretoolCheck(command);
-    if (result.code !== 2) return {};
-    return { block: true, reason: result.stderr.trim() || "denied by the watcher-arm PreToolUse seatbelt" };
+    if (result.code === 0) return {};
+    return { block: true, reason: result.stderr.trim() || "denied because the watcher-arm PreToolUse seatbelt failed" };
   });
 
   pi.on("agent_settled", async () => {

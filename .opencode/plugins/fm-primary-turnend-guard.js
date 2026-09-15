@@ -1,6 +1,10 @@
 import { spawn } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
+import {
+  firstmateHostPreflight,
+  reportFirstmateHostRefusal,
+} from "../../.pi/extensions/lib/fm-host-platform.ts";
 import { encodeFirstmateOperationalInput } from "./lib/fm-operational-input.js";
 
 const COORDINATOR_KEY = "__firstmateOpenCodeWatchArm";
@@ -56,6 +60,11 @@ async function letWatchArmRun(sessionID, client) {
 
 export const FmPrimaryTurnendGuard = async ({ client, directory, worktree }) => {
   const root = worktree ? resolvePath(worktree) : await resolveRoot(directory);
+  const hostPreflight = firstmateHostPreflight(root);
+  if (!hostPreflight.supported) {
+    reportFirstmateHostRefusal(hostPreflight);
+    return { event: async () => {} };
+  }
 
   return {
     event: async ({ event }) => {

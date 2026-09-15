@@ -1,6 +1,10 @@
 import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawn } from "node:child_process";
+import {
+  firstmateHostPreflight,
+  reportFirstmateHostRefusal,
+} from "../../.pi/extensions/lib/fm-host-platform.ts";
 
 // PreToolUse seatbelt for OpenCode: the arm mechanism itself lives entirely in
 // fm-primary-watch-arm.js (a plugin-owned child process, never a model tool
@@ -22,8 +26,8 @@ function runProcess(command, args) {
     child.stderr.on("data", (chunk) => {
       stderr += chunk.toString();
     });
-    child.on("error", () => resolvePromise({ code: 0, stdout: "", stderr: "" }));
-    child.on("close", (code) => resolvePromise({ code: code ?? 0, stdout, stderr }));
+    child.on("error", (error) => resolvePromise({ code: 127, stdout: "", stderr: error.message }));
+    child.on("close", (code) => resolvePromise({ code: code ?? 127, stdout, stderr }));
   });
 }
 
@@ -47,17 +51,20 @@ export const FmPrimaryPretoolCheck = async ({ directory, worktree }) => {
       return resolve(worktree);
     }
   })() : await resolveRoot(directory);
+  const hostPreflight = firstmateHostPreflight(root);
+  if (!hostPreflight.supported) reportFirstmateHostRefusal(hostPreflight);
 
   return {
     "tool.execute.before": async (input, output) => {
       if (!root || input?.tool !== "bash") return;
+      if (!hostPreflight.supported) throw new Error(hostPreflight.diagnostic);
       const command = output?.args?.command;
       if (!command || typeof command !== "string") return;
 
       const result = await runProcess(`${root}/bin/fm-arm-pretool-check.sh`, ["--command", command]);
-      if (result.code !== 2) return;
+      if (result.code === 0) return;
 
-      const reason = result.stderr.trim() || "denied by the watcher-arm PreToolUse seatbelt";
+      const reason = result.stderr.trim() || "denied because the watcher-arm PreToolUse seatbelt failed";
       throw new Error(reason);
     },
   };

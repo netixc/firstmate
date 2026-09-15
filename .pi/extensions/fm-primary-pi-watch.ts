@@ -29,6 +29,10 @@ import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
 import { Box, Container, Text, type Component } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
+import {
+  firstmateHostPreflight,
+  reportFirstmateHostRefusal,
+} from "./lib/fm-host-platform.ts";
 import { registerFirstmateTool } from "./lib/fm-native-contract.ts";
 import {
   createBranchDispatchOffer,
@@ -137,6 +141,7 @@ const marker = `${state}/.pi-watch-extension-loaded`;
 const handoffDir = `${state}/extensions/pi-primary-watch`;
 const actionableHandoff = `${handoffDir}/session-replacement-actionable.json`;
 const extensionVersion = `sha256:${createHash("sha256").update(readFileSync(extensionFile)).digest("hex")}`;
+const hostPreflight = firstmateHostPreflight(fmRoot);
 const retryBaseMs = positiveInteger("FM_WATCH_REARM_RETRY_BASE_MS", 250);
 const retryMaxMs = positiveInteger("FM_WATCH_REARM_RETRY_MAX_MS", 4000);
 const retryLimit = positiveInteger("FM_WATCH_REARM_RETRY_LIMIT", 5);
@@ -484,9 +489,14 @@ async function stopSessionGeneration(generation: SessionGeneration, replacement:
 const cleanupOnProcessExit = () => {
   if (activeGeneration) stopGeneration(activeGeneration);
 };
-process.once("exit", cleanupOnProcessExit);
 
 export default function (pi: ExtensionAPI) {
+  if (!hostPreflight.supported) {
+    reportFirstmateHostRefusal(hostPreflight);
+    return;
+  }
+  process.once("exit", cleanupOnProcessExit);
+
   let generation = createGeneration();
   activateGeneration(generation);
 

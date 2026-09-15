@@ -146,6 +146,7 @@ run_ahoy_case() {
 run_ahoy_transcript_regressions() {
   mkdir -p \
     "$AHOY_PROJECT/.opencode/plugins" \
+    "$AHOY_PROJECT/.pi/extensions/lib" \
     "$AHOY_PROJECT/.agents/skills/ahoy" \
     "$AHOY_PROJECT/.agents/skills/bearings" \
     "$AHOY_PROJECT/bin"
@@ -153,10 +154,12 @@ run_ahoy_transcript_regressions() {
   cp "$ROOT/.opencode/plugins/fm-primary-sessionstart-nudge.js" \
     "$ROOT/.opencode/plugins/package.json" \
     "$AHOY_PROJECT/.opencode/plugins/"
+  cp "$ROOT/.pi/extensions/lib/fm-host-platform.ts" "$AHOY_PROJECT/.pi/extensions/lib/"
   cp \
     "$ROOT/bin/fm-sessionstart-nudge.sh" \
     "$ROOT/bin/fm-primary-scope-lib.sh" \
     "$ROOT/bin/fm-gate-refuse-lib.sh" \
+    "$ROOT/bin/fm-host-platform-lib.sh" \
     "$ROOT/bin/fm-operational-input.sh" \
     "$AHOY_PROJECT/bin/"
   cp "$ROOT/.agents/skills/ahoy/SKILL.md" "$AHOY_PROJECT/.agents/skills/ahoy/SKILL.md"

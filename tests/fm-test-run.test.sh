@@ -113,6 +113,7 @@ init_changed_fixture_repo() {
     fm-pr-merge.test.sh \
     fm-procevent-quota.test.sh \
     fm-quota-choose.test.sh \
+    fm-extension-host-preflight.test.sh \
     fm-pi-watch-extension.test.sh \
     fm-remote-doctor.test.sh \
     fm-remote-entrypoint.test.sh \
@@ -417,6 +418,8 @@ test_changed_dependency_selection_and_unmapped_failure() {
   listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD)
   assert_contains "$listed" "tests/fm-session-start.test.sh" \
     "host-platform owner selects mandatory startup coverage"
+  assert_contains "$listed" "tests/fm-extension-host-preflight.test.sh" \
+    "host-platform owner selects extension refusal coverage"
   assert_contains "$listed" "tests/fm-remote-doctor.test.sh" \
     "host-platform owner selects remote readiness coverage"
   assert_contains "$listed" "tests/fm-remote-entrypoint.test.sh" \

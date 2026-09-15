@@ -1,6 +1,10 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
+import {
+  firstmateHostPreflight,
+  reportFirstmateHostRefusal,
+} from "../../.pi/extensions/lib/fm-host-platform.ts";
 import { encodeFirstmateOperationalInput } from "./lib/fm-operational-input.js";
 
 const COORDINATOR_KEY = "__firstmateOpenCodeWatchArm";
@@ -477,6 +481,11 @@ async function ensureArm(paths, sessionID, client, predecessorArmPid = "", inclu
 export const FmPrimaryWatchArm = async ({ client, directory, worktree }) => {
   const root = worktree ? resolvePath(worktree) : await resolveRoot(directory);
   const paths = effectivePaths(root);
+  const hostPreflight = firstmateHostPreflight(paths.root);
+  if (!hostPreflight.supported) {
+    reportFirstmateHostRefusal(hostPreflight);
+    return { event: async () => {} };
+  }
   globalThis[COORDINATOR_KEY] = {
     ensureArmed: (sessionID, activeClient) => ensureArm(paths, sessionID, activeClient ?? client),
   };
