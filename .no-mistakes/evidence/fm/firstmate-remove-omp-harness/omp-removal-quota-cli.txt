@@ -1,0 +1,5 @@
+ok - retired omp candidate fails closed
+ok - Muse candidate is accepted
+ok - Muse uses Meta quota
+ok - unsupported harness is rejected
+# all fm-quota-choose tests passed
