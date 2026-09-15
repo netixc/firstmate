@@ -12,6 +12,8 @@ TMP_ROOT=$(cd "$TMP_ROOT" && pwd -P)
 PARENT="$TMP_ROOT/parent"
 REMOTE="$TMP_ROOT/remote"
 FAKEBIN=$(fm_fakebin "$TMP_ROOT/fake")
+HOST_BIN=$(fm_fakebin "$TMP_ROOT/host")
+fm_fake_uname "$HOST_BIN" Linux
 CLAIMS="$TMP_ROOT/claims"
 mkdir -p "$PARENT/data" "$PARENT/state" "$REMOTE/state" "$REMOTE/data/reply" "$CLAIMS"
 # shellcheck source=bin/fm-remote-job-lib.sh
@@ -58,12 +60,12 @@ SH
 chmod +x "$FAKEBIN/fake-ssh"
 
 remote_env() {
+  PATH="$HOST_BIN:$PATH" \
   FM_HOME="$PARENT" \
   FM_ROOT_OVERRIDE="$ROOT" \
   FM_PROCEVENT_CLAIM_ROOT="$CLAIMS" \
   FM_SSH_BIN="$FAKEBIN/fake-ssh" \
   FM_FAKE_REMOTE_ENTRYPOINT="$ROOT/bin/fm-remote-entrypoint.sh" \
-  FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux \
   FM_REMOTE_JOB_STATE_ROOT="$TMP_ROOT/remote-jobs" \
   FM_REMOTE_REPLY_WAIT_SECONDS=10 \
   "$@"

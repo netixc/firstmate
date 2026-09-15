@@ -14,6 +14,8 @@ PARENT="$TMP_ROOT/parent"
 REMOTE_ROOT="$TMP_ROOT/remote-root"
 REMOTE="$TMP_ROOT/remote"
 FAKEBIN=$(fm_fakebin "$TMP_ROOT/fake")
+HOST_BIN=$(fm_fakebin "$TMP_ROOT/host")
+fm_fake_uname "$HOST_BIN" Linux
 SSH_COUNT="$TMP_ROOT/ssh.count"
 WAKE_LOG="$TMP_ROOT/wake.log"
 mkdir -p "$PARENT/data" "$PARENT/state" "$REMOTE_ROOT/bin" \
@@ -127,6 +129,7 @@ SH
 chmod +x "$FAKEBIN/fake-ssh"
 
 handoff_env() {
+  PATH="$HOST_BIN:$PATH" \
   FM_HOME="$PARENT" \
   FM_ROOT_OVERRIDE="$ROOT" \
   FM_SSH_BIN="$FAKEBIN/fake-ssh" \
@@ -137,7 +140,6 @@ handoff_env() {
   FM_FAKE_SERIALIZE_ENTERED="$TMP_ROOT/serialize.entered" \
   FM_FAKE_SERIALIZE_RELEASE="$TMP_ROOT/serialize.release" \
   FM_FAKE_REMOTE_ENTRYPOINT="$REMOTE_ROOT/bin/fm-remote-entrypoint.sh" \
-  FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux \
   FM_REMOTE_JOB_STATE_ROOT="$TMP_ROOT/remote-jobs" \
   "$@"
 }

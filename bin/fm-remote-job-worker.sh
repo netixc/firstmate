@@ -757,9 +757,6 @@ worker_run_job() { # <account-home> <job-dir>
     "FM_ROOT_OVERRIDE=$root"
     FM_REMOTE_JOB_ACTIVE=1
   )
-  if [ -n "${FM_REMOTE_JOB_PLATFORM_OVERRIDE:-}" ]; then
-    child_env+=("FM_REMOTE_JOB_PLATFORM_OVERRIDE=$FM_REMOTE_JOB_PLATFORM_OVERRIDE")
-  fi
   remaining=$((deadline - $(date +%s)))
   [ "$remaining" -gt 0 ] || {
     worker_cleanup_output_capture "$job" "$stdout_reader" "$stderr_reader"

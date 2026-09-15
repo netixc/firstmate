@@ -70,7 +70,6 @@ SSH_HOLDER_PID=$HOLDER_PID
 new_case() {
   local platform=$1 want_herdr=${2:-with-herdr} want_gui=${3:-gui}
   unset CASE_REMOTE_JOB_ACTIVE
-  unset CASE_PLATFORM_OVERRIDE
   unset CASE_DSCL_FAIL
   unset CASE_DSCL_HANG
   unset CASE_SECOND_LOGIN_SHELL
@@ -95,10 +94,7 @@ new_case() {
   : > "$CASE_FORBIDDEN_LOG"
   [ "$want_gui" != gui ] || touch "$CASE_STATE/gui-session"
 
-  cat > "$CASE_BIN/uname" <<SH
-#!/usr/bin/env bash
-printf '%s\n' '$platform'
-SH
+  fm_fake_uname "$CASE_BIN" "$platform"
 
   cat > "$CASE_BIN/launchctl" <<'SH'
 #!/usr/bin/env bash
@@ -320,7 +316,6 @@ doctor() {
     FM_FAKE_DSCL_HANG="${CASE_DSCL_HANG:-0}" \
     FM_LAUNCH_AGENT_SHELL="$([ "${CASE_RESOLVE_DSCL:-0}" = 1 ] || printf '%s' "$CASE_LOGIN_SHELL")" \
     SHELL="${CASE_ENV_SHELL-${SHELL-}}" \
-    FM_REMOTE_JOB_PLATFORM_OVERRIDE="${CASE_PLATFORM_OVERRIDE-}" \
     FM_REMOTE_JOB_ACTIVE="${CASE_REMOTE_JOB_ACTIVE-1}" \
     "$ROOT/bin/fm-remote-doctor.sh" "$@" 2>&1
   )
@@ -824,13 +819,12 @@ pass "--fix creates only owned version-manager wrappers and never clobbers an op
 
 new_case Linux with-herdr no-gui
 CASE_REMOTE_JOB_ACTIVE=
-CASE_PLATFORM_OVERRIDE=Linux
-rm -f "$CASE_BIN/sleep" "$CASE_BIN/uname"
+rm -f "$CASE_BIN/sleep"
 mkdir -p "$CASE_HOME/.local/bin"
 for tool in herdr tasks-axi treehouse claude; do
   ln -s "$CASE_BIN/$tool" "$CASE_HOME/.local/bin/$tool"
 done
-HOME="$CASE_HOME" FM_ROOT_OVERRIDE="$ROOT" FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux \
+HOME="$CASE_HOME" PATH="$CASE_BIN:$BASE_PATH" FM_ROOT_OVERRIDE="$ROOT" \
   "$ROOT/bin/fm-remote-job-worker.sh" > "$CASE_STATE/worker.out" 2> "$CASE_STATE/worker.err" &
 DOCTOR_WORKER_PID=$!
 for _ in $(seq 1 100); do

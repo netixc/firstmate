@@ -2376,6 +2376,7 @@ test_secondmate_promotion_uses_teardown_parent_resolution() {
 
 REMOTE_FIXTURE_ROOT=
 REMOTE_FIXTURE_SSH=
+REMOTE_FIXTURE_HOST_BIN=
 REMOTE_FIXTURE_JOBS=
 
 # remote_fixture_prepare: build the shared remote checkout and fake ssh once.
@@ -2422,7 +2423,9 @@ case "${FM_FAKE_SSH_MODE:-normal}" in
 esac
 SH
   chmod +x "$fakebin/fake-ssh"
+  fm_fake_uname "$fakebin" Linux
   REMOTE_FIXTURE_SSH="$fakebin/fake-ssh"
+  REMOTE_FIXTURE_HOST_BIN=$fakebin
 }
 
 # make_remote_route <home> <secondmate-id>: register a REMOTE secondmate route in
@@ -2446,14 +2449,13 @@ EOF
 run_pf_remote() {  # <home> <args...>
   local home=$1
   shift
-  PATH="$home/fakebin:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" \
+  PATH="$REMOTE_FIXTURE_HOST_BIN:$home/fakebin:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FAKE_CURL_LOG="${FAKE_CURL_LOG:-}" \
     FAKE_FOLLOWUP_CODE="${FAKE_FOLLOWUP_CODE:-200}" \
     FMX_NOW_OVERRIDE="${FMX_NOW_OVERRIDE:-$PF_TEST_NOW}" \
     FM_SSH_BIN="$REMOTE_FIXTURE_SSH" \
     FM_FAKE_SSH_MODE="${FM_FAKE_SSH_MODE:-normal}" \
     FM_FAKE_REMOTE_ENTRYPOINT="$REMOTE_FIXTURE_ROOT/bin/fm-remote-entrypoint.sh" \
-    FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux \
     FM_REMOTE_JOB_STATE_ROOT="$REMOTE_FIXTURE_JOBS" \
     "$PF" "$@"
 }
@@ -2462,14 +2464,13 @@ run_pf_remote_timed() {  # <seconds> <home> <args...>
   local seconds=$1 home=$2
   shift 2
   fm_run_timed "$seconds" env \
-    PATH="$home/fakebin:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" \
+    PATH="$REMOTE_FIXTURE_HOST_BIN:$home/fakebin:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FAKE_CURL_LOG="${FAKE_CURL_LOG:-}" \
     FAKE_FOLLOWUP_CODE="${FAKE_FOLLOWUP_CODE:-200}" \
     FMX_NOW_OVERRIDE="${FMX_NOW_OVERRIDE:-$PF_TEST_NOW}" \
     FM_SSH_BIN="$REMOTE_FIXTURE_SSH" \
     FM_FAKE_SSH_MODE="${FM_FAKE_SSH_MODE:-normal}" \
     FM_FAKE_REMOTE_ENTRYPOINT="$REMOTE_FIXTURE_ROOT/bin/fm-remote-entrypoint.sh" \
-    FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux \
     FM_REMOTE_JOB_STATE_ROOT="$REMOTE_FIXTURE_JOBS" \
     "$PF" "$@"
 }

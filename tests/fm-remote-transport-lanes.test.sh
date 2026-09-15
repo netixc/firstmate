@@ -37,6 +37,8 @@ LOCAL_HOME="$TMP_ROOT/local-home"
 ACCOUNT_HOME="$TMP_ROOT/account"
 STATE_ROOT="$TMP_ROOT/remote-jobs"
 FAKEBIN=$(fm_fakebin "$TMP_ROOT/fakebin")
+fm_fake_uname "$FAKEBIN" Linux
+export PATH="$FAKEBIN:$PATH"
 mkdir -p "$REMOTE_ROOT/bin" "$HOME_A" "$HOME_B" "$HOME_EDGE" "$LOCAL_HOME/data" "$ACCOUNT_HOME"
 
 cleanup_lane_fixture() {
@@ -111,7 +113,6 @@ SH
 chmod +x "$FAKEBIN/fake-ssh"
 
 export FM_REMOTE_JOB_STATE_ROOT="$STATE_ROOT"
-export FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux
 export FM_REMOTE_JOB_QUEUE_TIMEOUT=60
 export FM_REMOTE_JOB_TIMEOUT=30
 export FM_REMOTE_JOB_STAGE_REAP_SECONDS=1
@@ -172,7 +173,6 @@ wait_for_state() { # <id> <state>
 }
 
 HOME="$ACCOUNT_HOME" FM_ROOT_OVERRIDE="$REMOTE_ROOT" FM_REMOTE_JOB_STATE_ROOT="$STATE_ROOT" \
-  FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux \
   "$REMOTE_ROOT/bin/fm-remote-job-worker.sh" > "$TMP_ROOT/worker.out" 2> "$TMP_ROOT/worker.err" &
 for _ in $(seq 1 100); do
   [ -f "$STATE_ROOT/worker.ready" ] && break
@@ -334,7 +334,7 @@ ORPHAN_FINISH="$TMP_ROOT/orphan-cancel-finish"
 env FM_HOME="$LOCAL_HOME" FM_ROOT_OVERRIDE="$REMOTE_ROOT" \
   FM_SSH_BIN="$FAKEBIN/fake-ssh" \
   FM_FAKE_REMOTE_ENTRYPOINT="$REMOTE_ROOT/bin/fm-remote-entrypoint.sh" \
-  FM_REMOTE_JOB_STATE_ROOT="$STATE_ROOT" FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux \
+  FM_REMOTE_JOB_STATE_ROOT="$STATE_ROOT" \
   bash -c '
     "$1/bin/fm-on.sh" build fm-two-phase-job.sh "$2" "$3" 12 >/dev/null 2>&1 &
     while [ ! -f "$2" ]; do sleep 0.1; done
@@ -361,7 +361,7 @@ for tag in c1 c2 c3; do
   fm_run_timed 15 env FM_HOME="$LOCAL_HOME" FM_ROOT_OVERRIDE="$REMOTE_ROOT" \
     FM_SSH_BIN="$FAKEBIN/fake-ssh" \
     FM_FAKE_REMOTE_ENTRYPOINT="$REMOTE_ROOT/bin/fm-remote-entrypoint.sh" \
-    FM_REMOTE_JOB_STATE_ROOT="$STATE_ROOT" FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux \
+    FM_REMOTE_JOB_STATE_ROOT="$STATE_ROOT" \
     "$ROOT/bin/fm-on.sh" ios fm-touch-job.sh "$TMP_ROOT/burst-$tag" >/dev/null 2>&1 || rc=$?
   [ "$rc" -eq 0 ] || fail "post-cancellation burst command $tag failed with $rc"
   assert_present "$TMP_ROOT/burst-$tag" "post-cancellation burst command $tag did not run"
@@ -379,7 +379,7 @@ rc=0
 fm_run_timed 20 env FM_HOME="$LOCAL_HOME" FM_ROOT_OVERRIDE="$REMOTE_ROOT" \
   FM_SSH_BIN="$FAKEBIN/fake-ssh" \
   FM_FAKE_REMOTE_ENTRYPOINT="$REMOTE_ROOT/bin/fm-remote-entrypoint.sh" \
-  FM_REMOTE_JOB_STATE_ROOT="$STATE_ROOT" FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux \
+  FM_REMOTE_JOB_STATE_ROOT="$STATE_ROOT" \
   "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh state rsm \
   < <(sleep 30) > "$TMP_ROOT/state-out" 2> "$TMP_ROOT/state-err" || rc=$?
 [ "$rc" -ne 124 ] || fail "a control-state call with an open stdin pipe wedged staging"

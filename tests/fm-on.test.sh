@@ -30,6 +30,8 @@ REMOTE_ROOT="$TMP_ROOT/remote-root"
 REMOTE_HOME="$TMP_ROOT/remote-home"
 TOOL_PROBE_LOG="$TMP_ROOT/tool-probe.log"
 FAKEBIN=$(fm_fakebin "$TMP_ROOT/fakebin")
+HOST_BIN=$(fm_fakebin "$TMP_ROOT/host")
+fm_fake_uname "$HOST_BIN" Linux
 SSH_LOG="$TMP_ROOT/ssh.log"
 SSH_COUNT="$TMP_ROOT/ssh.count"
 mkdir -p "$LOCAL_HOME/data" "$REMOTE_ROOT/bin" "$REMOTE_HOME"
@@ -119,13 +121,13 @@ EOF
 write_registry
 
 fm_on() {
+  PATH="$HOST_BIN:$PATH" \
   FM_HOME="$LOCAL_HOME" \
   FM_ROOT_OVERRIDE="$REMOTE_ROOT" \
   FM_SSH_BIN="$FAKEBIN/fake-ssh" \
   FM_FAKE_SSH_COUNT="$SSH_COUNT" \
   FM_FAKE_SSH_LOG="$SSH_LOG" \
   FM_FAKE_REMOTE_ENTRYPOINT="$REMOTE_ROOT/bin/fm-remote-entrypoint.sh" \
-  FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux \
   FM_REMOTE_JOB_STATE_ROOT="$TMP_ROOT/remote-jobs" \
   "$ROOT/bin/fm-on.sh" "$@"
 }
@@ -415,7 +417,7 @@ untracked_root_b64=$(printf '%s' "$REMOTE_ROOT" | base64 | tr -d '\n')
 untracked_home_b64=$(printf '%s' "$REMOTE_HOME" | base64 | tr -d '\n')
 untracked_argv_b64=$(printf '%s\0' fm-untracked.sh | base64 | tr -d '\n')
 set +e
-out=$(FM_GIT_SHADOW_LOG="$GIT_SHADOW_LOG" FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux \
+out=$(PATH="$HOST_BIN:$PATH" FM_GIT_SHADOW_LOG="$GIT_SHADOW_LOG" \
   FM_REMOTE_JOB_STATE_ROOT="$TMP_ROOT/remote-jobs" "$REMOTE_ROOT/bin/fm-remote-entrypoint.sh" \
   1 "$untracked_root_b64" "$untracked_home_b64" "$untracked_argv_b64" 2>&1)
 rc=$?

@@ -11,6 +11,7 @@ set -u
 TMP_ROOT=$(fm_test_tmproot fm-remote-entrypoint)
 REAL_BIN="$TMP_ROOT/real-root/bin"
 LOCAL_BIN="$TMP_ROOT/local-bin"
+HOST_BIN=$(fm_fakebin "$TMP_ROOT/host")
 mkdir -p "$REAL_BIN" "$LOCAL_BIN"
 cp "$ROOT/bin/fm-host-platform-lib.sh" "$ROOT/bin/fm-remote-entrypoint.sh" \
   "$ROOT/bin/fm-remote-job-lib.sh" "$REAL_BIN/"
@@ -47,7 +48,8 @@ test_unsupported_host_refuses_before_protocol_staging() {
   out="$TMP_ROOT/unsupported.stdout"
   err="$TMP_ROOT/unsupported.stderr"
   runtime_tmp="$TMP_ROOT/unsupported-tmp"
-  code=$(FM_REMOTE_JOB_PLATFORM_OVERRIDE=MINGW64_NT-10.0 TMPDIR="$runtime_tmp" \
+  fm_fake_uname "$HOST_BIN" MINGW64_NT-10.0
+  code=$(PATH="$HOST_BIN:$PATH" TMPDIR="$runtime_tmp" \
     run_entrypoint "$REAL_BIN/fm-remote-entrypoint.sh" "$out" "$err")
 
   expect_code 64 "$code" "unsupported remote entrypoint exit code"

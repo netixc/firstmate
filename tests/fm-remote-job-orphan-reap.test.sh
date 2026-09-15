@@ -19,6 +19,8 @@ set -u
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
 TMP_ROOT=$(fm_test_tmproot fm-remote-job-orphan-reap)
 TMP_ROOT=$(cd "$TMP_ROOT" && pwd -P)
+HOST_BIN=$(fm_fakebin "$TMP_ROOT/host")
+fm_fake_uname "$HOST_BIN" Linux
 REAPER="$ROOT/bin/fm-remote-job-reap-orphans.sh"
 
 TRACKED_PIDS=()
@@ -112,8 +114,8 @@ pid_is_numeric() {
 start_worker() {
   local root=$1 account_home=$2 state_root=$3 pid deadline
   pid=$(
+    export PATH="$HOST_BIN:$PATH"
     export FM_REMOTE_JOB_STATE_ROOT="$state_root"
-    export FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux
     export FM_REMOTE_JOB_ORPHAN_GRACE_SECONDS=1
     # shellcheck source=bin/fm-remote-job-lib.sh
     . "$ROOT/bin/fm-remote-job-lib.sh"

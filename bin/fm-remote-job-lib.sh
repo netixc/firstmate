@@ -144,12 +144,7 @@ fm_remote_job_validate_settings() {
 }
 
 fm_remote_job_platform_raw() {
-  local raw=${FM_REMOTE_JOB_PLATFORM_OVERRIDE:-}
-  if [ -n "$raw" ]; then
-    fm_host_platform_raw "$raw"
-  else
-    fm_host_platform_raw
-  fi
+  fm_host_platform_raw
 }
 
 fm_remote_job_platform_supported() {
@@ -775,8 +770,6 @@ fm_remote_job_reap() { # <account-home> <id>; only removes an exact completed re
 }
 
 fm_remote_job_path_mtime() { # <path>
-  # The platform override controls worker shape in isolated tests, not the host
-  # kernel's stat syntax.
   if [ "$(uname -s 2>/dev/null || true)" = Darwin ]; then /usr/bin/stat -f %m "$1" 2>/dev/null; else stat -c %Y "$1" 2>/dev/null; fi
 }
 
@@ -1194,7 +1187,6 @@ fm_remote_job_start_linux_worker() { # <remote-root> <account-home>
     HOME="$account_home" \
     FM_ROOT_OVERRIDE="$root" \
     FM_REMOTE_JOB_STATE_ROOT="$FM_REMOTE_JOB_STATE" \
-    FM_REMOTE_JOB_PLATFORM_OVERRIDE="${FM_REMOTE_JOB_PLATFORM_OVERRIDE:-}" \
     "$worker" >> "$FM_REMOTE_JOB_STATE/logs/$FM_REMOTE_JOB_LABEL.log" 2>&1 < /dev/null &
   pid=$!
   set +m

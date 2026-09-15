@@ -336,7 +336,8 @@ fm_live_gate() {
 #
 # fm_fakebin <dir> creates <dir>/fakebin and echoes it; prepend it to PATH to
 # shadow real tools with stubs. fm_fake_exit0 drops trivial exit-0 stubs for the
-# named tools into a fakebin dir. fm_fake_crash_injector drops the shim a fake
+# named tools into a fakebin dir. fm_fake_uname makes host detection report a
+# fixture-owned platform. fm_fake_crash_injector drops the shim a fake
 # uses to crash the process under test deterministically. fm_fake_version_tool
 # drops a stub for a tool whose installed version bootstrap gates, so a fixture
 # cannot be reported as an unparseable build simply for answering `--version`
@@ -358,6 +359,41 @@ exit 0
 SH
     chmod +x "$fakebin/$tool"
   done
+}
+
+fm_fake_uname() { # <fakebin> <platform>
+  local fakebin=$1 platform=$2
+  printf '%s\n' "$platform" > "$fakebin/.fm-uname-platform"
+  /usr/bin/uname -s > "$fakebin/.fm-uname-real-platform"
+  cat > "$fakebin/uname" <<'SH'
+#!/usr/bin/env bash
+if [ "${1:-}" = -s ]; then
+  cat "$(dirname "$0")/.fm-uname-platform"
+  exit 0
+fi
+exec /usr/bin/uname "$@"
+SH
+  cat > "$fakebin/stat" <<'SH'
+#!/usr/bin/env bash
+fakebin=$(dirname "$0")
+if [ "$(cat "$fakebin/.fm-uname-platform")" = Linux ] &&
+  [ "$(cat "$fakebin/.fm-uname-real-platform")" = Darwin ] &&
+  [ "${1:-}" = -c ]; then
+  format=${2:-}
+  shift 2
+  case "$format" in
+    %Y) format=%m ;;
+    %a) format=%Lp ;;
+    %h) format=%l ;;
+    %s) format=%z ;;
+    %d:%i:%s:%Y:%Z) format=%d:%i:%z:%m:%c ;;
+    %s:%Y) format=%z:%m ;;
+  esac
+  exec /usr/bin/stat -f "$format" "$@"
+fi
+exec /usr/bin/stat "$@"
+SH
+  chmod +x "$fakebin/uname" "$fakebin/stat"
 }
 
 # fm_fake_crash_injector <fakebin>

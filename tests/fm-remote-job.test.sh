@@ -14,6 +14,7 @@ REMOTE_HOME="$TMP_ROOT/remote-home"
 ACCOUNT_HOME="$TMP_ROOT/account"
 STATE_ROOT="$TMP_ROOT/remote-jobs"
 RUNTIME_BIN="$TMP_ROOT/runtime-bin"
+HOST_BIN=$(fm_fakebin "$TMP_ROOT/host")
 FAKE_PERL_LOG="$TMP_ROOT/perl.log"
 REAL_GIT=$(command -v git)
 OTHER_PID=
@@ -113,7 +114,8 @@ pass "default queue and execution bounds independently cover long polls"
 
 # shellcheck disable=SC2031 # The earlier assignment was confined to DEFAULT_BOUNDS.
 export FM_REMOTE_JOB_STATE_ROOT="$STATE_ROOT"
-export FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux
+fm_fake_uname "$HOST_BIN" Linux
+export PATH="$HOST_BIN:$PATH"
 # shellcheck disable=SC2031 # The sourced defaults above were confined to DEFAULT_BOUNDS.
 export FM_REMOTE_JOB_QUEUE_TIMEOUT=5
 # shellcheck disable=SC2031 # The sourced defaults above were confined to DEFAULT_BOUNDS.
@@ -122,7 +124,7 @@ export FM_REMOTE_JOB_TIMEOUT=5
 . "$ROOT/bin/fm-remote-job-lib.sh"
 
 for UNSUPPORTED_REMOTE_PLATFORM in MINGW64_NT-10.0 FreeBSD darwin linux; do
-  FM_REMOTE_JOB_PLATFORM_OVERRIDE=$UNSUPPORTED_REMOTE_PLATFORM
+  fm_fake_uname "$HOST_BIN" "$UNSUPPORTED_REMOTE_PLATFORM"
   if fm_remote_job_ensure_worker "$REMOTE_ROOT" "$ACCOUNT_HOME"; then
     fail "unsupported remote platform $UNSUPPORTED_REMOTE_PLATFORM started a worker"
   fi
@@ -130,15 +132,16 @@ for UNSUPPORTED_REMOTE_PLATFORM in MINGW64_NT-10.0 FreeBSD darwin linux; do
     "unsupported remote platform $UNSUPPORTED_REMOTE_PLATFORM did not produce an explicit rejection"
   assert_absent "$STATE_ROOT" "unsupported remote platform $UNSUPPORTED_REMOTE_PLATFORM created worker state"
 done
-FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux
+fm_fake_uname "$HOST_BIN" Linux
 pass "remote worker startup rejects native-Windows and unknown hosts before state mutation"
 
 UNSUPPORTED_WORKER_STATE="$TMP_ROOT/unsupported-worker-state"
+fm_fake_uname "$HOST_BIN" MINGW64_NT-10.0
 UNSUPPORTED_WORKER_OUT=$(HOME="$ACCOUNT_HOME" FM_ROOT_OVERRIDE="$REMOTE_ROOT" \
   FM_REMOTE_JOB_STATE_ROOT="$UNSUPPORTED_WORKER_STATE" \
-  FM_REMOTE_JOB_PLATFORM_OVERRIDE=MINGW64_NT-10.0 \
   "$REMOTE_ROOT/bin/fm-remote-job-worker.sh" 2>&1)
 UNSUPPORTED_WORKER_RC=$?
+fm_fake_uname "$HOST_BIN" Linux
 expect_code 1 "$UNSUPPORTED_WORKER_RC" "unsupported direct remote worker refusal"
 assert_contains "$UNSUPPORTED_WORKER_OUT" "UNSUPPORTED_HOST: MINGW64_NT-10.0" \
   "direct remote worker did not explicitly reject its unsupported host"
@@ -210,9 +213,9 @@ MISE_EXPECTED=$(printf '%s\n' "$MISE_INSTALLS"/*/*/bin)
 rm -rf -- "$ACCOUNT_HOME/.local/share/mise"
 pass "operator PATH orders discovered tool installs deterministically"
 
-HOME="$ACCOUNT_HOME" PATH="$RUNTIME_BIN:/usr/bin:/bin:/usr/sbin:/sbin" FM_FAKE_PERL_LOG="$FAKE_PERL_LOG" \
+HOME="$ACCOUNT_HOME" PATH="$HOST_BIN:$RUNTIME_BIN:/usr/bin:/bin:/usr/sbin:/sbin" FM_FAKE_PERL_LOG="$FAKE_PERL_LOG" \
   FM_ROOT_OVERRIDE="$REMOTE_ROOT" FM_REMOTE_JOB_STATE_ROOT="$STATE_ROOT" \
-  FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux FM_REMOTE_JOB_TIMEOUT=5 \
+  FM_REMOTE_JOB_TIMEOUT=5 \
   "$REMOTE_ROOT/bin/fm-remote-job-worker.sh" > "$TMP_ROOT/worker.out" 2> "$TMP_ROOT/worker.err" &
 for _ in $(seq 1 100); do
   [ -f "$STATE_ROOT/worker.ready" ] && break
@@ -221,7 +224,7 @@ done
 assert_present "$STATE_ROOT/worker.ready" "the worker did not publish its readiness heartbeat"
 
 file_mode() {
-  if [ "$(uname)" = Darwin ]; then
+  if [ "$(/usr/bin/uname)" = Darwin ]; then
     stat -f %Lp "$1"
   else
     stat -c %a "$1"
@@ -483,7 +486,7 @@ for _ in $(seq 1 100); do
 done
 kill -0 "$WORKER_PID" 2>/dev/null && fail "the worker did not finish its TERM shutdown"
 HOME="$ACCOUNT_HOME" FM_ROOT_OVERRIDE="$REMOTE_ROOT" FM_REMOTE_JOB_STATE_ROOT="$STATE_ROOT" \
-  FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux FM_REMOTE_JOB_TIMEOUT=1 \
+  FM_REMOTE_JOB_TIMEOUT=1 \
   "$REMOTE_ROOT/bin/fm-remote-job-worker.sh" >> "$TMP_ROOT/worker.out" 2>> "$TMP_ROOT/worker.err" &
 for _ in $(seq 1 100); do
   [ -f "$STATE_ROOT/worker.ready" ] && break
@@ -605,7 +608,7 @@ assert_present "$STATE_ROOT/worker.lock/quarantine" "failed shutdown released wo
 fm_remote_job_probe "$ACCOUNT_HOME" && fail "quarantined worker ownership still reported ready"
 set +e
 HOME="$ACCOUNT_HOME" FM_ROOT_OVERRIDE="$REMOTE_ROOT" FM_REMOTE_JOB_STATE_ROOT="$STATE_ROOT" \
-  FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux "$REMOTE_ROOT/bin/fm-remote-job-worker.sh" \
+  "$REMOTE_ROOT/bin/fm-remote-job-worker.sh" \
   >> "$TMP_ROOT/worker.out" 2>> "$TMP_ROOT/worker.err"
 REPLACEMENT_RC=$?
 set -e
@@ -642,7 +645,7 @@ chmod 600 "$RECOVERY_STATE/worker.lock"/* "$RECOVERY_JOB/state" "$RECOVERY_JOB/.
 touch -t 200001010000 "$RECOVERY_STATE/worker.lock"
 set +e
 HOME="$RECOVERY_HOME" FM_ROOT_OVERRIDE="$REMOTE_ROOT" FM_REMOTE_JOB_STATE_ROOT="$RECOVERY_STATE" \
-  FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux "$REMOTE_ROOT/bin/fm-remote-job-worker.sh" \
+  "$REMOTE_ROOT/bin/fm-remote-job-worker.sh" \
   > "$TMP_ROOT/recovery-refused.out" 2> "$TMP_ROOT/recovery-refused.err"
 RECOVERY_REFUSED_RC=$?
 set -e
@@ -654,7 +657,7 @@ printf 'stale supervisor identity\n' > "$RECOVERY_JOB/.claim/supervisor_start"
 chmod 600 "$RECOVERY_JOB/.claim/owner" "$RECOVERY_JOB/.claim/owner_start" \
   "$RECOVERY_JOB/.claim/supervisor_start"
 HOME="$RECOVERY_HOME" FM_ROOT_OVERRIDE="$REMOTE_ROOT" FM_REMOTE_JOB_STATE_ROOT="$RECOVERY_STATE" \
-  FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux "$REMOTE_ROOT/bin/fm-remote-job-worker.sh" \
+  "$REMOTE_ROOT/bin/fm-remote-job-worker.sh" \
   > "$TMP_ROOT/recovery-worker.out" 2> "$TMP_ROOT/recovery-worker.err" &
 RECOVERY_WORKER_PID=$!
 for _ in $(seq 1 300); do
@@ -695,7 +698,7 @@ REPEAT_STATE="$TMP_ROOT/repeat-signal-jobs"
 mkdir -p "$REPEAT_HOME"
 chmod 700 "$REPEAT_HOME"
 HOME="$REPEAT_HOME" FM_ROOT_OVERRIDE="$REMOTE_ROOT" FM_REMOTE_JOB_STATE_ROOT="$REPEAT_STATE" \
-  FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux "$REMOTE_ROOT/bin/fm-remote-job-worker.sh" --serve \
+  "$REMOTE_ROOT/bin/fm-remote-job-worker.sh" --serve \
   > "$TMP_ROOT/repeat-signal.out" 2> "$TMP_ROOT/repeat-signal.err" &
 REPEAT_WORKER_PID=$!
 for _ in $(seq 1 300); do
@@ -726,7 +729,7 @@ assert_absent "$REPEAT_STATE/worker.lock" \
 assert_absent "$REPEAT_STATE/worker.ready" \
   "a repeatedly signalled shutdown left its readiness heartbeat behind"
 HOME="$REPEAT_HOME" FM_ROOT_OVERRIDE="$REMOTE_ROOT" FM_REMOTE_JOB_STATE_ROOT="$REPEAT_STATE" \
-  FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux "$REMOTE_ROOT/bin/fm-remote-job-worker.sh" --serve \
+  "$REMOTE_ROOT/bin/fm-remote-job-worker.sh" --serve \
   >> "$TMP_ROOT/repeat-signal.out" 2>> "$TMP_ROOT/repeat-signal.err" &
 REPEAT_WORKER_PID=$!
 for _ in $(seq 1 600); do
@@ -763,7 +766,7 @@ exit "$FM_TEST_SUPERVISOR_CHILD_STATUS"
 SH
 chmod +x "$RESTART_ROOT/bin"/*.sh
 HOME="$RESTART_HOME" FM_ROOT_OVERRIDE="$RESTART_ROOT" \
-  FM_REMOTE_JOB_STATE_ROOT="$RESTART_STATE" FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux \
+  FM_REMOTE_JOB_STATE_ROOT="$RESTART_STATE" \
   FM_REMOTE_JOB_SUPERVISOR_HEALTHY_SECONDS=1 FM_REMOTE_JOB_SUPERVISOR_MAX_RESTARTS=3 \
   FM_REMOTE_JOB_SUPERVISOR_MAX_BACKOFF_SECONDS=0 FM_TEST_SUPERVISOR_CHILD_LOG="$RESTART_CHILD_LOG" \
   FM_TEST_SUPERVISOR_CHILD_SECONDS=1.1 FM_TEST_SUPERVISOR_CHILD_STATUS=1 \

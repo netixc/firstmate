@@ -1814,6 +1814,8 @@ H_REMOTE_CONTROL="$HOMES/remote-control"
 H_REMOTE="$HOMES/remote-home"
 REMOTE_ROOT="$TMP_ROOT/remote-root"
 REMOTE_FAKEBIN=$(fm_fakebin "$TMP_ROOT/remote-fakebin")
+REMOTE_HOST_BIN=$(fm_fakebin "$TMP_ROOT/remote-host")
+fm_fake_uname "$REMOTE_HOST_BIN" Linux
 REMOTE_SSH_COUNT="$TMP_ROOT/remote-ssh.count"
 mkdir -p "$H_REMOTE_CONTROL/data" "$H_REMOTE" "$REMOTE_ROOT/bin"
 printf 'fixture\n' > "$REMOTE_ROOT/AGENTS.md"
@@ -1848,22 +1850,22 @@ exec "$FM_FAKE_REMOTE_ENTRYPOINT" "$@"
 SH
 chmod +x "$REMOTE_FAKEBIN/fake-ssh"
 remote_on() {
+  PATH="$REMOTE_HOST_BIN:$PATH" \
   FM_HOME="$H_REMOTE_CONTROL" \
   FM_ROOT_OVERRIDE="$REMOTE_ROOT" \
   FM_SSH_BIN="$REMOTE_FAKEBIN/fake-ssh" \
   FM_FAKE_SSH_COUNT="$REMOTE_SSH_COUNT" \
   FM_FAKE_REMOTE_ENTRYPOINT="$REMOTE_ROOT/bin/fm-remote-entrypoint.sh" \
-  FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux \
   FM_REMOTE_JOB_STATE_ROOT="$TMP_ROOT/remote-jobs" \
   "$ROOT/bin/fm-on.sh" --stdin ios "$@"
 }
 remote_controller() {
+  PATH="$REMOTE_HOST_BIN:$PATH" \
   FM_HOME="$H_REMOTE_CONTROL" \
   FM_ROOT_OVERRIDE="$REMOTE_ROOT" \
   FM_SSH_BIN="$REMOTE_FAKEBIN/fake-ssh" \
   FM_FAKE_SSH_COUNT="$REMOTE_SSH_COUNT" \
   FM_FAKE_REMOTE_ENTRYPOINT="$REMOTE_ROOT/bin/fm-remote-entrypoint.sh" \
-  FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux \
   FM_REMOTE_JOB_STATE_ROOT="$TMP_ROOT/remote-jobs" \
   "$@"
 }
@@ -1875,9 +1877,9 @@ remote_receive_file() {
 remote_direct() {
   local command=$1
   shift
+  PATH="$REMOTE_HOST_BIN:$PATH" \
   FM_HOME="$H_REMOTE" \
   FM_ROOT_OVERRIDE="$REMOTE_ROOT" \
-  FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux \
   FM_REMOTE_JOB_STATE_ROOT="$TMP_ROOT/remote-jobs" \
   "$REMOTE_ROOT/bin/$command" "$@"
 }
