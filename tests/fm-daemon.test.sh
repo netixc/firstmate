@@ -1823,19 +1823,18 @@ test_pane_input_pending_requires_proven_empty_prompt() {
   state="$dir/state"
   fakebin="$dir/fakebin"
   capture="$dir/pane.txt"
-  for prompt in '$' '>' '❯'; do
+  for prompt in '$' '>' '❯' '⟩'; do
     printf 'output\noutput\n%s \n' "$prompt" > "$capture"
     PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=2 \
       pane_input_pending "fakepane" \
       || fail "unverified bare prompt '$prompt' should defer as unknown"
   done
-  for prompt in '›' '⟩'; do
-    printf 'output\noutput\n%s \n' "$prompt" > "$capture"
-    if PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=2 \
-      pane_input_pending "fakepane"; then
-      fail "proven empty agent prompt '$prompt' should not defer"
-    fi
-  done
+  prompt='›'
+  printf 'output\noutput\n%s \n' "$prompt" > "$capture"
+  if PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=2 \
+    pane_input_pending "fakepane"; then
+    fail "proven empty agent prompt '$prompt' should not defer"
+  fi
   pass "pane_input_pending: only retained bare-agent prompts pass"
 }
 

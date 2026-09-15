@@ -90,11 +90,7 @@ SKIPPED=
 
 # The verified adapters, in the order the harness-adapters skill router records
 # them. An adapter that gains a verified launch path belongs here too.
-# muse matters most of all here: its launcher execs a VERSION-SUFFIXED binary,
-# so the live process name changes on every auto-update and its install path
-# carries no `muse` component to fall back on. That is precisely the drift this
-# guard exists to catch, and only a real muse release can produce it.
-for harness in codex opencode pi pi-signed grok kimi muse; do
+for harness in codex opencode pi pi-signed grok kimi; do
   if ! bin_path=$(resolve_harness_binary "$harness"); then
     SKIPPED="$SKIPPED $harness"
     note "skip: $harness is not installed on this machine, so its classification is unverified here"

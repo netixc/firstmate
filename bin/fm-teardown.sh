@@ -423,10 +423,12 @@ fm_backlog_record_present "$META" "task record" "$STATE" || {
 TEARDOWN_META_KIND=$(fm_meta_get "$META" kind)
 [ -n "$TEARDOWN_META_KIND" ] || TEARDOWN_META_KIND=ship
 TEARDOWN_META_HARNESS=$(fm_meta_get "$META" harness)
-if [ "$TEARDOWN_META_HARNESS" = omp ]; then
-  echo "error: task $ID records retired harness 'omp'; refusing cleanup so its endpoint, local copy, and durable records remain available for manual migration" >&2
-  exit 1
-fi
+case "$TEARDOWN_META_HARNESS" in
+  omp|muse)
+    echo "error: task $ID records retired harness '$TEARDOWN_META_HARNESS'; refusing cleanup so its endpoint, local copy, and durable records remain available for manual migration" >&2
+    exit 1
+    ;;
+esac
 TEARDOWN_CLEANUP_RECOVERY=$(fm_meta_get "$META" cleanup_recovery)
 TEARDOWN_META_SPAWN_GEN=
 TEARDOWN_LEGACY_PENDING=0
@@ -2699,10 +2701,12 @@ preflight_descendant_task_locks() {
     kind=$(meta_value "$meta" kind)
     [ -n "$kind" ] || kind=ship
     harness=$(meta_value "$meta" harness)
-    if [ "$harness" = omp ]; then
-      echo "REFUSED: descendant task $task_id records retired harness 'omp'; forced teardown changed nothing so its endpoint, local copy, and durable records remain available for manual migration" >&2
-      return 1
-    fi
+    case "$harness" in
+      omp|muse)
+        echo "REFUSED: descendant task $task_id records retired harness '$harness'; forced teardown changed nothing so its endpoint, local copy, and durable records remain available for manual migration" >&2
+        return 1
+        ;;
+    esac
     [ "$kind" = "${DESCENDANT_TASK_KINDS[$i]}" ] || {
       echo "REFUSED: descendant task $task_id changed kind while forced teardown acquired its locks; forced teardown changed nothing" >&2
       return 1
@@ -3050,7 +3054,6 @@ cleanup_firstmate_home_children() {
     rm -f "$sub_state/$child_id.turn-ended" "$sub_state/$child_id.progress" \
       "$sub_state/$child_id.pi-ext.ts" \
       "$sub_state/$child_id.grok-turnend-token" "$sub_state/$child_id.kimi-turnend-token" \
-      "$sub_state/$child_id.muse-session" "$sub_state/$child_id.muse-session-current" \
       "$sub_state/$child_id.reconcile-nudged" \
       "$sub_state/.$child_id.branch-outcome-index"
   done
@@ -3464,8 +3467,7 @@ retire_busy_state "$STATE" "$ID" "$BUSY_GEN" || exit 1
 status_retire_presentation_task "$STATE" "$ID" || exit 1
 rm -f "$STATE/$ID.turn-ended" "$STATE/$ID.progress" \
   "$STATE/$ID.pi-ext.ts" "$STATE/$ID.grok-turnend-token" \
-  "$STATE/$ID.kimi-turnend-token" "$STATE/$ID.muse-session" \
-  "$STATE/$ID.muse-session-current" \
+  "$STATE/$ID.kimi-turnend-token" \
   "$STATE/$ID.control-relaunch" "$STATE/$ID.control-relaunch.meta-prior" \
   "$STATE/$ID.control-relaunch.brief-prior" "$STATE/$ID.control-relaunch.note" \
   "$STATE/$ID.reconcile-nudged" "$STATE/$ID.gemini-settings.json" \

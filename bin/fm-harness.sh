@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Detect the agent harness this process tree runs on.
-# Usage: fm-harness.sh                  print own harness: codex|opencode|pi|pi-signed|grok|kimi|gemini|muse|rovo|agy|unknown
+# Usage: fm-harness.sh                  print own harness: codex|opencode|pi|pi-signed|grok|kimi|gemini|rovo|agy|unknown
 #        fm-harness.sh crew             print the effective CREWMATE harness
 #                                        (config/crew-harness; "default" resolves to own)
 #        fm-harness.sh secondmate       print the harness the PRIMARY uses to launch
@@ -91,13 +91,8 @@ harness_marker() {
   # identified, and any rule that must be RELIABLE under grok has to test the hook
   # markers too (see docs/turnend-guard.md).
   [ "${GROK_AGENT:-}" = "1" ] && { echo grok; return; }
-  # codex, opencode, kimi, muse, and agy publish no harness-identity marker at all,
+  # codex, opencode, kimi, and agy publish no harness-identity marker at all,
   # so they are never named here and are identified by ancestry alone.
-  # muse's only documented child variable is MUSE_CURRENT_SESSION_LOG, a
-  # per-session log PATH rather than an identity, and its export to tool
-  # subprocesses is unverified (verified: muse 0.1.0-R708.1). Do NOT promote it
-  # to a marker without verifying it reaches children AND that it cannot survive
-  # in a multiplexer's stored environment.
   return 0
 }
 
@@ -133,12 +128,6 @@ harness_process_verdict() {  # <pid>
     *grok*) echo "comm grok"; return ;;
     kimi) echo "comm kimi"; return ;;
     rovo) echo "comm rovo"; return ;;
-      # muse's installed launcher ~/.local/bin/muse execs ~/.local/bin/muse-bin-<version>
-      # (verified in the published launcher, muse 0.1.0-R708.1), so the live process
-      # name carries the version and CHANGES on every auto-update. Match the stable
-      # prefix rather than any exact name. Deliberately anchored, never *muse*, so
-      # unrelated commands (musescore, amuse) cannot be misread as this harness.
-    muse|muse-bin-*) echo "comm muse"; return ;;
     # Both Pi identities share this launcher name. Ancestry can only prove the
     # FAMILY; only the launch-boundary marker selects the signed identity, which
     # is why detect_own keeps a marker that agrees on the family.
@@ -150,8 +139,8 @@ harness_process_verdict() {  # <pid>
     # *agy*, so unrelated commands cannot be misread as this harness. agy
     # publishes no harness-identity marker of its own (a live 1.2.0 TUI
     # carries no AGY_* or ANTIGRAVITY_* variable; AGENT=1 seen there is an
-    # inherited launcher value, not an agy identity), so like muse it is
-    # detected by ancestry alone.
+    # inherited launcher value, not an agy identity), so it is detected by
+    # ancestry alone.
     agy) echo "comm agy"; return ;;
     node*|python*)
       # Bare interpreter: match the harness name in its script path.

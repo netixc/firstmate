@@ -549,33 +549,37 @@ test_spawn_explicit_harness_wins() {
   pass "B5 spawn: an explicit per-spawn harness arg overrides config/secondmate-harness"
 }
 
-# The retired-adapter guard holds on the resolved secondmate path: a stale OMP
-# selection in config/secondmate-harness aborts the spawn before recording or
-# launching anything and names the source.
-test_spawn_stale_omp_secondmate_harness_refused() {
-  local w sm fakebin err rc
-  w="$TMP_ROOT/spawn-stale-omp"
-  sm="$w/sm"
-  mkdir -p "$w/home/config" "$w/home/state"
-  printf 'omp\n' > "$w/home/config/secondmate-harness"
-  make_seeded_home "$sm" sm
-  fakebin=$(make_noop_tmux "$w/tmux")
-  err="$w/spawn.err"
-  rc=0
-  PATH="$fakebin:$BASE_PATH" TMUX='' \
-    FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$w/home" HOME="$w/home/user-home" \
-    FM_STATE_OVERRIDE="$w/home/state" FM_DATA_OVERRIDE="$w/home/data" \
-    FM_PROJECTS_OVERRIDE="$w/home/projects" FM_CONFIG_OVERRIDE="$w/home/config" \
-    FM_SPAWN_NO_GUARD=1 \
-    "$ROOT/bin/fm-spawn.sh" sm "$sm" --secondmate >/dev/null 2>"$err" || rc=$?
+# The retired-adapter guard holds on the resolved secondmate path: stale
+# selections abort the spawn before recording or launching anything and name
+# the configuration source.
+test_spawn_stale_retired_secondmate_harnesses_refused() {
+  local spec harness source w sm fakebin err rc
+  for spec in omp:secondmate-harness muse:secondmate-harness muse:crew-harness; do
+    harness=${spec%%:*}
+    source=${spec#*:}
+    w="$TMP_ROOT/spawn-stale-$harness-$source"
+    sm="$w/sm"
+    mkdir -p "$w/home/config" "$w/home/state"
+    printf '%s\n' "$harness" > "$w/home/config/$source"
+    make_seeded_home "$sm" sm
+    fakebin=$(make_noop_tmux "$w/tmux")
+    err="$w/spawn.err"
+    rc=0
+    PATH="$fakebin:$BASE_PATH" TMUX='' \
+      FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$w/home" HOME="$w/home/user-home" \
+      FM_STATE_OVERRIDE="$w/home/state" FM_DATA_OVERRIDE="$w/home/data" \
+      FM_PROJECTS_OVERRIDE="$w/home/projects" FM_CONFIG_OVERRIDE="$w/home/config" \
+      FM_SPAWN_NO_GUARD=1 \
+      "$ROOT/bin/fm-spawn.sh" sm "$sm" --secondmate >/dev/null 2>"$err" || rc=$?
 
-  [ "$rc" -ne 0 ] || fail "stale OMP: spawn should have failed"
-  assert_contains "$(cat "$err")" "no launch template for harness 'omp'" \
-    "stale OMP: error names the rejected harness"
-  assert_contains "$(cat "$err")" "config/secondmate-harness" \
-    "stale OMP: error names the secondmate-harness source"
-  [ -e "$w/home/state/sm.meta" ] && fail "stale OMP: a task record was written despite the abort"
-  pass "B6 spawn: stale OMP secondmate configuration is refused before mutation"
+    [ "$rc" -ne 0 ] || fail "stale $harness: spawn should have failed"
+    assert_contains "$(cat "$err")" "no launch template for harness '$harness'" \
+      "stale $harness: error names the rejected harness"
+    assert_contains "$(cat "$err")" "config/secondmate-harness" \
+      "stale $harness from $source: error names the effective secondmate-harness source"
+    [ -e "$w/home/state/sm.meta" ] && fail "stale $harness: a task record was written despite the abort"
+  done
+  pass "B6 spawn: stale OMP and Muse static configuration is refused before mutation"
 }
 
 # ===========================================================================
@@ -2522,7 +2526,7 @@ test_spawn_split_and_inherit
 test_spawn_backward_compat_crew_fallback
 test_spawn_bare_backward_compat
 test_spawn_explicit_harness_wins
-test_spawn_stale_omp_secondmate_harness_refused
+test_spawn_stale_retired_secondmate_harnesses_refused
 test_spawn_backend_precedence_over_inherited_config
 test_spawn_explicit_backend_precedence_over_env_and_inherited_config
 test_spawn_bare_harness_no_model_effort_flag

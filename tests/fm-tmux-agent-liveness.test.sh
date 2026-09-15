@@ -59,12 +59,9 @@ ln -s "$SLEEP_BIN" "$LAB/bin/notaharness"
 ln -s "$SLEEP_BIN" "$LAB/bin/omp"
 ln -s "$SLEEP_BIN" "$LAB/bin/ompd"
 ln -s "$SLEEP_BIN" "$LAB/bin/comp"
-# muse's installed binary is muse-bin-<version>: the launcher execs it, so the
-# version is the LIVE process name and it changes on every auto-update. There
-# is no separate `muse` path component to fall back on
-# (~/.local/bin/muse-bin-<version>), so the executable name is the ONLY
-# signal, and `muse` alone is a common English fragment that must not widen into
-# a substring match. The last two names are the decoys that would be misread.
+# Retired Muse executable names and unrelated similarly named commands must all
+# remain unclassified.
+ln -s "$SLEEP_BIN" "$LAB/bin/muse"
 ln -s "$SLEEP_BIN" "$LAB/bin/muse-bin-0.1.0-R708.1"
 ln -s "$SLEEP_BIN" "$LAB/bin/musescore"
 ln -s "$SLEEP_BIN" "$LAB/bin/amuse"
@@ -160,22 +157,15 @@ wait_for_state "$SESSION:agent" alive \
   || fail "a running harness-named foreground process must classify alive"
 pass "tmux liveness: a harness-named foreground process classifies alive"
 
-# --- muse's version-suffixed binary name ------------------------------------
-# A muse crewmate pane misclassified here reads as a dead endpoint, so a healthy
-# worker would be torn down or relaunched. The decoys below are what keep the
-# fix from being a substring match that claims unrelated programs.
-
-new_window muse "$LAB/bin/muse-bin-0.1.0-R708.1" 900
-wait_for_state "$SESSION:muse" alive \
-  || fail "muse's version-suffixed binary name must classify alive"
-pass "tmux liveness: muse's version-suffixed muse-bin-<version> classifies alive"
-
-for decoy in musescore amuse muse-binary muse-bind; do
-  new_window "decoy-$decoy" "$LAB/bin/$decoy" 900
-  wait_for_state "$SESSION:decoy-$decoy" ambiguous \
-    || fail "'$decoy' merely contains 'muse' and must not classify as a live agent pane"
+# --- retired Muse process identity ------------------------------------------
+# A stale Muse task must never make the tmux classifier treat its retired
+# executable or an unrelated similarly named command as a supported live agent.
+for retired in muse muse-bin-0.1.0-R708.1 musescore amuse muse-binary muse-bind; do
+  new_window "retired-$retired" "$LAB/bin/$retired" 900
+  wait_for_state "$SESSION:retired-$retired" ambiguous \
+    || fail "'$retired' must not classify as a verified live agent pane"
 done
-pass "tmux liveness: unrelated muse-containing command names stay ambiguous"
+pass "tmux liveness: stale Muse and unrelated similarly named processes stay ambiguous"
 
 # --- retired OMP process identity ------------------------------------------
 # A stale OMP task must never make the tmux classifier treat its retired

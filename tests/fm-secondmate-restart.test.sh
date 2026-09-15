@@ -399,8 +399,8 @@ test_refused_restart_falls_back_without_claiming_a_reload() {
   dir=$(new_case refused)
   add_local_mate "$dir" sm1
   arm_answer "$dir" sm1
-  # muse is a crewmate-only adapter, so the control plane refuses a secondmate
-  # relaunch onto it BEFORE stopping anything.
+  # Muse is retired, so the control plane refuses the stale secondmate relaunch
+  # target before stopping anything.
   printf 'muse\n' > "$dir/home/config/secondmate-harness"
   before=$(cat "$dir/fake/command")
 

@@ -133,7 +133,7 @@
 #   profile consultation. A --secondmate spawn is exempt and resolves the SECONDMATE
 #   harness (config/secondmate-harness -> config/crew-harness -> own), so the
 #   secondmate-vs-crewmate split is DURABLE across every respawn (recovery,
-#   /updatefirstmate, restart). A bare adapter name (codex|opencode|pi|pi-signed|grok|kimi|gemini|muse|rovo|agy)
+#   /updatefirstmate, restart). A bare adapter name (codex|opencode|pi|pi-signed|grok|kimi|gemini|rovo|agy)
 #   overrides it for this spawn (either kind). A non-flag string containing
 #   whitespace is treated as a RAW launch command - the escape hatch for verifying
 #   new adapters. For pi and pi-signed, fm-spawn resolves the selected executable
@@ -248,16 +248,13 @@
 # a firstmate-owned global hook and registry, and a gitignored per-task pointer.
 # grok uses a firstmate-owned global hook under ${GROK_HOME:-$HOME/.grok}/hooks
 # plus a gitignored .fm-grok-turnend worktree pointer and a state token.
-# muse installs no hook at all - its plugin engine is off in the default build - so
-# it writes state/<id>.muse-session to bind the pane to muse's own session event
-# log; muse, gemini, and agy are crewmate/scout only and are refused for --secondmate.
 # rovo installs no hook either - its eventHooks fire at tool granularity only,
 # never turn-end - so it carries no busy-source wiring at all and no turn-end
 # hook. A positional brief is dead-on-arrival (rovo loads, never works, and drops
 # to an idle shell), so rovo launches BARE and receives an absolute brief pointer
 # only after a TUI readiness gate, then a delivery-confirmation gate - the same
 # launch-then-send shape as kimi. Its busy state is a screen-scrape fallback like
-# grok. rovo is crewmate/scout only and is refused for --secondmate, like muse.
+# grok. rovo is crewmate/scout only and is refused for --secondmate.
 # agy installs no hook either - it exposes no hook surface at all - so it
 # carries no busy-source wiring and no turn-end hook. Its brief rides the launch
 # command, but a fresh worktree would park it on a folder-trust dialog, so the
@@ -1313,7 +1310,7 @@ if [ "$RELAUNCH" -eq 1 ]; then
   }
 elif [ "$KIND" = secondmate ]; then
   case "${POS[1]:-}" in
-    ''|codex|opencode|pi|pi-signed|grok|kimi|gemini|muse|rovo|agy)
+    ''|codex|opencode|pi|pi-signed|grok|kimi|gemini|rovo|agy)
       ARG3=${POS[1]:-}
       ;;
     *' '*)
@@ -1485,33 +1482,6 @@ launch_template() {
     # Its turn-end signal is a globally configured Stop hook plus a guarded
     # per-task worktree token, so no launch placeholder belongs here.
     kimi) printf '%s' '__KIMIBIN__ __MODELFLAG__--auto' ;;
-    # muse (Muse Code): a positional prompt starts the supervised interactive
-    # session. --yolo is the single flag that makes a crewmate pane viable: muse
-    # ships approval prompts AND a filesystem/network sandbox ON by default
-    # (--sandbox-network defaults to proxy-only, which refuses outright without a
-    # managed proxy), and it gates a fresh workspace behind a trust dialog. One
-    # --yolo disables approval, disables the sandbox so git and network work, and
-    # trusts the workspace for the run, so no dialog appears on the fresh
-    # per-task worktree (verified, muse 0.1.0-R708.1).
-    # MUSE_EXPERIMENTAL_FOREIGN_PERSONAL_CONTEXT_KILL=on is the privacy control:
-    # muse otherwise loads the operator's foreign personal rules into every run
-    # and ships them to Meta-hosted inference, even under an
-    # isolated XDG_CONFIG_HOME. exec mode's --no-foreign-personal-context flag is
-    # NOT accepted by the interactive TUI (it exits with "unexpected argument"),
-    # so this env var is the only control that reaches a pane worker. Verified to
-    # drop the foreign rules_file context block while KEEPING the project's own
-    # AGENTS.md rules, which the crewmate contract depends on.
-    # muse's turn-end signal rides neither the launch command nor a hook: its
-    # plugin engine is off in the default build, so firstmate folds muse's own
-    # session event log instead (bin/fm-busy-lib.sh), bound by the sidecar
-    # written below. Nothing to place in the template for it.
-    # codex, opencode, and kimi are markerless too and inherit foreign markers the
-    # same way, but detection no longer depends on this launch-side clearing:
-    # bin/fm-harness.sh lets a markerless harness's structural ancestor outrank an
-    # inherited marker. The clearing stays on the muse template as verified
-    # launch behavior, not as the only thing
-    # standing between a retained marker and a misidentified worker.
-    muse) printf '%s' 'env -u PI_CODING_AGENT -u GROK_AGENT -u FM_PI_HARNESS XDG_CONFIG_HOME=__MUSECONFIG__ XDG_DATA_HOME=__MUSEDATA__ MUSE_EXPERIMENTAL_FOREIGN_PERSONAL_CONTEXT_KILL=on __MUSEBIN__ --yolo __MODELFLAG____EFFORTFLAG__"$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
     # rovo (Atlassian Rovo CLI): a positional brief is dead-on-arrival - rovo
     # loads, never enters a working state, and drops back to an idle shell within
     # about 10-15 seconds (confirmed live four times over a raw PTY and once under
@@ -1577,24 +1547,19 @@ case "$ARG3" in
     ;;
 esac
 
-# muse, gemini, and agy are verified as CREWMATE/SCOUT adapters only. A secondmate is
+# Gemini and agy are verified as CREWMATE/SCOUT adapters only. A secondmate is
 # a firstmate instance, so it needs a primary supervision protocol.
-# gemini has none: docs/supervision-protocols/ carries no gemini wake protocol
-# and this task verified only crewmate-side launch, busy state, interrupt, and
-# exit, so a gemini secondmate is refused rather than stood up on an unverified
-# supervision path. muse has none either, and its hook dialect explicitly rejects
-# the model-reawakening and asyncRewake handlers that firstmate's primary turn-end supervision is built on
-# (muse 0.1.0-R708.1). Refusing here keeps that gap loud instead of standing up a
-# secondmate whose supervision cycle could never be armed.
-# agy has none either: it exposes no hook surface for primary supervision and
+# Gemini has none: docs/supervision-protocols/ carries no Gemini wake protocol,
+# so a Gemini secondmate is refused rather than stood up on an unverified path.
+# Agy likewise exposes no hook surface for primary supervision and
 # docs/supervision-protocols/ carries no agy wake protocol (agy 1.2.0).
-if [ "$KIND" = secondmate ] && { [ "$HARNESS" = muse ] || [ "$HARNESS" = gemini ] || [ "$HARNESS" = agy ]; }; then
+if [ "$KIND" = secondmate ] && { [ "$HARNESS" = gemini ] || [ "$HARNESS" = agy ]; }; then
   echo "error: $HARNESS is a verified crewmate/scout adapter only and cannot run a secondmate; it has no primary supervision protocol. Select a harness verified for secondmates." >&2
   exit 1
 fi
 
-# rovo carries the same primary-supervision gap as muse: no turn-end hook, no
-# verified primary integration, so a secondmate (a firstmate instance that must
+# rovo has no turn-end hook or verified primary integration, so a secondmate
+# (a firstmate instance that must
 # itself act as a primary) could never be supervised. Refuse loudly rather than
 # standing one up with no way to arm its watch cycle.
 if [ "$KIND" = secondmate ] && [ "$HARNESS" = rovo ]; then
@@ -1685,25 +1650,6 @@ resolve_kimi_binary() {
   return 1
 }
 
-resolve_muse_binary() {
-  local candidate dir
-  candidate=$(command -v muse 2>/dev/null || true)
-  if [ -n "$candidate" ] && [ -x "$candidate" ]; then
-    case "$candidate" in
-      /*) printf '%s\n' "$candidate"; return 0 ;;
-      *)
-        dir=$(cd "$(dirname "$candidate")" 2>/dev/null && pwd -P) || dir=
-        if [ -n "$dir" ]; then
-          printf '%s/%s\n' "$dir" "$(basename "$candidate")"
-          return 0
-        fi
-        ;;
-    esac
-  fi
-  echo "error: muse executable not found on PATH; install Muse Code or select a different verified harness" >&2
-  return 1
-}
-
 resolve_rovo_binary() {
   local candidate dir fallback
   candidate=$(command -v rovo 2>/dev/null || true)
@@ -1728,47 +1674,11 @@ resolve_rovo_binary() {
   return 1
 }
 
-# muse_credential_present: 0 when a launched muse pane can reach its provider
-# without an interactive login. muse offers exactly two credential paths
-# (verified, muse 0.1.0-R708.1): the META_API_KEY environment variable, which
-# always takes priority, and a stored credential written by `muse auth set` or
-# `muse login` into <config>/muse/auth.json. This is a PREFLIGHT rather than a
-# rendered-screen check because an unauthenticated pane does not exit - it sits
-# on an OAuth device-code prompt ("Sign in at this page ... Waiting for
-# approval...") waiting for a human who is not there, which would look to
-# supervision like a wedged worker rather than a missing credential.
-muse_worker_meta_api_key_present() {
-  local session worker_env
-  if [ "$LAUNCH_ENV_ENABLED" = 1 ]; then
-    case $'\n'"$LAUNCH_ENV_NAMES"$'\n' in
-      *$'\nMETA_API_KEY\n'*) ;;
-      *) return 1 ;;
-    esac
-  fi
-  [ "$BACKEND" = tmux ] || return 1
-  if [ -n "${TMUX:-}" ]; then
-    session=$(tmux display-message -p '#S' 2>/dev/null) || return 1
-  else
-    tmux has-session -t firstmate 2>/dev/null || return 1
-    session=firstmate
-  fi
-  worker_env=$(tmux show-environment -t "$session" META_API_KEY 2>/dev/null) || return 1
-  case "$worker_env" in
-    META_API_KEY=?*) return 0 ;;
-  esac
-  return 1
-}
-
-muse_credential_present() {
-  local auth=$1
-  [ -s "$auth" ] || muse_worker_meta_api_key_present
-}
-
 model_flag_for_harness() {
   local harness=$1 model=$2
   [ -n "$model" ] && [ "$model" != default ] || return 0
   case "$harness" in
-    codex|opencode|pi|pi-signed|grok|kimi|gemini|muse|rovo|agy)
+    codex|opencode|pi|pi-signed|grok|kimi|gemini|rovo|agy)
       printf -- '--model %s ' "$(shell_quote "$model")"
       ;;
   esac
@@ -1813,20 +1723,6 @@ effort_flag_for_harness() {
         low|medium|high|xhigh|max) printf -- '--thinking %s ' "$(shell_quote "$effort")" ;;
       esac
       ;;
-    muse)
-      # muse 0.1.0-R708.1 --reasoning-effort accepts none|minimal|low|medium|
-      # high|xhigh|ultra and defaults to high, so low..xhigh map straight across.
-      # ultra is muse's max-CLASS level, so firstmate's max maps onto it - but
-      # only ever as an EXPLICIT captain choice, never as a fallback, because
-      # AGENTS.md section 4 forbids selecting max without captain preference and
-      # the omitted effort here leaves muse on its own high default. muse's extra
-      # none/minimal levels sit below firstmate's shared vocabulary and are
-      # deliberately unreachable rather than remapped onto low.
-      case "$effort" in
-        low|medium|high|xhigh) printf -- '--reasoning-effort %s ' "$(shell_quote "$effort")" ;;
-        max) printf -- '--reasoning-effort %s ' "$(shell_quote ultra)" ;;
-      esac
-      ;;
     # rovo has no --effort flag on `run`; its effort mapping rides
     # --config-override, but that flag is single-value (see
     # rovo_config_override_flag below) so it is built there, merged with the
@@ -1838,26 +1734,6 @@ effort_flag_for_harness() {
     # task metadata but never reaches the launch command.
   esac
 }
-
-case "$LAUNCH" in
-  *__MUSEBIN__*)
-    MUSE_BIN=$(resolve_muse_binary) || exit 1
-    MUSE_CONFIG_HOME=$(resolve_directory_input XDG_CONFIG_HOME "${XDG_CONFIG_HOME:-${HOME:-}/.config}") || exit 1
-    MUSE_DATA_HOME=$(resolve_directory_input XDG_DATA_HOME "${XDG_DATA_HOME:-${HOME:-}/.local/share}") || exit 1
-    MUSE_AUTH_FILE="$MUSE_CONFIG_HOME/muse/auth.json"
-    if ! muse_credential_present "$MUSE_AUTH_FILE"; then
-      if [ -n "${META_API_KEY:-}" ]; then
-        echo "error: muse has no worker-reachable credential; META_API_KEY is set for fm-spawn but cannot be proven present in the $BACKEND worker environment. Store the fleet credential at '$MUSE_AUTH_FILE' with 'muse login' or 'muse auth set --api-key-stdin'. The secret will not be copied into the launch command." >&2
-      else
-        echo "error: muse has no worker-reachable credential; META_API_KEY cannot be proven present in the $BACKEND worker environment and '$MUSE_AUTH_FILE' is absent or empty. Store the fleet credential with 'muse login' or 'muse auth set --api-key-stdin'." >&2
-      fi
-      exit 1
-    fi
-    LAUNCH=${LAUNCH//__MUSEBIN__/$(shell_quote "$MUSE_BIN")}
-    LAUNCH=${LAUNCH//__MUSECONFIG__/$(shell_quote "$MUSE_CONFIG_HOME")}
-    LAUNCH=${LAUNCH//__MUSEDATA__/$(shell_quote "$MUSE_DATA_HOME")}
-    ;;
-esac
 
 case "$LAUNCH" in
   *__KIMIBIN__*)
@@ -3432,34 +3308,6 @@ EOF
       printf 'token=%s\n' "${auth_file##*/}" > "$WT/.fm-grok-turnend"
       exclude_path '.fm-grok-turnend'
       ;;
-    muse*)
-      # muse's turn lifecycle is neither a hook nor a launch flag: its plugin
-      # engine (the only hook surface) is disabled in the default build, so
-      # firstmate reads muse's own durable session event log instead
-      # (bin/fm-busy-lib.sh owns the fold). That is a PULL
-      # source with no writer, so nothing is armed and no record is seeded -
-      # exactly the reason standalone Kimi is not armed either.
-      # This sidecar is the whole binding: it pins the sessions root, the
-      # workspace root that muse records in each log's metadata, this pane's
-      # binding identity, and every matching main log that predates this pane.
-      # The classifier then accepts only one new matching log, so it never
-      # guesses between pane incarnations. Recording the resolved root here
-      # also means a later change to XDG_DATA_HOME cannot silently re-point an
-      # already-running task at a different log tree.
-      MUSE_SESSIONS_ROOT="${MUSE_DATA_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}}/muse/sessions"
-      MUSE_BINDING_ID="$$.$RANDOM.$(date +%s)"
-      rm -f "$STATE/$ID.muse-session-current"
-      {
-        printf 'sessions_root=%s\n' "$MUSE_SESSIONS_ROOT"
-        printf 'workspace_root=%s\n' "$WT"
-        printf 'binding_id=%s\n' "$MUSE_BINDING_ID"
-        while IFS= read -r MUSE_PRIOR_LOG; do
-          [ -n "$MUSE_PRIOR_LOG" ] && printf 'prior_log=%s\n' "$MUSE_PRIOR_LOG"
-        done <<EOF
-$(fm_busy_muse_matching_logs "$MUSE_SESSIONS_ROOT" "$WT" || true)
-EOF
-      } > "$STATE/$ID.muse-session"
-      ;;
     kimi*)
       # Kimi's Stop hook is global, but it is inert unless cwd contains this
       # task's token pointer and the token resolves through Firstmate's private
@@ -3716,7 +3564,7 @@ case "$HARNESS" in
 esac
 LAUNCH=${LAUNCH//__WORKTREE__/$sq_worktree}
 case "$HARNESS" in
-  codex|opencode|pi|pi-signed|grok|kimi|gemini|muse|rovo|agy)
+  codex|opencode|pi|pi-signed|grok|kimi|gemini|rovo|agy)
     LAUNCH="env -u GEMINI_CLI $LAUNCH"
     ;;
 esac
