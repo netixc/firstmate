@@ -104,6 +104,8 @@ signed Pi wrapper remains a distinct secondmate value^codex^pi-signed^pi-signed^
 secondmate=default defers to crew^codex^default^codex^codex
 crew=default resolves to own, secondmate follows^default^-^pi^pi
 secondmate=default with crew absent -> own^-^default^pi^pi
+retired crew harness falls back to own^claude^-^pi^pi
+retired secondmate harness falls back to verified crew^codex^claude^codex^codex
 ROWS
   pass "A1 fm-harness.sh secondmate resolves the fallback chain; crew mode unchanged"
 }

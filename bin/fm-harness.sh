@@ -372,7 +372,13 @@ detect_own() {
 resolve_crew() {
   local crew=
   [ -f "$CONFIG/crew-harness" ] && crew=$(tr -d '[:space:]' < "$CONFIG/crew-harness" || true)
-  if [ -z "$crew" ] || [ "$crew" = "default" ]; then detect_own; else echo "$crew"; fi
+  if [ -z "$crew" ] || [ "$crew" = "default" ]; then
+    detect_own
+  elif [ "$crew" = "claude" ]; then
+    detect_own
+  else
+    echo "$crew"
+  fi
 }
 
 # Print the first non-empty, non-comment line of config/secondmate-harness
@@ -417,7 +423,13 @@ secondmate_field() {
 resolve_secondmate() {
   local sm
   sm=$(secondmate_field 1)
-  if [ -z "$sm" ] || [ "$sm" = "default" ]; then resolve_crew; else echo "$sm"; fi
+  if [ -z "$sm" ] || [ "$sm" = "default" ]; then
+    resolve_crew
+  elif [ "$sm" = "claude" ]; then
+    resolve_crew
+  else
+    echo "$sm"
+  fi
 }
 
 # Print the optional model token (2nd field) from config/secondmate-harness, or
