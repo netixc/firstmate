@@ -549,15 +549,15 @@ test_spawn_explicit_harness_wins() {
   pass "B5 spawn: an explicit per-spawn harness arg overrides config/secondmate-harness"
 }
 
-# The unverified-adapter guard holds on the resolved secondmate path: an
-# unsupported harness name in config/secondmate-harness aborts the spawn (no
-# meta written) and names the source.
-test_spawn_unverified_secondmate_harness_refused() {
+# The retired-adapter guard holds on the resolved secondmate path: a stale OMP
+# selection in config/secondmate-harness aborts the spawn before recording or
+# launching anything and names the source.
+test_spawn_stale_omp_secondmate_harness_refused() {
   local w sm fakebin err rc
-  w="$TMP_ROOT/spawn-unverified"
+  w="$TMP_ROOT/spawn-stale-omp"
   sm="$w/sm"
   mkdir -p "$w/home/config" "$w/home/state"
-  printf 'cursor\n' > "$w/home/config/secondmate-harness"
+  printf 'omp\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
   fakebin=$(make_noop_tmux "$w/tmux")
   err="$w/spawn.err"
@@ -569,13 +569,13 @@ test_spawn_unverified_secondmate_harness_refused() {
     FM_SPAWN_NO_GUARD=1 \
     "$ROOT/bin/fm-spawn.sh" sm "$sm" --secondmate >/dev/null 2>"$err" || rc=$?
 
-  [ "$rc" -ne 0 ] || fail "unverified: spawn should have failed"
-  assert_contains "$(cat "$err")" "no launch template for harness 'cursor'" \
-    "unverified: error names the rejected harness"
+  [ "$rc" -ne 0 ] || fail "stale OMP: spawn should have failed"
+  assert_contains "$(cat "$err")" "no launch template for harness 'omp'" \
+    "stale OMP: error names the rejected harness"
   assert_contains "$(cat "$err")" "config/secondmate-harness" \
-    "unverified: error names the secondmate-harness source"
-  [ -e "$w/home/state/sm.meta" ] && fail "unverified: a meta was written despite the abort"
-  pass "B6 spawn: the cursor secondmate harness is refused as unverified"
+    "stale OMP: error names the secondmate-harness source"
+  [ -e "$w/home/state/sm.meta" ] && fail "stale OMP: a task record was written despite the abort"
+  pass "B6 spawn: stale OMP secondmate configuration is refused before mutation"
 }
 
 # ===========================================================================
@@ -1025,7 +1025,7 @@ case "$*" in
   *display-message*'#{pane_current_command}'*) printf '%s\n' codex; exit 0 ;;
   *display-message*'#{pane_id}'*) printf '%s\n' '%1'; exit 0 ;;
   *display-message*'#{cursor_y}'*) printf '%s\n' 0; exit 0 ;;
-  *capture-pane*) printf '❯\n'; exit 0 ;;
+  *capture-pane*) printf '›\n'; exit 0 ;;
   *'send-keys'*' -l '*)
     [ "${FM_FAKE_TMUX_FAIL_LITERAL:-0}" = 1 ] && exit 1
     exit 0
@@ -2421,7 +2421,7 @@ case "\$*" in
   *display-message*'#{pane_current_command}'*) printf '%s' zsh ;;
   *display-message*'#{pane_id}'*) printf '%s' '%1' ;;
   *display-message*'#{cursor_y}'*) printf '%s' 0 ;;
-  *capture-pane*) printf '❯\n'
+  *capture-pane*) printf '›\n'
     ;;
   *send-keys*) printf '%s' send-keys >> '$log' ;;
 esac
@@ -2522,7 +2522,7 @@ test_spawn_split_and_inherit
 test_spawn_backward_compat_crew_fallback
 test_spawn_bare_backward_compat
 test_spawn_explicit_harness_wins
-test_spawn_unverified_secondmate_harness_refused
+test_spawn_stale_omp_secondmate_harness_refused
 test_spawn_backend_precedence_over_inherited_config
 test_spawn_explicit_backend_precedence_over_env_and_inherited_config
 test_spawn_bare_harness_no_model_effort_flag

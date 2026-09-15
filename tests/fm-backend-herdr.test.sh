@@ -500,6 +500,18 @@ test_registered_agent_with_a_live_foreground_process_stays_alive() {
   pass "herdr stale registration: a registered agent with a live Pi foreground process still reads alive"
 }
 
+test_retired_omp_process_is_not_a_herdr_agent() {
+  local dir log resp fb out
+  dir="$TMP_ROOT/retired-omp-process"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
+  printf '{"result":{"type":"pane_process_info","process_info":{"pane_id":"w1:p2","shell_pid":4242,"foreground_process_group_id":4243,"foreground_processes":[{"pid":4243,"name":"omp","argv0":"omp","argv":["omp"],"cmdline":"omp"}]}}}\n' > "$resp/1.out"
+  fb=$(make_herdr_fakebin "$dir")
+  out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
+    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_pane_process_state_sample fmtest w1:p2' "$ROOT")
+  [ "$out" = other ] \
+    || fail "a stale OMP process must not classify as a verified Herdr agent, got '$out'"
+  pass "herdr process classifier: a stale OMP process is not a verified agent"
+}
+
 test_registered_agent_with_a_non_shell_foreground_process_stays_alive() {
   local out
   # A registered agent running a foreground tool in its own process group is
@@ -3734,18 +3746,18 @@ test_busy_state_unknown_on_no_agent() {
 test_composer_state_bare_prompt_is_empty() {
   local dir log resp fb out
   dir="$TMP_ROOT/composer-bare"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '  ╭────────────────────────╮\n  │ ❯                      │\n  ╰──────── Composer ──────╯\n\n  Shift+Tab:mode\n' > "$resp/1.out"
+  printf '  ╭────────────────────────╮\n  │ >                      │\n  ╰──────── Composer ──────╯\n\n  Shift+Tab:mode\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
-  [ "$out" = empty ] || fail "a bare prompt glyph should read as empty, got '$out'"
-  pass "fm_backend_herdr_composer_state: a bare '❯' composer row reads empty"
+  [ "$out" = empty ] || fail "a bordered prompt glyph should read as empty, got '$out'"
+  pass "fm_backend_herdr_composer_state: a bordered composer row reads empty"
 }
 
 test_composer_state_styled_placeholder_draft_is_pending() {
   local dir log resp fb out
   dir="$TMP_ROOT/composer-ghost"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '  ╭────────────────────────╮\n  │ ❯ Type a message...    │\n  ╰──────── Composer ──────╯\n' > "$resp/1.out"
+  printf '  ╭────────────────────────╮\n  │ > Type a message...    │\n  ╰──────── Composer ──────╯\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
@@ -3756,7 +3768,7 @@ test_composer_state_styled_placeholder_draft_is_pending() {
 test_composer_state_real_text_is_pending() {
   local dir log resp fb out
   dir="$TMP_ROOT/composer-pending"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '  ╭────────────────────────╮\n  │ ❯ hello captain        │\n  ╰──────── Composer ──────╯\n\n  Enter:send\n' > "$resp/1.out"
+  printf '  ╭────────────────────────╮\n  │ > hello captain        │\n  ╰──────── Composer ──────╯\n\n  Enter:send\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
@@ -3775,7 +3787,7 @@ test_composer_state_real_text_is_pending() {
 test_composer_state_popup_placeholder_fill_is_pending() {
   local dir log resp fb out
   dir="$TMP_ROOT/composer-popup-placeholder"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '  ╭──────────────────────────────────────╮\n  │ ❯ /compact compaction instructions   │\n  ╰──────────────── Composer ────────────╯\n\n  Enter:send\n' > "$resp/1.out"
+  printf '  ╭──────────────────────────────────────╮\n  │ > /compact compaction instructions   │\n  ╰──────────────── Composer ────────────╯\n\n  Enter:send\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
@@ -3903,32 +3915,7 @@ test_composer_state_pi_separator_requires_safe_native_identity() {
   pass "fm_backend_herdr_composer_state: Pi separators never authorize working, non-Pi, unreadable, or over-tall targets"
 }
 
-# --- composer_state: unbordered (bare) composer rows -------------------------
-# OMP composer rows carry no border glyph at all. These behavioral fixtures
-# combine a live OMP-style prompt with unrelated stale decoration so the
-# bottom-most active composer must win regardless of the earlier box's shape.
-# Before the fix, the bordered branch could mistake the stale box's blank
-# interior row for the live composer and fail to track real text below it.
-test_composer_state_bare_prompt_below_stale_bordered_banner_wins() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/composer-banner-priority"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '\xe2\x95\xad\xe2\x94\x80 Earlier Session \xe2\x94\x80\xe2\x94\x80\xe2\x95\xae\n\xe2\x94\x82           Session ready              \xe2\x94\x82\n\xe2\x94\x82                                      \xe2\x94\x82\n\xe2\x95\xb0\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x95\xaf\n\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n\xe2\x9d\xaf still typing message\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n' > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
-  [ "$out" = pending ] || fail "the live unbordered prompt row below a stale bordered banner must win (pending, real text present), got '$out'"
-  pass "fm_backend_herdr_composer_state: a live unbordered prompt row below a stale bordered decorative box still wins (not misread as the box's own row)"
-}
-
-# Captured read-only from a live OMP-on-Herdr pane: an idle composer's only
-# content is OMP's rotating prompt-suggestion ghost, rendered SGR-2 dim after
-# the bare "❯" prompt. Herdr's ANSI capture preserves that attribute. The
-# shared ANSI-aware owner drops the dim ghost so the row reads empty, while a
-# non-dim row remains protected as real input.
-# Same prompt row, but the text after "❯" is REAL (normal intensity, no dim) -
-# it must still read pending, so the ghost fix never weakens real-input
-# protection.
-# grok's TRUECOLOR placeholder gap (harness-adapters "Known gap"), now covered by
+# grok's TRUECOLOR placeholder gap (harness-adapters "Known gap"), covered by
 # the same owner. grok renders its composer inside a bordered box whose border
 # and placeholder/hint text use a dark, muted truecolor foreground (verified live
 # against grok 0.2.93: border 38;2;86;82;110, muted 38;2;50;47;70, hint
@@ -4102,8 +4089,8 @@ test_wait_for_working_treats_blocked_as_submit_active() {
 # --- send_text_submit: native agent-state (agent get) verify-and-retry ------
 # Rewritten for the 2026-07-07 incident (docs/herdr-backend.md): confirmation
 # no longer reads composer content in the normal idle-baseline path, so a
-# harness whose IDLE composer shows dynamic tip text (omp) can no
-# longer misread as "pending" and block/mis-confirm a send.
+# harness whose IDLE composer shows dynamic tip text can no longer misread as
+# "pending" and block or mis-confirm a send.
 # FM_BACKEND_HERDR_SUBMIT_POLLS=1 pins most tests
 # below to exactly one agent-get sample per Enter attempt for simple,
 # deterministic call-count assertions; the multi-sample behavior itself is
@@ -4137,9 +4124,9 @@ test_send_text_submit_detects_swallowed_enter() {
   # holds the typed text: a genuine swallow, not a queued Enter.
   printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/2.out"
   printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/4.out"
-  printf '  \xe2\x9d\xaf hello captain\n' > "$resp/5.out"
+  printf '  \xe2\x80\xba hello captain\n' > "$resp/5.out"
   printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/7.out"
-  printf '  \xe2\x9d\xaf hello captain\n' > "$resp/8.out"
+  printf '  \xe2\x80\xba hello captain\n' > "$resp/8.out"
   printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/9.out"
   printf '  ready\n' > "$resp/10.out"
   fb=$(make_herdr_fakebin "$dir")
@@ -4166,7 +4153,7 @@ test_send_text_submit_popup_autocomplete_requires_second_enter() {
   printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/4.out"
   # 5: composer still holds the placeholder fill; native idle falls through
   #    to the shared composer verdict, which retries rather than confirming.
-  printf '  \xe2\x9d\xaf /compact\n' > "$resp/5.out"
+  printf '  \xe2\x80\xba /compact\n' > "$resp/5.out"
   # 6: send-keys enter (#2) - actually submits
   # 7: agent get -> working (submitted)
   printf '{"result":{"agent":{"agent_status":"working"}}}\n' > "$resp/7.out"
@@ -4202,7 +4189,7 @@ test_send_text_submit_preexisting_working_pending_is_queued_enter() {
   # current turn ends. Footer transition is not the confirmation path here
   # because the pre-Enter native status is already working.
   printf '{"result":{"agent":{"agent_status":"working"}}}\n' > "$resp/2.out"
-  printf '  \xe2\x9d\xaf hello captain\n' > "$resp/4.out"
+  printf '  \xe2\x80\xba hello captain\n' > "$resp/4.out"
   printf '{"result":{"agent":{"agent_status":"working"}}}\n' > "$resp/5.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
@@ -4251,7 +4238,7 @@ test_send_text_submit_idle_native_empty_composer_confirms_delivery() {
   # that empty verdict is positive delivery, not a swallow.
   printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/2.out"
   printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/4.out"
-  printf '  \xe2\x9d\xaf\n' > "$resp/5.out"
+  printf '  \xe2\x80\xba\n' > "$resp/5.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_BACKEND_HERDR_SUBMIT_POLLS=1 \
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_send_text_submit default:w1:p2 "hello captain" 3 0.01 0.01' "$ROOT" )
@@ -4268,7 +4255,7 @@ test_send_text_submit_idle_native_pending_plus_rendered_busy_is_queued() {
   # and a generating footer after retries is a queued follow-up Enter.
   printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/2.out"
   printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/4.out"
-  printf '  \xe2\x9d\xaf hello captain\n' > "$resp/5.out"
+  printf '  \xe2\x80\xba hello captain\n' > "$resp/5.out"
   printf '{"result":{"agent":{"agent_status":"idle"}}}\n' > "$resp/6.out"
   printf 'thinking... esc to interrupt\n' > "$resp/7.out"
   fb=$(make_herdr_fakebin "$dir")
@@ -4296,10 +4283,10 @@ test_send_text_submit_confirms_despite_codex_idle_tip_composer() {
 }
 
 # Companion regression for the pre-injection empty-box guard itself
-# (bin/fm-supervise-daemon.sh's pane_input_pending): a OMP idle
-# composer can show faint ghost suggestions after the bare `›` prompt.
-# The guard must ignore that faint suggestion text, otherwise away-mode
-# escalation delivery defers forever even though the human has typed nothing.
+# (bin/fm-supervise-daemon.sh's pane_input_pending): a Codex idle composer can
+# show faint ghost suggestions after the bare `›` prompt. The guard must ignore
+# that faint suggestion text, otherwise away-mode escalation delivery defers
+# forever even though the human has typed nothing.
 test_composer_state_codex_dynamic_idle_tip_reads_empty_when_faint() {
   local dir log resp fb out
   dir="$TMP_ROOT/composer-codex-dynamic-tip"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
@@ -4307,8 +4294,8 @@ test_composer_state_codex_dynamic_idle_tip_reads_empty_when_faint() {
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
-  [ "$out" = empty ] || fail "a faint omp dynamic idle-tip row should read empty, got '$out'"
-  pass "fm_backend_herdr_composer_state: a faint omp dynamic idle-tip composer row reads empty"
+  [ "$out" = empty ] || fail "a faint Codex dynamic idle-tip row should read empty, got '$out'"
+  pass "fm_backend_herdr_composer_state: a faint Codex dynamic idle-tip composer row reads empty"
 }
 
 # Regression guard for the PRE-injection empty-box guard itself
@@ -4320,7 +4307,7 @@ test_composer_state_codex_dynamic_idle_tip_reads_empty_when_faint() {
 test_composer_state_guard_still_refuses_real_pending_text_after_submit_confirmation_change() {
   local dir log resp fb out
   dir="$TMP_ROOT/composer-guard-still-refuses"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '  \xe2\x9d\xaf hello there this is a test message\n' > "$resp/1.out"
+  printf '  \xe2\x80\xba hello there this is a test message\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     bash -c '. "$0/bin/fm-backend.sh"; fm_backend_composer_state herdr default:w1:p2' "$ROOT" )
@@ -5006,6 +4993,7 @@ test_recovery_grade_read_widens_only_at_its_own_boundary
 test_stale_registration_over_a_shell_only_pane_is_agent_free
 test_stale_registration_ignores_status_and_reads_the_process
 test_registered_agent_with_a_live_foreground_process_stays_alive
+test_retired_omp_process_is_not_a_herdr_agent
 test_registered_agent_with_a_non_shell_foreground_process_stays_alive
 test_transient_prompt_helper_settles_into_stale_agent
 test_exhausted_settle_window_keeps_a_non_shell_foreground_live
@@ -5141,7 +5129,6 @@ test_composer_state_pi_separator_idle_is_empty
 test_composer_state_pi_separator_real_text_is_pending
 test_composer_state_pi_incomplete_separator_below_stale_generic_is_unknown
 test_composer_state_pi_separator_requires_safe_native_identity
-test_composer_state_bare_prompt_below_stale_bordered_banner_wins
 test_composer_state_grok_dark_truecolor_placeholder_is_empty
 test_composer_state_grok_bright_truecolor_real_text_is_pending
 test_composer_state_codex_bare_prompt_glyph_is_empty

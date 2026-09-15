@@ -54,8 +54,8 @@ export PATH
 ln -s "$SLEEP_BIN" "$LAB/bin/codex-link"
 ln -s "$SLEEP_BIN" "$LAB/bin/pi"
 ln -s "$SLEEP_BIN" "$LAB/bin/notaharness"
-# omp (Oh My Pi) is a single binary whose live process name is the bare word
-# `omp`; the two decoys are the substrings an unanchored glob would misread.
+# Retired OMP task records can still point at one of these process names.
+# None is a verified agent identity after support is removed.
 ln -s "$SLEEP_BIN" "$LAB/bin/omp"
 ln -s "$SLEEP_BIN" "$LAB/bin/ompd"
 ln -s "$SLEEP_BIN" "$LAB/bin/comp"
@@ -177,22 +177,16 @@ for decoy in musescore amuse muse-binary muse-bind; do
 done
 pass "tmux liveness: unrelated muse-containing command names stay ambiguous"
 
-# --- omp's bare binary name -------------------------------------------------
-# omp (Oh My Pi) runs as a single binary whose live process name is exactly
-# `omp`, with no path component to fall back on, so the anchored name is the
-# only signal and the two decoys prove it never widens into a substring match.
-
-new_window omp "$LAB/bin/omp" 900
-wait_for_state "$SESSION:omp" alive \
-  || fail "omp's bare binary name must classify alive"
-pass "tmux liveness: omp's bare binary name classifies alive"
-
-for decoy in ompd comp; do
-  new_window "decoy-$decoy" "$LAB/bin/$decoy" 900
-  wait_for_state "$SESSION:decoy-$decoy" ambiguous \
-    || fail "'$decoy' merely contains 'omp' and must not classify as a live agent pane"
+# --- retired OMP process identity ------------------------------------------
+# A stale OMP task must never make the tmux classifier treat its retired
+# executable, a lookalike, or an ordinary similarly named command as a
+# supported live agent.
+for retired in omp ompd comp; do
+  new_window "retired-$retired" "$LAB/bin/$retired" 900
+  wait_for_state "$SESSION:retired-$retired" ambiguous \
+    || fail "'$retired' must not classify as a verified live agent pane"
 done
-pass "tmux liveness: unrelated omp-containing command names stay ambiguous"
+pass "tmux liveness: stale OMP and unrelated similarly named processes stay ambiguous"
 
 # --- neither source names a harness: no invented agent ----------------------
 

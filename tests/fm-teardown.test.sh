@@ -664,6 +664,38 @@ make_path_without_lsof() {  # <case-dir>
   printf '%s\n' "$path_dir"
 }
 
+test_stale_omp_task_refuses_even_forced_cleanup_without_removing_work() {
+  local case_dir rc
+  case_dir=$(make_case stale-omp-task)
+  write_meta "$case_dir" local-only ship
+  printf '%s\n' 'harness=omp' >> "$case_dir/state/task-x1.meta"
+  : > "$case_dir/state/task-x1.status"
+  : > "$case_dir/treehouse.log"
+  : > "$case_dir/tmux.log"
+  cat > "$case_dir/fakebin/treehouse" <<SH
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$case_dir/treehouse.log"
+SH
+  cat > "$case_dir/fakebin/tmux" <<SH
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$case_dir/tmux.log"
+SH
+  chmod +x "$case_dir/fakebin/treehouse" "$case_dir/fakebin/tmux"
+
+  rc=0
+  run_teardown "$case_dir" --force > "$case_dir/stdout" 2> "$case_dir/stderr" || rc=$?
+
+  expect_code 1 "$rc" "stale-omp-task: cleanup must refuse even with --force"
+  assert_grep "records retired harness 'omp'" "$case_dir/stderr" \
+    "stale-omp-task: refusal did not explain the retired harness record"
+  assert_present "$case_dir/state/task-x1.meta" "stale-omp-task: refusal removed the task record"
+  assert_present "$case_dir/state/task-x1.status" "stale-omp-task: refusal removed task status"
+  [ -d "$case_dir/wt" ] || fail "stale-omp-task: refusal removed the isolated copy"
+  [ ! -s "$case_dir/treehouse.log" ] || fail "stale-omp-task: refusal returned the isolated copy"
+  [ ! -s "$case_dir/tmux.log" ] || fail "stale-omp-task: refusal sent lifecycle input"
+  pass "stale OMP task cleanup refuses without removing retained work or records"
+}
+
 test_local_only_fork_remote_allows() {
   local case_dir rc
   case_dir=$(make_case fork-allow)
@@ -2327,6 +2359,40 @@ configure_secondmate_with_tmux_children() {  # <case-dir>
   done
 }
 
+test_forced_secondmate_stale_omp_child_refuses_before_cleanup() {
+  local case_dir home rc
+  case_dir=$(make_case stale-omp-child)
+  write_meta "$case_dir" local-only secondmate
+  configure_secondmate_with_tmux_children "$case_dir"
+  home="$case_dir/secondmate-home"
+  printf '%s\n' 'harness=omp' >> "$home/state/child-a.meta"
+  : > "$case_dir/kill.log"
+  : > "$case_dir/treehouse.log"
+  cat > "$case_dir/fakebin/tmux" <<SH
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$case_dir/kill.log"
+SH
+  cat > "$case_dir/fakebin/treehouse" <<SH
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$case_dir/treehouse.log"
+SH
+  chmod +x "$case_dir/fakebin/tmux" "$case_dir/fakebin/treehouse"
+
+  rc=0
+  run_teardown "$case_dir" --force > "$case_dir/stdout" 2> "$case_dir/stderr" || rc=$?
+
+  expect_code 1 "$rc" "stale-omp-child: forced parent cleanup must refuse"
+  assert_grep "descendant task child-a records retired harness 'omp'" "$case_dir/stderr" \
+    "stale-omp-child: refusal did not name the descendant stale record"
+  assert_present "$case_dir/state/task-x1.meta" "stale-omp-child: refusal removed the parent record"
+  assert_present "$home/state/child-a.meta" "stale-omp-child: refusal removed the descendant record"
+  [ -d "$home" ] && [ -d "$case_dir/child-a-wt" ] \
+    || fail "stale-omp-child: refusal removed the secondmate home or descendant copy"
+  [ ! -s "$case_dir/kill.log" ] || fail "stale-omp-child: refusal sent lifecycle input"
+  [ ! -s "$case_dir/treehouse.log" ] || fail "stale-omp-child: refusal returned an isolated copy"
+  pass "forced secondmate cleanup refuses a stale OMP descendant without removing retained work"
+}
+
 test_forced_secondmate_teardown_holds_descendant_lifecycle_locks() {
   local case_dir home lock ready release holder_pid rc waited=0 child
   case_dir=$(make_case descendant-locks)
@@ -3666,6 +3732,7 @@ EOF
   pass "the run abort and the leaked-process reap both complete before the destructive worktree return"
 }
 
+test_stale_omp_task_refuses_even_forced_cleanup_without_removing_work
 test_local_only_fork_remote_allows
 test_teardown_closes_the_backlog_item_itself
 test_teardown_manual_backend_leaves_the_backlog_to_the_operator
@@ -3682,6 +3749,7 @@ test_herdr_flat_teardown_refuses_orphaning_records_then_retry_completes
 test_herdr_flat_teardown_refuses_records_on_unparseable_presence
 test_herdr_flat_teardown_preflight_refuses_before_changes
 test_forced_secondmate_herdr_child_preflight_refuses_before_changes
+test_forced_secondmate_stale_omp_child_refuses_before_cleanup
 test_forced_secondmate_teardown_holds_descendant_lifecycle_locks
 test_forced_secondmate_herdr_child_retains_records_when_close_unconfirmed
 test_forced_teardown_retains_nested_secondmate_home_when_grandchild_close_unconfirmed

@@ -23,7 +23,7 @@ if [ -z "${FM_TEST_DAEMON_SOURCED:-}" ]; then
 fi
 
 TMP_ROOT=$(fm_test_tmproot fm-daemon-tests)
-FM_DAEMON_PRIMARY_HARNESS=omp
+FM_DAEMON_PRIMARY_HARNESS=codex
 export FM_DAEMON_PRIMARY_HARNESS
 
 test_afk_start_refuses_when_flag_cannot_be_written() {
@@ -1323,11 +1323,11 @@ test_housekeeping_herdr_idle_busy_record_clears_stale() {
   local dir state key gen
   dir=$(make_supercase stale-herdr-idle-busy-record)
   state="$dir/state"
-  fm_write_meta "$state/herdr-footer.meta" "window=default:w1:p4" "backend=herdr" "harness=omp"
+  fm_write_meta "$state/herdr-footer.meta" "window=default:w1:p4" "backend=herdr" "harness=pi"
   printf 'working\n' > "$state/herdr-footer.status"
   gen=$("$ROOT/bin/fm-busy-event.sh" arm "$state" herdr-footer)
   "$ROOT/bin/fm-busy-event.sh" apply "$state" herdr-footer busy --gen "$gen" \
-    --source omp-ext --event user-prompt-submit
+    --source pi-ext --event user-prompt-submit
   key=$(printf '%s' "herdr-footer" | tr ':/.' '___')
   echo $(( $(date +%s) - 500 )) > "$state/.subsuper-stale-$key"
   (
@@ -1412,7 +1412,7 @@ test_escalate_batches_into_one_digest() {
   state="$dir/state"
   fakebin="$dir/fakebin"
   sent="$dir/sent.log"; : > "$sent"
-  capture="$dir/pane.txt"; printf '\342\235\257 \n' > "$capture"  # a proven-empty bare omp composer: STRICT injection needs positive proof
+  capture="$dir/pane.txt"; printf '› \n' > "$capture"  # a proven-empty Codex composer: strict injection needs positive proof
   escalate_add "$state" "event A: done: PR 1"
   escalate_add "$state" "event B: done: PR 2"
   afk_enter "$state"
@@ -1438,7 +1438,7 @@ test_escalate_batch_age_uses_first_append() {
   state="$dir/state"
   fakebin="$dir/fakebin"
   sent="$dir/sent.log"; : > "$sent"
-  capture="$dir/pane.txt"; printf '\342\235\257 \n' > "$capture"  # a proven-empty bare omp composer: STRICT injection needs positive proof
+  capture="$dir/pane.txt"; printf '› \n' > "$capture"  # a proven-empty Codex composer: strict injection needs positive proof
   escalate_add "$state" "event A: done: PR 1"
   escalate_add "$state" "event B: done: PR 2"
   echo $(( $(date +%s) - 100 )) > "$state/.subsuper-escalations.since"
@@ -1671,7 +1671,7 @@ test_afk_absent_daemon_does_not_inject() {
   state="$dir/state"
   fakebin="$dir/fakebin"
   sent="$dir/sent.log"; : > "$sent"
-  capture="$dir/pane.txt"; printf '\342\235\257 \n' > "$capture"  # a proven-empty bare omp composer: STRICT injection needs positive proof
+  capture="$dir/pane.txt"; printf '› \n' > "$capture"  # a proven-empty Codex composer: strict injection needs positive proof
   escalate_add "$state" "done: PR 1"
   # afk flag deliberately NOT set
   if PATH="$fakebin:$PATH" FM_FAKE_TMUX_PANE_ALIVE=1 FM_FAKE_TMUX_SENT="$sent" \
@@ -1823,20 +1823,20 @@ test_pane_input_pending_requires_proven_empty_prompt() {
   state="$dir/state"
   fakebin="$dir/fakebin"
   capture="$dir/pane.txt"
-  for prompt in '$' '>'; do
+  for prompt in '$' '>' '❯'; do
     printf 'output\noutput\n%s \n' "$prompt" > "$capture"
     PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=2 \
       pane_input_pending "fakepane" \
-      || fail "bare shell prompt '$prompt' should defer as unknown"
+      || fail "unverified bare prompt '$prompt' should defer as unknown"
   done
-  for prompt in '❯' '›'; do
+  for prompt in '›' '⟩'; do
     printf 'output\noutput\n%s \n' "$prompt" > "$capture"
     if PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=2 \
       pane_input_pending "fakepane"; then
       fail "proven empty agent prompt '$prompt' should not defer"
     fi
   done
-  pass "pane_input_pending: only proven empty agent prompts pass"
+  pass "pane_input_pending: only retained bare-agent prompts pass"
 }
 
 # The safety fix at the tmux classifier (task fm-composer-shellglyph-safety): a
@@ -1859,8 +1859,8 @@ test_tmux_composer_state_bare_shell_is_unknown() {
 }
 
 # The other side of the fix: a bordered composer box (the harness draws its own
-# prompt glyph inside it) and a bare AGENT prompt glyph (omp ❯, codex ›) are
-# genuine empty agent composers and must still read `empty`.
+# prompt glyph inside it) and a bare retained-agent prompt glyph (Codex `›`)
+# are genuine empty agent composers and must still read `empty`.
 test_tmux_composer_state_bordered_and_agent_rows_are_empty() {
   local dir fakebin capture out
   dir=$(make_supercase composer-empty-agent)
@@ -1872,12 +1872,12 @@ test_tmux_composer_state_bordered_and_agent_rows_are_empty() {
   printf '%s\n' "❯ " > "$capture"
   out=$(PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=0 \
     fm_tmux_composer_state "fakepane")
-  [ "$out" = empty ] || fail "a bare omp '❯' composer should read empty, got '$out'"
+  [ "$out" = unknown ] || fail "a stale bare OMP '❯' composer must read unknown, got '$out'"
   printf '%s\n' "› " > "$capture"
   out=$(PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=0 \
     fm_tmux_composer_state "fakepane")
   [ "$out" = empty ] || fail "a bare codex '›' composer should read empty, got '$out'"
-  pass "fm_tmux_composer_state: a bordered composer box and bare agent glyphs (❯/›) still read empty"
+  pass "fm_tmux_composer_state: bordered composers and bare retained-agent glyphs read empty; stale OMP stays unknown"
 }
 
 test_tmux_composer_state_requires_matching_box_borders() {
@@ -2001,9 +2001,8 @@ test_afk_genuine_done_still_terminal_stale() {
 }
 
 test_pane_input_pending_bordered_idle_not_pending() {
-  # THE regression: an idle omp composer is a bordered box ("│ > … │"). The
-  # old idle regex only matched a BARE prompt, so every idle omp pane read as
-  # pending and the away-mode daemon deferred 100% of escalations for 9.5h.
+  # A bordered idle composer must not be mistaken for pending input merely
+  # because the prompt is not a bare row; otherwise away-mode delivery defers.
   local dir state fakebin capture line
   dir=$(make_supercase pending-bordered-idle)
   state="$dir/state"; fakebin="$dir/fakebin"; capture="$dir/pane.txt"
@@ -2037,8 +2036,8 @@ test_pane_input_pending_bordered_with_text_is_pending() {
 
 test_submit_ack_confirms_on_bordered_empty_composer() {
   # RC2: the submit acknowledgement must recognize a bordered-EMPTY composer as
-  # "submitted." The old ACK reused the broken check, so on omp it could never
-  # confirm and always reported a false "Enter swallowed."
+  # "submitted." Reusing a bare-prompt-only check here would never confirm and
+  # would report a false "Enter swallowed."
   local dir fakebin sent verdict
   dir=$(make_bordered_case ack-bordered)
   fakebin="$dir/fakebin"; sent="$dir/sent.log"; : > "$sent"
@@ -2177,7 +2176,7 @@ test_max_defer_afk_inactive_does_not_flush_or_alarm() {
 # --- backend-independent active wedge alert ---------------------------------
 # These cover the 2026-07-10 overnight-incident fix: the max-defer wedge alarm's
 # ACTIVE alert channel must reach the captain even when the wedged pane and its
-# backend status-line are unreadable (a omp-on-herdr primary that night).
+# backend status line are both unreadable.
 #
 # NO test here EVER posts a real notification. Every notifier routes through
 # the FM_WEDGE_ALARM_EXEC seam, which tests/wake-helpers.sh forces to a recorder
@@ -2624,7 +2623,7 @@ test_pane_is_busy_herdr_native_busy_state() {
   (
     fm_backend_busy_state() { [ "$1" = herdr ] && [ "$2" = "default:w1:p2" ] || fail "unexpected busy_state args: $1 $2"; printf 'busy'; }
     fm_backend_capture() { fail "capture should not be consulted when busy_state is conclusive"; }
-    FM_STATE_OVERRIDE="$dir/state" FM_DAEMON_PRIMARY_HARNESS=omp pane_is_busy "default:w1:p2" herdr \
+    FM_STATE_OVERRIDE="$dir/state" FM_DAEMON_PRIMARY_HARNESS=codex pane_is_busy "default:w1:p2" herdr \
       || fail "pane_is_busy should report busy from herdr's native busy_state"
   ) || fail "herdr native-busy pane_is_busy subshell failed"
   pass "pane_is_busy: herdr native busy_state='busy' short-circuits without a capture fallback"
@@ -2634,8 +2633,8 @@ test_primary_busy_guard_is_harness_scoped() {
   (
     fm_backend_busy_state() { printf 'unknown'; }
     fm_backend_capture() { printf 'esc interrupt\n'; }
-    if FM_DAEMON_PRIMARY_HARNESS=omp pane_is_busy "default:w1:p2" herdr; then
-      fail "OpenCode's rendered signature must not classify a omp primary busy"
+    if FM_DAEMON_PRIMARY_HARNESS=codex pane_is_busy "default:w1:p2" herdr; then
+      fail "OpenCode's rendered signature must not classify a Codex primary busy"
     fi
     FM_DAEMON_PRIMARY_HARNESS=opencode pane_is_busy "default:w1:p2" herdr \
       || fail "OpenCode's rendered signature should classify an OpenCode primary busy"

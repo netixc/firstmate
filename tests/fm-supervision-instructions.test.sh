@@ -23,7 +23,13 @@ test_unknown_fallback() {
   out=$("$RENDER" --harness not-real)
   assert_contains "$out" "primary harness: unknown" "unknown heading missing"
   assert_contains "$out" "Mode: Unknown harness fallback." "unknown fallback snippet missing"
-  pass "renderer falls back to unknown.md for unverified harness names"
+
+  out=$("$RENDER" --harness omp)
+  assert_contains "$out" "primary harness: unknown" "a stale OMP selection must use the unknown fallback"
+  assert_contains "$out" "Mode: Unknown harness fallback." "a stale OMP selection must not select a retired protocol"
+  assert_not_contains "$out" ".omp/" "a stale OMP selection must not render retired extension paths"
+  assert_not_contains "$out" "fm_watch_arm_omp" "a stale OMP selection must not render a retired repair tool"
+  pass "renderer falls back to unknown.md for unverified and retired harness names"
 }
 
 test_conditional_stanzas() {
@@ -88,10 +94,6 @@ test_repair_lines() {
   out=$(FM_HOME="$home" "$RENDER" --harness pi --repair-line)
   assert_contains "$out" "Pi tool fm_watch_arm_pi" "pi repair line does not direct the model to the extension-owned tool"
   assert_not_contains "$out" "extension command /fm-watch-arm-pi" "pi repair line still directs the model to the human slash command"
-  out=$(FM_HOME="$home" "$RENDER" --harness omp --repair-line)
-  assert_contains "$out" "omp tool fm_watch_arm_omp" "omp repair line does not direct the model to the extension-owned tool"
-  assert_contains "$out" ".omp/extensions/fm-primary-turnend-guard.ts" "omp repair line does not name its own turn-end extension"
-  assert_not_contains "$out" "fm_watch_arm_pi" "omp repair line must not borrow the Pi tool"
   pass "renderer repair-line mode is harness-aware and honors conditional state"
 }
 
@@ -104,17 +106,6 @@ test_cross_harness_ordinary_continuation_and_repair_matrix() {
   assert_not_contains "$ordinary" "fm_watch_arm_pi" "pi ordinary-wake line incorrectly calls the recovery tool"
   out=$("$RENDER" --harness pi --repair-line)
   assert_contains "$out" "fm_watch_arm_pi" "pi recovery line lost the extension-owned repair tool"
-
-  out=$("$RENDER" --harness omp)
-  assert_contains "$out" "primary harness: omp" "omp heading missing"
-  assert_contains "$out" "Mode: omp (Oh My Pi) extension background wake." "omp snippet missing"
-  assert_contains "$out" "the omp extension already owns watcher continuity" "omp ordinary-wake line does not leave continuity to the extension"
-  assert_contains "$out" ".omp/extensions/fm-primary-omp-watch.ts" "omp snippet did not substitute its watch extension path"
-  assert_not_contains "$out" "__FM_OMP_EXT__" "omp snippet left a placeholder unsubstituted"
-  assert_not_contains "$out" "__FM_OMP_TURNEND_EXT__" "omp snippet left the turn-end placeholder unsubstituted"
-  assert_not_contains "$out" "project trust" "omp snippet must not carry Pi's trust prerequisite"
-  out=$("$RENDER" --harness omp --repair-line)
-  assert_contains "$out" "fm_watch_arm_omp" "omp recovery line lost the extension-owned repair tool"
 
   out=$("$RENDER" --harness opencode)
   ordinary=$(printf '%s\n' "$out" | grep -F -- '- Ordinary wake:')

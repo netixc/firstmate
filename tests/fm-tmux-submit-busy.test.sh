@@ -50,7 +50,7 @@ case "${1:-}" in
       [ -z "${FM_FAKE_SENT:-}" ] || printf 'Enter\n' >> "$FM_FAKE_SENT"
       if [ -n "${FM_FAKE_SWALLOW:-}" ] && [ -f "$FM_FAKE_SWALLOW" ]; then
         [ "${FM_FAKE_PERSIST_SWALLOW:-0}" = 1 ] || rm -f "$FM_FAKE_SWALLOW"
-        [ "${FM_FAKE_APPEND_BUSY:-0}" != 1 ] || printf '✻ Working…\n' >> "$COMPOSER"
+        [ "${FM_FAKE_APPEND_BUSY:-0}" != 1 ] || printf '✻ Working...\n' >> "$COMPOSER"
       else
         printf '╭─────╮\n│ >   │\n╰─────╯\n' > "$COMPOSER"
       fi
@@ -111,7 +111,7 @@ test_wrapped_continuation_retries_swallowed_enter() {
   composer="$dir/composer"
   sent="$dir/sent.log"
   vfile="$dir/verdict"
-  printf '❯ wrapped typed input\ncontinues on the next terminal row\n' > "$composer"
+  printf '› wrapped typed input\ncontinues on the next terminal row\n' > "$composer"
   : > "$sent"
   touch "$dir/.swallow"
   PATH="$fakebin:$PATH" FM_FAKE_COMPOSER="$composer" FM_FAKE_SENT="$sent" \
@@ -131,7 +131,7 @@ test_placeholder_like_bare_input_retries_swallowed_enter() {
   composer="$dir/composer"
   sent="$dir/sent.log"
   vfile="$dir/verdict"
-  printf 'transcript\n❯ Type a message...\n' > "$composer"
+  printf 'transcript\n› Type a message...\n' > "$composer"
   : > "$sent"
   touch "$dir/.swallow"
   PATH="$fakebin:$PATH" FM_FAKE_COMPOSER="$composer" FM_FAKE_SENT="$sent" \
