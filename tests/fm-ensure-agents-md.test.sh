@@ -28,7 +28,7 @@ test_absent_file_creates_skeleton() {
 }
 
 test_existing_file_is_extended_once() {
-  local repo before out
+  local repo out
   repo=$(new_repo existing)
   printf '# Existing instructions\n\nKeep this.\n' > "$repo/AGENTS.md"
   out=$("$ENSURE" "$repo") || fail "helper refused an existing AGENTS.md: $out"
