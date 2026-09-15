@@ -63,6 +63,13 @@
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=bin/fm-host-platform-lib.sh
+. "$SCRIPT_DIR/fm-host-platform-lib.sh"
+if ! fm_host_platform_require >&2; then
+  printf 'UPGRADE_BLOCKED: manually retire every existing remote job worker on this unsupported host before changing its checkout; follow docs/remote-secondmates.md#retire-a-legacy-worker-before-upgrade.\n' >&2
+  exit 1
+fi
+
 FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"

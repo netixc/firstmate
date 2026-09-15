@@ -13,6 +13,24 @@ Local second mates are unaffected and keep their ordinary backend and session se
 
 ## Prerequisites
 
+### Retire a legacy worker before upgrade
+
+Before upgrading a Firstmate checkout on a host that is no longer supported, manually retire every remote job worker while the old checkout is still present.
+First retire or stop its remote second mates and wait for every queued or running remote job to finish, so this deliberate retirement does not interrupt active work.
+If `$HOME/.firstmate/remote-job/worker.pid` exists, run this from the old Firstmate code root before any fetch, pull, or fast-forward:
+
+```sh
+root=$PWD
+state=${FM_REMOTE_JOB_STATE_ROOT:-"$HOME/.firstmate/remote-job"}
+pid=$(cat "$state/worker.pid")
+bash -c '. "$1/bin/fm-remote-job-lib.sh"; fm_remote_job_stop_worker_tree "$2"' _ "$root" "$pid"
+```
+
+Do not upgrade until that command exits successfully, the recorded PID is no longer live, and no worker heartbeat or active lane remains.
+If the worker cannot be retired cleanly, leave the checkout unchanged and stop the exact worker tree with that host's process manager before retrying the verification.
+`bin/fm-update.sh` refuses unsupported hosts before fetching or changing a checkout and points to this prerequisite; it never retires a worker automatically.
+WSL2 reports Linux from inside its Linux environment and does not use this unsupported-host retirement path.
+
 Configure an SSH alias in the primary account's normal OpenSSH configuration.
 Use ordinary public-key authentication, strict host-key verification, and a dedicated remote account where practical.
 Do not enable agent forwarding for Firstmate.

@@ -507,6 +507,33 @@ test_primary_update_rebinds_local_watch() {
   pass "T12 a self-update rebinds a locally armed watch on the primary"
 }
 
+test_unsupported_host_requires_manual_worker_retirement() {
+  local w out rc before_head before_remote
+  w=$(new_world unsupported-host)
+  bump_origin "$w" instr
+  before_head=$(git -C "$w/main" rev-parse HEAD)
+  before_remote=$(git -C "$w/main" rev-parse refs/remotes/origin/main)
+  fm_fake_uname "$w/fakebin" MINGW64_NT-10.0
+
+  set +e
+  out=$(PATH="$w/fakebin:$PATH" FM_FAKE_DIR="$w/fake" \
+    FM_ROOT_OVERRIDE="$w/main" FM_HOME="$w/home" "$UPDATE" 2>&1)
+  rc=$?
+  set -e
+
+  expect_code 1 "$rc" "unsupported-host update refusal"
+  assert_contains "$out" "UNSUPPORTED_HOST: MINGW64_NT-10.0" \
+    "unsupported-host update did not report the host contract"
+  assert_contains "$out" "manually retire every existing remote job worker" \
+    "unsupported-host update did not require worker retirement"
+  [ "$(git -C "$w/main" rev-parse HEAD)" = "$before_head" ] \
+    || fail "unsupported-host update changed the checkout"
+  [ "$(git -C "$w/main" rev-parse refs/remotes/origin/main)" = "$before_remote" ] \
+    || fail "unsupported-host update fetched before refusing"
+  pass "unsupported hosts require manual worker retirement before update"
+}
+
+test_unsupported_host_requires_manual_worker_retirement
 test_updates_main_and_secondmate
 test_reread_gate_is_instruction_only
 test_bin_only_advance_restarts
