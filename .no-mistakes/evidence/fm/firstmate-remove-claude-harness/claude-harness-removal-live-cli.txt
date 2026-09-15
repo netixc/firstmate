@@ -1,0 +1,35 @@
+Firstmate Claude harness removal - live CLI evidence
+Target commit: b0c3bd32ab5169c187e76ada140bdef92165ce63
+
+SCENARIO: a supported Pi primary remains recognized
+$ bin/fm-harness.sh
+pi
+$ bin/fm-supervision-instructions.sh [selected lines]
+SUPERVISION OPERATING INSTRUCTIONS - primary harness: pi
+Mode: Pi extension background wake.
+
+SCENARIO: a legacy CLAUDECODE marker no longer claims a primary
+$ CLAUDECODE=1 bin/fm-harness.sh  # in a clean detached tmux process tree
+exit=0
+unknown
+$ bin/fm-supervision-instructions.sh --harness claude [selected lines]
+SUPERVISION OPERATING INSTRUCTIONS - primary harness: unknown
+Mode: Unknown harness fallback.
+
+SCENARIO: explicit and configured Claude crew launches fail closed
+$ bin/fm-spawn.sh removed-explicit ... --scout --harness claude
+exit=1
+error: unknown harness 'claude'; pass a raw launch command to use an unverified adapter
+metadata=absent
+$ config/crew-harness=claude bin/fm-spawn.sh removed-config ... --scout
+exit=1
+error: no launch template for harness 'claude' (from config/crew-harness or detection); pass a raw launch command to use an unverified adapter
+metadata=absent
+$ bin/fm-spawn.sh removed-secondmate ... --secondmate --harness claude
+exit=1
+error: unknown harness 'claude'; pass a raw launch command to use an unverified adapter
+metadata=absent
+
+SCENARIO: dispatch configuration rejects Claude as unverified
+$ FM_BOOTSTRAP_DETECT_ONLY=1 FM_BOOTSTRAP_NETWORK=skip bin/fm-bootstrap.sh [dispatch diagnostic]
+CREW_DISPATCH: invalid config/crew-dispatch.json - unverified harness: claude
