@@ -1,0 +1,2 @@
+sed: /Users/control/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.pi-live-e2e.62442/pi-ahoy-first-home/state/session-start-count: No such file or directory
+not ok - Pi native first-message Ahoy did not preserve one session-start execution

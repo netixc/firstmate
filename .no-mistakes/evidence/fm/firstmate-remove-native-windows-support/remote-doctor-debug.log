@@ -1,0 +1,33 @@
+ok - a missing herdr CLI is a human gap that --fix never claims to close
+ok - an absent launch agent is a fixable gap and the read-only run changes nothing
+DEBUG_RC=1
+mode=fix
+path=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.fqCSf1/case2/home/.local/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.fqCSf1/case2/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.fqCSf1/tools:/usr/bin:/bin:/usr/sbin:/sbin
+entrypoint=no
+note: not launched through the fixed remote entrypoint; the reported PATH is this caller environment.
+platform=darwin
+fix remote-job-worker=applied: installed or reloaded dev.firstmate.remote-job
+fix launchagent=applied: wrote the Aqua-scoped dev.firstmate.herdr.fm-remote launch agent running /Users/control/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/bin/fm-remote-herdr-guard.sh for /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.fqCSf1/case2/bin/herdr via /bin/sh -l -c
+fix launchagent-loaded=failed: the herdr server for session fm-remote did not come up inside the Aqua launch agent within 10s
+required git=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.fqCSf1/tools/git
+required jq=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.fqCSf1/tools/jq
+required herdr=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.fqCSf1/case2/bin/herdr
+required tasks-axi=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.fqCSf1/case2/bin/tasks-axi
+required treehouse=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.fqCSf1/case2/bin/treehouse
+required harness=claude:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.fqCSf1/case2/bin/claude
+optional tmux=absent
+optional no-mistakes=absent
+optional gh=absent
+check herdr=ok: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.fqCSf1/case2/bin/herdr
+check gui-session=ok: gui/501
+check remote-job-worker=ok: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.fqCSf1/case2/home/Library/LaunchAgents/dev.firstmate.remote-job.plist matches the Firstmate-owned Aqua worker contract
+check remote-job-worker-loaded=ok: dev.firstmate.remote-job is loaded in gui/501
+check remote-job-probe=ok: the remote job worker published a fresh heartbeat
+check launchagent=ok: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.fqCSf1/case2/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist matches the Firstmate-owned contract
+check launchagent-scope=ok: LimitLoadToSessionType=Aqua
+check launchagent-loaded=ok: gui/501/dev.firstmate.herdr.fm-remote matches the effective contract
+check herdr-server=fixable: session fm-remote is served by pid 8839 born outside the Aqua login session (unknown), so its panes cannot reach the login keychain
+check entrypoint-link=skip: this run did not come through the fixed remote entrypoint
+action: herdr-server: rerun this command with --fix so the launch agent takes the session over (its current panes close and the parent firstmate relaunches its mates)
+error: this host is not ready for a remote second mate; unresolved: herdr-server
+not ok - --fix left a repairable host unready: expected exit 0, got 1

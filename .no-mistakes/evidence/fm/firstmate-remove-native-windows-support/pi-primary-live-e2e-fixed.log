@@ -1,0 +1,1 @@
+not ok - Pi Ahoy legacy-start case did not take Bearings: I can’t take the helm or produce `/ahoy`: no command-execution tool is available to run `bin/fm-session-start.sh`.

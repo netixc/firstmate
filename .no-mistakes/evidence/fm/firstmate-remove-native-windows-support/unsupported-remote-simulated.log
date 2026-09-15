@@ -1,0 +1,9 @@
+SCENARIO: Unsupported remote host refuses before repair
+exit=1
+mode=fix
+path=/Users/control/.pi/agent/bin:/Users/control/.local/bin:/Users/control/.grok/bin:/Users/control/.local/bin:/Library/Frameworks/Python.framework/Versions/3.14/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/Users/control/.local/bin:/Users/control/go/bin:/Users/control/.cargo/bin:/Users/control/bin:/usr/local/sbin
+entrypoint=no
+platform=MINGW64_NT-10.0
+UNSUPPORTED_HOST: MINGW64_NT-10.0 - Firstmate hosts require macOS or Linux; native Windows, Git Bash, MSYS, and Cygwin are unsupported. WSL2 remains supported when Firstmate runs inside its Linux environment.
+action: host-platform: run the remote home on macOS or Linux; use WSL2 only through its Linux environment
+filesystem-unchanged=yes

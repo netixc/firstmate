@@ -1,0 +1,4 @@
+SCENARIO: Real Pi session-start hook runs on native macOS
+pi-output=PI_SESSIONSTART_OK
+sessionstart-record=ran
+turnend-marker=sha256:bf0e58c606afc89d061d9909140c584d13788a16f88f79579a889b184073723f

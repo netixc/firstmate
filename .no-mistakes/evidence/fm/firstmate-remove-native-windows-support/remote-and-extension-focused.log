@@ -1,0 +1,67 @@
+FM_TEST_BEGIN 2026-09-15T09:32:38Z tests/fm-remote-job.test.sh family=secondmate expected_gate_skip=none
+FM_TEST_BEGIN 2026-09-15T09:32:38Z tests/fm-remote-doctor.test.sh family=secondmate expected_gate_skip=none
+ok - a missing herdr CLI is a human gap that --fix never claims to close
+ok - an absent launch agent is a fixable gap and the read-only run changes nothing
+not ok - --fix left a repairable host unready: expected exit 0, got 1
+FM_TEST_END 2026-09-15T09:32:52Z tests/fm-remote-doctor.test.sh exit=1 duration_ms=13258 gate_skip=false
+ok - default queue and execution bounds independently cover long polls
+ok - remote worker startup rejects native-Windows and unknown hosts before state mutation
+ok - direct remote workers reject unsupported hosts before state mutation
+ok - operator PATH excludes a symlinked local bin
+ok - operator PATH honors nvm defaults with a deterministic fallback
+ok - operator PATH resolves the authorized Nix profile bin link
+ok - operator PATH orders discovered tool installs deterministically
+ok - the worker preserves bounded argv and stdin in an empty environment
+ok - active jobs keep the worker ready for concurrent requests
+ok - ensure replaces a live worker after its code changes
+ok - worker identity binds the canonical configured code root
+ok - stale ownership is reclaimed without signaling a reused pid
+ok - the worker enforces the job timeout and publishes its result
+ok - the worker expires queued jobs before they can mutate
+ok - queued jobs receive a fresh bounded execution window
+ok - a queued short command preempts a running long poll instead of waiting its window
+ok - a poll re-armed after preemption reads the same cursor with nothing lost
+ok - sibling polls never preempt each other into a re-arm churn loop
+ok - worker shutdown terminates the active command tree before replacement
+ok - Linux supervision recovers crashes and stops orphaned commands
+ok - pre-execution validation obeys the job timeout
+ok - the worker drains bounded output without changing command results
+ok - the worker refuses symlinked job fields before command execution
+ok - failed shutdown quarantines ownership against replacement workers
+ok - quarantine recovery refuses unverifiable supervisors and ignores reused pids
+ok - a repeatedly signalled shutdown still releases ownership for the next worker
+ok - barely healthy worker failures remain bounded by the restart guard
+ALL TESTS PASSED
+FM_TEST_END 2026-09-15T09:34:11Z tests/fm-remote-job.test.sh exit=0 duration_ms=92386 gate_skip=false
+FM_TEST_BEGIN 2026-09-15T09:34:11Z tests/fm-extension-binding.test.sh family=standalone expected_gate_skip=none
+FM_TEST_BEGIN 2026-09-15T09:34:11Z tests/fm-remote-entrypoint.test.sh family=standalone expected_gate_skip=none
+ok - fm-remote-entrypoint.sh invoked via a PATH symlink resolves SCRIPT_DIR to the real bin/ directory
+ok - remote entrypoint rejects unsupported hosts before protocol staging
+ok - fm-remote-entrypoint.sh invoked directly still resolves SCRIPT_DIR correctly
+FM_TEST_END 2026-09-15T09:34:12Z tests/fm-remote-entrypoint.test.sh exit=0 duration_ms=1128 gate_skip=false
+ok - unknown extension conformance section selectors fail before setup
+ok - the section coordinator propagates ordered failures and bounded cleanup
+not-autohandled: example-file (left for the handler; still unacknowledged)
+not-autohandled: flow-source (left for the handler; still unacknowledged)
+ok - the shipped file-signal package is a runnable end-to-end external adapter
+ok - one external adapter registers, invokes, captures unhandled evidence, classifies, and terminally retires end to end
+not-autohandled: remote-source (left for the handler; still unacknowledged)
+not-autohandled: example-symlinked (left for the handler; still unacknowledged)
+ok - a home reached through a symlinked ancestor captures external evidence normally
+ok - serialized remote binding crosses fm-on through addressed-home capture and retirement
+
+all extension-binding tests passed
+ok - handshake execution rejects and reaps foreground descendants
+
+all extension-binding tests passed
+ok - inner result.silent host crash releases the parent lifecycle lock before terminal retry
+not ok - an isolated extension conformance section failed
+FM_TEST_END 2026-09-15T09:34:45Z tests/fm-extension-binding.test.sh exit=1 duration_ms=34200 gate_skip=false
+FM_TEST_SUMMARY total=4 failed=2 skipped_gate=0 duration_ms=127103
+FM_TEST_SUMMARY_FAMILY family=secondmate count=2 duration_ms=105644 failed=1
+FM_TEST_SUMMARY_FAMILY family=standalone count=2 duration_ms=35328 failed=1
+FM_TEST_SLOWEST rank=1 script=tests/fm-remote-job.test.sh duration_ms=92386
+FM_TEST_SLOWEST rank=2 script=tests/fm-extension-binding.test.sh duration_ms=34200
+FM_TEST_SLOWEST rank=3 script=tests/fm-remote-doctor.test.sh duration_ms=13258
+FM_TEST_SLOWEST rank=4 script=tests/fm-remote-entrypoint.test.sh duration_ms=1128
+fm-test-run: wrote timing artifact: /Users/control/.no-mistakes/evidence/01M2J5C59A7B0PTGG3A0TDA626/remote-and-extension-focused.json

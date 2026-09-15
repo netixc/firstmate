@@ -1,0 +1,9 @@
+SCENARIO: Native macOS host accepts Firstmate executable interfaces
+uname=Darwin
+host-policy-exit=0
+no extension bindings
+extension-list-home-entries=0
+arm-guard-exit=0
+pi-version=0.85.1
+pi-turnend-marker=sha256:bf0e58c606afc89d061d9909140c584d13788a16f88f79579a889b184073723f
+pi-watch-marker=sha256:86a7b7f86a2b74f7fc84d86cf44a5b255625d4c78ce6a9e39c5fbce7748e8640

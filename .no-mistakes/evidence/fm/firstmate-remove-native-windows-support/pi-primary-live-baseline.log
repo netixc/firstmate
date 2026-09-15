@@ -1,0 +1,169 @@
+fatal: repository '/Users/control/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-check' does not exist
+cp: /Users/control/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-check/.pi-live-e2e.27407/project/bin/fm-watch-arm.sh: No such file or directory
+cp: /Users/control/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-check/.pi-live-e2e.27407/project/bin/fm-operational-input.sh: No such file or directory
+cp: /Users/control/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-check/.pi-live-e2e.27407/project/bin/fm-supervision-instructions.sh: No such file or directory
+chmod: /Users/control/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-check/.pi-live-e2e.27407/project/bin/fm-operational-input.sh: No such file or directory
+/Users/control/.profile: line 1: /Users/control/.cargo/env: No such file or dire
+ctory
+[Skill conflicts]
+  "ahoy" collision:
+    ✓ auto (project)
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-c
+heck/.pi-live-e2e.27407/project/.agents/skills/ahoy/SKILL.md
+    ✗
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-c
+heck/.agents/skills/ahoy/SKILL.md (skipped)
+    ✗
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.agents/skills/
+ahoy/SKILL.md (skipped)
+  "bearings" collision:
+    ✓ auto (project)
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-c
+heck/.pi-live-e2e.27407/project/.agents/skills/bearings/SKILL.md
+    ✗
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-c
+heck/.agents/skills/bearings/SKILL.md (skipped)
+    ✗
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.agents/skills/
+bearings/SKILL.md (skipped)
+  "afk" collision:
+    ✓ auto (project)
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-c
+heck/.agents/skills/afk/SKILL.md
+    ✗
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.agents/skills/
+afk/SKILL.md (skipped)
+  "ask-user-authority" collision:
+    ✓ auto (project)
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-c
+heck/.agents/skills/ask-user-authority/SKILL.md
+    ✗
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.agents/skills/
+ask-user-authority/SKILL.md (skipped)
+  "bootstrap-diagnostics" collision:
+    ✓ auto (project)
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-c
+heck/.agents/skills/bootstrap-diagnostics/SKILL.md
+    ✗
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.agents/skills/
+bootstrap-diagnostics/SKILL.md (skipped)
+  "captain-hold-lifecycle" collision:
+    ✓ auto (project)
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-c
+heck/.agents/skills/captain-hold-lifecycle/SKILL.md
+    ✗
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.agents/skills/
+captain-hold-lifecycle/SKILL.md (skipped)
+  "decision-hold-lifecycle" collision:
+    ✓ auto (project)
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-c
+heck/.agents/skills/decision-hold-lifecycle/SKILL.md
+    ✗
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.agents/skills/
+decision-hold-lifecycle/SKILL.md (skipped)
+  "diagnostic-reasoning" collision:
+    ✓ auto (project)
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-c
+heck/.agents/skills/diagnostic-reasoning/SKILL.md
+    ✗
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.agents/skills/
+diagnostic-reasoning/SKILL.md (skipped)
+  "firstmate-codexapp" collision:
+    ✓ auto (project)
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-c
+heck/.agents/skills/firstmate-codexapp/SKILL.md
+    ✗
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.agents/skills/
+firstmate-codexapp/SKILL.md (skipped)
+  "firstmate-coding-guidelines" collision:
+    ✓ auto (project)
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-c
+heck/.agents/skills/firstmate-coding-guidelines/SKILL.md
+    ✗
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.agents/skills/
+firstmate-coding-guidelines/SKILL.md (skipped)
+  "firstmate-orca" collision:
+    ✓ auto (project)
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-c
+heck/.agents/skills/firstmate-orca/SKILL.md
+    ✗
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.agents/skills/
+firstmate-orca/SKILL.md (skipped)
+  "fmx-respond" collision:
+    ✓ auto (project)
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-c
+heck/.agents/skills/fmx-respond/SKILL.md
+    ✗
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.agents/skills/
+fmx-respond/SKILL.md (skipped)
+  "harness-adapters" collision:
+    ✓ auto (project)
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-c
+heck/.agents/skills/harness-adapters/SKILL.md
+    ✗
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.agents/skills/
+harness-adapters/SKILL.md (skipped)
+  "process-event-sources" collision:
+    ✓ auto (project)
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-c
+heck/.agents/skills/process-event-sources/SKILL.md
+    ✗
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.agents/skills/
+process-event-sources/SKILL.md (skipped)
+  "project-management" collision:
+    ✓ auto (project)
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-c
+heck/.agents/skills/project-management/SKILL.md
+    ✗
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.agents/skills/
+project-management/SKILL.md (skipped)
+  "quiet" collision:
+    ✓ auto (project)
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-c
+heck/.agents/skills/quiet/SKILL.md
+    ✗
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.agents/skills/
+quiet/SKILL.md (skipped)
+  "quota-array-dispatch" collision:
+    ✓ auto (project)
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-c
+heck/.agents/skills/quota-array-dispatch/SKILL.md
+    ✗
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.agents/skills/
+quota-array-dispatch/SKILL.md (skipped)
+  "secondmate-provisioning" collision:
+    ✓ auto (project)
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-c
+heck/.agents/skills/secondmate-provisioning/SKILL.md
+    ✗
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.agents/skills/
+secondmate-provisioning/SKILL.md (skipped)
+  "stow" collision:
+    ✓ auto (project)
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-c
+heck/.agents/skills/stow/SKILL.md
+    ✗
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.agents/skills/
+stow/SKILL.md (skipped)
+  "stuck-crewmate-recovery" collision:
+    ✓ auto (project)
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-c
+heck/.agents/skills/stuck-crewmate-recovery/SKILL.md
+    ✗
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.agents/skills/
+stuck-crewmate-recovery/SKILL.md (skipped)
+  "updatefirstmate" collision:
+    ✓ auto (project)
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baseline-c
+heck/.agents/skills/updatefirstmate/SKILL.md
+    ✗
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.agents/skills/
+updatefirstmate/SKILL.md (skipped)
+
+
+────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────
+~/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/.tmp-baselin...
+$0.000 (sub) 0.0%/272k (auto)                                  gpt-5.6-sol • low
+not ok - Pi did not reach its ready composer
