@@ -58,7 +58,7 @@ Pi and pi-signed 0.82.0 were reverified on 2026-07-27 through real isolated `fm-
 The earlier record that every harness is observed under its own `#{pane_current_command}` no longer holds and has been replaced by the per-harness evidence below.
 In this macOS run that reading reflected a rewritable process title rather than stable executable identity, so it is now one of two independent name sources rather than the sole basis of a verdict.
 
-The seven primary-capable adapters were relaunched on 2026-08-03 with tmux 3.6a on macOS 26.5.2 arm64, each on a private socket in an isolated lab.
+The six primary-capable adapters were relaunched on 2026-08-03 with tmux 3.6a on macOS 26.5.2 arm64, each on a private socket in an isolated lab.
 
 ```sh
 tmux -L "$socket" new-window -d -t "$session:" -n "$harness" -c "$wt" -- "$bin"
@@ -115,7 +115,7 @@ FM_HARNESS_LIVENESS_DRIFT=1 bin/fm-test-run.sh tests/fm-harness-liveness-drift-l
 
 ### 2026-09-06 default-on drift refresh
 
-Running the guard with no variable set on macOS 26.5.2 arm64 checked seven supported installed harnesses and classified every one `alive`:
+Running the guard with no variable set on macOS 26.5.2 arm64 checked six supported installed harnesses and classified every one `alive`:
 
 ```text
 # codex codex-cli 0.147.0: title='codex' foreground=[/opt/homebrew/bin/codex ]
@@ -124,7 +124,7 @@ Running the guard with no variable set on macOS 26.5.2 arm64 checked seven suppo
 # pi-signed 0.84.4: title='pi-launcher' foreground=[/opt/homebrew/bin/pi-signed .../pi ]
 # grok grok 1.0.13 (5e9a58528b76) [stable]: title='grok-1.0.13-mac' foreground=[/Users/kunchen/.local/bin/grok ]
 # muse Muse Code 1.0.3 (1.0.3-R2198.1): title='muse-bin-1.0.3-' foreground=[/Users/kunchen/.local/bin/muse-bin-1.0.3-R2198.1 ]
-# checked 7 installed harness(es)
+# checked 6 installed harness(es)
 ```
 
 Bounded output from the 2026-08-03 run that produced the first table above:
