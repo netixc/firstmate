@@ -132,6 +132,33 @@ fm_on() {
   "$ROOT/bin/fm-on.sh" "$@"
 }
 
+unsupported_host_bin=$(fm_fakebin "$TMP_ROOT/unsupported-host")
+unsupported_mutation="$TMP_ROOT/unsupported-remote-mutation"
+cp "$LOCAL_HOME/data/secondmates.md" "$TMP_ROOT/unsupported-registry-before"
+ssh_before=$(cat "$SSH_COUNT" 2>/dev/null || printf '0\n')
+for unsupported_platform in MINGW64_NT-10.0 MSYS_NT-10.0 CYGWIN_NT-10.0 unknown; do
+  fm_fake_uname "$unsupported_host_bin" "$unsupported_platform"
+  set +e
+  unsupported_out=$(PATH="$unsupported_host_bin:$PATH" \
+    FM_HOME="$LOCAL_HOME" FM_ROOT_OVERRIDE="$REMOTE_ROOT" \
+    FM_SSH_BIN="$FAKEBIN/fake-ssh" FM_FAKE_SSH_COUNT="$SSH_COUNT" \
+    FM_FAKE_SSH_LOG="$SSH_LOG" FM_FAKE_REMOTE_ENTRYPOINT="$REMOTE_ROOT/bin/fm-remote-entrypoint.sh" \
+    FM_REMOTE_JOB_STATE_ROOT="$TMP_ROOT/remote-jobs" \
+    "$ROOT/bin/fm-on.sh" ios fm-mutate.sh "$unsupported_mutation" 2>&1)
+  unsupported_rc=$?
+  set -e
+  expect_code 1 "$unsupported_rc" "$unsupported_platform local host refusal"
+  assert_contains "$unsupported_out" "UNSUPPORTED_HOST: $unsupported_platform" \
+    "$unsupported_platform local host refusal was not actionable"
+done
+ssh_after=$(cat "$SSH_COUNT" 2>/dev/null || printf '0\n')
+[ "$ssh_after" = "$ssh_before" ] || fail "unsupported local hosts reached SSH"
+cmp -s "$TMP_ROOT/unsupported-registry-before" "$LOCAL_HOME/data/secondmates.md" \
+  || fail "unsupported local hosts changed the route registry"
+assert_absent "$LOCAL_HOME/state" "unsupported local hosts created local records"
+assert_absent "$unsupported_mutation" "unsupported local hosts mutated the remote fixture"
+pass "fm-on refuses unsupported local hosts before local or remote mutation"
+
 # The pre-feature user path had no executable transport at all. The regression
 # exercises the adopted public surface end to end through a deterministic SSH
 # process boundary rather than checking script source. A payload caller passes
