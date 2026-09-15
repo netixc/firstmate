@@ -35,7 +35,7 @@ mkdir -p "$TMP_ROOT"
 TMP_ROOT=$(cd "$TMP_ROOT" && pwd)
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
-VERIFIED_HARNESSES="codex opencode pi pi-signed grok kimi muse omp"
+VERIFIED_HARNESSES="codex opencode pi pi-signed grok kimi muse"
 
 # The expectation table, written out independently of the implementation so a
 # silent change to either side shows up here. The fourth field is the composer
@@ -47,7 +47,6 @@ verified_adapter_contract() {  # <harness> -> exit command, interrupt key, repea
     opencode) printf '/exit\tEscape\t2\t\n' ;;
     pi) printf '/quit\tEscape\t1\t\n' ;;
     pi-signed) printf '/quit\tEscape\t1\t\n' ;;
-    omp) printf '/quit\tEscape\t1\t\n' ;;
     grok) printf '/exit\tC-c\t1\t\n' ;;
     kimi) printf '/exit\tEscape\t1\t\n' ;;
     muse) printf '/exit\tEscape\t1\tC-u\n' ;;
@@ -258,7 +257,7 @@ test_harness_family_resolution() {
   for pair in codex:codex codex-cli:codex \
       opencode:opencode grok:grok grok-2:grok kimi:kimi \
       muse:muse muse-bin-0.1.0:muse pi:pi \
-      pi-signed:pi-signed omp:omp; do
+      pi-signed:pi-signed; do
     recorded=${pair%%:*}
     want=${pair#*:}
     got=$(fm_control_harness_family "$recorded") \
@@ -272,11 +271,8 @@ test_harness_family_resolution() {
   # The signed adapter is a distinct launch profile, not a pi variant.
   [ "$(fm_control_harness_family pi-signed)" != "$(fm_control_harness_family pi)" ] \
     || fail "pi-signed must not collapse into pi"
-  # omp is exact: an omp* prefix would claim unrelated commands such as ompd.
-  fm_control_harness_family ompd \
-    && fail "ompd must not be guessed into the omp adapter"
-  fm_control_harness_family comp \
-    && fail "comp must not be guessed into the omp adapter"
+  fm_control_harness_family omp \
+    && fail "the retired omp adapter must not resolve to a control family"
   pass "fm-control-lib: a recorded harness resolves to its verified adapter without guessing"
 }
 
@@ -326,13 +322,15 @@ test_opencode_interrupts_twice_and_others_once() {
 test_unverified_harness_is_refused() {
   local dir out rc
   dir=$(new_case unverified)
-  add_task "$dir" t1 someagent
-  alive_as "$dir" someagent
+  add_task "$dir" t1 omp
+  alive_as "$dir" omp
   out=$(run_control "$dir" t1 exit); rc=$?
   expect_code 1 "$rc" "an unverified harness should refuse"
   assert_contains "$out" "no verified control mechanics" "refusal should name the missing verification"
   [ -z "$(literals "$dir")" ] || fail "an unverified harness must receive no bytes"
-  pass "fm-control: a harness with no verified control mechanics is refused, not guessed at"
+  [ -f "$dir/home/state/t1.meta" ] || fail "a retired harness refusal must preserve the task record"
+  [ -d "$dir/wt-t1" ] || fail "a retired harness refusal must preserve the local copy"
+  pass "fm-control: a stale omp task is refused without sending bytes or removing retained work"
 }
 
 # --- 2. backend capability matrix -------------------------------------------
@@ -371,7 +369,7 @@ test_harness_kind_capability() {
   done
   fm_control_harness_supports_kind muse secondmate \
     && fail "muse has no primary supervision protocol and must not claim a secondmate"
-  for harness in pi codex opencode pi pi-signed grok kimi omp; do
+  for harness in pi codex opencode pi-signed grok kimi; do
     fm_control_harness_supports_kind "$harness" secondmate \
       || fail "$harness should be able to run a secondmate"
   done

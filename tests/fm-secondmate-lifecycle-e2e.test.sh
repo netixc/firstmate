@@ -135,7 +135,7 @@ phase_spawn() {
 
 phase_send() {
   : > "$LOG"
-  printf '❯\n' > "$PANE"
+  printf '›\n' > "$PANE"
   # The meta window (firstmate:fm-design) must win over a foreign same-named
   # window returned by list-windows. Include the recorded endpoint in the fake
   # inventory so the recovery-grade liveness check can verify it exists.

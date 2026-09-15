@@ -189,8 +189,8 @@ test_dim_ghost_only_composer_is_not_pending() {
   dir="$TMP_ROOT/ghost-only"; mkdir -p "$dir"
   fb=$(make_fake_tmux "$dir")
   capture="$dir/styled.txt"
-  # The exact rendering codex emits: a normal prompt glyph + a DIM predicted prompt.
-  printf '\xe2\x9d\xaf \033[2mWhat is the largest country by area?\033[0m\n' > "$capture"
+  # The exact rendering Codex emits: a normal prompt glyph plus a dim suggestion.
+  printf '› \033[2mWhat is the largest country by area?\033[0m\n' > "$capture"
   if PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=0 \
      fm_pane_input_pending "fakepane"; then
     fail "dim ghost-only composer falsely read as pending"
@@ -254,11 +254,11 @@ test_dark_truecolor_ghost_only_composer_is_not_pending() {
   dir="$TMP_ROOT/grok-ghost"; mkdir -p "$dir"
   fb=$(make_fake_tmux "$dir")
   capture="$dir/styled.txt"
-  # A grok-style pristine composer: bright prompt glyph + a dark/muted truecolor
-  # placeholder. It must read NOT pending (the grok TRUECOLOR gap, now covered by
-  # the same ANSI-aware owner as codex's dim ghost).
-  printf '\xe2\x9d\xaf \033[38;2;50;47;70mType a message...\033[0m\n' > "$capture"
-  if PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=0 \
+  # A Grok pristine composer: a bordered bright prompt plus a dark/muted
+  # truecolor placeholder. It must read not pending (the TRUECOLOR gap, covered
+  # by the same ANSI-aware owner as Codex's dim ghost).
+  printf '  ╭──────────────────────────────────────╮\n  │ ❯ \033[38;2;50;47;70mType a message...\033[0m                  │\n  ╰──────────────────── Grok 4.5 (high) ─╯\n' > "$capture"
+  if PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=1 \
      fm_pane_input_pending "fakepane"; then
     fail "dark truecolor ghost-only composer falsely read as pending"
   fi
@@ -535,9 +535,8 @@ test_all_tmux_harness_composers_share_classification() {
   dir="$TMP_ROOT/all-harness-composers"; mkdir -p "$dir"
   fb=$(make_fake_tmux "$dir")
   capture="$dir/styled.txt"
-  for harness in omp codex opencode pi pi-signed grok; do
+  for harness in codex opencode pi pi-signed grok; do
     case "$harness" in
-      omp) printf '╭────────────╮\n│ ❯ \033[2mtry\033[0m      │\n╰────────────╯\n' > "$capture" ;;
       codex) printf '╭────────────╮\n│ › \033[2mtip\033[0m      │\n╰────────────╯\n' > "$capture" ;;
       opencode) printf '╭────────────╮\n│ >          │\n╰────────────╯\n' > "$capture" ;;
       pi|pi-signed) printf '╭────────────╮\n│            │\n╰────────────╯\n' > "$capture" ;;
@@ -548,7 +547,7 @@ test_all_tmux_harness_composers_share_classification() {
     [ "$out" = empty ] \
       || fail "$harness aligned idle composer should be empty, got '$out'"
     case "$harness" in
-      omp|grok) printf '╭────────────╮\n│ ❯ fix      │\n╰────────────╯\n' > "$capture" ;;
+      grok) printf '╭────────────╮\n│ ❯ fix      │\n╰────────────╯\n' > "$capture" ;;
       codex) printf '╭────────────╮\n│ › fix      │\n╰────────────╯\n' > "$capture" ;;
       opencode|pi|pi-signed) printf '╭────────────╮\n│ > fix      │\n╰────────────╯\n' > "$capture" ;;
     esac
@@ -591,18 +590,18 @@ test_single_capture_leaves_no_fallback_race() {
   pass "fm_tmux_composer_state: one capture feeds the classifier; no band-capture race remains"
 }
 
-test_absent_tmux_identity_keeps_enclosed_bare_verdict() {
+test_stale_omp_composer_is_not_safe_for_injection() {
   local dir fb capture out nbsp
-  dir="$TMP_ROOT/absent-identity"; mkdir -p "$dir"
+  dir="$TMP_ROOT/stale-omp-composer"; mkdir -p "$dir"
   fb=$(make_fake_tmux "$dir")
   capture="$dir/styled.txt"
   nbsp=$(printf '\302\240')
   printf '────────────────────────\n❯%s\n────────────────────────\n' "$nbsp" > "$capture"
   out=$(PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=1 \
     fm_tmux_composer_state "fakepane")
-  [ "$out" = empty ] \
-    || fail "an enclosed omp glyph must keep its bare empty verdict when the Pi-only probe is absent, got '$out'"
-  pass "fm_tmux_composer_state: absent Pi identity preserves omp's enclosed bare verdict"
+  [ "$out" = unknown ] \
+    || fail "a stale OMP composer must remain unsafe for injection, got '$out'"
+  pass "fm_tmux_composer_state: a stale OMP composer is not treated as a verified empty input"
 }
 
 test_legitimate_empty_routes_remain_empty() {
@@ -709,7 +708,7 @@ test_wide_composer_text_is_pending
 test_all_tmux_harness_composers_share_classification
 test_unrecognized_state_defers_input_guard
 test_single_capture_leaves_no_fallback_race
-test_absent_tmux_identity_keeps_enclosed_bare_verdict
+test_stale_omp_composer_is_not_safe_for_injection
 test_legitimate_empty_routes_remain_empty
 test_non_bordered_composer_uses_compatibility_fallback
 test_non_bordered_interior_edges_are_pending

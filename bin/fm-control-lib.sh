@@ -37,7 +37,7 @@
 # `resume` is deliberately NOT a verb. It is not deterministic across the
 # verified adapters: codex and grok resume only from a session id printed at
 # exit, opencode resumes the most recent session for the cwd with --continue,
-# and pi, pi-signed, omp, and kimi have no verified pane-resume contract
+# and pi, pi-signed, and kimi have no verified pane-resume contract
 # at all. `relaunch` covers the same need deterministically for every adapter,
 # because the brief on disk - not a harness-private session - is the durable
 # instruction.
@@ -63,7 +63,7 @@ fm_control_verb_allowed() {  # <verb>
 # than guessed at, exactly as a spawn on it would be.
 fm_control_harness_supported() {  # <harness>
   case "${1-}" in
-    codex|opencode|pi|pi-signed|grok|kimi|gemini|muse|rovo|omp|agy) return 0 ;;
+    codex|opencode|pi|pi-signed|grok|kimi|gemini|muse|rovo|agy) return 0 ;;
   esac
   return 1
 }
@@ -74,14 +74,12 @@ fm_control_harness_supported() {  # <harness>
 # harness= that way), which is why the spawn adapters match `muse*`,
 # and friends. This is the one place that prefix rule is stated. `pi` and
 # `pi-signed` are exact because a `pi*` prefix would swallow the signed adapter,
-# `omp` is exact because an `omp*` prefix would claim unrelated commands, `agy`
-# is exact for the same reason on an even shorter name, and an
+# `agy` is exact for the same reason on an even shorter name, and an
 # unrecognized value returns nonzero rather than being guessed into a family.
 fm_control_harness_family() {  # <recorded-harness>
   case "${1-}" in
     pi) printf 'pi' ;;
     pi-signed) printf 'pi-signed' ;;
-    omp) printf 'omp' ;;
     agy) printf 'agy' ;;
     codex*) printf 'codex' ;;
     opencode*) printf 'opencode' ;;
@@ -116,12 +114,10 @@ fm_control_harness_supports_kind() {  # <harness> <kind>
 # rovo cancels on a single Escape too, printing "Agent cancelled" (verified,
 # 202609.1.2). agy cancels on a single Escape, printing the Interrupted row
 # with an idle composer and no repollution (verified live, agy 1.2.0 through
-# Herdr). omp (Oh My Pi) shares Pi's single Escape, empty composer
-# afterwards, and /quit exit (verified omp 18.1.2 in a PTY, re-verified 18.1.11
-# through Herdr).
+# Herdr).
 fm_control_interrupt_key() {  # <harness>
   case "${1-}" in
-    codex|opencode|pi|pi-signed|omp|kimi|gemini|muse|rovo|agy) printf 'Escape' ;;
+    codex|opencode|pi|pi-signed|kimi|gemini|muse|rovo|agy) printf 'Escape' ;;
     grok) printf 'C-c' ;;
     *) return 1 ;;
   esac
@@ -132,7 +128,7 @@ fm_control_interrupt_key() {  # <harness>
 fm_control_interrupt_repeat() {  # <harness>
   case "${1-}" in
     opencode) printf '2' ;;
-    codex|pi|pi-signed|omp|grok|kimi|gemini|muse|rovo|agy) printf '1' ;;
+    codex|pi|pi-signed|grok|kimi|gemini|muse|rovo|agy) printf '1' ;;
     *) return 1 ;;
   esac
 }
@@ -151,7 +147,7 @@ fm_control_interrupt_repeat() {  # <harness>
 fm_control_interrupt_clear_key() {  # <harness>
   case "${1-}" in
     muse) printf 'C-u' ;;
-    codex|opencode|pi|pi-signed|omp|grok|kimi|gemini|rovo|agy) ;;
+    codex|opencode|pi|pi-signed|grok|kimi|gemini|rovo|agy) ;;
     *) return 1 ;;
   esac
 }
@@ -162,7 +158,7 @@ fm_control_interrupt_ack_source() {  # <harness>
     # rovo's TUI prints "Agent cancelled" on Escape, but this stays 'none': the
     # acknowledgement is a rendered string, not a recorded state source, and
     # rovo has no busy wiring to confirm against.
-    codex|opencode|pi|pi-signed|omp|grok|kimi|gemini|rovo|agy) printf 'none' ;;
+    codex|opencode|pi|pi-signed|grok|kimi|gemini|rovo|agy) printf 'none' ;;
     *) return 1 ;;
   esac
 }
@@ -171,7 +167,7 @@ fm_control_interrupt_ack_source() {  # <harness>
 fm_control_exit_command() {  # <harness>
   case "${1-}" in
     opencode|grok|kimi|muse|rovo) printf '/exit' ;;
-    codex|pi|pi-signed|omp|gemini|agy) printf '/quit' ;;
+    codex|pi|pi-signed|gemini|agy) printf '/quit' ;;
     *) return 1 ;;
   esac
 }
@@ -217,7 +213,6 @@ fm_control_harness_wiring_paths() {  # <harness> <worktree> <state-dir> <id>
   case "$harness" in
     opencode) printf '%s\n' "$wt/.opencode/plugins/fm-busy-state.js" ;;
     pi|pi-signed) printf '%s\n' "$state/$id.pi-ext.ts" ;;
-    omp) printf '%s\n' "$state/$id.omp-ext.ts" ;;
     grok)
       printf '%s\n' "$wt/.fm-grok-turnend"
       printf '%s\n' "$state/$id.grok-turnend-token"

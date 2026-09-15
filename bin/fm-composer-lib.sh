@@ -55,8 +55,8 @@
 #                writes its model name there); a titled bottom border that
 #                still starts and ends with the family's rule glyph is
 #                tolerated, not ambiguity.
-#   bare       - an agent prompt glyph row with no border at all (omp `❯`,
-#                codex `›`, muse `⟩`). The agent glyph is itself the container
+#   bare       - an agent prompt glyph row with no border at all (codex `›`,
+#                muse `⟩`). The agent glyph is itself the container
 #                proof; a bare SHELL glyph (`>` `$` `%` `#`) never is.
 #   left-bar   - opencode: rows prefixed by a heavy left bar `┃` with no
 #                closing border, holding the idle hint, blank rows, and a
@@ -72,8 +72,8 @@
 # what a pane shows once its agent has exited to a plain login shell - is a
 # genuine empty agent composer ONLY inside a bordered container. On a bare row
 # it is a dead-shell prompt and classifies `unknown` (never a safe injection
-# target). The AGENT glyphs `❯` (omp), `›` (codex), and `⟩` (U+27E9, muse)
-# are a genuine empty agent composer either way.
+# target). The AGENT glyphs `›` (codex) and `⟩` (U+27E9, muse) are a genuine
+# empty agent composer either way.
 # Both glyph sets are declared
 # exactly once below; every decision reaches them through the declarations.
 #
@@ -196,7 +196,7 @@ fm_composer_normalize_trim_var() {  # <varname>
 # recognise every agent glyph from the UNSTRIPPED plain row.
 # The dim/faint and dark-foreground states are tracked together as "de-emphasis";
 # codes are processed left to right within a sequence, so "ESC[0;2m" reads as dim.
-# LC_ALL=C makes awk walk bytes, so multibyte glyphs (e.g. ❯) and de-emphasised
+# LC_ALL=C makes awk walk bytes, so multibyte glyphs and de-emphasised
 # runs alike pass through or drop intact without locale-dependent classes.
 fm_composer_strip_ghost() {
   LC_ALL=C awk -v lumamax="${FM_COMPOSER_GHOST_LUMA_MAX:-128}" '
@@ -290,8 +290,8 @@ fm_composer_strip_ghost() {
 # Matching a footer to confirm a keystroke landed is a different question from
 # asking what a worker is doing, and the two must not be conflated.
 # Delivery-only rendered busy footers per harness. codex: "esc to interrupt";
-# opencode: "esc interrupt"; pi: "Working..."; omp: "Working…"; grok:
-# "Ctrl+c:cancel"; agy: "esc to cancel".
+# opencode: "esc interrupt"; pi: "Working..."; grok: "Ctrl+c:cancel"; agy:
+# "esc to cancel".
 # Kimi's anchored moon-phase spinner is separate because bare moon glyphs in
 # ordinary output must not classify another harness as busy. Leading whitespace is
 # OPTIONAL; whitespace on both sides of the separator is REQUIRED because every
@@ -309,27 +309,10 @@ fm_composer_strip_ghost() {
 # tmux agy endpoint reaches the submit core with no recorded harness, and its
 # bare `>` composer verdict is `unknown`, so the busy footer is the only
 # turn-started acknowledgement that path can read.
-FM_DELIVERY_BUSY_REGEX_DEFAULT='esc (to )?interrupt|Working(\.\.\.|…)|Ctrl\+c:cancel|esc[[:space:]]+to[[:space:]]+cancel'
+FM_DELIVERY_BUSY_REGEX_DEFAULT='esc (to )?interrupt|Working\.\.\.|Ctrl\+c:cancel|esc[[:space:]]+to[[:space:]]+cancel'
 FM_DELIVERY_CODEX_BUSY_REGEX_DEFAULT='esc to interrupt'
 FM_DELIVERY_OPENCODE_BUSY_REGEX_DEFAULT='esc interrupt'
 FM_DELIVERY_PI_BUSY_REGEX_DEFAULT='Working\.\.\.'
-# omp (Oh My Pi) renders its TUI busy line as `Working…` with U+2026 HORIZONTAL
-# ELLIPSIS, not Pi's three ASCII dots (verified byte-level on omp 18.1.2,
-# re-verified live on 18.1.11 through the Herdr backend). Only the TUI form is
-# accepted: every supervised omp pane is the TUI, and the three-dot spelling its
-# headless -p mode writes to stderr never reaches a pane. The status row's
-# leading braille spinner plus elapsed cell (`⠧ 11s`) is the second, independent
-# busy signal, so no single vendor string is load-bearing; its idle form is a
-# static identity glyph with no elapsed time.
-# The spinner is an alternation of omp 18.1.11's unicode-preset frames (its
-# `status` set ⣾⣽⣻⢿⡿⣟⣯⣷ and `activity` set ⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏, read from the
-# build that rendered the live `⠧`), declared once for the busy regex and the
-# status-row furniture rule below. It is deliberately NOT a bracket range over
-# the braille block: GNU grep rejects a range between multibyte endpoints
-# ("Invalid collation character"), so `[⠁-⣿]` compiled on macOS and failed
-# every omp busy and furniture read on Linux CI.
-FM_OMP_SPINNER_FRAMES_RE='(⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏|⣾|⣽|⣻|⢿|⡿|⣟|⣯|⣷)'
-FM_DELIVERY_OMP_BUSY_REGEX_DEFAULT='Working…|^[[:space:]]*'"$FM_OMP_SPINNER_FRAMES_RE"'[[:space:]]+[0-9]+[smh]'
 FM_DELIVERY_GROK_BUSY_REGEX_DEFAULT='Ctrl\+c:cancel'
 # agy (Antigravity CLI) renders a pinned status row while a turn runs: the
 # `esc to cancel` token on the left and the model cell on the right (verified
@@ -351,7 +334,6 @@ fm_busy_lines_match() {  # [harness]
       codex) regex=$FM_DELIVERY_CODEX_BUSY_REGEX_DEFAULT ;;
       opencode) regex=$FM_DELIVERY_OPENCODE_BUSY_REGEX_DEFAULT ;;
       pi|pi-signed) regex=$FM_DELIVERY_PI_BUSY_REGEX_DEFAULT ;;
-      omp) regex=$FM_DELIVERY_OMP_BUSY_REGEX_DEFAULT ;;
       grok) regex=$FM_DELIVERY_GROK_BUSY_REGEX_DEFAULT ;;
       agy) regex=$FM_DELIVERY_AGY_BUSY_REGEX_DEFAULT ;;
       kimi) regex=$FM_DELIVERY_KIMI_BUSY_REGEX_DEFAULT ;;
@@ -368,12 +350,13 @@ fm_busy_lines_match() {  # [harness]
 
 # The prompt glyphs, each declared exactly once (see THE SAFETY RULE above).
 # AGENT glyphs are a genuine empty agent composer on any row, bordered or bare.
-# SHELL glyphs are one only INSIDE a composer container; on a bare row they are
-# a dead-shell prompt and must never read `empty`. Newline-separated and
-# consumed by `read` rather than word splitting, so `$`, `%`, and `#` stay
-# literal and no entry is ever exposed to pathname expansion.
-FM_COMPOSER_AGENT_PROMPT_GLYPHS=$(printf '%s\n' '❯' '›' '⟩')
-FM_COMPOSER_SHELL_PROMPT_GLYPHS=$(printf '%s\n' '>' '$' '%' '#')
+# CONTAINER-ONLY glyphs are empty only INSIDE a composer container; on a bare
+# row they may be a dead-shell or retired-tool prompt and must never read
+# `empty`. Newline-separated and consumed by `read` rather than word splitting,
+# so `$`, `%`, and `#` stay literal and no entry is exposed to pathname
+# expansion. The historical SHELL variable name remains internal-only.
+FM_COMPOSER_AGENT_PROMPT_GLYPHS=$(printf '%s\n' '›' '⟩')
+FM_COMPOSER_SHELL_PROMPT_GLYPHS=$(printf '%s\n' '>' '$' '%' '#' '❯')
 
 # The ONE fleet-wide idle-placeholder set: composer text a harness renders in
 # an EMPTY composer that a plain capture cannot tell from typed text. Grok's
@@ -386,26 +369,6 @@ FM_COMPOSER_IDLE_RE_DEFAULT='^Type a message\.\.\.$|^Ask anything\.\.\.'
 # ("Build · GPT-5.5 Fast OpenAI · high"). It is composer furniture, not typed
 # text, and only the run's LAST row is ever matched against it.
 FM_COMPOSER_LEFTBAR_FOOTER_RE_DEFAULT='^(Build|Plan)[[:space:]]+·[[:space:]]+'
-# omp (Oh My Pi) draws a one-row status line directly BELOW its borderless
-# composer: an identity or spinner cell, then middle-dot separated model, path,
-# git, and context cells. Verified live through Herdr on omp 18.1.11:
-# ` π  · ◔ GPT-6-Astra · 🌳 …-workspace · ⑂ detached · ◫ 15.4%/272K ⟲ · (sub)`
-# idle under the unicode preset, ` 󰵗  ·  qwen3:8b ·  … ·  36.7%/41K` under
-# nerd, and ` ⠧ 11s  · …` while busy. Without this rule the bare composer's
-# wrap region walks straight into that row and an idle omp pane reads
-# `pending`, the false verdict that skipped the doorbell on the first live omp
-# worker. A row is omp status furniture when it opens with omp's identity cell
-# then a middle dot (`π` under the unicode preset, `󰵗` under nerd: the
-# `icon.omp` of those omp 18.1.11 presets, never an arbitrary short token, so
-# a wrapped typed row such as `fix · tests` stays composer input; the ascii
-# preset's `pi` is deliberately absent because that preset's `sep.dot` is
-# ` - `, so its status row never carries a middle dot and a `pi ·` alternative
-# could only ever match typed text), when it opens with one of omp's spinner
-# frames then an elapsed cell, or when it carries the context-usage cell after
-# a middle dot. It is consulted only as the boundary BELOW a bare composer,
-# never on the composer row itself.
-FM_COMPOSER_OMP_STATUS_RE_DEFAULT='^[[:space:]]*(π|󰵗)[[:space:]]+·[[:space:]]|^[[:space:]]*'"$FM_OMP_SPINNER_FRAMES_RE"'[[:space:]]+[0-9]+[smh]([[:space:]]|$)|[[:space:]]·[[:space:]].*[0-9]+(\.[0-9]+)?%/[0-9]+K'
-
 # The bounded row window adapters should capture for a composer read. One
 # shared policy (previously three per-backend variables that had drifted to
 # 20/20/200): the composer is bottom-anchored, so a small tail window is
@@ -929,13 +892,6 @@ _fm_composer_classify_bare_row() {  # <screen> <styled> <row>
   printf '%s' "$state"
 }
 
-# _fm_composer_row_is_omp_status: 0 when the trimmed row is omp's status line
-# (FM_COMPOSER_OMP_STATUS_RE_DEFAULT above) - composer furniture that sits
-# below a bare composer and must bound its wrap region exactly as an edge does.
-_fm_composer_row_is_omp_status() {  # <trimmed-row>
-  fm_composer_idle_matches "$1" "${FM_COMPOSER_OMP_STATUS_RE:-$FM_COMPOSER_OMP_STATUS_RE_DEFAULT}" sensitive
-}
-
 # _fm_composer_wrap_region_ok: 0 when every row STRICTLY BELOW <glyph-row>
 # through <cursor-row> is non-blank and carries no structural edge - the
 # contiguity proof that those rows are the bare composer's wrapped input
@@ -949,7 +905,6 @@ _fm_composer_wrap_region_ok() {  # <plain-screen> <glyph-row> <cursor-row>
     fm_composer_normalize_trim_var trimmed
     [ -n "$trimmed" ] || return 1
     if fm_composer_row_has_edge "$trimmed"; then return 1; fi
-    if _fm_composer_row_is_omp_status "$trimmed"; then return 1; fi
     if fm_composer_leading_shell_glyph_var glyph "$trimmed"; then return 1; fi
     row=$((row + 1))
   done
@@ -1086,7 +1041,6 @@ _fm_composer_select_cursorless() {
       fm_composer_normalize_trim_var trimmed
       [ -n "$trimmed" ] || break
       fm_composer_row_has_edge "$trimmed" && break
-      _fm_composer_row_is_omp_status "$trimmed" && break
       FM_COMPOSER_SELECTED_LAST=$next
       next=$((next + 1))
     done

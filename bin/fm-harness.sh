@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Detect the agent harness this process tree runs on.
-# Usage: fm-harness.sh                  print own harness: codex|opencode|pi|pi-signed|grok|kimi|gemini|muse|rovo|omp|agy|unknown
+# Usage: fm-harness.sh                  print own harness: codex|opencode|pi|pi-signed|grok|kimi|gemini|muse|rovo|agy|unknown
 #        fm-harness.sh crew             print the effective CREWMATE harness
 #                                        (config/crew-harness; "default" resolves to own)
 #        fm-harness.sh secondmate       print the harness the PRIMARY uses to launch
@@ -78,20 +78,6 @@ harness_marker() {
   # AGENT=rovodev_cli on its tool subprocesses (verified, rovo 202609.1.2).
   [ "${ATLASSIAN_AGENT_TYPE:-}" = "rovo" ] && { echo rovo; return; }
   [ "${ROVODEV_CLI:-}" = "1" ] && { echo rovo; return; }
-  # omp (Oh My Pi) publishes NO harness-identity marker of its own: verified on
-  # omp 18.1.11 that PI_CODING_AGENT is absent from the binary and that the
-  # default profile sets neither PI_CODING_AGENT_DIR nor OMP_PROFILE in the
-  # process environment. FM_OMP_HARNESS=omp is therefore a Firstmate-OWNED
-  # launch marker, established by bin/fm-spawn.sh at the omp launch boundary
-  # (which also clears every foreign marker) and by the README's primary launch
-  # command. It is a PRECEDENCE override, never evidence on its own: it wins
-  # only when an omp process is genuinely in the ancestry, so a leaked marker
-  # cannot rename another worker. The anchored ancestry arm below covers a plain
-  # hand-started `omp` by itself.
-  if [ "${FM_OMP_HARNESS:-}" = omp ] && ancestry_names_omp; then
-    echo omp
-    return
-  fi
   if [ "${PI_CODING_AGENT:-}" = "true" ]; then
     if [ "${FM_PI_HARNESS:-}" = pi-signed ]; then echo pi-signed; else echo pi; fi
     return
@@ -113,20 +99,6 @@ harness_marker() {
   # to a marker without verifying it reaches children AND that it cannot survive
   # in a multiplexer's stored environment.
   return 0
-}
-
-# True when an exact `omp` process sits within eight parents of this one. The
-# same anchored match as the ancestry walk below, kept separate so the marker
-# precedence above can demand real process evidence before trusting FM_OMP_HARNESS.
-ancestry_names_omp() {
-  local pid=$$ comm
-  for _ in 1 2 3 4 5 6 7 8; do
-    comm=$(ps -o comm= -p "$pid" 2>/dev/null) || return 1
-    [ "$(basename -- "$comm")" = omp ] && return 0
-    pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
-    [ -n "$pid" ] && [ "$pid" -gt 1 ] || return 1
-  done
-  return 1
 }
 
 # Print "<strength> <harness>" when one process identifies a harness, or nothing.
@@ -172,13 +144,6 @@ harness_process_verdict() {  # <pid>
     # is why detect_own keeps a marker that agrees on the family.
     pi-signed) echo "comm pi"; return ;;
     pi) echo "comm pi"; return ;;
-    # omp is a Bun-compiled single binary whose process name is exactly `omp`
-    # (verified, omp 18.1.11: `ps -o comm=` reports omp from both its `!`
-    # bash path and the model's bash tool). Anchored, never *omp*, so ompd,
-    # comp, and similar unrelated commands are not misread as this harness.
-    # It sits above the node*|python* interpreter fallback deliberately so the
-    # native process identity wins before any weaker script-path inference.
-    omp) echo "comm omp"; return ;;
     # agy (Antigravity CLI) is a Go-compiled single binary whose process name
     # is exactly `agy` (verified, agy 1.2.0: `ps -o comm=` reports agy and
     # Herdr's process-info reports name agy with argv[0] agy). Anchored, never
