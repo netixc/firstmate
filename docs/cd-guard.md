@@ -112,7 +112,7 @@ The cd-guard never duplicates shell lexing; it adds only the cd-specific decisio
 
 ## Harness wiring
 
-| Harness | Entry | Adapter behavior on checker exit 2 |
+| Harness | Entry | Adapter behavior |
 | --- | --- | --- |
 | Claude | `.claude/settings.json` PreToolUse Bash hook forwarding stdin with `--claude` | Blocks the tool call; stderr deny object, stdout empty. |
 | Codex | `.codex/hooks.json` PreToolUse hook that anchors from `pwd -P`, verifies the hook-loaded firstmate root, and forwards the payload | Blocks on exit 2 and displays stderr. |

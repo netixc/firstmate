@@ -173,7 +173,9 @@ run_native_ahoy_regressions() {
     "$later_home/state" "$later_home/config"
   git init -q "$AHOY_PROJECT"
   cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$AHOY_PROJECT/.pi/extensions/"
-  cp "$ROOT/.pi/extensions/lib/fm-host-platform.ts" "$ROOT/.pi/extensions/lib/fm-operational-input.ts" \
+  cp "$ROOT/.pi/extensions/lib/fm-host-platform.ts" \
+    "$ROOT/.pi/extensions/lib/fm-operational-input.ts" \
+    "$ROOT/.pi/extensions/lib/fm-sessionstart-supervisor.mjs" \
     "$AHOY_PROJECT/.pi/extensions/lib/"
   cp \
     "$ROOT/bin/fm-sessionstart-nudge.sh" \
@@ -259,6 +261,7 @@ cp "$ROOT/.pi/extensions/lib/fm-native-contract.ts" "$PROJECT/.pi/extensions/lib
 cp "$ROOT/.pi/extensions/lib/fm-async-exec.ts" "$PROJECT/.pi/extensions/lib/fm-async-exec.ts"
 cp "$ROOT/.pi/extensions/lib/fm-host-platform.ts" "$PROJECT/.pi/extensions/lib/fm-host-platform.ts"
 cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$PROJECT/.pi/extensions/lib/fm-operational-input.ts"
+cp "$ROOT/.pi/extensions/lib/fm-sessionstart-supervisor.mjs" "$PROJECT/.pi/extensions/lib/fm-sessionstart-supervisor.mjs"
 cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$PROJECT/.pi/extensions/fm-primary-turnend-guard.ts"
 cp "$ROOT/bin/fm-watch-arm.sh" "$PROJECT/bin/fm-watch-arm.sh"
 cp "$ROOT/bin/fm-host-platform-lib.sh" "$PROJECT/bin/fm-host-platform-lib.sh"

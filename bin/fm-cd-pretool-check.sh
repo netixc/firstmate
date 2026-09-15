@@ -33,7 +33,7 @@
 # Claude requires stdout to remain empty on deny.
 # Codex blocks on exit 2 and displays stderr.
 # Grok consumes the stdout decision object.
-# OpenCode and Pi consume exit 2 plus stderr.
+# OpenCode, Pi, and omp fail closed on every nonzero exit and consume stderr.
 set -u
 
 CMD=""

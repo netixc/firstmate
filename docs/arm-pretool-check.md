@@ -156,7 +156,7 @@ Prose may improve without changing adapter behavior.
 
 ## Harness wiring
 
-| Harness | Exact command field | Adapter behavior on checker exit 2 |
+| Harness | Exact command field | Adapter behavior |
 | --- | --- | --- |
 | Codex | `.tool_input.command` | The `.codex/hooks.json` command forwards the complete stdin payload and Codex blocks on exit 2. |
 | Claude | `.tool_input.command` | `.claude/settings.json` forwards stdin with `--claude`, leaving stdout empty and returning the stderr deny object. |
