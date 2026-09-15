@@ -57,6 +57,12 @@ FM_ROOT=${FM_ROOT_OVERRIDE:-$(CDPATH='' cd "$SCRIPT_DIR/.." && pwd -P)}
 # shellcheck source=bin/fm-remote-job-lib.sh
 . "$SCRIPT_DIR/fm-remote-job-lib.sh"
 
+REMOTE_JOB_WORKER_PLATFORM=$(fm_remote_job_platform)
+if ! fm_remote_job_platform_supported; then
+  fm_host_platform_diagnostic "$(fm_remote_job_platform_raw)" >&2
+  exit 1
+fi
+
 WORKER_LOCK=
 WORKER_LOCK_HELD=0
 WORKER_RELEASE_OWNERSHIP=1
@@ -1118,7 +1124,7 @@ case "${1:-}" in
     worker_lane_main "$2"
     ;;
   '')
-    if [ "$(fm_remote_job_platform)" = linux ]; then worker_supervise_linux; else main; fi
+    if [ "$REMOTE_JOB_WORKER_PLATFORM" = linux ]; then worker_supervise_linux; else main; fi
     ;;
   *) worker_error "unexpected worker arguments"; exit 2 ;;
 esac

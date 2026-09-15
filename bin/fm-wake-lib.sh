@@ -9,9 +9,8 @@ STATE="${FM_STATE_OVERRIDE:-${STATE:-$FM_HOME/state}}"
 FM_WAKE_QUEUE="${FM_WAKE_QUEUE:-$STATE/.wake-queue}"
 FM_WAKE_QUEUE_LOCK="${FM_WAKE_QUEUE_LOCK:-$STATE/.wake-queue.lock}"
 FM_LOCK_STALE_AFTER="${FM_LOCK_STALE_AFTER:-2}"
-# Resolved once at source time: fm_pid_identity and fm_path_mtime run inside 0.2s
-# confirm and 0.5s attach polls, and forking uname per call is a measurable cost on
-# the platform (Git Bash/MSYS) that already pays the highest fork price.
+# Resolved once at source time because fm_pid_identity and fm_path_mtime run
+# inside hot confirmation and attachment polls.
 _FM_UNAME=$(uname 2>/dev/null || echo unknown)
 mkdir -p "$STATE"
 
@@ -54,19 +53,17 @@ fm_pid_alive() {
 }
 
 fm_pid_identity() {
-  local pid=$1 out proc_root stat_line starttime cmdline_hex identity_key
+  local pid=$1 out proc_root stat_line starttime cmdline_hex
   local -a stat_fields
   case "$pid" in
     ''|*[!0-9]*) return 1 ;;
   esac
   proc_root=${FM_PROC_ROOT_OVERRIDE:-/proc}
-  # Prefer a Linux-compatible /proc when present: stat field 22 (starttime, clock ticks since boot) is
-  # immune to the wall-clock steps that re-render the ps lstart fallback's date
-  # (observed as WSL2 btime drift) and would evict a live watcher; combining the
-  # full NUL-separated cmdline keeps PID reuse a mismatch even on a tick collision.
-  # Git Bash/MSYS exposes these compatible files but its Cygwin ps rejects the
-  # portable fallback's -o fields, so capability detection must not key on uname.
-  if [ -r "$proc_root/$pid/stat" ] && [ -r "$proc_root/$pid/cmdline" ]; then
+  # On Linux, /proc stat field 22 (starttime, clock ticks since boot) is immune
+  # to wall-clock steps that re-render the ps lstart fallback's date (observed
+  # as WSL2 btime drift) and would evict a live watcher. Combining the full
+  # NUL-separated cmdline keeps PID reuse a mismatch on a tick collision.
+  if [ "$_FM_UNAME" = Linux ] && [ -r "$proc_root/$pid/stat" ] && [ -r "$proc_root/$pid/cmdline" ]; then
     stat_line=$(cat "$proc_root/$pid/stat" 2>/dev/null) || return 1
     # After the final comm delimiter, array index 19 is proc stat field 22.
     read -r -a stat_fields <<< "${stat_line##*)}"
@@ -77,9 +74,7 @@ fm_pid_identity() {
     esac
     cmdline_hex=$(od -An -v -tx1 "$proc_root/$pid/cmdline" 2>/dev/null | tr -d '[:space:]') || return 1
     [ -n "$cmdline_hex" ] || return 1
-    identity_key=proc-starttime
-    [ "$_FM_UNAME" != Linux ] || identity_key=linux-starttime
-    printf '%s=%s cmdline-hex=%s\n' "$identity_key" "$starttime" "$cmdline_hex"
+    printf 'linux-starttime=%s cmdline-hex=%s\n' "$starttime" "$cmdline_hex"
     return 0
   fi
   # Pin LC_ALL=C so lstart's date format is locale-invariant: the identity is

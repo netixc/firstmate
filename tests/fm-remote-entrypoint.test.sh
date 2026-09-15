@@ -12,7 +12,8 @@ TMP_ROOT=$(fm_test_tmproot fm-remote-entrypoint)
 REAL_BIN="$TMP_ROOT/real-root/bin"
 LOCAL_BIN="$TMP_ROOT/local-bin"
 mkdir -p "$REAL_BIN" "$LOCAL_BIN"
-cp "$ROOT/bin/fm-remote-entrypoint.sh" "$ROOT/bin/fm-remote-job-lib.sh" "$REAL_BIN/"
+cp "$ROOT/bin/fm-host-platform-lib.sh" "$ROOT/bin/fm-remote-entrypoint.sh" \
+  "$ROOT/bin/fm-remote-job-lib.sh" "$REAL_BIN/"
 chmod +x "$REAL_BIN/fm-remote-entrypoint.sh"
 ln -s "$REAL_BIN/fm-remote-entrypoint.sh" "$LOCAL_BIN/fm-remote-entrypoint.sh"
 
@@ -41,6 +42,21 @@ test_symlink_invocation_resolves_sibling_lib() {
   pass "fm-remote-entrypoint.sh invoked via a PATH symlink resolves SCRIPT_DIR to the real bin/ directory"
 }
 
+test_unsupported_host_refuses_before_protocol_staging() {
+  local out err code runtime_tmp
+  out="$TMP_ROOT/unsupported.stdout"
+  err="$TMP_ROOT/unsupported.stderr"
+  runtime_tmp="$TMP_ROOT/unsupported-tmp"
+  code=$(FM_REMOTE_JOB_PLATFORM_OVERRIDE=MINGW64_NT-10.0 TMPDIR="$runtime_tmp" \
+    run_entrypoint "$REAL_BIN/fm-remote-entrypoint.sh" "$out" "$err")
+
+  expect_code 64 "$code" "unsupported remote entrypoint exit code"
+  assert_grep 'UNSUPPORTED_HOST: MINGW64_NT-10.0' "$err" \
+    "remote entrypoint did not explicitly reject its unsupported host"
+  assert_absent "$runtime_tmp" "remote entrypoint created protocol staging on an unsupported host"
+  pass "remote entrypoint rejects unsupported hosts before protocol staging"
+}
+
 test_direct_invocation_still_works() {
   # Control: the same real script invoked directly (no symlink) must behave
   # identically, so the symlink coverage above is proven by contrast.
@@ -56,4 +72,5 @@ test_direct_invocation_still_works() {
 }
 
 test_symlink_invocation_resolves_sibling_lib
+test_unsupported_host_refuses_before_protocol_staging
 test_direct_invocation_still_works

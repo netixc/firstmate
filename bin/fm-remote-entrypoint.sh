@@ -9,8 +9,9 @@
 #
 # The readiness-owning fm-remote-doctor.sh runs in this plain SSH bootstrap so
 # check mode can inspect worker gaps without changing them and --fix can repair
-# them. Every other command is staged after the worker is ready. On Darwin, a
-# missing Aqua session fails before staging with the doctor-actionable
+# them. Every invocation rejects an unsupported remote host before protocol
+# staging. Every other command is staged after the worker is ready. On Darwin,
+# a missing Aqua session fails before staging with the doctor-actionable
 # console-login diagnostic. Linux uses the same queue and worker shape without
 # an Aqua requirement.
 #
@@ -31,7 +32,7 @@
 set -eu
 
 PROTOCOL=1
-DOCTOR_SHA256=78efccd6cb7a0123400e49fa323292a64c8e3c7ebd3717151be69f87735302fb
+DOCTOR_SHA256=6d22548edb93c3667a0f7b0c7b5d6d88fe2faa85a87a3ea87b99b7e9e8402203
 REAL_SOURCE=$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "${BASH_SOURCE[0]}" 2>/dev/null) ||
   REAL_SOURCE=$(realpath "${BASH_SOURCE[0]}" 2>/dev/null) ||
   REAL_SOURCE=${BASH_SOURCE[0]}
@@ -41,6 +42,12 @@ SCRIPT_DIR=$(CDPATH='' cd "$(dirname "$REAL_SOURCE")" && pwd -P)
 . "$SCRIPT_DIR/fm-remote-job-lib.sh"
 
 die() { printf 'error: %s\n' "$1" >&2; exit "${2:-64}"; }
+
+ENTRYPOINT_PLATFORM=$(fm_remote_job_platform)
+if ! fm_remote_job_platform_supported; then
+  fm_host_platform_diagnostic "$(fm_remote_job_platform_raw)" >&2
+  exit 64
+fi
 
 base64_decode_to() { # <encoded> <destination>
   local encoded=$1 destination=$2

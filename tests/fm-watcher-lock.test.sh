@@ -14,10 +14,9 @@ DRAIN="$ROOT/bin/fm-wake-drain.sh"
 LIB="$ROOT/bin/fm-wake-lib.sh"
 
 # An arm only reports its typed failure after wait_for_healthy_successor has
-# spent the whole confirmation budget, so cases that wait for that failure must
-# outlast the largest production default (30s on MSYS, 10s elsewhere - see
-# ARM_CONFIRM_DEFAULT in bin/fm-watch-arm.sh). This is a ceiling spent only when
-# an arm genuinely fails to exit; a passing case returns as soon as it does.
+# spent the whole 10s confirmation budget, so cases that wait for that failure
+# must outlast it. This ceiling is spent only when an arm genuinely fails to
+# exit; a passing case returns as soon as it does.
 ARM_FAIL_EXIT_POLLS=400
 
 TMP_ROOT=$(fm_test_tmproot fm-watcher-lock-tests)
@@ -1015,31 +1014,35 @@ write_fake_proc_identity() {
 }
 
 test_proc_pid_identity_ignores_wall_clock_and_detects_pid_reuse() {
-  local dir state proc_root pid identity_key before after_time_jump after_pid_reuse
+  local dir state proc_root fakebin pid before after_time_jump after_pid_reuse
   dir=$(make_case proc-pid-identity)
   state="$dir/state"
   proc_root="$dir/proc"
+  fakebin="$dir/fakebin"
   pid=4242
-  identity_key=proc-starttime
-  [ "$(uname)" != Linux ] || identity_key=linux-starttime
-  mkdir -p "$proc_root"
+  mkdir -p "$proc_root" "$fakebin"
+  cat > "$fakebin/uname" <<'SH'
+#!/usr/bin/env bash
+printf 'Linux\n'
+SH
+  chmod +x "$fakebin/uname"
   printf 'btime 1784094040\n' > "$proc_root/stat"
   write_fake_proc_identity "$proc_root" "$pid" 987654
 
-  before=$(FM_PROC_ROOT_OVERRIDE="$proc_root" FM_STATE_OVERRIDE="$state" bash -c '. "$1"; fm_pid_identity "$2"' _ "$LIB" "$pid") \
+  before=$(PATH="$fakebin:$PATH" FM_PROC_ROOT_OVERRIDE="$proc_root" FM_STATE_OVERRIDE="$state" bash -c '. "$1"; fm_pid_identity "$2"' _ "$LIB" "$pid") \
     || fail "could not read initial fake Linux process identity"
   printf 'btime 1784094016\n' > "$proc_root/stat"
-  after_time_jump=$(FM_PROC_ROOT_OVERRIDE="$proc_root" FM_STATE_OVERRIDE="$state" bash -c '. "$1"; fm_pid_identity "$2"' _ "$LIB" "$pid") \
+  after_time_jump=$(PATH="$fakebin:$PATH" FM_PROC_ROOT_OVERRIDE="$proc_root" FM_STATE_OVERRIDE="$state" bash -c '. "$1"; fm_pid_identity "$2"' _ "$LIB" "$pid") \
     || fail "could not re-read fake Linux process identity after btime change"
 
   [ "$after_time_jump" = "$before" ] \
     || fail "/proc process identity changed with btime (before '$before', after '$after_time_jump')"
-  [ "$before" = "$identity_key=987654 cmdline-hex=62617368002f706174682077697468207370616365732f666d2d77617463682e7368002d2d666c616700" ] \
+  [ "$before" = "linux-starttime=987654 cmdline-hex=62617368002f706174682077697468207370616365732f666d2d77617463682e7368002d2d666c616700" ] \
     || fail "/proc process identity did not combine parsed starttime field 22 with the full cmdline ('$before')"
   pass "/proc process identity ignores simulated btime changes"
 
   write_fake_proc_identity "$proc_root" "$pid" 987655
-  after_pid_reuse=$(FM_PROC_ROOT_OVERRIDE="$proc_root" FM_STATE_OVERRIDE="$state" bash -c '. "$1"; fm_pid_identity "$2"' _ "$LIB" "$pid") \
+  after_pid_reuse=$(PATH="$fakebin:$PATH" FM_PROC_ROOT_OVERRIDE="$proc_root" FM_STATE_OVERRIDE="$state" bash -c '. "$1"; fm_pid_identity "$2"' _ "$LIB" "$pid") \
     || fail "could not read reused fake /proc pid identity"
   [ "$after_pid_reuse" != "$before" ] || fail "/proc process identity missed changed starttime for reused pid"
   pass "/proc process identity detects pid reuse"
@@ -1087,31 +1090,9 @@ test_stale_watch_reclaim_publishes_before_clear() {
   pass "stale watcher reclaim publishes durable recovery evidence before clear"
 }
 
-test_msys_pid_identity_uses_proc() {
-  local live identity
-  case "$(uname)" in
-    MSYS*|MINGW*|CYGWIN*) ;;
-    *)
-      pass "MSYS /proc process identity regression skipped on non-Windows host"
-      return
-      ;;
-  esac
-  sleep 300 &
-  live=$!
-  identity=$(bash -c '. "$1"; fm_pid_identity "$2"' _ "$LIB" "$live" 2>/dev/null)
-  kill "$live" 2>/dev/null || true
-  wait "$live" 2>/dev/null || true
-  case "$identity" in
-    proc-starttime=*" cmdline-hex="*) ;;
-    *) fail "MSYS process identity did not use compatible /proc fields ('$identity')" ;;
-  esac
-  pass "MSYS process identity uses compatible /proc fields"
-}
-
 test_singleton_start
 test_pid_identity_is_locale_invariant
 test_proc_pid_identity_ignores_wall_clock_and_detects_pid_reuse
-test_msys_pid_identity_uses_proc
 test_stale_watch_lock_reclaimed
 test_stale_watch_reclaim_publishes_before_clear
 test_live_stale_watch_lock_is_actionable

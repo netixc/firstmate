@@ -887,3 +887,26 @@ assert_contains "$DOCTOR_OUT" 'check entrypoint-link=human:' "an operator-owned 
 unset FM_ROOT_OVERRIDE
 pass "the entrypoint symlink is recreated when absent and never overwritten when operator-owned"
 
+# --- unsupported hosts refuse before readiness checks or repairs -------------
+
+for UNSUPPORTED_REMOTE_PLATFORM in MINGW64_NT-10.0 FreeBSD darwin linux; do
+  new_case "$UNSUPPORTED_REMOTE_PLATFORM" with-herdr gui
+  doctor
+  expect_code 1 "$DOCTOR_RC" "$UNSUPPORTED_REMOTE_PLATFORM remote doctor refusal"
+  assert_contains "$DOCTOR_OUT" "platform=$UNSUPPORTED_REMOTE_PLATFORM" \
+    "remote doctor did not report the unsupported platform"
+  assert_contains "$DOCTOR_OUT" "UNSUPPORTED_HOST: $UNSUPPORTED_REMOTE_PLATFORM" \
+    "remote doctor did not explicitly reject the unsupported platform"
+  assert_contains "$DOCTOR_OUT" "action: host-platform:" \
+    "remote doctor did not give an actionable supported-host alternative"
+
+  doctor --fix
+  expect_code 1 "$DOCTOR_RC" "$UNSUPPORTED_REMOTE_PLATFORM remote doctor repair refusal"
+  assert_absent "$CASE_PLIST" "unsupported remote doctor wrote a Herdr launch agent"
+  assert_absent "$CASE_JOB_PLIST" "unsupported remote doctor wrote a job-worker launch agent"
+  assert_absent "$CASE_HOME/.firstmate" "unsupported remote doctor created worker state"
+  [ ! -s "$CASE_LAUNCHCTL_LOG" ] || fail "unsupported remote doctor invoked launchctl: $(cat "$CASE_LAUNCHCTL_LOG")"
+  assert_no_dangerous_calls "unsupported remote doctor reached repair-only host services"
+done
+pass "remote readiness rejects native-Windows and unknown hosts before repair"
+

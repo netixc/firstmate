@@ -31,6 +31,7 @@
 #   path=<the child PATH this command inherited>
 #   entrypoint=yes|no
 #   platform=darwin|linux|<uname -s>|unknown
+#   UNSUPPORTED_HOST: <uname -s> - <supported-host guidance>
 #   required <tool>=<path>|MISSING
 #   optional <tool>=<path>|absent
 #   fix <check>=applied: <what changed>       (--fix only)
@@ -97,6 +98,19 @@ esac
 [ "$#" -eq 0 ] || usage
 
 PLATFORM=$(fm_remote_job_platform)
+if ! fm_remote_job_platform_supported; then
+  printf 'mode=%s\n' "$MODE"
+  printf 'path=%s\n' "${PATH:-}"
+  if [ -n "${FM_ROOT_OVERRIDE:-}" ] && [ "${PATH%%:*}" = "$FM_ROOT_OVERRIDE/bin" ]; then
+    printf 'entrypoint=yes\n'
+  else
+    printf 'entrypoint=no\n'
+  fi
+  printf 'platform=%s\n' "$PLATFORM"
+  fm_host_platform_diagnostic "$(fm_remote_job_platform_raw)"
+  printf 'action: host-platform: run the remote home on macOS or Linux; use WSL2 only through its Linux environment\n'
+  exit 1
+fi
 UID_NUM=$(id -u 2>/dev/null) || UID_NUM=
 
 CHECK_NAMES=()

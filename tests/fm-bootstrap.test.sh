@@ -14,6 +14,9 @@
 # whether the local backend config opts out of tasks-axi backlog mutations,
 # which no-mistakes version is on PATH, which gh-axi version is on PATH, and
 # which lavish-axi version is on PATH.
+# Host-platform cases pin Darwin/Linux acceptance (including WSL's Linux
+# identity) and refusal of native-Windows compatibility kernels or unknown
+# hosts before local records, network work, or approved-install evaluation.
 # Dedicated fleet-sync cases pin the computed bootstrap timeout, explicit
 # override, blank-env defaulting, partial-output relay, and pre-launch timeout
 # scan.
@@ -244,6 +247,65 @@ assert_timeout_report() {
 #   mode=empty -> output must be empty (expect/notcontains ignored)
 #   mode=exact -> output must equal <expect>
 #   mode=grep  -> output must contain <expect> (fixed string); <notcontains> must not appear
+test_host_platform_gate_precedes_bootstrap_work() {
+  local case_dir fakebin platform out rc home runtime_tmp marker tool
+  for platform in Darwin Linux; do
+    case_dir="$TMP_ROOT/host-accepted-$platform"
+    fakebin=$(make_fake_toolchain "$case_dir")
+    cat > "$fakebin/uname" <<SH
+#!/usr/bin/env bash
+printf '%s\\n' '$platform'
+SH
+    chmod +x "$fakebin/uname"
+    out=$(PATH="$fakebin:$BASE_PATH" FM_FAKE_TREEHOUSE_LEASE_HELP=1 \
+      "$ROOT/bin/fm-bootstrap.sh" lavish-compatible 2>&1)
+    rc=$?
+    expect_code 0 "$rc" "$platform bootstrap acceptance"
+    assert_not_contains "$out" "UNSUPPORTED_HOST:" "$platform was refused by bootstrap"
+  done
+  pass "bootstrap accepts Darwin and Linux, including WSL's Linux identity"
+
+  for platform in MINGW64_NT-10.0 MSYS_NT-10.0 CYGWIN_NT-10.0 FreeBSD darwin linux; do
+    case_dir="$TMP_ROOT/host-refused-${platform%%_*}"
+    fakebin="$case_dir/fakebin"
+    home="$case_dir/home"
+    runtime_tmp="$case_dir/runtime-tmp"
+    marker="$case_dir/network-or-install-ran"
+    mkdir -p "$fakebin"
+    cat > "$fakebin/uname" <<SH
+#!/usr/bin/env bash
+printf '%s\\n' '$platform'
+SH
+    chmod +x "$fakebin/uname"
+    for tool in gh brew curl; do
+      cat > "$fakebin/$tool" <<'SH'
+#!/usr/bin/env bash
+: > "$FM_HOST_TEST_MARKER"
+exit 0
+SH
+      chmod +x "$fakebin/$tool"
+    done
+    out=$(PATH="$fakebin:$BASE_PATH" TMPDIR="$runtime_tmp" FM_HOME="$home" \
+      FM_HOST_TEST_MARKER="$marker" "$ROOT/bin/fm-bootstrap.sh" 2>&1)
+    rc=$?
+    expect_code 0 "$rc" "$platform bootstrap detect refusal"
+    assert_contains "$out" "UNSUPPORTED_HOST: $platform" "$platform bootstrap refusal lost the detected host"
+    assert_absent "$home" "$platform bootstrap refusal created the operational home"
+    assert_absent "$runtime_tmp" "$platform bootstrap refusal created its temporary-file root"
+    assert_absent "$marker" "$platform bootstrap refusal reached network or install work"
+
+    out=$(PATH="$fakebin:$BASE_PATH" TMPDIR="$runtime_tmp" FM_HOME="$home" \
+      FM_HOST_TEST_MARKER="$marker" "$ROOT/bin/fm-bootstrap.sh" install shellcheck 2>&1)
+    rc=$?
+    expect_code 1 "$rc" "$platform explicit install refusal"
+    assert_contains "$out" "UNSUPPORTED_HOST: $platform" "$platform install refusal was not actionable"
+    assert_absent "$home" "$platform install refusal created the operational home"
+    assert_absent "$runtime_tmp" "$platform install refusal created its temporary-file root"
+    assert_absent "$marker" "$platform install refusal evaluated an install command"
+  done
+  pass "bootstrap refuses unsupported hosts before detection, network, records, or installs"
+}
+
 test_bootstrap_reporting() {
   local label lease tasks quota backend mode expect notcontains case_dir fakebin out n archive_body multi_id
   n=0
@@ -1161,6 +1223,7 @@ ROWS
   pass "bootstrap validates crew-dispatch.json and reports malformed or unverified configs"
 }
 
+test_host_platform_gate_precedes_bootstrap_work
 test_bootstrap_reporting
 test_no_mistakes_min_version
 test_gh_axi_min_version

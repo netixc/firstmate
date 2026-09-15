@@ -5,7 +5,8 @@
 #          BOOTSTRAP_INFO no-action fact for completed benign bootstrap work, and
 #          exits 0.
 #          Silent = all good.
-#          Lines: "MISSING: <tool> (install: <command>)",
+#          Lines: "UNSUPPORTED_HOST: <uname -s> - <supported-host guidance>",
+#                 "MISSING: <tool> (install: <command>)",
 #                 "PRESENTATION_UNAVAILABLE: lavish-axi (requires >=<floor>; install: <command>) - nonvisual work may proceed with plain-text decisions and reports; install or upgrade before using Lavish",
 #                 "MISSING_MANUAL: <tool> (instructions: <url>)", "NEEDS_GH_AUTH",
 #                 "BACKEND_INVALID: <name> (known: <names>)",
@@ -157,6 +158,17 @@
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# This check precedes home-path resolution, sourced setup, temporary files,
+# network work, and install evaluation. Detect mode reports and exits 0;
+# explicit install and compatibility probes refuse with a nonzero status.
+# shellcheck source=bin/fm-host-platform-lib.sh disable=SC1091
+. "$SCRIPT_DIR/fm-host-platform-lib.sh"
+if ! fm_host_platform_require; then
+  case "${1:-}" in
+    install|lavish-compatible) exit 1 ;;
+    *) exit 0 ;;
+  esac
+fi
 FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 PROJECTS="${FM_PROJECTS_OVERRIDE:-$FM_HOME/projects}"

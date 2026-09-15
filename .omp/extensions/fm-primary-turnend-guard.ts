@@ -141,8 +141,6 @@ type SessionstartGeneration = {
   delivered: boolean;
   child: ChildProcess | null;
   processGroupId: number | null;
-  childClosed: boolean;
-  childClose: Promise<void> | null;
   stopPromise: Promise<void> | null;
   result: Promise<SessionstartResult>;
 };
@@ -165,12 +163,6 @@ function sessionstartGenerationIsLive(generation: SessionstartGeneration): boole
 function signalSessionstartChild(child: ChildProcess, signal: NodeJS.Signals): void {
   const pid = child.pid;
   if (!pid) return;
-  if (process.platform === "win32") {
-    const args = ["/pid", String(pid), "/t"];
-    if (signal === "SIGKILL") args.push("/f");
-    spawnSync("taskkill", args, { stdio: "ignore" });
-    return;
-  }
   try {
     process.kill(-pid, signal);
   } catch {
@@ -207,35 +199,11 @@ function waitForSessionstartProcessGroupExit(
   });
 }
 
-function waitForSessionstartClose(generation: SessionstartGeneration, timeoutMs: number): Promise<void> {
-  if (generation.childClosed || !generation.childClose) return Promise.resolve();
-  return new Promise((resolveWait) => {
-    const timer = setTimeout(resolveWait, timeoutMs);
-    void generation.childClose?.then(() => {
-      clearTimeout(timer);
-      resolveWait();
-    });
-  });
-}
-
 function stopSessionstartGeneration(generation: SessionstartGeneration): Promise<void> {
   if (generation.stopPromise) return generation.stopPromise;
   generation.stopping = true;
   generation.stopPromise = (async () => {
     const child = generation.child;
-    if (process.platform === "win32") {
-      if (!child || generation.childClosed) {
-        await generation.result;
-        return;
-      }
-      signalSessionstartChild(child, "SIGTERM");
-      await waitForSessionstartClose(generation, sessionstartRetireTimeoutMs);
-      if (!generation.childClosed) {
-        signalSessionstartChild(child, "SIGKILL");
-        await waitForSessionstartClose(generation, sessionstartRetireTimeoutMs);
-      }
-      return;
-    }
     const processGroupId = generation.processGroupId;
     if (!child || !processGroupId) {
       await generation.result;
@@ -260,34 +228,28 @@ function stopSessionstartGeneration(generation: SessionstartGeneration): Promise
 function runSessionstartHook(generation: SessionstartGeneration): Promise<SessionstartResult> {
   return new Promise((resolveResult) => {
     let settled = false;
-    let closeChild: () => void = () => {};
     const settle = (result: SessionstartResult): void => {
       if (settled) return;
       settled = true;
       resolveResult(result);
     };
-    const supervised = process.platform !== "win32";
     const runner = `${root}/bin/fm-sessionstart-run.sh`;
     // The internal --pi-prerequisite mode is shared: it is the wrapper's
     // "silent exit 3 on an intentional stand-down" contract, not a Pi-only path.
     let child: ChildProcess;
     try {
       child = spawn(
-        supervised ? "node" : runner,
-        supervised
-          ? [
-              `${root}/.pi/extensions/lib/fm-sessionstart-supervisor.mjs`,
-              runner,
-              "--source",
-              generation.source,
-              "--pi-prerequisite",
-            ]
-          : ["--source", generation.source, "--pi-prerequisite"],
+        "node",
+        [
+          `${root}/.pi/extensions/lib/fm-sessionstart-supervisor.mjs`,
+          runner,
+          "--source",
+          generation.source,
+          "--pi-prerequisite",
+        ],
         {
-          detached: supervised,
-          stdio: supervised
-            ? ["ignore", "pipe", "ignore", "ipc"]
-            : ["ignore", "pipe", "ignore"],
+          detached: true,
+          stdio: ["ignore", "pipe", "ignore", "ipc"],
         },
       );
     } catch {
@@ -296,27 +258,20 @@ function runSessionstartHook(generation: SessionstartGeneration): Promise<Sessio
     }
     generation.child = child;
     generation.processGroupId = child.pid ?? null;
-    generation.childClose = new Promise<void>((resolveClose) => {
-      closeChild = resolveClose;
-    });
     const chunks: Buffer[] = [];
     let observedBytes = 0;
     let retainedBytes = 0;
     let truncated = false;
     let pendingCompletion: { code: number | null; bytes: number } | null = null;
     const unrefSupervisor = (): void => {
-      if (!supervised) return;
       child.unref();
       child.channel?.unref?.();
       const stdout = child.stdout as (NodeJS.ReadableStream & { unref?: () => void }) | null;
       stdout?.unref?.();
     };
     const markClosed = (): void => {
-      if (generation.childClosed) return;
-      generation.childClosed = true;
       if (generation.child === child) generation.child = null;
       generation.processGroupId = null;
-      closeChild();
     };
     const complete = (code: number | null): void => {
       unrefSupervisor();
@@ -361,27 +316,21 @@ function runSessionstartHook(generation: SessionstartGeneration): Promise<Sessio
       if (retained.length !== chunk.length) truncated = true;
       completePending();
     });
-    if (supervised) {
-      child.on("message", (message: unknown) => {
-        const result = message as { type?: unknown; code?: unknown; bytes?: unknown };
-        if (result.type !== "result" ||
-            (typeof result.code !== "number" && result.code !== null) ||
-            typeof result.bytes !== "number") return;
-        pendingCompletion = { code: result.code, bytes: result.bytes };
-        completePending();
-      });
-    }
+    child.on("message", (message: unknown) => {
+      const result = message as { type?: unknown; code?: unknown; bytes?: unknown };
+      if (result.type !== "result" ||
+          (typeof result.code !== "number" && result.code !== null) ||
+          typeof result.bytes !== "number") return;
+      pendingCompletion = { code: result.code, bytes: result.bytes };
+      completePending();
+    });
     child.on("error", () => {
       markClosed();
       settle(generation.stopping ? { kind: "cancelled" } : { kind: "failed" });
     });
-    child.on("close", (code) => {
+    child.on("close", () => {
       markClosed();
-      if (supervised) {
-        settle(generation.stopping ? { kind: "cancelled" } : { kind: "failed" });
-        return;
-      }
-      complete(code);
+      settle(generation.stopping ? { kind: "cancelled" } : { kind: "failed" });
     });
   });
 }
@@ -399,8 +348,6 @@ function createSessionstartGeneration(
     delivered: false,
     child: null,
     processGroupId: null,
-    childClosed: false,
-    childClose: null,
     stopPromise: null,
     result: Promise.resolve({ kind: "cancelled" }),
   };
@@ -510,10 +457,6 @@ export default function (pi: ExtensionAPI) {
   const cleanupSessionstartOnProcessExit = (): void => {
     const generation = sessionstartGeneration;
     if (!generation) return;
-    if (process.platform === "win32") {
-      if (generation.child) signalSessionstartChild(generation.child, "SIGKILL");
-      return;
-    }
     const processGroupId = generation.processGroupId;
     if (!processGroupId) {
       if (generation.child) signalSessionstartChild(generation.child, "SIGKILL");

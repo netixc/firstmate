@@ -62,6 +62,9 @@ Full detail on every feature lives in [docs/architecture.md](docs/architecture.m
 - Git and the GitHub CLI, authenticated through `gh auth login`.
 - The CLI and dependencies for your selected runtime backend; tmux is the reference default.
 
+Firstmate hosts must run macOS or Linux.
+Native Windows, including Git Bash, MSYS, and Cygwin, is unsupported; WSL2 remains supported through its Linux environment, while Windows clients and repositories that target Windows are unaffected.
+
 The first mate detects and offers to install supported missing tools after you approve.
 Backend-specific setup is linked in [Documentation](#documentation).
 

@@ -36,8 +36,8 @@ cleanup_remote_job_fixture() {
 }
 trap cleanup_remote_job_fixture EXIT
 
-cp "$ROOT/bin/fm-remote-job-lib.sh" "$ROOT/bin/fm-remote-job-worker.sh" \
-  "$ROOT/bin/fm-remote-delta-read.sh" "$REMOTE_ROOT/bin/"
+cp "$ROOT/bin/fm-host-platform-lib.sh" "$ROOT/bin/fm-remote-job-lib.sh" \
+  "$ROOT/bin/fm-remote-job-worker.sh" "$ROOT/bin/fm-remote-delta-read.sh" "$REMOTE_ROOT/bin/"
 printf 'fixture\n' > "$REMOTE_ROOT/AGENTS.md"
 cat > "$REMOTE_ROOT/bin/fm-probe-job.sh" <<'SH'
 #!/bin/bash
@@ -120,6 +120,30 @@ export FM_REMOTE_JOB_QUEUE_TIMEOUT=5
 export FM_REMOTE_JOB_TIMEOUT=5
 # shellcheck source=bin/fm-remote-job-lib.sh
 . "$ROOT/bin/fm-remote-job-lib.sh"
+
+for UNSUPPORTED_REMOTE_PLATFORM in MINGW64_NT-10.0 FreeBSD darwin linux; do
+  FM_REMOTE_JOB_PLATFORM_OVERRIDE=$UNSUPPORTED_REMOTE_PLATFORM
+  if fm_remote_job_ensure_worker "$REMOTE_ROOT" "$ACCOUNT_HOME"; then
+    fail "unsupported remote platform $UNSUPPORTED_REMOTE_PLATFORM started a worker"
+  fi
+  assert_contains "$FM_REMOTE_JOB_ERROR" "unsupported remote host platform '$UNSUPPORTED_REMOTE_PLATFORM'" \
+    "unsupported remote platform $UNSUPPORTED_REMOTE_PLATFORM did not produce an explicit rejection"
+  assert_absent "$STATE_ROOT" "unsupported remote platform $UNSUPPORTED_REMOTE_PLATFORM created worker state"
+done
+FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux
+pass "remote worker startup rejects native-Windows and unknown hosts before state mutation"
+
+UNSUPPORTED_WORKER_STATE="$TMP_ROOT/unsupported-worker-state"
+UNSUPPORTED_WORKER_OUT=$(HOME="$ACCOUNT_HOME" FM_ROOT_OVERRIDE="$REMOTE_ROOT" \
+  FM_REMOTE_JOB_STATE_ROOT="$UNSUPPORTED_WORKER_STATE" \
+  FM_REMOTE_JOB_PLATFORM_OVERRIDE=MINGW64_NT-10.0 \
+  "$REMOTE_ROOT/bin/fm-remote-job-worker.sh" 2>&1)
+UNSUPPORTED_WORKER_RC=$?
+expect_code 1 "$UNSUPPORTED_WORKER_RC" "unsupported direct remote worker refusal"
+assert_contains "$UNSUPPORTED_WORKER_OUT" "UNSUPPORTED_HOST: MINGW64_NT-10.0" \
+  "direct remote worker did not explicitly reject its unsupported host"
+assert_absent "$UNSUPPORTED_WORKER_STATE" "direct remote worker created state on an unsupported host"
+pass "direct remote workers reject unsupported hosts before state mutation"
 
 LOCAL_BIN_PARENT="$ACCOUNT_HOME/.local"
 LOCAL_BIN_TARGET="$TMP_ROOT/local-bin-target"
@@ -726,7 +750,7 @@ RESTART_HOME="$TMP_ROOT/restart-account"
 RESTART_STATE="$TMP_ROOT/restart-state"
 RESTART_CHILD_LOG="$TMP_ROOT/restart-children"
 mkdir -p "$RESTART_ROOT/bin" "$RESTART_HOME"
-cp "$ROOT/bin/fm-remote-job-lib.sh" "$RESTART_ROOT/bin/"
+cp "$ROOT/bin/fm-host-platform-lib.sh" "$ROOT/bin/fm-remote-job-lib.sh" "$RESTART_ROOT/bin/"
 cp "$ROOT/bin/fm-remote-job-worker.sh" "$RESTART_ROOT/bin/fm-remote-job-supervisor-under-test.sh"
 printf 'fixture\n' > "$RESTART_ROOT/AGENTS.md"
 cat > "$RESTART_ROOT/bin/fm-remote-job-worker.sh" <<'SH'

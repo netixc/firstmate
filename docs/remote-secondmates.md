@@ -1,6 +1,7 @@
 # Remote second mates
 
 Remote second mates place a whole persistent Firstmate home on another SSH-reachable host.
+Because that remote machine executes a Firstmate home, it must meet the macOS-or-Linux [host-platform contract](configuration.md#host-platforms).
 The primary still owns routing and supervision, while the remote home owns its own projects, backlog, and workers.
 Firstmate does not support placing an individual worker remotely or failing a remote route over to a local replacement.
 

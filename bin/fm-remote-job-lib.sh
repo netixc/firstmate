@@ -65,7 +65,9 @@
 # of a multi-version tool wins is fixed by this composition rather than by the
 # order the filesystem happens to return.
 #
-# On macOS the worker is Firstmate's Aqua LaunchAgent
+# Remote hosts follow Firstmate's global host-platform contract: macOS and
+# Linux only. Unsupported platforms are rejected before worker state or launch
+# records can be created. On macOS the worker is Firstmate's Aqua LaunchAgent
 # dev.firstmate.remote-job at ~/Library/LaunchAgents/dev.firstmate.remote-job.plist
 # with logs under ~/Library/Logs. Linux starts the same worker process without
 # an Aqua requirement. The launch-agent renderer and repair helpers here are
@@ -82,6 +84,13 @@
 # it to stop itself once its root is pruned, and
 # bin/fm-remote-job-reap-orphans.sh uses it to reap workers that were already
 # orphaned that way.
+
+FM_REMOTE_JOB_LIB_SELF=${BASH_SOURCE[0]}
+FM_REMOTE_JOB_LIB_DIR=${FM_REMOTE_JOB_LIB_SELF%/*}
+[ "$FM_REMOTE_JOB_LIB_DIR" != "$FM_REMOTE_JOB_LIB_SELF" ] || FM_REMOTE_JOB_LIB_DIR=.
+FM_REMOTE_JOB_LIB_DIR=$(CDPATH='' cd -- "$FM_REMOTE_JOB_LIB_DIR" && pwd -P)
+# shellcheck source=bin/fm-host-platform-lib.sh disable=SC1091
+. "$FM_REMOTE_JOB_LIB_DIR/fm-host-platform-lib.sh"
 
 FM_REMOTE_JOB_LABEL=dev.firstmate.remote-job
 FM_REMOTE_JOB_MAX_BYTES=${FM_REMOTE_JOB_MAX_BYTES:-1048576}
@@ -134,15 +143,25 @@ fm_remote_job_validate_settings() {
   return 0
 }
 
-fm_remote_job_platform() {
+fm_remote_job_platform_raw() {
   local raw=${FM_REMOTE_JOB_PLATFORM_OVERRIDE:-}
-  [ -n "$raw" ] || raw=$(uname -s 2>/dev/null || true)
-  case "$raw" in
-    Darwin|darwin) printf 'darwin\n' ;;
-    Linux|linux) printf 'linux\n' ;;
-    '') printf 'unknown\n' ;;
-    *) printf '%s\n' "$raw" ;;
-  esac
+  if [ -n "$raw" ]; then
+    fm_host_platform_raw "$raw"
+  else
+    fm_host_platform_raw
+  fi
+}
+
+fm_remote_job_platform_supported() {
+  local raw
+  raw=$(fm_remote_job_platform_raw)
+  fm_host_platform_supported "$raw"
+}
+
+fm_remote_job_platform() {
+  local raw
+  raw=$(fm_remote_job_platform_raw)
+  fm_host_platform_name "$raw"
 }
 
 fm_remote_job_path_append() { # <directory>
@@ -1201,6 +1220,10 @@ fm_remote_job_ensure_worker() { # <remote-root> <account-home>
     return 1
   }
   platform=$(fm_remote_job_platform)
+  if ! fm_remote_job_platform_supported; then
+    FM_REMOTE_JOB_ERROR="unsupported remote host platform '$platform'; Firstmate remote hosts require macOS or Linux, with WSL2 supported only through its Linux environment"
+    return 1
+  fi
   fm_remote_job_worker_identity_matches "$root" "$account_home" && identity_matches=1
   if [ "$platform" = darwin ]; then
     uid=$(id -u 2>/dev/null || true)
@@ -1218,7 +1241,7 @@ fm_remote_job_ensure_worker() { # <remote-root> <account-home>
       fm_remote_job_reload_launchagent "$account_home" "$uid" || return 1
       FM_REMOTE_JOB_REPAIRED=1
     fi
-  else
+  elif [ "$platform" = linux ]; then
     fm_remote_job_start_linux_worker "$root" "$account_home" || return 1
   fi
   fm_remote_job_wait_for_probe "$root" "$account_home" && return 0
@@ -1226,7 +1249,7 @@ fm_remote_job_ensure_worker() { # <remote-root> <account-home>
     fm_remote_job_reload_launchagent "$account_home" "$uid" || return 1
     FM_REMOTE_JOB_REPAIRED=1
     fm_remote_job_wait_for_probe "$root" "$account_home" && return 0
-  else
+  elif [ "$platform" = linux ]; then
     # A replaced Linux supervisor can lose its first ownership race while the
     # prior supervisor finishes releasing the shared worker lock. Retry the
     # idempotent start once, matching the bounded recovery already used above

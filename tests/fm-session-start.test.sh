@@ -4,6 +4,9 @@
 # (recovery) into one ordered digest.
 #
 # Coverage:
+#   - Darwin and Linux (including WSL's Linux identity) are accepted, while
+#     native-Windows compatibility kernels and unknown hosts are refused before
+#     temporary files, locks, state, or deferred work
 #   - absent-file markers vs empty-but-present files in the context digest
 #   - the lock-refusal read-only path: banner leads, every mutating step is
 #     skipped (including bootstrap's seven mutating sweeps, verified by their
@@ -715,6 +718,57 @@ write_omp_loaded_markers() {
   printf '%s\n%s\n' "$version" "$pid" > "$home/state/.omp-watch-extension-loaded"
   version=$(hash_file_for_test "$root/.omp/extensions/fm-primary-turnend-guard.ts")
   printf '%s\n%s\n' "$version" "$pid" > "$home/state/.omp-turnend-extension-loaded"
+}
+
+# --- host platform precedes every startup side effect ------------------------
+
+test_host_platform_refusal_precedes_startup_mutation() {
+  local case_dir fakebin platform out rc home runtime_tmp marker
+  for platform in Darwin Linux; do
+    case_dir="$TMP_ROOT/host-accepted-$platform"
+    fakebin="$case_dir/fakebin"
+    mkdir -p "$fakebin"
+    cat > "$fakebin/uname" <<SH
+#!/usr/bin/env bash
+printf '%s\\n' '$platform'
+SH
+    chmod +x "$fakebin/uname"
+    out=$(PATH="$fakebin:$BASE_PATH" "$SESSION_START" --help 2>&1)
+    rc=$?
+    expect_code 0 "$rc" "$platform host acceptance"
+    assert_not_contains "$out" "UNSUPPORTED_HOST:" "$platform was refused as a host"
+  done
+  pass "session start accepts Darwin and Linux, including WSL's Linux identity"
+
+  for platform in MINGW64_NT-10.0 MSYS_NT-10.0 CYGWIN_NT-10.0 FreeBSD darwin linux; do
+    case_dir="$TMP_ROOT/host-refused-${platform%%_*}"
+    fakebin="$case_dir/fakebin"
+    home="$case_dir/home"
+    runtime_tmp="$case_dir/runtime-tmp"
+    marker="$case_dir/network-or-tool-ran"
+    mkdir -p "$fakebin"
+    cat > "$fakebin/uname" <<SH
+#!/usr/bin/env bash
+printf '%s\\n' '$platform'
+SH
+    cat > "$fakebin/gh" <<'SH'
+#!/usr/bin/env bash
+: > "$FM_HOST_TEST_MARKER"
+exit 0
+SH
+    chmod +x "$fakebin/uname" "$fakebin/gh"
+    out=$(PATH="$fakebin:$BASE_PATH" TMPDIR="$runtime_tmp" FM_HOME="$home" \
+      FM_HOST_TEST_MARKER="$marker" "$SESSION_START" 2>&1)
+    rc=$?
+    expect_code 0 "$rc" "$platform session-start refusal"
+    assert_contains "$out" "UNSUPPORTED_HOST: $platform" "$platform refusal did not preserve the detected host"
+    assert_contains "$out" "WSL2 remains supported when Firstmate runs inside its Linux environment" \
+      "$platform refusal did not provide the supported Windows-host alternative"
+    assert_absent "$home" "$platform refusal created the operational home"
+    assert_absent "$runtime_tmp" "$platform refusal created its temporary-file root"
+    assert_absent "$marker" "$platform refusal reached network or tool work"
+  done
+  pass "session start refuses native-Windows compatibility kernels and unknown hosts before mutation"
 }
 
 # --- context digest: absent vs empty vs present -----------------------------
@@ -2670,6 +2724,7 @@ EOF
   pass "session start rejects Pi loaded markers from previous sessions"
 }
 
+test_host_platform_refusal_precedes_startup_mutation
 test_context_digest_absent_empty_present
 test_lock_refusal_read_only_path
 test_lock_write_failure_read_only_path

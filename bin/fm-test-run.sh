@@ -726,7 +726,6 @@ tests/fm-pi-branch-live-e2e.test.sh 56
 tests/fm-pi-branch-responsiveness-live-e2e.test.sh 21
 tests/fm-pi-primary-live-e2e.test.sh 20
 tests/fm-pi-watch-extension.test.sh 42970
-tests/fm-pi-windows-shell-invocation.test.sh 5121
 tests/fm-pr-check-security.test.sh 172215
 tests/fm-procevent-quota.test.sh 1949
 tests/fm-procevent-when.test.sh 17392
@@ -1380,6 +1379,12 @@ families_for_changed_path() {
       printf '%s\n' secondmate
       printf '%s\n' session-bootstrap
       ;;
+    bin/fm-host-platform-lib.sh)
+      printf '%s\n' session-bootstrap
+      printf '%s\n' __script__:fm-remote-job.test.sh
+      printf '%s\n' __script__:fm-remote-doctor.test.sh
+      printf '%s\n' __script__:fm-remote-entrypoint.test.sh
+      ;;
     bin/fm-secondmate*|bin/fm-remote*|bin/fm-on.sh|bin/fm-home-seed.sh|\
     bin/fm-backlog-handoff.sh|bin/fm-backlog-receive.sh|bin/fm-procevent-remote-reply.sh|\
     bin/fm-config-inherit-lib.sh|bin/fm-config-push.sh|bin/fm-shared*|\
@@ -1426,7 +1431,6 @@ families_for_changed_path() {
     .pi/extensions/lib/fm-operational-input.ts)
       # The same rule for the operational-input library, whose reach is wider:
       # every Pi extension that classifies or encodes operational text.
-      printf '%s\n' __script__:fm-pi-windows-shell-invocation.test.sh
       printf '%s\n' __script__:fm-pi-branch-extension.test.sh
       printf '%s\n' __script__:fm-pi-watch-extension.test.sh
       printf '%s\n' __script__:fm-calm-pi-extension.test.sh
@@ -1440,7 +1444,6 @@ families_for_changed_path() {
     .pi/extensions/fm-primary-turnend-guard.ts)
       # The run tier's two harness-supplied facts (source vocabulary and
       # context-reset stdout injection) only show up against a real harness.
-      printf '%s\n' __script__:fm-pi-windows-shell-invocation.test.sh
       printf '%s\n' session-bootstrap
       printf '%s\n' live-harness-optin
       ;;
@@ -2379,19 +2382,11 @@ if [ "$JOBS" -eq 1 ]; then
   done
 else
   # Bounded concurrent execution for admitted scripts. Each worker gets a
-  # private mode-0700 TMPDIR so mktemp roots cannot collide. Native Windows
-  # Bash layers report synthetic POSIX modes, so retain chmod there but enforce
-  # its observed mode only where the host reports real POSIX permissions.
+  # private mode-0700 TMPDIR so mktemp roots cannot collide, and that custody
+  # invariant is enforced on every supported host.
   # Retries are never used as a green strategy.
   worker_n=0
   active_workers=0
-
-  worker_root_mode_is_enforceable() {
-    case "$(uname -s)" in
-      MINGW*|MSYS*) return 1 ;;
-      *) return 0 ;;
-    esac
-  }
 
   wait_one_job_worker() {
     local slot=$1 pid idx work script rc duration mode out end_iso
@@ -2414,16 +2409,14 @@ else
     if [ -s "$out" ]; then
       cat "$out"
     fi
-    if worker_root_mode_is_enforceable; then
-      mode=$(stat -c %a "$work" 2>/dev/null || /usr/bin/stat -f %Lp "$work" 2>/dev/null || echo unknown)
-      case "$mode" in
-        700|0700) ;;
-        *)
-          log "isolation failure: worker root mode is $mode, expected 0700 ($work)"
-          rc=1
-          ;;
-      esac
-    fi
+    mode=$(stat -c %a "$work" 2>/dev/null || /usr/bin/stat -f %Lp "$work" 2>/dev/null || echo unknown)
+    case "$mode" in
+      700|0700) ;;
+      *)
+        log "isolation failure: worker root mode is $mode, expected 0700 ($work)"
+        rc=1
+        ;;
+    esac
     record_script_result "$script" "$rc" "$duration" "$out" "$end_iso"
   }
 
