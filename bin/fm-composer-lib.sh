@@ -55,9 +55,9 @@
 #                writes its model name there); a titled bottom border that
 #                still starts and ends with the family's rule glyph is
 #                tolerated, not ambiguity.
-#   bare       - an agent prompt glyph row with no border at all (codex `›`,
-#                muse `⟩`). The agent glyph is itself the container
-#                proof; a bare SHELL glyph (`>` `$` `%` `#`) never is.
+#   bare       - an agent prompt glyph row with no border at all (codex `›`).
+#                The agent glyph is itself the container proof; a bare SHELL
+#                glyph (`>` `$` `%` `#`) never is.
 #   left-bar   - opencode: rows prefixed by a heavy left bar `┃` with no
 #                closing border, holding the idle hint, blank rows, and a
 #                mode/model footer line.
@@ -72,8 +72,8 @@
 # what a pane shows once its agent has exited to a plain login shell - is a
 # genuine empty agent composer ONLY inside a bordered container. On a bare row
 # it is a dead-shell prompt and classifies `unknown` (never a safe injection
-# target). The AGENT glyphs `›` (codex) and `⟩` (U+27E9, muse) are a genuine
-# empty agent composer either way.
+# target). The AGENT glyph `›` (codex) is a genuine empty agent composer
+# either way.
 # Both glyph sets are declared
 # exactly once below; every decision reaches them through the declarations.
 #
@@ -189,11 +189,6 @@ fm_composer_normalize_trim_var() {  # <varname>
 #     no fleet harness uses it for ghost text, so it is kept (real text wins:
 #     under-stripping merely defers, which the max-defer alarm surfaces, while
 #     over-stripping would inject over real input).
-# Raising FM_COMPOSER_GHOST_LUMA_MAX is not free: muse draws its `⟩` prompt glyph
-# in truecolor 38;2;90;160;255, luminance ~149.9 (verified, muse 0.1.0-R708.1),
-# the tightest margin over the 128 default in the fleet. Above ~150 that glyph is
-# stripped as ghost text, which is why the bare-glyph fallback below must also
-# recognise every agent glyph from the UNSTRIPPED plain row.
 # The dim/faint and dark-foreground states are tracked together as "de-emphasis";
 # codes are processed left to right within a sequence, so "ESC[0;2m" reads as dim.
 # LC_ALL=C makes awk walk bytes, so multibyte glyphs and de-emphasised
@@ -355,7 +350,7 @@ fm_busy_lines_match() {  # [harness]
 # `empty`. Newline-separated and consumed by `read` rather than word splitting,
 # so `$`, `%`, and `#` stay literal and no entry is exposed to pathname
 # expansion. The historical SHELL variable name remains internal-only.
-FM_COMPOSER_AGENT_PROMPT_GLYPHS=$(printf '%s\n' '›' '⟩')
+FM_COMPOSER_AGENT_PROMPT_GLYPHS=$(printf '%s\n' '›')
 FM_COMPOSER_SHELL_PROMPT_GLYPHS=$(printf '%s\n' '>' '$' '%' '#' '❯')
 
 # The ONE fleet-wide idle-placeholder set: composer text a harness renders in
@@ -468,9 +463,8 @@ fm_composer_idle_matches() {
 #              cannot shift underneath it.
 #   [idle_case] `sensitive` (default) or `insensitive`.
 #   [plain_content] the UNSTRIPPED plain row, consulted when ghost stripping
-#              emptied an unbordered row: muse's `⟩` sits at luminance ~150,
-#              close enough to the ghost threshold that a raised threshold
-#              strips it, and the plain row is what keeps that pane readable.
+#              emptied an unbordered row so a retained agent glyph can still
+#              prove the composer.
 # Content and plain_content are normalized and re-trimmed on entry, so the
 # verdict never depends on which whitespace alphabet the calling adapter
 # trimmed with.

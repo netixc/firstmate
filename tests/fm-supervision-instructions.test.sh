@@ -19,16 +19,25 @@ test_selected_harness_block_only() {
 }
 
 test_unknown_fallback() {
-  local out
+  local harness out
   out=$("$RENDER" --harness not-real)
   assert_contains "$out" "primary harness: unknown" "unknown heading missing"
   assert_contains "$out" "Mode: Unknown harness fallback." "unknown fallback snippet missing"
 
-  out=$("$RENDER" --harness omp)
-  assert_contains "$out" "primary harness: unknown" "a stale OMP selection must use the unknown fallback"
-  assert_contains "$out" "Mode: Unknown harness fallback." "a stale OMP selection must not select a retired protocol"
-  assert_not_contains "$out" ".omp/" "a stale OMP selection must not render retired extension paths"
-  assert_not_contains "$out" "fm_watch_arm_omp" "a stale OMP selection must not render a retired repair tool"
+  for harness in omp muse; do
+    out=$("$RENDER" --harness "$harness")
+    assert_contains "$out" "primary harness: unknown" "a stale $harness selection must use the unknown fallback"
+    assert_contains "$out" "Mode: Unknown harness fallback." "a stale $harness selection must not select a retired protocol"
+    case "$harness" in
+      omp)
+        assert_not_contains "$out" ".omp/" "a stale OMP selection must not render retired extension paths"
+        assert_not_contains "$out" "fm_watch_arm_omp" "a stale OMP selection must not render a retired repair tool"
+        ;;
+      muse)
+        assert_not_contains "$out" "muse-session" "a stale Muse selection must not render retired sidecar paths"
+        ;;
+    esac
+  done
   pass "renderer falls back to unknown.md for unverified and retired harness names"
 }
 

@@ -36,8 +36,8 @@ cat > "$EXPECTED_JSON" <<'JSON'
     {"id":"interrupt.default","common":["references/common/control-and-recovery.md"],"harness":"references/harness/pi.md"},
     {"id":"exit.default","common":["references/common/control-and-recovery.md"],"harness":"references/harness/grok.md"},
     {"id":"resume.default","common":["references/common/control-and-recovery.md"],"harness":"references/harness/kimi.md"},
-    {"id":"recovery.default","common":["references/common/control-and-recovery.md"],"harness":"references/harness/muse.md"},
-    {"id":"recovery.replacement-profile","common":["references/common/control-and-recovery.md","references/common/dispatch.md","references/common/model-and-effort.md"],"harness":"references/harness/muse.md"},
+    {"id":"recovery.default","common":["references/common/control-and-recovery.md"],"harness":"references/harness/rovo.md"},
+    {"id":"recovery.replacement-profile","common":["references/common/control-and-recovery.md","references/common/dispatch.md","references/common/model-and-effort.md"],"harness":"references/harness/rovo.md"},
     {"id":"recovery.secondmate","common":["references/common/control-and-recovery.md","references/common/primary-hooks.md"],"harness":"references/harness/codex.md"},
     {"id":"recovery.replacement-secondmate","common":["references/common/control-and-recovery.md","references/common/dispatch.md","references/common/model-and-effort.md","references/common/primary-hooks.md"],"harness":"references/harness/codex.md"},
     {"id":"primary.default","common":["references/common/primary-hooks.md"],"harness":"references/harness/opencode.md"},
@@ -61,8 +61,8 @@ JSON
     'interrupt.default pi-signed' \
     'exit.default grok' \
     'resume.default kimi' \
-    'recovery.default muse' \
-    'recovery.replacement-profile muse' \
+    'recovery.default rovo' \
+    'recovery.replacement-profile rovo' \
     'recovery.secondmate codex' \
     'recovery.replacement-secondmate codex' \
     'primary.default opencode' \
@@ -110,7 +110,7 @@ resolve_native_binary() {
   return 1
 }
 
-for harness in codex opencode pi pi-signed grok kimi muse; do
+for harness in codex opencode pi pi-signed grok kimi rovo; do
   if binary=$(resolve_native_binary "$harness"); then
     version=$("$binary" --version 2>/dev/null | head -1 | tr -d '\r') || version=unknown
     printf '# native loader not claimed: %s %s is installed, but this harness-neutral evaluation does not exercise its provider transport\n' "$harness" "$version"

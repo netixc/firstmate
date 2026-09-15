@@ -120,16 +120,15 @@ named_bin() {  # <dir> <name>
 
 # --- 1. A foreign marker never renames a markerless harness -----------------
 
-# Codex, OpenCode, Kimi, Muse, and Agy publish no identity marker. An inherited
+# Codex, OpenCode, Kimi, and Agy publish no identity marker. An inherited
 # foreign marker must not rename those structurally identified runtimes.
 test_markerless_ancestry_outranks_foreign_marker() {
   local dir fakebin bin got name
   dir="$TMP_ROOT/markerless"
   fakebin=$(blind_ancestry_bin "$dir/blind")
-  for name in codex opencode kimi muse-bin-0.1.0 agy; do
+  for name in codex opencode kimi agy; do
     bin=$(named_bin "$dir/$name-tree" "$name")
     local expect=$name
-    case "$name" in muse-bin-*) expect=muse ;; esac
 
     got=$(under_process "$bin")
     [ "$got" = "$expect" ] \
@@ -145,6 +144,18 @@ test_markerless_ancestry_outranks_foreign_marker() {
     || fail "an inherited Grok marker alone resolved '$got', expected grok"
 
   pass "a markerless harness keeps its identity under an inherited foreign marker"
+}
+
+# Retired Muse names must contribute no ancestry identity of their own.
+test_retired_muse_ancestry_is_not_recognized() {
+  local bin got name
+  for name in muse muse-bin-1.0.3-R2198.1; do
+    bin=$(named_bin "$TMP_ROOT/retired-$name-tree" "$name")
+    got=$(under_process "$bin")
+    [ "$got" != muse ] \
+      || fail "retired Muse process '$name' still resolved as a supported Muse harness"
+  done
+  pass "retired Muse process names no longer identify a supported harness"
 }
 
 # --- 2. A genuine harness in its own process tree still wins ----------------
@@ -675,6 +686,7 @@ test_supervision_protocol_follows_corrected_verdict() {
 }
 
 test_markerless_ancestry_outranks_foreign_marker
+test_retired_muse_ancestry_is_not_recognized
 test_genuine_marker_and_ancestry_agree
 test_pi_signed_survives_agreeing_ancestry
 test_interpreter_args_match_does_not_outrank_a_marker

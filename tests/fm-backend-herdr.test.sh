@@ -500,16 +500,19 @@ test_registered_agent_with_a_live_foreground_process_stays_alive() {
   pass "herdr stale registration: a registered agent with a live Pi foreground process still reads alive"
 }
 
-test_retired_omp_process_is_not_a_herdr_agent() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/retired-omp-process"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '{"result":{"type":"pane_process_info","process_info":{"pane_id":"w1:p2","shell_pid":4242,"foreground_process_group_id":4243,"foreground_processes":[{"pid":4243,"name":"omp","argv0":"omp","argv":["omp"],"cmdline":"omp"}]}}}\n' > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_pane_process_state_sample fmtest w1:p2' "$ROOT")
-  [ "$out" = other ] \
-    || fail "a stale OMP process must not classify as a verified Herdr agent, got '$out'"
-  pass "herdr process classifier: a stale OMP process is not a verified agent"
+test_retired_harness_processes_are_not_herdr_agents() {
+  local harness dir log resp fb out
+  for harness in omp muse muse-bin-1.0.3-R2198.1; do
+    dir="$TMP_ROOT/retired-$harness-process"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
+    printf '{"result":{"type":"pane_process_info","process_info":{"pane_id":"w1:p2","shell_pid":4242,"foreground_process_group_id":4243,"foreground_processes":[{"pid":4243,"name":"%s","argv0":"%s","argv":["%s"],"cmdline":"%s"}]}}}\n' \
+      "$harness" "$harness" "$harness" "$harness" > "$resp/1.out"
+    fb=$(make_herdr_fakebin "$dir")
+    out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
+      bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_pane_process_state_sample fmtest w1:p2' "$ROOT")
+    [ "$out" = other ] \
+      || fail "a stale $harness process must not classify as a verified Herdr agent, got '$out'"
+  done
+  pass "herdr process classifier: stale OMP and Muse processes are not verified agents"
 }
 
 test_registered_agent_with_a_non_shell_foreground_process_stays_alive() {
@@ -4993,7 +4996,7 @@ test_recovery_grade_read_widens_only_at_its_own_boundary
 test_stale_registration_over_a_shell_only_pane_is_agent_free
 test_stale_registration_ignores_status_and_reads_the_process
 test_registered_agent_with_a_live_foreground_process_stays_alive
-test_retired_omp_process_is_not_a_herdr_agent
+test_retired_harness_processes_are_not_herdr_agents
 test_registered_agent_with_a_non_shell_foreground_process_stays_alive
 test_transient_prompt_helper_settles_into_stale_agent
 test_exhausted_settle_window_keeps_a_non_shell_foreground_live
