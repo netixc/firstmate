@@ -303,7 +303,7 @@ test_fail_open_unparseable_json() {
 test_fail_open_missing_node() {
   local fakebin tool tool_path out rc
   fakebin=$(fm_fakebin "$TMP_ROOT/nonode")
-  for tool in bash sh git dirname cat printf sed tr jq; do
+  for tool in bash sh git dirname cat printf sed tr jq uname; do
     tool_path=$(command -v "$tool") || continue
     ln -s "$tool_path" "$fakebin/$tool"
   done
@@ -317,7 +317,7 @@ test_fail_open_missing_node() {
 test_fail_open_missing_jq_on_stdin() {
   local fakebin tool tool_path out rc
   fakebin=$(fm_fakebin "$TMP_ROOT/nojq")
-  for tool in bash sh git dirname cat printf sed tr node; do
+  for tool in bash sh git dirname cat printf sed tr node uname; do
     tool_path=$(command -v "$tool") || continue
     ln -s "$tool_path" "$fakebin/$tool"
   done
@@ -336,7 +336,7 @@ test_prefilter_skips_node_without_cd_substring() {
   make_primary_fixture "$dir" >/dev/null
   fakebin=$(fm_fakebin "$TMP_ROOT/prefilter-fake")
   marker="$TMP_ROOT/prefilter-node-called"
-  for tool in bash sh git dirname cat printf sed tr jq; do
+  for tool in bash sh git dirname cat printf sed tr jq uname; do
     tool_path=$(command -v "$tool") || continue
     ln -s "$tool_path" "$fakebin/$tool"
   done

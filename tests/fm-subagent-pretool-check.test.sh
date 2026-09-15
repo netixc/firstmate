@@ -260,12 +260,12 @@ test_malformed_transport_fails_open() {
 }
 
 test_missing_jq_stdin_transport_fails_open() {
-  local fakebin="$TMP_ROOT/no-jq-bin" bash_bin cat_bin rc=0
-  bash_bin=$(command -v bash) || fail "test needs bash to simulate the hook shebang"
-  cat_bin=$(command -v cat) || fail "test needs cat to feed stdin without jq"
+  local fakebin="$TMP_ROOT/no-jq-bin" rc=0 tool tool_path
   mkdir -p "$fakebin"
-  ln -sf "$bash_bin" "$fakebin/bash"
-  ln -sf "$cat_bin" "$fakebin/cat"
+  for tool in bash cat dirname uname; do
+    tool_path=$(command -v "$tool") || fail "test host must provide $tool"
+    ln -sf "$tool_path" "$fakebin/$tool"
+  done
   : > "$OUT"; : > "$ERR"
   printf '%s' '{"tool_name":"Agent"}' \
     | env PATH="$fakebin" FM_ROOT_OVERRIDE="$PRIMARY" FM_HOME="$PRIMARY" FM_STATE_OVERRIDE="$STATE" \

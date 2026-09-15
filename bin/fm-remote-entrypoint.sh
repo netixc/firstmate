@@ -43,7 +43,6 @@ SCRIPT_DIR=$(CDPATH='' cd "$(dirname "$REAL_SOURCE")" && pwd -P)
 
 die() { printf 'error: %s\n' "$1" >&2; exit "${2:-64}"; }
 
-ENTRYPOINT_PLATFORM=$(fm_remote_job_platform)
 if ! fm_remote_job_platform_supported; then
   fm_host_platform_diagnostic "$(fm_remote_job_platform_raw)" >&2
   exit 64

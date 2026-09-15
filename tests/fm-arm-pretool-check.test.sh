@@ -375,7 +375,7 @@ test_failopen_missing_jq() {
   fakebin="$dir/fakebin"
   mkdir -p "$fakebin"
   local tool
-  for tool in bash grep sed tr; do
+  for tool in bash dirname grep sed tr uname; do
     real=$(command -v "$tool")
     ln -sf "$real" "$fakebin/$tool"
   done
@@ -390,7 +390,7 @@ test_failopen_missing_node() {
   dir=$(fm_test_tmproot fm-arm-pretool-node)
   fakebin="$dir/fakebin"
   mkdir -p "$fakebin"
-  for tool in bash dirname; do
+  for tool in bash dirname uname; do
     real=$(command -v "$tool")
     ln -sf "$real" "$fakebin/$tool"
   done

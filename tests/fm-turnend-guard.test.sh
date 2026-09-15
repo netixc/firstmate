@@ -853,7 +853,7 @@ test_grok_adapter_missing_jq_and_no_supervision_allow() {
   : > "$dir/state/task1.meta"
   fakebin=$(fm_fakebin "$TMP_ROOT/grok-nojq-bin")
   log="$TMP_ROOT/grok-nojq.log"
-  for tool in bash cat printf; do
+  for tool in bash cat dirname printf uname; do
     tool_path=$(command -v "$tool") || fail "test host must provide $tool"
     ln -s "$tool_path" "$fakebin/$tool"
   done
