@@ -518,10 +518,9 @@ test_hook_secondmate_loop_guard_allows_retry() {
 # proven deterministically without a live model or any daemon: silent while the
 # watcher is live (the secondmate ends its turn and relies on the background
 # re-invoke), then blocks to force the re-arm once the watcher has exited and a
-# second child event lands. The live half - that Codex Code autonomously
-# re-invokes the model when the background watcher exits (Mechanism A) - is a
-# harness property recorded empirically in docs/turnend-guard.md; it needs a live
-# session and cannot be a hermetic CI assertion.
+# second child event lands. A harness adapter's live follow-up transport needs a
+# real session and cannot be a hermetic CI assertion; this test owns only the
+# shared guard behavior.
 test_hook_secondmate_reinvoke_recovery_loop() {
   local dir pid identity out status
   dir=$(make_secondmate_dir "$TMP_ROOT/hook-secondmate-reinvoke")

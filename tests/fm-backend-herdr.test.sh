@@ -3904,32 +3904,15 @@ test_composer_state_pi_separator_requires_safe_native_identity() {
 }
 
 # --- composer_state: unbordered (bare) composer rows -------------------------
-# Regression coverage for the away-mode redelivery-loop incident
-# (docs/herdr-backend.md "Incident (2026-07-07)"): omp
-# composer rows carry NO border glyph at all - the fixtures below are captured
-# verbatim (character-for-character) from a real herdr session running real
-# `codex`/`codex` (see the dated evidence entry). Before the fix these all
-# read "unknown" (codex/codex fixtures) or produced a false "empty" from a
-# stale decorative box (the banner-priority fixture) - none of them correctly
-# tracked the live composer, which is exactly what caused
-# bin/fm-supervise-daemon.sh's fm_backend_herdr_send_text_submit to never
-# confirm a landed injection, so escalate_flush never cleared
-# state/.subsuper-escalations and the same digest was redelivered every cycle.
-
-# The exact incident shape: a bordered decorative box (codex's own startup
-# welcome banner) is STILL in the capture window, sitting ABOVE the live,
-# unbordered "❯" prompt. Before the fix, the bordered branch was the ONLY one
-# ever consulted, so the LAST bordered row (the banner's own blank interior
-# spacer row, immediately above its closing ╰──╯) won by construction and was
-# misread as the live composer - which happened to strip to empty here, but
-# for the same reason never tracks the REAL composer once real text is typed
-# below the banner (see the daemon-level E2E evidence in
-# docs/herdr-backend.md). The live, bottom-most row must win regardless of
-# shape.
+# OMP composer rows carry no border glyph at all. These behavioral fixtures
+# combine a live OMP-style prompt with unrelated stale decoration so the
+# bottom-most active composer must win regardless of the earlier box's shape.
+# Before the fix, the bordered branch could mistake the stale box's blank
+# interior row for the live composer and fail to track real text below it.
 test_composer_state_bare_prompt_below_stale_bordered_banner_wins() {
   local dir log resp fb out
   dir="$TMP_ROOT/composer-banner-priority"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '\xe2\x95\xad\xe2\x94\x80 Codex Code \xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x95\xae\n\xe2\x94\x82           Welcome back Kun!           \xe2\x94\x82\n\xe2\x94\x82                                       \xe2\x94\x82\n\xe2\x95\xb0\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x95\xaf\n\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n\xe2\x9d\xaf still typing captain\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n' > "$resp/1.out"
+  printf '\xe2\x95\xad\xe2\x94\x80 Earlier Session \xe2\x94\x80\xe2\x94\x80\xe2\x95\xae\n\xe2\x94\x82           Session ready              \xe2\x94\x82\n\xe2\x94\x82                                      \xe2\x94\x82\n\xe2\x95\xb0\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x95\xaf\n\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n\xe2\x9d\xaf still typing message\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n' > "$resp/1.out"
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
@@ -3937,18 +3920,11 @@ test_composer_state_bare_prompt_below_stale_bordered_banner_wins() {
   pass "fm_backend_herdr_composer_state: a live unbordered prompt row below a stale bordered decorative box still wins (not misread as the box's own row)"
 }
 
-# THE OVERNIGHT WEDGE regression (task afk-herdr-false-pending). Captured
-# read-only from the live primary omp-on-herdr pane default:w1:p3 on
-# 2026-07-10: an idle composer whose only content is codex's rotating
-# prompt-suggestion GHOST, rendered SGR-2 dim after the bare "❯" prompt
-# ("❯ \033[0m\033[2m<suggestion>\033[0m"). herdr's `pane read --format ansi`
-# preserves the dim attribute. The pre-fix herdr classifier stripped ALL ANSI
-# and read the suggestion as real pending text (its only faint check matched
-# codex's bold-wrapped "\033[1m❯ \033[0m\033[2m", which this shape is NOT), so
-# every away-mode injection deferred with "pending input (non-empty composer)"
-# all night (6524 lifetime defers; wedge 30623s undelivered). The shared
-# ANSI-aware owner now drops the dim ghost and the row reads empty (safe to
-# inject).
+# Captured read-only from a live OMP-on-Herdr pane: an idle composer's only
+# content is OMP's rotating prompt-suggestion ghost, rendered SGR-2 dim after
+# the bare "❯" prompt. Herdr's ANSI capture preserves that attribute. The
+# shared ANSI-aware owner drops the dim ghost so the row reads empty, while a
+# non-dim row remains protected as real input.
 # Same prompt row, but the text after "❯" is REAL (normal intensity, no dim) -
 # it must still read pending, so the ghost fix never weakens real-input
 # protection.
@@ -3988,8 +3964,8 @@ test_composer_state_codex_bare_prompt_glyph_is_empty() {
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
-  [ "$out" = empty ] || fail "a bare '›' (codex) prompt glyph with no trailing text should read empty, got '$out'"
-  pass "fm_backend_herdr_composer_state: a omp unbordered '›' prompt row reads empty"
+  [ "$out" = empty ] || fail "a bare '›' (Codex) prompt glyph with no trailing text should read empty, got '$out'"
+  pass "fm_backend_herdr_composer_state: a Codex unbordered '›' prompt row reads empty"
 }
 
 test_composer_state_codex_faint_suggestion_is_empty() {
@@ -3999,8 +3975,8 @@ test_composer_state_codex_faint_suggestion_is_empty() {
   fb=$(make_herdr_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
-  [ "$out" = empty ] || fail "a faint omp ghost suggestion should read empty, not pending, got '$out'"
-  pass "fm_backend_herdr_composer_state: a faint omp ghost suggestion reads empty"
+  [ "$out" = empty ] || fail "a faint Codex ghost suggestion should read empty, not pending, got '$out'"
+  pass "fm_backend_herdr_composer_state: a faint Codex ghost suggestion reads empty"
 }
 
 test_composer_state_codex_non_faint_same_text_is_pending() {
@@ -4011,7 +3987,7 @@ test_composer_state_codex_non_faint_same_text_is_pending() {
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
   [ "$out" = pending ] || fail "the same words without faint styling should still protect real typed input, got '$out'"
-  pass "fm_backend_herdr_composer_state: non-faint omp prompt text still reads pending"
+  pass "fm_backend_herdr_composer_state: non-faint Codex prompt text still reads pending"
 }
 
 # --- wait_for_working: the native agent-state poll-and-classify primitive ---

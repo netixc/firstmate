@@ -68,11 +68,11 @@ STALE_BANNER_MARKER="$STATE/.guard-watcher-stale-banner"
 GUARD_ACTOR=$(fm_lease_actor 2>/dev/null) || GUARD_ACTOR=main
 
 # Deterministic episode key from the qualitative down-state (the failing
-# condition), NOT the beacon mtime: under the auto-arm model a healthy
-# between-turns watcher advances that mtime every poll, which made the "same
-# episode" key change every turn and re-print the full banner. Keying on the
-# failing condition keeps one continuous down-episode stable, while positive
-# recovery clears the marker (below) and re-arms the next episode.
+# condition), NOT the beacon mtime: a watcher can advance that mtime without
+# changing the failing condition, which made the "same episode" key change and
+# re-print the full banner. Keying on the failing condition keeps one continuous
+# down-episode stable, while positive recovery clears the marker (below) and
+# re-arms the next episode.
 fm_guard_stale_episode_key() {
   printf '%s\n' "$1"
 }

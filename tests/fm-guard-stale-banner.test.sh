@@ -63,13 +63,6 @@ run_guard_case_read_only() {
     "$ROOT/bin/fm-guard.sh" 2>&1
 }
 
-# The Codex Stop auto-arm model: the watcher runs only between turns, so a fresh
-# beacon with no live watcher process is the healthy mid-turn state.
-
-# Age the rewake ledger into the past so a passing long-turn case cannot rest on
-# epoch freshness: a handling turn that has already outrun grace still has this
-# shape, which is the false alarm this suite now pins.
-
 record_session_lock_pid() {
   local home=$1 pid=$2
   printf '%s\n' "$pid" > "$home/state/.lock"
@@ -373,24 +366,6 @@ test_read_only_never_mutates_stale_banner_state_files() {
   [ "$(cat "$marker")" = "sentinel-marker" ] || fail "no-work read-only guard updated the marker content"
   pass "fm-guard stale banner: read-only never mutates stale-banner state files"
 }
-
-
-
-
-# The send-time false alarm on a long Codex handling turn: the between-turns
-# watcher has already exited, the beacon is older than grace, and the auto-arm
-# ledger still shows a healthy rewake with no failure markers while the session
-# lock names a live pid. Turn-end will re-arm, so the pull guard must stay silent.
-
-# Drive the long-turn signals apart on the same stale beacon. Losing any one
-# healthy-generation signal must restore the banner; the stale beacon alone
-# is not enough to stay quiet, and adding a failure marker is not either.
-
-# An open arming claim is between-turn startup, not evidence that the current
-# handling turn came from a healthy rewake.
-
-# The long-turn tolerance is a Codex auto-arm carve-out. The same leftover
-# rewake ledger must not silence Pi/extension or persistent primaries.
 
 test_persistent_no_watcher_banner_names_missing_process() {
   local dir out

@@ -6,8 +6,8 @@
 #
 # Why this file exists: both verdicts depend on how a harness names its own
 # process, which is a surface the harness vendor controls and changes without
-# notice. Codex Code began reporting its version string as its process name and
-# became unattributable, which silently degraded supervision. A regression that
+# notice. A prior release began reporting its version string as its process name
+# and became unattributable, which silently degraded supervision. A regression that
 # only a real harness release can cause needs a check that runs real harnesses;
 # a stubbed agent cannot see it, and neither can a table of names transcribed
 # from a previous release.

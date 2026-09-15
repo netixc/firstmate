@@ -60,9 +60,9 @@ ln -s "$SLEEP_BIN" "$LAB/bin/omp"
 ln -s "$SLEEP_BIN" "$LAB/bin/ompd"
 ln -s "$SLEEP_BIN" "$LAB/bin/comp"
 # muse's installed binary is muse-bin-<version>: the launcher execs it, so the
-# version is the LIVE process name and it changes on every auto-update. Unlike
-# Codex Code's version-named binary there is no `muse` path component to fall
-# back on (~/.local/bin/muse-bin-<version>), so the executable name is the ONLY
+# version is the LIVE process name and it changes on every auto-update. There
+# is no separate `muse` path component to fall back on
+# (~/.local/bin/muse-bin-<version>), so the executable name is the ONLY
 # signal, and `muse` alone is a common English fragment that must not widen into
 # a substring match. The last two names are the decoys that would be misread.
 ln -s "$SLEEP_BIN" "$LAB/bin/muse-bin-0.1.0-R708.1"

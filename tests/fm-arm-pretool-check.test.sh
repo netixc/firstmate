@@ -272,16 +272,16 @@ test_stdin_codex_schema_allow() {
   local rc
   printf '%s' '{"tool_input":{"command":"exec bin/fm-watch-arm.sh"},"tool_name":"Bash"}' | "$CHECK" >/dev/null 2>&1
   rc=$?
-  [ "$rc" -eq 0 ] || fail "codex/codex tool_input.command schema must be read and allowed for the blessed shape, got exit $rc"
-  pass "stdin codex/codex schema (tool_input.command): blessed shape allowed"
+  [ "$rc" -eq 0 ] || fail "Codex tool_input.command schema must be read and allowed for the blessed shape, got exit $rc"
+  pass "stdin Codex schema (tool_input.command): blessed shape allowed"
 }
 
 test_stdin_codex_schema_deny() {
   local rc
   printf '%s' '{"tool_input":{"command":"bin/fm-watch-arm.sh &"},"tool_name":"Bash"}' | "$CHECK" >/dev/null 2>&1
   rc=$?
-  [ "$rc" -eq 2 ] || fail "codex/codex tool_input.command schema must be denied for the backgrounded shape, got exit $rc"
-  pass "stdin codex/codex schema (tool_input.command): backgrounded shape denied"
+  [ "$rc" -eq 2 ] || fail "Codex tool_input.command schema must be denied for the backgrounded shape, got exit $rc"
+  pass "stdin Codex schema (tool_input.command): backgrounded shape denied"
 }
 
 test_stdin_unrelated_command_allowed() {
