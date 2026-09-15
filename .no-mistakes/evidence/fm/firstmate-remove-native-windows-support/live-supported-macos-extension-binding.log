@@ -1,0 +1,17 @@
+$ uname -s
+Darwin
+
+$ FM_HOME=<isolated> bin/fm-extension.mjs bind <external-package> --adapter file-signal --trust-same-user-code --consent artifact-references
+bound: org.firstmate.example.file-signal@1.0.0
+binding: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-live-extension.hvp4z9/home/config/extensions.d/org.firstmate.example.file-signal.json
+binding-digest: sha256:1ec4fd51c95b0ae4a70ed512317d4e2458619497e64dec9e1a74b423a541249f
+package: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-live-extension.hvp4z9/home/data/extensions/packages/org.firstmate.example.file-signal/1.0.0/a670d3f1353bbfa659564b86f6af7783cd47d32ae9a04e7962b28aedf5bc0e76
+package-digest: sha256:a670d3f1353bbfa659564b86f6af7783cd47d32ae9a04e7962b28aedf5bc0e76
+verified: process-event-adapter/1 (file-signal)
+
+$ FM_HOME=<isolated> bin/fm-extension.mjs list
+EXTENSION VERSION CAPABILITY ADAPTERS PACKAGE_DIGEST
+org.firstmate.example.file-signal 1.0.0 process-event-adapter/1 file-signal sha256:a670d3f1353bbfa659564b86f6af7783cd47d32ae9a04e7962b28aedf5bc0e76
+
+$ FM_HOME=<isolated> bin/fm-extension.mjs verify org.firstmate.example.file-signal
+verified: org.firstmate.example.file-signal@1.0.0 sha256:a670d3f1353bbfa659564b86f6af7783cd47d32ae9a04e7962b28aedf5bc0e76

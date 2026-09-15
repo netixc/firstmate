@@ -1,0 +1,7 @@
+$ uname -s
+Darwin
+
+$ FM_HOME=<isolated> node bin/fm-extension.mjs list
+no extension bindings
+exit=0
+unexpected-local-records=none

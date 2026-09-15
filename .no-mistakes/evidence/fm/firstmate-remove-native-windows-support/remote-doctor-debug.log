@@ -1,33 +1,494 @@
++ set -u
+++ dirname tests/fm-remote-doctor.test.sh
++ . tests/lib.sh
+++ '[' -n '' ']'
+++ FM_TEST_LIB_SOURCED=1
+++ umask 022
++++ dirname tests/lib.sh
+++ . tests/git-config-helpers.sh
++++ export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
++++ GIT_CONFIG_GLOBAL=/dev/null
++++ GIT_CONFIG_NOSYSTEM=1
+++ export FM_GATE_REFUSE_BYPASS=1
+++ FM_GATE_REFUSE_BYPASS=1
+++ unset FM_TASK_ID
+++ unset TASKS_AXI_FILE TASKS_AXI_BACKEND
+++++ dirname tests/lib.sh
++++ cd tests/..
++++ pwd
+++ ROOT=/Users/control/.no-mistakes/worktrees/874f0de57f61/01M2JB7GN66X3YXFGKGFQ8P3FR
+++ FM_TEST_CLEANUP_DIRS=()
++++ mktemp /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//.fm-test-cleanup.86374.XXXXXX
+++ FM_TEST_CLEANUP_REGISTRY=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//.fm-test-cleanup.86374.ML1p9k
++++ fm_test_pid_identity 86374
++++ local pid=86374
++++ FM_STATE_OVERRIDE=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/
++++ bash -c '. "$1"; fm_pid_identity "$2"' _ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M2JB7GN66X3YXFGKGFQ8P3FR/bin/fm-wake-lib.sh 86374
+++ FM_TEST_OWNER_IDENTITY='Tue Sep 15 15:16:56 2026     bash -x tests/fm-remote-doctor.test.sh'
++++ mktemp /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//.fm-test-procevent.86374.XXXXXX
+++ FM_TEST_PROCEVENT_REGISTRY=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//.fm-test-procevent.86374.QoGZXZ
+++ FM_TEST_STUB_MAX_BLOCK_SECONDS=120
+++ export FM_TEST_STUB_MAX_BLOCK_SECONDS
+++ trap fm_test_cleanup EXIT
+++ trap 'fm_test_cleanup; exit 130' INT
+++ trap 'fm_test_cleanup; exit 143' TERM
+++ trap 'fm_test_cleanup; exit 129' HUP
+++ trap 'fm_test_cleanup; exit 131' QUIT
+++ FM_TEST_ORPHAN_MAX_AGE_SECONDS=3600
+++ '[' 0 '!=' 1 ']'
+++ fm_test_reap_orphans
+++ local marker dir mtime now owner_pid owner_identity current_identity
++++ date +%s
+++ now=1789478216
+++ for marker in "${TMPDIR:-/tmp}"/fm-*/.fm-test-fixture
+++ '[' -e /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-control-auth.AHfRFa/.fm-test-fixture ']'
++++ sed -n 1p /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-control-auth.AHfRFa/.fm-test-fixture
+++ owner_pid=19563
++++ sed -n '2,$p' /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-control-auth.AHfRFa/.fm-test-fixture
+++ owner_identity='Tue Sep 15 14:37:11 2026     bash tests/fm-control-relaunch.test.sh'
+++ case "$owner_pid" in
++++ fm_test_pid_identity 19563
+++ current_identity=
+++ current_identity=
+++ '[' -n 'Tue Sep 15 14:37:11 2026     bash tests/fm-control-relaunch.test.sh' ']'
+++ '[' '' = 'Tue Sep 15 14:37:11 2026     bash tests/fm-control-relaunch.test.sh' ']'
++++ stat -c %Y /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-control-auth.AHfRFa/.fm-test-fixture
++++ stat -f %m /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-control-auth.AHfRFa/.fm-test-fixture
+++ mtime=1789475865
+++ '[' 2351 -ge 3600 ']'
+++ continue
+++ for marker in "${TMPDIR:-/tmp}"/fm-*/.fm-test-fixture
+++ '[' -e /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-secondmate-harness.5zzLZl/.fm-test-fixture ']'
++++ sed -n 1p /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-secondmate-harness.5zzLZl/.fm-test-fixture
+++ owner_pid=70957
++++ sed -n '2,$p' /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-secondmate-harness.5zzLZl/.fm-test-fixture
+++ owner_identity='Tue Sep 15 14:44:13 2026     bash tests/fm-secondmate-harness.test.sh'
+++ case "$owner_pid" in
++++ fm_test_pid_identity 70957
+++ current_identity=
+++ current_identity=
+++ '[' -n 'Tue Sep 15 14:44:13 2026     bash tests/fm-secondmate-harness.test.sh' ']'
+++ '[' '' = 'Tue Sep 15 14:44:13 2026     bash tests/fm-secondmate-harness.test.sh' ']'
++++ stat -c %Y /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-secondmate-harness.5zzLZl/.fm-test-fixture
++++ stat -f %m /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//fm-secondmate-harness.5zzLZl/.fm-test-fixture
+++ mtime=1789476253
+++ '[' 1963 -ge 3600 ']'
+++ continue
++ command -v jq
++ command -v python3
+++ fm_test_tmproot fm-remote-doctor
+++ local prefix=fm-remote-doctor root tmp_base
+++ tmp_base=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/
+++ tmp_base=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T
++++ mktemp -d /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.XXXXXX
+++ root=/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy
++++ cd -P -- /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy
++++ pwd -P
+++ root=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy
+++ printf '%s\n%s\n' 86374 'Tue Sep 15 15:16:56 2026     bash -x tests/fm-remote-doctor.test.sh'
+++ printf '%s\n' /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy
+++ printf '%s\n' /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy
++ TMP_ROOT=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy
++ LABEL=dev.firstmate.herdr.fm-remote
++ INTERACTIVE_LABEL=dev.firstmate.herdr
++ mkdir -p /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy
+++ cd /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy
+++ pwd -P
++ TMP_ROOT=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy
++ JOB_LABEL=dev.firstmate.remote-job
++ CASE_N=0
++ DOCTOR_WORKER_PID=
++ HOLDER_PIDS=()
++ trap 'if [ -n "$DOCTOR_WORKER_PID" ]; then kill "$DOCTOR_WORKER_PID" 2>/dev/null || true; fi; if [ "${#HOLDER_PIDS[@]}" -gt 0 ]; then kill "${HOLDER_PIDS[@]}" 2>/dev/null || true; fi; fm_test_cleanup || true' EXIT
++ GUARD=/Users/control/.no-mistakes/worktrees/874f0de57f61/01M2JB7GN66X3YXFGKGFQ8P3FR/bin/fm-remote-herdr-guard.sh
++ TOOLS=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools
++ mkdir -p /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools
+++ command -v git
++ ln -sf /usr/bin/git /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/git
+++ command -v jq
++ ln -sf /usr/bin/jq /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/jq
++ BASE_PATH=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools:/usr/bin:/bin:/usr/sbin:/sbin
+++ command -v jq
++ JQ=/usr/bin/jq
++ HOLDER_FD=5
++ hold XPC_SERVICE_NAME=dev.firstmate.herdr.fm-remote
++ local fifo=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/holder-5.fifo
++ mkfifo /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/holder-5.fifo
++ HOLDER_PID=86451
++ HOLDER_PIDS+=("$HOLDER_PID")
++ eval 'exec 5>"$fifo"'
+++ exec
++ env -i XPC_SERVICE_NAME=dev.firstmate.herdr.fm-remote /usr/bin/jq . /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/holder-5.fifo
++ HOLDER_FD=6
++ AQUA_HOLDER_PID=86451
++ hold XPC_SERVICE_NAME=dev.firstmate.herdr.fm-remote
++ local fifo=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/holder-6.fifo
++ mkfifo /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/holder-6.fifo
++ HOLDER_PID=86453
++ HOLDER_PIDS+=("$HOLDER_PID")
++ eval 'exec 6>"$fifo"'
+++ exec
++ env -i XPC_SERVICE_NAME=dev.firstmate.herdr.fm-remote /usr/bin/jq . /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/holder-6.fifo
++ HOLDER_FD=7
++ BACKGROUND_HOLDER_PID=86453
++ hold XPC_SERVICE_NAME=0
++ local fifo=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/holder-7.fifo
++ mkfifo /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/holder-7.fifo
++ HOLDER_PID=86455
++ HOLDER_PIDS+=("$HOLDER_PID")
++ eval 'exec 7>"$fifo"'
+++ exec
++ env -i XPC_SERVICE_NAME=0 /usr/bin/jq . /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/holder-7.fifo
++ HOLDER_FD=8
++ XPC_ZERO_HOLDER_PID=86455
++ hold FM_REMOTE_JOB_ACTIVE=1
++ local fifo=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/holder-8.fifo
++ mkfifo /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/holder-8.fifo
++ HOLDER_PID=86457
++ HOLDER_PIDS+=("$HOLDER_PID")
++ eval 'exec 8>"$fifo"'
+++ exec
++ env -i FM_REMOTE_JOB_ACTIVE=1 /usr/bin/jq . /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/holder-8.fifo
++ HOLDER_FD=9
++ WORKER_HOLDER_PID=86457
++ hold 'SSH_CONNECTION=100.102.217.78 51234 100.100.1.2 22' 'SSH_CLIENT=100.102.217.78 51234 22'
++ local fifo=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/holder-9.fifo
++ mkfifo /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/holder-9.fifo
++ HOLDER_PID=86459
++ HOLDER_PIDS+=("$HOLDER_PID")
++ eval 'exec 9>"$fifo"'
+++ exec
++ env -i 'SSH_CONNECTION=100.102.217.78 51234 100.100.1.2 22' 'SSH_CLIENT=100.102.217.78 51234 22' /usr/bin/jq . /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/holder-9.fifo
++ HOLDER_FD=10
++ SSH_HOLDER_PID=86459
++ new_case Darwin no-herdr gui
++ local platform=Darwin want_herdr=no-herdr want_gui=gui
++ unset CASE_REMOTE_JOB_ACTIVE
++ unset CASE_DSCL_FAIL
++ unset CASE_DSCL_HANG
++ unset CASE_SECOND_LOGIN_SHELL
++ unset CASE_ENV_SHELL
++ unset CASE_RESOLVE_DSCL
++ CASE_N=1
++ CASE_LOGIN_SHELL=/bin/sh
++ CASE_DIR=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1
++ CASE_BIN=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin
++ CASE_HOME=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home
++ CASE_PROJECT_HOME=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/project-home
++ CASE_STATE=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/state
++ CASE_LAUNCHCTL_LOG=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/state/launchctl.log
++ CASE_FORBIDDEN_LOG=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/state/forbidden.log
++ CASE_HERDR_RUNNING=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/state/herdr.running
++ CASE_PLIST=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist
++ CASE_INTERACTIVE_PLIST=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/Library/LaunchAgents/dev.firstmate.herdr.plist
++ CASE_JOB_PLIST=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/Library/LaunchAgents/dev.firstmate.remote-job.plist
++ mkdir -p /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/project-home /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/state
++ printf 'false\n'
++ :
++ :
++ '[' gui '!=' gui ']'
++ touch /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/state/gui-session
++ fm_fake_uname /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin Darwin
++ local fakebin=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin platform=Darwin
++ printf '%s\n' Darwin
++ /usr/bin/uname -s
++ cat
++ cat
++ chmod +x /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/uname /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/stat
++ cat
++ local forbidden
++ for forbidden in fdesetup security defaults
++ cat
++ chmod +x /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/fdesetup
++ for forbidden in fdesetup security defaults
++ cat
++ chmod +x /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/security
++ for forbidden in fdesetup security defaults
++ cat
++ chmod +x /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/defaults
++ cat
++ chmod +x /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/lsof
++ cat
++ '[' no-herdr = with-herdr ']'
++ cat
++ cat
++ cat
++ chmod +x /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/uname /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/launchctl /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/dscl /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/tasks-axi /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/treehouse /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/claude
++ cat
++ chmod +x /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/sleep
++ doctor
++ set +e
+++ HOME=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home
+++ FM_HOME=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/project-home
+++ PATH=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/.local/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools:/usr/bin:/bin:/usr/sbin:/sbin
+++ FM_FAKE_STATE=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/state
+++ FM_FAKE_LAUNCHCTL_LOG=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/state/launchctl.log
+++ FM_FAKE_FORBIDDEN_LOG=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/state/forbidden.log
+++ FM_FAKE_HERDR_RUNNING=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/state/herdr.running
+++ FM_FAKE_HERDR_BIN=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/herdr
+++ FM_FAKE_HERDR_SOCKET=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/state/herdr.sock
+++ FM_FAKE_GUARD=/Users/control/.no-mistakes/worktrees/874f0de57f61/01M2JB7GN66X3YXFGKGFQ8P3FR/bin/fm-remote-herdr-guard.sh
+++ FM_FAKE_AQUA_PID=86451
+++ FM_FAKE_PLIST=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist
+++ FM_FAKE_JOB_PLIST=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/Library/LaunchAgents/dev.firstmate.remote-job.plist
+++ FM_FAKE_JOB_WORKER=/Users/control/.no-mistakes/worktrees/874f0de57f61/01M2JB7GN66X3YXFGKGFQ8P3FR/bin/fm-remote-job-worker.sh
+++ FM_FAKE_LAUNCH_AGENT_LOG=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/Library/Logs/dev.firstmate.herdr.fm-remote.log
+++ FM_FAKE_LOGIN_SHELL=/bin/sh
+++ FM_FAKE_SECOND_LOGIN_SHELL=
+++ FM_FAKE_DSCL_FAIL=0
+++ FM_FAKE_DSCL_HANG=0
++++ '[' 0 = 1 ']'
++++ printf %s /bin/sh
+++ FM_LAUNCH_AGENT_SHELL=/bin/sh
+++ SHELL=/bin/zsh
+++ FM_REMOTE_JOB_ACTIVE=1
+++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M2JB7GN66X3YXFGKGFQ8P3FR/bin/fm-remote-doctor.sh
++ DOCTOR_OUT=$'mode=check\npath=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/.local/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools:/usr/bin:/bin:/usr/sbin:/sbin\nentrypoint=no\nnote: not launched through the fixed remote entrypoint; the reported PATH is this caller environment.\nplatform=darwin\nrequired git=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/git\nrequired jq=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/jq\nrequired herdr=MISSING\nrequired tasks-axi=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/tasks-axi\nrequired treehouse=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/treehouse\nrequired harness=claude:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/claude\noptional tmux=absent\noptional no-mistakes=absent\noptional gh=absent\ncheck herdr=human: the herdr CLI does not resolve on the remote runtime PATH\ncheck gui-session=ok: gui/501\ncheck remote-job-worker=fixable: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/Library/LaunchAgents/dev.firstmate.remote-job.plist does not match the Firstmate-owned Aqua worker contract\ncheck remote-job-worker-loaded=fixable: dev.firstmate.remote-job is not loaded in gui/501\ncheck remote-job-probe=ok: the remote job worker published a fresh heartbeat\ncheck launchagent=fixable: no Firstmate herdr launch agent at /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist\ncheck launchagent-scope=skip: no launch agent is installed yet\ncheck launchagent-loaded=fixable: dev.firstmate.herdr.fm-remote is not loaded into gui/501\ncheck herdr-server=human: herdr server status cannot be read without both herdr and jq on the runtime PATH\ncheck entrypoint-link=skip: this run did not come through the fixed remote entrypoint\naction: herdr: install herdr from https://herdr.dev on that account, or add a ~/.local/bin wrapper for it; a remote second mate always runs on the Herdr backend\naction: remote-job-worker: rerun this command with --fix to write dev.firstmate.remote-job\naction: remote-job-worker-loaded: rerun this command with --fix to bootstrap the worker\naction: launchagent: rerun this command with --fix to install it\naction: launchagent-loaded: rerun this command with --fix to bootstrap and start it\naction: herdr-server: install the missing tool reported above, then rerun this command\nerror: required tools do not resolve on the remote runtime PATH: herdr\nfix: install each one where it resolves on the path reported above, or put a wrapper script for it in /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/.local/bin, which is always on that PATH.\nfix: tools in an unselected nvm version or outside the discovered asdf or mise paths need an absolute wrapper; see docs/remote-secondmates.md for the wrapper recipe.\nerror: this host is not ready for a remote second mate; unresolved: herdr remote-job-worker remote-job-worker-loaded launchagent launchagent-loaded herdr-server'
++ DOCTOR_RC=1
++ set -e
++ expect_code 1 1 'a host without herdr was reported ready'
++ local expected=1 actual=1 'label=a host without herdr was reported ready'
++ '[' 1 = 1 ']'
++ assert_contains $'mode=check\npath=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/.local/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools:/usr/bin:/bin:/usr/sbin:/sbin\nentrypoint=no\nnote: not launched through the fixed remote entrypoint; the reported PATH is this caller environment.\nplatform=darwin\nrequired git=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/git\nrequired jq=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/jq\nrequired herdr=MISSING\nrequired tasks-axi=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/tasks-axi\nrequired treehouse=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/treehouse\nrequired harness=claude:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/claude\noptional tmux=absent\noptional no-mistakes=absent\noptional gh=absent\ncheck herdr=human: the herdr CLI does not resolve on the remote runtime PATH\ncheck gui-session=ok: gui/501\ncheck remote-job-worker=fixable: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/Library/LaunchAgents/dev.firstmate.remote-job.plist does not match the Firstmate-owned Aqua worker contract\ncheck remote-job-worker-loaded=fixable: dev.firstmate.remote-job is not loaded in gui/501\ncheck remote-job-probe=ok: the remote job worker published a fresh heartbeat\ncheck launchagent=fixable: no Firstmate herdr launch agent at /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist\ncheck launchagent-scope=skip: no launch agent is installed yet\ncheck launchagent-loaded=fixable: dev.firstmate.herdr.fm-remote is not loaded into gui/501\ncheck herdr-server=human: herdr server status cannot be read without both herdr and jq on the runtime PATH\ncheck entrypoint-link=skip: this run did not come through the fixed remote entrypoint\naction: herdr: install herdr from https://herdr.dev on that account, or add a ~/.local/bin wrapper for it; a remote second mate always runs on the Herdr backend\naction: remote-job-worker: rerun this command with --fix to write dev.firstmate.remote-job\naction: remote-job-worker-loaded: rerun this command with --fix to bootstrap the worker\naction: launchagent: rerun this command with --fix to install it\naction: launchagent-loaded: rerun this command with --fix to bootstrap and start it\naction: herdr-server: install the missing tool reported above, then rerun this command\nerror: required tools do not resolve on the remote runtime PATH: herdr\nfix: install each one where it resolves on the path reported above, or put a wrapper script for it in /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/.local/bin, which is always on that PATH.\nfix: tools in an unselected nvm version or outside the discovered asdf or mise paths need an absolute wrapper; see docs/remote-secondmates.md for the wrapper recipe.\nerror: this host is not ready for a remote second mate; unresolved: herdr remote-job-worker remote-job-worker-loaded launchagent launchagent-loaded herdr-server' 'check herdr=human:' 'a missing herdr CLI was not tagged as a human gap'
++ case "$1" in
++ :
++ assert_contains $'mode=check\npath=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/.local/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools:/usr/bin:/bin:/usr/sbin:/sbin\nentrypoint=no\nnote: not launched through the fixed remote entrypoint; the reported PATH is this caller environment.\nplatform=darwin\nrequired git=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/git\nrequired jq=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/jq\nrequired herdr=MISSING\nrequired tasks-axi=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/tasks-axi\nrequired treehouse=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/treehouse\nrequired harness=claude:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/claude\noptional tmux=absent\noptional no-mistakes=absent\noptional gh=absent\ncheck herdr=human: the herdr CLI does not resolve on the remote runtime PATH\ncheck gui-session=ok: gui/501\ncheck remote-job-worker=fixable: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/Library/LaunchAgents/dev.firstmate.remote-job.plist does not match the Firstmate-owned Aqua worker contract\ncheck remote-job-worker-loaded=fixable: dev.firstmate.remote-job is not loaded in gui/501\ncheck remote-job-probe=ok: the remote job worker published a fresh heartbeat\ncheck launchagent=fixable: no Firstmate herdr launch agent at /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist\ncheck launchagent-scope=skip: no launch agent is installed yet\ncheck launchagent-loaded=fixable: dev.firstmate.herdr.fm-remote is not loaded into gui/501\ncheck herdr-server=human: herdr server status cannot be read without both herdr and jq on the runtime PATH\ncheck entrypoint-link=skip: this run did not come through the fixed remote entrypoint\naction: herdr: install herdr from https://herdr.dev on that account, or add a ~/.local/bin wrapper for it; a remote second mate always runs on the Herdr backend\naction: remote-job-worker: rerun this command with --fix to write dev.firstmate.remote-job\naction: remote-job-worker-loaded: rerun this command with --fix to bootstrap the worker\naction: launchagent: rerun this command with --fix to install it\naction: launchagent-loaded: rerun this command with --fix to bootstrap and start it\naction: herdr-server: install the missing tool reported above, then rerun this command\nerror: required tools do not resolve on the remote runtime PATH: herdr\nfix: install each one where it resolves on the path reported above, or put a wrapper script for it in /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/.local/bin, which is always on that PATH.\nfix: tools in an unselected nvm version or outside the discovered asdf or mise paths need an absolute wrapper; see docs/remote-secondmates.md for the wrapper recipe.\nerror: this host is not ready for a remote second mate; unresolved: herdr remote-job-worker remote-job-worker-loaded launchagent launchagent-loaded herdr-server' 'action: herdr:' 'a missing herdr CLI came with no operator action'
++ case "$1" in
++ :
++ doctor --fix
++ set +e
+++ HOME=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home
+++ FM_HOME=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/project-home
+++ PATH=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/.local/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools:/usr/bin:/bin:/usr/sbin:/sbin
+++ FM_FAKE_STATE=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/state
+++ FM_FAKE_LAUNCHCTL_LOG=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/state/launchctl.log
+++ FM_FAKE_FORBIDDEN_LOG=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/state/forbidden.log
+++ FM_FAKE_HERDR_RUNNING=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/state/herdr.running
+++ FM_FAKE_HERDR_BIN=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/herdr
+++ FM_FAKE_HERDR_SOCKET=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/state/herdr.sock
+++ FM_FAKE_GUARD=/Users/control/.no-mistakes/worktrees/874f0de57f61/01M2JB7GN66X3YXFGKGFQ8P3FR/bin/fm-remote-herdr-guard.sh
+++ FM_FAKE_AQUA_PID=86451
+++ FM_FAKE_PLIST=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist
+++ FM_FAKE_JOB_PLIST=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/Library/LaunchAgents/dev.firstmate.remote-job.plist
+++ FM_FAKE_JOB_WORKER=/Users/control/.no-mistakes/worktrees/874f0de57f61/01M2JB7GN66X3YXFGKGFQ8P3FR/bin/fm-remote-job-worker.sh
+++ FM_FAKE_LAUNCH_AGENT_LOG=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/Library/Logs/dev.firstmate.herdr.fm-remote.log
+++ FM_FAKE_LOGIN_SHELL=/bin/sh
+++ FM_FAKE_SECOND_LOGIN_SHELL=
+++ FM_FAKE_DSCL_FAIL=0
+++ FM_FAKE_DSCL_HANG=0
++++ '[' 0 = 1 ']'
++++ printf %s /bin/sh
+++ FM_LAUNCH_AGENT_SHELL=/bin/sh
+++ SHELL=/bin/zsh
+++ FM_REMOTE_JOB_ACTIVE=1
+++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M2JB7GN66X3YXFGKGFQ8P3FR/bin/fm-remote-doctor.sh --fix
++ DOCTOR_OUT=$'mode=fix\npath=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/.local/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools:/usr/bin:/bin:/usr/sbin:/sbin\nentrypoint=no\nnote: not launched through the fixed remote entrypoint; the reported PATH is this caller environment.\nplatform=darwin\nfix remote-job-worker=applied: installed or reloaded dev.firstmate.remote-job\nfix launchagent=failed: herdr does not resolve, so no launch agent was written\nfix launchagent-loaded=failed: there is no launch agent to load at /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist\nrequired git=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/git\nrequired jq=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/jq\nrequired herdr=MISSING\nrequired tasks-axi=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/tasks-axi\nrequired treehouse=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/treehouse\nrequired harness=claude:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/claude\noptional tmux=absent\noptional no-mistakes=absent\noptional gh=absent\ncheck herdr=human: the herdr CLI does not resolve on the remote runtime PATH\ncheck gui-session=ok: gui/501\ncheck remote-job-worker=ok: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/Library/LaunchAgents/dev.firstmate.remote-job.plist matches the Firstmate-owned Aqua worker contract\ncheck remote-job-worker-loaded=ok: dev.firstmate.remote-job is loaded in gui/501\ncheck remote-job-probe=ok: the remote job worker published a fresh heartbeat\ncheck launchagent=fixable: no Firstmate herdr launch agent at /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist\ncheck launchagent-scope=skip: no launch agent is installed yet\ncheck launchagent-loaded=fixable: dev.firstmate.herdr.fm-remote is not loaded into gui/501\ncheck herdr-server=human: herdr server status cannot be read without both herdr and jq on the runtime PATH\ncheck entrypoint-link=skip: this run did not come through the fixed remote entrypoint\naction: herdr: install herdr from https://herdr.dev on that account, or add a ~/.local/bin wrapper for it; a remote second mate always runs on the Herdr backend\naction: launchagent: rerun this command with --fix to install it\naction: launchagent-loaded: rerun this command with --fix to bootstrap and start it\naction: herdr-server: install the missing tool reported above, then rerun this command\nerror: required tools do not resolve on the remote runtime PATH: herdr\nfix: install each one where it resolves on the path reported above, or put a wrapper script for it in /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/.local/bin, which is always on that PATH.\nfix: tools in an unselected nvm version or outside the discovered asdf or mise paths need an absolute wrapper; see docs/remote-secondmates.md for the wrapper recipe.\nerror: this host is not ready for a remote second mate; unresolved: herdr launchagent launchagent-loaded herdr-server'
++ DOCTOR_RC=1
++ set -e
++ expect_code 1 1 '--fix reported a host without herdr as ready'
++ local expected=1 actual=1 'label=--fix reported a host without herdr as ready'
++ '[' 1 = 1 ']'
++ assert_contains $'mode=fix\npath=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/.local/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools:/usr/bin:/bin:/usr/sbin:/sbin\nentrypoint=no\nnote: not launched through the fixed remote entrypoint; the reported PATH is this caller environment.\nplatform=darwin\nfix remote-job-worker=applied: installed or reloaded dev.firstmate.remote-job\nfix launchagent=failed: herdr does not resolve, so no launch agent was written\nfix launchagent-loaded=failed: there is no launch agent to load at /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist\nrequired git=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/git\nrequired jq=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/jq\nrequired herdr=MISSING\nrequired tasks-axi=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/tasks-axi\nrequired treehouse=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/treehouse\nrequired harness=claude:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/claude\noptional tmux=absent\noptional no-mistakes=absent\noptional gh=absent\ncheck herdr=human: the herdr CLI does not resolve on the remote runtime PATH\ncheck gui-session=ok: gui/501\ncheck remote-job-worker=ok: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/Library/LaunchAgents/dev.firstmate.remote-job.plist matches the Firstmate-owned Aqua worker contract\ncheck remote-job-worker-loaded=ok: dev.firstmate.remote-job is loaded in gui/501\ncheck remote-job-probe=ok: the remote job worker published a fresh heartbeat\ncheck launchagent=fixable: no Firstmate herdr launch agent at /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist\ncheck launchagent-scope=skip: no launch agent is installed yet\ncheck launchagent-loaded=fixable: dev.firstmate.herdr.fm-remote is not loaded into gui/501\ncheck herdr-server=human: herdr server status cannot be read without both herdr and jq on the runtime PATH\ncheck entrypoint-link=skip: this run did not come through the fixed remote entrypoint\naction: herdr: install herdr from https://herdr.dev on that account, or add a ~/.local/bin wrapper for it; a remote second mate always runs on the Herdr backend\naction: launchagent: rerun this command with --fix to install it\naction: launchagent-loaded: rerun this command with --fix to bootstrap and start it\naction: herdr-server: install the missing tool reported above, then rerun this command\nerror: required tools do not resolve on the remote runtime PATH: herdr\nfix: install each one where it resolves on the path reported above, or put a wrapper script for it in /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/.local/bin, which is always on that PATH.\nfix: tools in an unselected nvm version or outside the discovered asdf or mise paths need an absolute wrapper; see docs/remote-secondmates.md for the wrapper recipe.\nerror: this host is not ready for a remote second mate; unresolved: herdr launchagent launchagent-loaded herdr-server' 'check herdr=human:' '--fix stopped reporting the missing herdr CLI'
++ case "$1" in
++ :
++ assert_not_contains $'mode=fix\npath=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/.local/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools:/usr/bin:/bin:/usr/sbin:/sbin\nentrypoint=no\nnote: not launched through the fixed remote entrypoint; the reported PATH is this caller environment.\nplatform=darwin\nfix remote-job-worker=applied: installed or reloaded dev.firstmate.remote-job\nfix launchagent=failed: herdr does not resolve, so no launch agent was written\nfix launchagent-loaded=failed: there is no launch agent to load at /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist\nrequired git=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/git\nrequired jq=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/jq\nrequired herdr=MISSING\nrequired tasks-axi=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/tasks-axi\nrequired treehouse=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/treehouse\nrequired harness=claude:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/bin/claude\noptional tmux=absent\noptional no-mistakes=absent\noptional gh=absent\ncheck herdr=human: the herdr CLI does not resolve on the remote runtime PATH\ncheck gui-session=ok: gui/501\ncheck remote-job-worker=ok: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/Library/LaunchAgents/dev.firstmate.remote-job.plist matches the Firstmate-owned Aqua worker contract\ncheck remote-job-worker-loaded=ok: dev.firstmate.remote-job is loaded in gui/501\ncheck remote-job-probe=ok: the remote job worker published a fresh heartbeat\ncheck launchagent=fixable: no Firstmate herdr launch agent at /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist\ncheck launchagent-scope=skip: no launch agent is installed yet\ncheck launchagent-loaded=fixable: dev.firstmate.herdr.fm-remote is not loaded into gui/501\ncheck herdr-server=human: herdr server status cannot be read without both herdr and jq on the runtime PATH\ncheck entrypoint-link=skip: this run did not come through the fixed remote entrypoint\naction: herdr: install herdr from https://herdr.dev on that account, or add a ~/.local/bin wrapper for it; a remote second mate always runs on the Herdr backend\naction: launchagent: rerun this command with --fix to install it\naction: launchagent-loaded: rerun this command with --fix to bootstrap and start it\naction: herdr-server: install the missing tool reported above, then rerun this command\nerror: required tools do not resolve on the remote runtime PATH: herdr\nfix: install each one where it resolves on the path reported above, or put a wrapper script for it in /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/.local/bin, which is always on that PATH.\nfix: tools in an unselected nvm version or outside the discovered asdf or mise paths need an absolute wrapper; see docs/remote-secondmates.md for the wrapper recipe.\nerror: this host is not ready for a remote second mate; unresolved: herdr launchagent launchagent-loaded herdr-server' 'fix herdr=applied' '--fix claimed to have installed herdr'
++ case "$1" in
++ :
++ assert_no_dangerous_calls 'the doctor reached for auto-login, FileVault, or the keychain'
++ '[' '!' -s /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/state/forbidden.log ']'
++ assert_absent /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/Library/Preferences/com.apple.loginwindow.plist 'the doctor wrote a loginwindow preference'
++ '[' '!' -e /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/Library/Preferences/com.apple.loginwindow.plist ']'
++ assert_absent /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/kcpassword 'the doctor wrote an auto-login password'
++ '[' '!' -e /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case1/home/kcpassword ']'
++ pass 'a missing herdr CLI is a human gap that --fix never claims to close'
++ printf 'ok - %s\n' 'a missing herdr CLI is a human gap that --fix never claims to close'
 ok - a missing herdr CLI is a human gap that --fix never claims to close
++ new_case Darwin with-herdr gui
++ local platform=Darwin want_herdr=with-herdr want_gui=gui
++ unset CASE_REMOTE_JOB_ACTIVE
++ unset CASE_DSCL_FAIL
++ unset CASE_DSCL_HANG
++ unset CASE_SECOND_LOGIN_SHELL
++ unset CASE_ENV_SHELL
++ unset CASE_RESOLVE_DSCL
++ CASE_N=2
++ CASE_LOGIN_SHELL=/bin/sh
++ CASE_DIR=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2
++ CASE_BIN=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin
++ CASE_HOME=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home
++ CASE_PROJECT_HOME=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/project-home
++ CASE_STATE=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/state
++ CASE_LAUNCHCTL_LOG=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/state/launchctl.log
++ CASE_FORBIDDEN_LOG=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/state/forbidden.log
++ CASE_HERDR_RUNNING=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/state/herdr.running
++ CASE_PLIST=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist
++ CASE_INTERACTIVE_PLIST=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.herdr.plist
++ CASE_JOB_PLIST=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.remote-job.plist
++ mkdir -p /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/project-home /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/state
++ printf 'false\n'
++ :
++ :
++ '[' gui '!=' gui ']'
++ touch /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/state/gui-session
++ fm_fake_uname /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin Darwin
++ local fakebin=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin platform=Darwin
++ printf '%s\n' Darwin
++ /usr/bin/uname -s
++ cat
++ cat
++ chmod +x /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/uname /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/stat
++ cat
++ local forbidden
++ for forbidden in fdesetup security defaults
++ cat
++ chmod +x /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/fdesetup
++ for forbidden in fdesetup security defaults
++ cat
++ chmod +x /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/security
++ for forbidden in fdesetup security defaults
++ cat
++ chmod +x /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/defaults
++ cat
++ chmod +x /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/lsof
++ cat
++ '[' with-herdr = with-herdr ']'
++ cat
++ chmod +x /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/herdr
++ cat
++ cat
++ cat
++ chmod +x /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/uname /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/launchctl /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/dscl /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/tasks-axi /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/treehouse /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/claude
++ cat
++ chmod +x /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/sleep
+++ dirname /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.herdr.plist
++ mkdir -p /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents
++ cat
++ cp /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.herdr.plist /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/state/interactive-before.plist
++ touch /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/state/interactive-loaded
++ doctor
++ set +e
+++ HOME=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home
+++ FM_HOME=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/project-home
+++ PATH=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/.local/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools:/usr/bin:/bin:/usr/sbin:/sbin
+++ FM_FAKE_STATE=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/state
+++ FM_FAKE_LAUNCHCTL_LOG=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/state/launchctl.log
+++ FM_FAKE_FORBIDDEN_LOG=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/state/forbidden.log
+++ FM_FAKE_HERDR_RUNNING=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/state/herdr.running
+++ FM_FAKE_HERDR_BIN=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/herdr
+++ FM_FAKE_HERDR_SOCKET=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/state/herdr.sock
+++ FM_FAKE_GUARD=/Users/control/.no-mistakes/worktrees/874f0de57f61/01M2JB7GN66X3YXFGKGFQ8P3FR/bin/fm-remote-herdr-guard.sh
+++ FM_FAKE_AQUA_PID=86451
+++ FM_FAKE_PLIST=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist
+++ FM_FAKE_JOB_PLIST=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.remote-job.plist
+++ FM_FAKE_JOB_WORKER=/Users/control/.no-mistakes/worktrees/874f0de57f61/01M2JB7GN66X3YXFGKGFQ8P3FR/bin/fm-remote-job-worker.sh
+++ FM_FAKE_LAUNCH_AGENT_LOG=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/Logs/dev.firstmate.herdr.fm-remote.log
+++ FM_FAKE_LOGIN_SHELL=/bin/sh
+++ FM_FAKE_SECOND_LOGIN_SHELL=
+++ FM_FAKE_DSCL_FAIL=0
+++ FM_FAKE_DSCL_HANG=0
++++ '[' 0 = 1 ']'
++++ printf %s /bin/sh
+++ FM_LAUNCH_AGENT_SHELL=/bin/sh
+++ SHELL=/bin/zsh
+++ FM_REMOTE_JOB_ACTIVE=1
+++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M2JB7GN66X3YXFGKGFQ8P3FR/bin/fm-remote-doctor.sh
++ DOCTOR_OUT=$'mode=check\npath=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/.local/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools:/usr/bin:/bin:/usr/sbin:/sbin\nentrypoint=no\nnote: not launched through the fixed remote entrypoint; the reported PATH is this caller environment.\nplatform=darwin\nrequired git=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/git\nrequired jq=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/jq\nrequired herdr=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/herdr\nrequired tasks-axi=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/tasks-axi\nrequired treehouse=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/treehouse\nrequired harness=claude:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/claude\noptional tmux=absent\noptional no-mistakes=absent\noptional gh=absent\ncheck herdr=ok: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/herdr\ncheck gui-session=ok: gui/501\ncheck remote-job-worker=fixable: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.remote-job.plist does not match the Firstmate-owned Aqua worker contract\ncheck remote-job-worker-loaded=fixable: dev.firstmate.remote-job is not loaded in gui/501\ncheck remote-job-probe=ok: the remote job worker published a fresh heartbeat\ncheck launchagent=fixable: no Firstmate herdr launch agent at /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist\ncheck launchagent-scope=skip: no launch agent is installed yet\ncheck launchagent-loaded=fixable: dev.firstmate.herdr.fm-remote is not loaded into gui/501\ncheck herdr-server=fixable: the herdr server for session fm-remote is not running\ncheck entrypoint-link=skip: this run did not come through the fixed remote entrypoint\naction: remote-job-worker: rerun this command with --fix to write dev.firstmate.remote-job\naction: remote-job-worker-loaded: rerun this command with --fix to bootstrap the worker\naction: launchagent: rerun this command with --fix to install it\naction: launchagent-loaded: rerun this command with --fix to bootstrap and start it\naction: herdr-server: rerun this command with --fix to start it\nerror: this host is not ready for a remote second mate; unresolved: remote-job-worker remote-job-worker-loaded launchagent launchagent-loaded herdr-server'
++ DOCTOR_RC=1
++ set -e
++ expect_code 1 1 'a host with no launch agent was reported ready'
++ local expected=1 actual=1 'label=a host with no launch agent was reported ready'
++ '[' 1 = 1 ']'
++ assert_contains $'mode=check\npath=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/.local/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools:/usr/bin:/bin:/usr/sbin:/sbin\nentrypoint=no\nnote: not launched through the fixed remote entrypoint; the reported PATH is this caller environment.\nplatform=darwin\nrequired git=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/git\nrequired jq=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/jq\nrequired herdr=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/herdr\nrequired tasks-axi=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/tasks-axi\nrequired treehouse=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/treehouse\nrequired harness=claude:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/claude\noptional tmux=absent\noptional no-mistakes=absent\noptional gh=absent\ncheck herdr=ok: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/herdr\ncheck gui-session=ok: gui/501\ncheck remote-job-worker=fixable: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.remote-job.plist does not match the Firstmate-owned Aqua worker contract\ncheck remote-job-worker-loaded=fixable: dev.firstmate.remote-job is not loaded in gui/501\ncheck remote-job-probe=ok: the remote job worker published a fresh heartbeat\ncheck launchagent=fixable: no Firstmate herdr launch agent at /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist\ncheck launchagent-scope=skip: no launch agent is installed yet\ncheck launchagent-loaded=fixable: dev.firstmate.herdr.fm-remote is not loaded into gui/501\ncheck herdr-server=fixable: the herdr server for session fm-remote is not running\ncheck entrypoint-link=skip: this run did not come through the fixed remote entrypoint\naction: remote-job-worker: rerun this command with --fix to write dev.firstmate.remote-job\naction: remote-job-worker-loaded: rerun this command with --fix to bootstrap the worker\naction: launchagent: rerun this command with --fix to install it\naction: launchagent-loaded: rerun this command with --fix to bootstrap and start it\naction: herdr-server: rerun this command with --fix to start it\nerror: this host is not ready for a remote second mate; unresolved: remote-job-worker remote-job-worker-loaded launchagent launchagent-loaded herdr-server' 'check herdr=ok:' 'the fake herdr CLI was not detected'
++ case "$1" in
++ :
++ assert_contains $'mode=check\npath=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/.local/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools:/usr/bin:/bin:/usr/sbin:/sbin\nentrypoint=no\nnote: not launched through the fixed remote entrypoint; the reported PATH is this caller environment.\nplatform=darwin\nrequired git=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/git\nrequired jq=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/jq\nrequired herdr=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/herdr\nrequired tasks-axi=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/tasks-axi\nrequired treehouse=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/treehouse\nrequired harness=claude:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/claude\noptional tmux=absent\noptional no-mistakes=absent\noptional gh=absent\ncheck herdr=ok: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/herdr\ncheck gui-session=ok: gui/501\ncheck remote-job-worker=fixable: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.remote-job.plist does not match the Firstmate-owned Aqua worker contract\ncheck remote-job-worker-loaded=fixable: dev.firstmate.remote-job is not loaded in gui/501\ncheck remote-job-probe=ok: the remote job worker published a fresh heartbeat\ncheck launchagent=fixable: no Firstmate herdr launch agent at /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist\ncheck launchagent-scope=skip: no launch agent is installed yet\ncheck launchagent-loaded=fixable: dev.firstmate.herdr.fm-remote is not loaded into gui/501\ncheck herdr-server=fixable: the herdr server for session fm-remote is not running\ncheck entrypoint-link=skip: this run did not come through the fixed remote entrypoint\naction: remote-job-worker: rerun this command with --fix to write dev.firstmate.remote-job\naction: remote-job-worker-loaded: rerun this command with --fix to bootstrap the worker\naction: launchagent: rerun this command with --fix to install it\naction: launchagent-loaded: rerun this command with --fix to bootstrap and start it\naction: herdr-server: rerun this command with --fix to start it\nerror: this host is not ready for a remote second mate; unresolved: remote-job-worker remote-job-worker-loaded launchagent launchagent-loaded herdr-server' 'check gui-session=ok:' 'an existing login session was not detected'
++ case "$1" in
++ :
++ assert_contains $'mode=check\npath=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/.local/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools:/usr/bin:/bin:/usr/sbin:/sbin\nentrypoint=no\nnote: not launched through the fixed remote entrypoint; the reported PATH is this caller environment.\nplatform=darwin\nrequired git=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/git\nrequired jq=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/jq\nrequired herdr=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/herdr\nrequired tasks-axi=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/tasks-axi\nrequired treehouse=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/treehouse\nrequired harness=claude:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/claude\noptional tmux=absent\noptional no-mistakes=absent\noptional gh=absent\ncheck herdr=ok: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/herdr\ncheck gui-session=ok: gui/501\ncheck remote-job-worker=fixable: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.remote-job.plist does not match the Firstmate-owned Aqua worker contract\ncheck remote-job-worker-loaded=fixable: dev.firstmate.remote-job is not loaded in gui/501\ncheck remote-job-probe=ok: the remote job worker published a fresh heartbeat\ncheck launchagent=fixable: no Firstmate herdr launch agent at /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist\ncheck launchagent-scope=skip: no launch agent is installed yet\ncheck launchagent-loaded=fixable: dev.firstmate.herdr.fm-remote is not loaded into gui/501\ncheck herdr-server=fixable: the herdr server for session fm-remote is not running\ncheck entrypoint-link=skip: this run did not come through the fixed remote entrypoint\naction: remote-job-worker: rerun this command with --fix to write dev.firstmate.remote-job\naction: remote-job-worker-loaded: rerun this command with --fix to bootstrap the worker\naction: launchagent: rerun this command with --fix to install it\naction: launchagent-loaded: rerun this command with --fix to bootstrap and start it\naction: herdr-server: rerun this command with --fix to start it\nerror: this host is not ready for a remote second mate; unresolved: remote-job-worker remote-job-worker-loaded launchagent launchagent-loaded herdr-server' 'check launchagent=fixable:' 'an absent launch agent was not tagged fixable'
++ case "$1" in
++ :
++ assert_contains $'mode=check\npath=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/.local/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools:/usr/bin:/bin:/usr/sbin:/sbin\nentrypoint=no\nnote: not launched through the fixed remote entrypoint; the reported PATH is this caller environment.\nplatform=darwin\nrequired git=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/git\nrequired jq=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/jq\nrequired herdr=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/herdr\nrequired tasks-axi=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/tasks-axi\nrequired treehouse=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/treehouse\nrequired harness=claude:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/claude\noptional tmux=absent\noptional no-mistakes=absent\noptional gh=absent\ncheck herdr=ok: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/herdr\ncheck gui-session=ok: gui/501\ncheck remote-job-worker=fixable: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.remote-job.plist does not match the Firstmate-owned Aqua worker contract\ncheck remote-job-worker-loaded=fixable: dev.firstmate.remote-job is not loaded in gui/501\ncheck remote-job-probe=ok: the remote job worker published a fresh heartbeat\ncheck launchagent=fixable: no Firstmate herdr launch agent at /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist\ncheck launchagent-scope=skip: no launch agent is installed yet\ncheck launchagent-loaded=fixable: dev.firstmate.herdr.fm-remote is not loaded into gui/501\ncheck herdr-server=fixable: the herdr server for session fm-remote is not running\ncheck entrypoint-link=skip: this run did not come through the fixed remote entrypoint\naction: remote-job-worker: rerun this command with --fix to write dev.firstmate.remote-job\naction: remote-job-worker-loaded: rerun this command with --fix to bootstrap the worker\naction: launchagent: rerun this command with --fix to install it\naction: launchagent-loaded: rerun this command with --fix to bootstrap and start it\naction: herdr-server: rerun this command with --fix to start it\nerror: this host is not ready for a remote second mate; unresolved: remote-job-worker remote-job-worker-loaded launchagent launchagent-loaded herdr-server' dev.firstmate.herdr.fm-remote.plist 'the gap did not name the launch agent path'
++ case "$1" in
++ :
++ assert_contains $'mode=check\npath=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/.local/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools:/usr/bin:/bin:/usr/sbin:/sbin\nentrypoint=no\nnote: not launched through the fixed remote entrypoint; the reported PATH is this caller environment.\nplatform=darwin\nrequired git=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/git\nrequired jq=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/jq\nrequired herdr=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/herdr\nrequired tasks-axi=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/tasks-axi\nrequired treehouse=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/treehouse\nrequired harness=claude:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/claude\noptional tmux=absent\noptional no-mistakes=absent\noptional gh=absent\ncheck herdr=ok: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/herdr\ncheck gui-session=ok: gui/501\ncheck remote-job-worker=fixable: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.remote-job.plist does not match the Firstmate-owned Aqua worker contract\ncheck remote-job-worker-loaded=fixable: dev.firstmate.remote-job is not loaded in gui/501\ncheck remote-job-probe=ok: the remote job worker published a fresh heartbeat\ncheck launchagent=fixable: no Firstmate herdr launch agent at /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist\ncheck launchagent-scope=skip: no launch agent is installed yet\ncheck launchagent-loaded=fixable: dev.firstmate.herdr.fm-remote is not loaded into gui/501\ncheck herdr-server=fixable: the herdr server for session fm-remote is not running\ncheck entrypoint-link=skip: this run did not come through the fixed remote entrypoint\naction: remote-job-worker: rerun this command with --fix to write dev.firstmate.remote-job\naction: remote-job-worker-loaded: rerun this command with --fix to bootstrap the worker\naction: launchagent: rerun this command with --fix to install it\naction: launchagent-loaded: rerun this command with --fix to bootstrap and start it\naction: herdr-server: rerun this command with --fix to start it\nerror: this host is not ready for a remote second mate; unresolved: remote-job-worker remote-job-worker-loaded launchagent launchagent-loaded herdr-server' 'check herdr-server=fixable:' 'a stopped herdr server was not tagged fixable'
++ case "$1" in
++ :
++ assert_contains $'mode=check\npath=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/.local/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools:/usr/bin:/bin:/usr/sbin:/sbin\nentrypoint=no\nnote: not launched through the fixed remote entrypoint; the reported PATH is this caller environment.\nplatform=darwin\nrequired git=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/git\nrequired jq=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/jq\nrequired herdr=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/herdr\nrequired tasks-axi=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/tasks-axi\nrequired treehouse=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/treehouse\nrequired harness=claude:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/claude\noptional tmux=absent\noptional no-mistakes=absent\noptional gh=absent\ncheck herdr=ok: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/herdr\ncheck gui-session=ok: gui/501\ncheck remote-job-worker=fixable: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.remote-job.plist does not match the Firstmate-owned Aqua worker contract\ncheck remote-job-worker-loaded=fixable: dev.firstmate.remote-job is not loaded in gui/501\ncheck remote-job-probe=ok: the remote job worker published a fresh heartbeat\ncheck launchagent=fixable: no Firstmate herdr launch agent at /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist\ncheck launchagent-scope=skip: no launch agent is installed yet\ncheck launchagent-loaded=fixable: dev.firstmate.herdr.fm-remote is not loaded into gui/501\ncheck herdr-server=fixable: the herdr server for session fm-remote is not running\ncheck entrypoint-link=skip: this run did not come through the fixed remote entrypoint\naction: remote-job-worker: rerun this command with --fix to write dev.firstmate.remote-job\naction: remote-job-worker-loaded: rerun this command with --fix to bootstrap the worker\naction: launchagent: rerun this command with --fix to install it\naction: launchagent-loaded: rerun this command with --fix to bootstrap and start it\naction: herdr-server: rerun this command with --fix to start it\nerror: this host is not ready for a remote second mate; unresolved: remote-job-worker remote-job-worker-loaded launchagent launchagent-loaded herdr-server' 'check remote-job-worker=fixable:' 'an absent remote job worker was not tagged fixable'
++ case "$1" in
++ :
++ assert_contains $'mode=check\npath=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/.local/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools:/usr/bin:/bin:/usr/sbin:/sbin\nentrypoint=no\nnote: not launched through the fixed remote entrypoint; the reported PATH is this caller environment.\nplatform=darwin\nrequired git=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/git\nrequired jq=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/jq\nrequired herdr=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/herdr\nrequired tasks-axi=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/tasks-axi\nrequired treehouse=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/treehouse\nrequired harness=claude:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/claude\noptional tmux=absent\noptional no-mistakes=absent\noptional gh=absent\ncheck herdr=ok: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/herdr\ncheck gui-session=ok: gui/501\ncheck remote-job-worker=fixable: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.remote-job.plist does not match the Firstmate-owned Aqua worker contract\ncheck remote-job-worker-loaded=fixable: dev.firstmate.remote-job is not loaded in gui/501\ncheck remote-job-probe=ok: the remote job worker published a fresh heartbeat\ncheck launchagent=fixable: no Firstmate herdr launch agent at /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist\ncheck launchagent-scope=skip: no launch agent is installed yet\ncheck launchagent-loaded=fixable: dev.firstmate.herdr.fm-remote is not loaded into gui/501\ncheck herdr-server=fixable: the herdr server for session fm-remote is not running\ncheck entrypoint-link=skip: this run did not come through the fixed remote entrypoint\naction: remote-job-worker: rerun this command with --fix to write dev.firstmate.remote-job\naction: remote-job-worker-loaded: rerun this command with --fix to bootstrap the worker\naction: launchagent: rerun this command with --fix to install it\naction: launchagent-loaded: rerun this command with --fix to bootstrap and start it\naction: herdr-server: rerun this command with --fix to start it\nerror: this host is not ready for a remote second mate; unresolved: remote-job-worker remote-job-worker-loaded launchagent launchagent-loaded herdr-server' 'check remote-job-worker-loaded=fixable:' 'an unloaded remote job worker was not tagged fixable'
++ case "$1" in
++ :
++ assert_contains $'mode=check\npath=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/.local/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools:/usr/bin:/bin:/usr/sbin:/sbin\nentrypoint=no\nnote: not launched through the fixed remote entrypoint; the reported PATH is this caller environment.\nplatform=darwin\nrequired git=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/git\nrequired jq=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/jq\nrequired herdr=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/herdr\nrequired tasks-axi=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/tasks-axi\nrequired treehouse=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/treehouse\nrequired harness=claude:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/claude\noptional tmux=absent\noptional no-mistakes=absent\noptional gh=absent\ncheck herdr=ok: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/herdr\ncheck gui-session=ok: gui/501\ncheck remote-job-worker=fixable: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.remote-job.plist does not match the Firstmate-owned Aqua worker contract\ncheck remote-job-worker-loaded=fixable: dev.firstmate.remote-job is not loaded in gui/501\ncheck remote-job-probe=ok: the remote job worker published a fresh heartbeat\ncheck launchagent=fixable: no Firstmate herdr launch agent at /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist\ncheck launchagent-scope=skip: no launch agent is installed yet\ncheck launchagent-loaded=fixable: dev.firstmate.herdr.fm-remote is not loaded into gui/501\ncheck herdr-server=fixable: the herdr server for session fm-remote is not running\ncheck entrypoint-link=skip: this run did not come through the fixed remote entrypoint\naction: remote-job-worker: rerun this command with --fix to write dev.firstmate.remote-job\naction: remote-job-worker-loaded: rerun this command with --fix to bootstrap the worker\naction: launchagent: rerun this command with --fix to install it\naction: launchagent-loaded: rerun this command with --fix to bootstrap and start it\naction: herdr-server: rerun this command with --fix to start it\nerror: this host is not ready for a remote second mate; unresolved: remote-job-worker remote-job-worker-loaded launchagent launchagent-loaded herdr-server' 'check remote-job-probe=ok:' 'the controlled job-worker probe was not reported'
++ case "$1" in
++ :
++ assert_absent /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist 'a read-only doctor run installed a launch agent'
++ '[' '!' -e /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist ']'
++ assert_absent /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.remote-job.plist 'a read-only doctor run installed a remote job worker'
++ '[' '!' -e /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.remote-job.plist ']'
++ '[' '!' -s /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/state/launchctl.log ']'
+++ cat /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/state/launchctl.log
++ assert_not_contains $'print gui/501\nprint gui/501/dev.firstmate.remote-job\nprint gui/501/dev.firstmate.herdr.fm-remote' bootstrap 'a read-only doctor run loaded a launch agent'
++ case "$1" in
++ :
++ pass 'an absent launch agent is a fixable gap and the read-only run changes nothing'
++ printf 'ok - %s\n' 'an absent launch agent is a fixable gap and the read-only run changes nothing'
 ok - an absent launch agent is a fixable gap and the read-only run changes nothing
-DEBUG_RC=1
-mode=fix
-path=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.fqCSf1/case2/home/.local/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.fqCSf1/case2/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.fqCSf1/tools:/usr/bin:/bin:/usr/sbin:/sbin
-entrypoint=no
-note: not launched through the fixed remote entrypoint; the reported PATH is this caller environment.
-platform=darwin
-fix remote-job-worker=applied: installed or reloaded dev.firstmate.remote-job
-fix launchagent=applied: wrote the Aqua-scoped dev.firstmate.herdr.fm-remote launch agent running /Users/control/.no-mistakes/worktrees/874f0de57f61/01M2J5C59A7B0PTGG3A0TDA626/bin/fm-remote-herdr-guard.sh for /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.fqCSf1/case2/bin/herdr via /bin/sh -l -c
-fix launchagent-loaded=failed: the herdr server for session fm-remote did not come up inside the Aqua launch agent within 10s
-required git=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.fqCSf1/tools/git
-required jq=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.fqCSf1/tools/jq
-required herdr=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.fqCSf1/case2/bin/herdr
-required tasks-axi=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.fqCSf1/case2/bin/tasks-axi
-required treehouse=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.fqCSf1/case2/bin/treehouse
-required harness=claude:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.fqCSf1/case2/bin/claude
-optional tmux=absent
-optional no-mistakes=absent
-optional gh=absent
-check herdr=ok: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.fqCSf1/case2/bin/herdr
-check gui-session=ok: gui/501
-check remote-job-worker=ok: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.fqCSf1/case2/home/Library/LaunchAgents/dev.firstmate.remote-job.plist matches the Firstmate-owned Aqua worker contract
-check remote-job-worker-loaded=ok: dev.firstmate.remote-job is loaded in gui/501
-check remote-job-probe=ok: the remote job worker published a fresh heartbeat
-check launchagent=ok: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.fqCSf1/case2/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist matches the Firstmate-owned contract
-check launchagent-scope=ok: LimitLoadToSessionType=Aqua
-check launchagent-loaded=ok: gui/501/dev.firstmate.herdr.fm-remote matches the effective contract
-check herdr-server=fixable: session fm-remote is served by pid 8839 born outside the Aqua login session (unknown), so its panes cannot reach the login keychain
-check entrypoint-link=skip: this run did not come through the fixed remote entrypoint
-action: herdr-server: rerun this command with --fix so the launch agent takes the session over (its current panes close and the parent firstmate relaunches its mates)
-error: this host is not ready for a remote second mate; unresolved: herdr-server
++ doctor --fix
++ set +e
+++ HOME=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home
+++ FM_HOME=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/project-home
+++ PATH=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/.local/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools:/usr/bin:/bin:/usr/sbin:/sbin
+++ FM_FAKE_STATE=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/state
+++ FM_FAKE_LAUNCHCTL_LOG=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/state/launchctl.log
+++ FM_FAKE_FORBIDDEN_LOG=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/state/forbidden.log
+++ FM_FAKE_HERDR_RUNNING=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/state/herdr.running
+++ FM_FAKE_HERDR_BIN=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/herdr
+++ FM_FAKE_HERDR_SOCKET=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/state/herdr.sock
+++ FM_FAKE_GUARD=/Users/control/.no-mistakes/worktrees/874f0de57f61/01M2JB7GN66X3YXFGKGFQ8P3FR/bin/fm-remote-herdr-guard.sh
+++ FM_FAKE_AQUA_PID=86451
+++ FM_FAKE_PLIST=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist
+++ FM_FAKE_JOB_PLIST=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.remote-job.plist
+++ FM_FAKE_JOB_WORKER=/Users/control/.no-mistakes/worktrees/874f0de57f61/01M2JB7GN66X3YXFGKGFQ8P3FR/bin/fm-remote-job-worker.sh
+++ FM_FAKE_LAUNCH_AGENT_LOG=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/Logs/dev.firstmate.herdr.fm-remote.log
+++ FM_FAKE_LOGIN_SHELL=/bin/sh
+++ FM_FAKE_SECOND_LOGIN_SHELL=
+++ FM_FAKE_DSCL_FAIL=0
+++ FM_FAKE_DSCL_HANG=0
++++ '[' 0 = 1 ']'
++++ printf %s /bin/sh
+++ FM_LAUNCH_AGENT_SHELL=/bin/sh
+++ SHELL=/bin/zsh
+++ FM_REMOTE_JOB_ACTIVE=1
+++ /Users/control/.no-mistakes/worktrees/874f0de57f61/01M2JB7GN66X3YXFGKGFQ8P3FR/bin/fm-remote-doctor.sh --fix
++ DOCTOR_OUT=$'mode=fix\npath=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/.local/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools:/usr/bin:/bin:/usr/sbin:/sbin\nentrypoint=no\nnote: not launched through the fixed remote entrypoint; the reported PATH is this caller environment.\nplatform=darwin\nfix remote-job-worker=applied: installed or reloaded dev.firstmate.remote-job\nfix launchagent=applied: wrote the Aqua-scoped dev.firstmate.herdr.fm-remote launch agent running /Users/control/.no-mistakes/worktrees/874f0de57f61/01M2JB7GN66X3YXFGKGFQ8P3FR/bin/fm-remote-herdr-guard.sh for /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/herdr via /bin/sh -l -c\nfix launchagent-loaded=failed: the herdr server for session fm-remote did not come up inside the Aqua launch agent within 10s\nrequired git=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/git\nrequired jq=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/tools/jq\nrequired herdr=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/herdr\nrequired tasks-axi=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/tasks-axi\nrequired treehouse=/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/treehouse\nrequired harness=claude:/private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/claude\noptional tmux=absent\noptional no-mistakes=absent\noptional gh=absent\ncheck herdr=ok: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/bin/herdr\ncheck gui-session=ok: gui/501\ncheck remote-job-worker=ok: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.remote-job.plist matches the Firstmate-owned Aqua worker contract\ncheck remote-job-worker-loaded=ok: dev.firstmate.remote-job is loaded in gui/501\ncheck remote-job-probe=ok: the remote job worker published a fresh heartbeat\ncheck launchagent=ok: /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy/case2/home/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist matches the Firstmate-owned contract\ncheck launchagent-scope=ok: LimitLoadToSessionType=Aqua\ncheck launchagent-loaded=ok: gui/501/dev.firstmate.herdr.fm-remote matches the effective contract\ncheck herdr-server=fixable: session fm-remote is served by pid 86451 born outside the Aqua login session (unknown), so its panes cannot reach the login keychain\ncheck entrypoint-link=skip: this run did not come through the fixed remote entrypoint\naction: herdr-server: rerun this command with --fix so the launch agent takes the session over (its current panes close and the parent firstmate relaunches its mates)\nerror: this host is not ready for a remote second mate; unresolved: herdr-server'
++ DOCTOR_RC=1
++ set -e
++ expect_code 0 1 '--fix left a repairable host unready'
++ local expected=0 actual=1 'label=--fix left a repairable host unready'
++ '[' 1 = 0 ']'
++ fail '--fix left a repairable host unready: expected exit 0, got 1'
++ printf 'not ok - %s\n' '--fix left a repairable host unready: expected exit 0, got 1'
 not ok - --fix left a repairable host unready: expected exit 0, got 1
++ exit 1
++ '[' -n '' ']'
++ '[' 5 -gt 0 ']'
++ kill 86451 86453 86455 86457 86459
++ fm_test_cleanup
++ local d
++ fm_test_reap_procevent_homes
++ local home claim_root $'seen=\n'
++ '[' -f /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//.fm-test-procevent.86374.QoGZXZ ']'
++ IFS=$'\t'
++ read -r home claim_root
++ rm -f /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//.fm-test-procevent.86374.QoGZXZ
++ for d in "${FM_TEST_CLEANUP_DIRS[@]:-}"
++ '[' -n '' ']'
++ '[' -f /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//.fm-test-cleanup.86374.ML1p9k ']'
++ IFS=
++ read -r d
++ '[' -n /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy ']'
++ rm -rf /private/var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T/fm-remote-doctor.unQ9gy
++ IFS=
++ read -r d
++ rm -f /var/folders/w7/jl8fwyn12ngg2h2sg073hrn80000gn/T//.fm-test-cleanup.86374.ML1p9k

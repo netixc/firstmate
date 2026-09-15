@@ -1,0 +1,14 @@
+$ PATH=<MINGW uname fixture> FM_HOME=<isolated> bin/fm-on.sh route fm-update.sh
+UNSUPPORTED_HOST: MINGW64_NT-10.0 - Firstmate hosts require macOS or Linux; native Windows, Git Bash, MSYS, and Cygwin are unsupported. WSL2 remains supported when Firstmate runs inside its Linux environment.
+exit=1
+local-home-created=no ssh-called=no
+
+$ PATH=<MINGW uname fixture> FM_HOME=<isolated> bin/fm-sessionstart-run.sh --source startup
+UNSUPPORTED_HOST: MINGW64_NT-10.0 - Firstmate hosts require macOS or Linux; native Windows, Git Bash, MSYS, and Cygwin are unsupported. WSL2 remains supported when Firstmate runs inside its Linux environment.
+exit=1
+session-home-created=no root-scope-touched=no
+
+$ PATH=<MINGW uname fixture> FM_REMOTE_JOB_STATE_ROOT=<isolated> bin/fm-remote-entrypoint.sh invalid
+UNSUPPORTED_HOST: MINGW64_NT-10.0 - Firstmate hosts require macOS or Linux; native Windows, Git Bash, MSYS, and Cygwin are unsupported. WSL2 remains supported when Firstmate runs inside its Linux environment.
+exit=64
+remote-state-created=no

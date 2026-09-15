@@ -1,3 +1,8 @@
+FM_TEST_BEGIN 2026-09-15T13:15:37Z tests/fm-remote-doctor.test.sh family=secondmate expected_gate_skip=none
 ok - a missing herdr CLI is a human gap that --fix never claims to close
 ok - an absent launch agent is a fixable gap and the read-only run changes nothing
 not ok - --fix left a repairable host unready: expected exit 0, got 1
+FM_TEST_END 2026-09-15T13:15:43Z tests/fm-remote-doctor.test.sh exit=1 duration_ms=6313 gate_skip=false
+FM_TEST_SUMMARY total=1 failed=1 skipped_gate=0 duration_ms=6404
+FM_TEST_SUMMARY_FAMILY family=secondmate count=1 duration_ms=6313 failed=1
+FM_TEST_SLOWEST rank=1 script=tests/fm-remote-doctor.test.sh duration_ms=6313

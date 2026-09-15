@@ -1,0 +1,38 @@
+FM_TEST_BEGIN 2026-09-15T13:21:30Z tests/fm-operational-input.test.sh family=pure-contract-unit expected_gate_skip=none
+ok - operational input: every current generic envelope retains its exact structured kind
+ok - operational input: the established from-firstmate carrier remains structurally typed and byte-compatible
+ok - operational input: untyped landed FIRSTMATE_OP transcripts are explicit legacy-operational input
+ok - operational input: historical prose compatibility is isolated from current parsing
+ok - operational input: quoted, ASCII-only, arbitrary-U+2063, altered-legacy, and label-only near misses stay genuine
+ok - operational input: the OpenCode adapter constructs through the canonical owner
+ok - operational input: current construction rejects legacy kinds and empty bodies
+FM_TEST_END 2026-09-15T13:21:30Z tests/fm-operational-input.test.sh exit=0 duration_ms=407 gate_skip=false
+FM_TEST_BEGIN 2026-09-15T13:21:30Z tests/fm-extension-binding.test.sh family=standalone expected_gate_skip=none
+ok - unknown extension conformance section selectors fail before setup
+not-autohandled: example-file (left for the handler; still unacknowledged)
+not-autohandled: flow-source (left for the handler; still unacknowledged)
+ok - the section coordinator propagates ordered failures and bounded cleanup
+ok - the shipped file-signal package is a runnable end-to-end external adapter
+ok - one external adapter registers, invokes, captures unhandled evidence, classifies, and terminally retires end to end
+not-autohandled: example-symlinked (left for the handler; still unacknowledged)
+ok - a home reached through a symlinked ancestor captures external evidence normally
+not-autohandled: remote-source (left for the handler; still unacknowledged)
+ok - handshake execution rejects and reaps foreground descendants
+
+all extension-binding tests passed
+ok - inner result.silent host crash releases the parent lifecycle lock before terminal retry
+ok - local binding retirement requires its exact identity and disables invocation
+
+all extension-binding tests passed
+ok - serialized remote binding crosses fm-on through addressed-home capture and retirement
+
+all extension-binding tests passed
+ok - independent extension conformance sections complete through isolated public homes
+
+all extension-binding tests passed
+FM_TEST_END 2026-09-15T13:21:47Z tests/fm-extension-binding.test.sh exit=0 duration_ms=16790 gate_skip=false
+FM_TEST_SUMMARY total=2 failed=0 skipped_gate=0 duration_ms=17454
+FM_TEST_SUMMARY_FAMILY family=pure-contract-unit count=1 duration_ms=407 failed=0
+FM_TEST_SUMMARY_FAMILY family=standalone count=1 duration_ms=16790 failed=0
+FM_TEST_SLOWEST rank=1 script=tests/fm-extension-binding.test.sh duration_ms=16790
+FM_TEST_SLOWEST rank=2 script=tests/fm-operational-input.test.sh duration_ms=407
