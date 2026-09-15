@@ -14,14 +14,21 @@ install_fixture() {
     "$fixture/.omp/extensions" \
     "$fixture/.opencode/plugins/lib" \
     "$fixture/bin" \
+    "$fixture/node_modules/@earendil-works/pi-ai" \
     "$fixture/node_modules/@earendil-works/pi-coding-agent" \
     "$fixture/node_modules/@earendil-works/pi-tui" \
     "$fixture/node_modules/typebox"
-  cp "$ROOT/.pi/extensions/fm-primary-pi-watch.ts" \
+  cp "$ROOT/.pi/extensions/fm-branch-supervision.ts" \
+    "$ROOT/.pi/extensions/fm-calm.ts" \
+    "$ROOT/.pi/extensions/fm-primary-pi-watch.ts" \
     "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$fixture/.pi/extensions/"
   cp "$ROOT/.pi/extensions/lib/fm-async-exec.ts" \
     "$ROOT/.pi/extensions/lib/fm-branch-dispatch.ts" \
+    "$ROOT/.pi/extensions/lib/fm-branch-model-picker.ts" \
+    "$ROOT/.pi/extensions/lib/fm-calm-assistant-layout.ts" \
+    "$ROOT/.pi/extensions/lib/fm-calm-operational-user-layout.ts" \
     "$ROOT/.pi/extensions/lib/fm-calm-visibility.ts" \
+    "$ROOT/.pi/extensions/lib/fm-calm-working-ship.ts" \
     "$ROOT/.pi/extensions/lib/fm-host-platform.ts" \
     "$ROOT/.pi/extensions/lib/fm-native-contract.ts" \
     "$ROOT/.pi/extensions/lib/fm-operational-input.ts" \
@@ -40,15 +47,41 @@ install_fixture() {
   chmod +x "$fixture/bin/"*.sh
   printf '%s\n' '{"name":"@earendil-works/pi-coding-agent","type":"module","exports":"./index.js"}' \
     > "$fixture/node_modules/@earendil-works/pi-coding-agent/package.json"
+  cat > "$fixture/node_modules/@earendil-works/pi-ai/package.json" <<'JSON'
+{"name":"@earendil-works/pi-ai","type":"module","exports":"./index.js"}
+JSON
+  cat > "$fixture/node_modules/@earendil-works/pi-ai/index.js" <<'JS'
+export function clampThinkingLevel(value) { return value; }
+export function getSupportedThinkingLevels() { return []; }
+JS
   cat > "$fixture/node_modules/@earendil-works/pi-coding-agent/index.js" <<'JS'
+export function createAgentSession() {}
+export function createBashToolDefinition() { return {}; }
+export function createEditToolDefinition() { return {}; }
+export function createFindToolDefinition() { return {}; }
+export function createGrepToolDefinition() { return {}; }
+export function createLsToolDefinition() { return {}; }
+export function createReadToolDefinition() { return {}; }
+export function createWriteToolDefinition() { return {}; }
+export function getAgentDir() { return ""; }
 export function getMarkdownTheme() { return {}; }
+export function keyHint() { return ""; }
+export class DefaultResourceLoader {}
+export class DynamicBorder {}
+export class ModelRuntime {}
+export class SessionManager {}
+export class ToolExecutionComponent {}
 export class UserMessageComponent { render() { return []; } invalidate() {} }
 JS
   printf '%s\n' '{"name":"@earendil-works/pi-tui","type":"module","exports":"./index.js"}' \
     > "$fixture/node_modules/@earendil-works/pi-tui/package.json"
   cat > "$fixture/node_modules/@earendil-works/pi-tui/index.js" <<'JS'
+export function fuzzyFilter() { return []; }
+export function getKeybindings() { return {}; }
 export class Box { addChild() {} clear() {} setBgFn() {} }
 export class Container {}
+export class Input {}
+export class SelectList {}
 export class Text {}
 JS
   printf '%s\n' '{"name":"typebox","type":"module","exports":"./index.js"}' \
@@ -139,6 +172,21 @@ for (const path of [
     sendUserMessage() {},
   });
   if (handlers.size !== 0 || registrations !== 0) throw new Error(`${path} activated on an unsupported host`);
+}
+for (const path of [
+  ".pi/extensions/fm-calm.ts",
+  ".pi/extensions/fm-branch-supervision.ts",
+]) {
+  let apiAccesses = 0;
+  const api = new Proxy({}, {
+    get() {
+      apiAccesses += 1;
+      return () => {};
+    },
+  });
+  const mod = await load(path);
+  mod.default(api);
+  if (apiAccesses !== 0) throw new Error(`${path} registered behavior on an unsupported host`);
 }
 const client = { session: { promptAsync: async () => { throw new Error("prompted on unsupported host"); } } };
 for (const [path, name] of [
@@ -267,9 +315,53 @@ JS
   pass "extensions preserve $platform behavior and fail closed when a checker cannot execute"
 }
 
+run_unsupported_shell_case() {
+  local platform=$1 fixture="$TMP_ROOT/unsupported-shell-$1" out status
+  install_fake_uname "$fixture" "$platform"
+
+  out=$(PATH="$fixture/fakebin:$PATH" FM_HOME="$fixture/home" FM_ROOT_OVERRIDE="$fixture/root" \
+    "$ROOT/bin/fm-sessionstart-run.sh" --source startup 2>&1)
+  status=$?
+  expect_code 0 "$status" "$platform session-start wrapper refusal"
+  assert_contains "$out" "UNSUPPORTED_HOST: $platform" "$platform session-start wrapper refusal was not actionable"
+  assert_absent "$fixture/home" "$platform session-start wrapper created home state"
+  assert_absent "$fixture/root" "$platform session-start wrapper reached scope work"
+
+  out=$(PATH="$fixture/fakebin:$PATH" FM_HOME="$fixture/wake-home" \
+    bash -c '. "$1"; : > "$2"' _ "$ROOT/bin/fm-wake-lib.sh" "$fixture/after-source" 2>&1)
+  status=$?
+  expect_code 1 "$status" "$platform wake library refusal"
+  assert_contains "$out" "UNSUPPORTED_HOST: $platform" "$platform wake library refusal was not actionable"
+  assert_absent "$fixture/wake-home" "$platform wake library created state"
+  assert_absent "$fixture/after-source" "$platform wake library returned to its caller"
+  pass "session and wake entrypoints reject $platform before mutation"
+}
+
+run_supported_shell_case() {
+  local platform=$1 fixture="$TMP_ROOT/supported-shell-$1" out status
+  install_fake_uname "$fixture" "$platform"
+
+  out=$(PATH="$fixture/fakebin:$PATH" FM_HOME="$fixture/session-home" FM_ROOT_OVERRIDE="$fixture/root" \
+    NO_MISTAKES_GATE=1 "$ROOT/bin/fm-sessionstart-run.sh" --source startup --pi-prerequisite 2>&1)
+  status=$?
+  expect_code 3 "$status" "$platform session-start wrapper acceptance"
+  [ -z "$out" ] || fail "$platform supported session-start wrapper printed output: $out"
+
+  out=$(PATH="$fixture/fakebin:$PATH" FM_HOME="$fixture/wake-home" \
+    bash -c '. "$1"; : > "$2"' _ "$ROOT/bin/fm-wake-lib.sh" "$fixture/after-source" 2>&1)
+  status=$?
+  expect_code 0 "$status" "$platform wake library acceptance"
+  [ -z "$out" ] || fail "$platform supported wake library printed output: $out"
+  assert_present "$fixture/wake-home/state" "$platform wake library did not preserve state initialization"
+  assert_present "$fixture/after-source" "$platform wake library did not return to its caller"
+  pass "session and wake entrypoints preserve $platform behavior"
+}
+
 for platform in MINGW64_NT-10.0 MSYS_NT-10.0 CYGWIN_NT-10.0 FreeBSD; do
   FM_TEST_PLATFORM=$platform run_unsupported_case "$platform"
+  run_unsupported_shell_case "$platform"
 done
 for platform in Darwin Linux; do
   FM_TEST_PLATFORM=$platform run_supported_case "$platform"
+  run_supported_shell_case "$platform"
 done

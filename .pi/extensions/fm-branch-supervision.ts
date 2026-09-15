@@ -88,6 +88,10 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Box, Container, fuzzyFilter, Input, SelectList, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
+import {
+  firstmateHostPreflight,
+  reportFirstmateHostRefusal,
+} from "./lib/fm-host-platform.ts";
 import { registerFirstmateTool } from "./lib/fm-native-contract.ts";
 import { runCommandAsync } from "./lib/fm-async-exec.ts";
 import {
@@ -134,6 +138,7 @@ const wakeGrantScript = join(fmRoot, "bin", "fm-wake-grant.sh");
 const loadedMarker = join(state, ".pi-branch-extension-loaded");
 const modelPinFile = join(config, "supervision-branch-model");
 const effortPinFile = join(config, "supervision-branch-effort");
+const hostPreflight = firstmateHostPreflight(fmRoot);
 
 // Same tool set in the same order on every request (part of the cached
 // prefix). "bash" resolves to the customTools override below, which injects
@@ -555,6 +560,11 @@ function collectMainDialog(sessionManager: ReadonlyEntries, collection: MirrorCo
 }
 
 export default function (pi: ExtensionAPI) {
+  if (!hostPreflight.supported) {
+    reportFirstmateHostRefusal(hostPreflight);
+    return;
+  }
+
   type BranchSession = {
     session: AgentSession;
     sessionManager: SessionManager;

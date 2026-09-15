@@ -86,8 +86,9 @@ Processing order is cheapest-first: a strict-superset prefilter, then the primar
 The prefilter removes ordinary single quotes, double quotes, backslashes, carriage returns, and newlines before fast-allowing any command that carries no `cd`, `pushd`, or `popd` substring and no quoting-decoder marker (`$'` ANSI-C or `$"` locale), so quoted or escaped command-word fragments delegate to the policy while most commands never pay for the git scoping calls or the Node process.
 The quoting-decoder marker set is coupled to the classifier's decoder set in `bin/fm-arm-command-policy.mjs`: adding any new quote or expansion form the classifier decodes requires extending the prefilter marker set in the same change, or it stops being a strict superset.
 
-Empty stdin, unparseable JSON, missing `jq` on the stdin path, missing Node, a missing policy owner, or an invalid policy response all fail open with exit 0 and no output.
-A broken hook must never deny every shell tool call.
+Empty stdin, unparseable JSON, missing `jq` on the stdin path, missing Node, a missing policy owner, or an invalid policy response are checker-owned validation failures and return exit 0 with no output.
+That checker-owned fail-open behavior prevents malformed hook input from denying every shell tool call.
+It is distinct from a Pi, omp, or OpenCode adapter failing to spawn the checker or receiving an unexpected nonzero status, which those adapters deny because they cannot obtain an allow verdict.
 
 ## Output contract
 
@@ -98,8 +99,8 @@ Identical in shape to `docs/arm-pretool-check.md`:
 - Default deny mode also writes `{"decision":"deny","reason":"[persistent-cd] reason"}` to stdout for Grok.
 - `--claude` suppresses stdout completely because Claude ignores a PreToolUse deny when stdout is nonempty.
 - Codex blocks on exit 2 and displays stderr.
-- OpenCode throws only when the checker exits 2.
-- Pi, pi-signed, and omp return `{block: true}` only when the checker exits 2.
+- OpenCode throws when the checker returns exit 2, another nonzero status, or cannot execute.
+- Pi, pi-signed, and omp return `{block: true}` when the checker returns exit 2, another nonzero status, or cannot execute.
 
 ## Shared classifier ownership
 

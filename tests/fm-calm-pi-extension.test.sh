@@ -28,6 +28,13 @@ record_pi_version_evidence() {
   [ -n "$version" ] || fail "$context could not determine the installed Pi version"
 }
 
+install_calm_host_preflight() {
+  local extension_dir=$1 runtime_root=$2
+  mkdir -p "$extension_dir/lib" "$runtime_root/bin"
+  cp "$ROOT/.pi/extensions/lib/fm-host-platform.ts" "$extension_dir/lib/"
+  cp "$ROOT/bin/fm-host-platform-lib.sh" "$runtime_root/bin/"
+}
+
 cleanup() {
   if command -v tmux >/dev/null 2>&1; then
     tmux -L "$TMUX_SOCKET" kill-server 2>/dev/null || true
@@ -167,6 +174,7 @@ test_home_resolution() {
     "$fixture/override" \
     "$fixture/launch-cwd"
   cp "$EXT" "$fixture/project/.pi/extensions/fm-calm.ts"
+  install_calm_host_preflight "$fixture/project/.pi/extensions" "$fixture/project"
   cp "$ASSISTANT_LAYOUT" "$fixture/project/.pi/extensions/lib/fm-calm-assistant-layout.ts"
   cp "$OPERATIONAL_USER_LAYOUT" "$fixture/project/.pi/extensions/lib/fm-calm-operational-user-layout.ts"
   cp "$VISIBILITY" "$fixture/project/.pi/extensions/lib/fm-calm-visibility.ts"
@@ -289,6 +297,7 @@ test_pi_compat_degraded_adapter() {
     "$fixture/project/.pi/extensions/lib" \
     "$fixture/project/node_modules/@earendil-works"
   cp "$EXT" "$fixture/project/.pi/extensions/fm-calm.ts"
+  install_calm_host_preflight "$fixture/project/.pi/extensions" "$fixture/project"
   cp "$ASSISTANT_LAYOUT" "$fixture/project/.pi/extensions/lib/fm-calm-assistant-layout.ts"
   cp "$OPERATIONAL_USER_LAYOUT" "$fixture/project/.pi/extensions/lib/fm-calm-operational-user-layout.ts"
   cp "$VISIBILITY" "$fixture/project/.pi/extensions/lib/fm-calm-visibility.ts"
@@ -448,6 +457,7 @@ test_builtin_gate_load_time() {
     "$fixture/home-off/config" \
     "$fixture/home-on/config"
   cp "$EXT" "$fixture/project/.pi/extensions/fm-calm.ts"
+  install_calm_host_preflight "$fixture/project/.pi/extensions" "$fixture/project"
   cp "$ASSISTANT_LAYOUT" "$fixture/project/.pi/extensions/lib/fm-calm-assistant-layout.ts"
   cp "$OPERATIONAL_USER_LAYOUT" "$fixture/project/.pi/extensions/lib/fm-calm-operational-user-layout.ts"
   cp "$VISIBILITY" "$fixture/project/.pi/extensions/lib/fm-calm-visibility.ts"
@@ -534,6 +544,7 @@ test_calm_activation_collision_and_regression_bound() {
     "$fixture/project/node_modules/@earendil-works" \
     "$fixture/home/config"
   cp "$EXT" "$fixture/project/.pi/extensions/fm-calm.ts"
+  install_calm_host_preflight "$fixture/project/.pi/extensions" "$fixture/project"
   cp "$ASSISTANT_LAYOUT" "$fixture/project/.pi/extensions/lib/fm-calm-assistant-layout.ts"
   cp "$OPERATIONAL_USER_LAYOUT" "$fixture/project/.pi/extensions/lib/fm-calm-operational-user-layout.ts"
   cp "$VISIBILITY" "$fixture/project/.pi/extensions/lib/fm-calm-visibility.ts"
@@ -748,6 +759,7 @@ test_rendering_and_session_lifecycle() {
   fixture="$TMP_ROOT/renderer"
   mkdir -p "$fixture/home" "$fixture/lib" "$fixture/node_modules/@earendil-works"
   cp "$EXT" "$fixture/fm-calm.ts"
+  install_calm_host_preflight "$fixture" "$fixture"
   cp "$ASSISTANT_LAYOUT" "$fixture/lib/fm-calm-assistant-layout.ts"
   cp "$OPERATIONAL_USER_LAYOUT" "$fixture/lib/fm-calm-operational-user-layout.ts"
   cp "$VISIBILITY" "$fixture/lib/fm-calm-visibility.ts"
@@ -1466,6 +1478,7 @@ test_calm_mid_turn_working_notes() {
   fixture="$TMP_ROOT/calm-mid-turn"
   mkdir -p "$fixture/home" "$fixture/lib" "$fixture/node_modules/@earendil-works"
   cp "$EXT" "$fixture/fm-calm.ts"
+  install_calm_host_preflight "$fixture" "$fixture"
   cp "$ASSISTANT_LAYOUT" "$fixture/lib/fm-calm-assistant-layout.ts"
   cp "$OPERATIONAL_USER_LAYOUT" "$fixture/lib/fm-calm-operational-user-layout.ts"
   cp "$VISIBILITY" "$fixture/lib/fm-calm-visibility.ts"
@@ -1477,7 +1490,7 @@ test_calm_mid_turn_working_notes() {
   printf '%s\n' '{"type":"module"}' >"$fixture/package.json"
 
   output_file="$fixture/node-output"
-  (cd "$fixture" && EXT="$fixture/fm-calm.ts" FM_HOME="$fixture/home" PI_PACKAGE_DIR="$PI_PACKAGE_DIR" node --input-type=module) >"$output_file" 2>&1 <<'JS'
+  (cd "$fixture" && EXT="$fixture/fm-calm.ts" FM_HOME="$fixture/home" FM_ROOT_OVERRIDE="$fixture" PI_PACKAGE_DIR="$PI_PACKAGE_DIR" node --input-type=module) >"$output_file" 2>&1 <<'JS'
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
@@ -1726,6 +1739,7 @@ test_operational_followup_turn_e2e() {
   mkdir -p "$project/.pi/extensions/lib" "$home/config" "$config" "$sessions"
   fm_git_init_commit "$project"
   cp "$EXT" "$project/.pi/extensions/fm-calm.ts"
+  install_calm_host_preflight "$project/.pi/extensions" "$project"
   cp "$ASSISTANT_LAYOUT" "$project/.pi/extensions/lib/fm-calm-assistant-layout.ts"
   cp "$OPERATIONAL_USER_LAYOUT" "$project/.pi/extensions/lib/fm-calm-operational-user-layout.ts"
   cp "$VISIBILITY" "$project/.pi/extensions/lib/fm-calm-visibility.ts"
@@ -2100,6 +2114,7 @@ test_hidden_block_geometry_e2e() {
     "$sessions"
   fm_git_init_commit "$project"
   cp "$EXT" "$project/.pi/extensions/fm-calm.ts"
+  install_calm_host_preflight "$project/.pi/extensions" "$project"
   cp "$ASSISTANT_LAYOUT" "$project/.pi/extensions/lib/fm-calm-assistant-layout.ts"
   cp "$OPERATIONAL_USER_LAYOUT" "$project/.pi/extensions/lib/fm-calm-operational-user-layout.ts"
   cp "$VISIBILITY" "$project/.pi/extensions/lib/fm-calm-visibility.ts"
@@ -2334,6 +2349,7 @@ test_working_ship_geometry_and_lifecycle() {
   fixture="$TMP_ROOT/working-ship"
   mkdir -p "$fixture/home" "$fixture/lib" "$fixture/node_modules/@earendil-works"
   cp "$EXT" "$fixture/fm-calm.ts"
+  install_calm_host_preflight "$fixture" "$fixture"
   cp "$ASSISTANT_LAYOUT" "$fixture/lib/fm-calm-assistant-layout.ts"
   cp "$OPERATIONAL_USER_LAYOUT" "$fixture/lib/fm-calm-operational-user-layout.ts"
   cp "$VISIBILITY" "$fixture/lib/fm-calm-visibility.ts"
@@ -2344,7 +2360,7 @@ test_working_ship_geometry_and_lifecycle() {
   ln -s "$PI_PACKAGE_DIR/node_modules/typebox" "$fixture/node_modules/typebox"
   printf '%s\n' '{"type":"module"}' >"$fixture/package.json"
 
-  out=$(cd "$fixture" && EXT="$fixture/fm-calm.ts" FM_HOME="$fixture/home" PI_PACKAGE_DIR="$PI_PACKAGE_DIR" node --input-type=module 2>&1 <<'JS'
+  out=$(cd "$fixture" && EXT="$fixture/fm-calm.ts" FM_HOME="$fixture/home" FM_ROOT_OVERRIDE="$fixture" PI_PACKAGE_DIR="$PI_PACKAGE_DIR" node --input-type=module 2>&1 <<'JS'
 import { pathToFileURL } from "node:url";
 
 const packageRoot = process.env.PI_PACKAGE_DIR;

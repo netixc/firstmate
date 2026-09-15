@@ -2,6 +2,25 @@
 # Shared durable wake queue and portable lock helpers.
 
 FM_WAKE_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FM_WAKE_HOST_PLATFORM_LIB="$FM_WAKE_LIB_DIR/fm-host-platform-lib.sh"
+if [ ! -r "$FM_WAKE_HOST_PLATFORM_LIB" ] && [ -L "${BASH_SOURCE[0]}" ]; then
+  _FM_WAKE_LIB_LINK=$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || true)
+  case "$_FM_WAKE_LIB_LINK" in
+    /*) ;;
+    *) _FM_WAKE_LIB_LINK="$FM_WAKE_LIB_DIR/$_FM_WAKE_LIB_LINK" ;;
+  esac
+  _FM_WAKE_LIB_REAL_DIR=$(cd "$(dirname "$_FM_WAKE_LIB_LINK")" 2>/dev/null && pwd || true)
+  [ -z "$_FM_WAKE_LIB_REAL_DIR" ] || FM_WAKE_HOST_PLATFORM_LIB="$_FM_WAKE_LIB_REAL_DIR/fm-host-platform-lib.sh"
+fi
+if [ ! -r "$FM_WAKE_HOST_PLATFORM_LIB" ]; then
+  printf 'Firstmate host preflight failed closed: %s is unavailable\n' "$FM_WAKE_HOST_PLATFORM_LIB"
+  exit 1
+fi
+# shellcheck source=bin/fm-host-platform-lib.sh disable=SC1091
+. "$FM_WAKE_HOST_PLATFORM_LIB"
+if ! fm_host_platform_require; then
+  exit 1
+fi
 FM_WAKE_DEFAULT_ROOT="$(cd "$FM_WAKE_LIB_DIR/.." && pwd)"
 FM_ROOT="${FM_ROOT_OVERRIDE:-${FM_ROOT:-$FM_WAKE_DEFAULT_ROOT}}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"

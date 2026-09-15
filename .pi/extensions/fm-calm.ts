@@ -48,6 +48,10 @@ import {
 import { Box, Container, getKeybindings, type Component } from "@earendil-works/pi-tui";
 import type { TSchema } from "typebox";
 import { installCalmAssistantLayout } from "./lib/fm-calm-assistant-layout.ts";
+import {
+  firstmateHostPreflight,
+  reportFirstmateHostRefusal,
+} from "./lib/fm-host-platform.ts";
 import { installCalmOperationalUserLayout } from "./lib/fm-calm-operational-user-layout.ts";
 import {
   CALM_WORKING_SHIP_WIDGET_KEY,
@@ -92,6 +96,7 @@ type StandardShellState = {
 const extensionFile = fileURLToPath(import.meta.url);
 const extensionDir = dirname(extensionFile);
 const root = resolve(extensionDir, "../..");
+const hostPreflight = firstmateHostPreflight(process.env.FM_ROOT_OVERRIDE || root);
 
 // Resolves symlinks before comparing tool-ownership identity below: sourceInfo.path
 // values come from independent path-resolution code paths (this module's own
@@ -120,6 +125,11 @@ function installCalmPresentationAdapter(name: string, install: () => void): void
 }
 
 export default function (pi: ExtensionAPI) {
+  if (!hostPreflight.supported) {
+    reportFirstmateHostRefusal(hostPreflight);
+    return;
+  }
+
   installCalmPresentationAdapter("collapsed-thinking", installCalmAssistantLayout);
   installCalmPresentationAdapter("operational-user-row", installCalmOperationalUserLayout);
 
