@@ -455,7 +455,7 @@ test_native_pi_ultra_is_explicit_and_model_scoped() {
       assert_not_contains "$launch" "'max'" "native Ultra was aliased to max"
     done
   done
-  for native_profile in 'codex:codex-native/gpt-6-astra' 'codex:codex-native/gpt-6-astra' 'pi:openai-codex/gpt-6-astra' 'pi:default' 'pi:codex-native/'; do
+  for native_profile in 'codex:codex-native/gpt-6-astra' 'pi:openai-codex/gpt-6-astra' 'pi:default' 'pi:codex-native/'; do
     harness=${native_profile%%:*}; model=${native_profile#*:}; id="ultra-refused-$RANDOM"
     rec=$(make_spawn_case "$id" "$harness" "$id")
     read_case_record "$rec"

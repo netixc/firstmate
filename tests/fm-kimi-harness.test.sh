@@ -34,7 +34,7 @@ ln -s "$PYTHON_BIN" "$PYTHON_BIN_DIR/python3"
 PATH="$PYTHON_BIN_DIR:$PATH"
 export PATH
 JQ_BIN=$(command -v jq) || fail "test needs jq"
-BASE_PATH=${FM_TEST_BASE_PATH:-$PYTHON_BIN_DIR:/usr/bin:/bin:/usr/sbin:/sbin}
+BASE_PATH="$PYTHON_BIN_DIR:${FM_TEST_BASE_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}"
 
 cleanup_kimi_harness() {
   [ -z "$KIMI_RUNTIME_TASK_TMP" ] || rm -rf "$KIMI_RUNTIME_TASK_TMP"

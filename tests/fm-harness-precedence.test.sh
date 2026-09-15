@@ -135,11 +135,15 @@ test_markerless_ancestry_outranks_foreign_marker() {
     [ "$got" = "$expect" ] \
       || fail "$name ancestry alone resolved '$got', expected $expect (the ancestry signal is not live)"
 
-    got=$(with_blind_ancestry "$fakebin" GROK_AGENT=1)
-    [ "$got" = grok ] \
-      || fail "an inherited Grok marker alone resolved '$got', expected grok"
-
+    got=$(under_process "$bin" GROK_AGENT=1)
+    [ "$got" = "$expect" ] \
+      || fail "$name ancestry with an inherited Grok marker resolved '$got', expected $expect"
   done
+
+  got=$(with_blind_ancestry "$fakebin" GROK_AGENT=1)
+  [ "$got" = grok ] \
+    || fail "an inherited Grok marker alone resolved '$got', expected grok"
+
   pass "a markerless harness keeps its identity under an inherited foreign marker"
 }
 
@@ -376,8 +380,8 @@ EOF
 # The other half of the vantage question: which vantages a probe must NOT ask
 # from. harness_ancestry only ever climbs, so firstmate's own detection can never
 # occupy a SIBLING branch of the process that runs it. A harness routinely spawns
-# such branches - an MCP server started as `node <home>/.codex/mcp/<server>.js`
-# matches *codex* on its script path in the bare-interpreter branch of the walk -
+# such branches - an MCP server started as `node <home>/.grok/mcp/<server>.js`
+# matches *grok* on its script path in the bare-interpreter branch of the walk -
 # and a probe that reported every descendant would answer a foreign harness from a
 # process no real tool subprocess can ask from. The descent probe asks only the
 # vantages on the upward path from the deepest descendant, which is exactly the set
@@ -391,7 +395,7 @@ test_descent_probe_ignores_a_sibling_branch_the_walk_cannot_reach() {
   worker=$(named_bin "$dir/vendor" worker)
   ready="$dir/ready"
   fifo="$dir/fifo"
-  mkdir -p "$dir/.codex/mcp"
+  mkdir -p "$dir/.grok/mcp"
   mkfifo "$fifo"
 
   # Both leaves park on a fifo nothing ever writes, so they hold their position in
@@ -402,7 +406,7 @@ read -r _ < "$FM_TEST_FIFO"
 SH
   # The MCP server is the sibling branch: a bare interpreter whose script path
   # carries a harness name it does not belong to.
-  mcp_script="$dir/.codex/mcp/foo.js"
+  mcp_script="$dir/.grok/mcp/foo.js"
   cp "$block" "$mcp_script"
 
   # The native binary keeps a child of its own, so the deepest descendant is
@@ -447,10 +451,10 @@ SH
   mcp_pid=$(cat "$dir/mcp.pid")
 
   # Non-vacuity: the sibling really does answer a foreign harness when asked, so a
-  # probe that reported every descendant would have reported codex here.
+  # probe that reported every descendant would have reported grok here.
   got=$("$HARNESS" ancestry "$mcp_pid")
-  [ "$got" = "args codex" ] \
-    || { release_sibling_fixture; fail "the sibling MCP process reported '$got', expected 'args codex'; this case proves nothing unless that branch really names a foreign harness"; }
+  [ "$got" = "args grok" ] \
+    || { release_sibling_fixture; fail "the sibling MCP process reported '$got', expected 'args grok'; this case proves nothing unless that branch really names a foreign harness"; }
 
   got=$("$HARNESS" ancestry-descent "$shim_pid")
   case "$got" in
@@ -471,16 +475,17 @@ EOF
 
 # The deeper shape the case above cannot reach, and the reason the live guard's
 # reject-other-harness cross-check judges COMM-strength vantages only. A harness
-# spawns its MCP servers from the AGENT BINARY, not from the npm shim, so the real
-# Codex topology is shim -> native codex -> mcp server: the server inherits its
-# parent's process group, passes the foreground filter, and is the deepest eligible
-# descendant, which puts its own `args codex` vantage ON the descent path rather
-# than off it. An args-strength verdict is path-ambiguous by construction - the
+# spawns its MCP servers from the AGENT BINARY, not from the npm shim, so this
+# Codex-shaped topology is shim -> native codex -> foreign-named MCP server: the
+# server inherits its parent's process group, passes the foreground filter, and
+# is the deepest eligible descendant. That puts its own `args grok` vantage ON
+# the descent path rather than off it. An args-strength verdict is path-ambiguous
+# by construction - the
 # bare-interpreter branch of the walk matches a harness name anywhere in the script
 # path - so it is the comm-strength verdicts that carry a real process name and are
 # the ones worth cross-checking. This case pins that the path still reaches
 # `comm codex`, that every comm-strength vantage on it names codex, and that an
-# `args codex` vantage really is present, which is what a cross-check applied to
+# `args grok` vantage really is present, which is what a cross-check applied to
 # args strength would have rejected.
 test_descent_probe_tolerates_an_args_only_foreign_verdict_at_the_deepest_vantage() {
   local dir node native mcp_script hold entry ready fifo
@@ -490,10 +495,10 @@ test_descent_probe_tolerates_an_args_only_foreign_verdict_at_the_deepest_vantage
   native=$(named_bin "$dir/vendor" codex)
   ready="$dir/ready"
   fifo="$dir/fifo"
-  mkdir -p "$dir/.codex/mcp"
+  mkdir -p "$dir/.grok/mcp"
   mkfifo "$fifo"
 
-  mcp_script="$dir/.codex/mcp/foo.js"
+  mcp_script="$dir/.grok/mcp/foo.js"
   cat > "$mcp_script" <<'SH'
 read -r _ < "$FM_TEST_FIFO"
 SH
@@ -537,12 +542,12 @@ SH
   mcp_pid=$(cat "$dir/mcp.pid")
 
   got=$("$HARNESS" ancestry "$mcp_pid")
-  [ "$got" = "args codex" ] \
-    || { release_deep_mcp_fixture; fail "the MCP server reported '$got', expected 'args codex'; this case proves nothing unless the deepest vantage really answers a foreign harness"; }
+  [ "$got" = "args grok" ] \
+    || { release_deep_mcp_fixture; fail "the MCP server reported '$got', expected 'args grok'; this case proves nothing unless the deepest vantage really answers a foreign harness"; }
 
   got=$("$HARNESS" ancestry-descent "$shim_pid")
   case "$got" in
-    *"args codex"*) ;;
+    *"args grok"*) ;;
     *) release_deep_mcp_fixture; fail "the descent path did not include the MCP server's foreign args verdict, got '$got'; a cross-check restricted to comm strength is untested unless that vantage is on the path" ;;
   esac
   case "$got" in

@@ -6,6 +6,29 @@ This record contains reusable version-scoped evidence for active runtime guarant
 The backend guides own current setup, safety boundaries, and limitations.
 Exact task chronology, branch names, temporary homes, local paths, process ids, thread ids, and delivery transcripts remain in private reports or PR evidence.
 
+## Harness detection precedence
+
+Firstmate's own harness comes from two evidence classes, and `bin/fm-harness.sh` owns how they combine.
+An environment marker can name a harness, while the nearest supported harness process in the parent chain proves which runtime owns the process tree.
+A marker alone is not ownership proof because ordinary environment state can be inherited or replayed into an unrelated session.
+
+Verified 2026-09-15 with the portable regression, which constructs every process tree from renamed executables and requires no installed harness:
+
+```sh
+bin/fm-test-run.sh tests/fm-harness-precedence.test.sh
+```
+
+The regression proves all three evidence combinations independently.
+With ancestry blinded, `GROK_AGENT=1` resolves Grok and demonstrates that the retained marker is live.
+Without that marker, native Codex, OpenCode, Kimi, Muse, and Agy process ancestry each resolves its own runtime.
+With both present, each native process still wins over the inherited Grok marker.
+Pi's marker retains the finer `pi-signed` identity when ancestry can prove only the shared Pi family.
+
+The same suite pins interpreter-script-path matches, native harness binaries beneath interpreter shims, harnesses running as pid 1 inside a namespace, and the descent probe used by liveness checks.
+A foreign-named interpreter path can contribute an args-strength verdict, but it cannot override a comm-strength native process on the reachable ancestor path.
+Equal-depth descendants prefer the comm-strength leaf, so process-table ordering cannot silently change the selected identity.
+The final case confirms that session start renders the Codex supervision protocol for a Codex primary.
+
 ## tmux
 
 Foreground-process behavior was verified on 2026-07-07 with tmux 3.6a on macOS.
@@ -513,6 +536,41 @@ The CLI matrix was checked directly:
 
 All destructive verification used `bin/fm-herdr-lab.sh` with a non-default `fm-lab-` name and a byte-identical default-session tripwire.
 No ambient `herdr server stop` command is a supported test operation.
+
+### fm-remote server birth and login-keychain access
+
+Measured 2026-09-09 on macOS 26 (Darwin 25.6.0) aarch64 with Herdr 0.9.0.
+This is the guarantee behind `bin/fm-remote-herdr-guard.sh` and the doctor's `herdr-server` check: login-keychain access follows the audit session a process was born into, never the launch shape or shell.
+
+The same user, `HOME`, and login-keychain test item were probed across three process births with `launchctl managername`, a compiled `getaudit_addr` probe, and `security find-generic-password -a "$USER" -w -s "<test-service>"` with the secret output withheld:
+
+| Birth | `managername` | Audit session | Keychain read |
+| --- | --- | --- | --- |
+| `gui/501` LaunchAgent with bare `ProgramArguments` | Aqua | The `gui/501` asid with graphic, TTY, console, and authenticated access | exit 0 |
+| `gui/501` LaunchAgent through `zsh -l -c 'exec ...'` | Aqua | The same `gui/501` asid and flags | exit 0 |
+| `user/501` LaunchAgent with `LimitLoadToSessionType=Background` | Background | A separate asid with flags `0x0` | exit 36, `User interaction is not allowed.` |
+
+Candidate birth markers were read with `ps -Eww -o command= -p <pid>` for same-uid processes.
+macOS hides the environment of Apple platform binaries such as `/bin/sleep`, while the Herdr server is not a platform binary.
+
+```text
+launchd-born herdr server (child of launchd, gui/501): XPC_SERVICE_NAME=org.nix-community.home.herdr-server; no SSH_*
+SSH-born herdr server (child of a remote-client bridge under sshd-session): SSH_CLIENT=... SSH_CONNECTION=...; no XPC_SERVICE_NAME
+```
+
+`XPC_SERVICE_NAME` identifies a launchd label but not its domain, because the Background `user/501` job also carried that variable while lacking keychain access.
+The owner classifier therefore accepts that label only when `launchctl print gui/<uid>/<label>` identifies the owner pid or the label is loaded in `gui/<uid>` but not `user/<uid>`.
+`XPC_SERVICE_NAME=0`, including a value inherited by a Herdr live-handoff child, remains unknown.
+`FM_REMOTE_JOB_ACTIVE=1` proves the Aqua worker only when `dev.firstmate.remote-job` is loaded in `gui/<uid>` but not `user/<uid>`.
+
+The SSH-born row came from a remote host where the launchd job repeatedly lost to a server that remote attach had started first in the SSH session.
+`pgrep -f` did not expose that Herdr server's argv on macOS, while `lsof -U -a -c herdr -F pn` identified its socket owner.
+
+A separate foreground-supervision check used a throwaway Aqua launch agent in a guarded named lab.
+The Herdr server remained the foreground launchd job, owned the named session socket, stopped after the guarded session stop, stayed at rest through the throttle interval, and became the new socket owner after a second kickstart.
+This proves the guard's final `exec` supplies launchd supervision and distinguishes an unrelated SSH-born server.
+
+`bin/fm-test-run.sh tests/fm-remote-herdr-guard.test.sh` pins the resulting decision table against real marker-carrying processes, and `tests/fm-remote-doctor.test.sh` pins the doctor's verdicts on the same markers.
 
 ### Client selection
 
