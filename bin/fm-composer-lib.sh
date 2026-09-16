@@ -34,6 +34,7 @@
 #               the tmux pi foreground-process probe). Identity is what makes
 #               Pi's blank separated composer provable; with identity=0 that
 #               shape stays `unknown`.
+#   titled-bottom=1  a plain capture may use a verified titled bottom border.
 #   rows=<n>    the capture's bounded row count (informational).
 #
 # THE STRICT BLANK-ROW RULE (captain decision blank-row-injection-posture,
@@ -468,8 +469,8 @@ _fm_composer_pi_separator_row() {  # <trimmed-row>
 
 # Row-scan results are returned through FM_COMPOSER_SCAN_* globals (bash 3.2
 # has no nameref); they are internal to this owner.
-_fm_composer_scan_screen() {  # <plain-screen> <cursor-or-empty> [extract-wrap]
-  local pane=$1 cy=${2:-}
+_fm_composer_scan_screen() {  # <plain-screen> <cursor-or-empty> [extract-wrap] [titled-bottom]
+  local pane=$1 cy=${2:-} titled_bottom=${4:-0}
   local line indent left_stripped trimmed kind family side_family
   local top_inner top_spaces='' geometry_check=0 geometry_ambiguous=0
   local content_inner content_spaces bottom_inner bottom_spaces glyph
@@ -593,7 +594,12 @@ _fm_composer_scan_screen() {  # <plain-screen> <cursor-or-empty> [extract-wrap]
             heavy) bottom_inner=${bottom_inner#┗}; bottom_inner=${bottom_inner%┛}; bottom_spaces=${bottom_inner//━/ } ;;
             ascii) bottom_inner=${bottom_inner#+}; bottom_inner=${bottom_inner%+}; bottom_spaces=${bottom_inner//-/ } ;;
           esac
-          [ "$bottom_spaces" = "$top_spaces" ] || geometry_ambiguous=1
+          if [ "$bottom_spaces" != "$top_spaces" ]; then
+            if [ "$titled_bottom" != 1 ] || \
+               ! _fm_composer_titled_bottom_ok "$family" "$bottom_inner" "$top_spaces"; then
+              geometry_ambiguous=1
+            fi
+          fi
         fi
         if [ -n "$cy" ]; then
           if [ "$top" -lt "$cy" ] && [ "$cy" -le "$row" ]; then
@@ -660,6 +666,29 @@ EOF
   if [ -n "$cy" ] && [ "$top" -ge 0 ] && [ "$top" -lt "$cy" ]; then
     FM_COMPOSER_SCAN_UNSAFE=1
   fi
+}
+
+# 0 when a mismatched bottom border reads as a legitimate titled border.
+_fm_composer_titled_bottom_ok() {  # <family> <bottom-inner> <top-spaces>
+  local family=$1 inner=$2 expected=$3 dash spaces
+  fm_composer_normalize_trim_var inner
+  case "$family" in
+    rounded|light) dash='─' ;;
+    double) dash='═' ;;
+    heavy) dash='━' ;;
+    ascii) dash='-' ;;
+    *) return 1 ;;
+  esac
+  case "$inner" in
+    "$dash"*"$dash") ;;
+    *) return 1 ;;
+  esac
+  spaces=${inner//"$dash"/ }
+  spaces=$(printf '%s' "$spaces" | LC_ALL=C sed 's/[!-~]/ /g')
+  case "$spaces" in
+    *[![:space:]]*) return 1 ;;
+  esac
+  [ "$spaces" = "$expected" ]
 }
 
 # fm_composer_row_has_edge: 0 when the trimmed row starts or ends with a
@@ -1033,12 +1062,13 @@ EOF
 
 fm_composer_classify_screen() {  # <caps> <screen> [cursor_row] [identity]
   local caps=$1 screen=$2 cy=${3:-} identity=${4:-}
-  local styled=0 cursor=0 has_identity=0 kv plain
+  local styled=0 cursor=0 has_identity=0 titled_bottom=0 kv plain
   while IFS= read -r kv; do
     case "$kv" in
       styled=1) styled=1 ;;
       cursor=1) cursor=1 ;;
       identity=1) has_identity=1 ;;
+      titled-bottom=1) titled_bottom=1 ;;
     esac
   done <<EOF
 $caps
@@ -1048,7 +1078,7 @@ EOF
     case "$cy" in *[!0-9]*) printf 'unknown'; return 0 ;; esac
   fi
   plain=$(printf '%s\n' "$screen" | fm_composer_strip_ansi)
-  _fm_composer_scan_screen "$plain" "$cy"
+  _fm_composer_scan_screen "$plain" "$cy" 0 "$titled_bottom"
   if [ -n "$cy" ]; then
     # Cursor mode (tmux): the shape CONTAINING the cursor is the composer.
     if [ "$FM_COMPOSER_SCAN_UNSAFE" = 1 ]; then
