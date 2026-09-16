@@ -49,11 +49,7 @@
 # captures in data/fm-composer-consolidation-audit-s1/report.md and
 # docs/verification/runtime-backends.md):
 #   bordered   - a complete boxed composer: a top border, side-bordered content
-#                rows of the same family, and a bottom border (grok).
-#                The bottom border may carry a TITLE (grok
-#                writes its model name there); a titled bottom border that
-#                still starts and ends with the family's rule glyph is
-#                tolerated, not ambiguity.
+#                rows of the same family, and a matching bottom border.
 #   bare       - an agent prompt glyph row with no border at all (codex `›`).
 #                The agent glyph is itself the container proof; a bare SHELL
 #                glyph (`>` `$` `%` `#`) never is.
@@ -77,14 +73,10 @@
 # exactly once below; every decision reaches them through the declarations.
 #
 # GHOST/PLACEHOLDER TEXT (task afk-herdr-false-pending): a harness fills an
-# otherwise-empty composer with de-emphasized ghost text - codex's idle
-# suggestion or grok's placeholder -
-# prompt suggestion, codex's idle suggestion, or grok's placeholder - which a
-# plain capture cannot tell apart from text a human typed.
+# otherwise-empty composer with a dim/faint idle suggestion that a plain
+# capture cannot tell apart from text a human typed.
 # fm_composer_strip_ghost is the ONE ANSI-aware extractor of "real typed
-# content": it drops every de-emphasized run - dim/faint (SGR 2) AND a
-# dark/muted TRUECOLOR foreground - and keeps only normal-intensity,
-# normally-coloured text.
+# content": it drops dim/faint (SGR 2) runs and keeps normal-intensity text.
 #
 # UNICODE WHITESPACE (issue #1988; open PRs #1995/#2047 target the same
 # defect and #1995's naming is adopted here so the implementations converge):
@@ -171,29 +163,11 @@ fm_composer_normalize_trim_var() {  # <varname>
 
 # fm_composer_strip_ghost: the ONE fleet-wide ANSI-aware extractor of "real typed
 # content" from a captured, styled composer row. Reads the styled line on stdin
-# (from `tmux capture-pane -e`, `herdr pane read --format ansi`, or
-# `zellij action dump-screen --ansi`) and prints the
-# plain, non-ghost text on stdout, dropping:
-#   - dim/faint runs (SGR 2): how codex renders ghost/suggestion text.
-#     A reset (SGR 0) or normal-intensity (SGR 22) ends a dim run.
-#   - dark/muted TRUECOLOR foreground runs (SGR 38;2;r;g;b or the colon form
-#     38:2::r:g:b) whose perceived luminance (0.299R + 0.587G + 0.114B) is below
-#     FM_COMPOSER_GHOST_LUMA_MAX (default 128): how grok renders its placeholder
-#     and hint text. A reset (SGR 0), a default-foreground (SGR 39), any base
-#     foreground colour (30-37 / 90-97), or a lighter 38;2 foreground ends the
-#     dark-foreground run. This assumes a DARK terminal theme, the firstmate
-#     fleet reality, where real typed input is bright and only de-emphasised UI
-#     is dark; the SGR-2 signal above stays theme-independent. A 256-colour
-#     foreground (38;5;n) is NOT luminance-tested - it is palette-dependent and
-#     no fleet harness uses it for ghost text, so it is kept (real text wins:
-#     under-stripping merely defers, which the max-defer alarm surfaces, while
-#     over-stripping would inject over real input).
-# The dim/faint and dark-foreground states are tracked together as "de-emphasis";
-# codes are processed left to right within a sequence, so "ESC[0;2m" reads as dim.
-# LC_ALL=C makes awk walk bytes, so multibyte glyphs and de-emphasised
-# runs alike pass through or drop intact without locale-dependent classes.
+# and prints plain text while dropping dim/faint (SGR 2) runs. A reset (SGR 0)
+# or normal-intensity (SGR 22) ends a dim run. Colour payloads are skipped while
+# parsing so their numeric fields can never be mistaken for an SGR 2 command.
 fm_composer_strip_ghost() {
-  LC_ALL=C awk -v lumamax="${FM_COMPOSER_GHOST_LUMA_MAX:-128}" '
+  LC_ALL=C awk '
     function sgr_code(v, b) {
       b = v
       sub(/:.*/, "", b)
@@ -210,26 +184,11 @@ fm_composer_strip_ghost() {
       if (code == "2") return p + 4
       return p + 1
     }
-    # fg38_is_dark: 1 when the SGR 38 foreground starting at param p is a
-    # TRUECOLOR (38;2 / 38:2) whose luminance is below lumamax; 0 otherwise
-    # (a 38;5 palette colour, a bright truecolor, or a malformed run).
-    function fg38_is_dark(a, p, k, lumamax,   spec, nf, f, r, g, b) {
-      spec = a[p]
-      if (index(spec, ":") > 0) {           # colon form: whole colour in a[p]
-        nf = split(spec, f, ":")
-        if (f[2] != "2" || nf < 5) return 0
-        r = f[nf - 2] + 0; g = f[nf - 1] + 0; b = f[nf] + 0
-        return ((299*r + 587*g + 114*b) / 1000 < lumamax) ? 1 : 0
-      }
-      if (p + 1 > k || a[p + 1] != "2" || p + 4 > k) return 0
-      r = a[p + 2] + 0; g = a[p + 3] + 0; b = a[p + 4] + 0
-      return ((299*r + 587*g + 114*b) / 1000 < lumamax) ? 1 : 0
-    }
     {
-      line = $0; out = ""; dim = 0; darkfg = 0; n = length(line); i = 1
+      line = $0; out = ""; dim = 0; n = length(line); i = 1
       while (i <= n) {
         c = substr(line, i, 1)
-        if (c == "\033") {            # ESC: consume a CSI ... final-byte sequence
+        if (c == "\033") {
           j = i + 1
           if (substr(line, j, 1) == "[") {
             j++; params = ""
@@ -238,29 +197,22 @@ fm_composer_strip_ghost() {
               if (cc ~ /[@-~]/) break
               params = params cc; j++
             }
-            if (j <= n && substr(line, j, 1) == "m") {   # SGR: update de-emphasis
+            if (j <= n && substr(line, j, 1) == "m") {
               if (params == "") params = "0"
               k = split(params, a, ";")
               for (p = 1; p <= k; p++) {
-                v = a[p]; code = sgr_code(v)
-                if (code == "38") {
-                  darkfg = fg38_is_dark(a, p, k, lumamax)
-                  p = skip_color_payload(a, p, k)
-                } else if (code == "48" || code == "58") {
+                code = sgr_code(a[p])
+                if (code == "38" || code == "48" || code == "58") {
                   p = skip_color_payload(a, p, k)
                 } else if (code == "2") dim = 1
-                else if (code == "0") { dim = 0; darkfg = 0 }
-                else if (code == "22") dim = 0
-                else if (code == "39") darkfg = 0
-                else if (code + 0 >= 30 && code + 0 <= 37) darkfg = 0
-                else if (code + 0 >= 90 && code + 0 <= 97) darkfg = 0
+                else if (code == "0" || code == "22") dim = 0
               }
             }
             if (j <= n) { i = j + 1; continue }
           }
-          i = i + 1; continue          # lone/other ESC: drop the ESC byte only
+          i = i + 1; continue
         }
-        if (dim == 0 && darkfg == 0) out = out c   # keep only non-de-emphasised bytes
+        if (dim == 0) out = out c
         i++
       }
       print out
@@ -284,15 +236,14 @@ fm_composer_strip_ghost() {
 # Matching a footer to confirm a keystroke landed is a different question from
 # asking what a worker is doing, and the two must not be conflated.
 # Delivery-only rendered busy footers per harness. codex: "esc to interrupt";
-# opencode: "esc interrupt"; pi: "Working..."; grok: "Ctrl+c:cancel".
+# opencode: "esc interrupt"; pi: "Working...".
 # The harness-less default is the UNION of the per-harness tokens below, used
 # when a caller has no recorded harness for the pane (the submit cores read the
 # baseline and the post-Enter transition this way).
-FM_DELIVERY_BUSY_REGEX_DEFAULT='esc (to )?interrupt|Working\.\.\.|Ctrl\+c:cancel'
+FM_DELIVERY_BUSY_REGEX_DEFAULT='esc (to )?interrupt|Working\.\.\.'
 FM_DELIVERY_CODEX_BUSY_REGEX_DEFAULT='esc to interrupt'
 FM_DELIVERY_OPENCODE_BUSY_REGEX_DEFAULT='esc interrupt'
 FM_DELIVERY_PI_BUSY_REGEX_DEFAULT='Working\.\.\.'
-FM_DELIVERY_GROK_BUSY_REGEX_DEFAULT='Ctrl\+c:cancel'
 
 fm_busy_lines_match() {  # [harness]
   local harness=${1:-} lines regex
@@ -304,7 +255,6 @@ fm_busy_lines_match() {  # [harness]
       codex) regex=$FM_DELIVERY_CODEX_BUSY_REGEX_DEFAULT ;;
       opencode) regex=$FM_DELIVERY_OPENCODE_BUSY_REGEX_DEFAULT ;;
       pi|pi-signed) regex=$FM_DELIVERY_PI_BUSY_REGEX_DEFAULT ;;
-      grok) regex=$FM_DELIVERY_GROK_BUSY_REGEX_DEFAULT ;;
       '') regex=$FM_DELIVERY_BUSY_REGEX_DEFAULT ;;
       *)
         # A supplied harness must never borrow another harness's signature.
@@ -327,9 +277,9 @@ FM_COMPOSER_AGENT_PROMPT_GLYPHS=$(printf '%s\n' '›')
 FM_COMPOSER_SHELL_PROMPT_GLYPHS=$(printf '%s\n' '>' '$' '%' '#' '❯')
 
 # The ONE fleet-wide idle-placeholder set: composer text a harness renders in
-# an EMPTY composer that a plain capture cannot tell from typed text. Grok's
-# bordered placeholder and opencode's left-bar hint continues with a rotating
-# quoted suggestion, hence the unanchored tail. FM_COMPOSER_IDLE_RE overrides
+# an EMPTY composer that a plain capture cannot tell from typed text.
+# OpenCode's left-bar hint continues with a rotating quoted suggestion, hence
+# the unanchored tail. FM_COMPOSER_IDLE_RE overrides
 # for an unverified harness; matching is case-insensitive.
 FM_COMPOSER_IDLE_RE_DEFAULT='^Type a message\.\.\.$|^Ask anything\.\.\.'
 
@@ -643,15 +593,7 @@ _fm_composer_scan_screen() {  # <plain-screen> <cursor-or-empty> [extract-wrap]
             heavy) bottom_inner=${bottom_inner#┗}; bottom_inner=${bottom_inner%┛}; bottom_spaces=${bottom_inner//━/ } ;;
             ascii) bottom_inner=${bottom_inner#+}; bottom_inner=${bottom_inner%+}; bottom_spaces=${bottom_inner//-/ } ;;
           esac
-          if [ "$bottom_spaces" != "$top_spaces" ]; then
-            # A TITLED bottom border (grok writes its model name there) is
-            # tolerated when the inner still starts and ends with the family's
-            # own rule glyph: the corners, family, indent, and every content
-            # row's geometry were already proven. Anything else is ambiguity.
-            if ! _fm_composer_titled_bottom_ok "$family" "$bottom_inner" "$top_spaces"; then
-              geometry_ambiguous=1
-            fi
-          fi
+          [ "$bottom_spaces" = "$top_spaces" ] || geometry_ambiguous=1
         fi
         if [ -n "$cy" ]; then
           if [ "$top" -lt "$cy" ] && [ "$cy" -le "$row" ]; then
@@ -718,31 +660,6 @@ EOF
   if [ -n "$cy" ] && [ "$top" -ge 0 ] && [ "$top" -lt "$cy" ]; then
     FM_COMPOSER_SCAN_UNSAFE=1
   fi
-}
-
-# 0 when a mismatched bottom border reads as a legitimate TITLE: the trimmed
-# inner (corners already stripped) still starts and ends with the family's own
-# rule glyph, so the title is embedded IN the rule rather than replacing it.
-_fm_composer_titled_bottom_ok() {  # <family> <bottom-inner> <top-spaces>
-  local family=$1 inner=$2 expected=$3 dash spaces
-  fm_composer_normalize_trim_var inner
-  case "$family" in
-    rounded|light) dash='─' ;;
-    double) dash='═' ;;
-    heavy) dash='━' ;;
-    ascii) dash='-' ;;
-    *) return 1 ;;
-  esac
-  case "$inner" in
-    "$dash"*"$dash") ;;
-    *) return 1 ;;
-  esac
-  spaces=${inner//"$dash"/ }
-  spaces=$(printf '%s' "$spaces" | LC_ALL=C sed 's/[!-~]/ /g')
-  case "$spaces" in
-    *[![:space:]]*) return 1 ;;
-  esac
-  [ "$spaces" = "$expected" ]
 }
 
 # fm_composer_row_has_edge: 0 when the trimmed row starts or ends with a

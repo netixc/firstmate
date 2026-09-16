@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Detect the agent harness this process tree runs on.
-# Usage: fm-harness.sh                  print own harness: codex|opencode|pi|pi-signed|grok|unknown
+# Usage: fm-harness.sh                  print own harness: codex|opencode|pi|pi-signed|unknown
 #        fm-harness.sh crew             print the effective CREWMATE harness
 #                                        (config/crew-harness; "default" resolves to own)
 #        fm-harness.sh secondmate       print the harness the PRIMARY uses to launch
@@ -70,15 +70,6 @@ harness_marker() {
     if [ "${FM_PI_HARNESS:-}" = pi-signed ]; then echo pi-signed; else echo pi; fi
     return
   fi
-  # grok set GROK_AGENT=1 for its child/tool processes (verified, grok 0.2.73).
-  # The marker is unambiguous when present, but it is not guaranteed present. A grok 1.0.0
-  # hook process carries GROK_HOOK_EVENT, GROK_HOOK_NAME, GROK_SESSION_ID, and
-  # GROK_WORKSPACE_ROOT with no GROK_AGENT at all (verified from the live process
-  # environment of a wedged grok 1.0.0 Stop hook, 2026-08-07). Treat this marker as
-  # a fast path only; the ancestry walk below is what actually guarantees grok is
-  # identified, and any rule that must be RELIABLE under grok has to test the hook
-  # markers too (see docs/turnend-guard.md).
-  [ "${GROK_AGENT:-}" = "1" ] && { echo grok; return; }
   # codex and opencode publish no harness-identity marker at all, so
   # they are never named here and are identified by ancestry alone.
   return 0
@@ -98,7 +89,6 @@ harness_process_verdict() {  # <pid>
   case "$(basename -- "$comm")" in
     *codex*) echo "comm codex"; return ;;
     *opencode*) echo "comm opencode"; return ;;
-    *grok*) echo "comm grok"; return ;;
     # Both Pi identities share this launcher name. Ancestry can only prove the
     # FAMILY; only the launch-boundary marker selects the signed identity, which
     # is why detect_own keeps a marker that agrees on the family.
@@ -110,7 +100,6 @@ harness_process_verdict() {  # <pid>
       case "$args" in
         *codex*) echo "args codex"; return ;;
         *opencode*) echo "args opencode"; return ;;
-        *grok*) echo "args grok"; return ;;
         *" pi "*|*/pi) echo "args pi"; return ;;
       esac ;;
   esac

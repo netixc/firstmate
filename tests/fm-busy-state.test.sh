@@ -5,8 +5,8 @@
 # Covers the captain-approved redesign invariants: busy/idle/unknown/dead with
 # explicit source attribution; missing, malformed, stale (gen-mismatch), and
 # untrusted (source-mismatch) semantic data classify unknown - never idle;
-# adapter isolation (one adapter's writer or Grok's regex can never classify
-# another adapter); endpoint death is the only process-level override and
+# adapter isolation (one adapter's writer can never classify another adapter);
+# endpoint death is the only process-level override and
 # yields dead, never busy; converted adapters never classify from rendered
 # footer text. All hermetic over temp dirs; no real agent session is invoked.
 set -u
@@ -268,8 +268,8 @@ test_source_mismatch_cross_adapter() {
   [ "$out" = "unknown source-mismatch" ] || fail "pi-ext record on an OpenCode task must be untrusted, got '$out'"
   out=$(fm_busy_classify tmux w1 pi t1 "$state")
   [ "$out" = "busy pi-ext" ] || fail "pi-ext record on a pi task must classify, got '$out'"
-  out=$(fm_busy_classify tmux w1 grok t1 "$state")
-  [ "$out" = "unknown source-mismatch" ] || fail "grok trusts no semantic source, got '$out'"
+  out=$(fm_busy_classify tmux w1 unknown-harness t1 "$state")
+  [ "$out" = "unknown source-mismatch" ] || fail "an unknown harness trusts no semantic source, got '$out'"
   pass "a record is trusted only by the adapter whose source wrote it"
 }
 
@@ -287,21 +287,6 @@ Ctrl+c:cancel'
   out=$(fm_busy_classify tmux w1 codex t1 "$state" "$tail")
   [ "$out" = "unknown codex-unverified" ] || fail "codex must never classify from footer text, got '$out'"
   pass "converted adapters never classify busy from rendered footer text"
-}
-
-test_grok_regex_isolated() {
-  local state out
-  state=$(new_state_dir grok-arm)
-  out=$(fm_busy_classify tmux w1 grok t1 "$state" 'thinking hard
-Ctrl+c:cancel')
-  [ "$out" = "busy grok-regex" ] || fail "grok busy tail must classify 'busy grok-regex', got '$out'"
-  out=$(fm_busy_classify tmux w1 grok t1 "$state" 'done.
-> ')
-  [ "$out" = "idle grok-regex" ] || fail "grok idle tail must classify 'idle grok-regex', got '$out'"
-  # Another adapter's footer never makes grok busy either.
-  out=$(fm_busy_classify tmux w1 grok t1 "$state" '• Working (6s • esc to interrupt)')
-  [ "$out" = "idle grok-regex" ] || fail "a pi footer must not classify grok busy, got '$out'"
-  pass "the grok fallback is regex-scoped to grok and classifies only grok tasks"
 }
 
 test_codex_unverified_gate() {
@@ -435,7 +420,6 @@ test_malformed_record_unknown
 test_record_without_sidecar_unknown
 test_source_mismatch_cross_adapter
 test_converted_adapters_ignore_footer_text
-test_grok_regex_isolated
 test_codex_unverified_gate
 test_dead_endpoint_overrides
 test_herdr_native_busy_only

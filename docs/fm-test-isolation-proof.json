@@ -16,7 +16,6 @@
     {"duration_ms": 3544, "exit": 0, "path": "tests/fm-composer-lib.test.sh", "worker": 7},
     {"duration_ms": 17558, "exit": 0, "path": "tests/fm-crew-state.test.sh", "worker": 8},
     {"duration_ms": 513, "exit": 0, "path": "tests/fm-ensure-agents-md.test.sh", "worker": 9},
-    {"duration_ms": 6768, "exit": 0, "path": "tests/fm-grok-harness.test.sh", "worker": 10},
     {"duration_ms": 9562, "exit": 0, "path": "tests/fm-herdr-lab.test.sh", "worker": 11},
     {"duration_ms": 9766, "exit": 0, "path": "tests/fm-lint.test.sh", "worker": 12},
     {"duration_ms": 598, "exit": 0, "path": "tests/fm-pi-primary-types.test.sh", "worker": 13},

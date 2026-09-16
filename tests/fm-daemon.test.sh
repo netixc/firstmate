@@ -2641,16 +2641,6 @@ test_primary_busy_guard_is_harness_scoped() {
   pass "primary busy guard isolates rendered signatures by detected harness"
 }
 
-test_pane_is_busy_defaults_to_tmux_when_backend_omitted() {
-  local dir fakebin capture
-  dir=$(make_supercase busy-default-backend)
-  fakebin="$dir/fakebin"; capture="$dir/pane.txt"
-  printf 'Ctrl+c:cancel\n' > "$capture"
-  PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_STATE_OVERRIDE="$dir/state" FM_DAEMON_PRIMARY_HARNESS=grok pane_is_busy "fakepane" \
-    || fail "pane_is_busy with no backend arg should still default to tmux"
-  pass "pane_is_busy: omitted backend defaults to tmux for Grok's isolated fallback"
-}
-
 test_pane_input_pending_herdr_dispatch() {
   (
     fm_backend_composer_state() { [ "$1" = herdr ] && [ "$2" = "default:w1:p2" ] || fail "unexpected composer_state args: $1 $2"; printf 'pending'; }
@@ -2897,7 +2887,6 @@ test_discover_supervisor_backend_precedence
 test_discover_supervisor_target_herdr
 test_pane_is_busy_herdr_native_busy_state
 test_primary_busy_guard_is_harness_scoped
-test_pane_is_busy_defaults_to_tmux_when_backend_omitted
 test_pane_input_pending_herdr_dispatch
 test_inject_msg_herdr_busy_guard_defers
 test_inject_msg_herdr_composer_guard_defers

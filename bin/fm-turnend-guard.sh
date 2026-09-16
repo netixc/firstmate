@@ -5,7 +5,7 @@
 # bin/fm-guard.sh is pull-based and can warn only when another command runs.
 # This push-based guard is invoked by verified harness turn-end integrations so
 # a primary cannot finish a turn while required supervision is absent.
-# Codex and Grok can block directly by preserving exit status 2 and stderr.
+# Codex can block directly by preserving exit status 2 and stderr.
 # OpenCode and Pi adapters turn that refusal into one bounded continuation
 # through their own native event surfaces.
 #
@@ -14,8 +14,7 @@
 # Away mode transfers supervision to the identity-matched away daemon, whose
 # fresh beacon is accepted even while its one-shot watcher is between cycles.
 #
-# Loop prevention is payload-owned.
-# Codex uses stop_hook_active, while Grok uses stopHookActive.
+# Loop prevention is payload-owned through Codex's stop_hook_active field.
 # A true value means this stop already follows a guard-driven continuation, so
 # the guard allows it rather than creating an unbounded loop.
 set -u
@@ -41,8 +40,6 @@ command -v jq >/dev/null 2>&1 || exit 0
 
 STOP_HOOK_ACTIVE=$(printf '%s' "$PAYLOAD" | jq -r '
   if type != "object" then error("payload")
-  elif has("stopHookActive") then
-    if ((.stopHookActive | type) == "boolean") then .stopHookActive else error("stopHookActive") end
   elif has("stop_hook_active") then
     if ((.stop_hook_active | type) == "boolean") then .stop_hook_active else error("stop_hook_active") end
   else false

@@ -484,7 +484,7 @@ setup_watch_case() {  # <name> -> echoes case dir; state in <dir>/state
   dir="$TMP_ROOT/$name"
   mkdir -p "$dir/state"
   make_watch_stubs "$dir" >/dev/null
-  fm_write_meta "$dir/state/t1.meta" "window=sess:fm-t1" "kind=ship" "harness=grok"
+  fm_write_meta "$dir/state/t1.meta" "window=sess:fm-t1" "kind=ship" "harness=pi"
   printf '%s\n' "$dir"
 }
 
@@ -530,12 +530,14 @@ test_watcher_waits_on_busy_pane() {
   local dir state out log pid rec
   dir=$(setup_watch_case busywait)
   state="$dir/state"; out="$dir/watch.out"; log="$dir/send.log"; : > "$log"
-  printf 'some output\nBUSYTOKEN active\n' > "$dir/busy.capture"
+  printf 'some output\n' > "$dir/busy.capture"
+  printf 'test-gen\n' > "$state/t1.busy-gen"
+  printf 'v1 gen=test-gen seq=1 state=busy source=pi-ext event=agent-start ts=%s\n' "$(date +%s)" > "$state/t1.busy-state"
   rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
   age_path "$rec"
   watch_bg "$state" "$dir/fakebin" "$out" \
     FM_SEND_LOG="$log" FM_FAKE_TMUX_CAPTURE="$dir/busy.capture" \
-    FM_BUSY_REGEX=BUSYTOKEN FM_TASK_INBOX_RING_MAX=99
+    FM_TASK_INBOX_RING_MAX=99
   pid=$!
   sleep 4
   kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
