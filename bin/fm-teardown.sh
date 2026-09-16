@@ -1259,7 +1259,7 @@ validate_retired_kimi_turnend_auth() {
 }
 
 remove_retired_kimi_turnend_auth() {
-  local state_dir=$1 id=$2 registry initial_token
+  local state_dir=$1 id=$2 registry token_path entry quarantine initial_token entry_identity quarantine_identity entry_owner quarantine_owner state_real expected_path registry_target current_token extra
   RETIRED_KIMI_VALIDATED_TOKEN=
   validate_retired_kimi_turnend_auth "$state_dir" "$id" || return 1
   [ -n "$RETIRED_KIMI_VALIDATED_TOKEN" ] || return 0
@@ -1271,7 +1271,46 @@ remove_retired_kimi_turnend_auth() {
     return 1
   }
   registry="$HOME/.kimi-code/fm-turn-end.d"
-  rm -f -- "$registry/$RETIRED_KIMI_VALIDATED_TOKEN"
+  token_path="$state_dir/$id.kimi-turnend-token"
+  entry="$registry/$RETIRED_KIMI_VALIDATED_TOKEN"
+  entry_identity=$(fm_pr_file_identity "$entry") || return 1
+  entry_owner=$(if [ "$(uname)" = Darwin ]; then /usr/bin/stat -f %u "$entry"; else stat -c %u "$entry"; fi) || return 1
+  quarantine="$registry/.fm-retired-kimi.$$.${BASHPID:-0}"
+  [ ! -e "$quarantine" ] && [ ! -L "$quarantine" ] || return 1
+  mv -- "$entry" "$quarantine" || return 1
+  quarantine_identity=$(fm_pr_file_identity "$quarantine" 2>/dev/null || true)
+  state_real=$(cd "$state_dir" 2>/dev/null && pwd -P) || quarantine_identity=
+  expected_path="$state_real/$id.turn-ended"
+  current_token=
+  extra=
+  if exec 5< "$token_path" 2>/dev/null; then
+    IFS= read -r current_token <&5 || true
+    IFS= read -r extra <&5 || true
+    exec 5<&-
+  fi
+  registry_target=
+  if [ -f "$quarantine" ] && [ ! -L "$quarantine" ]; then
+    IFS= read -r registry_target < "$quarantine" || [ -n "$registry_target" ] || true
+  fi
+  quarantine_owner=$(if [ "$(uname)" = Darwin ]; then /usr/bin/stat -f %u "$quarantine"; else stat -c %u "$quarantine"; fi 2>/dev/null || true)
+  if [ ! -f "$quarantine" ] || [ -L "$quarantine" ] \
+    || [ "$quarantine_identity" != "$entry_identity" ] \
+    || [ "$(fm_pr_file_link_count "$quarantine" 2>/dev/null || true)" != 1 ] \
+    || [ "$entry_owner" != "$quarantine_owner" ] \
+    || [ "$current_token" != "$initial_token" ] || [ -n "$extra" ] \
+    || [ "$registry_target" != "$expected_path" ]; then
+    if [ -e "$entry" ] || [ -L "$entry" ]; then
+      echo "error: retired Kimi registry entry changed during identity-preserving cleanup; preserving both artifacts" >&2
+      return 1
+    fi
+    mv -- "$quarantine" "$entry" || {
+      echo "error: retired Kimi registry entry could not be restored after identity validation failed" >&2
+      return 1
+    }
+    echo "error: retired Kimi registry entry changed during identity-preserving cleanup; refusing artifact deletion" >&2
+    return 1
+  fi
+  rm -f -- "$quarantine"
 }
 
 retire_busy_state() {

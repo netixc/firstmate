@@ -813,6 +813,37 @@ SH
   pass "teardown revalidates a replaced Kimi registry entry before deletion"
 }
 
+test_retired_kimi_registry_entry_preserves_replacement_during_quarantine() {
+  local case_dir home token target real_mv rc=0
+  case_dir=$(make_case retired-kimi-quarantine-race)
+  home="$case_dir/home"
+  mkdir -p "$home/.kimi-code/fm-turn-end.d"
+  write_meta "$case_dir" local-only ship
+  wt_commit "$case_dir" "landed Kimi quarantine race fixture"
+  add_fork_with_pushed_branch "$case_dir"
+  token=fm.123456789012
+  target="$case_dir/state/task-x1.turn-ended"
+  printf '%s\n' "$token" > "$case_dir/state/task-x1.kimi-turnend-token"
+  printf '%s\n' "$target" > "$home/.kimi-code/fm-turn-end.d/$token"
+  real_mv=$(command -v mv)
+  cat > "$case_dir/fakebin/mv" <<SH
+#!/usr/bin/env bash
+if [ "\${1:-}" = -- ] && [ "\${2:-}" = "$home/.kimi-code/fm-turn-end.d/$token" ]; then
+  printf '%s\n' 'user replacement' > "\${2}"
+fi
+exec "$real_mv" "\$@"
+SH
+  chmod +x "$case_dir/fakebin/mv"
+
+  HOME="$home" run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr" || rc=$?
+  [ "$rc" -ne 0 ] || fail "retired-kimi-quarantine-race: teardown deleted a replaced registry entry"
+  [ "$(cat "$home/.kimi-code/fm-turn-end.d/$token")" = 'user replacement' ] \
+    || fail "retired-kimi-quarantine-race: replaced registry bytes were not preserved"
+  assert_present "$case_dir/state/task-x1.meta" \
+    "retired-kimi-quarantine-race: refusal removed the task record"
+  pass "teardown preserves a registry replacement during identity quarantine"
+}
+
 test_retired_kimi_registry_entry_accepts_canonical_state_path() {
   local case_dir home state_alias token target rc=0
   case_dir=$(make_case retired-kimi-canonical-state)
@@ -3882,6 +3913,7 @@ test_stale_retired_harness_tasks_refuse_even_forced_cleanup_without_removing_wor
 test_local_only_fork_remote_allows
 test_retired_kimi_registry_entry_mismatch_refuses_cleanup
 test_retired_kimi_registry_entry_revalidates_before_delete
+test_retired_kimi_registry_entry_preserves_replacement_during_quarantine
 test_retired_kimi_registry_entry_accepts_canonical_state_path
 test_retired_kimi_traversal_token_name_refuses_cleanup
 test_teardown_closes_the_backlog_item_itself
