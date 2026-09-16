@@ -1,0 +1,8 @@
+ok - retired Kimi cleanup byte-preserves external TOML and removes only exact orphan artifacts
+ok - retired Kimi cleanup preserves every artifact while a task record still owns a token
+ok - retired Kimi cleanup preserves registry entries belonging to another home
+ok - retired Kimi cleanup preserves shared artifacts for foreign active tasks
+ok - retired Kimi cleanup refuses surprising external files without mutation
+ok - retired Kimi cleanup refuses symlinked roots and malformed ownership markers without mutation
+ok - bootstrap retires old Kimi global artifacts only on its mutation-authorized path
+# all retired Kimi cleanup tests passed
