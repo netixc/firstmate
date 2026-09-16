@@ -778,6 +778,33 @@ test_retired_kimi_registry_entry_mismatch_refuses_cleanup() {
   pass "teardown refuses a mismatched retired Kimi registry entry without deleting it"
 }
 
+test_retired_kimi_malformed_token_name_refuses_cleanup() {
+  local case_dir home rc=0
+  case_dir=$(make_case retired-kimi-malformed-token)
+  home="$case_dir/home"
+  mkdir -p "$home/.kimi-code/fm-turn-end.d"
+  write_meta "$case_dir" local-only ship
+  wt_commit "$case_dir" "landed malformed Kimi token fixture"
+  add_fork_with_pushed_branch "$case_dir"
+  printf '%s\n' 'foo' > "$case_dir/state/task-x1.kimi-turnend-token"
+  printf '%s\n' "$case_dir/state/task-x1.turn-ended" \
+    > "$home/.kimi-code/fm-turn-end.d/foo"
+
+  set +e
+  HOME="$home" run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  [ "$rc" -ne 0 ] || fail "retired-kimi-malformed-token: teardown accepted a malformed token name"
+  grep -q "invalid token name" "$case_dir/stderr" \
+    || fail "retired-kimi-malformed-token: refusal did not identify the malformed token"
+  assert_present "$case_dir/state/task-x1.meta" \
+    "retired-kimi-malformed-token: refusal removed the task record"
+  assert_present "$home/.kimi-code/fm-turn-end.d/foo" \
+    "retired-kimi-malformed-token: refusal removed the registry entry"
+  pass "teardown refuses malformed retired Kimi token names without deleting them"
+}
+
 test_teardown_closes_the_backlog_item_itself() {
   local case_dir out
   case_dir=$(make_case tasks-axi-close)
@@ -2003,6 +2030,7 @@ test_secondmate_home_teardown_delivers_final_line_or_refuses() {
     && [ -d "$case_dir/tasktmp" ] \
     || fail "mate-teardown-refuses: refusal removed endpoint records before parent delivery"
   rmdir "$channel"
+  rm -f "$case_dir/state/task-x1.kimi-turnend-token"
   err=$(FM_HOME="$case_dir/home" FM_STATE_OVERRIDE="$case_dir/state" \
     "$ROOT/bin/fm-wake-drain.sh" 2>&1 >/dev/null)
   seq=$(printf '%s\n' "$err" | sed -n 's/^WAKE_ACK_REQUIRED:.*--ack-through \([0-9][0-9]*\) --recovery-generation .*/\1/p')
@@ -3791,6 +3819,7 @@ EOF
 test_stale_retired_harness_tasks_refuse_even_forced_cleanup_without_removing_work
 test_local_only_fork_remote_allows
 test_retired_kimi_registry_entry_mismatch_refuses_cleanup
+test_retired_kimi_malformed_token_name_refuses_cleanup
 test_teardown_closes_the_backlog_item_itself
 test_teardown_manual_backend_leaves_the_backlog_to_the_operator
 test_local_only_truly_unpushed_refuses

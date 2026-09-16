@@ -336,7 +336,7 @@ test_active_dispatch_profile_allows_raw_launch_command() {
 }
 
 test_retired_kimi_raw_launch_commands_refuse_before_provisioning() {
-  local selection rec id out status
+  local selection command rec id out status
   for selection in configured explicit; do
     id="retired-kimi-raw-$selection-z16"
     rec=$(make_spawn_case "retired-kimi-raw-$selection" pi "$id")
@@ -346,18 +346,23 @@ test_retired_kimi_raw_launch_commands_refuse_before_provisioning() {
       out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
         "$id" "$PROJ_DIR" 2>&1)
     else
-      out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-        "$id" "$PROJ_DIR" '/opt/kimi --model k3' 2>&1)
+      for command in 'kimi --model k3' '/opt/kimi-code --model k3'; do
+        out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
+          "$id" "$PROJ_DIR" "$command" 2>&1)
+        status=$?
+        expect_code 1 "$status" "retired Kimi raw explicit command should refuse"
+        assert_contains "$out" "retired Kimi launch commands" \
+          "retired Kimi raw explicit refusal omitted the reason"
+        assert_absent "$HOME_DIR/state/$id.meta" \
+          "retired Kimi raw explicit command published task metadata"
+        [ ! -s "$LAUNCH_LOG" ] || fail "retired Kimi raw explicit command reached the launch backend"
+      done
+      continue
     fi
     status=$?
     expect_code 1 "$status" "retired Kimi raw $selection command should refuse"
-    if [ "$selection" = configured ]; then
-      assert_contains "$out" "no launch template for harness 'kimi'" \
-        "retired Kimi configured refusal omitted the reason"
-    else
-      assert_contains "$out" "retired Kimi launch commands" \
-        "retired Kimi raw explicit refusal omitted the reason"
-    fi
+    assert_contains "$out" "no launch template for harness 'kimi'" \
+      "retired Kimi configured refusal omitted the reason"
     assert_absent "$HOME_DIR/state/$id.meta" \
       "retired Kimi raw $selection command published task metadata"
     [ ! -s "$LAUNCH_LOG" ] || fail "retired Kimi raw $selection command reached the launch backend"
