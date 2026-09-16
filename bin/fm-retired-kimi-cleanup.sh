@@ -39,7 +39,18 @@ if [ -f "$config" ] && [ ! -L "$config" ] \
   owned=1
 fi
 [ ! -e "$hook" ] && [ ! -L "$hook" ] || owned=1
-[ ! -e "$registry" ] && [ ! -L "$registry" ] || owned=1
+if [ -L "$registry" ] || { [ -e "$registry" ] && [ ! -d "$registry" ]; }; then
+  owned=1
+elif [ -d "$registry" ]; then
+  for entry in "$registry"/*; do
+    [ -e "$entry" ] || continue
+    name=${entry##*/}
+    if [[ "$name" =~ ^fm\.[A-Za-z0-9]{12}$ ]] && [ -f "$entry" ] && [ ! -L "$entry" ]; then
+      owned=1
+      break
+    fi
+  done
+fi
 [ "$owned" -eq 1 ] || exit 0
 
 if ! command -v python3 >/dev/null 2>&1; then

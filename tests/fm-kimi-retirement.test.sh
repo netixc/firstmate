@@ -97,6 +97,16 @@ test_cleanup_preserves_external_config_bytes_and_removes_orphans() {
   pass "retired Kimi cleanup byte-preserves external TOML and removes only exact orphan artifacts"
 }
 
+test_cleanup_preserves_unrelated_empty_registry_directory() {
+  local home
+  home=$(make_home empty-registry)
+  mkdir -p "$home/.kimi-code/fm-turn-end.d"
+
+  HOME="$home" "$CLEANUP" || fail "retired Kimi cleanup refused an unrelated empty registry directory"
+  assert_present "$home/.kimi-code/fm-turn-end.d" "retired Kimi cleanup removed an unrelated empty registry directory"
+  pass "retired Kimi cleanup preserves an unrelated empty registry directory"
+}
+
 test_cleanup_refuses_task_bound_token_without_mutation() {
   local home expected token target out rc=0
   home=$(make_home active)
@@ -250,6 +260,7 @@ test_bootstrap_runs_cleanup_only_with_mutation_authority() {
 }
 
 test_cleanup_preserves_external_config_bytes_and_removes_orphans
+test_cleanup_preserves_unrelated_empty_registry_directory
 test_cleanup_refuses_task_bound_token_without_mutation
 test_cleanup_preserves_cross_home_registry_entries
 test_cleanup_refuses_foreign_active_registry_entries_without_mutation
