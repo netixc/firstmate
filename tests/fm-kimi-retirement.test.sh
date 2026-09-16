@@ -124,6 +124,27 @@ test_cleanup_refuses_task_bound_token_without_mutation() {
   pass "retired Kimi cleanup preserves every artifact while a task record still owns a token"
 }
 
+test_cleanup_preserves_cross_home_registry_entries() {
+  local home other current_token current_target foreign_token foreign_target
+  home=$(make_home cross-home)
+  other="$LAB/other-home"
+  mkdir -p "$other/state"
+  write_config_with_owned_region "$home" "$home/expected.toml"
+  mkdir -p "$home/.kimi-code/fm-turn-end.d"
+  current_token=fm.123456789012
+  foreign_token=fm.abcdefghijkl
+  printf '%s\n' "$current_token" > "$home/state/current.kimi-turnend-token"
+  current_target="$home/state/current.turn-ended"
+  printf '%s\n' "$current_target" > "$home/.kimi-code/fm-turn-end.d/$current_token"
+  foreign_target="$other/state/foreign.turn-ended"
+  printf '%s\n' "$foreign_target" > "$home/.kimi-code/fm-turn-end.d/$foreign_token"
+
+  HOME="$home" "$CLEANUP" || fail "retired Kimi cleanup refused current-home orphan cleanup"
+  assert_absent "$home/.kimi-code/fm-turn-end.d/$current_token" "current-home orphan token was not removed"
+  assert_present "$home/.kimi-code/fm-turn-end.d/$foreign_token" "cross-home registry token was removed"
+  pass "retired Kimi cleanup preserves registry entries belonging to another home"
+}
+
 test_cleanup_refuses_unexpected_external_files() {
   local home expected out rc=0
   home=$(make_home unexpected)
@@ -202,6 +223,7 @@ test_bootstrap_runs_cleanup_only_with_mutation_authority() {
 
 test_cleanup_preserves_external_config_bytes_and_removes_orphans
 test_cleanup_refuses_task_bound_token_without_mutation
+test_cleanup_preserves_cross_home_registry_entries
 test_cleanup_refuses_unexpected_external_files
 test_cleanup_refuses_symlinked_root_and_malformed_markers
 test_bootstrap_runs_cleanup_only_with_mutation_authority

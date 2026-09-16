@@ -1448,7 +1448,7 @@ detect_local_tools() {
 
 retired_kimi_cleanup() {
   local out
-  if out=$("$SCRIPT_DIR/fm-retired-kimi-cleanup.sh" 2>&1); then
+  if out=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-retired-kimi-cleanup.sh" 2>&1); then
     return 0
   fi
   out=$(printf '%s' "$out" | head -1)

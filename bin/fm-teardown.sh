@@ -1194,7 +1194,7 @@ remove_grok_turnend_auth() {
 # control family, so its retired path must not remain in fm-control-lib's active
 # capability tables. Only a conservative token may name an owned registry file.
 remove_retired_kimi_turnend_auth() {
-  local state_dir=$1 id=$2 token_path="$1/$2.kimi-turnend-token" token='' extra='' expected_path kimi_root registry token_owner
+  local state_dir=$1 id=$2 token_path="$1/$2.kimi-turnend-token" token='' extra='' expected_path kimi_root registry token_owner registry_target registry_extra
   if [ -e "$token_path" ] || [ -L "$token_path" ]; then
     if [ ! -f "$token_path" ] || [ -L "$token_path" ]; then
       echo "error: retired Kimi token record is not a regular file: $token_path" >&2
@@ -1236,7 +1236,15 @@ remove_retired_kimi_turnend_auth() {
     echo "error: retired Kimi registry entry is not owned by this user: $registry/$token" >&2
     return 1
   }
-  [ "$token" = "$expected_path" ] || {
+  exec 4< "$registry/$token" || return 1
+  IFS= read -r registry_target <&4 || [ -n "$registry_target" ] || { exec 4<&-; return 1; }
+  if IFS= read -r registry_extra <&4; then
+    exec 4<&-
+    echo "error: retired Kimi registry entry has multiple lines: $registry/$token" >&2
+    return 1
+  fi
+  exec 4<&-
+  [ "$registry_target" = "$expected_path" ] || {
     echo "error: retired Kimi registry entry does not name this task's turn-end marker: $registry/$token" >&2
     return 1
   }

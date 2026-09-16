@@ -58,6 +58,7 @@ CONFIG_DIR = sys.argv[1]
 CONFIG = os.path.join(CONFIG_DIR, "config.toml")
 HOOK = os.path.join(CONFIG_DIR, "fm-turn-end.sh")
 REGISTRY = os.path.join(CONFIG_DIR, "fm-turn-end.d")
+STATE_ROOT = os.path.realpath(os.environ.get("FM_STATE_OVERRIDE") or os.path.join(os.environ.get("FM_HOME") or os.path.expanduser("~"), "state"))
 BEGIN = b"# BEGIN FIRSTMATE KIMI TURN-END HOOK"
 BEGIN_OWNS_NEWLINE = BEGIN + b" (OWNS PRECEDING NEWLINE)"
 END = b"# END FIRSTMATE KIMI TURN-END HOOK"
@@ -185,9 +186,14 @@ def registry_tokens() -> list[str]:
             target = raw.decode("utf-8")
         except UnicodeDecodeError:
             refuse(f"Firstmate registry token is not UTF-8 at {path}.")
-        if not target.startswith("/") or not target.endswith(TURN_END_SUFFIX):
+        if not target.startswith("/") or not target.endswith(TURN_END_SUFFIX) or os.path.normpath(target) != target:
             refuse(f"Firstmate registry token has an unexpected target at {path}.")
-        meta = target[: -len(TURN_END_SUFFIX)] + ".meta"
+        if os.path.dirname(target) != STATE_ROOT:
+            continue
+        task_id = os.path.basename(target)[: -len(TURN_END_SUFFIX)]
+        if not re.fullmatch(r"[A-Za-z0-9._-]+", task_id):
+            refuse(f"Firstmate registry token has an unexpected task marker at {path}.")
+        meta = os.path.join(STATE_ROOT, task_id + ".meta")
         if os.path.lexists(meta):
             active.append(name)
         tokens.append(path)
@@ -230,7 +236,7 @@ try:
         os.unlink(token)
     if os.path.lexists(HOOK):
         os.unlink(HOOK)
-    if os.path.lexists(REGISTRY):
+    if os.path.lexists(REGISTRY) and not os.listdir(REGISTRY):
         os.rmdir(REGISTRY)
 except OSError as error:
     refuse(f"filesystem operation failed: {error}.")
