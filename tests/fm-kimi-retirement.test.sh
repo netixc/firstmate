@@ -100,10 +100,13 @@ test_cleanup_preserves_external_config_bytes_and_removes_orphans() {
 test_cleanup_preserves_unrelated_empty_registry_directory() {
   local home
   home=$(make_home empty-registry)
+  write_config_with_owned_region "$home" "$home/expected.toml"
+  write_generated_hook "$home"
   mkdir -p "$home/.kimi-code/fm-turn-end.d"
 
   HOME="$home" "$CLEANUP" || fail "retired Kimi cleanup refused an unrelated empty registry directory"
   assert_present "$home/.kimi-code/fm-turn-end.d" "retired Kimi cleanup removed an unrelated empty registry directory"
+  assert_absent "$home/.kimi-code/fm-turn-end.sh" "retired Kimi cleanup left the generated hook"
   pass "retired Kimi cleanup preserves an unrelated empty registry directory"
 }
 

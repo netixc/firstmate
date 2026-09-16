@@ -1194,7 +1194,7 @@ remove_grok_turnend_auth() {
 # control family, so its retired path must not remain in fm-control-lib's active
 # capability tables. Only a conservative token may name an owned registry file.
 validate_retired_kimi_turnend_auth() {
-  local state_dir=$1 id=$2 token_path="$1/$2.kimi-turnend-token" token='' extra='' expected_path kimi_root registry token_owner registry_target
+  local state_dir=$1 id=$2 token_path="$1/$2.kimi-turnend-token" token='' extra='' state_real expected_path kimi_root registry token_owner registry_target
   if [ -e "$token_path" ] || [ -L "$token_path" ]; then
     if [ ! -f "$token_path" ] || [ -L "$token_path" ]; then
       echo "error: retired Kimi token record is not a regular file: $token_path" >&2
@@ -1214,7 +1214,11 @@ validate_retired_kimi_turnend_auth() {
     echo "error: retired Kimi token record has an invalid token name: $token_path" >&2
     return 1
   fi
-  expected_path="$state_dir/$id.turn-ended"
+  state_real=$(cd "$state_dir" 2>/dev/null && pwd -P) || {
+    echo "error: retired Kimi state directory is not accessible: $state_dir" >&2
+    return 1
+  }
+  expected_path="$state_real/$id.turn-ended"
   kimi_root="$HOME/.kimi-code"
   registry="$kimi_root/fm-turn-end.d"
   if { [ -e "$kimi_root" ] || [ -L "$kimi_root" ]; } && [ -L "$kimi_root" ]; then

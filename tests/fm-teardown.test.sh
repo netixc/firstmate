@@ -620,12 +620,13 @@ SH
 
 # Run teardown with PATH mocking. Args: case_dir [extra args...]
 run_teardown() {
-  local case_dir=$1; shift
+  local case_dir=$1 state_override; shift
+  state_override=${FM_TEARDOWN_STATE_OVERRIDE:-"$case_dir/state"}
   # FM_DATA_OVERRIDE is pinned to the case dir because teardown closes this
   # home's backlog item itself; without it $DATA would resolve to the real
   # repo's own home and a test could mutate live records.
   FM_ROOT_OVERRIDE="$ROOT" \
-  FM_STATE_OVERRIDE="$case_dir/state" \
+  FM_STATE_OVERRIDE="$state_override" \
   FM_DATA_OVERRIDE="$case_dir/data" \
   FM_CONFIG_OVERRIDE="$case_dir/config" \
   PATH="$case_dir/fakebin:${FM_TEARDOWN_TEST_PATH:-$PATH}" \
@@ -782,6 +783,30 @@ test_retired_kimi_registry_entry_mismatch_refuses_cleanup() {
   [ "$(backlog_row_state "$case_dir")" = in_flight ] \
     || fail "retired-kimi-registry-mismatch: refusal changed the backlog state"
   pass "teardown refuses a mismatched retired Kimi registry entry without deleting it"
+}
+
+test_retired_kimi_registry_entry_accepts_canonical_state_path() {
+  local case_dir home state_alias token target rc=0
+  case_dir=$(make_case retired-kimi-canonical-state)
+  home="$case_dir/home"
+  mkdir -p "$home/.kimi-code/fm-turn-end.d"
+  write_meta "$case_dir" local-only ship
+  wt_commit "$case_dir" "landed canonical Kimi cleanup fixture"
+  add_fork_with_pushed_branch "$case_dir"
+  state_alias="$case_dir/state/../state"
+  token=fm.123456789012
+  target="$case_dir/state/task-x1.turn-ended"
+  printf '%s\n' "$token" > "$case_dir/state/task-x1.kimi-turnend-token"
+  printf '%s\n' "$target" > "$home/.kimi-code/fm-turn-end.d/$token"
+
+  HOME="$home" FM_TEARDOWN_STATE_OVERRIDE="$state_alias" run_teardown "$case_dir" \
+    > "$case_dir/stdout" 2> "$case_dir/stderr" || rc=$?
+  [ "$rc" -eq 0 ] || fail "retired-kimi-canonical-state: teardown rejected a canonical registry target"
+  assert_absent "$home/.kimi-code/fm-turn-end.d/$token" \
+    "retired-kimi-canonical-state: teardown left the valid registry entry"
+  assert_absent "$case_dir/state/task-x1.meta" \
+    "retired-kimi-canonical-state: teardown left the task record"
+  pass "teardown accepts a retired Kimi registry target written with canonical state spelling"
 }
 
 test_retired_kimi_traversal_token_name_refuses_cleanup() {
@@ -1986,7 +2011,7 @@ test_secondmate_pr_registration_publishes_ready_line() {
 # every record) while the parent channel cannot be written; a rerun after the
 # repair delivers and completes.
 test_secondmate_home_teardown_delivers_final_line_or_refuses() {
-  local case_dir rc channel wt_head err seq generation
+  local case_dir rc channel wt_head err seq generation home
 
   case_dir=$(make_case mate-teardown-delivers)
   configure_secondmate_home "$case_dir" local "$case_dir/parent"
@@ -2009,20 +2034,24 @@ test_secondmate_home_teardown_delivers_final_line_or_refuses() {
 
   case_dir=$(make_case mate-teardown-refuses)
   configure_secondmate_home "$case_dir" local "$case_dir/parent"
+  home="$case_dir/home"
   # The channel path is occupied by a directory, so no line can be appended.
   mkdir -p "$case_dir/parent/state/mate-x.status"
   channel="$case_dir/parent/state/mate-x.status"
   write_meta "$case_dir" local-only ship
   mkdir -p "$case_dir/tasktmp"
   printf '!\n' > "$case_dir/state/task-x1.grok-turnend-token"
-  printf '!\n' > "$case_dir/state/task-x1.kimi-turnend-token"
+  mkdir -p "$home/.kimi-code/fm-turn-end.d"
+  printf 'fm.123456789012\n' > "$case_dir/state/task-x1.kimi-turnend-token"
+  printf '%s\n' "$case_dir/state/task-x1.turn-ended" > \
+    "$home/.kimi-code/fm-turn-end.d/fm.123456789012"
   printf 'tasktmp=%s\n' "$case_dir/tasktmp" >> "$case_dir/state/task-x1.meta"
   wt_commit "$case_dir" "merged work"
   wt_head=$(git -C "$case_dir/wt" rev-parse HEAD)
   git -C "$case_dir/project" update-ref refs/heads/main "$wt_head"
   printf 'done: PR https://github.com/example/repo/pull/9 checks green\n' > "$case_dir/state/task-x1.status"
   set +e
-  FM_HOME="$case_dir/home" run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  HOME="$home" FM_HOME="$home" run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
   rc=$?
   set -e
   [ "$rc" -ne 0 ] || fail "mate-teardown-refuses: teardown proceeded with an undelivered final line"
@@ -2043,7 +2072,7 @@ test_secondmate_home_teardown_delivers_final_line_or_refuses() {
   [ -z "$seq" ] || FM_HOME="$case_dir/home" FM_STATE_OVERRIDE="$case_dir/state" \
     "$ROOT/bin/fm-wake-drain.sh" --ack-through "$seq" --recovery-generation "$generation" >/dev/null
   set +e
-  FM_HOME="$case_dir/home" run_teardown "$case_dir" > "$case_dir/stdout2" 2> "$case_dir/stderr2"
+  HOME="$home" FM_HOME="$home" run_teardown "$case_dir" > "$case_dir/stdout2" 2> "$case_dir/stderr2"
   rc=$?
   set -e
   expect_code 0 "$rc" "mate-teardown-refuses: rerun after repair should succeed: $(cat "$case_dir/stderr2")"
@@ -3824,6 +3853,7 @@ EOF
 test_stale_retired_harness_tasks_refuse_even_forced_cleanup_without_removing_work
 test_local_only_fork_remote_allows
 test_retired_kimi_registry_entry_mismatch_refuses_cleanup
+test_retired_kimi_registry_entry_accepts_canonical_state_path
 test_retired_kimi_traversal_token_name_refuses_cleanup
 test_teardown_closes_the_backlog_item_itself
 test_teardown_manual_backend_leaves_the_backlog_to_the_operator

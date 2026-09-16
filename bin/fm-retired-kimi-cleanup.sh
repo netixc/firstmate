@@ -250,7 +250,7 @@ try:
         os.unlink(token)
     if os.path.lexists(HOOK):
         os.unlink(HOOK)
-    if os.path.lexists(REGISTRY) and not os.listdir(REGISTRY):
+    if tokens and os.path.lexists(REGISTRY) and not os.listdir(REGISTRY):
         os.rmdir(REGISTRY)
 except OSError as error:
     refuse(f"filesystem operation failed: {error}.")
