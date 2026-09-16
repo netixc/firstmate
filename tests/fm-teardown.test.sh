@@ -666,13 +666,16 @@ make_path_without_lsof() {  # <case-dir>
 
 test_stale_retired_harness_tasks_refuse_even_forced_cleanup_without_removing_work() {
   local harness case_dir rc
-  for harness in omp muse; do
+  for harness in omp muse kimi; do
     case_dir=$(make_case "stale-$harness-task")
     write_meta "$case_dir" local-only ship
     printf 'harness=%s\n' "$harness" >> "$case_dir/state/task-x1.meta"
     : > "$case_dir/state/task-x1.status"
     if [ "$harness" = muse ]; then
       printf 'legacy Muse binding\n' > "$case_dir/state/task-x1.muse-session"
+    elif [ "$harness" = kimi ]; then
+      printf 'fm.123456789012\n' > "$case_dir/state/task-x1.kimi-turnend-token"
+      printf 'token=fm.123456789012\n' > "$case_dir/wt/.fm-kimi-turnend"
     fi
     : > "$case_dir/treehouse.log"
     : > "$case_dir/tmux.log"
@@ -696,12 +699,15 @@ SH
     assert_present "$case_dir/state/task-x1.status" "stale-$harness-task: refusal removed task status"
     if [ "$harness" = muse ]; then
       assert_present "$case_dir/state/task-x1.muse-session" "stale-Muse-task: refusal removed the legacy sidecar"
+    elif [ "$harness" = kimi ]; then
+      assert_present "$case_dir/state/task-x1.kimi-turnend-token" "stale-Kimi-task: refusal removed the legacy token"
+      assert_present "$case_dir/wt/.fm-kimi-turnend" "stale-Kimi-task: refusal removed the legacy pointer"
     fi
     [ -d "$case_dir/wt" ] || fail "stale-$harness-task: refusal removed the isolated copy"
     [ ! -s "$case_dir/treehouse.log" ] || fail "stale-$harness-task: refusal returned the isolated copy"
     [ ! -s "$case_dir/tmux.log" ] || fail "stale-$harness-task: refusal sent lifecycle input"
   done
-  pass "stale OMP and Muse task cleanup refuses without removing retained work or records"
+  pass "stale OMP, Muse, and Kimi task cleanup refuses without removing retained work or records"
 }
 
 test_local_only_fork_remote_allows() {
@@ -2369,7 +2375,7 @@ configure_secondmate_with_tmux_children() {  # <case-dir>
 
 test_forced_secondmate_stale_retired_child_refuses_before_cleanup() {
   local harness case_dir home rc
-  for harness in omp muse; do
+  for harness in omp muse kimi; do
     case_dir=$(make_case "stale-$harness-child")
     write_meta "$case_dir" local-only secondmate
     configure_secondmate_with_tmux_children "$case_dir"
@@ -2377,6 +2383,9 @@ test_forced_secondmate_stale_retired_child_refuses_before_cleanup() {
     printf 'harness=%s\n' "$harness" >> "$home/state/child-a.meta"
     if [ "$harness" = muse ]; then
       printf 'legacy Muse binding\n' > "$home/state/child-a.muse-session"
+    elif [ "$harness" = kimi ]; then
+      printf 'fm.123456789012\n' > "$home/state/child-a.kimi-turnend-token"
+      printf 'token=fm.123456789012\n' > "$case_dir/child-a-wt/.fm-kimi-turnend"
     fi
     : > "$case_dir/kill.log"
     : > "$case_dir/treehouse.log"
@@ -2400,13 +2409,16 @@ SH
     assert_present "$home/state/child-a.meta" "stale-$harness-child: refusal removed the descendant record"
     if [ "$harness" = muse ]; then
       assert_present "$home/state/child-a.muse-session" "stale-Muse-child: refusal removed the legacy sidecar"
+    elif [ "$harness" = kimi ]; then
+      assert_present "$home/state/child-a.kimi-turnend-token" "stale-Kimi-child: refusal removed the legacy token"
+      assert_present "$case_dir/child-a-wt/.fm-kimi-turnend" "stale-Kimi-child: refusal removed the legacy pointer"
     fi
     [ -d "$home" ] && [ -d "$case_dir/child-a-wt" ] \
       || fail "stale-$harness-child: refusal removed the secondmate home or descendant copy"
     [ ! -s "$case_dir/kill.log" ] || fail "stale-$harness-child: refusal sent lifecycle input"
     [ ! -s "$case_dir/treehouse.log" ] || fail "stale-$harness-child: refusal returned an isolated copy"
   done
-  pass "forced secondmate cleanup refuses stale OMP and Muse descendants without removing retained work"
+  pass "forced secondmate cleanup refuses stale OMP, Muse, and Kimi descendants without removing retained work"
 }
 
 test_forced_secondmate_teardown_holds_descendant_lifecycle_locks() {

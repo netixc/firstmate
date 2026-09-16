@@ -311,7 +311,6 @@ provider_for_harness() {
     opencode)     printf 'codex\n' ;;
     pi|pi-signed) printf 'pi\n' ;;
     grok)         printf 'grok\n' ;;
-    kimi)         printf 'kimi\n' ;;
     *)            return 1 ;;
   esac
 }

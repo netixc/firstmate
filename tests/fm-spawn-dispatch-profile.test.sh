@@ -437,6 +437,45 @@ test_retired_rovo_harness_refuses_without_touching_project_files() {
   pass "retired Rovo config and explicit selections refuse before launch and byte-preserve project files"
 }
 
+test_retired_kimi_harness_refuses_without_touching_external_config() {
+  local selection rec id out status config_before hook_before
+  for selection in configured explicit; do
+    id="retired-kimi-$selection"
+    rec=$(make_spawn_case "$id" kimi "$id")
+    read_case_record "$rec"
+    mkdir -p "$HOME_DIR/user/.kimi-code"
+    cat > "$HOME_DIR/user/.kimi-code/config.toml" <<'TOML'
+# user bytes that a rejected selection must not rewrite
+[[hooks]]
+event = "Custom"
+command = "keep"
+TOML
+    printf '%s\n' '# unrelated user hook' > "$HOME_DIR/user/.kimi-code/fm-turn-end.sh"
+    cp "$HOME_DIR/user/.kimi-code/config.toml" "$CASE_DIR/config-before"
+    cp "$HOME_DIR/user/.kimi-code/fm-turn-end.sh" "$CASE_DIR/hook-before"
+    config_before="$CASE_DIR/config-before"
+    hook_before="$CASE_DIR/hook-before"
+    if [ "$selection" = configured ]; then
+      printf 'kimi\n' > "$HOME_DIR/config/crew-harness"
+      out=$(HOME="$HOME_DIR/user" run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
+        "$id" "$PROJ_DIR" 2>&1)
+    else
+      out=$(HOME="$HOME_DIR/user" run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
+        "$id" "$PROJ_DIR" --harness kimi 2>&1)
+    fi
+    status=$?
+    expect_code 1 "$status" "retired Kimi $selection selection should refuse"
+    assert_contains "$out" "harness 'kimi'" "retired Kimi refusal did not name the stale harness"
+    assert_absent "$HOME_DIR/state/$id.meta" "retired Kimi refusal published task metadata"
+    [ ! -s "$LAUNCH_LOG" ] || fail "retired Kimi refusal typed a launch command"
+    cmp -s "$config_before" "$HOME_DIR/user/.kimi-code/config.toml" \
+      || fail "retired Kimi refusal rewrote external config.toml"
+    cmp -s "$hook_before" "$HOME_DIR/user/.kimi-code/fm-turn-end.sh" \
+      || fail "retired Kimi refusal changed unrelated external hook bytes"
+  done
+  pass "retired Kimi config and explicit selections refuse before launch and byte-preserve external configuration"
+}
+
 test_codex_omits_invalid_max_effort() {
   local rec id out status launch
   id=profile-codex-max-z4
@@ -616,6 +655,23 @@ test_pi_threads_model_and_max_effort() {
   pass "pi receives --model and --thinking max profile flags"
 }
 
+test_pi_preserves_kimi_provider_model_selection() {
+  local rec id out status launch
+  id=profile-pi-kimi-provider-z8a
+  rec=$(make_spawn_case profile-pi-kimi-provider pi "$id")
+  read_case_record "$rec"
+
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+    --model kimi-coding/k2p5 --effort high)
+  status=$?
+  expect_code 0 "$status" "Pi spawn with a Kimi provider model should succeed"
+  assert_meta_profile "$HOME_DIR/state/$id.meta" pi kimi-coding/k2p5 high
+  launch=$(cat "$LAUNCH_LOG")
+  assert_contains "$launch" "FM_PI_HARNESS=pi '$FAKEBIN_DIR/pi' --tui-mode regular --model 'kimi-coding/k2p5' --thinking 'high' -e" \
+    "standalone Kimi removal stripped Pi's Kimi provider model"
+  pass "Kimi provider models remain selectable through the retained Pi runtime"
+}
+
 test_pi_signed_threads_shared_pi_profile_and_preserves_identity() {
   local rec id out status launch
   id=profile-pi-signed-z8b
@@ -700,6 +756,29 @@ test_pi_signed_missing_binary_refuses_before_endpoint_or_metadata() {
   assert_absent "$HOME_DIR/state/$id.meta" "missing pi-signed refusal wrote task metadata"
   [ ! -s "$LAUNCH_LOG" ] || fail "missing pi-signed refusal typed a launch command"
   pass "pi-signed refuses safely and actionably when the selected executable is unavailable"
+}
+
+test_retired_kimi_secondmate_selection_refuses_before_endpoint() {
+  local selection rec id sm out status
+  for selection in configured explicit; do
+    id="retired-kimi-secondmate-$selection"
+    rec=$(make_spawn_case "$id" codex "$id")
+    read_case_record "$rec"
+    sm="$CASE_DIR/secondmate-home"
+    make_seeded_secondmate_home "$sm" "$id"
+    if [ "$selection" = configured ]; then
+      printf 'kimi\n' > "$HOME_DIR/config/secondmate-harness"
+      out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$sm" --secondmate 2>&1)
+    else
+      out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$sm" --secondmate --harness kimi 2>&1)
+    fi
+    status=$?
+    expect_code 1 "$status" "retired Kimi $selection secondmate selection should refuse"
+    assert_contains "$out" "harness 'kimi'" "retired Kimi secondmate refusal omitted the stale harness"
+    assert_absent "$HOME_DIR/state/$id.meta" "retired Kimi secondmate refusal published endpoint metadata"
+    [ ! -s "$LAUNCH_LOG" ] || fail "retired Kimi secondmate refusal typed a launch command"
+  done
+  pass "retired Kimi local secondmate config and explicit selections refuse before endpoint creation"
 }
 
 test_pi_signed_persistent_secondmate_uses_pi_extensions_and_identity() {
@@ -1071,6 +1150,7 @@ test_active_dispatch_profile_allows_raw_launch_command
 test_retired_gemini_harness_refuses_without_touching_settings
 test_retired_agy_harness_refuses_without_touching_external_settings
 test_retired_rovo_harness_refuses_without_touching_project_files
+test_retired_kimi_harness_refuses_without_touching_external_config
 test_codex_omits_invalid_max_effort
 test_grok_threads_model_and_reasoning_effort
 test_grok_omits_invalid_max_reasoning_effort
@@ -1080,9 +1160,11 @@ test_native_effort_validator_keeps_axes_separate
 test_native_pi_ultra_is_explicit_and_model_scoped
 test_batch_preserves_native_ultra
 test_pi_threads_model_and_max_effort
+test_pi_preserves_kimi_provider_model_selection
 test_pi_tui_mode_probe_is_safe_for_old_and_new_pi
 test_pi_signed_threads_shared_pi_profile_and_preserves_identity
 test_pi_signed_missing_binary_refuses_before_endpoint_or_metadata
+test_retired_kimi_secondmate_selection_refuses_before_endpoint
 test_pi_signed_persistent_secondmate_uses_pi_extensions_and_identity
 test_batch_forwards_shared_profile_flags
 test_active_dispatch_profile_does_not_block_secondmate_launch

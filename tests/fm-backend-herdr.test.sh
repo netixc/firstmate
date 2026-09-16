@@ -502,7 +502,7 @@ test_registered_agent_with_a_live_foreground_process_stays_alive() {
 
 test_retired_harness_processes_are_not_herdr_agents() {
   local harness dir log resp fb out
-  for harness in omp muse muse-bin-1.0.3-R2198.1; do
+  for harness in omp muse muse-bin-1.0.3-R2198.1 kimi kimi-code; do
     dir="$TMP_ROOT/retired-$harness-process"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
     printf '{"result":{"type":"pane_process_info","process_info":{"pane_id":"w1:p2","shell_pid":4242,"foreground_process_group_id":4243,"foreground_processes":[{"pid":4243,"name":"%s","argv0":"%s","argv":["%s"],"cmdline":"%s"}]}}}\n' \
       "$harness" "$harness" "$harness" "$harness" > "$resp/1.out"
@@ -512,7 +512,7 @@ test_retired_harness_processes_are_not_herdr_agents() {
     [ "$out" = other ] \
       || fail "a stale $harness process must not classify as a verified Herdr agent, got '$out'"
   done
-  pass "herdr process classifier: stale OMP and Muse processes are not verified agents"
+  pass "herdr process classifier: stale OMP, Muse, and Kimi processes are not verified agents"
 }
 
 test_registered_agent_with_a_non_shell_foreground_process_stays_alive() {

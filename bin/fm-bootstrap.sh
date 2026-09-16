@@ -11,6 +11,7 @@
 #                 "BACKEND_INVALID: <name> (known: <names>)",
 #                 "STARTUP_MEMORY_BUDGET: invalid config/startup-memory-budget - <reason>",
 #                 "CREW_DISPATCH: invalid config/crew-dispatch.json - <reason>",
+#                 "KIMI_RETIREMENT: <safe cleanup refusal>",
 #                 "FLEET_SYNC: <repo>: skipped|recovered|STUCK: <detail>",
 #                 "HOME_SUMMARY: <ledger never published|not republished since
 #                 <stamp>>; <n> failed attempt(s) ... last: <recorded failure>",
@@ -101,10 +102,10 @@
 #          The `code-root <file>` variant is a detect-only local check that runs
 #          even in a read-only session; detect_code_root_backlog_fork owns what
 #          it reports.
-#          Set FM_BOOTSTRAP_DETECT_ONLY=1 to skip the six MUTATING sweeps
+#          Set FM_BOOTSTRAP_DETECT_ONLY=1 to skip the seven MUTATING sweeps
 #          (backlog_record_reconcile, secondmate_sync,
-#          secondmate_liveness_sweep, secondmate_handoff_resume, x_mode_setup,
-#          fleet_sync) while still
+#          secondmate_liveness_sweep, secondmate_handoff_resume,
+#          retired_kimi_cleanup, x_mode_setup, fleet_sync) while still
 #          printing every read-only detect line
 #          above; the TANGLE line switches to advisory-only wording with no
 #          checkout command. Used by
@@ -800,7 +801,7 @@ secondmate_liveness_one() {  # <meta> <id>
   [ -n "$target" ] || target="$window"
   agent_state=$(fm_backend_agent_state "$backend" "$target" 2>/dev/null) || agent_state=unreadable
   case "$harness" in
-    codex|opencode|pi|pi-signed|grok|kimi) ;;
+    codex|opencode|pi|pi-signed|grok) ;;
     *)
       case "$agent_state" in dead|missing) agent_state=unverified-harness ;; esac
       ;;
@@ -1111,7 +1112,7 @@ crew_dispatch_validate() {
     return 0
   fi
   err=$(jq -r '
-    def verified($h): ["codex","opencode","pi","pi-signed","grok","kimi"] | index($h);
+    def verified($h): ["codex","opencode","pi","pi-signed","grok"] | index($h);
     def effort_ok($h; $m; $e):
       if $e == null then true
       elif ($e | type) != "string" then false
@@ -1119,7 +1120,7 @@ crew_dispatch_validate() {
       elif $h == "codex" then (["low","medium","high","xhigh"] | index($e))
       elif $h == "grok" then (["low","medium","high"] | index($e))
       elif $h == "pi" or $h == "pi-signed" then (["low","medium","high","xhigh","max"] | index($e))
-      elif $h == "opencode" or $h == "kimi" then false
+      elif $h == "opencode" then false
       else true
       end;
     def profiles($value):
@@ -1445,6 +1446,15 @@ detect_local_tools() {
   fi
 }
 
+retired_kimi_cleanup() {
+  local out
+  if out=$("$SCRIPT_DIR/fm-retired-kimi-cleanup.sh" 2>&1); then
+    return 0
+  fi
+  out=$(printf '%s' "$out" | head -1)
+  echo "KIMI_RETIREMENT: ${out:-retired global hook cleanup failed without a diagnostic}"
+}
+
 detect_local_config() {
   # Worktree-tangle check: the firstmate primary checkout (FM_ROOT) must sit on its
   # default branch, not a feature branch (see fm-tangle-lib.sh). Scoped to the
@@ -1598,6 +1608,10 @@ if [ "${FM_BOOTSTRAP_DETECT_ONLY:-0}" != 1 ]; then
       fm_timing_record phase handoff-delivery "$__fm_timing_stamp"
     fi
   fi
+  # Retire only exact Firstmate-owned artifacts from the removed standalone
+  # Kimi adapter. The helper preserves external config bytes and refuses while
+  # any registry token still has a task record.
+  local_phase && retired_kimi_cleanup
   # x_mode_setup writes local Relay artifacts only and never leaves the machine.
   local_phase && x_mode_setup
   if [ -n "$fleet_sync_pid" ]; then

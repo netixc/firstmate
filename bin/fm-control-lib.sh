@@ -37,7 +37,7 @@
 # `resume` is deliberately NOT a verb. It is not deterministic across the
 # verified adapters: codex and grok resume only from a session id printed at
 # exit, opencode resumes the most recent session for the cwd with --continue,
-# and pi, pi-signed, and kimi have no verified pane-resume contract
+# and pi and pi-signed have no verified pane-resume contract
 # at all. `relaunch` covers the same need deterministically for every adapter,
 # because the brief on disk - not a harness-private session - is the durable
 # instruction.
@@ -63,7 +63,7 @@ fm_control_verb_allowed() {  # <verb>
 # than guessed at, exactly as a spawn on it would be.
 fm_control_harness_supported() {  # <harness>
   case "${1-}" in
-    codex|opencode|pi|pi-signed|grok|kimi) return 0 ;;
+    codex|opencode|pi|pi-signed|grok) return 0 ;;
   esac
   return 1
 }
@@ -82,7 +82,6 @@ fm_control_harness_family() {  # <recorded-harness>
     codex*) printf 'codex' ;;
     opencode*) printf 'opencode' ;;
     grok*) printf 'grok' ;;
-    kimi*) printf 'kimi' ;;
     *) return 1 ;;
   esac
 }
@@ -100,7 +99,7 @@ fm_control_harness_supports_kind() {  # <harness> <kind>
 # whose Esc only moves focus to the scrollback; grok cancels on Ctrl+C.
 fm_control_interrupt_key() {  # <harness>
   case "${1-}" in
-    codex|opencode|pi|pi-signed|kimi) printf 'Escape' ;;
+    codex|opencode|pi|pi-signed) printf 'Escape' ;;
     grok) printf 'C-c' ;;
     *) return 1 ;;
   esac
@@ -111,7 +110,7 @@ fm_control_interrupt_key() {  # <harness>
 fm_control_interrupt_repeat() {  # <harness>
   case "${1-}" in
     opencode) printf '2' ;;
-    codex|pi|pi-signed|grok|kimi) printf '1' ;;
+    codex|pi|pi-signed|grok) printf '1' ;;
     *) return 1 ;;
   esac
 }
@@ -121,14 +120,14 @@ fm_control_interrupt_repeat() {  # <harness>
 # with no verified mechanics returns nonzero, matching the tables above.
 fm_control_interrupt_clear_key() {  # <harness>
   case "${1-}" in
-    codex|opencode|pi|pi-signed|grok|kimi) ;;
+    codex|opencode|pi|pi-signed|grok) ;;
     *) return 1 ;;
   esac
 }
 
 fm_control_interrupt_ack_source() {  # <harness>
   case "${1-}" in
-    codex|opencode|pi|pi-signed|grok|kimi) printf 'none' ;;
+    codex|opencode|pi|pi-signed|grok) printf 'none' ;;
     *) return 1 ;;
   esac
 }
@@ -136,7 +135,7 @@ fm_control_interrupt_ack_source() {  # <harness>
 # The command that exits the agent from its own composer.
 fm_control_exit_command() {  # <harness>
   case "${1-}" in
-    opencode|grok|kimi) printf '/exit' ;;
+    opencode|grok) printf '/exit' ;;
     codex|pi|pi-signed) printf '/quit' ;;
     *) return 1 ;;
   esac
@@ -187,23 +186,18 @@ fm_control_harness_wiring_paths() {  # <harness> <worktree> <state-dir> <id>
       printf '%s\n' "$wt/.fm-grok-turnend"
       printf '%s\n' "$state/$id.grok-turnend-token"
       ;;
-    kimi)
-      printf '%s\n' "$wt/.fm-kimi-turnend"
-      printf '%s\n' "$state/$id.kimi-turnend-token"
-      ;;
   esac
 }
 
 # The firstmate-owned global turn-end registry entry a harness mints per task.
-# grok and kimi are the two adapters whose turn-end hook is global and gated by
-# a private token file; every other adapter's wiring is fully covered by
+# Grok's turn-end hook is global and gated by a private token file; every other
+# adapter's wiring is fully covered by
 # fm_control_harness_wiring_paths. Prints the registry path or nothing.
 fm_control_harness_turnend_token_path() {  # <harness> <state-dir> <id>
   local harness=${1-} state=${2-} id=${3-}
   [ -n "$state" ] && [ -n "$id" ] || return 1
   case "$harness" in
     grok) printf '%s\n' "$state/$id.grok-turnend-token" ;;
-    kimi) printf '%s\n' "$state/$id.kimi-turnend-token" ;;
   esac
 }
 
@@ -212,7 +206,6 @@ fm_control_harness_turnend_auth_path() {  # <harness> <token>
   case "$token" in ''|*[!A-Za-z0-9._-]*) return 0 ;; esac
   case "$harness" in
     grok) printf '%s\n' "${GROK_HOME:-$HOME/.grok}/hooks/fm-turn-end.d/$token" ;;
-    kimi) printf '%s\n' "$HOME/.kimi-code/fm-turn-end.d/$token" ;;
     *) return 0 ;;
   esac
 }

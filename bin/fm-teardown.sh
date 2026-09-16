@@ -424,7 +424,7 @@ TEARDOWN_META_KIND=$(fm_meta_get "$META" kind)
 [ -n "$TEARDOWN_META_KIND" ] || TEARDOWN_META_KIND=ship
 TEARDOWN_META_HARNESS=$(fm_meta_get "$META" harness)
 case "$TEARDOWN_META_HARNESS" in
-  omp|muse)
+  omp|muse|kimi)
     echo "error: task $ID records retired harness '$TEARDOWN_META_HARNESS'; refusing cleanup so its endpoint, local copy, and durable records remain available for manual migration" >&2
     exit 1
     ;;
@@ -1189,15 +1189,31 @@ remove_grok_turnend_auth() {
   rm -f -- "$path"
 }
 
-remove_kimi_turnend_auth() {
-  local state_dir=$1 id=$2 token_path token='' path
-  token_path=$(fm_control_harness_turnend_token_path kimi "$state_dir" "$id") || return 1
-  if [ -n "$token_path" ] && [ -f "$token_path" ]; then
+# Cleanup-only compatibility for a task that now runs on a retained harness but
+# still carries a Kimi token from an older incarnation. Kimi is not a supported
+# control family, so its retired path must not remain in fm-control-lib's active
+# capability tables. Only a conservative token may name an owned registry file.
+remove_retired_kimi_turnend_auth() {
+  local state_dir=$1 id=$2 token_path="$1/$2.kimi-turnend-token" token='' kimi_root registry
+  if [ -e "$token_path" ] || [ -L "$token_path" ]; then
+    if [ ! -f "$token_path" ] || [ -L "$token_path" ]; then
+      echo "error: retired Kimi token record is not a regular file: $token_path" >&2
+      return 1
+    fi
     IFS= read -r token < "$token_path" || [ -n "$token" ] || return 1
   fi
-  path=$(fm_control_harness_turnend_auth_path kimi "$token") || return 1
-  [ -n "$path" ] || return 0
-  rm -f -- "$path"
+  case "$token" in ''|*[!A-Za-z0-9._-]*) return 0 ;; esac
+  kimi_root="$HOME/.kimi-code"
+  registry="$kimi_root/fm-turn-end.d"
+  if { [ -e "$kimi_root" ] || [ -L "$kimi_root" ]; } && [ -L "$kimi_root" ]; then
+    echo "error: retired Kimi root is symlinked; refusing artifact cleanup: $kimi_root" >&2
+    return 1
+  fi
+  if { [ -e "$registry" ] || [ -L "$registry" ]; } && { [ ! -d "$registry" ] || [ -L "$registry" ]; }; then
+    echo "error: retired Kimi registry is not a regular directory: $registry" >&2
+    return 1
+  fi
+  rm -f -- "$registry/$token"
 }
 
 retire_busy_state() {
@@ -2702,7 +2718,7 @@ preflight_descendant_task_locks() {
     [ -n "$kind" ] || kind=ship
     harness=$(meta_value "$meta" harness)
     case "$harness" in
-      omp|muse)
+      omp|muse|kimi)
         echo "REFUSED: descendant task $task_id records retired harness '$harness'; forced teardown changed nothing so its endpoint, local copy, and durable records remain available for manual migration" >&2
         return 1
         ;;
@@ -3042,7 +3058,7 @@ cleanup_firstmate_home_children() {
       fi
     fi
     remove_grok_turnend_auth "$sub_state" "$child_id" || return 1
-    remove_kimi_turnend_auth "$sub_state" "$child_id" || return 1
+    remove_retired_kimi_turnend_auth "$sub_state" "$child_id" || return 1
     remove_pr_poll_artifacts "$sub_state" "$child_id" || return 1
     child_busy_gen=$(meta_value "$child_meta" busy_gen)
     if [ -z "$child_busy_gen" ]; then
@@ -3457,7 +3473,7 @@ if [ "$KIND" = secondmate ]; then
   remove_secondmate_registry_entry "$ID"
 fi
 remove_grok_turnend_auth "$STATE" "$ID" || exit 1
-remove_kimi_turnend_auth "$STATE" "$ID" || exit 1
+remove_retired_kimi_turnend_auth "$STATE" "$ID" || exit 1
 fm_backend_clear_transition "$BACKEND" "$STATE" "$T" || true
 # Remove the per-task temp root (/tmp/fm-<id>/, incl. its gotmp/) recorded by spawn.
 # Read before the state-file rm below; empty (pre-fix tasks without tasktmp=) is a no-op.

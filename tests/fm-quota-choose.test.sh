@@ -172,17 +172,17 @@ fi
 ok "help renders the complete header only"
 
 # 1. First candidate with positive effective quota.
-out=$(call_choose --snapshot "$LAB/captured.json" --candidate kimi:default --candidate codex:model:codex_bengalfox --candidate pi:llama-4-scout)
+out=$(call_choose --snapshot "$LAB/captured.json" --candidate codex:model:codex_bengalfox --candidate pi:llama-4-scout)
 [ "$out" = "pi llama-4-scout" ] || fail "first positive: expected 'pi llama-4-scout', got '$out'"
 ok "first positive candidate wins"
 
 # 2. Exhausted provider is skipped.
-out=$(call_choose --snapshot "$LAB/captured.json" --candidate kimi:default --candidate pi:llama-4-scout)
+out=$(call_choose --snapshot "$LAB/captured.json" --candidate codex:model:codex_bengalfox --candidate pi:llama-4-scout)
 [ "$out" = "pi llama-4-scout" ] || fail "exhausted skip: expected 'pi llama-4-scout', got '$out'"
 ok "exhausted provider is skipped"
 
 # 3. No candidates have positive quota.
-if out=$(call_choose --snapshot "$LAB/captured.json" --candidate kimi:default 2>/dev/null); then
+if out=$(call_choose --snapshot "$LAB/captured.json" --candidate codex:model:codex_bengalfox 2>/dev/null); then
   fail "no positive: expected exit 1, got exit 0 with '$out'"
 fi
 [ "$out" = "none" ] || fail "no positive: expected 'none', got '$out'"
@@ -211,6 +211,12 @@ if err=$(call_choose --snapshot "$LAB/captured.json" --candidate muse:default 2>
 fi
 [ "$err" = "error: unknown harness: muse" ] || fail "retired Muse candidate returned: $err"
 ok "retired Muse candidate fails closed"
+
+if err=$(call_choose --snapshot "$LAB/captured.json" --candidate kimi:kimi-coding/k2p5 2>&1); then
+  fail "retired Kimi candidate unexpectedly dispatched"
+fi
+[ "$err" = "error: unknown harness: kimi" ] || fail "retired Kimi candidate returned: $err"
+ok "retired Kimi candidate fails closed while Pi remains available"
 
 out=$(call_choose --snapshot "$LAB/captured.json" --candidate codex:default)
 [ "$out" = "codex default" ] || fail "default scope: expected provider-wide quota, got '$out'"

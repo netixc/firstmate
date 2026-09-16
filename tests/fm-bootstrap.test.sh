@@ -1138,8 +1138,7 @@ retired Gemini CLI dispatch harness is rejected^{"rules":[{"when":"old Gemini CL
 retired Rovo dispatch harness is rejected^{"rules":[{"when":"old Rovo config","use":{"harness":"rovo","effort":"high"}}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - unverified harness: rovo
 retired AGY dispatch harness is rejected^{"rules":[{"when":"old AGY config","use":{"harness":"agy","model":"gemini-3.8-flash-high","effort":"high"}}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - unverified harness: agy
 unsupported opencode effort is flagged^{"rules":[{"when":"opencode work","use":{"harness":"opencode","model":"anthropic/claude-sonnet-4-5","effort":"high"}}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - invalid effort: opencode:high
-kimi model profile is accepted^{"rules":[{"when":"kimi work","use":{"harness":"kimi","model":"kimi-code/k3"}}]}^empty^
-unsupported kimi effort is flagged^{"rules":[{"when":"kimi work","use":{"harness":"kimi","model":"kimi-code/k3","effort":"high"}}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - invalid effort: kimi:high
+retired Kimi dispatch harness is rejected^{"rules":[{"when":"old Kimi config","use":{"harness":"kimi","model":"kimi-code/k3","effort":"high"}}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - unverified harness: kimi
 cursor harness is unverified^{"rules":[{"when":"cursor work","use":{"harness":"cursor"}}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - unverified harness: cursor
 array use with quota-balanced is accepted^{"rules":[{"when":"big feature","use":[{"harness":"pi","model":"anthropic/claude-sonnet-5","effort":"high"},{"harness":"codex","model":"gpt-5.5","effort":"high"}],"select":"quota-balanced"}]}^empty^
 array use without select is accepted^{"rules":[{"when":"big feature","use":[{"harness":"codex"},{"harness":"codex"}]}]}^empty^
