@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Detect the agent harness this process tree runs on.
-# Usage: fm-harness.sh                  print own harness: codex|opencode|pi|pi-signed|grok|kimi|agy|unknown
+# Usage: fm-harness.sh                  print own harness: codex|opencode|pi|pi-signed|grok|kimi|unknown
 #        fm-harness.sh crew             print the effective CREWMATE harness
 #                                        (config/crew-harness; "default" resolves to own)
 #        fm-harness.sh secondmate       print the harness the PRIMARY uses to launch
@@ -79,8 +79,8 @@ harness_marker() {
   # identified, and any rule that must be RELIABLE under grok has to test the hook
   # markers too (see docs/turnend-guard.md).
   [ "${GROK_AGENT:-}" = "1" ] && { echo grok; return; }
-  # codex, opencode, kimi, and agy publish no harness-identity marker at all,
-  # so they are never named here and are identified by ancestry alone.
+  # codex, opencode, and kimi publish no harness-identity marker at all, so
+  # they are never named here and are identified by ancestry alone.
   return 0
 }
 
@@ -105,15 +105,6 @@ harness_process_verdict() {  # <pid>
     # is why detect_own keeps a marker that agrees on the family.
     pi-signed) echo "comm pi"; return ;;
     pi) echo "comm pi"; return ;;
-    # agy (Antigravity CLI) is a Go-compiled single binary whose process name
-    # is exactly `agy` (verified, agy 1.2.0: `ps -o comm=` reports agy and
-    # Herdr's process-info reports name agy with argv[0] agy). Anchored, never
-    # *agy*, so unrelated commands cannot be misread as this harness. agy
-    # publishes no harness-identity marker of its own (a live 1.2.0 TUI
-    # carries no AGY_* or ANTIGRAVITY_* variable; AGENT=1 seen there is an
-    # inherited launcher value, not an agy identity), so it is detected by
-    # ancestry alone.
-    agy) echo "comm agy"; return ;;
     node*|python*)
       # Bare interpreter: match the harness name in its script path.
       args=$(ps -o args= -p "$pid" 2>/dev/null)

@@ -63,7 +63,7 @@ fm_control_verb_allowed() {  # <verb>
 # than guessed at, exactly as a spawn on it would be.
 fm_control_harness_supported() {  # <harness>
   case "${1-}" in
-    codex|opencode|pi|pi-signed|grok|kimi|agy) return 0 ;;
+    codex|opencode|pi|pi-signed|grok|kimi) return 0 ;;
   esac
   return 1
 }
@@ -74,13 +74,11 @@ fm_control_harness_supported() {  # <harness>
 # harness= that way), which is why several adapters match a prefix here.
 # This is the one place that prefix rule is stated. `pi` and
 # `pi-signed` are exact because a `pi*` prefix would swallow the signed adapter,
-# `agy` is exact for the same reason on an even shorter name, and an
-# unrecognized value returns nonzero rather than being guessed into a family.
+# and an unrecognized value returns nonzero rather than being guessed into a family.
 fm_control_harness_family() {  # <recorded-harness>
   case "${1-}" in
     pi) printf 'pi' ;;
     pi-signed) printf 'pi-signed' ;;
-    agy) printf 'agy' ;;
     codex*) printf 'codex' ;;
     opencode*) printf 'opencode' ;;
     grok*) printf 'grok' ;;
@@ -89,29 +87,20 @@ fm_control_harness_family() {  # <recorded-harness>
   esac
 }
 
-# Which task kinds an adapter is verified to run. agy is a crewmate/scout
-# adapter only: it has no primary supervision protocol, and bin/fm-spawn.sh
-# refuses a --secondmate launch on it. The control
-# plane asks this BEFORE it stops anything, so an incompatible relaunch target is
-# refused while the current agent is still running rather than after it has
-# been stopped.
+# Which task kinds an adapter is verified to run. The control plane asks this
+# BEFORE it stops anything, so an incompatible relaunch target is refused while
+# the current agent is still running rather than after it has been stopped.
 fm_control_harness_supports_kind() {  # <harness> <kind>
-  local harness=${1-} kind=${2-}
+  local harness=${1-}
   fm_control_harness_supported "$harness" || return 1
-  case "$harness" in
-    agy) [ "$kind" != secondmate ] || return 1 ;;
-  esac
   return 0
 }
 
 # The key that cancels a running turn. Escape for every adapter except grok,
 # whose Esc only moves focus to the scrollback; grok cancels on Ctrl+C.
-# agy cancels on a single Escape, printing the Interrupted row
-# with an idle composer and no repollution (verified live, agy 1.2.0 through
-# Herdr).
 fm_control_interrupt_key() {  # <harness>
   case "${1-}" in
-    codex|opencode|pi|pi-signed|kimi|agy) printf 'Escape' ;;
+    codex|opencode|pi|pi-signed|kimi) printf 'Escape' ;;
     grok) printf 'C-c' ;;
     *) return 1 ;;
   esac
@@ -122,7 +111,7 @@ fm_control_interrupt_key() {  # <harness>
 fm_control_interrupt_repeat() {  # <harness>
   case "${1-}" in
     opencode) printf '2' ;;
-    codex|pi|pi-signed|grok|kimi|agy) printf '1' ;;
+    codex|pi|pi-signed|grok|kimi) printf '1' ;;
     *) return 1 ;;
   esac
 }
@@ -132,14 +121,14 @@ fm_control_interrupt_repeat() {  # <harness>
 # with no verified mechanics returns nonzero, matching the tables above.
 fm_control_interrupt_clear_key() {  # <harness>
   case "${1-}" in
-    codex|opencode|pi|pi-signed|grok|kimi|agy) ;;
+    codex|opencode|pi|pi-signed|grok|kimi) ;;
     *) return 1 ;;
   esac
 }
 
 fm_control_interrupt_ack_source() {  # <harness>
   case "${1-}" in
-    codex|opencode|pi|pi-signed|grok|kimi|agy) printf 'none' ;;
+    codex|opencode|pi|pi-signed|grok|kimi) printf 'none' ;;
     *) return 1 ;;
   esac
 }
@@ -148,7 +137,7 @@ fm_control_interrupt_ack_source() {  # <harness>
 fm_control_exit_command() {  # <harness>
   case "${1-}" in
     opencode|grok|kimi) printf '/exit' ;;
-    codex|pi|pi-signed|agy) printf '/quit' ;;
+    codex|pi|pi-signed) printf '/quit' ;;
     *) return 1 ;;
   esac
 }

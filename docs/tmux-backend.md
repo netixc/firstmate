@@ -48,7 +48,7 @@ Verify setup by spawning a small task and confirming its `fm-<id>` window appear
 
 A target-existence check proves only that the pane exists.
 The deeper tmux agent-liveness probe first verifies exact window membership, then reads process names to distinguish a running harness from a bare idle shell.
-It classifies recognized Codex, OpenCode, Pi, pi-signed, Grok, Kimi, and AGY process identities as `alive`, common shells as `dead`, an authoritatively absent window as `missing`, unreadable state as `unreadable`, and every other process as `ambiguous`.
+It classifies recognized Codex, OpenCode, Pi, pi-signed, Grok, and Kimi process identities as `alive`, common shells as `dead`, an authoritatively absent window as `missing`, unreadable state as `unreadable`, and every other process as `ambiguous`.
 The process-name vocabulary behind those verdicts is owned by `bin/fm-agent-process-lib.sh` and shared with the Herdr adapter, which proves a registered agent against the same names ([herdr-backend.md](herdr-backend.md) "Restart and liveness behavior").
 Only `dead` and `missing` authorize recovery because a false dead result could launch a duplicate agent.
 
@@ -60,7 +60,6 @@ Either source naming a verified harness is enough for `alive`, because a false `
 Scoping the second source to the foreground process group rather than to the pane's descendants is deliberate: a harness-named process left running in the background of an otherwise idle pane must not read as an agent.
 The same scoping covers multi-process launchers without a special case, so the Pi Launcher path is attributed through its `pi-signed` wrapper and `pi` engine even though its title is the exact foreground command `pi-launcher`.
 Direct executable identities `pi`, `pi-signed`, and `Pi` remain accepted exactly, and similar or prefixed process names are not accepted through those exact Pi-family entries.
-AGY is anchored to the exact `agy` identity for the same reason, so unrelated names containing that fragment remain ambiguous.
 The CI-enforced portable regression and opt-in real-harness drift guard follow the split owned by `.agents/skills/firstmate-coding-guidelines/SKILL.md`.
 Run the real-harness guard after any harness upgrade and before trusting refreshed evidence.
 
@@ -75,7 +74,7 @@ A bare shell prompt is `unknown`, so away-mode escalation is never injected into
 
 Busy state is not read from rendered text on this backend.
 A task's busy, idle, unknown, or dead verdict comes from the semantic busy-state contract owned by `bin/fm-busy-lib.sh`; [architecture](architecture.md#busy-state-is-semantic-per-adapter) owns its boundaries.
-The retained rendered-tail readers are the isolated Grok and AGY fallbacks inside that contract, each of which can classify only its own task.
+The retained rendered-tail reader is Grok's isolated fallback inside that contract, which can classify only its own task.
 The submit acknowledgement and away-mode supervisor-pane busy guard below still consult rendered output, but only to decide whether input can be delivered, never to decide recorded task state.
 The supervisor guard selects only the detected primary harness's signature rather than a global union of vendor patterns.
 

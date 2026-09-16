@@ -285,8 +285,7 @@ fm_composer_strip_ghost() {
 # Matching a footer to confirm a keystroke landed is a different question from
 # asking what a worker is doing, and the two must not be conflated.
 # Delivery-only rendered busy footers per harness. codex: "esc to interrupt";
-# opencode: "esc interrupt"; pi: "Working..."; grok: "Ctrl+c:cancel"; agy:
-# "esc to cancel".
+# opencode: "esc interrupt"; pi: "Working..."; grok: "Ctrl+c:cancel".
 # Kimi's anchored moon-phase spinner is separate because bare moon glyphs in
 # ordinary output must not classify another harness as busy. Leading whitespace is
 # OPTIONAL; whitespace on both sides of the separator is REQUIRED because every
@@ -299,24 +298,12 @@ fm_composer_strip_ghost() {
 # exposes no stable ASCII busy token.
 # The harness-less default is the UNION of the per-harness tokens below, used
 # when a caller has no recorded harness for the pane (the submit cores read the
-# baseline and the post-Enter transition this way). agy's `esc to cancel` is
-# part of that union because an explicit
-# tmux agy endpoint reaches the submit core with no recorded harness, and its
-# bare `>` composer verdict is `unknown`, so the busy footer is the only
-# turn-started acknowledgement that path can read.
-FM_DELIVERY_BUSY_REGEX_DEFAULT='esc (to )?interrupt|Working\.\.\.|Ctrl\+c:cancel|esc[[:space:]]+to[[:space:]]+cancel'
+# baseline and the post-Enter transition this way).
+FM_DELIVERY_BUSY_REGEX_DEFAULT='esc (to )?interrupt|Working\.\.\.|Ctrl\+c:cancel'
 FM_DELIVERY_CODEX_BUSY_REGEX_DEFAULT='esc to interrupt'
 FM_DELIVERY_OPENCODE_BUSY_REGEX_DEFAULT='esc interrupt'
 FM_DELIVERY_PI_BUSY_REGEX_DEFAULT='Working\.\.\.'
 FM_DELIVERY_GROK_BUSY_REGEX_DEFAULT='Ctrl\+c:cancel'
-# agy (Antigravity CLI) renders a pinned status row while a turn runs: the
-# `esc to cancel` token on the left and the model cell on the right (verified
-# live, agy 1.2.0; the idle row shows `? for shortcuts` instead). The
-# `Generating...` spinner word beside it is a free-floating output line and is
-# deliberately not matched, so echoed worker output cannot fake an
-# acknowledgement. Delivery guard only; recorded worker state comes from the
-# agy-regex fold in bin/fm-busy-lib.sh.
-FM_DELIVERY_AGY_BUSY_REGEX_DEFAULT='esc[[:space:]]+to[[:space:]]+cancel'
 FM_DELIVERY_KIMI_BUSY_REGEX_DEFAULT='^[[:space:]]*(🌑|🌒|🌓|🌔|🌕|🌖|🌗|🌘)[[:space:]]+·[[:space:]]+'
 
 fm_busy_lines_match() {  # [harness]
@@ -330,7 +317,6 @@ fm_busy_lines_match() {  # [harness]
       opencode) regex=$FM_DELIVERY_OPENCODE_BUSY_REGEX_DEFAULT ;;
       pi|pi-signed) regex=$FM_DELIVERY_PI_BUSY_REGEX_DEFAULT ;;
       grok) regex=$FM_DELIVERY_GROK_BUSY_REGEX_DEFAULT ;;
-      agy) regex=$FM_DELIVERY_AGY_BUSY_REGEX_DEFAULT ;;
       kimi) regex=$FM_DELIVERY_KIMI_BUSY_REGEX_DEFAULT ;;
       '') regex=$FM_DELIVERY_BUSY_REGEX_DEFAULT ;;
       *)

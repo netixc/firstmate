@@ -1136,10 +1136,7 @@ pi-signed max effort is accepted^{"rules":[{"when":"signed coding","use":{"harne
 retired Muse dispatch harness is rejected^{"rules":[{"when":"old Muse config","use":{"harness":"muse","effort":"high"}}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - unverified harness: muse
 retired Gemini CLI dispatch harness is rejected^{"rules":[{"when":"old Gemini CLI config","use":{"harness":"gemini","model":"gemini-2.5-pro"}}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - unverified harness: gemini
 retired Rovo dispatch harness is rejected^{"rules":[{"when":"old Rovo config","use":{"harness":"rovo","effort":"high"}}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - unverified harness: rovo
-agy model profile is accepted^{"rules":[{"when":"agy work","use":{"harness":"agy","model":"gemini-3.8-flash-high"}}]}^empty^
-agy low medium high efforts are accepted^{"rules":[{"when":"agy low","use":{"harness":"agy","effort":"low"}},{"when":"agy medium","use":{"harness":"agy","effort":"medium"}},{"when":"agy high","use":{"harness":"agy","effort":"high"}}]}^empty^
-unsupported agy xhigh effort is flagged^{"rules":[{"when":"agy xhigh","use":{"harness":"agy","effort":"xhigh"}}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - invalid effort: agy:xhigh
-unsupported agy max effort is flagged^{"rules":[{"when":"agy max","use":{"harness":"agy","effort":"max"}}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - invalid effort: agy:max
+retired AGY dispatch harness is rejected^{"rules":[{"when":"old AGY config","use":{"harness":"agy","model":"gemini-3.8-flash-high","effort":"high"}}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - unverified harness: agy
 unsupported opencode effort is flagged^{"rules":[{"when":"opencode work","use":{"harness":"opencode","model":"anthropic/claude-sonnet-4-5","effort":"high"}}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - invalid effort: opencode:high
 kimi model profile is accepted^{"rules":[{"when":"kimi work","use":{"harness":"kimi","model":"kimi-code/k3"}}]}^empty^
 unsupported kimi effort is flagged^{"rules":[{"when":"kimi work","use":{"harness":"kimi","model":"kimi-code/k3","effort":"high"}}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - invalid effort: kimi:high

@@ -67,11 +67,12 @@ ln -s "$SLEEP_BIN" "$LAB/bin/musescore"
 ln -s "$SLEEP_BIN" "$LAB/bin/amuse"
 ln -s "$SLEEP_BIN" "$LAB/bin/muse-binary"
 ln -s "$SLEEP_BIN" "$LAB/bin/muse-bind"
-# Retired Gemini CLI and Rovo executable names must remain unclassified, too.
+# Retired Gemini CLI, Rovo, and AGY executable names must remain unclassified.
 ln -s "$SLEEP_BIN" "$LAB/bin/gemini"
 ln -s "$SLEEP_BIN" "$LAB/bin/gemini-cli-0.58.0"
 ln -s "$SLEEP_BIN" "$LAB/bin/rovo"
 ln -s "$SLEEP_BIN" "$LAB/bin/atlassian_cli_rovodev"
+ln -s "$SLEEP_BIN" "$LAB/bin/agy"
 
 # A launcher whose own process identity is a bare shell, running the harness as
 # a child in the same foreground process group - the shape the real Pi Launcher
@@ -187,6 +188,12 @@ for retired in rovo atlassian_cli_rovodev; do
     || fail "'$retired' must not classify as a verified live agent pane"
 done
 pass "tmux liveness: stale Rovo process names stay ambiguous"
+
+# --- retired AGY process identity -----------------------------------------
+new_window retired-agy "$LAB/bin/agy" 900
+wait_for_state "$SESSION:retired-agy" ambiguous \
+  || fail "'agy' must not classify as a verified live agent pane"
+pass "tmux liveness: stale AGY process names stay ambiguous"
 
 # --- retired OMP process identity ------------------------------------------
 # A stale OMP task must never make the tmux classifier treat its retired

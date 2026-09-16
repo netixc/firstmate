@@ -369,6 +369,41 @@ test_retired_gemini_harness_refuses_without_touching_settings() {
   pass "retired Gemini CLI config and explicit selections refuse before launch and byte-preserve unrelated settings"
 }
 
+test_retired_agy_harness_refuses_without_touching_external_settings() {
+  local selection rec id out status antigravity_before gemini_before
+  for selection in configured explicit; do
+    id="retired-agy-$selection"
+    rec=$(make_spawn_case "$id" agy "$id")
+    read_case_record "$rec"
+    mkdir -p "$HOME_DIR/user/.gemini/antigravity-cli"
+    printf '%s\n' '{"trustedWorkspaces":["/keep/me"],"theme":"keep-byte-for-byte"}' \
+      > "$HOME_DIR/user/.gemini/antigravity-cli/settings.json"
+    printf '%s\n' '{"gemini":"unrelated-and-preserved"}' \
+      > "$HOME_DIR/user/.gemini/settings.json"
+    antigravity_before="$CASE_DIR/antigravity-settings.before"
+    gemini_before="$CASE_DIR/gemini-settings.before"
+    cp "$HOME_DIR/user/.gemini/antigravity-cli/settings.json" "$antigravity_before"
+    cp "$HOME_DIR/user/.gemini/settings.json" "$gemini_before"
+    if [ "$selection" = configured ]; then
+      out=$(HOME="$HOME_DIR/user" run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
+        "$id" "$PROJ_DIR" 2>&1)
+    else
+      out=$(HOME="$HOME_DIR/user" run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
+        "$id" "$PROJ_DIR" --harness agy 2>&1)
+    fi
+    status=$?
+    expect_code 1 "$status" "retired AGY $selection selection should refuse"
+    assert_contains "$out" "harness 'agy'" "retired AGY refusal did not name the stale harness"
+    assert_absent "$HOME_DIR/state/$id.meta" "retired AGY refusal published task metadata"
+    [ ! -s "$LAUNCH_LOG" ] || fail "retired AGY refusal typed a launch command"
+    cmp -s "$antigravity_before" "$HOME_DIR/user/.gemini/antigravity-cli/settings.json" \
+      || fail "retired AGY refusal rewrote unrelated Antigravity settings"
+    cmp -s "$gemini_before" "$HOME_DIR/user/.gemini/settings.json" \
+      || fail "retired AGY refusal rewrote unrelated Gemini settings"
+  done
+  pass "retired AGY config and explicit selections refuse before launch and byte-preserve external settings"
+}
+
 test_retired_rovo_harness_refuses_without_touching_project_files() {
   local selection rec id out status rovo_before atlassian_before
   for selection in configured explicit; do
@@ -1034,6 +1069,7 @@ test_active_dispatch_profile_allows_explicit_harness
 test_active_dispatch_profile_allows_positional_harness
 test_active_dispatch_profile_allows_raw_launch_command
 test_retired_gemini_harness_refuses_without_touching_settings
+test_retired_agy_harness_refuses_without_touching_external_settings
 test_retired_rovo_harness_refuses_without_touching_project_files
 test_codex_omits_invalid_max_effort
 test_grok_threads_model_and_reasoning_effort

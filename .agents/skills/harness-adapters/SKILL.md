@@ -3,7 +3,7 @@ name: harness-adapters
 description: >-
   Agent-only reference for firstmate harness operations.
   Use before spawning or recovering a crewmate or secondmate, handling a trust dialog, sending a harness-specific skill invocation, interrupting or exiting an agent, resuming an exited agent, or verifying a new harness adapter.
-  Contains verified facts for codex, opencode, pi, pi-signed, grok, kimi, and agy.
+  Contains verified facts for codex, opencode, pi, pi-signed, grok, and kimi.
 user-invocable: false
 metadata:
   internal: true
@@ -35,7 +35,6 @@ For recovery and control, use the exact `harness=` in `state/<id>.meta`; never i
 Deliver lifecycle actions only through `../../../bin/fm-control.sh <task-id> interrupt|exit|relaunch`.
 Never type an interrupt key or exit command through `fm-send`, where routing-marked lifecycle text becomes chat.
 Trust handling is complete only when inspection proves the target started processing its instructions; delivery success alone is not proof.
-AGY is verified only for crewmate and scout work, never a secondmate or primary.
 
 ## Detection
 
@@ -87,8 +86,7 @@ A new tool remains undispatchable until the `verify` plan, its harness entry, ev
     "pi": "references/harness/pi.md",
     "pi-signed": "references/harness/pi.md",
     "grok": "references/harness/grok.md",
-    "kimi": "references/harness/kimi.md",
-    "agy": "references/harness/agy.md"
+    "kimi": "references/harness/kimi.md"
   }
 }
 ```
