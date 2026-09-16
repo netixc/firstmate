@@ -149,7 +149,7 @@ test_markerless_ancestry_outranks_foreign_marker() {
 # Retired harness names and markers must contribute no identity of their own.
 test_retired_harness_identity_is_not_recognized() {
   local bin fakebin got name retired
-  for retired in muse gemini; do
+  for retired in muse gemini rovo; do
     for name in "$retired" "$retired-cli-0.58.0"; do
       bin=$(named_bin "$TMP_ROOT/retired-$name-tree" "$name")
       got=$(under_process "$bin")
@@ -158,6 +158,11 @@ test_retired_harness_identity_is_not_recognized() {
     done
   done
 
+  bin=$(named_bin "$TMP_ROOT/retired-rovo-native-tree" atlassian_cli_rovodev)
+  got=$(under_process "$bin")
+  [ "$got" != rovo ] \
+    || fail "retired Atlassian Rovo executable still resolved as a supported harness"
+
   fakebin=$(blind_ancestry_bin "$TMP_ROOT/retired-gemini-marker")
   got=$(with_blind_ancestry "$fakebin" GEMINI_CLI=1)
   [ "$got" = unknown ] \
@@ -165,7 +170,13 @@ test_retired_harness_identity_is_not_recognized() {
   got=$(with_blind_ancestry "$fakebin" GEMINI_CLI=1 PI_CODING_AGENT=true FM_PI_HARNESS=pi-signed)
   [ "$got" = pi-signed ] \
     || fail "retired GEMINI_CLI marker hid a retained Pi-signed marker, got '$got'"
-  pass "retired harness process names and the Gemini CLI marker no longer identify an adapter"
+  got=$(with_blind_ancestry "$fakebin" ATLASSIAN_AGENT_TYPE=rovo ROVODEV_CLI=1)
+  [ "$got" = unknown ] \
+    || fail "retired Rovo markers still selected a harness, got '$got'"
+  got=$(with_blind_ancestry "$fakebin" ATLASSIAN_AGENT_TYPE=rovo ROVODEV_CLI=1 PI_CODING_AGENT=true FM_PI_HARNESS=pi-signed)
+  [ "$got" = pi-signed ] \
+    || fail "retired Rovo markers hid a retained Pi-signed marker, got '$got'"
+  pass "retired harness process names and markers no longer identify an adapter or hide retained Pi"
 }
 
 # --- 2. A genuine harness in its own process tree still wins ----------------

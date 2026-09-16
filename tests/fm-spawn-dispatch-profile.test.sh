@@ -369,6 +369,39 @@ test_retired_gemini_harness_refuses_without_touching_settings() {
   pass "retired Gemini CLI config and explicit selections refuse before launch and byte-preserve unrelated settings"
 }
 
+test_retired_rovo_harness_refuses_without_touching_project_files() {
+  local selection rec id out status rovo_before atlassian_before
+  for selection in configured explicit; do
+    id="retired-rovo-$selection"
+    rec=$(make_spawn_case "$id" rovo "$id")
+    read_case_record "$rec"
+    mkdir -p "$WT_DIR/.rovo" "$WT_DIR/.atlassian"
+    printf '%s\n' 'project: keep-byte-for-byte' > "$WT_DIR/.rovo/config.yml"
+    printf '%s\n' '{"jira":"keep-byte-for-byte"}' > "$WT_DIR/.atlassian/project.json"
+    rovo_before="$CASE_DIR/rovo-config.before"
+    atlassian_before="$CASE_DIR/atlassian-project.before"
+    cp "$WT_DIR/.rovo/config.yml" "$rovo_before"
+    cp "$WT_DIR/.atlassian/project.json" "$atlassian_before"
+    if [ "$selection" = configured ]; then
+      out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
+        "$id" "$PROJ_DIR" 2>&1)
+    else
+      out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
+        "$id" "$PROJ_DIR" --harness rovo 2>&1)
+    fi
+    status=$?
+    expect_code 1 "$status" "retired Rovo $selection selection should refuse"
+    assert_contains "$out" "harness 'rovo'" "retired Rovo refusal did not name the stale harness"
+    assert_absent "$HOME_DIR/state/$id.meta" "retired Rovo refusal published task metadata"
+    [ ! -s "$LAUNCH_LOG" ] || fail "retired Rovo refusal typed a launch command"
+    cmp -s "$rovo_before" "$WT_DIR/.rovo/config.yml" \
+      || fail "retired Rovo refusal rewrote project .rovo configuration"
+    cmp -s "$atlassian_before" "$WT_DIR/.atlassian/project.json" \
+      || fail "retired Rovo refusal rewrote unrelated Atlassian project data"
+  done
+  pass "retired Rovo config and explicit selections refuse before launch and byte-preserve project files"
+}
+
 test_codex_omits_invalid_max_effort() {
   local rec id out status launch
   id=profile-codex-max-z4
@@ -1001,6 +1034,7 @@ test_active_dispatch_profile_allows_explicit_harness
 test_active_dispatch_profile_allows_positional_harness
 test_active_dispatch_profile_allows_raw_launch_command
 test_retired_gemini_harness_refuses_without_touching_settings
+test_retired_rovo_harness_refuses_without_touching_project_files
 test_codex_omits_invalid_max_effort
 test_grok_threads_model_and_reasoning_effort
 test_grok_omits_invalid_max_reasoning_effort

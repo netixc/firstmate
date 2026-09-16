@@ -63,7 +63,7 @@ fm_control_verb_allowed() {  # <verb>
 # than guessed at, exactly as a spawn on it would be.
 fm_control_harness_supported() {  # <harness>
   case "${1-}" in
-    codex|opencode|pi|pi-signed|grok|kimi|rovo|agy) return 0 ;;
+    codex|opencode|pi|pi-signed|grok|kimi|agy) return 0 ;;
   esac
   return 1
 }
@@ -85,14 +85,13 @@ fm_control_harness_family() {  # <recorded-harness>
     opencode*) printf 'opencode' ;;
     grok*) printf 'grok' ;;
     kimi*) printf 'kimi' ;;
-    rovo*) printf 'rovo' ;;
     *) return 1 ;;
   esac
 }
 
-# Which task kinds an adapter is verified to run. rovo and agy are
-# crewmate/scout adapters only: neither has a primary supervision protocol,
-# and bin/fm-spawn.sh refuses a --secondmate launch on any of them. The control
+# Which task kinds an adapter is verified to run. agy is a crewmate/scout
+# adapter only: it has no primary supervision protocol, and bin/fm-spawn.sh
+# refuses a --secondmate launch on it. The control
 # plane asks this BEFORE it stops anything, so an incompatible relaunch target is
 # refused while the current agent is still running rather than after it has
 # been stopped.
@@ -100,20 +99,19 @@ fm_control_harness_supports_kind() {  # <harness> <kind>
   local harness=${1-} kind=${2-}
   fm_control_harness_supported "$harness" || return 1
   case "$harness" in
-    rovo|agy) [ "$kind" != secondmate ] || return 1 ;;
+    agy) [ "$kind" != secondmate ] || return 1 ;;
   esac
   return 0
 }
 
 # The key that cancels a running turn. Escape for every adapter except grok,
 # whose Esc only moves focus to the scrollback; grok cancels on Ctrl+C.
-# rovo cancels on a single Escape, printing "Agent cancelled" (verified,
-# 202609.1.2). agy cancels on a single Escape, printing the Interrupted row
+# agy cancels on a single Escape, printing the Interrupted row
 # with an idle composer and no repollution (verified live, agy 1.2.0 through
 # Herdr).
 fm_control_interrupt_key() {  # <harness>
   case "${1-}" in
-    codex|opencode|pi|pi-signed|kimi|rovo|agy) printf 'Escape' ;;
+    codex|opencode|pi|pi-signed|kimi|agy) printf 'Escape' ;;
     grok) printf 'C-c' ;;
     *) return 1 ;;
   esac
@@ -124,7 +122,7 @@ fm_control_interrupt_key() {  # <harness>
 fm_control_interrupt_repeat() {  # <harness>
   case "${1-}" in
     opencode) printf '2' ;;
-    codex|pi|pi-signed|grok|kimi|rovo|agy) printf '1' ;;
+    codex|pi|pi-signed|grok|kimi|agy) printf '1' ;;
     *) return 1 ;;
   esac
 }
@@ -134,17 +132,14 @@ fm_control_interrupt_repeat() {  # <harness>
 # with no verified mechanics returns nonzero, matching the tables above.
 fm_control_interrupt_clear_key() {  # <harness>
   case "${1-}" in
-    codex|opencode|pi|pi-signed|grok|kimi|rovo|agy) ;;
+    codex|opencode|pi|pi-signed|grok|kimi|agy) ;;
     *) return 1 ;;
   esac
 }
 
 fm_control_interrupt_ack_source() {  # <harness>
   case "${1-}" in
-    # rovo's TUI prints "Agent cancelled" on Escape, but this stays 'none': the
-    # acknowledgement is a rendered string, not a recorded state source, and
-    # rovo has no busy wiring to confirm against.
-    codex|opencode|pi|pi-signed|grok|kimi|rovo|agy) printf 'none' ;;
+    codex|opencode|pi|pi-signed|grok|kimi|agy) printf 'none' ;;
     *) return 1 ;;
   esac
 }
@@ -152,7 +147,7 @@ fm_control_interrupt_ack_source() {  # <harness>
 # The command that exits the agent from its own composer.
 fm_control_exit_command() {  # <harness>
   case "${1-}" in
-    opencode|grok|kimi|rovo) printf '/exit' ;;
+    opencode|grok|kimi) printf '/exit' ;;
     codex|pi|pi-signed|agy) printf '/quit' ;;
     *) return 1 ;;
   esac

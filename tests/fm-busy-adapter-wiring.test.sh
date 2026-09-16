@@ -251,6 +251,16 @@ test_codex_unverified_until_a_semantic_source_exists() {
   pass "codex classifies unknown until a semantic source is verified, never idle or footer-matched"
 }
 
+test_retired_rovo_record_has_no_rendered_fallback() {
+  local state out
+  state="$TMP_ROOT/retired-rovo/state"
+  mkdir -p "$state"
+  out=$(fm_busy_classify tmux fake:w rovo retired-rovo "$state" 'Rovo is thinking...')
+  [ "$out" = "unknown missing" ] \
+    || fail "a retired Rovo record must ignore its old rendered busy text and stay unknown, got '$out'"
+  pass "retired Rovo task records no longer classify from vendor-rendered text"
+}
+
 test_kimi_and_grok_install_no_unverified_wiring() {
   local state out
   state="$TMP_ROOT/gates/state"
@@ -269,6 +279,7 @@ test_kimi_and_grok_install_no_unverified_wiring() {
 test_pi_extension_semantic_lifecycle
 test_pi_extension_serializes_settle_before_next_start
 test_pi_extension_stale_incarnation_rejected
+test_retired_rovo_record_has_no_rendered_fallback
 test_kimi_and_grok_install_no_unverified_wiring
 test_opencode_plugin_semantic_lifecycle
 test_codex_unverified_until_a_semantic_source_exists

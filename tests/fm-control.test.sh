@@ -264,6 +264,10 @@ test_harness_family_resolution() {
     && fail "the retired Gemini CLI adapter must not resolve to a control family"
   fm_control_harness_family gemini-cli-0.58.0 \
     && fail "a retired versioned Gemini CLI binary must not resolve to a control family"
+  fm_control_harness_family rovo \
+    && fail "the retired Rovo adapter must not resolve to a control family"
+  fm_control_harness_family atlassian_cli_rovodev \
+    && fail "a retired Rovo executable must not resolve to a control family"
   pass "fm-control-lib: a recorded harness resolves to its verified adapter without guessing"
 }
 
@@ -312,7 +316,7 @@ test_opencode_interrupts_twice_and_others_once() {
 
 test_unverified_harness_is_refused() {
   local harness dir out rc
-  for harness in omp muse gemini; do
+  for harness in omp muse gemini rovo; do
     dir=$(new_case "unverified-$harness")
     add_task "$dir" t1 "$harness"
     alive_as "$dir" "$harness"
@@ -323,7 +327,7 @@ test_unverified_harness_is_refused() {
     [ -f "$dir/home/state/t1.meta" ] || fail "a retired harness refusal must preserve the task record"
     [ -d "$dir/wt-t1" ] || fail "a retired harness refusal must preserve the local copy"
   done
-  pass "fm-control: stale OMP, Muse, and Gemini CLI tasks are refused without sending bytes or removing retained work"
+  pass "fm-control: stale OMP, Muse, Gemini CLI, and Rovo tasks are refused without sending bytes or removing retained work"
 }
 
 # --- 2. backend capability matrix -------------------------------------------
