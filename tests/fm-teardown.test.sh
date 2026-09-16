@@ -778,31 +778,30 @@ test_retired_kimi_registry_entry_mismatch_refuses_cleanup() {
   pass "teardown refuses a mismatched retired Kimi registry entry without deleting it"
 }
 
-test_retired_kimi_malformed_token_name_refuses_cleanup() {
+test_retired_kimi_traversal_token_name_refuses_cleanup() {
   local case_dir home rc=0
-  case_dir=$(make_case retired-kimi-malformed-token)
+  case_dir=$(make_case retired-kimi-traversal-token)
   home="$case_dir/home"
   mkdir -p "$home/.kimi-code/fm-turn-end.d"
   write_meta "$case_dir" local-only ship
   wt_commit "$case_dir" "landed malformed Kimi token fixture"
   add_fork_with_pushed_branch "$case_dir"
-  printf '%s\n' 'foo' > "$case_dir/state/task-x1.kimi-turnend-token"
-  printf '%s\n' "$case_dir/state/task-x1.turn-ended" \
-    > "$home/.kimi-code/fm-turn-end.d/foo"
+  printf '%s\n' 'fm.aa/../../xxxx' > "$case_dir/state/task-x1.kimi-turnend-token"
+  printf '%s\n' "$case_dir/state/task-x1.turn-ended" > "$home/.kimi-code/xxxx"
 
   set +e
   HOME="$home" run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
   rc=$?
   set -e
 
-  [ "$rc" -ne 0 ] || fail "retired-kimi-malformed-token: teardown accepted a malformed token name"
+  [ "$rc" -ne 0 ] || fail "retired-kimi-traversal-token: teardown accepted a traversal token name"
   grep -q "invalid token name" "$case_dir/stderr" \
-    || fail "retired-kimi-malformed-token: refusal did not identify the malformed token"
+    || fail "retired-kimi-traversal-token: refusal did not identify the malformed token"
   assert_present "$case_dir/state/task-x1.meta" \
-    "retired-kimi-malformed-token: refusal removed the task record"
-  assert_present "$home/.kimi-code/fm-turn-end.d/foo" \
-    "retired-kimi-malformed-token: refusal removed the registry entry"
-  pass "teardown refuses malformed retired Kimi token names without deleting them"
+    "retired-kimi-traversal-token: refusal removed the task record"
+  assert_present "$home/.kimi-code/xxxx" \
+    "retired-kimi-traversal-token: refusal deleted the escaped registry target"
+  pass "teardown refuses traversal token names without deleting escaped files"
 }
 
 test_teardown_closes_the_backlog_item_itself() {
@@ -3819,7 +3818,7 @@ EOF
 test_stale_retired_harness_tasks_refuse_even_forced_cleanup_without_removing_work
 test_local_only_fork_remote_allows
 test_retired_kimi_registry_entry_mismatch_refuses_cleanup
-test_retired_kimi_malformed_token_name_refuses_cleanup
+test_retired_kimi_traversal_token_name_refuses_cleanup
 test_teardown_closes_the_backlog_item_itself
 test_teardown_manual_backend_leaves_the_backlog_to_the_operator
 test_local_only_truly_unpushed_refuses

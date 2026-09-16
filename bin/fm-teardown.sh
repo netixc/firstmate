@@ -1210,13 +1210,10 @@ remove_retired_kimi_turnend_auth() {
     exec 3<&-
   fi
   [ -n "$token" ] || return 0
-  case "$token" in
-    fm.????????????) ;;
-    *)
-      echo "error: retired Kimi token record has an invalid token name: $token_path" >&2
-      return 1
-      ;;
-  esac
+  if [[ ! "$token" =~ ^fm\.[A-Za-z0-9]{12}$ ]]; then
+    echo "error: retired Kimi token record has an invalid token name: $token_path" >&2
+    return 1
+  fi
   expected_path="$state_dir/$id.turn-ended"
   kimi_root="$HOME/.kimi-code"
   registry="$kimi_root/fm-turn-end.d"
