@@ -157,14 +157,13 @@ Verified 2026-07-30 against quota-axi 0.1.16.
       { "source": "auth-json", "path": "<home>/.grok/auth.json", "status": "available" },
       { "source": "pi:xai", "status": "available" } ] },
   { "provider": "kimi", "sources": [
-      { "source": "pi:kimi-coding", "status": "available" },
-      { "source": "kimi-code-cli", "status": "expired", "error": "kimi_code_cli_credential_expired" } ] }
+      { "source": "pi:kimi-coding", "status": "available" } ] }
 ]
 ```
 
 Observed source statuses are `available`, `expired` (with an `error` slug), and `missing`.
 
-- A provider can carry a healthy source beside a missing or expired one, so a provider must not be collapsed to a single status. Claude's `oauth-file` is missing while its keychain source is available, and Kimi's standalone CLI credential is expired while its Pi source is available.
+- A provider can carry a healthy source beside a missing or expired one, so a provider must not be collapsed to a single status. Claude's `oauth-file` is missing while its keychain source is available.
 - A `pi:`-prefixed source exists only where Pi holds its own credential for that family (`pi:xai`, `pi:kimi-coding`). Pi's `openai-codex` family has none, because it authenticates through the Codex store that the `codex` provider already lists. A missing `pi:` source is therefore never evidence against a Pi candidate.
 
 Neither this per-source shape nor `state.authStatus` exists before quota-axi 0.1.16.

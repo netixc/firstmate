@@ -424,7 +424,7 @@ TEARDOWN_META_KIND=$(fm_meta_get "$META" kind)
 [ -n "$TEARDOWN_META_KIND" ] || TEARDOWN_META_KIND=ship
 TEARDOWN_META_HARNESS=$(fm_meta_get "$META" harness)
 case "$TEARDOWN_META_HARNESS" in
-  omp|muse)
+  omp|muse|kimi)
     echo "error: task $ID records retired harness '$TEARDOWN_META_HARNESS'; refusing cleanup so its endpoint, local copy, and durable records remain available for manual migration" >&2
     exit 1
     ;;
@@ -1189,15 +1189,128 @@ remove_grok_turnend_auth() {
   rm -f -- "$path"
 }
 
-remove_kimi_turnend_auth() {
-  local state_dir=$1 id=$2 token_path token='' path
-  token_path=$(fm_control_harness_turnend_token_path kimi "$state_dir" "$id") || return 1
-  if [ -n "$token_path" ] && [ -f "$token_path" ]; then
-    IFS= read -r token < "$token_path" || [ -n "$token" ] || return 1
+# Cleanup-only compatibility for a task that now runs on a retained harness but
+# still carries a Kimi token from an older incarnation. Kimi is not a supported
+# control family, so its retired path must not remain in fm-control-lib's active
+# capability tables. Only a conservative token may name an owned registry file.
+validate_retired_kimi_turnend_auth() {
+  local state_dir=$1 id=$2 token_path="$1/$2.kimi-turnend-token" token='' extra='' state_real expected_path kimi_root registry token_owner registry_target
+  if [ -e "$token_path" ] || [ -L "$token_path" ]; then
+    if [ ! -f "$token_path" ] || [ -L "$token_path" ]; then
+      echo "error: retired Kimi token record is not a regular file: $token_path" >&2
+      return 1
+    fi
+    exec 3< "$token_path" || return 1
+    IFS= read -r token <&3 || [ -n "$token" ] || { exec 3<&-; return 1; }
+    if IFS= read -r extra <&3; then
+      exec 3<&-
+      echo "error: retired Kimi token record has multiple lines: $token_path" >&2
+      return 1
+    fi
+    exec 3<&-
   fi
-  path=$(fm_control_harness_turnend_auth_path kimi "$token") || return 1
-  [ -n "$path" ] || return 0
-  rm -f -- "$path"
+  [ -n "$token" ] || return 0
+  if [[ ! "$token" =~ ^fm\.[A-Za-z0-9]{12}$ ]]; then
+    echo "error: retired Kimi token record has an invalid token name: $token_path" >&2
+    return 1
+  fi
+  state_real=$(cd "$state_dir" 2>/dev/null && pwd -P) || {
+    echo "error: retired Kimi state directory is not accessible: $state_dir" >&2
+    return 1
+  }
+  expected_path="$state_real/$id.turn-ended"
+  kimi_root="$HOME/.kimi-code"
+  registry="$kimi_root/fm-turn-end.d"
+  if { [ -e "$kimi_root" ] || [ -L "$kimi_root" ]; } && [ -L "$kimi_root" ]; then
+    echo "error: retired Kimi root is symlinked; refusing artifact cleanup: $kimi_root" >&2
+    return 1
+  fi
+  if { [ -e "$registry" ] || [ -L "$registry" ]; } && { [ ! -d "$registry" ] || [ -L "$registry" ]; }; then
+    echo "error: retired Kimi registry is not a regular directory: $registry" >&2
+    return 1
+  fi
+  if [ ! -f "$registry/$token" ] || [ -L "$registry/$token" ] \
+    || [ "$(fm_pr_file_link_count "$registry/$token")" != 1 ]; then
+    echo "error: retired Kimi registry entry is not a task-owned regular file: $registry/$token" >&2
+    return 1
+  fi
+  if [ "$(uname)" = Darwin ]; then
+    token_owner=$(/usr/bin/stat -f %u "$registry/$token" 2>/dev/null) || return 1
+  else
+    token_owner=$(stat -c %u "$registry/$token" 2>/dev/null) || return 1
+  fi
+  [ "$token_owner" = "$(id -u)" ] || {
+    echo "error: retired Kimi registry entry is not owned by this user: $registry/$token" >&2
+    return 1
+  }
+  exec 4< "$registry/$token" || return 1
+  IFS= read -r registry_target <&4 || [ -n "$registry_target" ] || { exec 4<&-; return 1; }
+  if IFS= read -r _ <&4; then
+    exec 4<&-
+    echo "error: retired Kimi registry entry has multiple lines: $registry/$token" >&2
+    return 1
+  fi
+  exec 4<&-
+  [ "$registry_target" = "$expected_path" ] || {
+    echo "error: retired Kimi registry entry does not name this task's turn-end marker: $registry/$token" >&2
+    return 1
+  }
+  RETIRED_KIMI_VALIDATED_TOKEN=$token
+}
+
+remove_retired_kimi_turnend_auth() {
+  local state_dir=$1 id=$2 registry token_path entry quarantine initial_token entry_identity quarantine_identity entry_owner quarantine_owner state_real expected_path registry_target current_token extra
+  RETIRED_KIMI_VALIDATED_TOKEN=
+  validate_retired_kimi_turnend_auth "$state_dir" "$id" || return 1
+  [ -n "$RETIRED_KIMI_VALIDATED_TOKEN" ] || return 0
+  initial_token=$RETIRED_KIMI_VALIDATED_TOKEN
+  RETIRED_KIMI_VALIDATED_TOKEN=
+  validate_retired_kimi_turnend_auth "$state_dir" "$id" || return 1
+  [ "$RETIRED_KIMI_VALIDATED_TOKEN" = "$initial_token" ] || {
+    echo "error: retired Kimi token changed during final cleanup validation; refusing artifact deletion" >&2
+    return 1
+  }
+  registry="$HOME/.kimi-code/fm-turn-end.d"
+  token_path="$state_dir/$id.kimi-turnend-token"
+  entry="$registry/$RETIRED_KIMI_VALIDATED_TOKEN"
+  entry_identity=$(fm_pr_file_identity "$entry") || return 1
+  entry_owner=$(if [ "$(uname)" = Darwin ]; then /usr/bin/stat -f %u "$entry"; else stat -c %u "$entry"; fi) || return 1
+  quarantine="$registry/.fm-retired-kimi.$$.${BASHPID:-0}"
+  [ ! -e "$quarantine" ] && [ ! -L "$quarantine" ] || return 1
+  mv -- "$entry" "$quarantine" || return 1
+  quarantine_identity=$(fm_pr_file_identity "$quarantine" 2>/dev/null || true)
+  state_real=$(cd "$state_dir" 2>/dev/null && pwd -P) || quarantine_identity=
+  expected_path="$state_real/$id.turn-ended"
+  current_token=
+  extra=
+  if exec 5< "$token_path" 2>/dev/null; then
+    IFS= read -r current_token <&5 || true
+    IFS= read -r extra <&5 || true
+    exec 5<&-
+  fi
+  registry_target=
+  if [ -f "$quarantine" ] && [ ! -L "$quarantine" ]; then
+    IFS= read -r registry_target < "$quarantine" || [ -n "$registry_target" ] || true
+  fi
+  quarantine_owner=$(if [ "$(uname)" = Darwin ]; then /usr/bin/stat -f %u "$quarantine"; else stat -c %u "$quarantine"; fi 2>/dev/null || true)
+  if [ ! -f "$quarantine" ] || [ -L "$quarantine" ] \
+    || [ "$quarantine_identity" != "$entry_identity" ] \
+    || [ "$(fm_pr_file_link_count "$quarantine" 2>/dev/null || true)" != 1 ] \
+    || [ "$entry_owner" != "$quarantine_owner" ] \
+    || [ "$current_token" != "$initial_token" ] || [ -n "$extra" ] \
+    || [ "$registry_target" != "$expected_path" ]; then
+    if [ -e "$entry" ] || [ -L "$entry" ]; then
+      echo "error: retired Kimi registry entry changed during identity-preserving cleanup; preserving both artifacts" >&2
+      return 1
+    fi
+    mv -- "$quarantine" "$entry" || {
+      echo "error: retired Kimi registry entry could not be restored after identity validation failed" >&2
+      return 1
+    }
+    echo "error: retired Kimi registry entry changed during identity-preserving cleanup; refusing artifact deletion" >&2
+    return 1
+  fi
+  rm -f -- "$quarantine"
 }
 
 retire_busy_state() {
@@ -2702,11 +2815,12 @@ preflight_descendant_task_locks() {
     [ -n "$kind" ] || kind=ship
     harness=$(meta_value "$meta" harness)
     case "$harness" in
-      omp|muse)
+      omp|muse|kimi)
         echo "REFUSED: descendant task $task_id records retired harness '$harness'; forced teardown changed nothing so its endpoint, local copy, and durable records remain available for manual migration" >&2
         return 1
         ;;
     esac
+    validate_retired_kimi_turnend_auth "$state" "$task_id" || return 1
     [ "$kind" = "${DESCENDANT_TASK_KINDS[$i]}" ] || {
       echo "REFUSED: descendant task $task_id changed kind while forced teardown acquired its locks; forced teardown changed nothing" >&2
       return 1
@@ -3042,7 +3156,7 @@ cleanup_firstmate_home_children() {
       fi
     fi
     remove_grok_turnend_auth "$sub_state" "$child_id" || return 1
-    remove_kimi_turnend_auth "$sub_state" "$child_id" || return 1
+    remove_retired_kimi_turnend_auth "$sub_state" "$child_id" || return 1
     remove_pr_poll_artifacts "$sub_state" "$child_id" || return 1
     child_busy_gen=$(meta_value "$child_meta" busy_gen)
     if [ -z "$child_busy_gen" ]; then
@@ -3078,6 +3192,7 @@ require_exclusive_task_worktree_slot || exit 1
 require_owned_task_worktree_slot || exit 1
 
 validate_pr_poll_cleanup "$STATE" "$ID" || exit 1
+validate_retired_kimi_turnend_auth "$STATE" "$ID" || exit 1
 
 if [ "$KIND" = secondmate ]; then
   LOCAL_REGISTRY_LOCK=$(secondmate_registry_lock_path "$STATE")
@@ -3457,7 +3572,7 @@ if [ "$KIND" = secondmate ]; then
   remove_secondmate_registry_entry "$ID"
 fi
 remove_grok_turnend_auth "$STATE" "$ID" || exit 1
-remove_kimi_turnend_auth "$STATE" "$ID" || exit 1
+remove_retired_kimi_turnend_auth "$STATE" "$ID" || exit 1
 fm_backend_clear_transition "$BACKEND" "$STATE" "$T" || true
 # Remove the per-task temp root (/tmp/fm-<id>/, incl. its gotmp/) recorded by spawn.
 # Read before the state-file rm below; empty (pre-fix tasks without tasktmp=) is a no-op.

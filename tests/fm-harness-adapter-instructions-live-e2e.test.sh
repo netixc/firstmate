@@ -35,8 +35,8 @@ cat > "$EXPECTED_JSON" <<'JSON'
     {"id":"skill.default","common":["references/common/control-and-recovery.md"],"harness":"references/harness/pi.md"},
     {"id":"interrupt.default","common":["references/common/control-and-recovery.md"],"harness":"references/harness/pi.md"},
     {"id":"exit.default","common":["references/common/control-and-recovery.md"],"harness":"references/harness/grok.md"},
-    {"id":"resume.default","common":["references/common/control-and-recovery.md"],"harness":"references/harness/kimi.md"},
-    {"id":"recovery.default","common":["references/common/control-and-recovery.md"],"harness":"references/harness/kimi.md"},
+    {"id":"resume.default","common":["references/common/control-and-recovery.md"],"harness":"references/harness/grok.md"},
+    {"id":"recovery.default","common":["references/common/control-and-recovery.md"],"harness":"references/harness/codex.md"},
     {"id":"recovery.replacement-profile","common":["references/common/control-and-recovery.md","references/common/dispatch.md","references/common/model-and-effort.md"],"harness":"references/harness/grok.md"},
     {"id":"recovery.secondmate","common":["references/common/control-and-recovery.md","references/common/primary-hooks.md"],"harness":"references/harness/codex.md"},
     {"id":"recovery.replacement-secondmate","common":["references/common/control-and-recovery.md","references/common/dispatch.md","references/common/model-and-effort.md","references/common/primary-hooks.md"],"harness":"references/harness/codex.md"},
@@ -60,8 +60,8 @@ JSON
     'skill.default pi' \
     'interrupt.default pi-signed' \
     'exit.default grok' \
-    'resume.default kimi' \
-    'recovery.default kimi' \
+    'resume.default grok' \
+    'recovery.default codex' \
     'recovery.replacement-profile grok' \
     'recovery.secondmate codex' \
     'recovery.replacement-secondmate codex' \
@@ -92,7 +92,7 @@ if ! diff -u \
   <(jq -S . "$TMP_ROOT/normalized-response.json") > "$TMP_ROOT/diff"; then
   fail "local model $MODEL did not follow the routing instructions: $(tr '\n' ' ' < "$TMP_ROOT/diff")"
 fi
-pass "local model $MODEL selected every operation scenario and all six harness identities"
+pass "local model $MODEL selected every operation scenario and all five harness identities"
 
 CHECKED=0
 MISSING=
@@ -103,14 +103,10 @@ resolve_native_binary() {
     printf '%s\n' "$candidate"
     return 0
   fi
-  if [ "$harness" = kimi ] && [ -n "${HOME:-}" ] && [ -x "$HOME/.kimi-code/bin/kimi" ]; then
-    printf '%s\n' "$HOME/.kimi-code/bin/kimi"
-    return 0
-  fi
   return 1
 }
 
-for harness in codex opencode pi pi-signed grok kimi; do
+for harness in codex opencode pi pi-signed grok; do
   if binary=$(resolve_native_binary "$harness"); then
     version=$("$binary" --version 2>/dev/null | head -1 | tr -d '\r') || version=unknown
     printf '# native loader not claimed: %s %s is installed, but this harness-neutral evaluation does not exercise its provider transport\n' "$harness" "$version"

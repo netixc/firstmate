@@ -35,7 +35,7 @@ mkdir -p "$TMP_ROOT"
 TMP_ROOT=$(cd "$TMP_ROOT" && pwd)
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
-VERIFIED_HARNESSES="codex opencode pi pi-signed grok kimi"
+VERIFIED_HARNESSES="codex opencode pi pi-signed grok"
 
 # The expectation table, written out independently of the implementation so a
 # silent change to either side shows up here. The fourth field is the composer
@@ -48,7 +48,6 @@ verified_adapter_contract() {  # <harness> -> exit command, interrupt key, repea
     pi) printf '/quit\tEscape\t1\t\n' ;;
     pi-signed) printf '/quit\tEscape\t1\t\n' ;;
     grok) printf '/exit\tC-c\t1\t\n' ;;
-    kimi) printf '/exit\tEscape\t1\t\n' ;;
     *) return 1 ;;
   esac
 }
@@ -239,7 +238,7 @@ test_interrupt_sends_each_harness_verified_key() {
 test_harness_family_resolution() {
   local pair recorded want got
   for pair in codex:codex codex-cli:codex \
-      opencode:opencode grok:grok grok-2:grok kimi:kimi pi:pi \
+      opencode:opencode grok:grok grok-2:grok pi:pi \
       pi-signed:pi-signed; do
     recorded=${pair%%:*}
     want=${pair#*:}
@@ -270,6 +269,8 @@ test_harness_family_resolution() {
     && fail "a retired Rovo executable must not resolve to a control family"
   fm_control_harness_family agy \
     && fail "the retired AGY adapter must not resolve to a control family"
+  fm_control_harness_family kimi \
+    && fail "the retired Kimi adapter must not resolve to a control family"
   pass "fm-control-lib: a recorded harness resolves to its verified adapter without guessing"
 }
 
@@ -318,7 +319,7 @@ test_opencode_interrupts_twice_and_others_once() {
 
 test_unverified_harness_is_refused() {
   local harness dir out rc
-  for harness in omp muse gemini rovo agy; do
+  for harness in omp muse gemini rovo agy kimi; do
     dir=$(new_case "unverified-$harness")
     add_task "$dir" t1 "$harness"
     alive_as "$dir" "$harness"
@@ -329,7 +330,7 @@ test_unverified_harness_is_refused() {
     [ -f "$dir/home/state/t1.meta" ] || fail "a retired harness refusal must preserve the task record"
     [ -d "$dir/wt-t1" ] || fail "a retired harness refusal must preserve the local copy"
   done
-  pass "fm-control: stale OMP, Muse, Gemini CLI, Rovo, and AGY tasks are refused without sending bytes or removing retained work"
+  pass "fm-control: stale OMP, Muse, Gemini CLI, Rovo, AGY, and Kimi tasks are refused without sending bytes or removing retained work"
 }
 
 # --- 2. backend capability matrix -------------------------------------------
@@ -362,7 +363,7 @@ test_harness_kind_capability() {
     fm_control_harness_supports_kind "$harness" scout \
       || fail "$harness should be able to run a scout task"
   done
-  for harness in pi codex opencode pi-signed grok kimi; do
+  for harness in pi codex opencode pi-signed grok; do
     fm_control_harness_supports_kind "$harness" secondmate \
       || fail "$harness should be able to run a secondmate"
   done

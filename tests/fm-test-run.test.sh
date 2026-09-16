@@ -1009,7 +1009,7 @@ test_list_scheduled_non_lane_selections_use_serial_weights() {
     tests/fm-operational-input.test.sh
     tests/fm-lint.test.sh
     tests/fm-captain-hold-lifecycle.test.sh
-    tests/fm-kimi-harness.test.sh
+    tests/fm-kimi-retirement.test.sh
     tests/fm-brief.test.sh
   )
   tmp=$(fm_test_tmproot fm-test-run-non-lane-schedule)
@@ -1030,7 +1030,7 @@ test_list_scheduled_non_lane_selections_use_serial_weights() {
     tests/fm-brief.test.sh \
     tests/fm-captain-hold-lifecycle.test.sh \
     tests/fm-lint.test.sh \
-    tests/fm-kimi-harness.test.sh \
+    tests/fm-kimi-retirement.test.sh \
     tests/fm-operational-input.test.sh >"$tmp/expected"
   for selection in family all changed scripts; do
     case "$selection" in
