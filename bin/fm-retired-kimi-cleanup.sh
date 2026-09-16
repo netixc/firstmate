@@ -196,6 +196,8 @@ def registry_tokens() -> list[str]:
         child = os.lstat(path)
         if not TOKEN_NAME.fullmatch(name) or stat.S_ISLNK(child.st_mode) or not stat.S_ISREG(child.st_mode):
             refuse(f"Firstmate registry contains an unexpected entry at {path}.")
+        if child.st_uid != os.getuid() or child.st_nlink != 1:
+            refuse(f"Firstmate registry token is not owned solely by this user at {path}.")
         with open(path, "rb") as stream:
             raw = stream.read()
         if raw.endswith(b"\n"):

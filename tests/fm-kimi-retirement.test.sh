@@ -161,6 +161,29 @@ test_cleanup_preserves_all_artifacts_when_registry_mutation_fails() {
   pass "retired Kimi cleanup preserves all artifacts when registry mutation fails"
 }
 
+test_cleanup_refuses_shared_registry_token_without_mutation() {
+  local home token target out rc=0
+  home=$(make_home shared-registry-token)
+  write_config_with_owned_region "$home" "$home/expected.toml"
+  write_generated_hook "$home"
+  mkdir -p "$home/.kimi-code/fm-turn-end.d"
+  token=fm.123456789012
+  target="$home/state/orphan.turn-ended"
+  printf '%s\n' "$target" > "$home/.kimi-code/fm-turn-end.d/$token"
+  ln "$home/.kimi-code/fm-turn-end.d/$token" "$home/registry-token-alias"
+  cp "$home/.kimi-code/config.toml" "$home/config.before"
+
+  out=$(HOME="$home" "$CLEANUP" 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "retired Kimi cleanup removed a multiply-linked registry token"
+  cmp -s "$home/config.before" "$home/.kimi-code/config.toml" \
+    || fail "retired Kimi cleanup changed config for a shared registry token"
+  assert_present "$home/.kimi-code/fm-turn-end.sh" "retired Kimi cleanup removed the hook for a shared registry token"
+  assert_present "$home/.kimi-code/fm-turn-end.d/$token" "retired Kimi cleanup removed a shared registry token"
+  assert_present "$home/registry-token-alias" "retired Kimi cleanup removed the token's unrelated hard link"
+  assert_contains "$out" "owned solely by this user" "shared-token refusal omitted its ownership reason"
+  pass "retired Kimi cleanup refuses multiply-linked registry tokens"
+}
+
 test_cleanup_preserves_cross_home_registry_entries() {
   local home other current_token current_target foreign_token foreign_target
   home=$(make_home cross-home)
@@ -290,6 +313,7 @@ test_cleanup_preserves_external_config_bytes_and_removes_orphans
 test_cleanup_preserves_unrelated_empty_registry_directory
 test_cleanup_refuses_task_bound_token_without_mutation
 test_cleanup_preserves_all_artifacts_when_registry_mutation_fails
+test_cleanup_refuses_shared_registry_token_without_mutation
 test_cleanup_preserves_cross_home_registry_entries
 test_cleanup_refuses_foreign_active_registry_entries_without_mutation
 test_cleanup_refuses_unexpected_external_files
