@@ -335,6 +335,36 @@ test_active_dispatch_profile_allows_raw_launch_command() {
   pass "active crew-dispatch profile allows the raw launch-command escape hatch"
 }
 
+test_retired_kimi_raw_launch_commands_refuse_before_provisioning() {
+  local selection rec id out status
+  for selection in configured explicit; do
+    id="retired-kimi-raw-$selection-z16"
+    rec=$(make_spawn_case "retired-kimi-raw-$selection" pi "$id")
+    read_case_record "$rec"
+    if [ "$selection" = configured ]; then
+      printf '%s\n' 'kimi' > "$HOME_DIR/config/crew-harness"
+      out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
+        "$id" "$PROJ_DIR" 2>&1)
+    else
+      out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
+        "$id" "$PROJ_DIR" '/opt/kimi --model k3' 2>&1)
+    fi
+    status=$?
+    expect_code 1 "$status" "retired Kimi raw $selection command should refuse"
+    if [ "$selection" = configured ]; then
+      assert_contains "$out" "no launch template for harness 'kimi'" \
+        "retired Kimi configured refusal omitted the reason"
+    else
+      assert_contains "$out" "retired Kimi launch commands" \
+        "retired Kimi raw explicit refusal omitted the reason"
+    fi
+    assert_absent "$HOME_DIR/state/$id.meta" \
+      "retired Kimi raw $selection command published task metadata"
+    [ ! -s "$LAUNCH_LOG" ] || fail "retired Kimi raw $selection command reached the launch backend"
+  done
+  pass "configured and explicit raw Kimi commands refuse before endpoint provisioning"
+}
+
 
 test_retired_gemini_harness_refuses_without_touching_settings() {
   local selection rec id out status project_before user_before
@@ -1147,6 +1177,7 @@ test_active_dispatch_profile_requires_explicit_harness_for_scout
 test_active_dispatch_profile_allows_explicit_harness
 test_active_dispatch_profile_allows_positional_harness
 test_active_dispatch_profile_allows_raw_launch_command
+test_retired_kimi_raw_launch_commands_refuse_before_provisioning
 test_retired_gemini_harness_refuses_without_touching_settings
 test_retired_agy_harness_refuses_without_touching_external_settings
 test_retired_rovo_harness_refuses_without_touching_project_files

@@ -1379,6 +1379,10 @@ case "$ARG3" in
     for word in $LAUNCH; do
       case "$word" in [A-Za-z_]*=*) continue ;; *) HARNESS=$(basename "$word"); break ;; esac
     done
+    if [ "$HARNESS" = kimi ]; then
+      echo "error: retired Kimi launch commands are unsupported; select a retained harness" >&2
+      exit 1
+    fi
     ;;
   '')
     # No explicit harness: resolve from config. A secondmate AGENT launches on the
