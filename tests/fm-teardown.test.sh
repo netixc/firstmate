@@ -751,13 +751,15 @@ test_local_only_fork_remote_allows() {
 }
 
 test_retired_kimi_registry_entry_mismatch_refuses_cleanup() {
-  local case_dir home token target rc=0
+  local case_dir home token target head rc=0
   case_dir=$(make_case retired-kimi-registry-mismatch)
   home="$case_dir/home"
   mkdir -p "$home/.kimi-code/fm-turn-end.d"
   write_meta "$case_dir" local-only ship
   wt_commit "$case_dir" "landed Kimi cleanup fixture"
+  head=$(git -C "$case_dir/wt" rev-parse HEAD)
   add_fork_with_pushed_branch "$case_dir"
+  seed_backlog_in_flight "$case_dir"
   token=fm.123456789012
   target="$home/state/unrelated.turn-ended"
   printf '%s\n' "$token" > "$case_dir/state/task-x1.kimi-turnend-token"
@@ -775,6 +777,10 @@ test_retired_kimi_registry_entry_mismatch_refuses_cleanup() {
     "retired-kimi-registry-mismatch: refusal removed the task record"
   assert_present "$home/.kimi-code/fm-turn-end.d/$token" \
     "retired-kimi-registry-mismatch: refusal removed the unrelated registry entry"
+  assert_refusal_retained_task_state "$case_dir" \
+    "retired-kimi-registry-mismatch" "$head"
+  [ "$(backlog_row_state "$case_dir")" = in_flight ] \
+    || fail "retired-kimi-registry-mismatch: refusal changed the backlog state"
   pass "teardown refuses a mismatched retired Kimi registry entry without deleting it"
 }
 

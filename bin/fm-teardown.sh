@@ -1193,7 +1193,7 @@ remove_grok_turnend_auth() {
 # still carries a Kimi token from an older incarnation. Kimi is not a supported
 # control family, so its retired path must not remain in fm-control-lib's active
 # capability tables. Only a conservative token may name an owned registry file.
-remove_retired_kimi_turnend_auth() {
+validate_retired_kimi_turnend_auth() {
   local state_dir=$1 id=$2 token_path="$1/$2.kimi-turnend-token" token='' extra='' expected_path kimi_root registry token_owner registry_target
   if [ -e "$token_path" ] || [ -L "$token_path" ]; then
     if [ ! -f "$token_path" ] || [ -L "$token_path" ]; then
@@ -1251,7 +1251,14 @@ remove_retired_kimi_turnend_auth() {
     echo "error: retired Kimi registry entry does not name this task's turn-end marker: $registry/$token" >&2
     return 1
   }
-  rm -f -- "$registry/$token"
+}
+
+remove_retired_kimi_turnend_auth() {
+  local state_dir=$1 id=$2 token_path="$1/$2.kimi-turnend-token" token=''
+  validate_retired_kimi_turnend_auth "$state_dir" "$id" || return 1
+  [ -e "$token_path" ] || [ -L "$token_path" ] || return 0
+  IFS= read -r token < "$token_path" || [ -n "$token" ] || return 1
+  rm -f -- "$HOME/.kimi-code/fm-turn-end.d/$token"
 }
 
 retire_busy_state() {
@@ -2761,6 +2768,7 @@ preflight_descendant_task_locks() {
         return 1
         ;;
     esac
+    validate_retired_kimi_turnend_auth "$state" "$task_id" || return 1
     [ "$kind" = "${DESCENDANT_TASK_KINDS[$i]}" ] || {
       echo "REFUSED: descendant task $task_id changed kind while forced teardown acquired its locks; forced teardown changed nothing" >&2
       return 1
@@ -3132,6 +3140,7 @@ require_exclusive_task_worktree_slot || exit 1
 require_owned_task_worktree_slot || exit 1
 
 validate_pr_poll_cleanup "$STATE" "$ID" || exit 1
+validate_retired_kimi_turnend_auth "$STATE" "$ID" || exit 1
 
 if [ "$KIND" = secondmate ]; then
   LOCAL_REGISTRY_LOCK=$(secondmate_registry_lock_path "$STATE")
