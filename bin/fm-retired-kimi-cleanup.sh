@@ -189,6 +189,9 @@ def registry_tokens() -> list[str]:
         if not target.startswith("/") or not target.endswith(TURN_END_SUFFIX) or os.path.normpath(target) != target:
             refuse(f"Firstmate registry token has an unexpected target at {path}.")
         if os.path.dirname(target) != STATE_ROOT:
+            foreign_meta = target[: -len(TURN_END_SUFFIX)] + ".meta"
+            if os.path.lexists(foreign_meta):
+                active.append(name)
             continue
         task_id = os.path.basename(target)[: -len(TURN_END_SUFFIX)]
         if not re.fullmatch(r"[A-Za-z0-9._-]+", task_id):

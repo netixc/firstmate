@@ -145,6 +145,34 @@ test_cleanup_preserves_cross_home_registry_entries() {
   pass "retired Kimi cleanup preserves registry entries belonging to another home"
 }
 
+test_cleanup_refuses_foreign_active_registry_entries_without_mutation() {
+  local home other foreign_token foreign_target out rc=0
+  home=$(make_home cross-home-active)
+  other="$LAB/other-active-home"
+  mkdir -p "$other/state"
+  write_config_with_owned_region "$home" "$home/expected.toml"
+  write_generated_hook "$home"
+  mkdir -p "$home/.kimi-code/fm-turn-end.d"
+  foreign_token=fm.abcdefghijkl
+  foreign_target="$other/state/foreign.turn-ended"
+  printf '%s\n' "$foreign_target" > "$home/.kimi-code/fm-turn-end.d/$foreign_token"
+  printf 'harness=pi\n' > "$other/state/foreign.meta"
+  cp "$home/.kimi-code/config.toml" "$home/config.before"
+  cp "$home/.kimi-code/fm-turn-end.sh" "$home/hook.before"
+  cp "$home/.kimi-code/fm-turn-end.d/$foreign_token" "$home/token.before"
+
+  out=$(HOME="$home" "$CLEANUP" 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "retired Kimi cleanup removed a foreign active task's hook path"
+  assert_contains "$out" "task records exist" "foreign-active refusal omitted its reason"
+  cmp -s "$home/config.before" "$home/.kimi-code/config.toml" \
+    || fail "foreign-active refusal changed shared Kimi config"
+  cmp -s "$home/hook.before" "$home/.kimi-code/fm-turn-end.sh" \
+    || fail "foreign-active refusal changed the shared Kimi hook"
+  cmp -s "$home/token.before" "$home/.kimi-code/fm-turn-end.d/$foreign_token" \
+    || fail "foreign-active refusal changed the foreign registry token"
+  pass "retired Kimi cleanup preserves shared artifacts for foreign active tasks"
+}
+
 test_cleanup_refuses_unexpected_external_files() {
   local home expected out rc=0
   home=$(make_home unexpected)
@@ -224,6 +252,7 @@ test_bootstrap_runs_cleanup_only_with_mutation_authority() {
 test_cleanup_preserves_external_config_bytes_and_removes_orphans
 test_cleanup_refuses_task_bound_token_without_mutation
 test_cleanup_preserves_cross_home_registry_entries
+test_cleanup_refuses_foreign_active_registry_entries_without_mutation
 test_cleanup_refuses_unexpected_external_files
 test_cleanup_refuses_symlinked_root_and_malformed_markers
 test_bootstrap_runs_cleanup_only_with_mutation_authority
