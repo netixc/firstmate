@@ -1259,10 +1259,17 @@ validate_retired_kimi_turnend_auth() {
 }
 
 remove_retired_kimi_turnend_auth() {
-  local state_dir=$1 id=$2 registry
+  local state_dir=$1 id=$2 registry initial_token
   RETIRED_KIMI_VALIDATED_TOKEN=
   validate_retired_kimi_turnend_auth "$state_dir" "$id" || return 1
   [ -n "$RETIRED_KIMI_VALIDATED_TOKEN" ] || return 0
+  initial_token=$RETIRED_KIMI_VALIDATED_TOKEN
+  RETIRED_KIMI_VALIDATED_TOKEN=
+  validate_retired_kimi_turnend_auth "$state_dir" "$id" || return 1
+  [ "$RETIRED_KIMI_VALIDATED_TOKEN" = "$initial_token" ] || {
+    echo "error: retired Kimi token changed during final cleanup validation; refusing artifact deletion" >&2
+    return 1
+  }
   registry="$HOME/.kimi-code/fm-turn-end.d"
   rm -f -- "$registry/$RETIRED_KIMI_VALIDATED_TOKEN"
 }
