@@ -174,6 +174,15 @@ def atomic_write(path: str, data: bytes, mode: int) -> None:
         raise
 
 
+def probe_directory(path: str, label: str) -> None:
+    try:
+        fd, temporary = tempfile.mkstemp(prefix=".fm-kimi-probe.", dir=path)
+        os.close(fd)
+        os.unlink(temporary)
+    except OSError as error:
+        refuse(f"cannot safely mutate {label} at {path}: {error}.")
+
+
 def registry_tokens() -> list[str]:
     if not os.path.lexists(REGISTRY):
         return []
@@ -244,14 +253,49 @@ try:
             refuse(f"Firstmate hook script has unexpectedly broad permissions at {HOOK}.")
 
     tokens = registry_tokens()
-    if config_info is not None and outside != original:
-        atomic_write(CONFIG, outside, stat.S_IMODE(config_info.st_mode))
-    for token in tokens:
-        os.unlink(token)
-    if os.path.lexists(HOOK):
-        os.unlink(HOOK)
-    if tokens and os.path.lexists(REGISTRY) and not os.listdir(REGISTRY):
-        os.rmdir(REGISTRY)
+    config_changed = config_info is not None and outside != original
+    if config_changed or os.path.lexists(HOOK) or tokens:
+        probe_directory(CONFIG_DIR, "Kimi config root")
+    if tokens:
+        probe_directory(REGISTRY, "Firstmate registry")
+
+    backup_dir = tempfile.mkdtemp(prefix=".fm-kimi-backup.", dir=CONFIG_DIR)
+    moved = []
+
+    def move_to_backup(path: str) -> None:
+        backup = os.path.join(backup_dir, str(len(moved)))
+        os.rename(path, backup)
+        moved.append((backup, path))
+
+    try:
+        if config_changed:
+            move_to_backup(CONFIG)
+        for token in tokens:
+            move_to_backup(token)
+        if os.path.lexists(HOOK):
+            move_to_backup(HOOK)
+        if config_changed:
+            atomic_write(CONFIG, outside, stat.S_IMODE(config_info.st_mode))
+        if tokens and os.path.lexists(REGISTRY) and not os.listdir(REGISTRY):
+            os.rmdir(REGISTRY)
+    except OSError as error:
+        if config_changed and os.path.lexists(CONFIG):
+            os.unlink(CONFIG)
+        for backup, path in reversed(moved):
+            if os.path.lexists(backup) and not os.path.lexists(path):
+                os.rename(backup, path)
+        try:
+            os.rmdir(backup_dir)
+        except OSError:
+            pass
+        refuse(f"cleanup could not complete atomically: {error}.")
+
+    try:
+        for backup, _ in moved:
+            os.unlink(backup)
+        os.rmdir(backup_dir)
+    except OSError:
+        pass
 except OSError as error:
     refuse(f"filesystem operation failed: {error}.")
 PY

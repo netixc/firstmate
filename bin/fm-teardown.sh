@@ -1255,14 +1255,16 @@ validate_retired_kimi_turnend_auth() {
     echo "error: retired Kimi registry entry does not name this task's turn-end marker: $registry/$token" >&2
     return 1
   }
+  RETIRED_KIMI_VALIDATED_TOKEN=$token
 }
 
 remove_retired_kimi_turnend_auth() {
-  local state_dir=$1 id=$2 token_path="$1/$2.kimi-turnend-token" token=''
+  local state_dir=$1 id=$2 registry
+  RETIRED_KIMI_VALIDATED_TOKEN=
   validate_retired_kimi_turnend_auth "$state_dir" "$id" || return 1
-  [ -e "$token_path" ] || [ -L "$token_path" ] || return 0
-  IFS= read -r token < "$token_path" || [ -n "$token" ] || return 1
-  rm -f -- "$HOME/.kimi-code/fm-turn-end.d/$token"
+  [ -n "$RETIRED_KIMI_VALIDATED_TOKEN" ] || return 0
+  registry="$HOME/.kimi-code/fm-turn-end.d"
+  rm -f -- "$registry/$RETIRED_KIMI_VALIDATED_TOKEN"
 }
 
 retire_busy_state() {

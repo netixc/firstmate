@@ -137,6 +137,30 @@ test_cleanup_refuses_task_bound_token_without_mutation() {
   pass "retired Kimi cleanup preserves every artifact while a task record still owns a token"
 }
 
+test_cleanup_preserves_all_artifacts_when_registry_mutation_fails() {
+  local home expected token target out rc=0
+  home=$(make_home registry-failure)
+  expected="$home/expected.toml"
+  write_config_with_owned_region "$home" "$expected"
+  write_generated_hook "$home"
+  mkdir -p "$home/.kimi-code/fm-turn-end.d"
+  token=fm.123456789012
+  target="$home/state/orphan.turn-ended"
+  printf '%s\n' "$target" > "$home/.kimi-code/fm-turn-end.d/$token"
+  cp "$home/.kimi-code/config.toml" "$home/config.before"
+  chmod 500 "$home/.kimi-code/fm-turn-end.d"
+
+  out=$(HOME="$home" "$CLEANUP" 2>&1) || rc=$?
+  chmod 700 "$home/.kimi-code/fm-turn-end.d"
+  [ "$rc" -ne 0 ] || fail "retired Kimi cleanup ignored an unwritable registry"
+  cmp -s "$home/config.before" "$home/.kimi-code/config.toml" \
+    || fail "retired Kimi cleanup partially changed config after registry failure"
+  assert_present "$home/.kimi-code/fm-turn-end.sh" "retired Kimi cleanup removed the hook after registry failure"
+  assert_present "$home/.kimi-code/fm-turn-end.d/$token" "retired Kimi cleanup removed the token after registry failure"
+  assert_contains "$out" "cannot safely mutate Firstmate registry" "registry failure omitted its refusal reason"
+  pass "retired Kimi cleanup preserves all artifacts when registry mutation fails"
+}
+
 test_cleanup_preserves_cross_home_registry_entries() {
   local home other current_token current_target foreign_token foreign_target
   home=$(make_home cross-home)
@@ -265,6 +289,7 @@ test_bootstrap_runs_cleanup_only_with_mutation_authority() {
 test_cleanup_preserves_external_config_bytes_and_removes_orphans
 test_cleanup_preserves_unrelated_empty_registry_directory
 test_cleanup_refuses_task_bound_token_without_mutation
+test_cleanup_preserves_all_artifacts_when_registry_mutation_fails
 test_cleanup_preserves_cross_home_registry_entries
 test_cleanup_refuses_foreign_active_registry_entries_without_mutation
 test_cleanup_refuses_unexpected_external_files
