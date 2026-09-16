@@ -1,0 +1,11 @@
+ok - tmux liveness: a harness-named foreground process classifies alive
+ok - tmux liveness: stale Muse and unrelated similarly named processes stay ambiguous
+ok - tmux liveness: stale Gemini CLI process names stay ambiguous
+ok - tmux liveness: stale Rovo process names stay ambiguous
+ok - tmux liveness: stale AGY process names stay ambiguous
+ok - tmux liveness: stale OMP and unrelated similarly named processes stay ambiguous
+ok - tmux liveness: a process neither name source attributes stays ambiguous rather than inventing an agent
+ok - tmux liveness: a launcher whose own identity reads as a bare shell classifies alive from its harness child
+ok - tmux liveness: an idle shell pane classifies dead
+ok - tmux liveness: a harness-named background process in an idle pane still classifies dead
+ok - tmux liveness: an absent window classifies missing rather than inheriting tmux's active-window fallback
