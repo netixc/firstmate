@@ -1194,15 +1194,24 @@ remove_grok_turnend_auth() {
 # control family, so its retired path must not remain in fm-control-lib's active
 # capability tables. Only a conservative token may name an owned registry file.
 remove_retired_kimi_turnend_auth() {
-  local state_dir=$1 id=$2 token_path="$1/$2.kimi-turnend-token" token='' kimi_root registry
+  local state_dir=$1 id=$2 token_path="$1/$2.kimi-turnend-token" token='' extra='' expected_path kimi_root registry token_owner
   if [ -e "$token_path" ] || [ -L "$token_path" ]; then
     if [ ! -f "$token_path" ] || [ -L "$token_path" ]; then
       echo "error: retired Kimi token record is not a regular file: $token_path" >&2
       return 1
     fi
-    IFS= read -r token < "$token_path" || [ -n "$token" ] || return 1
+    exec 3< "$token_path" || return 1
+    IFS= read -r token <&3 || [ -n "$token" ] || { exec 3<&-; return 1; }
+    if IFS= read -r extra <&3; then
+      exec 3<&-
+      echo "error: retired Kimi token record has multiple lines: $token_path" >&2
+      return 1
+    fi
+    exec 3<&-
   fi
+  [ -n "$token" ] || return 0
   case "$token" in ''|*[!A-Za-z0-9._-]*) return 0 ;; esac
+  expected_path="$state_dir/$id.turn-ended"
   kimi_root="$HOME/.kimi-code"
   registry="$kimi_root/fm-turn-end.d"
   if { [ -e "$kimi_root" ] || [ -L "$kimi_root" ]; } && [ -L "$kimi_root" ]; then
@@ -1213,6 +1222,24 @@ remove_retired_kimi_turnend_auth() {
     echo "error: retired Kimi registry is not a regular directory: $registry" >&2
     return 1
   fi
+  if [ ! -f "$registry/$token" ] || [ -L "$registry/$token" ] \
+    || [ "$(fm_pr_file_link_count "$registry/$token")" != 1 ]; then
+    echo "error: retired Kimi registry entry is not a task-owned regular file: $registry/$token" >&2
+    return 1
+  fi
+  if [ "$(uname)" = Darwin ]; then
+    token_owner=$(/usr/bin/stat -f %u "$registry/$token" 2>/dev/null) || return 1
+  else
+    token_owner=$(stat -c %u "$registry/$token" 2>/dev/null) || return 1
+  fi
+  [ "$token_owner" = "$(id -u)" ] || {
+    echo "error: retired Kimi registry entry is not owned by this user: $registry/$token" >&2
+    return 1
+  }
+  [ "$token" = "$expected_path" ] || {
+    echo "error: retired Kimi registry entry does not name this task's turn-end marker: $registry/$token" >&2
+    return 1
+  }
   rm -f -- "$registry/$token"
 }
 

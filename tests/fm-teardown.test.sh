@@ -750,6 +750,34 @@ test_local_only_fork_remote_allows() {
   pass "local-only worktree with HEAD on a fork remote is torn down and the home summary is refreshed"
 }
 
+test_retired_kimi_registry_entry_mismatch_refuses_cleanup() {
+  local case_dir home token target rc=0
+  case_dir=$(make_case retired-kimi-registry-mismatch)
+  home="$case_dir/home"
+  mkdir -p "$home/.kimi-code/fm-turn-end.d"
+  write_meta "$case_dir" local-only ship
+  wt_commit "$case_dir" "landed Kimi cleanup fixture"
+  add_fork_with_pushed_branch "$case_dir"
+  token=fm.123456789012
+  target="$home/state/unrelated.turn-ended"
+  printf '%s\n' "$token" > "$case_dir/state/task-x1.kimi-turnend-token"
+  printf '%s\n' "$target" > "$home/.kimi-code/fm-turn-end.d/$token"
+
+  set +e
+  HOME="$home" run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  [ "$rc" -ne 0 ] || fail "retired-kimi-registry-mismatch: teardown deleted an unrelated registry target"
+  grep -q "does not name this task's turn-end marker" "$case_dir/stderr" \
+    || fail "retired-kimi-registry-mismatch: refusal did not identify the mismatched target"
+  assert_present "$case_dir/state/task-x1.meta" \
+    "retired-kimi-registry-mismatch: refusal removed the task record"
+  assert_present "$home/.kimi-code/fm-turn-end.d/$token" \
+    "retired-kimi-registry-mismatch: refusal removed the unrelated registry entry"
+  pass "teardown refuses a mismatched retired Kimi registry entry without deleting it"
+}
+
 test_teardown_closes_the_backlog_item_itself() {
   local case_dir out
   case_dir=$(make_case tasks-axi-close)
@@ -3762,6 +3790,7 @@ EOF
 
 test_stale_retired_harness_tasks_refuse_even_forced_cleanup_without_removing_work
 test_local_only_fork_remote_allows
+test_retired_kimi_registry_entry_mismatch_refuses_cleanup
 test_teardown_closes_the_backlog_item_itself
 test_teardown_manual_backend_leaves_the_backlog_to_the_operator
 test_local_only_truly_unpushed_refuses
