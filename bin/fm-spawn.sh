@@ -133,7 +133,7 @@
 #   profile consultation. A --secondmate spawn is exempt and resolves the SECONDMATE
 #   harness (config/secondmate-harness -> config/crew-harness -> own), so the
 #   secondmate-vs-crewmate split is DURABLE across every respawn (recovery,
-#   /updatefirstmate, restart). A bare adapter name (codex|opencode|pi|pi-signed|grok|kimi|agy)
+#   /updatefirstmate, restart). A bare adapter name (codex|opencode|pi|pi-signed|grok|kimi)
 #   overrides it for this spawn (either kind). A non-flag string containing
 #   whitespace is treated as a RAW launch command - the escape hatch for verifying
 #   new adapters. For pi and pi-signed, fm-spawn resolves the selected executable
@@ -240,20 +240,11 @@
 #     __PIWATCH__   absolute path to .pi/extensions/fm-primary-pi-watch.ts in a pi secondmate home
 #     __OPINPUT__   absolute path to the canonical operational-input encoder
 #     __WORKTREE__  absolute path to the task worktree
-#     __AGYBIN__    resolved, agy-verified executable for an agy launch
 # Verified per-harness turn-end hooks are installed automatically where enabled; some live outside the worktree.
 # Kimi uses one surgically installed Firstmate region in $HOME/.kimi-code/config.toml,
 # a firstmate-owned global hook and registry, and a gitignored per-task pointer.
 # grok uses a firstmate-owned global hook under ${GROK_HOME:-$HOME/.grok}/hooks
 # plus a gitignored .fm-grok-turnend worktree pointer and a state token.
-# agy installs no hook either - it exposes no hook surface at all - so it
-# carries no busy-source wiring and no turn-end hook. Its brief rides the launch
-# command, but a fresh worktree would park it on a folder-trust dialog, so the
-# spawn pre-registers the worktree in agy's own trust store through
-# bin/fm-agy-trust.sh and then waits for a
-# busy turn - answering the dialog first if it renders anyway - before
-# reporting success. Its busy state is a screen-scrape fallback like grok,
-# and it is crewmate/scout only.
 # Publishing the record and moving this home's backlog item to In flight are one
 # step, not two: bin/fm-backlog-transition-lib.sh owns that invariant, and this
 # script performs the transition under the task's own meta lock before it reports
@@ -391,8 +382,6 @@ fm_backlog_directory_present "$STATE" "state directory" || {
 . "$SCRIPT_DIR/fm-trace-context-lib.sh"
 # shellcheck source=bin/fm-remote-readiness-lib.sh
 . "$SCRIPT_DIR/fm-remote-readiness-lib.sh"
-# shellcheck source=bin/fm-timeout-lib.sh
-. "$SCRIPT_DIR/fm-timeout-lib.sh"
 # Fail closed before any fleet mutation: a no-mistakes gate agent must never spawn
 # a direct report (see bin/fm-gate-refuse-lib.sh).
 fm_refuse_if_gate_agent
@@ -1301,7 +1290,7 @@ if [ "$RELAUNCH" -eq 1 ]; then
   }
 elif [ "$KIND" = secondmate ]; then
   case "${POS[1]:-}" in
-    ''|codex|opencode|pi|pi-signed|grok|kimi|agy)
+    ''|codex|opencode|pi|pi-signed|grok|kimi)
       ARG3=${POS[1]:-}
       ;;
     *' '*)
@@ -1351,37 +1340,6 @@ pi_supports_tui_mode() {
   printf '%s\n' "$help" | grep -Eq -- '(^|[[:space:]])--tui-mode([[:space:]=]|$)'
 }
 
-# agy pre-launch model validation. `agy models` (agy 1.2.0) prints one model per
-# line as "<id>\t<label>" for the account's catalog only; model ids are bare
-# (gemini-3.8-flash-high), never provider-prefixed. A requested model absent
-# from a reachable listing is concrete unsupported evidence and refuses the
-# spawn, so a stale id (the unlisted bare gemini-3.8-flash) fails loudly here
-# instead of wedging a worker pane. The listing is a remote fetch that needs
-# network and a signed-in account, so the probe runs under the shared hard
-# bound (bin/fm-timeout-lib.sh) with stdin detached: a stalled fetch or a
-# sign-in prompt can never block the spawn before any pane exists. An
-# unreachable listing establishes nothing (harness-adapters
-# model-and-effort.md) and launches unvalidated with a notice.
-agy_model_validate() {  # <agy-bin> <model>
-  local bin=$1 model=$2 listing rc=0 bound=${FM_AGY_MODELS_TIMEOUT:-15}
-  case "$bound" in ''|*[!0-9]*|0*) bound=15 ;; esac
-  [ -n "$model" ] && [ "$model" != default ] || return 0
-  listing=$(fm_run_timed "$bound" "$bin" models 2>/dev/null < /dev/null) || rc=$?
-  if [ "$rc" -ne 0 ] || [ -z "$listing" ]; then
-    if [ "$rc" -eq 124 ]; then
-      echo "notice: 'agy models' did not answer within ${bound}s; launching with --model '$model' unvalidated" >&2
-    else
-      echo "notice: 'agy models' listing is unreachable (exit $rc); launching with --model '$model' unvalidated" >&2
-    fi
-    return 0
-  fi
-  if printf '%s\n' "$listing" | awk '{print $1}' | grep -qxF -- "$model"; then
-    return 0
-  fi
-  echo "error: agy model '$model' is not listed by 'agy models'; choose a listed id or omit --model" >&2
-  return 1
-}
-
 # The verified launch command per adapter. The knowledge half of each adapter
 # (busy-state source, exit command, dialogs, quirks) lives in the harness-adapters skill.
 launch_template() {
@@ -1404,29 +1362,6 @@ launch_template() {
         printf '%s' ' __MODELFLAG____EFFORTFLAG__-e __PIEXT__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
       fi
       ;;
-    # agy (Antigravity CLI): --prompt-interactive "<brief>" starts the supervised
-    # interactive session and auto-submits it, so the brief rides the launch
-    # command (verified: a multi-line brief submitted itself with no extra Enter,
-    # agy 1.2.0). --model takes the bare catalog id from `agy models`
-    # (gemini-3.8-flash-high, never the unlisted bare gemini-3.8-flash).
-    # --effort takes low|medium|high. --dangerously-skip-permissions
-    # auto-approves every tool call, which an unattended crewmate needs.
-    # Every task worktree is a fresh path, so agy would show a folder-trust
-    # dialog ("Do you trust the contents of this project?") and no launch flag
-    # suppresses it (agy 1.2.0 --help lists none). Left unanswered, the turn
-    # runs in agy's own scratch directory instead of the worktree, so the
-    # worktree is pre-registered in the captain's own
-    # ~/.gemini/antigravity-cli/settings.json trustedWorkspaces before launch
-    # (bin/fm-agy-trust.sh), and the post-launch gate
-    # (agy_wait_for_working) answers the preselected safe default ("Yes, I
-    # trust this folder") with a single Enter if the dialog renders anyway,
-    # then requires the busy signature before the spawn reports success.
-    # Foreign primary markers are cleared because agy publishes no marker
-    # of its
-    # own, so bin/fm-harness.sh must not read an agy worker as its launcher.
-    # agy exposes no hook surface, so busy state is a rendered-tail fallback
-    # (bin/fm-busy-lib.sh) and nothing is armed below.
-    agy) printf '%s' 'env -u PI_CODING_AGENT -u GROK_AGENT -u FM_PI_HARNESS __AGYBIN__ --prompt-interactive "$(__OPINPUT__ encode launch-brief < __BRIEF__)" __MODELFLAG____EFFORTFLAG__--dangerously-skip-permissions' ;;
     # grok (Grok Build TUI): a positional prompt starts the supervised interactive
     # session. --always-approve auto-approves every tool execution (verified: the
     # crewmate runs fully autonomously, no permission gate), which an unattended
@@ -1480,15 +1415,6 @@ case "$ARG3" in
     ;;
 esac
 
-# Agy is verified as a CREWMATE/SCOUT adapter only. A secondmate is a
-# firstmate instance, so it needs a primary supervision protocol. Agy exposes
-# no hook surface for primary supervision and docs/supervision-protocols/
-# carries no agy wake protocol (agy 1.2.0).
-if [ "$KIND" = secondmate ] && [ "$HARNESS" = agy ]; then
-  echo "error: $HARNESS is a verified crewmate/scout adapter only and cannot run a secondmate; it has no primary supervision protocol. Select a harness verified for secondmates." >&2
-  exit 1
-fi
-
 case "$HARNESS" in
   pi|pi-signed)
     PI_BIN=$(resolve_pi_executable "$HARNESS") || {
@@ -1501,12 +1427,6 @@ case "$HARNESS" in
     fi
     LAUNCH=${LAUNCH//__PITUIMODE__/$PI_TUI_MODE}
     LAUNCH="FM_PI_HARNESS=$HARNESS $LAUNCH"
-    ;;
-  agy)
-    AGY_BIN=$(resolve_pi_executable agy) || {
-      echo "error: agy executable not found on PATH; install Antigravity CLI or select a different verified harness" >&2
-      exit 1
-    }
     ;;
 esac
 
@@ -1540,10 +1460,6 @@ if [ "$EFFORT" = ultra ]; then
     exit 1
   }
 fi
-if [ "$HARNESS" = agy ]; then
-  agy_model_validate "$AGY_BIN" "$MODEL" || exit 1
-fi
-
 secondmate_registry_value() {
   secondmate_registry_field "$DATA/secondmates.md" "$1" "$2"
 }
@@ -1576,7 +1492,7 @@ model_flag_for_harness() {
   local harness=$1 model=$2
   [ -n "$model" ] && [ "$model" != default ] || return 0
   case "$harness" in
-    codex|opencode|pi|pi-signed|grok|kimi|agy)
+    codex|opencode|pi|pi-signed|grok|kimi)
       printf -- '--model %s ' "$(shell_quote "$model")"
       ;;
   esac
@@ -1601,13 +1517,6 @@ effort_flag_for_harness() {
       # than passing a known-bad value.
       case "$effort" in
         low|medium|high) printf -- '--reasoning-effort %s ' "$(shell_quote "$effort")" ;;
-      esac
-      ;;
-    agy)
-      # agy 1.2.0 --effort accepts exactly low|medium|high, so xhigh and max are
-      # omitted rather than passed as known-bad values (record-and-omit).
-      case "$effort" in
-        low|medium|high) printf -- '--effort %s ' "$(shell_quote "$effort")" ;;
       esac
       ;;
     pi|pi-signed)
@@ -2605,79 +2514,6 @@ kimi_spawn_fail() {  # <detail>
   echo "error: $1; inspect window $T" >&2
 }
 
-# The launch-confirmation gates run after the task record is published, when
-# ORCA_ABORT_CLEANUP is already cleared and neither the abort trap nor a
-# teardown owns this endpoint yet, so a gate failure must close the launched
-# process here or it keeps running as an orphaned autonomous agent outside
-# task control. Mirrors fm-teardown.sh's own generic kill call. On orca only
-# the exact terminal is closed: that stops the CLI while its worktree stays
-# for the record's own teardown, which owns worktree deletion.
-launch_gate_endpoint_cleanup() {
-  if [ "$BACKEND" = orca ]; then
-    fm_backend_kill orca "$T" 2>/dev/null || true
-    return 0
-  fi
-  local tab_id=
-  [ "$BACKEND" = zellij ] && tab_id=$ZELLIJ_TAB_ID
-  fm_backend_kill "$BACKEND" "$T" "$tab_id" "fm-$ID" 2>/dev/null || true
-}
-
-# agy carries its brief on the launch command, so it needs no delivery gate,
-# but a worktree agy does not trust parks the TUI on the folder-trust dialog
-# and an unanswered dialog sends the turn into agy's scratch directory instead
-# of the worktree. The trust is pre-registered before launch
-# (bin/fm-agy-trust.sh, verified to remove the dialog), and this gate is the
-# post-launch backstop: answer the dialog once
-# with the preselected safe default if it renders anyway, then require
-# positive proof that the brief is being processed - the same verdict the
-# supervisor reads (Herdr's native working state or the pinned `esc to cancel`
-# status row through fm_busy_classify) - before the spawn reports success.
-# The gate is strict about ordering because on Herdr the native working
-# verdict is known to coexist with an unanswered dialog: a busy verdict counts
-# only when the path was pre-registered or the dialog has been seen and
-# answered; on an unregistered path it keeps polling for the dialog instead.
-AGY_TRUST_DIALOG='Do you trust the contents of this project?'
-AGY_TRUST_ANSWERED=0
-
-agy_capture() {
-  fm_backend_capture "$BACKEND" "$T" 120 "$W" 2>/dev/null || true
-}
-
-agy_pane_shows_trust_dialog() {  # <plain-pane-capture>
-  printf '%s\n' "$1" | grep -Fq "$AGY_TRUST_DIALOG"
-}
-
-agy_pane_is_working() {  # <plain-pane-capture>
-  case "$(fm_busy_classify "$BACKEND" "$T" agy "$ID" "$STATE" "$1")" in
-    busy*) return 0 ;;
-  esac
-  return 1
-}
-
-agy_wait_for_working() {
-  local pane i=0 max=${FM_AGY_READY_POLLS:-60} interval=${FM_AGY_POLL_INTERVAL:-0.5}
-  while [ "$i" -lt "$max" ]; do
-    pane=$(agy_capture)
-    if agy_pane_shows_trust_dialog "$pane"; then
-      if [ "$AGY_TRUST_ANSWERED" -eq 0 ]; then
-        spawn_send_key "$T" Enter
-        AGY_TRUST_ANSWERED=1
-      fi
-    elif [ "$AGY_TRUST_PREREGISTERED" -eq 1 ] || [ "$AGY_TRUST_ANSWERED" -eq 1 ]; then
-      agy_pane_is_working "$pane" && return 0
-    fi
-    i=$((i + 1))
-    [ "$i" -ge "$max" ] || sleep "$interval"
-  done
-  return 1
-}
-
-agy_spawn_fail() {  # <detail>
-  printf 'failed: %s\n' "$1" >> "$STATE/$ID.status"
-  echo "error: $1; inspect window $T" >&2
-  launch_gate_endpoint_cleanup
-}
-
 if [ "$RELAUNCH" -eq 1 ]; then
   # No worktree is acquired: the recorded one is reused as-is. What must be
   # proven instead is that the adopted endpoint's shell is actually sitting in
@@ -2796,27 +2632,6 @@ fi
 if [ "$RELAUNCH" -eq 0 ] && [ "$KIND" != secondmate ]; then
   freshen_spawn_worktree_base "$WT" || exit 1
 fi
-
-# agy gates a fresh worktree behind its own folder-trust dialog and honours a
-# trustedWorkspaces entry written ahead of launch (bin/fm-agy-trust.sh).
-# Pre-registration removes the dialog, but a failed registration is not fatal:
-# the
-# post-launch gate (agy_wait_for_working) answers the dialog itself and, on a
-# path that was not pre-registered, refuses to count a busy turn as ready until
-# it has done so. agy is crewmate/scout only (refused above for secondmate), so
-# only the worktree shape applies.
-AGY_TRUST_PREREGISTERED=0
-case "$HARNESS" in
-  agy)
-    if [ "$KIND" != secondmate ]; then
-      if "$FM_ROOT/bin/fm-agy-trust.sh" "$WT" "$PROJ_ABS" >/dev/null; then
-        AGY_TRUST_PREREGISTERED=1
-      else
-        echo "warning: could not pre-register agy workspace trust for $WT; the launch will answer the folder-trust dialog in window $T instead" >&2
-      fi
-    fi
-    ;;
-esac
 
 # Per-task temp root: /tmp/fm-<id>/ with Go's build temp nested at gotmp/. Go won't
 # create GOTMPDIR, so mkdir before it is used; fm-teardown removes the whole root.
@@ -3292,7 +3107,6 @@ LAUNCH=${LAUNCH//__PIWATCH__/$sq_piwatch}
 LAUNCH=${LAUNCH//__OPINPUT__/$sq_opinput}
 case "$HARNESS" in
   pi|pi-signed) LAUNCH=${LAUNCH//__PIBIN__/"$(shell_quote "$PI_BIN")"} ;;
-  agy) LAUNCH=${LAUNCH//__AGYBIN__/"$(shell_quote "$AGY_BIN")"} ;;
 esac
 LAUNCH=${LAUNCH//__WORKTREE__/$sq_worktree}
 if [ "$KIND" = secondmate ]; then
@@ -3423,18 +3237,6 @@ if [ "$HARNESS" = kimi ]; then
   fi
   if ! kimi_wait_for_delivery; then
     kimi_spawn_fail "kimi brief pointer delivery was not confirmed"
-    exit 1
-  fi
-fi
-if [ "$HARNESS" = agy ]; then
-  if ! agy_wait_for_working; then
-    if [ "$AGY_TRUST_ANSWERED" -eq 1 ]; then
-      agy_spawn_fail "agy did not start processing its brief after the folder-trust dialog was answered in window $T"
-    elif [ "$AGY_TRUST_PREREGISTERED" -eq 1 ]; then
-      agy_spawn_fail "agy did not start processing its brief in the pre-trusted worktree in window $T"
-    else
-      agy_spawn_fail "agy never showed its folder-trust dialog on an unregistered worktree in window $T, so the brief could not be confirmed to run there"
-    fi
     exit 1
   fi
 fi

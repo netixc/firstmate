@@ -20,7 +20,7 @@ bin/fm-test-run.sh tests/fm-harness-precedence.test.sh
 
 The regression proves all three evidence combinations independently.
 With ancestry blinded, `GROK_AGENT=1` resolves Grok and demonstrates that the retained marker is live.
-Without that marker, native Codex, OpenCode, Kimi, and Agy process ancestry each resolves its own runtime.
+Without that marker, native Codex, OpenCode, and Kimi process ancestry each resolves its own runtime.
 With both present, each native process still wins over the inherited Grok marker.
 Pi's marker retains the finer `pi-signed` identity when ancestry can prove only the shared Pi family.
 
