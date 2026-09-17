@@ -84,7 +84,6 @@ launch_cmd() {  # <name>
     codex) printf '%s' 'codex --dangerously-bypass-approvals-and-sandbox' ;;
     opencode) printf '%s' "OPENCODE_CONFIG_CONTENT='{\"permission\":{\"*\":\"allow\"}}' opencode" ;;
     pi|pi-signed) printf '%s' "$1" ;;
-    grok) printf '%s' 'grok --always-approve' ;;
     *) return 1 ;;
   esac
 }
@@ -182,7 +181,7 @@ check_harness_doorbell() {  # <name>
   tmux -L "$SOCKET" kill-window -t "$SESSION:$win" 2>/dev/null || true
 }
 
-HARNESSES=${FM_SEND_INBOX_LIVE_HARNESSES:-'codex opencode pi grok'}
+HARNESSES=${FM_SEND_INBOX_LIVE_HARNESSES:-'codex opencode pi'}
 for h in $HARNESSES; do
   if command -v "$h" >/dev/null 2>&1; then
     check_harness_doorbell "$h"

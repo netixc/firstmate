@@ -25,7 +25,7 @@ A harness with no verified interactive effort flag follows the same record-and-o
 ## Harness and provider identity
 
 Harness identity is independent of model provider.
-`harness=pi` with `model=xai/grok-*` is Pi using xAI, not standalone Grok Build, and does not require Grok CLI login.
+`harness=pi` with `model=xai/grok-*` is Pi using the xAI provider through Pi's configured authentication surface.
 
 No script resolves credential provenance for you.
 Establish it from the tool's discovery surface and `quota-axi auth --json` per-provider sources, and show the reasoning rather than inferring it from a name.

@@ -35,7 +35,7 @@ mkdir -p "$TMP_ROOT"
 TMP_ROOT=$(cd "$TMP_ROOT" && pwd)
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
-VERIFIED_HARNESSES="codex opencode pi pi-signed grok"
+VERIFIED_HARNESSES="codex opencode pi pi-signed"
 
 # The expectation table, written out independently of the implementation so a
 # silent change to either side shows up here. The fourth field is the composer
@@ -47,7 +47,6 @@ verified_adapter_contract() {  # <harness> -> exit command, interrupt key, repea
     opencode) printf '/exit\tEscape\t2\t\n' ;;
     pi) printf '/quit\tEscape\t1\t\n' ;;
     pi-signed) printf '/quit\tEscape\t1\t\n' ;;
-    grok) printf '/exit\tC-c\t1\t\n' ;;
     *) return 1 ;;
   esac
 }
@@ -238,7 +237,7 @@ test_interrupt_sends_each_harness_verified_key() {
 test_harness_family_resolution() {
   local pair recorded want got
   for pair in codex:codex codex-cli:codex \
-      opencode:opencode grok:grok grok-2:grok pi:pi \
+      opencode:opencode pi:pi \
       pi-signed:pi-signed; do
     recorded=${pair%%:*}
     want=${pair#*:}
@@ -277,23 +276,23 @@ test_harness_family_resolution() {
 test_prefixed_recorded_harness_reaches_each_control_verb() {
   local dir out rc
   dir=$(new_case prefixed-interrupt)
-  add_task "$dir" t1 grok-2
-  alive_as "$dir" grok-2
+  add_task "$dir" t1 codex-cli-2
+  alive_as "$dir" codex-cli-2
   out=$(run_control "$dir" t1 interrupt); rc=$?
   expect_code 0 "$rc" "interrupt should resolve a prefixed recorded harness"$'\n'"$out"
-  [ "$(keys_sent "$dir")" = C-c ] \
-    || fail "a grok-prefixed task should receive grok's interrupt key"
-  assert_contains "$out" "harness=grok" \
+  [ "$(keys_sent "$dir")" = Escape ] \
+    || fail "a codex-prefixed task should receive codex's interrupt key"
+  assert_contains "$out" "harness=codex" \
     "interrupt should report the verified adapter that supplied its mechanics"
 
   dir=$(new_case prefixed-exit)
-  add_task "$dir" t1 grok-2
-  alive_as "$dir" grok-2
+  add_task "$dir" t1 codex-cli-2
+  alive_as "$dir" codex-cli-2
   out=$(run_control "$dir" t1 exit); rc=$?
   expect_code 0 "$rc" "exit should resolve a prefixed recorded harness"$'\n'"$out"
-  [ "$(literals "$dir")" = /exit ] \
-    || fail "a grok-prefixed task should receive grok's exit command"
-  assert_contains "$out" "stopped t1 harness=grok" \
+  [ "$(literals "$dir")" = /quit ] \
+    || fail "a codex-prefixed task should receive codex's exit command"
+  assert_contains "$out" "stopped t1 harness=codex" \
     "exit should report the verified adapter that supplied its mechanics"
   pass "fm-control: prefixed recorded harnesses reach interrupt and exit mechanics"
 }
@@ -363,7 +362,7 @@ test_harness_kind_capability() {
     fm_control_harness_supports_kind "$harness" scout \
       || fail "$harness should be able to run a scout task"
   done
-  for harness in pi codex opencode pi-signed grok; do
+  for harness in pi codex opencode pi-signed; do
     fm_control_harness_supports_kind "$harness" secondmate \
       || fail "$harness should be able to run a secondmate"
   done
@@ -745,33 +744,6 @@ test_agent_that_does_not_stop_fails_closed() {
   pass "fm-control exit: a stubborn agent reports delivered input and an unconfirmed exit"
 }
 
-test_grok_interrupt_without_acknowledgement_reports_unconfirmed() {
-  local dir out rc
-  dir=$(new_case nosettle)
-  add_task "$dir" t1 grok
-  alive_as "$dir" grok
-  printf '╭────╮\n│    │\n╰────╯\n Ctrl+c:cancel\n' > "$dir/fake/pane"
-  out=$(run_control "$dir" t1 interrupt); rc=$?
-  expect_code 0 "$rc" "grok interrupt delivery should not depend on inferred cancellation"$'\n'"$out"
-  assert_contains "$out" "verified=agent-alive cancel=unconfirmed" \
-    "a rendered busy hint is not a cancellation acknowledgement"
-  pass "fm-control interrupt: grok reports delivery without claiming cancellation"
-}
-
-test_grok_idle_footer_does_not_confirm_cancellation() {
-  local dir out rc
-  dir=$(new_case settles)
-  add_task "$dir" t1 grok
-  alive_as "$dir" grok
-  printf '╭────╮\n│    │\n╰────╯\n Shift+Tab:mode │ Ctrl+.:shortcuts\n' > "$dir/fake/pane"
-  out=$(run_control "$dir" t1 interrupt); rc=$?
-  expect_code 0 "$rc" "grok interrupt delivery should succeed"$'\n'"$out"
-  assert_contains "$out" "verified=agent-alive cancel=unconfirmed" \
-    "an idle footer is not an explicit cancellation acknowledgement"
-  [ "$(keys_sent "$dir")" = "C-c" ] || fail "grok should receive C-c, got: $(keys_sent "$dir")"
-  pass "fm-control interrupt: grok's idle footer does not confirm cancellation"
-}
-
 # --- 6. marker non-regression -----------------------------------------------
 
 test_secondmate_control_command_carries_no_marker() {
@@ -847,7 +819,5 @@ test_idle_agent_is_not_interrupted
 test_interrupt_without_acknowledgement_preserves_busy_state
 test_exit_accepts_agent_stopped_by_busy_interrupt
 test_agent_that_does_not_stop_fails_closed
-test_grok_interrupt_without_acknowledgement_reports_unconfirmed
-test_grok_idle_footer_does_not_confirm_cancellation
 test_secondmate_control_command_carries_no_marker
 test_fm_send_still_marks_the_same_secondmate_task

@@ -516,12 +516,6 @@ fi
 [ "$out" = "none" ] || fail "quoted exhausted model scope returned: $out"
 ok "quoted TOON scope vetoes dispatch"
 
-if out=$(call_choose --snapshot "$LAB/captured.json" --candidate grok:default 2>/dev/null); then
-  fail "provider-level unknown quota unexpectedly dispatched"
-fi
-[ "$out" = "none" ] || fail "provider-level unknown quota returned: $out"
-ok "provider-level unknown quota is not positive"
-
 cp "$LAB/captured.json" "$PI_SIGNED_POSITIVE"
 out=$(call_choose --snapshot "$PI_SIGNED_POSITIVE" --candidate pi-signed:default)
 [ "$out" = "pi-signed default" ] || fail "supported Pi-signed candidate returned: $out"

@@ -26,12 +26,12 @@ CONTRACT="$ROOT/bin/fm-afk-contract.sh"
 # The daemon paths refuse on a Pi primary, so pin a daemon-running harness for
 # every unit below; the Pi refusal has its own units (unit_pi_never_launches_the_daemon).
 unset PI_CODING_AGENT FM_PI_HARNESS
-export GROK_AGENT=1
 HARNESS_BIN=$(mktemp -d "${TMPDIR:-/tmp}/fm-afk-harness.XXXXXX")
+export HARNESS_BIN
 cat > "$HARNESS_BIN/ps" <<'SH'
 #!/usr/bin/env bash
 case "$*" in
-  *comm=*|*args=*) printf 'grok\n' ;;
+  *comm=*|*args=*) printf 'codex\n' ;;
   *) /bin/ps "$@" ;;
 esac
 SH

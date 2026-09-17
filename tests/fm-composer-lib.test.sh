@@ -10,8 +10,8 @@
 #   2. The SAME shell glyph INSIDE a bordered composer box is the harness's own
 #      prompt and still reads `empty` (existing behavior preserved).
 #   3. The AGENT prompt glyph `›` (codex) is a genuine empty agent composer
-#      either way, bordered or bare. Grok's `❯` is empty only inside its
-#      composer container.
+#      either way, bordered or bare. A container-only `❯` glyph is empty only
+#      inside a proven composer container.
 #   4. Real unsubmitted text reads `pending`; a known idle placeholder reads
 #      `empty`.
 set -u
@@ -82,8 +82,8 @@ test_verified_prompt_glyph_scope() {
   out=$(classify 1 '›'); [ "$out" = empty ] || fail "bordered codex '›' should read empty, got '$out'"
   out=$(classify 0 '⟩'); [ "$out" = pending ] || fail "a stale bare Muse '⟩' must remain non-empty, got '$out'"
   out=$(classify 0 '❯'); [ "$out" = unknown ] || fail "a stale bare OMP '❯' must read unknown, got '$out'"
-  out=$(classify 1 '❯'); [ "$out" = empty ] || fail "bordered grok '❯' should read empty, got '$out'"
-  pass "fm_composer_classify_content: bare glyphs require a retained agent identity while Grok's glyph requires its container"
+  out=$(classify 1 '❯'); [ "$out" = empty ] || fail "bordered container-only '❯' should read empty, got '$out'"
+  pass "fm_composer_classify_content: bare glyphs require a retained agent identity while container-only glyphs require structure"
 }
 
 # --- Empty content and idle placeholder -------------------------------------
@@ -137,8 +137,7 @@ test_real_text_is_pending() {
 #
 # Fixtures are the audit's byte-level captures of retained idle harnesses:
 # codex 0.146.0 (bold `›` + SGR-2 dim hint), pi (blank row between solid `─`
-# rules), opencode 1.14.46 (left-bar `┃` rows), and grok 1.0.0 (bordered box
-# with a titled bottom border).
+# rules), and opencode 1.14.46 (left-bar `┃` rows).
 #
 # Capability profiles mirror the real adapters' descriptors: tmux
 # (styled+cursor+identity), herdr/zellij (styled), cmux/orca (plain). Every
@@ -235,28 +234,6 @@ test_matrix_opencode_leftbar_signals() {
   typed=$'┃  refactor the parser please\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high'
   assert_screen "opencode multiline draft above blank cursor row" pending "$CAPS_TMUX" "$typed" 1
   pass "matrix: opencode's left-bar composer reads empty everywhere and scans the full active run"
-}
-
-test_matrix_grok_titled_bottom_border() {
-  # Real idle grok: a bordered box whose BOTTOM border carries the model name.
-  # The audit showed the title alone flipped tmux's geometry check to
-  # ambiguous and the verdict to unknown, stranding every grok steer.
-  local titled plain_border typed placeholder_draft
-  titled=$'  ╭──────────────────────────────────────╮\n  │ ❯                                    │\n  ╰──────────────────── Grok 4.5 (high) ─╯'
-  plain_border=$'  ╭──────────────────────────────────────╮\n  │ ❯                                    │\n  ╰──────────────────────────────────────╯'
-  assert_screen "grok titled on tmux" empty "$CAPS_TMUX" "$titled" 1
-  assert_screen "grok titled on tmux bottom-border cursor" empty "$CAPS_TMUX" "$titled" 2
-  assert_screen "grok titled on herdr" empty "$CAPS_STYLED" "$titled"
-  placeholder_draft=$'  ╭──────────────────────────────────────╮\n  │ ❯ Type a message...                  │\n  ╰──────────────────── Grok 4.5 (high) ─╯'
-  assert_screen "grok bright placeholder-like draft on tmux" pending "$CAPS_TMUX" "$placeholder_draft" 1
-  assert_screen "grok placeholder on plain backends" empty "$CAPS_PLAIN" "$placeholder_draft"
-  assert_screen "grok titled on cmux/orca" empty "$CAPS_PLAIN" "$titled"
-  assert_screen "grok titled on zellij" empty "$CAPS_STYLED_NOID" "$titled"
-  # The tolerance is additive: an untitled border still proves the same box.
-  assert_screen "grok untitled border" empty "$CAPS_TMUX" "$plain_border" 1
-  typed=$'  ╭──────────────────────────────────────╮\n  │ ❯ deploy the fix                     │\n  ╰──────────────────── Grok 4.5 (high) ─╯'
-  assert_screen "grok typed on tmux" pending "$CAPS_TMUX" "$typed" 1
-  pass "matrix: grok's titled bottom border is tolerated as a title, not read as ambiguity"
 }
 
 test_matrix_bordered_shell_glyph_box() {
@@ -365,7 +342,7 @@ test_cursorless_bare_wrap_region_classifies() {
 }
 
 test_cursorless_container_rejects_contiguous_lower_activity() {
-  local box leftbar grok bordered opencode
+  local box leftbar blank_separated bordered opencode
   box=$'╭────────────────────────╮\n│ ❯                      │\n╰────────────────────────╯\nWorking on request...'
   assert_screen "stale box above activity on herdr" unknown "$CAPS_STYLED" "$box"
   assert_screen "stale box above activity on zellij" unknown "$CAPS_STYLED_NOID" "$box"
@@ -376,10 +353,10 @@ test_cursorless_container_rejects_contiguous_lower_activity() {
   assert_screen "stale left-bar above activity on zellij" unknown "$CAPS_STYLED_NOID" "$leftbar"
   assert_screen "stale left-bar above activity on cmux/orca" unknown "$CAPS_PLAIN" "$leftbar"
 
-  grok=$'╭────────────────────────╮\n│ ❯                      │\n╰──────── Grok 4.5 ──────╯\n\nGrok status'
+  blank_separated=$'╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯\n\nstatus'
   bordered=$'╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯\n\nstatus'
   opencode=$'┃\n┃  Ask anything...\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high\n╹▀▀▀▀▀▀▀▀\n\nOpenCode status'
-  assert_screen "blank-separated grok footer" empty "$CAPS_STYLED_NOID" "$grok"
+  assert_screen "blank-separated bordered footer with styling" empty "$CAPS_STYLED_NOID" "$blank_separated"
   assert_screen "blank-separated bordered footer" empty "$CAPS_PLAIN" "$bordered"
   assert_screen "left-bar floor and blank-separated footer" empty "$CAPS_STYLED_NOID" "$opencode"
   pass "fm_composer_classify_screen: cursorless containers reject only contiguous unclaimed activity"
@@ -410,7 +387,7 @@ test_incomplete_lower_box_invalidates_stale_candidate() {
 
 test_titled_bottom_requires_matching_width() {
   local screen out
-  screen=$'╭────────────────────────╮\n│ ❯                      │\n╰─ Grok ─╯'
+  screen=$'╭────────────────────────╮\n│ >                      │\n╰─ Model ─╯'
   out=$(fm_composer_classify_screen "$CAPS_TMUX" "$screen" 1)
   [ "$out" = unknown ] \
     || fail "a short titled bottom must not prove an empty box, got '$out'"
@@ -479,7 +456,6 @@ test_real_text_is_pending
 test_matrix_codex_dim_hint_row
 test_matrix_pi_separated_needs_identity
 test_matrix_opencode_leftbar_signals
-test_matrix_grok_titled_bottom_border
 test_matrix_bordered_shell_glyph_box
 test_strict_blank_row_divergence
 test_bare_wrap_region_classifies

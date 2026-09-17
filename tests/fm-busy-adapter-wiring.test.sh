@@ -36,7 +36,6 @@ run_spawn() {  # <home> <wt> <fakebin> <spawn-args...>
   # fixed valid one.
   local home=$1 wt=$2 fakebin=$3
   shift 3
-  GROK_HOME="$home/grok-home" \
     fm_test_run_spawn "$home" "$wt" "$fakebin" "$@" --mode no-mistakes --yolo off
 }
 
@@ -267,22 +266,10 @@ test_retired_harness_records_have_no_rendered_fallback() {
   pass "retired harness task records no longer classify from vendor-rendered text"
 }
 
-test_grok_uses_only_its_isolated_fallback() {
-  local state out
-  state="$TMP_ROOT/gates/state"
-  mkdir -p "$state"
-  [ -z "$(fm_busy_sources_for_harness grok)" ] \
-    || fail "grok must trust no semantic source while its structured path is unverified"
-  out=$(fm_busy_classify tmux fake:w grok gate-g "$state" 'Ctrl+c:cancel')
-  [ "$out" = "busy grok-regex" ] || fail "grok must classify through its isolated fallback, got '$out'"
-  pass "grok installs no unverified semantic wiring and stays on its isolated fallback"
-}
-
 test_pi_extension_semantic_lifecycle
 test_pi_extension_serializes_settle_before_next_start
 test_pi_extension_stale_incarnation_rejected
 test_retired_harness_records_have_no_rendered_fallback
-test_grok_uses_only_its_isolated_fallback
 test_opencode_plugin_semantic_lifecycle
 test_codex_unverified_until_a_semantic_source_exists
 
