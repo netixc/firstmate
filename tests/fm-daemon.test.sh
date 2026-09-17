@@ -23,7 +23,7 @@ if [ -z "${FM_TEST_DAEMON_SOURCED:-}" ]; then
 fi
 
 TMP_ROOT=$(fm_test_tmproot fm-daemon-tests)
-FM_DAEMON_PRIMARY_HARNESS=codex
+FM_DAEMON_PRIMARY_HARNESS=pi
 export FM_DAEMON_PRIMARY_HARNESS
 
 test_afk_start_refuses_when_flag_cannot_be_written() {
@@ -1412,7 +1412,7 @@ test_escalate_batches_into_one_digest() {
   state="$dir/state"
   fakebin="$dir/fakebin"
   sent="$dir/sent.log"; : > "$sent"
-  capture="$dir/pane.txt"; printf '› \n' > "$capture"  # a proven-empty Codex composer: strict injection needs positive proof
+  capture="$dir/pane.txt"; printf '┃\n' > "$capture"  # a proven-empty OpenCode composer: strict injection needs positive proof
   escalate_add "$state" "event A: done: PR 1"
   escalate_add "$state" "event B: done: PR 2"
   afk_enter "$state"
@@ -1438,7 +1438,7 @@ test_escalate_batch_age_uses_first_append() {
   state="$dir/state"
   fakebin="$dir/fakebin"
   sent="$dir/sent.log"; : > "$sent"
-  capture="$dir/pane.txt"; printf '› \n' > "$capture"  # a proven-empty Codex composer: strict injection needs positive proof
+  capture="$dir/pane.txt"; printf '┃\n' > "$capture"  # a proven-empty OpenCode composer: strict injection needs positive proof
   escalate_add "$state" "event A: done: PR 1"
   escalate_add "$state" "event B: done: PR 2"
   echo $(( $(date +%s) - 100 )) > "$state/.subsuper-escalations.since"
@@ -1671,7 +1671,7 @@ test_afk_absent_daemon_does_not_inject() {
   state="$dir/state"
   fakebin="$dir/fakebin"
   sent="$dir/sent.log"; : > "$sent"
-  capture="$dir/pane.txt"; printf '› \n' > "$capture"  # a proven-empty Codex composer: strict injection needs positive proof
+  capture="$dir/pane.txt"; printf '┃\n' > "$capture"  # a proven-empty OpenCode composer: strict injection needs positive proof
   escalate_add "$state" "done: PR 1"
   # afk flag deliberately NOT set
   if PATH="$fakebin:$PATH" FM_FAKE_TMUX_PANE_ALIVE=1 FM_FAKE_TMUX_SENT="$sent" \
@@ -1817,25 +1817,19 @@ test_pane_input_pending_blank_defers_strict() {
   pass "pane_input_pending: a blank unidentified cursor row defers (strict container-proof rule)"
 }
 
-test_pane_input_pending_requires_proven_empty_prompt() {
+test_pane_input_pending_defers_on_bare_prompts() {
   local dir state fakebin capture prompt
   dir=$(make_supercase pending-prompt)
   state="$dir/state"
   fakebin="$dir/fakebin"
   capture="$dir/pane.txt"
-  for prompt in '$' '>' '❯' '⟩'; do
+  for prompt in '$' '>' '❯' '⟩' '›'; do
     printf 'output\noutput\n%s \n' "$prompt" > "$capture"
     PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=2 \
       pane_input_pending "fakepane" \
       || fail "unverified bare prompt '$prompt' should defer as unknown"
   done
-  prompt='›'
-  printf 'output\noutput\n%s \n' "$prompt" > "$capture"
-  if PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=2 \
-    pane_input_pending "fakepane"; then
-    fail "proven empty agent prompt '$prompt' should not defer"
-  fi
-  pass "pane_input_pending: only retained bare-agent prompts pass"
+  pass "pane_input_pending: unverified bare prompts all defer"
 }
 
 # The safety fix at the tmux classifier (task fm-composer-shellglyph-safety): a
@@ -1857,9 +1851,8 @@ test_tmux_composer_state_bare_shell_is_unknown() {
   pass "fm_tmux_composer_state: a bare shell prompt (\$/%/#/>) reads unknown, never empty (dead-shell injection safety)"
 }
 
-# The other side of the fix: a bordered composer box (the harness draws its own
-# prompt glyph inside it) and a bare retained-agent prompt glyph (Codex `›`)
-# are genuine empty agent composers and must still read `empty`.
+# The other side of the fix: a bordered composer box is a genuine empty agent
+# composer and must still read `empty`; retired bare prompt shapes stay unknown.
 test_tmux_composer_state_bordered_and_agent_rows_are_empty() {
   local dir fakebin capture out
   dir=$(make_supercase composer-empty-agent)
@@ -1875,8 +1868,8 @@ test_tmux_composer_state_bordered_and_agent_rows_are_empty() {
   printf '%s\n' "› " > "$capture"
   out=$(PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=0 \
     fm_tmux_composer_state "fakepane")
-  [ "$out" = empty ] || fail "a bare codex '›' composer should read empty, got '$out'"
-  pass "fm_tmux_composer_state: bordered composers and bare retained-agent glyphs read empty; stale OMP stays unknown"
+  [ "$out" = unknown ] || fail "a retired bare '›' composer must read unknown, got '$out'"
+  pass "fm_tmux_composer_state: bordered composers read empty; retired bare shapes stay unknown"
 }
 
 test_tmux_composer_state_requires_matching_box_borders() {
@@ -2622,7 +2615,7 @@ test_pane_is_busy_herdr_native_busy_state() {
   (
     fm_backend_busy_state() { [ "$1" = herdr ] && [ "$2" = "default:w1:p2" ] || fail "unexpected busy_state args: $1 $2"; printf 'busy'; }
     fm_backend_capture() { fail "capture should not be consulted when busy_state is conclusive"; }
-    FM_STATE_OVERRIDE="$dir/state" FM_DAEMON_PRIMARY_HARNESS=codex pane_is_busy "default:w1:p2" herdr \
+    FM_STATE_OVERRIDE="$dir/state" FM_DAEMON_PRIMARY_HARNESS=pi pane_is_busy "default:w1:p2" herdr \
       || fail "pane_is_busy should report busy from herdr's native busy_state"
   ) || fail "herdr native-busy pane_is_busy subshell failed"
   pass "pane_is_busy: herdr native busy_state='busy' short-circuits without a capture fallback"
@@ -2632,8 +2625,8 @@ test_primary_busy_guard_is_harness_scoped() {
   (
     fm_backend_busy_state() { printf 'unknown'; }
     fm_backend_capture() { printf 'esc interrupt\n'; }
-    if FM_DAEMON_PRIMARY_HARNESS=codex pane_is_busy "default:w1:p2" herdr; then
-      fail "OpenCode's rendered signature must not classify a Codex primary busy"
+    if FM_DAEMON_PRIMARY_HARNESS=pi pane_is_busy "default:w1:p2" herdr; then
+      fail "OpenCode's rendered signature must not classify a Pi primary busy"
     fi
     FM_DAEMON_PRIMARY_HARNESS=opencode pane_is_busy "default:w1:p2" herdr \
       || fail "OpenCode's rendered signature should classify an OpenCode primary busy"
@@ -2824,7 +2817,7 @@ test_should_exit_afk_when_afk_inactive
 test_strip_injection_marker
 test_pane_input_pending_detects_partial_input
 test_pane_input_pending_blank_defers_strict
-test_pane_input_pending_requires_proven_empty_prompt
+test_pane_input_pending_defers_on_bare_prompts
 test_tmux_composer_state_bare_shell_is_unknown
 test_tmux_composer_state_bordered_and_agent_rows_are_empty
 test_tmux_composer_state_requires_matching_box_borders

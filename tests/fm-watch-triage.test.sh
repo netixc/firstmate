@@ -751,7 +751,7 @@ test_turn_ended_not_working_surfaced() {
 }
 
 # --- bare turn-end, unverifiable harness: pane churn is the third proof --------
-# A harness whose semantic busy state has no verified source (codex) can never
+# A harness whose semantic busy state has no verified source (unknown-runtime) can never
 # report working, so the two proofs above are unreachable for it and EVERY worker
 # turn boundary woke firstmate. Pane content that changed since the previous poll
 # is harness-independent positive evidence the crew is still executing - the same
@@ -790,18 +790,18 @@ test_turn_ended_churning_pane_absorbed() {
   local dir state fakebin out capture_file window key pid
   dir=$(make_case turn-ended-churning); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; capture_file="$dir/pane.txt"
-  window="test:fm-codexer"
-  : > "$state/codexer.turn-ended"
-  printf 'window=%s\nkind=ship\nharness=codex\n' "$window" > "$state/codexer.meta"
+  window="test:fm-unknowner"
+  : > "$state/unknowner.turn-ended"
+  printf 'window=%s\nkind=ship\nharness=unknown-runtime\n' "$window" > "$state/unknowner.meta"
   printf 'apply_patch: writing bin/thing.sh' > "$capture_file"
   key=$(printf '%s' "$window" | tr ':/.' '___')
   # The previous poll recorded DIFFERENT pane content, so this poll's capture is
   # churn: the crew rendered output between the two polls.
   printf '%s' "$(hash_text 'reading the brief')" > "$state/.hash-$key"
   printf '0\n' > "$state/.count-$key"
-  # The codex verdict verbatim: a verified dispatch adapter with no verified
+  # The unknown-runtime verdict verbatim: a verified dispatch adapter with no verified
   # semantic busy source, so crew_is_provably_working can never be satisfied.
-  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown codex-unverified)'
+  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown runtime-unverified)'
   # A slow poll leaves the first cycle's absorb assertion many ticks clear of the
   # stale backbone, which this static fixture pane would otherwise reach.
   PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
@@ -824,9 +824,9 @@ test_turn_ended_churn_resets_prior_stale_classification() {
   local dir state fakebin out capture_file window key old_hash active_hash pid i
   dir=$(make_case turn-ended-churn-resets-stale); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; capture_file="$dir/pane.txt"
-  window="test:fm-codexreturned"
-  : > "$state/codexreturned.turn-ended"
-  printf 'window=%s\nkind=ship\nharness=codex\n' "$window" > "$state/codexreturned.meta"
+  window="test:fm-unknownreturned"
+  : > "$state/unknownreturned.turn-ended"
+  printf 'window=%s\nkind=ship\nharness=unknown-runtime\n' "$window" > "$state/unknownreturned.meta"
   old_hash=$(hash_text 'idle prompt from an earlier turn')
   active_hash=$(hash_text 'rendering a new turn')
   printf 'rendering a new turn' > "$capture_file"
@@ -835,7 +835,7 @@ test_turn_ended_churn_resets_prior_stale_classification() {
   printf '1\n' > "$state/.count-$key"
   printf '%s' "$old_hash" > "$state/.stale-$key"
   date +%s > "$state/.stale-since-$key"
-  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown codex-unverified)'
+  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown runtime-unverified)'
   PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
     FM_CONFIG_OVERRIDE="$(churn_config "$dir")" \
     FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_STALE_ESCALATE_SECS=999 \
@@ -870,14 +870,14 @@ test_turn_ended_churn_resets_wedge_state_before_stale_poll() {
   local dir state fakebin out capture_file capture_count window key pid
   dir=$(make_case turn-ended-churn-resets-wedge); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; capture_file="$dir/pane.txt"; capture_count="$dir/capture.count"
-  window="test:fm-codexfreshinterval"
-  : > "$state/codexfreshinterval.turn-ended"
-  printf 'window=%s\nkind=ship\nharness=codex\n' "$window" > "$state/codexfreshinterval.meta"
+  window="test:fm-unknownfreshinterval"
+  : > "$state/unknownfreshinterval.turn-ended"
+  printf 'window=%s\nkind=ship\nharness=unknown-runtime\n' "$window" > "$state/unknownfreshinterval.meta"
   printf 'rendering a new turn' > "$capture_file"
   key=$(printf '%s' "$window" | tr ':/.' '___')
   printf '%s' "$(hash_text 'idle output from the prior interval')" > "$state/.hash-$key"
   printf '2\n' > "$state/.wedge-escalations-$key"
-  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown codex-unverified)'
+  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown runtime-unverified)'
   PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
     FM_FAKE_TMUX_CAPTURE_COUNT_FILE="$capture_count" FM_FAKE_TMUX_CAPTURE_FAIL_AFTER=1 \
     FM_CONFIG_OVERRIDE="$(churn_config "$dir")" \
@@ -903,25 +903,25 @@ test_turn_ended_still_pane_surfaced() {
   local dir state fakebin out drain_out capture_file window key pid
   dir=$(make_case turn-ended-still); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; drain_out="$dir/drain.out"; capture_file="$dir/pane.txt"
-  window="test:fm-codexstopped"
-  : > "$state/codexstopped.turn-ended"
-  printf 'window=%s\nkind=ship\nharness=codex\n' "$window" > "$state/codexstopped.meta"
+  window="test:fm-unknownstopped"
+  : > "$state/unknownstopped.turn-ended"
+  printf 'window=%s\nkind=ship\nharness=unknown-runtime\n' "$window" > "$state/unknownstopped.meta"
   printf 'apply_patch: writing bin/thing.sh' > "$capture_file"
   key=$(printf '%s' "$window" | tr ':/.' '___')
   # The previous poll recorded THIS pane content: nothing rendered since.
   printf '%s' "$(hash_text 'apply_patch: writing bin/thing.sh')" > "$state/.hash-$key"
   printf '0\n' > "$state/.count-$key"
-  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown codex-unverified)'
+  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown runtime-unverified)'
   PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
     FM_CONFIG_OVERRIDE="$(churn_config "$dir")" \
     FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_POLL=3 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
   pid=$!
   wait_for_exit "$pid" 100 || fail "watcher did not surface a bare turn-end from an unchanged pane"
-  grep -F "signal: $state/codexstopped.turn-ended" "$out" >/dev/null \
+  grep -F "signal: $state/unknownstopped.turn-ended" "$out" >/dev/null \
     || fail "watcher did not print the surfaced still-pane turn-end signal"
   FM_STATE_OVERRIDE="$state" "$DRAIN" > "$drain_out" 2>/dev/null || fail "drain after the still-pane turn-end failed"
-  grep "$(printf '\tsignal\t')" "$drain_out" | grep -F "$state/codexstopped.turn-ended" >/dev/null \
+  grep "$(printf '\tsignal\t')" "$drain_out" | grep -F "$state/unknownstopped.turn-ended" >/dev/null \
     || fail "surfaced still-pane turn-end was not queued"
   unset FM_FAKE_CREW_STATE
   pass "a bare turn-end from a pane unchanged since the previous poll still surfaces"
@@ -931,25 +931,25 @@ test_turn_ended_malformed_prior_hash_surfaced() {
   local dir state fakebin out drain_out capture_file window key pid
   dir=$(make_case turn-ended-malformed-hash); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; drain_out="$dir/drain.out"; capture_file="$dir/pane.txt"
-  window="test:fm-codexmalformed"
-  : > "$state/codexmalformed.turn-ended"
-  printf 'window=%s\nkind=ship\nharness=codex\n' "$window" > "$state/codexmalformed.meta"
+  window="test:fm-unknownmalformed"
+  : > "$state/unknownmalformed.turn-ended"
+  printf 'window=%s\nkind=ship\nharness=unknown-runtime\n' "$window" > "$state/unknownmalformed.meta"
   printf 'stopped after rendering this' > "$capture_file"
   key=$(printf '%s' "$window" | tr ':/.' '___')
   printf 'x' > "$state/.hash-$key"
   printf '0\n' > "$state/.count-$key"
-  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown codex-unverified)'
+  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown runtime-unverified)'
   PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
     FM_CONFIG_OVERRIDE="$(churn_config "$dir")" \
     FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_POLL=3 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
   pid=$!
   wait_for_exit "$pid" 100 || fail "watcher absorbed a turn-end backed by a malformed prior hash"
-  grep -F "signal: $state/codexmalformed.turn-ended" "$out" >/dev/null \
+  grep -F "signal: $state/unknownmalformed.turn-ended" "$out" >/dev/null \
     || fail "watcher did not print the surfaced malformed-hash turn-end"
   FM_STATE_OVERRIDE="$state" "$DRAIN" > "$drain_out" 2>/dev/null \
     || fail "drain after the malformed-hash turn-end failed"
-  grep "$(printf '\tsignal\t')" "$drain_out" | grep -F "$state/codexmalformed.turn-ended" >/dev/null \
+  grep "$(printf '\tsignal\t')" "$drain_out" | grep -F "$state/unknownmalformed.turn-ended" >/dev/null \
     || fail "malformed-hash turn-end was not queued"
   unset FM_FAKE_CREW_STATE
   pass "a bare turn-end backed by a malformed prior hash surfaces"
@@ -959,25 +959,25 @@ test_turn_ended_trailing_newline_prior_hash_surfaced() {
   local dir state fakebin out drain_out capture_file window key pid
   dir=$(make_case turn-ended-newline-hash); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; drain_out="$dir/drain.out"; capture_file="$dir/pane.txt"
-  window="test:fm-codexnewline"
-  : > "$state/codexnewline.turn-ended"
-  printf 'window=%s\nkind=ship\nharness=codex\n' "$window" > "$state/codexnewline.meta"
+  window="test:fm-unknownnewline"
+  : > "$state/unknownnewline.turn-ended"
+  printf 'window=%s\nkind=ship\nharness=unknown-runtime\n' "$window" > "$state/unknownnewline.meta"
   printf 'rendered after the prior poll' > "$capture_file"
   key=$(printf '%s' "$window" | tr ':/.' '___')
   printf '%s\n' "$(hash_text 'the previous render')" > "$state/.hash-$key"
   printf '0\n' > "$state/.count-$key"
-  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown codex-unverified)'
+  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown runtime-unverified)'
   PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
     FM_CONFIG_OVERRIDE="$(churn_config "$dir")" \
     FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_POLL=3 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
   pid=$!
   wait_for_exit "$pid" 100 || fail "watcher absorbed a turn-end backed by a newline-terminated prior hash"
-  grep -F "signal: $state/codexnewline.turn-ended" "$out" >/dev/null \
+  grep -F "signal: $state/unknownnewline.turn-ended" "$out" >/dev/null \
     || fail "watcher did not print the surfaced newline-hash turn-end"
   FM_STATE_OVERRIDE="$state" "$DRAIN" > "$drain_out" 2>/dev/null \
     || fail "drain after the newline-hash turn-end failed"
-  grep "$(printf '\tsignal\t')" "$drain_out" | grep -F "$state/codexnewline.turn-ended" >/dev/null \
+  grep "$(printf '\tsignal\t')" "$drain_out" | grep -F "$state/unknownnewline.turn-ended" >/dev/null \
     || fail "newline-hash turn-end was not queued"
   [ ! -e "$state/.churn-since-$key" ] \
     || fail "a newline-terminated prior hash opened a deferral window"
@@ -1019,13 +1019,13 @@ test_turn_ended_colliding_window_key_surfaced() {
   out="$dir/watch.out"; drain_out="$dir/drain.out"; capture_file="$dir/pane.txt"
   window="test:fm-a.b"; colliding="test:fm-a_b"
   : > "$state/a.b.turn-ended"
-  printf 'window=%s\nkind=ship\nharness=codex\n' "$window" > "$state/a.b.meta"
-  printf 'window=%s\nkind=ship\nharness=codex\n' "$colliding" > "$state/a_b.meta"
+  printf 'window=%s\nkind=ship\nharness=unknown-runtime\n' "$window" > "$state/a.b.meta"
+  printf 'window=%s\nkind=ship\nharness=unknown-runtime\n' "$colliding" > "$state/a_b.meta"
   printf 'rendered after the prior poll' > "$capture_file"
   key=$(printf '%s' "$window" | tr ':/.' '___')
   printf '%s' "$(hash_text 'the other window pane')" > "$state/.hash-$key"
   printf '0\n' > "$state/.count-$key"
-  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown codex-unverified)'
+  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown runtime-unverified)'
   PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
     FM_CONFIG_OVERRIDE="$(churn_config "$dir")" \
     FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_POLL=3 FM_SIGNAL_GRACE=1 \
@@ -1048,13 +1048,13 @@ test_turn_ended_duplicate_endpoint_records_surfaced() {
   out="$dir/watch.out"; drain_out="$dir/drain.out"; capture_file="$dir/pane.txt"
   window="test:fm-shared"
   : > "$state/first.turn-ended"
-  printf 'window=%s\nkind=ship\nharness=codex\n' "$window" > "$state/first.meta"
-  printf 'window=%s\nkind=ship\nharness=codex\n' "$window" > "$state/second.meta"
+  printf 'window=%s\nkind=ship\nharness=unknown-runtime\n' "$window" > "$state/first.meta"
+  printf 'window=%s\nkind=ship\nharness=unknown-runtime\n' "$window" > "$state/second.meta"
   printf 'rendered after the prior poll' > "$capture_file"
   key=$(printf '%s' "$window" | tr ':/.' '___')
   printf '%s' "$(hash_text 'the previous render')" > "$state/.hash-$key"
   printf '0\n' > "$state/.count-$key"
-  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown codex-unverified)'
+  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown runtime-unverified)'
   PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
     FM_CONFIG_OVERRIDE="$(churn_config "$dir")" \
     FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_POLL=3 FM_SIGNAL_GRACE=1 \
@@ -1081,7 +1081,7 @@ test_turn_ended_mixed_positive_evidence_batch_absorbed() {
   : > "$state/first.turn-ended"
   : > "$state/second.turn-ended"
   printf 'window=%s\nkind=ship\nharness=pi\n' "$first_window" > "$state/first.meta"
-  printf 'window=%s\nkind=ship\nharness=codex\n' "$second_window" > "$state/second.meta"
+  printf 'window=%s\nkind=ship\nharness=unknown-runtime\n' "$second_window" > "$state/second.meta"
   printf 'second task rendered after the prior poll' > "$capture_file"
   first_key=$(printf '%s' "$first_window" | tr ':/.' '___')
   second_key=$(printf '%s' "$second_window" | tr ':/.' '___')
@@ -1090,7 +1090,7 @@ test_turn_ended_mixed_positive_evidence_batch_absorbed() {
   printf '0\n' > "$state/.count-$first_key"
   printf '0\n' > "$state/.count-$second_key"
   export FM_FAKE_CREW_STATE_first='state: working · source: run-step · running'
-  export FM_FAKE_CREW_STATE_second='state: unknown · source: pane · harness state unavailable (unknown codex-unverified)'
+  export FM_FAKE_CREW_STATE_second='state: unknown · source: pane · harness state unavailable (unknown runtime-unverified)'
   PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOWS="$(printf 'fm-first\nfm-second')" \
     FM_FAKE_TMUX_CAPTURE="$capture_file" FM_FAKE_TMUX_FORBIDDEN_TARGET="$first_window" \
     FM_CONFIG_OVERRIDE="$(churn_config "$dir")" \
@@ -1118,7 +1118,7 @@ test_turn_ended_mixed_positive_evidence_batch_default_off() {
   : > "$state/firstoff.turn-ended"
   : > "$state/secondoff.turn-ended"
   printf 'window=%s\nkind=ship\nharness=pi\n' "$first_window" > "$state/firstoff.meta"
-  printf 'window=%s\nkind=ship\nharness=codex\n' "$second_window" > "$state/secondoff.meta"
+  printf 'window=%s\nkind=ship\nharness=unknown-runtime\n' "$second_window" > "$state/secondoff.meta"
   printf 'second task rendered after the prior poll' > "$capture_file"
   first_key=$(printf '%s' "$first_window" | tr ':/.' '___')
   second_key=$(printf '%s' "$second_window" | tr ':/.' '___')
@@ -1127,7 +1127,7 @@ test_turn_ended_mixed_positive_evidence_batch_default_off() {
   printf '0\n' > "$state/.count-$first_key"
   printf '0\n' > "$state/.count-$second_key"
   export FM_FAKE_CREW_STATE_firstoff='state: working · source: run-step · running'
-  export FM_FAKE_CREW_STATE_secondoff='state: unknown · source: pane · harness state unavailable (unknown codex-unverified)'
+  export FM_FAKE_CREW_STATE_secondoff='state: unknown · source: pane · harness state unavailable (unknown runtime-unverified)'
   PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOWS="$(printf 'fm-firstoff\nfm-secondoff')" \
     FM_FAKE_TMUX_CAPTURE="$capture_file" FM_CONFIG_OVERRIDE="$(churn_config "$dir" off)" \
     FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_POLL=3 FM_SIGNAL_GRACE=1 \
@@ -1158,13 +1158,13 @@ test_status_and_turn_end_batch_never_uses_churn_evidence() {
   printf 'working: authoritative task still running\n' > "$state/firststatus.status"
   : > "$state/secondturn.turn-ended"
   printf 'window=%s\nkind=ship\nharness=pi\n' "$first_window" > "$state/firststatus.meta"
-  printf 'window=%s\nkind=ship\nharness=codex\n' "$second_window" > "$state/secondturn.meta"
+  printf 'window=%s\nkind=ship\nharness=unknown-runtime\n' "$second_window" > "$state/secondturn.meta"
   printf 'second task rendered after the prior poll' > "$capture_file"
   second_key=$(printf '%s' "$second_window" | tr ':/.' '___')
   printf '%s' "$(hash_text 'second task previous render')" > "$state/.hash-$second_key"
   printf '0\n' > "$state/.count-$second_key"
   export FM_FAKE_CREW_STATE_firststatus='state: working · source: run-step · running'
-  export FM_FAKE_CREW_STATE_secondturn='state: unknown · source: pane · harness state unavailable (unknown codex-unverified)'
+  export FM_FAKE_CREW_STATE_secondturn='state: unknown · source: pane · harness state unavailable (unknown runtime-unverified)'
   PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOWS="$(printf 'fm-firststatus\nfm-secondturn')" \
     FM_FAKE_TMUX_CAPTURE="$capture_file" FM_CONFIG_OVERRIDE="$(churn_config "$dir")" \
     FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_POLL=3 FM_SIGNAL_GRACE=1 \
@@ -1195,25 +1195,25 @@ test_turn_ended_churn_absorb_off_by_default() {
   local dir state fakebin out drain_out capture_file window key pid
   dir=$(make_case turn-ended-churn-default-off); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; drain_out="$dir/drain.out"; capture_file="$dir/pane.txt"
-  window="test:fm-codexdefault"
-  : > "$state/codexdefault.turn-ended"
-  printf 'window=%s\nkind=ship\nharness=codex\n' "$window" > "$state/codexdefault.meta"
+  window="test:fm-unknowndefault"
+  : > "$state/unknowndefault.turn-ended"
+  printf 'window=%s\nkind=ship\nharness=unknown-runtime\n' "$window" > "$state/unknowndefault.meta"
   printf 'apply_patch: writing bin/thing.sh' > "$capture_file"
   key=$(printf '%s' "$window" | tr ':/.' '___')
   printf '%s' "$(hash_text 'reading the brief')" > "$state/.hash-$key"
   printf '0\n' > "$state/.count-$key"
-  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown codex-unverified)'
+  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown runtime-unverified)'
   PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
     FM_CONFIG_OVERRIDE="$(churn_config "$dir" off)" \
     FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_POLL=3 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
   pid=$!
   wait_for_exit "$pid" 100 || fail "watcher absorbed a churning turn-end without the opt-in flag"
-  grep -F "signal: $state/codexdefault.turn-ended" "$out" >/dev/null \
+  grep -F "signal: $state/unknowndefault.turn-ended" "$out" >/dev/null \
     || fail "watcher did not print the surfaced default-off churning turn-end"
   FM_STATE_OVERRIDE="$state" "$DRAIN" > "$drain_out" 2>/dev/null \
     || fail "drain after the default-off churning turn-end failed"
-  grep "$(printf '\tsignal\t')" "$drain_out" | grep -F "$state/codexdefault.turn-ended" >/dev/null \
+  grep "$(printf '\tsignal\t')" "$drain_out" | grep -F "$state/unknowndefault.turn-ended" >/dev/null \
     || fail "default-off churning turn-end was not queued"
   [ ! -e "$state/.churn-since-$key" ] \
     || fail "the default-off path opened a bounded deferral window"
@@ -1231,16 +1231,16 @@ test_turn_ended_churn_absorb_bounded() {
   local dir state fakebin out drain_out capture_file window key pid
   dir=$(make_case turn-ended-churn-bounded); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; drain_out="$dir/drain.out"; capture_file="$dir/pane.txt"
-  window="test:fm-codexclock"
-  : > "$state/codexclock.turn-ended"
-  printf 'window=%s\nkind=ship\nharness=codex\n' "$window" > "$state/codexclock.meta"
+  window="test:fm-unknownclock"
+  : > "$state/unknownclock.turn-ended"
+  printf 'window=%s\nkind=ship\nharness=unknown-runtime\n' "$window" > "$state/unknownclock.meta"
   printf 'a background renderer that never stops' > "$capture_file"
   key=$(printf '%s' "$window" | tr ':/.' '___')
   printf '%s' "$(hash_text 'the previous frame')" > "$state/.hash-$key"
   printf '0\n' > "$state/.count-$key"
   # This endpoint has already been riding churn evidence longer than the bound.
   printf '%s' "$(( $(date +%s) - 600 ))" > "$state/.churn-since-$key"
-  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown codex-unverified)'
+  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown runtime-unverified)'
   PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
     FM_CONFIG_OVERRIDE="$(churn_config "$dir")" FM_TURNEND_CHURN_ABSORB_SECS=60 \
     FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_POLL=3 FM_SIGNAL_GRACE=1 \
@@ -1248,11 +1248,11 @@ test_turn_ended_churn_absorb_bounded() {
   pid=$!
   wait_for_exit "$pid" 100 \
     || fail "a perpetually churning pane deferred its turn-end past the absorb bound"
-  grep -F "signal: $state/codexclock.turn-ended" "$out" >/dev/null \
+  grep -F "signal: $state/unknownclock.turn-ended" "$out" >/dev/null \
     || fail "watcher did not print the turn-end surfaced by the exhausted absorb bound"
   FM_STATE_OVERRIDE="$state" "$DRAIN" > "$drain_out" 2>/dev/null \
     || fail "drain after the bounded churn turn-end failed"
-  grep "$(printf '\tsignal\t')" "$drain_out" | grep -F "$state/codexclock.turn-ended" >/dev/null \
+  grep "$(printf '\tsignal\t')" "$drain_out" | grep -F "$state/unknownclock.turn-ended" >/dev/null \
     || fail "the turn-end surfaced by the exhausted absorb bound was not queued"
   [ ! -e "$state/.churn-since-$key" ] \
     || fail "an exhausted deferral window was not restarted after surfacing"
@@ -1264,26 +1264,26 @@ test_turn_ended_churn_timer_write_failure_surfaced() {
   local dir state fakebin out drain_out capture_file window key pid
   dir=$(make_case turn-ended-churn-timer-write-failure); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; drain_out="$dir/drain.out"; capture_file="$dir/pane.txt"
-  window="test:fm-codextimer"
-  : > "$state/codextimer.turn-ended"
-  printf 'window=%s\nkind=ship\nharness=codex\n' "$window" > "$state/codextimer.meta"
+  window="test:fm-unknowntimer"
+  : > "$state/unknowntimer.turn-ended"
+  printf 'window=%s\nkind=ship\nharness=unknown-runtime\n' "$window" > "$state/unknowntimer.meta"
   printf 'rendered after the previous poll' > "$capture_file"
   key=$(printf '%s' "$window" | tr ':/.' '___')
   printf '%s' "$(hash_text 'the previous render')" > "$state/.hash-$key"
   printf '0\n' > "$state/.count-$key"
   mkdir "$state/.churn-since-$key"
-  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown codex-unverified)'
+  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown runtime-unverified)'
   PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
     FM_CONFIG_OVERRIDE="$(churn_config "$dir")" \
     FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_POLL=3 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" 2>/dev/null &
   pid=$!
   wait_for_exit "$pid" 100 || fail "watcher absorbed a churning turn-end without recording its deadline"
-  grep -F "signal: $state/codextimer.turn-ended" "$out" >/dev/null \
+  grep -F "signal: $state/unknowntimer.turn-ended" "$out" >/dev/null \
     || fail "watcher did not print the turn-end whose churn deadline could not be recorded"
   FM_STATE_OVERRIDE="$state" "$DRAIN" > "$drain_out" 2>/dev/null \
     || fail "drain after the failed churn deadline write failed"
-  grep "$(printf '\tsignal\t')" "$drain_out" | grep -F "$state/codextimer.turn-ended" >/dev/null \
+  grep "$(printf '\tsignal\t')" "$drain_out" | grep -F "$state/unknowntimer.turn-ended" >/dev/null \
     || fail "turn-end with an unrecordable churn deadline was not queued"
   unset FM_FAKE_CREW_STATE
   pass "an unrecordable pane-churn deadline surfaces the turn-end"
@@ -1293,25 +1293,25 @@ test_turn_ended_invalid_churn_bound_surfaced() {
   local dir state fakebin out drain_out capture_file window key pid
   dir=$(make_case turn-ended-invalid-churn-bound); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; drain_out="$dir/drain.out"; capture_file="$dir/pane.txt"
-  window="test:fm-codexbound"
-  : > "$state/codexbound.turn-ended"
-  printf 'window=%s\nkind=ship\nharness=codex\n' "$window" > "$state/codexbound.meta"
+  window="test:fm-unknownbound"
+  : > "$state/unknownbound.turn-ended"
+  printf 'window=%s\nkind=ship\nharness=unknown-runtime\n' "$window" > "$state/unknownbound.meta"
   printf 'rendered after the previous poll' > "$capture_file"
   key=$(printf '%s' "$window" | tr ':/.' '___')
   printf '%s' "$(hash_text 'the previous render')" > "$state/.hash-$key"
   printf '0\n' > "$state/.count-$key"
-  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown codex-unverified)'
+  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown runtime-unverified)'
   PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
     FM_CONFIG_OVERRIDE="$(churn_config "$dir")" FM_TURNEND_CHURN_ABSORB_SECS=bogus \
     FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_POLL=3 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" 2>/dev/null &
   pid=$!
   wait_for_exit "$pid" 100 || fail "watcher did not surface a turn-end with an invalid churn bound"
-  grep -F "signal: $state/codexbound.turn-ended" "$out" >/dev/null \
+  grep -F "signal: $state/unknownbound.turn-ended" "$out" >/dev/null \
     || fail "watcher terminated before printing the invalid-bound turn-end"
   FM_STATE_OVERRIDE="$state" "$DRAIN" > "$drain_out" 2>/dev/null \
     || fail "drain after the invalid churn bound failed"
-  grep "$(printf '\tsignal\t')" "$drain_out" | grep -F "$state/codexbound.turn-ended" >/dev/null \
+  grep "$(printf '\tsignal\t')" "$drain_out" | grep -F "$state/unknownbound.turn-ended" >/dev/null \
     || fail "turn-end with an invalid churn bound was not queued"
   [ ! -e "$state/.churn-since-$key" ] \
     || fail "an invalid churn bound opened a deferral window"
@@ -1323,25 +1323,25 @@ test_turn_ended_oversized_churn_bound_surfaced() {
   local dir state fakebin out drain_out capture_file window key pid
   dir=$(make_case turn-ended-oversized-churn-bound); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; drain_out="$dir/drain.out"; capture_file="$dir/pane.txt"
-  window="test:fm-codexoversized"
-  : > "$state/codexoversized.turn-ended"
-  printf 'window=%s\nkind=ship\nharness=codex\n' "$window" > "$state/codexoversized.meta"
+  window="test:fm-unknownoversized"
+  : > "$state/unknownoversized.turn-ended"
+  printf 'window=%s\nkind=ship\nharness=unknown-runtime\n' "$window" > "$state/unknownoversized.meta"
   printf 'rendered after the previous poll' > "$capture_file"
   key=$(printf '%s' "$window" | tr ':/.' '___')
   printf '%s' "$(hash_text 'the previous render')" > "$state/.hash-$key"
   printf '0\n' > "$state/.count-$key"
-  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown codex-unverified)'
+  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown runtime-unverified)'
   PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
     FM_CONFIG_OVERRIDE="$(churn_config "$dir")" FM_TURNEND_CHURN_ABSORB_SECS=999999999999999999999999999999999999 \
     FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_POLL=3 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" 2>/dev/null &
   pid=$!
   wait_for_exit "$pid" 100 || fail "watcher did not surface a turn-end with an oversized churn bound"
-  grep -F "signal: $state/codexoversized.turn-ended" "$out" >/dev/null \
+  grep -F "signal: $state/unknownoversized.turn-ended" "$out" >/dev/null \
     || fail "watcher terminated before printing the oversized-bound turn-end"
   FM_STATE_OVERRIDE="$state" "$DRAIN" > "$drain_out" 2>/dev/null \
     || fail "drain after the oversized churn bound failed"
-  grep "$(printf '\tsignal\t')" "$drain_out" | grep -F "$state/codexoversized.turn-ended" >/dev/null \
+  grep "$(printf '\tsignal\t')" "$drain_out" | grep -F "$state/unknownoversized.turn-ended" >/dev/null \
     || fail "turn-end with an oversized churn bound was not queued"
   [ ! -e "$state/.churn-since-$key" ] \
     || fail "an oversized churn bound opened a deferral window"
@@ -1355,9 +1355,9 @@ test_turn_ended_invalid_churn_deadline_surfaced() {
     dir=$(make_case "turn-ended-invalid-churn-deadline-$variant")
     state="$dir/state"; fakebin="$dir/fakebin"
     out="$dir/watch.out"; drain_out="$dir/drain.out"; capture_file="$dir/pane.txt"
-    window="test:fm-codexdeadline"
-    : > "$state/codexdeadline.turn-ended"
-    printf 'window=%s\nkind=ship\nharness=codex\n' "$window" > "$state/codexdeadline.meta"
+    window="test:fm-unknowndeadline"
+    : > "$state/unknowndeadline.turn-ended"
+    printf 'window=%s\nkind=ship\nharness=unknown-runtime\n' "$window" > "$state/unknowndeadline.meta"
     printf 'rendered after the previous poll' > "$capture_file"
     key=$(printf '%s' "$window" | tr ':/.' '___')
     marker="$state/.churn-since-$key"
@@ -1371,18 +1371,18 @@ test_turn_ended_invalid_churn_deadline_surfaced() {
       overflow)     value=999999999999999999999999999999999999 ;;
     esac
     printf '%s' "$value" > "$marker"
-    export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown codex-unverified)'
+    export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown runtime-unverified)'
     PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOW="$window" FM_FAKE_TMUX_CAPTURE="$capture_file" \
       FM_CONFIG_OVERRIDE="$(churn_config "$dir")" \
       FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_POLL=3 FM_SIGNAL_GRACE=1 \
       FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" 2>/dev/null &
     pid=$!
     wait_for_exit "$pid" 100 || fail "watcher did not surface a turn-end with a $variant churn deadline"
-    grep -F "signal: $state/codexdeadline.turn-ended" "$out" >/dev/null \
+    grep -F "signal: $state/unknowndeadline.turn-ended" "$out" >/dev/null \
       || fail "watcher terminated before printing the $variant-deadline turn-end"
     FM_STATE_OVERRIDE="$state" "$DRAIN" > "$drain_out" 2>/dev/null \
       || fail "drain after the $variant churn deadline failed"
-    grep "$(printf '\tsignal\t')" "$drain_out" | grep -F "$state/codexdeadline.turn-ended" >/dev/null \
+    grep "$(printf '\tsignal\t')" "$drain_out" | grep -F "$state/unknowndeadline.turn-ended" >/dev/null \
       || fail "turn-end with a $variant churn deadline was not queued"
     [ "$(cat "$marker")" = "$value" ] \
       || fail "the $variant churn deadline was rewritten"
@@ -1395,11 +1395,11 @@ test_turn_ended_surfaced_batch_opens_no_partial_deadline() {
   local dir state fakebin out drain_out capture_file first_window second_window first_key second_key pid
   dir=$(make_case turn-ended-no-partial-churn-deadline); state="$dir/state"; fakebin="$dir/fakebin"
   out="$dir/watch.out"; drain_out="$dir/drain.out"; capture_file="$dir/pane.txt"
-  first_window="test:fm-codexfirst"; second_window="test:fm-codexsecond"
+  first_window="test:fm-unknownfirst"; second_window="test:fm-unknownsecond"
   : > "$state/first.turn-ended"
   : > "$state/second.turn-ended"
-  printf 'window=%s\nkind=ship\nharness=codex\n' "$first_window" > "$state/first.meta"
-  printf 'window=%s\nkind=ship\nharness=codex\n' "$second_window" > "$state/second.meta"
+  printf 'window=%s\nkind=ship\nharness=unknown-runtime\n' "$first_window" > "$state/first.meta"
+  printf 'window=%s\nkind=ship\nharness=unknown-runtime\n' "$second_window" > "$state/second.meta"
   printf 'rendered after the previous poll' > "$capture_file"
   first_key=$(printf '%s' "$first_window" | tr ':/.' '___')
   second_key=$(printf '%s' "$second_window" | tr ':/.' '___')
@@ -1408,8 +1408,8 @@ test_turn_ended_surfaced_batch_opens_no_partial_deadline() {
   printf '0\n' > "$state/.count-$first_key"
   printf '0\n' > "$state/.count-$second_key"
   printf 'bogus' > "$state/.churn-since-$second_key"
-  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown codex-unverified)'
-  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOWS="$(printf 'fm-codexfirst\nfm-codexsecond')" \
+  export FM_FAKE_CREW_STATE='state: unknown · source: pane · harness state unavailable (unknown runtime-unverified)'
+  PATH="$fakebin:$PATH" FM_FAKE_TMUX_WINDOWS="$(printf 'fm-unknownfirst\nfm-unknownsecond')" \
     FM_FAKE_TMUX_CAPTURE="$capture_file" FM_CONFIG_OVERRIDE="$(churn_config "$dir")" \
     FM_STATE_OVERRIDE="$state" FM_CREW_STATE_BIN="$fakebin/fm-crew-state.sh" FM_POLL=3 FM_SIGNAL_GRACE=1 \
     FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" 2>/dev/null &

@@ -19,13 +19,12 @@ bin/fm-test-run.sh tests/fm-harness-precedence.test.sh
 ```
 
 The regression proves marker-only, ancestry-only, and agreeing marker-plus-ancestry combinations independently.
-Native Codex and OpenCode process ancestry each resolves its own runtime.
+Native OpenCode process ancestry resolves its own runtime.
 Pi's marker retains the finer `pi-signed` identity when ancestry can prove only the shared Pi family.
 
 The same suite pins interpreter-script-path matches, native harness binaries beneath interpreter shims, harnesses running as pid 1 inside a namespace, and the descent probe used by liveness checks.
 A foreign-named interpreter path can contribute an args-strength verdict, but it cannot override a comm-strength native process on the reachable ancestor path.
 Equal-depth descendants prefer the comm-strength leaf, so process-table ordering cannot silently change the selected identity.
-The final case confirms that session start renders the Codex supervision protocol for a Codex primary.
 
 ## tmux
 
@@ -68,13 +67,9 @@ Observed identities, and the resulting verdict:
 
 | Harness | Version | `#{pane_current_command}` | Foreground `comm` | Verdict |
 | --- | --- | --- | --- | --- |
-| codex | codex-cli 0.146.0 | `codex` | `codex` | alive |
 | opencode | 1.18.11 | `opencode` | `opencode` | alive |
 | pi | 0.82.0 | `pi-launcher` | `pi-signed`, `pi` | alive |
 | pi-signed | 0.82.0 | `pi-launcher` | `pi-signed`, `pi` | alive |
-
-Codex reported `codex-aarch64-a` at 0.145.0 and `codex` at 0.146.0, so this identity moves between ordinary patch releases.
-That is the evidence for treating any single process name as a surface under vendor control rather than a stable contract.
 
 `#{pane_current_command}` and foreground `ps -o comm=` read different name fields, but which one preserves executable identity is platform-dependent.
 On macOS the pane command reflected the rewritable title while the full install path could survive in `ps -o comm=`; in the Linux portable regression those roles reversed for the version-named native executable, with the identifying path retained in argv[0].
@@ -90,14 +85,13 @@ FM_HARNESS_LIVENESS_DRIFT=1 bin/fm-test-run.sh tests/fm-harness-liveness-drift-l
 
 ### 2026-09-06 default-on drift refresh
 
-The retained-adapter portion of the macOS 26.5.2 arm64 run checked five installed harness entries and classified every one `alive`:
+The retained-adapter portion of the macOS 26.5.2 arm64 run checked three installed harness entries and classified every one `alive`:
 
 ```text
-# codex codex-cli 0.147.0: title='codex' foreground=[/opt/homebrew/bin/codex ]
 # opencode 1.18.29: title='opencode' foreground=[/opt/homebrew/bin/opencode ]
 # pi 0.84.4: title='pi-launcher' foreground=[/opt/homebrew/bin/pi-signed .../pi ]
 # pi-signed 0.84.4: title='pi-launcher' foreground=[/opt/homebrew/bin/pi-signed .../pi ]
-# checked 4 installed harness(es)
+# checked 3 installed harness(es)
 ```
 
 Bounded output from the 2026-08-03 run that produced the first table above:
@@ -134,17 +128,16 @@ FM_HARNESS_ADAPTER_INSTRUCTION_EVAL=1 FM_HARNESS_ADAPTER_LOCAL_MODEL=ambient-rou
 
 That local evaluation demonstrates instruction-driven scenario selection, but it does not claim that a native harness loaded the selected files.
 The guard prints the exact installed version or unavailable status for every native harness so absent tools and unexercised provider transports remain explicit rather than becoming passes.
-Native loader behavior still requires the applicable live agent-tool check; no uniform deterministic zero-provider transport currently spans Codex, OpenCode, and Pi, and other tools remain unavailable where their binaries are absent.
+Native loader behavior still requires the applicable live agent-tool check; no uniform deterministic zero-provider transport currently spans OpenCode and Pi, and other tools remain unavailable where their binaries are absent.
 
 Bounded output from the 2026-08-29 local run:
 
 ```text
 ok - local model ambient-router-gemma4:e4b selected every operation scenario and all remaining harness identities
-# native loader not claimed: codex 0.147.0-alpha.6+local.4 is installed, but this harness-neutral evaluation does not exercise its provider transport
 # native loader not claimed: opencode 1.14.48 is installed, but this harness-neutral evaluation does not exercise its provider transport
 # native loader not claimed: pi 0.84.0 is installed, but this harness-neutral evaluation does not exercise its provider transport
 # unverified native loader: pi-signed is not installed on this machine
-# installed native tools recorded without overstating loader coverage: 3
+# installed native tools recorded without overstating loader coverage: 2
 # unavailable native tools: pi-signed
 ```
 
@@ -208,7 +201,7 @@ ok - fm-teardown: dedicated-socket invalid cleanup preserves target/control and 
 The dedicated tmux cell removed ambient tmux variables, required a socket-bound wrapper, kept one target and one independent control window, and proved the wrapper was not called for invalid metadata or a direct empty target.
 Valid cleanup removed only the exact task-bound target and left the control window live.
 The metadata-only validation covers tmux, Herdr, Zellij, Orca, and cmux before backend dispatch.
-Codex, OpenCode, Pi, and pi-signed share that backend cleanup boundary; their harness-specific hook files and tokens are cleaned only after it, so no harness needs a separate endpoint parser.
+OpenCode, Pi, and pi-signed share that backend cleanup boundary; their harness-specific hook files and tokens are cleaned only after it, so no harness needs a separate endpoint parser.
 
 ## Composer classification matrix
 
@@ -222,15 +215,14 @@ FM_COMPOSER_MATRIX_LIVE=1 tests/fm-composer-matrix-live-e2e.test.sh
 Observed output:
 
 ```text
-ok - codex (codex-cli 0.146.0): real idle composer classifies empty
 ok - opencode (1.14.46): real idle composer classifies empty
 ok - pi (0.84.0): real idle composer classifies empty
 ok - strict posture live: a blank shell row classifies unknown and injection defers
 ok - zellij (zellij 0.44.0): unrelated pane change never confirms delivery (verdict: unknown)
-ok - live composer-matrix guard verified 6 live surface(s)
+ok - live composer-matrix guard verified 5 live surface(s)
 ```
 
-All remaining installed harnesses' real idle composers reached a proven `empty`, including Pi through the tmux foreground-process identity probe and OpenCode through the left-bar shape; Codex and OpenCode first parked on vendor update-available modals that the strict classifier correctly refused until the guard's single non-submitting Escape dismissed them.
+All remaining installed harnesses' real idle composers reached a proven `empty`, including Pi through the tmux foreground-process identity probe and OpenCode through the left-bar shape; OpenCode first parked on a vendor update-available modal that the strict classifier correctly refused until the guard's single non-submitting Escape dismissed it.
 The strict blank-row posture held live (a blank shell row deferred injection), and a zellij pane changing for reasons unrelated to submission never confirmed a delivery, replacing the retired content-diff heuristic's false positive.
 Portable byte-capture regressions in `tests/fm-composer-lib.test.sh` carry the retained adapters' capability profiles under both a UTF-8 locale and `LC_ALL=C`.
 This guard is the refresh command after an upgrade to any matrix-covered harness; rerun it and update the versions above rather than trusting this table across releases.
@@ -247,12 +239,11 @@ FM_SEND_INBOX_LIVE_E2E=1 tests/fm-send-inbox-doorbell-live-e2e.test.sh
 Observed output:
 
 ```text
-ok - codex (codex-cli 0.147.0): the doorbell reached a real worker, which acted and acked with the mv
 ok - opencode (1.18.21): the doorbell reached a real worker, which acted and acked with the mv
 ok - pi (0.84.1): the doorbell reached a real worker, which acted and acked with the mv
 ```
 
-All three installed retained harnesses honored the doorbell contract with real model turns: each listed the inbox named by the doorbell, read its record, executed the instruction inside it, and acknowledged with the atomic `mv`.
+Both installed retained harnesses honored the doorbell contract with real model turns: each listed the inbox named by the doorbell, read its record, executed the instruction inside it, and acknowledged with the atomic `mv`.
 An OpenCode vendor update modal swallowed the first doorbell and the single re-ring recovered it, which is exactly the watcher's retry ladder.
 The portable ladder and enqueue regressions in `tests/fm-task-inbox.test.sh` and `tests/fm-send-inbox.test.sh` cover every harness-independent half.
 This guard is the refresh command after any harness upgrade; it spends a small number of real tokens per installed harness, reports an absent harness explicitly, and refuses a run that verified nothing.
@@ -666,7 +657,6 @@ ok - forced teardown retains a nested secondmate home and its grandchild's Herdr
 
 Real captures verified these active distinctions:
 
-- Codex uses a bare `›` agent composer.
 - Pi uses content between complete separator rows and requires exact native Pi identity.
 - Dim or faint suggestion text is ghost content, while normally styled text is pending input.
 - A bare shell prompt has no safe agent-composer container and is unknown.
@@ -816,7 +806,7 @@ The registration is still present after the wait, and Herdr's own `pane report-a
 
 Two vendor facts the fix rests on, both read from the outputs above and from `fm_backend_herdr_pane_process_state`'s `pane process-info` parse:
 
-- Pi's process presents with kernel name `node` and argv0 `pi` (its foreground group also carries Pi's child `node` helpers with argv0 such as `npm view ... version`), so a running Pi is attributed by argv[0] exactly as the tmux probe attributes it; a symlink named `codex` to `sleep` presents as name `sleep`, argv0 `codex`.
+- Pi's process presents with kernel name `node` and argv0 `pi` (its foreground group also carries Pi's child `node` helpers with argv0 such as `npm view ... version`), so a running Pi is attributed by argv[0] exactly as the tmux probe attributes it; a renamed symlink to `sleep` presents as name `sleep` with the symlink name in argv0.
 - Herdr creates the record with its own placeholder `agent_status` of `unknown` the moment it notices Pi, before Pi's extension reports `idle`; that transient reads `unknown` in the pane classifier as it always did, and only a lifecycle status is subject to the process-level proof.
 
 Subcommand presence below the 0.9.0 measurement, checked 2026-09-10 on macOS aarch64 against the pinned upstream release clients fetched from `https://github.com/ogulcancelik/herdr/releases/download/v<version>/herdr-macos-aarch64`:

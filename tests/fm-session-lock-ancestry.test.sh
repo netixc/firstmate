@@ -28,8 +28,7 @@ lib_eval() {  # <fakebin> <expression>
   " "$LIB"
 }
 
-# A harness that is pid 1 of its own PID namespace - a container, or the
-# `codex sandbox` this shape was verified in - used to be invisible: the walk
+# A harness that is pid 1 of its own PID namespace used to be invisible: the walk
 # stopped as soon as the NEXT pid was 1, so the one process that identifies the
 # session was never examined and the session could not recognize its own lock.
 test_harness_at_namespace_pid1_is_examined() {
@@ -49,8 +48,8 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 case "$pid:$field" in
-  1:comm=) printf '%s\n' "${FM_TEST_PID1_COMM:-codex}" ;;
-  1:args=) printf '%s\n' "${FM_TEST_PID1_COMM:-codex}" ;;
+  1:comm=) printf '%s\n' "${FM_TEST_PID1_COMM:-opencode}" ;;
+  1:args=) printf '%s\n' "${FM_TEST_PID1_COMM:-opencode}" ;;
   1:ppid=) printf '%s\n' 0 ;;
   *:comm=) printf '%s\n' bash ;;
   *:args=) printf '%s\n' 'bash /repo/bin/fm-watch.sh' ;;
@@ -91,8 +90,8 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 case "$pid:$field:${FM_TEST_PATH_SHAPE:-hookdir}" in
-  810:comm=:hookdir) printf '%s\n' '/home/u/.codex/hooks/notify.sh' ;;
-  810:args=:hookdir) printf '%s\n' '/home/u/.codex/hooks/notify.sh --quiet' ;;
+  810:comm=:hookdir) printf '%s\n' '/home/u/opencode-cache/hooks/notify.sh' ;;
+  810:args=:hookdir) printf '%s\n' '/home/u/opencode-cache/hooks/notify.sh --quiet' ;;
   810:comm=:piprefix) printf '%s\n' '/opt/pipeline/bin/runner' ;;
   810:args=:piprefix) printf '%s\n' '/opt/pipeline/bin/runner --once' ;;
   810:ppid=:*) printf '%s\n' 1 ;;
@@ -105,8 +104,8 @@ SH
   printf '810\n' > "$dir/state/.lock"
 
   # Identity may be read from an executable path, but only from whole path
-  # components: anything merely living under ~/.codex, and any component that
-  # merely starts with a harness name, must stay outside the harness identity.
+  # components: any component that merely starts with a harness name must stay
+  # outside the harness identity.
   for shape in hookdir piprefix; do
     if FM_TEST_PATH_SHAPE="$shape" lib_eval "$fakebin" 'fm_harness_ancestry_pid'; then
       fail "$shape: an ordinary script path was treated as a harness process"
@@ -138,14 +137,14 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 case "$pid:$field" in
-  900:comm=) printf '%s\n' codex ;;
-  900:args=) printf '%s\n' 'codex' ;;
+  900:comm=) printf '%s\n' opencode ;;
+  900:args=) printf '%s\n' 'opencode' ;;
   900:ppid=) printf '%s\n' 910 ;;
   910:comm=) printf '%s\n' bash ;;
   910:args=) printf '%s\n' 'bash tests/run.sh' ;;
   910:ppid=) printf '%s\n' 920 ;;
-  920:comm=) printf '%s\n' codex ;;
-  920:args=) printf '%s\n' 'codex' ;;
+  920:comm=) printf '%s\n' opencode ;;
+  920:args=) printf '%s\n' 'opencode' ;;
   920:ppid=) printf '%s\n' 1 ;;
   *:comm=) printf '%s\n' bash ;;
   *:args=) printf '%s\n' bash ;;

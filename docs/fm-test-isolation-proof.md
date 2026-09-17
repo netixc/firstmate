@@ -99,7 +99,7 @@ Plain `--changed` automatically selected bounded concurrency at four workers; ea
 Those runs exercised the production path that the family admission enables.
 
 These scripts assert how quickly a real watcher reaches its next poll, so they are sensitive to CPU oversubscription rather than to shared state.
-An earlier attempt on the same host measured three failures (`fm-watch-checkpoint`, `fm-watch-recovery-loop`, `fm-watch-arm`) while six unrelated busy processes were running, at roughly ten runnable processes against fourteen cores.
+An earlier attempt on the same host measured two failures (`fm-watch-recovery-loop`, `fm-watch-arm`) while six unrelated busy processes were running, at roughly ten runnable processes against fourteen cores.
 That is the margin this family has: four workers is proven, and the failures reappear well before the machine is merely busy.
 Keep `--jobs` for this family at or below the proven bound rather than raising it to fill a larger machine.
 

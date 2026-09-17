@@ -465,7 +465,7 @@ function runGuard(): Promise<{ code: number; stderr: string }> {
     child.on("error", () => resolveResult({ code: 0, stderr: "" }));
     child.on("close", (code) => resolveResult({ code: code ?? 0, stderr }));
     child.stdin?.on("error", () => {});
-    child.stdin?.end('{"stop_hook_active":false}');
+    child.stdin?.end('{}');
   });
 }
 

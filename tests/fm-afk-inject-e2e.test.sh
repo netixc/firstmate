@@ -93,15 +93,22 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 _buf=
-# The drawn composer row carries a real agent prompt glyph, matching the
-# production supervisor pane this daemon injects into: under the strict
-# container-proof rule (captain decision blank-row-injection-posture) a bare
-# unidentified row is never a safe injection target, so the fixture must
-# render the Codex shape the classifier positively proves - "› " when idle,
-# "› <buffer>" while input is pending. The glyph is rendering only; it never
-# enters the buffer, so submitted-content assertions are unchanged.
+# Draw a retained bordered composer. Bare `›` rows belonged to the retired
+# standalone Codex runtime and deliberately classify unknown.
 redraw() {
-  printf '\r\033[K\xe2\x80\xba %s' "$_buf"
+  local avail=40 shown tail_n
+  if [ "${#_buf}" -gt "$avail" ]; then
+    tail_n=$((avail - 3))
+    shown="...${_buf: -$tail_n}"
+  else
+    shown="$_buf"
+  fi
+  printf '\r\033[K│ > %-40s │' "$shown"
+}
+draw_frame() {
+  printf '\r\033[K╭────────────────────────────────────────────╮\n'
+  redraw
+  printf '\n╰────────────────────────────────────────────╯\033[1A\r'
 }
 submit_line() {
   local _line=$_buf _c _hex
@@ -113,11 +120,10 @@ submit_line() {
   _hex=$(printf '%s' "$_line" | od -An -tx1 | tr -d ' \n')
   printf '%s\t%s\t%s\n' "$_hex" "$_line" "$_c" >> "$LOG"
   _buf=
-  printf '\r\033[K\n'
   redraw
 }
 
-redraw
+draw_frame
 while IFS= read -r -n 1 _ch; do
   if [ -z "$_ch" ]; then
     submit_line

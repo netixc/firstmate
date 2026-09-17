@@ -192,12 +192,6 @@ install_guard_scripts() {
   chmod +x "$dir/bin/fm-turnend-guard.sh" "$dir/bin/fm-operational-input.sh" "$dir/bin/fm-supervision-instructions.sh" "$dir/bin/fm-harness.sh"
 }
 
-mark_codex_hook_root() {
-  local dir=$1
-  mkdir -p "$dir/.codex"
-  printf '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"fm-turnend-guard.sh"}]}]}}\n' > "$dir/.codex/hooks.json"
-}
-
 # A primary-shaped checkout: plain (non-worktree) git repo, AGENTS.md, bin/,
 # state/ - everything the hook's scoping check requires to treat it as primary.
 make_primary_dir() {
@@ -317,9 +311,9 @@ test_hook_blocks_source_only_home() {
   mkdir -p "$dir/state/procevent"
   : > "$dir/state/procevent/source-only.source"
   out=$(run_hook "$dir" false); status=$?
-  expect_code 2 "$status" "non-Codex hook must block when a source-only home has no watcher"
+  expect_code 2 "$status" "turn-end guard must block when a source-only home has no watcher"
   assert_contains "$out" "1 process-event source(s) registered" "block reason must identify the source-only supervision need"
-  pass "fm-turnend-guard: non-Codex path blocks a source-only home"
+  pass "fm-turnend-guard: source-only home without supervision is blocked"
 }
 
 test_hook_blocks_when_dead_lock_has_fresh_beacon() {
@@ -672,71 +666,6 @@ test_hook_runs_fast() {
   elapsed_s=$((SECONDS - start))
   [ "$elapsed_s" -lt 3 ] || fail "hook took ${elapsed_s}s, expected well under a second (generous 3s CI margin)"
   pass "fm-turnend-guard: runs well under the generous timing margin (${elapsed_s}s)"
-}
-
-# The tracked Codex registration authenticates its project root before invoking
-# the shared guard, so payload paths cannot redirect it into another project.
-test_codex_hook_uses_process_pwd_when_payload_cwd_is_outside_root() {
-  local settings command dir expected_root outside payload out status
-  settings="$ROOT/.codex/hooks.json"
-  [ -f "$settings" ] || fail "tracked .codex/hooks.json is missing"
-  command=$(jq -r '.hooks.Stop[0].hooks[0].command // empty' "$settings")
-  [ -n "$command" ] || fail "Stop hook command is missing from .codex/hooks.json"
-  dir=$(make_primary_dir "$TMP_ROOT/codex-hook-root")
-  mark_codex_hook_root "$dir"
-  expected_root=$(cd "$dir" && pwd -P)
-  outside="$TMP_ROOT/codex-hook-outside"
-  mkdir -p "$outside"
-  cat > "$dir/bin/fm-turnend-guard.sh" <<'EOF'
-#!/usr/bin/env bash
-printf 'guard=%s\n' "$0"
-cat
-EOF
-  chmod +x "$dir/bin/fm-turnend-guard.sh"
-  payload=$(jq -cn --arg cwd "$outside" '{cwd:$cwd,stop_hook_active:false}')
-  out=$(printf '%s' "$payload" | (cd "$dir" && bash -c "$command") 2>&1); status=$?
-  expect_code 0 "$status" "codex hook must execute successfully when payload cwd is outside the firstmate root"
-  assert_contains "$out" "guard=$expected_root/bin/fm-turnend-guard.sh" "codex hook must use the hook process root"
-  assert_contains "$out" "$payload" "codex hook must pass the original payload to the guard"
-  pass ".codex/hooks.json: Stop hook uses hook process root when payload cwd is outside"
-}
-
-test_codex_hook_ignores_nested_git_root_guard() {
-  local settings command dir nested subdir expected_root payload out status
-  settings="$ROOT/.codex/hooks.json"
-  [ -f "$settings" ] || fail "tracked .codex/hooks.json is missing"
-  command=$(jq -r '.hooks.Stop[0].hooks[0].command // empty' "$settings")
-  [ -n "$command" ] || fail "Stop hook command is missing from .codex/hooks.json"
-  dir=$(make_primary_dir "$TMP_ROOT/codex-hook-outer")
-  mark_codex_hook_root "$dir"
-  expected_root=$(cd "$dir" && pwd -P)
-  nested="$dir/projects/other"
-  mkdir -p "$nested"
-  git init -q "$nested"
-  git -C "$nested" commit -q --allow-empty -m init
-  mkdir -p "$nested/bin" "$nested/.codex"
-  : > "$nested/AGENTS.md"
-  printf '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"fm-turnend-guard.sh"}]}]}}\n' > "$nested/.codex/hooks.json"
-  cat > "$nested/bin/fm-turnend-guard.sh" <<'EOF'
-#!/usr/bin/env bash
-printf 'nested guard executed\n'
-exit 99
-EOF
-  chmod +x "$nested/bin/fm-turnend-guard.sh"
-  cat > "$dir/bin/fm-turnend-guard.sh" <<'EOF'
-#!/usr/bin/env bash
-printf 'guard=%s\n' "$0"
-cat
-EOF
-  chmod +x "$dir/bin/fm-turnend-guard.sh"
-  subdir="$nested/deep/path"
-  mkdir -p "$subdir"
-  payload=$(jq -cn --arg cwd "$subdir" '{cwd:$cwd,stop_hook_active:false}')
-  out=$(printf '%s' "$payload" | (cd "$dir" && bash -c "$command") 2>&1); status=$?
-  expect_code 0 "$status" "codex hook must not execute a nested project guard"
-  assert_contains "$out" "guard=$expected_root/bin/fm-turnend-guard.sh" "codex hook must keep using the outer firstmate guard"
-  assert_not_contains "$out" "nested guard executed" "codex hook must not execute nested project code"
-  pass ".codex/hooks.json: Stop hook ignores nested git root guard scripts"
 }
 
 test_opencode_plugin_anchors_guard_to_worktree() {
@@ -1188,8 +1117,6 @@ test_hook_silent_in_crewmate_worktree
 test_hook_silent_without_jq
 test_hook_silent_without_stdin
 test_hook_runs_fast
-test_codex_hook_uses_process_pwd_when_payload_cwd_is_outside_root
-test_codex_hook_ignores_nested_git_root_guard
 test_opencode_plugin_anchors_guard_to_worktree
 test_pi_extension_injects_once_per_logical_agent_run
 test_pi_extension_retries_after_followup_delivery_failure

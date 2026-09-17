@@ -922,13 +922,13 @@ test_send_text_submit_detects_landed_send() {
   local dir fb out
   dir="$TMP_ROOT/submit-ok"; mkdir -p "$dir/responses"
   zellij_pane_response "$dir" 1 7 3
-  printf '%s' $'› ' > "$dir/responses/2.out"
+  printf '%s' $'╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯' > "$dir/responses/2.out"
   zellij_pane_response "$dir" 3 7 3
   zellij_pane_response "$dir" 5 7 3
-  printf '%s' $'› hello captain' > "$dir/responses/6.out"
+  printf '%s' $'╭────────────────────────╮\n│ > hello captain        │\n╰────────────────────────╯' > "$dir/responses/6.out"
   zellij_pane_response "$dir" 7 7 3
   zellij_pane_response "$dir" 9 7 3
-  printf '%s' $'hello captain\n› ' > "$dir/responses/10.out"
+  printf '%s' $'hello captain\n╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯' > "$dir/responses/10.out"
   fb=$(make_zellij_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_ZELLIJ_LOG="$dir/log" FM_ZELLIJ_RESPONSES="$dir/responses" \
     FM_ZELLIJ_SESSION_LIST="firstmate" \
@@ -948,16 +948,16 @@ test_send_text_submit_detects_swallowed_enter() {
   local dir fb out
   dir="$TMP_ROOT/submit-swallow"; mkdir -p "$dir/responses"
   zellij_pane_response "$dir" 1 7 3
-  printf '%s' $'› ' > "$dir/responses/2.out"
+  printf '%s' $'╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯' > "$dir/responses/2.out"
   zellij_pane_response "$dir" 3 7 3
   zellij_pane_response "$dir" 5 7 3
-  printf '%s' $'› hello captain' > "$dir/responses/6.out"
+  printf '%s' $'╭────────────────────────╮\n│ > hello captain        │\n╰────────────────────────╯' > "$dir/responses/6.out"
   zellij_pane_response "$dir" 7 7 3
   zellij_pane_response "$dir" 9 7 3
-  printf '%s' $'› hello captain' > "$dir/responses/10.out"
+  printf '%s' $'╭────────────────────────╮\n│ > hello captain        │\n╰────────────────────────╯' > "$dir/responses/10.out"
   zellij_pane_response "$dir" 11 7 3
   zellij_pane_response "$dir" 13 7 3
-  printf '%s' $'› hello captain' > "$dir/responses/14.out"
+  printf '%s' $'╭────────────────────────╮\n│ > hello captain        │\n╰────────────────────────╯' > "$dir/responses/14.out"
   fb=$(make_zellij_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_ZELLIJ_LOG="$dir/log" FM_ZELLIJ_RESPONSES="$dir/responses" \
     FM_ZELLIJ_SESSION_LIST="firstmate" \
@@ -978,16 +978,16 @@ test_send_text_submit_unrelated_change_is_not_delivery() {
   local dir fb out
   dir="$TMP_ROOT/submit-false-positive"; mkdir -p "$dir/responses"
   zellij_pane_response "$dir" 1 7 3
-  printf '%s' $'clock 11:59:59\n› ' > "$dir/responses/2.out"
+  printf '%s' $'clock 11:59:59\n╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯' > "$dir/responses/2.out"
   zellij_pane_response "$dir" 3 7 3
   zellij_pane_response "$dir" 5 7 3
-  printf '%s' $'clock 12:00:00\n› hello captain' > "$dir/responses/6.out"
+  printf '%s' $'clock 12:00:00\n╭────────────────────────╮\n│ > hello captain        │\n╰────────────────────────╯' > "$dir/responses/6.out"
   zellij_pane_response "$dir" 7 7 3
   zellij_pane_response "$dir" 9 7 3
-  printf '%s' $'clock 12:00:01\n› hello captain' > "$dir/responses/10.out"
+  printf '%s' $'clock 12:00:01\n╭────────────────────────╮\n│ > hello captain        │\n╰────────────────────────╯' > "$dir/responses/10.out"
   zellij_pane_response "$dir" 11 7 3
   zellij_pane_response "$dir" 13 7 3
-  printf '%s' $'clock 12:00:02\n› hello captain' > "$dir/responses/14.out"
+  printf '%s' $'clock 12:00:02\n╭────────────────────────╮\n│ > hello captain        │\n╰────────────────────────╯' > "$dir/responses/14.out"
   fb=$(make_zellij_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_ZELLIJ_LOG="$dir/log" FM_ZELLIJ_RESPONSES="$dir/responses" \
     FM_ZELLIJ_SESSION_LIST="firstmate" \
@@ -1001,10 +1001,10 @@ test_send_text_submit_rejects_unobserved_paste() {
   local dir fb out
   dir="$TMP_ROOT/submit-unobserved"; mkdir -p "$dir/responses"
   zellij_pane_response "$dir" 1 7 3
-  printf '%s' $'transcript line\n› ' > "$dir/responses/2.out"
+  printf '%s' $'transcript line\n╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯' > "$dir/responses/2.out"
   zellij_pane_response "$dir" 3 7 3
   zellij_pane_response "$dir" 5 7 3
-  printf '%s' $'transcript line\n› ' > "$dir/responses/6.out"
+  printf '%s' $'transcript line\n╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯' > "$dir/responses/6.out"
   fb=$(make_zellij_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_ZELLIJ_LOG="$dir/log" FM_ZELLIJ_RESPONSES="$dir/responses" \
     FM_ZELLIJ_SESSION_LIST="firstmate" \
@@ -1019,10 +1019,10 @@ test_send_text_submit_rejects_transcript_echo_with_unrelated_draft() {
   local dir fb out
   dir="$TMP_ROOT/submit-transcript-echo"; mkdir -p "$dir/responses"
   zellij_pane_response "$dir" 1 7 3
-  printf '%s' $'hello captain\n› unrelated draft' > "$dir/responses/2.out"
+  printf '%s' $'hello captain\n╭────────────────────────╮\n│ > unrelated draft      │\n╰────────────────────────╯' > "$dir/responses/2.out"
   zellij_pane_response "$dir" 3 7 3
   zellij_pane_response "$dir" 5 7 3
-  printf '%s' $'hello captain\n› unrelated draft' > "$dir/responses/6.out"
+  printf '%s' $'hello captain\n╭────────────────────────╮\n│ > unrelated draft      │\n╰────────────────────────╯' > "$dir/responses/6.out"
   fb=$(make_zellij_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_ZELLIJ_LOG="$dir/log" FM_ZELLIJ_RESPONSES="$dir/responses" \
     FM_ZELLIJ_SESSION_LIST="firstmate" \
@@ -1037,10 +1037,10 @@ test_send_text_submit_rejects_existing_intended_text_after_noop_paste() {
   local dir fb out
   dir="$TMP_ROOT/submit-existing-text-noop"; mkdir -p "$dir/responses"
   zellij_pane_response "$dir" 1 7 3
-  printf '%s' $'› hello captain' > "$dir/responses/2.out"
+  printf '%s' $'╭────────────────────────╮\n│ > hello captain        │\n╰────────────────────────╯' > "$dir/responses/2.out"
   zellij_pane_response "$dir" 3 7 3
   zellij_pane_response "$dir" 5 7 3
-  printf '%s' $'› hello captain' > "$dir/responses/6.out"
+  printf '%s' $'╭────────────────────────╮\n│ > hello captain        │\n╰────────────────────────╯' > "$dir/responses/6.out"
   fb=$(make_zellij_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_ZELLIJ_LOG="$dir/log" FM_ZELLIJ_RESPONSES="$dir/responses" \
     FM_ZELLIJ_SESSION_LIST="firstmate" \
@@ -1079,7 +1079,7 @@ test_send_text_submit_accepts_wrapped_boxed_text() {
   printf '%s' $'╭────────────────────╮\n│ > hello            │\n│ captain            │\n╰────────────────────╯' > "$dir/responses/6.out"
   zellij_pane_response "$dir" 7 7 3
   zellij_pane_response "$dir" 9 7 3
-  printf '%s' $'╭────────────────────╮\n│ ›                  │\n╰────────────────────╯' > "$dir/responses/10.out"
+  printf '%s' $'╭────────────────────╮\n│ >                  │\n╰────────────────────╯' > "$dir/responses/10.out"
   fb=$(make_zellij_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_ZELLIJ_LOG="$dir/log" FM_ZELLIJ_RESPONSES="$dir/responses" \
     FM_ZELLIJ_SESSION_LIST="firstmate" \
@@ -1090,40 +1090,18 @@ test_send_text_submit_accepts_wrapped_boxed_text() {
   pass "fm_backend_zellij_send_text_submit: observes wrapped text replacing a shell-prompt placeholder"
 }
 
-test_send_text_submit_accepts_wrapped_bare_text() {
-  local dir fb out text
-  dir="$TMP_ROOT/submit-wrapped-bare"; mkdir -p "$dir/responses"
-  text='this deliberately long steer wraps across a bare continuation row'
-  zellij_pane_response "$dir" 1 7 3
-  printf '%s' $'› ' > "$dir/responses/2.out"
-  zellij_pane_response "$dir" 3 7 3
-  zellij_pane_response "$dir" 5 7 3
-  printf '%s' $'› this deliberately long steer\nwraps across a bare continuation row' > "$dir/responses/6.out"
-  zellij_pane_response "$dir" 7 7 3
-  zellij_pane_response "$dir" 9 7 3
-  printf '%s' $'this deliberately long steer wraps across a bare continuation row\n› ' > "$dir/responses/10.out"
-  fb=$(make_zellij_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_ZELLIJ_LOG="$dir/log" FM_ZELLIJ_RESPONSES="$dir/responses" \
-    FM_ZELLIJ_SESSION_LIST="firstmate" \
-    bash -c '. "$0/bin/backends/zellij.sh"; fm_backend_zellij_send_text_submit firstmate:7 "$1" 2 0.01 0.01' "$ROOT" "$text" )
-  [ "$out" = empty ] || fail "wrapped text in a bare composer should be observed and submitted, got '$out'"
-  assert_contains "$(cat "$dir/log")" $'\x1f''send-keys' \
-    "send_text_submit should send Enter after observing wrapped bare text"
-  pass "fm_backend_zellij_send_text_submit: observes wrapped text in a bare composer"
-}
-
 test_send_text_submit_preserves_agent_glyph_within_wrapped_content() {
   local dir fb out text
   dir="$TMP_ROOT/submit-wrapped-agent-glyph"; mkdir -p "$dir/responses"
   text='hello › captain'
   zellij_pane_response "$dir" 1 7 3
-  printf '%s' $'› ' > "$dir/responses/2.out"
+  printf '%s' $'╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯' > "$dir/responses/2.out"
   zellij_pane_response "$dir" 3 7 3
   zellij_pane_response "$dir" 5 7 3
-  printf '%s' $'› hello ›\ncaptain' > "$dir/responses/6.out"
+  printf '%s' $'╭────────────────────────╮\n│ > hello ›              │\n│ captain                │\n╰────────────────────────╯' > "$dir/responses/6.out"
   zellij_pane_response "$dir" 7 7 3
   zellij_pane_response "$dir" 9 7 3
-  printf '%s' $'hello › captain\n› ' > "$dir/responses/10.out"
+  printf '%s' $'hello › captain\n╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯' > "$dir/responses/10.out"
   fb=$(make_zellij_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_ZELLIJ_LOG="$dir/log" FM_ZELLIJ_RESPONSES="$dir/responses" \
     FM_ZELLIJ_SESSION_LIST="firstmate" \
@@ -1142,7 +1120,7 @@ test_send_text_submit_rejects_stale_composer_above_live_shell() {
   fb=$(make_zellij_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_ZELLIJ_LOG="$dir/log" FM_ZELLIJ_RESPONSES="$dir/responses" \
     FM_ZELLIJ_SESSION_LIST="firstmate" \
-    bash -c '. "$0/bin/backends/zellij.sh"; fm_backend_zellij_send_text_submit firstmate:7 "codex" 2 0.01 0.01' "$ROOT" )
+    bash -c '. "$0/bin/backends/zellij.sh"; fm_backend_zellij_send_text_submit firstmate:7 "pi" 2 0.01 0.01' "$ROOT" )
   [ "$out" = send-failed ] || fail "a stale composer above a live shell should report send-failed, got '$out'"
   assert_not_contains "$(cat "$dir/log")" $'\x1f''paste' \
     "send_text_submit must not paste into a live shell below a stale composer"
@@ -1153,8 +1131,8 @@ test_composer_state_reads_styled_dump() {
   local dir fb out
   dir="$TMP_ROOT/composer-styled"; mkdir -p "$dir/responses"
   zellij_pane_response "$dir" 1 7 3
-  # Codex's styled idle row: a bold prompt plus a dim rotating suggestion.
-  printf 'transcript line\n\033[1m›\033[0m \033[2mUse /skills to list available skills\033[0m' > "$dir/responses/2.out"
+  # OpenCode's styled idle rows include a dim rotating suggestion.
+  printf 'transcript line\n┃\n┃  \033[2mAsk anything...\033[0m\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high\n╹▀▀▀▀' > "$dir/responses/2.out"
   fb=$(make_zellij_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_ZELLIJ_LOG="$dir/log" FM_ZELLIJ_RESPONSES="$dir/responses" \
     FM_ZELLIJ_SESSION_LIST="firstmate" \
@@ -1162,7 +1140,7 @@ test_composer_state_reads_styled_dump() {
   [ "$out" = empty ] || fail "a retained harness's styled Zellij dump should classify empty, got '$out'"
   assert_contains "$(cat "$dir/log")" $'\x1f''dump-screen'$'\x1f''--pane-id'$'\x1f''7'$'\x1f''--ansi' \
     "composer_state did not request the styled dump"
-  pass "fm_backend_zellij_composer_state: classifies a Codex --ansi dump as empty"
+  pass "fm_backend_zellij_composer_state: classifies an OpenCode --ansi dump as empty"
 }
 
 test_composer_state_dead_pane_is_unknown() {
@@ -1348,7 +1326,6 @@ test_send_text_submit_rejects_transcript_echo_with_unrelated_draft
 test_send_text_submit_rejects_existing_intended_text_after_noop_paste
 test_send_text_submit_rejects_furniture_match_after_noop_paste
 test_send_text_submit_accepts_wrapped_boxed_text
-test_send_text_submit_accepts_wrapped_bare_text
 test_send_text_submit_preserves_agent_glyph_within_wrapped_content
 test_send_text_submit_rejects_stale_composer_above_live_shell
 test_composer_state_reads_styled_dump

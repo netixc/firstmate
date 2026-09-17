@@ -3104,10 +3104,9 @@ fm_backend_herdr_rendered_busy_state() {  # <target> [harness] -> busy|idle|unkn
 # unsubmitted, via send_literal), then submit with a named Enter key, retried
 # (Enter only, never retyped) until native agent-state, a cleared composer, or
 # fm_composer_queued_enter_verdict confirms delivery. Verified hazard
-# (herdr-verification-p2.md "slash/$ autocomplete popup"): a `/`- or
-# `$`-prefixed send opens a completion popup within ~0.1s, exactly like tmux's
-# Codex popup, so the caller's <settle> before the first Enter matters
-# here the same way it does for tmux.
+# (herdr-verification-p2.md "slash autocomplete popup"): a slash-prefixed
+# send can open a completion popup within ~0.1s, so the caller's <settle> before
+# the first Enter matters here the same way it does for tmux.
 #
 # Confirmation signal: when the target is legibly idle before Enter,
 # submission is confirmed by fm_backend_herdr_wait_for_working observing a
@@ -3120,11 +3119,10 @@ fm_backend_herdr_rendered_busy_state() {  # <target> [harness] -> busy|idle|unkn
 #
 # Incident (2026-07-07, followed up on 2026-07-08): a redelivery loop in the
 # away-mode daemon. Root cause: composer-content submit confirmation was too
-# sensitive to harness rendering details. Some runtimes use bare prompt rows,
-# and Codex adds dynamic idle suggestions after `›`; the later
-# ANSI-aware composer classifier now handles that Codex shape, and idle-baseline
-# submit confirmation still prefers native agent-state so a faint idle tip
-# cannot block a landed send. Composer content is consulted only after native
+# sensitive to harness rendering details. The shared ANSI-aware composer
+# classifier handles retained runtime shapes, and idle-baseline submit
+# confirmation still prefers native agent-state so a faint idle tip cannot
+# block a landed send. Composer content is consulted only after native
 # state stays idle, as the empty/pending owner, and for submit attempts whose
 # pre-Enter agent-state baseline is not legibly idle.
 #
@@ -3409,7 +3407,7 @@ fm_backend_herdr_busy_state() {  # <target>
 #             the submit landed - independent of
 #             whatever the composer's own text happens to show (docs/
 #             herdr-backend.md "Incident (2026-07-07)": composer content is
-#             what fooled the OLD confirmation on codex's dynamic idle-tip
+#             what fooled the old confirmation on dynamic idle-tip text
 #             text). Returned the INSTANT it is seen, without waiting out the
 #             rest of the budget.
 #   idle    - the target was legibly read at least once and never reported

@@ -13,22 +13,18 @@
 # See docs/cd-guard.md for the complete contract and validation record.
 #
 # Usage:
-#   <PreToolUse JSON on stdin> | bin/fm-cd-pretool-check.sh
 #   bin/fm-cd-pretool-check.sh --command '<cmd>'
 #
-# Stdin mode extracts .tool_input.command for Codex.
-# CLI mode is used by OpenCode and Pi after their adapters extract the
-# exact command string.
+# OpenCode and Pi adapters extract and pass the exact command string.
 #
 # Exit/output contract (identical shape to bin/fm-arm-pretool-check.sh):
 #   ALLOW - exit 0 and no output.
 #   DENY - exit 2 and a structured deny object on stderr.
 #   INERT - not the real primary checkout (a crewmate/scout task worktree or a
 #           non-firstmate repo): exit 0 with no output, exactly like ALLOW.
-#   FAIL OPEN - malformed or empty stdin, missing jq for stdin transport,
-#               missing Node or policy owner, or an invalid policy response.
+#   FAIL OPEN - missing Node or policy owner, or an invalid policy response.
 #
-# Codex, OpenCode, and Pi consume exit 2 plus stderr.
+# OpenCode and Pi consume exit 2 plus stderr.
 set -u
 
 CMD=""
@@ -36,10 +32,8 @@ CMD_SET=0
 
 usage() {
   cat <<'EOF'
-Usage: fm-cd-pretool-check.sh [--command <cmd>]
+Usage: fm-cd-pretool-check.sh --command <cmd>
 
-With no --command, reads a Codex PreToolUse JSON payload on stdin
-(tool_input.command).
 Fires only in the real primary firstmate checkout; it is a silent no-op in a
 crewmate/scout task worktree or any non-firstmate repo.
 Exits 0 to allow and 2 to deny a persistent top-level cwd change.
@@ -73,13 +67,7 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-if [ "$CMD_SET" -eq 0 ]; then
-  PAYLOAD=$(cat 2>/dev/null || true)
-  [ -n "$PAYLOAD" ] || exit 0
-  command -v jq >/dev/null 2>&1 || exit 0
-  CMD=$(printf '%s' "$PAYLOAD" | jq -r '(.tool_input.command // empty)' 2>/dev/null) || exit 0
-fi
-
+[ "$CMD_SET" -eq 1 ] || exit 0
 [ -n "$CMD" ] || exit 0
 
 # Strict-superset prefilter (transport only; owns zero classification

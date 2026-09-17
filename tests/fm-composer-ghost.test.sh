@@ -5,13 +5,12 @@
 # a plain pane capture cannot tell apart from human input, so the composer reader
 # saw an idle pane as holding pending input. The shared ANSI-aware owner
 # (fm_composer_strip_ghost, bin/fm-composer-lib.sh, reached here through the
-# fm_tmux_strip_ghost thin adapter) handles Codex's SGR 2 rotating prompt
-# suggestion and idle tip.
+# fm_tmux_strip_ghost thin adapter) handles SGR 2 suggestions and idle tips.
 # These tests pin:
 #   1. fm_tmux_strip_ghost drops dim/faint runs while keeping normal-intensity
 #      and coloured text.
-#   2. fm_pane_input_pending reads a dim ghost-only composer as NOT pending,
-#      while still treating real normal-intensity text as pending.
+#   2. fm_pane_input_pending defers on unrecognized bare rows while bordered
+#      composers distinguish ghost text from real normal-intensity text.
 #   3. The tmux reader structurally scans every row of a multi-row composer.
 #   4. The human/LLM-facing capture path (fm-peek.sh) stays PLAIN - no escape codes
 #      ever reach firstmate's context.
@@ -138,13 +137,11 @@ test_dim_ghost_only_composer_is_not_pending() {
   dir="$TMP_ROOT/ghost-only"; mkdir -p "$dir"
   fb=$(make_fake_tmux "$dir")
   capture="$dir/styled.txt"
-  # The exact rendering Codex emits: a normal prompt glyph plus a dim suggestion.
   printf '› \033[2mWhat is the largest country by area?\033[0m\n' > "$capture"
-  if PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=0 \
-     fm_pane_input_pending "fakepane"; then
-    fail "dim ghost-only composer falsely read as pending"
-  fi
-  pass "fm_pane_input_pending: a dim ghost-only composer is NOT pending"
+  PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=0 \
+    fm_pane_input_pending "fakepane" \
+    || fail "an unrecognized retired bare shape must defer"
+  pass "fm_pane_input_pending: an unrecognized retired bare shape defers"
 }
 
 test_dim_ghost_inside_bordered_composer_is_not_pending() {
@@ -152,7 +149,7 @@ test_dim_ghost_inside_bordered_composer_is_not_pending() {
   dir="$TMP_ROOT/ghost-bordered"; mkdir -p "$dir"
   fb=$(make_fake_tmux "$dir")
   capture="$dir/styled.txt"
-  # Bordered composer (codex box) holding only dim ghost text.
+  # Bordered composer holding only dim ghost text.
   printf '╭─────────────────────────────────────╮\n│ \033[2mtry the other approach instead\033[0m      │\n╰─────────────────────────────────────╯\n' > "$capture"
   if PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=1 \
      fm_pane_input_pending "fakepane"; then
@@ -203,8 +200,8 @@ test_real_text_with_trailing_ghost_is_pending() {
   dir="$TMP_ROOT/mixed"; mkdir -p "$dir"
   fb=$(make_fake_tmux "$dir")
   capture="$dir/styled.txt"
-  # A human typed "deploy" and codex appended a dim ghost completion. The real
-  # text must win - the composer is pending.
+  # A human typed "deploy" and the runtime appended a dim ghost completion.
+  # The real text must win - the composer is pending.
   printf '\xe2\x9d\xaf deploy\033[2m the staging environment now\033[0m\n' > "$capture"
   PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=0 \
     fm_pane_input_pending "fakepane" \
@@ -452,9 +449,8 @@ test_all_tmux_harness_composers_share_classification() {
   dir="$TMP_ROOT/all-harness-composers"; mkdir -p "$dir"
   fb=$(make_fake_tmux "$dir")
   capture="$dir/styled.txt"
-  for harness in codex opencode pi pi-signed; do
+  for harness in opencode pi pi-signed; do
     case "$harness" in
-      codex) printf '╭────────────╮\n│ › \033[2mtip\033[0m      │\n╰────────────╯\n' > "$capture" ;;
       opencode) printf '╭────────────╮\n│ >          │\n╰────────────╯\n' > "$capture" ;;
       pi|pi-signed) printf '╭────────────╮\n│            │\n╰────────────╯\n' > "$capture" ;;
     esac
@@ -462,10 +458,7 @@ test_all_tmux_harness_composers_share_classification() {
       fm_tmux_composer_state "fakepane")
     [ "$out" = empty ] \
       || fail "$harness aligned idle composer should be empty, got '$out'"
-    case "$harness" in
-      codex) printf '╭────────────╮\n│ › fix      │\n╰────────────╯\n' > "$capture" ;;
-      opencode|pi|pi-signed) printf '╭────────────╮\n│ > fix      │\n╰────────────╯\n' > "$capture" ;;
-    esac
+    printf '╭────────────╮\n│ > fix      │\n╰────────────╯\n' > "$capture"
     out=$(PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=1 \
       fm_tmux_composer_state "fakepane")
     [ "$out" = pending ] \
@@ -500,8 +493,8 @@ test_single_capture_leaves_no_fallback_race() {
   printf '│ > │\n' > "$row_capture"
   out=$(PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_ROW="$row_capture" FM_FAKE_CY=0 \
     fm_tmux_composer_state "fakepane")
-  [ "$out" = pending ] \
-    || fail "the verdict must come from the one full capture (agent glyph + typed text = pending), got '$out'"
+  [ "$out" = unknown ] \
+    || fail "the verdict must come from the one full capture (unrecognized bare row = unknown), got '$out'"
   pass "fm_tmux_composer_state: one capture feeds the classifier; no band-capture race remains"
 }
 
@@ -527,11 +520,10 @@ test_legitimate_empty_routes_remain_empty() {
   # A blank pane is deliberately absent here: under the strict container-proof
   # rule (captain decision blank-row-injection-posture) a blank cursor row is
   # unknown, pinned by tests/fm-daemon.test.sh and tests/fm-composer-lib.test.sh.
-  for fixture in bordered double-bordered agent-prompt; do
+  for fixture in bordered double-bordered; do
     case "$fixture" in
       bordered) printf '╭────╮\n│    │\n╰────╯\n' > "$capture"; cursor=1 ;;
       double-bordered) printf '╔════╗\n║    ║\n╚════╝\n' > "$capture"; cursor=1 ;;
-      agent-prompt) printf '›\n' > "$capture"; cursor=0 ;;
     esac
     out=$(PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY="$cursor" \
       fm_tmux_composer_state "fakepane")
@@ -549,9 +541,9 @@ test_non_bordered_composer_uses_compatibility_fallback() {
   printf '› deploy staging\n' > "$capture"
   out=$(PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=0 \
     fm_tmux_composer_state "fakepane")
-  [ "$out" = pending ] \
-    || fail "a non-bordered composer should retain cursor-row classification, got '$out'"
-  pass "fm_tmux_composer_state: panes without bordered structure retain compatibility fallback"
+  [ "$out" = unknown ] \
+    || fail "an unrecognized non-bordered shape should remain unknown, got '$out'"
+  pass "fm_tmux_composer_state: unrecognized non-bordered shapes remain unknown"
 }
 
 test_non_bordered_interior_edges_are_pending() {
@@ -563,10 +555,10 @@ test_non_bordered_interior_edges_are_pending() {
     printf '%s\n' "$row" > "$capture"
     out=$(PATH="$fb:$PATH" LC_ALL=C FM_FAKE_STYLED="$capture" FM_FAKE_CY=0 \
       fm_tmux_composer_state "fakepane")
-    [ "$out" = pending ] \
-      || fail "non-bordered interior edge row '$row' should be pending, got '$out'"
+    [ "$out" = unknown ] \
+      || fail "unrecognized non-bordered row '$row' should be unknown, got '$out'"
   done
-  pass "fm_tmux_composer_state: interior edge glyphs retain non-bordered fallback"
+  pass "fm_tmux_composer_state: unrecognized interior-edge rows remain unknown"
 }
 
 # --- fm-peek.sh stays escape-free (LLM-facing path) -------------------------

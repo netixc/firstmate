@@ -266,7 +266,7 @@ test_ring_skips_dead_agent() {
   [ ! -s "$log" ] || fail "a missing endpoint was typed into:"$'\n'"$(cat "$log")"
   [ -f "$rec" ] || fail "skipping a missing endpoint must leave the durable record in place"
   rc=0
-  PATH="$dir/fakebin:$PATH" FM_SEND_LOG="$log" FM_FAKE_TMUX_AGENT=codex \
+  PATH="$dir/fakebin:$PATH" FM_SEND_LOG="$log" FM_FAKE_TMUX_AGENT=pi \
     inbox_lib "$state" fm_task_inbox_ring tmux sess:fm-t1 "$rec" fm-t1 || rc=$?
   [ "$rc" = 0 ] || fail "a live agent should still be rung, got $rc"
   grep -qF 'Firstmate instruction waiting' "$log" || fail "a live agent did not receive the doorbell"

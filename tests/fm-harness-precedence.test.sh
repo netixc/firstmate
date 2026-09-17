@@ -59,8 +59,8 @@ SH
 
 # A fake ps that models a PID NAMESPACE: every process reports bash with ppid 1,
 # and pid 1 reports whatever FM_TEST_PID1_COMM names. This is what a harness
-# looks like from inside a container or `codex sandbox`, where the harness is
-# pid 1 of its own namespace rather than a child of a shell.
+# looks like from inside a container, where the harness is pid 1 of its own
+# namespace rather than a child of a shell.
 namespace_ancestry_bin() {  # <dir>
   local fakebin
   fakebin=$(fm_fakebin "$1")
@@ -120,24 +120,23 @@ named_bin() {  # <dir> <name>
 
 # --- 1. A foreign marker never renames a markerless harness -----------------
 
-# Codex and OpenCode publish no identity marker. An inherited foreign marker
-# must not rename those structurally identified runtimes.
+# OpenCode publishes no identity marker. An inherited foreign marker must not
+# rename that structurally identified runtime.
 test_markerless_ancestry_outranks_foreign_marker() {
-  local dir fakebin bin got name
+  local dir fakebin bin got name expect
   dir="$TMP_ROOT/markerless"
   fakebin=$(blind_ancestry_bin "$dir/blind")
-  for name in codex opencode; do
-    bin=$(named_bin "$dir/$name-tree" "$name")
-    local expect=$name
+  name=opencode
+  expect=$name
+  bin=$(named_bin "$dir/$name-tree" "$name")
 
-    got=$(under_process "$bin")
-    [ "$got" = "$expect" ] \
-      || fail "$name ancestry alone resolved '$got', expected $expect (the ancestry signal is not live)"
+  got=$(under_process "$bin")
+  [ "$got" = "$expect" ] \
+    || fail "$name ancestry alone resolved '$got', expected $expect (the ancestry signal is not live)"
 
-    got=$(under_process "$bin" PI_CODING_AGENT=true FM_PI_HARNESS=pi)
-    [ "$got" = "$expect" ] \
-      || fail "$name ancestry with an inherited Pi marker resolved '$got', expected $expect"
-  done
+  got=$(under_process "$bin" PI_CODING_AGENT=true FM_PI_HARNESS=pi)
+  [ "$got" = "$expect" ] \
+    || fail "$name ancestry with an inherited Pi marker resolved '$got', expected $expect"
 
   got=$(with_blind_ancestry "$fakebin" PI_CODING_AGENT=true FM_PI_HARNESS=pi)
   [ "$got" = pi ] \
@@ -149,7 +148,7 @@ test_markerless_ancestry_outranks_foreign_marker() {
 # Retired harness names and markers must contribute no identity of their own.
 test_retired_harness_identity_is_not_recognized() {
   local bin fakebin got name retired
-  for retired in muse gemini rovo agy kimi; do
+  for retired in codex muse gemini rovo agy kimi; do
     for name in "$retired" "$retired-cli-0.58.0"; do
       bin=$(named_bin "$TMP_ROOT/retired-$name-tree" "$name")
       got=$(under_process "$bin")
@@ -185,9 +184,9 @@ test_genuine_marker_and_ancestry_agree() {
   local dir bin got
   dir="$TMP_ROOT/genuine"
 
-  bin=$(named_bin "$dir/codex-tree" codex)
+  bin=$(named_bin "$dir/opencode-tree" opencode)
   got=$(under_process "$bin" )
-  [ "$got" = codex ] || fail "a genuine codex session resolved '$got', expected codex"
+  [ "$got" = opencode ] || fail "a genuine opencode session resolved '$got', expected opencode"
 
   bin=$(named_bin "$dir/pi-tree" pi)
   got=$(under_process "$bin" PI_CODING_AGENT=true FM_PI_HARNESS=pi)
@@ -235,38 +234,36 @@ test_interpreter_args_match_does_not_outrank_a_marker() {
   local dir node script got
   dir="$TMP_ROOT/weak-args"
   node=$(named_bin "$dir" node)
-  script="$dir/codex-tool.sh"
+  script="$dir/opencode-tool.sh"
   cat > "$script" <<SH
 r=\$("$HARNESS"); printf '%s' "\$r"
 SH
 
   got=$(env -u PI_CODING_AGENT -u FM_PI_HARNESS \
     "$node" "$script")
-  [ "$got" = codex ] \
-    || fail "an unmarked interpreter holding a codex-shaped script path resolved '$got', expected codex"
+  [ "$got" = opencode ] \
+    || fail "an unmarked interpreter holding a opencode-shaped script path resolved '$got', expected opencode"
 
   got=$(env -u PI_CODING_AGENT -u FM_PI_HARNESS PI_CODING_AGENT=true FM_PI_HARNESS=pi "$node" "$script")
   [ "$got" = pi ] \
-    || fail "a Pi marker lost to a codex-shaped script path, resolving '$got'"
+    || fail "a Pi marker lost to a opencode-shaped script path, resolving '$got'"
   pass "an interpreter script-path match answers alone but never outranks a marker"
 }
 
-# The real Codex install topology, modelled because the fix depends on it. codex
-# ships as a `node` npm shim that spawns its native `codex` binary as a child and
-# waits, so BOTH are in a tool subprocess's parent chain and the native name is
-# the nearer one. Verified live on 2026-09-01 with codex-cli 0.152.0, whose pane
-# foreground process names were [node codex]. What this case pins is that rule
-# and nothing wider: a native harness binary nearer than an interpreter decides
+# Model an interpreter shim that spawns a native OpenCode binary as a child and
+# waits, so both are in a tool subprocess's parent chain and the native name is
+# the nearer one. What this case pins is that a native harness binary nearer than
+# an interpreter decides
 # at comm strength, so the shim's own script path never gets to hand the verdict
 # back to a retained marker. The strength assertion below is what keeps that
-# non-vacuous - reaching the node shim instead would answer 'args codex'.
+# non-vacuous - reaching the node shim instead would answer 'args opencode'.
 # A fixture cannot notice a vendor topology change; the opt-in live drift guard
 # (tests/fm-harness-liveness-drift-live-e2e.test.sh) owns that.
 test_native_child_of_an_interpreter_shim_decides_at_comm_strength() {
   local dir node native probe entry got
   dir="$TMP_ROOT/shim-topology"
   node=$(named_bin "$dir" node)
-  native=$(named_bin "$dir/vendor" codex)
+  native=$(named_bin "$dir/vendor" opencode)
 
   # The probe forks so the command substitution's child is what asks, exactly as
   # a tool subprocess of a real harness would.
@@ -277,7 +274,7 @@ printf '%s' "$r"
 SH
   # The shim SPAWNS its native binary and waits, so the node process stays alive
   # above it and the walk meets the native binary first.
-  entry="$dir/codex-cli-entry.sh"
+  entry="$dir/opencode-cli-entry.sh"
   cat > "$entry" <<'SH'
 "$FM_TEST_NATIVE" "$FM_TEST_PROBE" "$@" &
 wait "$!"
@@ -294,14 +291,14 @@ SH
   }
 
   got=$(run_shim)
-  [ "$got" = codex ] \
-    || fail "the shim topology without a marker resolved '$got', expected codex"
+  [ "$got" = opencode ] \
+    || fail "the shim topology without a marker resolved '$got', expected opencode"
 
   got=$(env -u PI_CODING_AGENT -u FM_PI_HARNESS \
     \
     FM_TEST_HARNESS="$HARNESS" FM_TEST_NATIVE="$native" FM_TEST_PROBE="$probe" \
     "$node" "$entry" ancestry)
-  [ "$got" = "comm codex" ] \
+  [ "$got" = "comm opencode" ] \
     || fail "the native child must decide at comm strength, got '$got'"
   pass "a native harness binary under an interpreter shim decides at comm strength"
 }
@@ -312,7 +309,7 @@ SH
 # pid 1 is always init. Inside a PID namespace that assumption inverts: the
 # harness itself is pid 1, so the one process that proves who owns the tree was
 # never examined and a retained marker won by default. Verified against the real
-# installed Codex, which runs as pid 1 under `codex sandbox`.
+# namespace shape where OpenCode itself is pid 1.
 test_harness_at_namespace_pid1_is_examined() {
   local fakebin got
   fakebin=$(namespace_ancestry_bin "$TMP_ROOT/namespace-pid1")
@@ -322,12 +319,12 @@ test_harness_at_namespace_pid1_is_examined() {
   [ "$got" = pi ] \
     || fail "a host-shaped pid 1 with a Pi marker resolved '$got', expected pi"
 
-  got=$(under_fake_ps "$fakebin" FM_TEST_PID1_COMM=codex --)
-  [ "$got" = codex ] \
-    || fail "a Codex session at namespace pid 1 resolved '$got' with no marker, expected codex"
+  got=$(under_fake_ps "$fakebin" FM_TEST_PID1_COMM=opencode --)
+  [ "$got" = opencode ] \
+    || fail "a OpenCode session at namespace pid 1 resolved '$got' with no marker, expected opencode"
 
-  got=$(under_fake_ps "$fakebin" FM_TEST_PID1_COMM=codex -- ancestry)
-  [ "$got" = "comm codex" ] \
+  got=$(under_fake_ps "$fakebin" FM_TEST_PID1_COMM=opencode -- ancestry)
+  [ "$got" = "comm opencode" ] \
     || fail "the namespace pid 1 harness must decide at comm strength, got '$got'"
 
   pass "a harness that is pid 1 of its own namespace is examined, not skipped"
@@ -351,7 +348,7 @@ test_descent_probe_reaches_a_strength_the_top_of_session_cannot() {
   local dir node native hold entry ready shim_pid got waited
   dir="$TMP_ROOT/descent-vantage"
   node=$(named_bin "$dir" node)
-  native=$(named_bin "$dir/vendor" codex)
+  native=$(named_bin "$dir/vendor" opencode)
   ready="$dir/ready"
 
   # The native binary parks until the test releases it, so the whole topology is
@@ -362,8 +359,8 @@ touch "$FM_TEST_READY"
 while [ -e "$FM_TEST_READY" ]; do sleep 0.05; done
 SH
   # The shim spawns its native binary and waits, so the node process stays alive
-  # ABOVE it exactly as the real Codex npm shim does.
-  entry="$dir/codex-cli-entry.sh"
+  # ABOVE it exactly as the real OpenCode npm shim does.
+  entry="$dir/opencode-cli-entry.sh"
   cat > "$entry" <<'SH'
 "$FM_TEST_NATIVE" "$FM_TEST_HOLD" &
 wait "$!"
@@ -385,12 +382,12 @@ SH
   # Non-vacuity: the top-of-session vantage really is limited to args strength
   # here, which is the whole reason the descent probe has something to add.
   got=$("$HARNESS" ancestry "$shim_pid")
-  [ "$got" = "args codex" ] \
-    || fail "the shim's own vantage should see only 'args codex', got '$got'; the descent case proves nothing if the top of the session already reaches comm strength"
+  [ "$got" = "args opencode" ] \
+    || fail "the shim's own vantage should see only 'args opencode', got '$got'; the descent case proves nothing if the top of the session already reaches comm strength"
 
   got=$("$HARNESS" ancestry-descent "$shim_pid")
   case "$got" in
-    *"comm codex"*) ;;
+    *"comm opencode"*) ;;
     *) fail "the descent probe did not reach the native child at comm strength, got '$got'" ;;
   esac
 
@@ -398,8 +395,8 @@ SH
   # built on this probe would accept a tree it should have rejected.
   while read -r strength named; do
     [ -n "$strength" ] || continue
-    [ "$named" = codex ] \
-      || fail "a vantage point inside the codex fixture reported '$strength $named'"
+    [ "$named" = opencode ] \
+      || fail "a vantage point inside the opencode fixture reported '$strength $named'"
   done <<EOF
 $got
 EOF
@@ -412,8 +409,8 @@ EOF
 # The other half of the vantage question: which vantages a probe must NOT ask
 # from. harness_ancestry only ever climbs, so firstmate's own detection can never
 # occupy a SIBLING branch of the process that runs it. A harness routinely spawns
-# such branches - an MCP server started as `node <home>/.opencode/mcp/<server>.js`
-# matches *opencode* on its script path in the bare-interpreter branch of the walk -
+# such branches - an MCP server started as `node <home>/.pi/mcp/pi`
+# matches Pi on its script path in the bare-interpreter branch of the walk -
 # and a probe that reported every descendant would answer a foreign harness from a
 # process no real tool subprocess can ask from. The descent probe asks only the
 # vantages on the upward path from the deepest descendant, which is exactly the set
@@ -423,11 +420,11 @@ test_descent_probe_ignores_a_sibling_branch_the_walk_cannot_reach() {
   local shim_pid mcp_pid got waited
   dir="$TMP_ROOT/descent-sibling"
   node=$(named_bin "$dir" node)
-  native=$(named_bin "$dir/vendor" codex)
+  native=$(named_bin "$dir/vendor" opencode)
   worker=$(named_bin "$dir/vendor" worker)
   ready="$dir/ready"
   fifo="$dir/fifo"
-  mkdir -p "$dir/.opencode/mcp"
+  mkdir -p "$dir/.pi/mcp"
   mkfifo "$fifo"
 
   # Both leaves park on a fifo nothing ever writes, so they hold their position in
@@ -438,11 +435,11 @@ read -r _ < "$FM_TEST_FIFO"
 SH
   # The MCP server is the sibling branch: a bare interpreter whose script path
   # carries a harness name it does not belong to.
-  mcp_script="$dir/.opencode/mcp/foo.js"
+  mcp_script="$dir/.pi/mcp/pi"
   cp "$block" "$mcp_script"
 
   # The native binary keeps a child of its own, so the deepest descendant is
-  # unambiguously on the codex branch rather than tied with the sibling.
+  # unambiguously on the opencode branch rather than tied with the sibling.
   hold="$dir/hold.sh"
   cat > "$hold" <<'SH'
 "$FM_TEST_WORKER" "$FM_TEST_BLOCK" &
@@ -450,7 +447,7 @@ printf '%s\n' "$!" > "$FM_TEST_DIR/worker.pid"
 touch "$FM_TEST_READY"
 wait
 SH
-  entry="$dir/codex-cli-entry.sh"
+  entry="$dir/opencode-cli-entry.sh"
   cat > "$entry" <<'SH'
 "$FM_TEST_NATIVE" "$FM_TEST_HOLD" &
 printf '%s\n' "$!" > "$FM_TEST_DIR/native.pid"
@@ -485,17 +482,17 @@ SH
   # Non-vacuity: the sibling really does answer a foreign harness when asked, so a
   # probe that reported every descendant would have reported pi here.
   got=$("$HARNESS" ancestry "$mcp_pid")
-  [ "$got" = "args opencode" ] \
-    || { release_sibling_fixture; fail "the sibling MCP process reported '$got', expected 'args opencode'; this case proves nothing unless that branch really names a foreign harness"; }
+  [ "$got" = "args pi" ] \
+    || { release_sibling_fixture; fail "the sibling MCP process reported '$got', expected 'args pi'; this case proves nothing unless that branch really names a foreign harness"; }
 
   got=$("$HARNESS" ancestry-descent "$shim_pid")
   case "$got" in
-    *"comm codex"*) ;;
+    *"comm opencode"*) ;;
     *) release_sibling_fixture; fail "the descent probe did not reach the native child at comm strength, got '$got'" ;;
   esac
   while read -r strength named; do
     [ -n "$strength" ] || continue
-    [ "$named" = codex ] \
+    [ "$named" = opencode ] \
       || { release_sibling_fixture; fail "the descent probe reported '$strength $named' from a sibling branch the ancestry walk can never climb through"; }
   done <<EOF
 $got
@@ -508,29 +505,29 @@ EOF
 # The deeper shape the case above cannot reach, and the reason the live guard's
 # reject-other-harness cross-check judges COMM-strength vantages only. A harness
 # spawns its MCP servers from the AGENT BINARY, not from the npm shim, so this
-# Codex-shaped topology is shim -> native codex -> foreign-named MCP server: the
-# server inherits its parent's process group, passes the foreground filter, and
-# is the deepest eligible descendant. That puts its own `args opencode` vantage ON
+# The modeled topology is shim -> native opencode -> foreign-named MCP server:
+# the server inherits its parent's process group, passes the foreground filter,
+# and is the deepest eligible descendant. That puts its own `args pi` vantage ON
 # the descent path rather than off it. An args-strength verdict is path-ambiguous
 # by construction - the
 # bare-interpreter branch of the walk matches a harness name anywhere in the script
 # path - so it is the comm-strength verdicts that carry a real process name and are
 # the ones worth cross-checking. This case pins that the path still reaches
-# `comm codex`, that every comm-strength vantage on it names codex, and that an
-# `args opencode` vantage really is present, which is what a cross-check applied to
+# `comm opencode`, that every comm-strength vantage on it names opencode, and that
+# an `args pi` vantage really is present, which is what a cross-check applied to
 # args strength would have rejected.
 test_descent_probe_tolerates_an_args_only_foreign_verdict_at_the_deepest_vantage() {
   local dir node native mcp_script hold entry ready fifo
   local shim_pid mcp_pid got waited saw_comm
   dir="$TMP_ROOT/descent-deep-mcp"
   node=$(named_bin "$dir" node)
-  native=$(named_bin "$dir/vendor" codex)
+  native=$(named_bin "$dir/vendor" opencode)
   ready="$dir/ready"
   fifo="$dir/fifo"
-  mkdir -p "$dir/.opencode/mcp"
+  mkdir -p "$dir/.pi/mcp"
   mkfifo "$fifo"
 
-  mcp_script="$dir/.opencode/mcp/foo.js"
+  mcp_script="$dir/.pi/mcp/pi"
   cat > "$mcp_script" <<'SH'
 read -r _ < "$FM_TEST_FIFO"
 SH
@@ -544,7 +541,7 @@ printf '%s\n' "$!" > "$FM_TEST_DIR/mcp.pid"
 touch "$FM_TEST_READY"
 wait
 SH
-  entry="$dir/codex-cli-entry.sh"
+  entry="$dir/opencode-cli-entry.sh"
   cat > "$entry" <<'SH'
 "$FM_TEST_NATIVE" "$FM_TEST_HOLD" &
 printf '%s\n' "$!" > "$FM_TEST_DIR/native.pid"
@@ -574,16 +571,16 @@ SH
   mcp_pid=$(cat "$dir/mcp.pid")
 
   got=$("$HARNESS" ancestry "$mcp_pid")
-  [ "$got" = "args opencode" ] \
-    || { release_deep_mcp_fixture; fail "the MCP server reported '$got', expected 'args opencode'; this case proves nothing unless the deepest vantage really answers a foreign harness"; }
+  [ "$got" = "args pi" ] \
+    || { release_deep_mcp_fixture; fail "the MCP server reported '$got', expected 'args pi'; this case proves nothing unless the deepest vantage really answers a foreign harness"; }
 
   got=$("$HARNESS" ancestry-descent "$shim_pid")
   case "$got" in
-    *"args opencode"*) ;;
+    *"args pi"*) ;;
     *) release_deep_mcp_fixture; fail "the descent path did not include the MCP server's foreign args verdict, got '$got'; a cross-check restricted to comm strength is untested unless that vantage is on the path" ;;
   esac
   case "$got" in
-    *"comm codex"*) ;;
+    *"comm opencode"*) ;;
     *) release_deep_mcp_fixture; fail "the descent probe did not reach the native binary at comm strength, got '$got'" ;;
   esac
 
@@ -591,8 +588,8 @@ SH
   while read -r strength named; do
     [ -n "$strength" ] || continue
     [ "$strength" = comm ] || continue
-    [ "$named" = codex ] \
-      || { release_deep_mcp_fixture; fail "a comm-strength vantage on the descent path reported '$named', expected codex"; }
+    [ "$named" = opencode ] \
+      || { release_deep_mcp_fixture; fail "a comm-strength vantage on the descent path reported '$named', expected opencode"; }
     saw_comm=1
   done <<EOF
 $got
@@ -606,7 +603,7 @@ EOF
 
 # Two equally deep foreground leaves must not let ps ordering decide whether the
 # chosen path reaches comm strength. The foreign MCP interpreter is spawned first
-# in one pass and the native codex binary first in the other; both must resolve to
+# in one pass and the native opencode binary first in the other; both must resolve to
 # the native leaf while the single-path shape remains intact.
 test_descent_probe_prefers_comm_strength_when_deepest_leaves_tie() {
   local order dir node native mcp_script block entry ready fifo
@@ -614,19 +611,19 @@ test_descent_probe_prefers_comm_strength_when_deepest_leaves_tie() {
   for order in mcp-first native-first; do
     dir="$TMP_ROOT/descent-equal-$order"
     node=$(named_bin "$dir" node)
-    native=$(named_bin "$dir/vendor" codex)
+    native=$(named_bin "$dir/vendor" opencode)
     ready="$dir/ready"
     fifo="$dir/fifo"
-    mkdir -p "$dir/.opencode/mcp"
+    mkdir -p "$dir/.pi/mcp"
     mkfifo "$fifo"
 
     block="$dir/block.sh"
     cat > "$block" <<'SH'
 read -r _ < "$FM_TEST_FIFO"
 SH
-    mcp_script="$dir/.opencode/mcp/foo.js"
+    mcp_script="$dir/.pi/mcp/pi"
     cp "$block" "$mcp_script"
-    entry="$dir/codex-cli-entry.sh"
+    entry="$dir/opencode-cli-entry.sh"
     cat > "$entry" <<'SH'
 if [ "$FM_TEST_ORDER" = mcp-first ]; then
   "$FM_TEST_NODE" "$FM_TEST_MCP" &
@@ -666,19 +663,19 @@ SH
       || { release_equal_depth_fixture; fail "the $order equal-depth fixture never reached both leaves"; }
 
     got=$("$HARNESS" ancestry "$mcp_pid")
-    [ "$got" = "args opencode" ] \
-      || { release_equal_depth_fixture; fail "the $order MCP leaf reported '$got', expected 'args opencode'"; }
+    [ "$got" = "args pi" ] \
+      || { release_equal_depth_fixture; fail "the $order MCP leaf reported '$got', expected 'args pi'"; }
     got=$("$HARNESS" ancestry "$native_pid")
-    [ "$got" = "comm codex" ] \
-      || { release_equal_depth_fixture; fail "the $order native leaf reported '$got', expected 'comm codex'"; }
+    [ "$got" = "comm opencode" ] \
+      || { release_equal_depth_fixture; fail "the $order native leaf reported '$got', expected 'comm opencode'"; }
 
     got=$("$HARNESS" ancestry-descent "$shim_pid" "$mcp_pid" "$native_pid")
     case "$got" in
-      "comm codex"*) ;;
+      "comm opencode"*) ;;
       *) release_equal_depth_fixture; fail "the $order equal-depth tie did not choose the comm-strength native leaf, got '$got'" ;;
     esac
     case "$got" in
-      *"args opencode"*) release_equal_depth_fixture; fail "the $order equal-depth tie chose the foreign args-strength leaf" ;;
+      *"args pi"*) release_equal_depth_fixture; fail "the $order equal-depth tie chose the foreign args-strength leaf" ;;
     esac
 
     release_equal_depth_fixture
@@ -695,15 +692,15 @@ test_supervision_protocol_follows_corrected_verdict() {
   dir="$TMP_ROOT/supervision"
   home="$dir/home"
   mkdir -p "$home/state" "$home/config"
-  bin=$(named_bin "$dir/codex-tree" codex)
+  bin=$(named_bin "$dir/opencode-tree" opencode)
 
   got=$(env -u PI_CODING_AGENT -u FM_PI_HARNESS FM_HOME="$home" \
     "$bin" -c "r=\$(\"$RENDER\"); printf '%s' \"\$r\"")
-  assert_contains "$got" "primary harness: codex" \
-    "a Codex primary did not render the Codex protocol"
-  assert_contains "$got" "Mode: Codex foreground checkpoint." \
-    "the rendered block is not Codex's foreground-checkpoint protocol"
-  pass "session start renders the Codex protocol for a Codex primary"
+  assert_contains "$got" "primary harness: opencode" \
+    "a OpenCode primary did not render the OpenCode protocol"
+  assert_contains "$got" "Mode: OpenCode TUI plugin background wake." \
+    "the rendered block is not OpenCode's plugin-owned protocol"
+  pass "session start renders the OpenCode protocol for an OpenCode primary"
 }
 
 test_markerless_ancestry_outranks_foreign_marker

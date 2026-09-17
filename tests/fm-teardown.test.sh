@@ -1387,7 +1387,7 @@ write_legacy_meta() {
     "project=$case_dir/project" \
     "kind=$kind" \
     "mode=$mode" \
-    "harness=codex"
+    "harness=pi"
 }
 
 # Count spawn_gen fields in the task's meta, so a refusal can prove it left the

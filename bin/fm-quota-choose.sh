@@ -307,7 +307,6 @@ printf '%s\n' "$QUOTA_JSON" | fm_quota_json_valid || die "invalid quota-axi prov
 # quota-array-dispatch skill, not this helper.
 provider_for_harness() {
   case "$1" in
-    codex)        printf 'codex\n' ;;
     opencode)     printf 'codex\n' ;;
     pi|pi-signed) printf 'pi\n' ;;
     *)            return 1 ;;

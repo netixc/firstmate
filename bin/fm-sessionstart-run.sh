@@ -12,11 +12,9 @@
 # first turn is.
 #
 # Usage: fm-sessionstart-run.sh [--source <source>] [--pi-prerequisite]
-#   --source  The harness's own session-open source. When omitted, the source is
-#             read from a Codex-shaped JSON hook payload on stdin
-#             (the `source` field). An unreadable or unrecognized source is
-#             treated as `startup`, because taking the helm redundantly is
-#             cheap and idempotent while not taking it is the whole bug.
+#   --source  The harness's own session-open source. An omitted or unrecognized
+#             source is treated as `startup`, because taking the helm redundantly
+#             is cheap and idempotent while not taking it is the whole bug.
 #   --pi-prerequisite
 #             Internal Pi extension mode. An intentional gate/scope stand-down
 #             exits 3 so provider preflight can distinguish it from an eligible
@@ -97,25 +95,6 @@ session_start_completed() {
   case "$lock_pid" in ''|*[!0-9]*) return 1 ;; esac
   [ "$completion_pid" = "$lock_pid" ]
 }
-
-if [ -z "$SOURCE" ] && [ ! -t 0 ]; then
-  # Codex delivers a JSON SessionStart payload on stdin whose `source` field
-  # carries startup|resume|clear|compact. Parsed without jq so a
-  # host missing it still gets correct routing rather than silent full runs.
-  # A terminal stdin is skipped outright: a hook always pipes its payload, and
-  # an operator running this by hand must not be left waiting on a read.
-  # Splitting on the quote character finds the FIRST "source" key and its value
-  # without depending on greedy-regex luck, and it cannot mistake a string VALUE
-  # of "source" for the key, because only a key is followed by a bare colon.
-  PAYLOAD=$(cat 2>/dev/null || true)
-  SOURCE=$(printf '%s' "$PAYLOAD" | awk '
-    BEGIN { RS = "\"" }
-    seen == 2 { print; exit }
-    seen == 1 && $0 ~ /^[[:space:]]*:[[:space:]]*$/ { seen = 2; next }
-    seen == 1 { seen = 0 }
-    $0 == "source" { seen = 1 }
-  ')
-fi
 
 case "$SOURCE" in
   resume|reload|fork)

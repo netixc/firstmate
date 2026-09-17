@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Detect the agent harness this process tree runs on.
-# Usage: fm-harness.sh                  print own harness: codex|opencode|pi|pi-signed|unknown
+# Usage: fm-harness.sh                  print own harness: opencode|pi|pi-signed|unknown
 #        fm-harness.sh crew             print the effective CREWMATE harness
 #                                        (config/crew-harness; "default" resolves to own)
 #        fm-harness.sh secondmate       print the harness the PRIMARY uses to launch
@@ -70,8 +70,8 @@ harness_marker() {
     if [ "${FM_PI_HARNESS:-}" = pi-signed ]; then echo pi-signed; else echo pi; fi
     return
   fi
-  # codex and opencode publish no harness-identity marker at all, so
-  # they are never named here and are identified by ancestry alone.
+  # opencode publishes no harness-identity marker, so it is identified by
+  # ancestry alone.
   return 0
 }
 
@@ -87,7 +87,6 @@ harness_process_verdict() {  # <pid>
   local pid=$1 comm args
   comm=$(ps -o comm= -p "$pid" 2>/dev/null) || return 0
   case "$(basename -- "$comm")" in
-    *codex*) echo "comm codex"; return ;;
     *opencode*) echo "comm opencode"; return ;;
     # Both Pi identities share this launcher name. Ancestry can only prove the
     # FAMILY; only the launch-boundary marker selects the signed identity, which
@@ -98,7 +97,6 @@ harness_process_verdict() {  # <pid>
       # Bare interpreter: match the harness name in its script path.
       args=$(ps -o args= -p "$pid" 2>/dev/null)
       case "$args" in
-        *codex*) echo "args codex"; return ;;
         *opencode*) echo "args opencode"; return ;;
         *" pi "*|*/pi) echo "args pi"; return ;;
       esac ;;
@@ -115,8 +113,8 @@ harness_ancestry() {  # [<pid>]
     [ -z "$verdict" ] || { echo "$verdict"; return; }
     pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
     # Stop only once the walk has EXAMINED the top of the chain. Inside a PID
-    # namespace the harness itself is pid 1 - a container, or the `codex sandbox`
-    # this boundary was proven in - so breaking as soon as the next pid is 1
+    # namespace the harness itself can be pid 1, so breaking as soon as the next
+    # pid is 1
     # skips the one process that identifies the session and hands the verdict
     # straight back to a retained marker. A host's real pid 1 (init, systemd,
     # launchd) matches no harness name above, so examining it costs one ps call

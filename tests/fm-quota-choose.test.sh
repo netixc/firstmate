@@ -172,17 +172,17 @@ fi
 ok "help renders the complete header only"
 
 # 1. First candidate with positive effective quota.
-out=$(call_choose --snapshot "$LAB/captured.json" --candidate codex:model:codex_bengalfox --candidate pi:llama-4-scout)
+out=$(call_choose --snapshot "$LAB/captured.json" --candidate opencode:model:codex_bengalfox --candidate pi:llama-4-scout)
 [ "$out" = "pi llama-4-scout" ] || fail "first positive: expected 'pi llama-4-scout', got '$out'"
 ok "first positive candidate wins"
 
 # 2. Exhausted provider is skipped.
-out=$(call_choose --snapshot "$LAB/captured.json" --candidate codex:model:codex_bengalfox --candidate pi:llama-4-scout)
+out=$(call_choose --snapshot "$LAB/captured.json" --candidate opencode:model:codex_bengalfox --candidate pi:llama-4-scout)
 [ "$out" = "pi llama-4-scout" ] || fail "exhausted skip: expected 'pi llama-4-scout', got '$out'"
 ok "exhausted provider is skipped"
 
 # 3. No candidates have positive quota.
-if out=$(call_choose --snapshot "$LAB/captured.json" --candidate codex:model:codex_bengalfox 2>/dev/null); then
+if out=$(call_choose --snapshot "$LAB/captured.json" --candidate opencode:model:codex_bengalfox 2>/dev/null); then
   fail "no positive: expected exit 1, got exit 0 with '$out'"
 fi
 [ "$out" = "none" ] || fail "no positive: expected 'none', got '$out'"
@@ -194,7 +194,7 @@ out=$(call_choose --snapshot "$LAB/captured.json" pi:llama-4-scout)
 ok "positional candidates work"
 
 # 5. A model-specific exhausted scope bounds a healthy all-models scope.
-if out=$(call_choose --snapshot "$LAB/captured.json" --candidate codex:model:codex_bengalfox 2>/dev/null); then
+if out=$(call_choose --snapshot "$LAB/captured.json" --candidate opencode:model:codex_bengalfox 2>/dev/null); then
   fail "specific scope: expected exit 1, got exit 0 with '$out'"
 fi
 [ "$out" = "none" ] || fail "specific scope: expected 'none', got '$out'"
@@ -218,8 +218,8 @@ fi
 [ "$err" = "error: unknown harness: kimi" ] || fail "retired Kimi candidate returned: $err"
 ok "retired Kimi candidate fails closed while Pi remains available"
 
-out=$(call_choose --snapshot "$LAB/captured.json" --candidate codex:default)
-[ "$out" = "codex default" ] || fail "default scope: expected provider-wide quota, got '$out'"
+out=$(call_choose --snapshot "$LAB/captured.json" --candidate opencode:default)
+[ "$out" = "opencode default" ] || fail "default scope: expected provider-wide quota, got '$out'"
 ok "default model uses provider-wide quota"
 
 out=$(call_choose --snapshot "$LAB/captured.json" --candidate pi:llama-4-scout)
@@ -237,10 +237,10 @@ if err=$(call_choose --snapshot "$LAB/captured.json" --candidate pi:default --ca
 fi
 [ "$err" = "error: unknown harness: agy" ] || fail "trailing unsupported harness returned: $err"
 
-if err=$(call_choose --snapshot "$LAB/captured.json" --candidate pi:default --candidate 'codex:' 2>&1); then
+if err=$(call_choose --snapshot "$LAB/captured.json" --candidate pi:default --candidate 'opencode:' 2>&1); then
   fail "trailing empty model was hidden by an earlier selection"
 fi
-[ "$err" = "error: invalid candidate: codex:" ] || fail "trailing empty model returned: $err"
+[ "$err" = "error: invalid candidate: opencode:" ] || fail "trailing empty model returned: $err"
 ok "all candidates are validated before selection"
 
 printf '{"schemaVersion":5,"providers":{"provider":"pi","quotaSemantics":{"effectiveAvailability":[{"scope":"all_models","status":"known","effectivePercentRemaining":50,"runway":{"status":"through_reset"}}]}}}\n' > "$MALFORMED"
@@ -301,15 +301,15 @@ out=$(call_choose --candidate pi:default < "$LAB/captured.json")
 [ "$out" = "pi default" ] || fail "stdin snapshot returned '$out'"
 ok "stdin snapshot is accepted"
 
-if err=$(call_choose --snapshot "$LAB/captured.json" --candidate 'codex:' 2>&1); then
+if err=$(call_choose --snapshot "$LAB/captured.json" --candidate 'opencode:' 2>&1); then
   fail "empty model candidate unexpectedly dispatched"
 fi
-[ "$err" = "error: invalid candidate: codex:" ] || fail "empty model candidate returned: $err"
+[ "$err" = "error: invalid candidate: opencode:" ] || fail "empty model candidate returned: $err"
 ok "empty model candidate fails closed"
 
 # A bare harness with no colon means the default model.
-out=$(call_choose --snapshot "$LAB/captured.json" --candidate codex)
-[ "$out" = "codex default" ] || fail "bare harness: expected 'codex default', got '$out'"
+out=$(call_choose --snapshot "$LAB/captured.json" --candidate opencode)
+[ "$out" = "opencode default" ] || fail "bare harness: expected 'opencode default', got '$out'"
 ok "bare harness maps to default model"
 
 cat > "$TOON" <<'TOON'

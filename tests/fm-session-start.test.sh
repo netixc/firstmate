@@ -213,7 +213,7 @@ make_fake_ps_harness() {
 #!/usr/bin/env bash
 set -u
 # The ancestry this stub reports defaults to the harness the fixture was built
-# for, so a case that builds a pi (or codex) fixture gets pi (or codex) ancestry
+# for, so a case that builds a pi (or opencode) fixture gets pi (or opencode) ancestry
 # without having to repeat it per run; FM_FAKE_HARNESS still overrides it.
 harness=\${FM_FAKE_HARNESS:-$harness}
 SH
@@ -507,10 +507,10 @@ SH
 # run_session_start <home> <root> <path>
 # Drop every harness env marker from bin/fm-harness.sh detect_own so the
 # surrounding interactive shell cannot leak past the suite's fake ps harness.
-# Markers today: (codex), PI_CODING_AGENT plus FM_PI_HARNESS
+# Markers today: (opencode), PI_CODING_AGENT plus FM_PI_HARNESS
 # (Pi family).
-# codex and opencode have no env markers (ancestry only). Without this, a local
-# codex/pi session fails cases that pin a different fake harness while CI
+# opencode and opencode have no env markers (ancestry only). Without this, a local
+# opencode/pi session fails cases that pin a different fake harness while CI
 # (no ambient markers) still passes.
 run_session_start() {
   local home=$1 root=$2 path=$3 pi_harness=${4:-}
@@ -890,14 +890,14 @@ done
 case "$*" in
   *"comm="*)
     if [ -f "$FM_FAKE_LOCK_STATE/harness-$pid" ]; then
-      printf '%s\n' /usr/local/bin/codex
+      printf '%s\n' /usr/local/bin/opencode
     else
       printf '%s\n' /bin/bash
     fi
     ;;
   *"args="*)
     if [ -f "$FM_FAKE_LOCK_STATE/harness-$pid" ]; then
-      printf '%s\n' codex
+      printf '%s\n' opencode
     else
       printf '%s\n' bash
     fi
@@ -1429,7 +1429,7 @@ test_non_pi_session_start_leaves_branch_state_untouched() {
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_harness "$fakebin" codex
+  make_fake_ps_harness "$fakebin" opencode
 
   FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" append \
     --task task-b --verdict captain --summary 'unread Pi branch outcome' >/dev/null \
@@ -1632,7 +1632,7 @@ EOF
 #!/usr/bin/env bash
 set -u
 case "$*" in
-  *"-p 999999"*) printf 'codex\n'; exit 0 ;;
+  *"-p 999999"*) printf 'opencode\n'; exit 0 ;;
   *"comm="*|*"args="*) printf 'bash\n'; exit 0 ;;
 esac
 exit 0
@@ -2040,11 +2040,11 @@ for argument in "$@"; do
 done
 case "$*" in
   *"comm="*)
-    if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then printf '%s\n' /usr/local/bin/codex
+    if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then printf '%s\n' /usr/local/bin/opencode
     else printf '%s\n' /bin/bash; fi
     ;;
   *"args="*)
-    if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then printf '%s\n' codex
+    if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then printf '%s\n' opencode
     else printf '%s\n' bash; fi
     ;;
   *"ppid="*) /bin/ps -o ppid= -p "$pid" ;;
@@ -2245,33 +2245,6 @@ EOF
     || fail "read-only compact mutated startup completion state"
 
   pass "read-only Pi compact refreshes against the rebuilding session identity without mutation"
-}
-
-test_codex_unreachable_reset_sources_do_not_claim_instruction_refresh() {
-  local rec root home fakebin startup baseline clear_out compact_out
-  rec=$(new_world codex-instruction-refresh)
-  IFS='|' read -r root home fakebin <<EOF
-$rec
-EOF
-  make_fake_toolchain "$fakebin"
-  make_fake_ps_harness "$fakebin" codex
-  printf '%s\n' 'CODEX_TEST_INSTRUCTION=original' > "$root/AGENTS.md"
-
-  startup=$(run_named_harness_session_start codex "$home" "$root" "$fakebin:$BASE_PATH" --source startup)
-  assert_contains "$startup" "primary harness: codex" "codex fixture did not select the codex run tier"
-  baseline=$(cat "$home/state/.session-start-agents-baseline")
-  printf '%s\n' 'CODEX_TEST_INSTRUCTION=updated' > "$root/AGENTS.md"
-
-  clear_out=$(run_named_harness_session_start codex "$home" "$root" "$fakebin:$BASE_PATH" --reemit --source clear)
-  compact_out=$(run_named_harness_session_start codex "$home" "$root" "$fakebin:$BASE_PATH" --reemit --source compact)
-  assert_not_contains "$clear_out" "CURRENT AGENTS.md - INSTRUCTION REFRESH" \
-    "Codex clear claimed an instruction-refresh channel unavailable to the tracked transport"
-  assert_not_contains "$compact_out" "CURRENT AGENTS.md - INSTRUCTION REFRESH" \
-    "Codex compact claimed an instruction-refresh channel unavailable to the tracked transport"
-  [ "$(cat "$home/state/.session-start-agents-baseline")" = "$baseline" ] \
-    || fail "an unsupported Codex rebuild rewrote the true-start baseline"
-
-  pass "Codex reset sources do not claim an unavailable instruction-refresh channel"
 }
 
 test_agents_baseline_requires_sha256_and_successful_completion() {
@@ -2682,7 +2655,6 @@ test_runtime_bound_leaves_harness_ancestry_headroom
 test_reemit_skips_startup_sweeps_but_keeps_the_wake_drain
 test_agents_baseline_stays_at_true_start_and_reemits_on_every_drifted_pi_compact
 test_read_only_pi_compact_refreshes_against_its_own_session_identity
-test_codex_unreachable_reset_sources_do_not_claim_instruction_refresh
 test_agents_baseline_requires_sha256_and_successful_completion
 test_reemit_keeps_repair_ownership_with_the_lock_holder
 

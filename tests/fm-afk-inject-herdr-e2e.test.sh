@@ -131,11 +131,10 @@ read -r _FAKE_TAB_ID FAKE_CREW_PANE_ID <<EOF
 $FAKE_CREW_IDS
 EOF
 
-# --- deterministic bare-composer loop, drawn in the scratch pane -------------
-# Mirrors tests/fm-afk-inject-e2e.test.sh's supervisor-loop.sh, but draws the
-# shared classifier's positively identified Codex bare-agent shape (`› <buf>`). This
-# remains readable under the strict blank-row posture without pretending that
-# one side-bordered row is a complete composer box. ALSO registers itself as a
+# --- deterministic bordered-composer loop, drawn in the scratch pane ----------
+# Mirrors tests/fm-afk-inject-e2e.test.sh's supervisor-loop.sh with a retained
+# bordered composer; bare `›` rows belong to the retired standalone Codex
+# runtime and deliberately classify unknown. It also registers itself as a
 # real herdr agent via `herdr pane report-agent` and reports idle/working
 # transitions around each
 # submission: fm_backend_herdr_send_text_submit's confirmation is now native
@@ -190,7 +189,12 @@ redraw() {
   else
     shown="$_buf"
   fi
-  printf '\r\033[K› %s' "$shown"
+  printf '\r\033[K│ > %-40s │' "$shown"
+}
+draw_frame() {
+  printf '\r\033[K╭────────────────────────────────────────────╮\n'
+  redraw
+  printf '\n╰────────────────────────────────────────────╯\033[1A\r'
 }
 submit_line() {
   local _line=$_buf _c _hex
@@ -202,7 +206,6 @@ submit_line() {
   _hex=$(printf '%s' "$_line" | od -An -tx1 | tr -d ' \n')
   printf '%s\t%s\t%s\n' "$_hex" "$_line" "$_c" >> "$LOG"
   _buf=
-  printf '\r\033[K\n'
   redraw
   # Report a real idle->working->idle cycle around the submission, exactly
   # like a real harness's agent_status - this is the signal
@@ -214,7 +217,7 @@ submit_line() {
   report_agent_state idle
 }
 
-redraw
+draw_frame
 while IFS= read -r -n 1 _ch; do
   if [ -z "$_ch" ]; then
     submit_line

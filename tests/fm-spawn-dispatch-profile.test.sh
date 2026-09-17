@@ -63,7 +63,7 @@ make_spawn_case() {
 
 enable_dispatch_profile() {
   local home=$1
-  printf '%s\n' '{"rules":[{"when":"current events","use":{"harness":"pi","model":"xai/grok-4","effort":"high"}}],"default":{"harness":"codex","model":"gpt-5","effort":"medium"}}' \
+  printf '%s\n' '{"rules":[{"when":"current events","use":{"harness":"pi","model":"xai/grok-4","effort":"high"}}],"default":{"harness":"opencode","model":"anthropic/claude-sonnet-4-5"}}' \
     > "$home/config/crew-dispatch.json"
 }
 
@@ -248,7 +248,7 @@ test_unresolvable_relative_overrides_fail_loudly() {
 test_active_dispatch_profile_requires_explicit_harness_for_ship() {
   local rec id out status
   id=profile-required-ship-z11
-  rec=$(make_spawn_case profile-required-ship codex "$id")
+  rec=$(make_spawn_case profile-required-ship pi "$id")
   read_case_record "$rec"
   enable_dispatch_profile "$HOME_DIR"
 
@@ -264,7 +264,7 @@ test_active_dispatch_profile_requires_explicit_harness_for_ship() {
 test_active_dispatch_profile_requires_explicit_harness_for_scout() {
   local rec id out status
   id=profile-required-scout-z12
-  rec=$(make_spawn_case profile-required-scout codex "$id")
+  rec=$(make_spawn_case profile-required-scout pi "$id")
   read_case_record "$rec"
   enable_dispatch_profile "$HOME_DIR"
 
@@ -280,18 +280,18 @@ test_active_dispatch_profile_requires_explicit_harness_for_scout() {
 test_active_dispatch_profile_allows_explicit_harness() {
   local rec id out status launch
   id=profile-explicit-z13
-  rec=$(make_spawn_case profile-explicit codex "$id")
+  rec=$(make_spawn_case profile-explicit pi "$id")
   read_case_record "$rec"
   enable_dispatch_profile "$HOME_DIR"
 
   out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id" "$PROJ_DIR" --harness codex --model gpt-5 --effort high)
+    "$id" "$PROJ_DIR" --harness pi --model anthropic/claude-sonnet-5 --effort high)
   status=$?
   expect_code 0 "$status" "explicit harness should satisfy active dispatch-profile requirement"
-  assert_contains "$out" "spawned $id harness=codex" "spawn did not report explicit codex harness"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" codex gpt-5 high
+  assert_contains "$out" "spawned $id harness=pi" "spawn did not report explicit pi harness"
+  assert_meta_profile "$HOME_DIR/state/$id.meta" pi anthropic/claude-sonnet-5 high
   launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "codex --model 'gpt-5' -c 'model_reasoning_effort=\"high\"' --dangerously-bypass-approvals-and-sandbox" \
+  assert_contains "$launch" "--model 'anthropic/claude-sonnet-5' --thinking 'high'" \
     "explicit harness launch did not thread model and effort"
   pass "active crew-dispatch profile allows an explicit resolved harness"
 }
@@ -299,23 +299,23 @@ test_active_dispatch_profile_allows_explicit_harness() {
 test_active_dispatch_profile_allows_positional_harness() {
   local rec id out status
   id=profile-positional-z14
-  rec=$(make_spawn_case profile-positional codex "$id")
+  rec=$(make_spawn_case profile-positional pi "$id")
   read_case_record "$rec"
   enable_dispatch_profile "$HOME_DIR"
 
   out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id" "$PROJ_DIR" codex --model gpt-5 --effort high)
+    "$id" "$PROJ_DIR" pi --model anthropic/claude-sonnet-5 --effort high)
   status=$?
   expect_code 0 "$status" "positional harness should satisfy active dispatch-profile requirement"
-  assert_contains "$out" "spawned $id harness=codex" "spawn did not report positional codex harness"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" codex gpt-5 high
+  assert_contains "$out" "spawned $id harness=pi" "spawn did not report positional pi harness"
+  assert_meta_profile "$HOME_DIR/state/$id.meta" pi anthropic/claude-sonnet-5 high
   pass "active crew-dispatch profile allows the legacy positional harness form"
 }
 
 test_active_dispatch_profile_allows_raw_launch_command() {
   local rec id out status launch
   id=profile-raw-z15
-  rec=$(make_spawn_case profile-raw codex "$id")
+  rec=$(make_spawn_case profile-raw pi "$id")
   read_case_record "$rec"
   enable_dispatch_profile "$HOME_DIR"
 
@@ -506,21 +506,20 @@ TOML
   pass "retired Kimi config and explicit selections refuse before launch and byte-preserve external configuration"
 }
 
-test_codex_omits_invalid_max_effort() {
-  local rec id out status launch
-  id=profile-codex-max-z4
-  rec=$(make_spawn_case profile-codex-max codex "$id")
+test_retired_codex_harness_refuses_before_provisioning() {
+  local rec id out status
+  id=profile-retired-codex-z4
+  rec=$(make_spawn_case profile-retired-codex pi "$id")
   read_case_record "$rec"
 
-  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" --model gpt-5 --effort max)
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
+    "$id" "$PROJ_DIR" --harness codex 2>&1)
   status=$?
-  expect_code 0 "$status" "codex spawn with unsupported max effort should omit the effort flag"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" codex gpt-5 max
-  launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "codex --model 'gpt-5' --dangerously-bypass-approvals-and-sandbox" \
-    "codex launch did not preserve the model flag when max effort was omitted"
-  assert_not_contains "$launch" "model_reasoning_effort" "codex launch must omit unsupported max reasoning effort"
-  pass "codex omits unsupported max effort instead of passing a bad config value"
+  expect_code 1 "$status" "retired standalone Codex harness should refuse"
+  assert_contains "$out" "harness 'codex'" "retired Codex refusal did not name the stale harness"
+  assert_absent "$HOME_DIR/state/$id.meta" "retired Codex refusal published task metadata"
+  [ ! -s "$LAUNCH_LOG" ] || fail "retired Codex refusal typed a launch command"
+  pass "retired standalone Codex harness refuses before task publication or launch"
 }
 
 test_opencode_threads_model_and_ignores_effort_axis() {
@@ -571,7 +570,7 @@ test_native_pi_ultra_is_explicit_and_model_scoped() {
       assert_not_contains "$launch" "'max'" "native Ultra was aliased to max"
     done
   done
-  for native_profile in 'codex:codex-native/gpt-6-astra' 'pi:openai-codex/gpt-6-astra' 'pi:default' 'pi:codex-native/'; do
+  for native_profile in 'opencode:codex-native/gpt-6-astra' 'pi:openai-codex/gpt-6-astra' 'pi:default' 'pi:codex-native/'; do
     harness=${native_profile%%:*}; model=${native_profile#*:}; id="ultra-refused-$RANDOM"
     rec=$(make_spawn_case "$id" "$harness" "$id")
     read_case_record "$rec"
@@ -756,7 +755,7 @@ test_retired_kimi_secondmate_selection_refuses_before_endpoint() {
   local selection rec id sm out status
   for selection in configured explicit; do
     id="retired-kimi-secondmate-$selection"
-    rec=$(make_spawn_case "$id" codex "$id")
+    rec=$(make_spawn_case "$id" pi "$id")
     read_case_record "$rec"
     sm="$CASE_DIR/secondmate-home"
     make_seeded_secondmate_home "$sm" "$id"
@@ -778,7 +777,7 @@ test_retired_kimi_secondmate_selection_refuses_before_endpoint() {
 test_pi_signed_persistent_secondmate_uses_pi_extensions_and_identity() {
   local rec id sm out status launch
   id=profile-pi-signed-secondmate-z8d
-  rec=$(make_spawn_case profile-pi-signed-secondmate codex "$id")
+  rec=$(make_spawn_case profile-pi-signed-secondmate pi "$id")
   read_case_record "$rec"
   printf '%s\n' pi-signed > "$HOME_DIR/config/secondmate-harness"
   sm="$CASE_DIR/secondmate-home"
@@ -813,25 +812,25 @@ test_batch_forwards_shared_profile_flags() {
   local rec id1 id2 out status
   id1=profile-batch-a-z9
   id2=profile-batch-b-z10
-  rec=$(make_spawn_case profile-batch codex "$id1" "$id2")
+  rec=$(make_spawn_case profile-batch pi "$id1" "$id2")
   read_case_record "$rec"
   enable_dispatch_profile "$HOME_DIR"
 
   out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id1=$PROJ_DIR" "$id2=$PROJ_DIR" --harness codex --model gpt-5 --effort high)
+    "$id1=$PROJ_DIR" "$id2=$PROJ_DIR" --harness pi --model anthropic/claude-sonnet-5 --effort high)
   status=$?
   expect_code 0 "$status" "batch spawn with shared profile flags should succeed"
-  assert_contains "$out" "spawned $id1 harness=codex" "first batch task did not use shared harness"
-  assert_contains "$out" "spawned $id2 harness=codex" "second batch task did not use shared harness"
-  assert_meta_profile "$HOME_DIR/state/$id1.meta" codex gpt-5 high
-  assert_meta_profile "$HOME_DIR/state/$id2.meta" codex gpt-5 high
+  assert_contains "$out" "spawned $id1 harness=pi" "first batch task did not use shared harness"
+  assert_contains "$out" "spawned $id2 harness=pi" "second batch task did not use shared harness"
+  assert_meta_profile "$HOME_DIR/state/$id1.meta" pi anthropic/claude-sonnet-5 high
+  assert_meta_profile "$HOME_DIR/state/$id2.meta" pi anthropic/claude-sonnet-5 high
   pass "batch dispatch forwards shared --harness, --model, and --effort to every pair"
 }
 
 test_active_dispatch_profile_does_not_block_secondmate_launch() {
   local rec id sm out status
   id=profile-secondmate-z16
-  rec=$(make_spawn_case profile-secondmate codex "$id")
+  rec=$(make_spawn_case profile-secondmate pi "$id")
   read_case_record "$rec"
   enable_dispatch_profile "$HOME_DIR"
   sm="$CASE_DIR/secondmate-home"
@@ -840,9 +839,9 @@ test_active_dispatch_profile_does_not_block_secondmate_launch() {
   out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$sm" --secondmate)
   status=$?
   expect_code 0 "$status" "secondmate spawn should be exempt from the dispatch-profile explicit harness requirement"
-  assert_contains "$out" "spawned $id harness=codex kind=secondmate" "secondmate launch did not use secondmate harness resolution"
+  assert_contains "$out" "spawned $id harness=pi kind=secondmate" "secondmate launch did not use secondmate harness resolution"
   assert_grep "kind=secondmate" "$HOME_DIR/state/$id.meta" "secondmate meta missing kind=secondmate"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" codex default default
+  assert_meta_profile "$HOME_DIR/state/$id.meta" pi default default
   pass "active crew-dispatch profile does not block secondmate launches"
 }
 
@@ -855,7 +854,7 @@ test_launch_environment_allowlist() {
   value='synthetic value; $(touch SHOULD_NOT_EXIST) `false` "quoted"'
   for setting in absent missing-config enabled empty; do
     id="env-$setting"
-    rec=$(make_spawn_case "$id" codex "$id")
+    rec=$(make_spawn_case "$id" pi "$id")
     read_case_record "$rec"
     case "$setting" in
       missing-config) rm "$HOME_DIR/config/crew-harness"; rmdir "$HOME_DIR/config" ;;
@@ -899,7 +898,7 @@ SH
 test_launch_environment_invalid_config_refuses() {
   local rec id bad out status
   id=env-invalid
-  rec=$(make_spawn_case "$id" codex "$id")
+  rec=$(make_spawn_case "$id" pi "$id")
   read_case_record "$rec"
   for bad in 'FM_TEST_ALLOWED=value' 'NAME;false' '1INVALID' '*'; do
     printf '%s\n' "$bad" > "$HOME_DIR/config/launch-env-allowlist"
@@ -922,7 +921,7 @@ test_launch_environment_inaccessible_config_refuses() {
   for setting in config ancestor; do
     for presence in present absent; do
       id="env-inaccessible-$setting-$presence"
-      rec=$(make_spawn_case "$id" codex "$id")
+      rec=$(make_spawn_case "$id" pi "$id")
       read_case_record "$rec"
       if [ "$presence" = present ]; then
         printf 'FM_TEST_ALLOWED\n' > "$HOME_DIR/config/launch-env-allowlist"
@@ -936,7 +935,7 @@ test_launch_environment_inaccessible_config_refuses() {
       fi
       chmod 600 "$blocked" || fail "could not remove configuration search permission"
       out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-        "$id" "$PROJ_DIR" --harness codex --backend tmux)
+        "$id" "$PROJ_DIR" --harness pi --backend tmux)
       status=$?
       chmod 700 "$blocked" || fail "could not restore configuration search permission"
       expect_code 1 "$status" "inaccessible $setting with $presence allowlist must refuse spawn: $out"
@@ -951,7 +950,7 @@ test_launch_environment_inaccessible_config_refuses() {
 test_launch_environment_inherited_by_secondmate() {
   local rec id sm out status result
   id=env-secondmate
-  rec=$(make_spawn_case "$id" codex "$id")
+  rec=$(make_spawn_case "$id" pi "$id")
   read_case_record "$rec"
   printf 'FM_TEST_ALLOWED\n' > "$HOME_DIR/config/launch-env-allowlist"
   sm="$CASE_DIR/secondmate-home"
@@ -961,11 +960,11 @@ test_launch_environment_inherited_by_secondmate() {
   expect_code 0 "$status" "secondmate with an allowlist should spawn: $out"
   cmp -s "$HOME_DIR/config/launch-env-allowlist" "$sm/config/launch-env-allowlist" \
     || fail "secondmate did not inherit the launch environment contract"
-  cat > "$FAKEBIN_DIR/codex" <<'SH'
+  cat > "$FAKEBIN_DIR/pi" <<'SH'
 #!/bin/sh
 printf '%s\n' "${FM_TEST_AMBIENT_SENTINEL-unset}" "$FM_TEST_ALLOWED" "$FM_HOME" "${FM_STATE_OVERRIDE-unset}"
 SH
-  chmod +x "$FAKEBIN_DIR/codex"
+  chmod +x "$FAKEBIN_DIR/pi"
   result=$(env -i HOME="$HOME_DIR/user-home" PATH="$FAKEBIN_DIR:$PATH" \
     FM_TEST_AMBIENT_SENTINEL=synthetic-unrelated FM_TEST_ALLOWED=synthetic-provider \
     /bin/sh -c "$(cat "$LAUNCH_LOG")") || fail "secondmate's emitted command failed"
@@ -1008,7 +1007,7 @@ test_launch_environment_inheritance_preserves_on_source_errors() {
   fi
   for route in local remote; do
     id="env-inherit-$route"
-    rec=$(make_spawn_case "$id" codex "$id")
+    rec=$(make_spawn_case "$id" pi "$id")
     read_case_record "$rec"
     dest="$CASE_DIR/inherited-home"
     mkdir -p "$dest/config"
@@ -1075,7 +1074,7 @@ test_worker_launch_delivers_role_scope() {
   for kind in no-mistakes direct-PR local-only scout; do
     [ "$brief_kind" = heading ] && [ "$kind" != no-mistakes ] && continue
     id="role-launch-$brief_kind-$kind"
-    rec=$(make_spawn_case "$id" codex)
+    rec=$(make_spawn_case "$id" pi)
     read_case_record "$rec"
     if [ "$brief_kind" != scaffold ]; then
       fm_test_spawn_brief "$HOME_DIR" "$id"
@@ -1095,11 +1094,11 @@ test_worker_launch_delivers_role_scope() {
       printf '%s\n' "$content" > "$brief"
     fi
     cp "$HOME_DIR/data/$id/brief.md" "$CASE_DIR/brief-before"
-    cat > "$FAKEBIN_DIR/codex" <<'SH'
+    cat > "$FAKEBIN_DIR/pi" <<'SH'
 #!/usr/bin/env bash
 printf '%s\n' "$@" > "$FM_ROLE_PROMPT"
 SH
-    chmod +x "$FAKEBIN_DIR/codex"
+    chmod +x "$FAKEBIN_DIR/pi"
     if [ "$kind" = scout ]; then
       out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" --scout)
     else
@@ -1146,7 +1145,7 @@ test_retired_gemini_harness_refuses_without_touching_settings
 test_retired_agy_harness_refuses_without_touching_external_settings
 test_retired_rovo_harness_refuses_without_touching_project_files
 test_retired_kimi_harness_refuses_without_touching_external_config
-test_codex_omits_invalid_max_effort
+test_retired_codex_harness_refuses_before_provisioning
 test_opencode_threads_model_and_ignores_effort_axis
 test_native_effort_validator_keeps_axes_separate
 test_native_pi_ultra_is_explicit_and_model_scoped

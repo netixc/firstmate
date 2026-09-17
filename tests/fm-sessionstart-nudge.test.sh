@@ -14,9 +14,9 @@ set -u
 # portable regression pass locally while failing on a harness-free CI runner.
 if [ "${FM_SESSIONSTART_TEST_HARNESS:-0}" != 1 ]; then
   HARNESS_FIXTURE=$(mktemp -d "${TMPDIR:-/tmp}/fm-sessionstart-harness.XXXXXX") || exit 1
-  ln -s /bin/bash "$HARNESS_FIXTURE/codex" || exit 1
+  ln -s /bin/bash "$HARNESS_FIXTURE/pi" || exit 1
   # shellcheck disable=SC2016 # Expand in the fixture shell, not this parent.
-  FM_SESSIONSTART_TEST_HARNESS=1 "$HARNESS_FIXTURE/codex" \
+  FM_SESSIONSTART_TEST_HARNESS=1 "$HARNESS_FIXTURE/pi" \
     -c '"$@"; rc=$?; :; exit "$rc"' _ "$0" "$@"
   HARNESS_STATUS=$?
   rm -rf "$HARNESS_FIXTURE"
@@ -131,7 +131,7 @@ test_owned_lock_is_silent() {
   pass "fm-sessionstart-nudge: a lock holder in process ancestry is already run"
 }
 
-# A firstmate running inside a PID namespace - a container, or `codex sandbox` -
+# A firstmate running inside a PID namespace - a container, or `pi sandbox` -
 # holds its home lock from a harness that IS pid 1, so this hook must recognize
 # that owner. The old walk rejected a lock pid of 1 outright and stopped before
 # comparing pid 1, so the hook nudged a session that had already run.
