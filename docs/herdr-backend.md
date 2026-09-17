@@ -233,7 +233,7 @@ Typed-plane text is typed once; only Enter is retried.
 
 On an idle or done native baseline, submit confirmation first waits for `working` or `blocked` across a bounded polling window.
 If native status stays idle, the shared composer verdict is the next positive signal: a cleared composer is delivery, and proven pending text retries Enter.
-After the retry budget, `fm_composer_queued_enter_verdict` treats proven pending text plus a generating busy signal as a queued delivered Enter, and keeps an idle pending composer as a genuine swallow.
+After the retry budget, proven pending text plus a generating busy signal counts as a queued delivered Enter, while an idle pending composer remains a genuine swallow.
 On an already active or unreadable baseline, the adapter falls back to conservative composer clearance.
 A fully unreadable target stops retrying and reports unknown.
 blocked is not treated as a queued-Enter busy signal.
