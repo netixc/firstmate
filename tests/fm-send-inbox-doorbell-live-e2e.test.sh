@@ -18,7 +18,7 @@
 # authorized by the harness-dependent-checks rule. An absent harness is
 # reported explicitly and skipped; a run that verified nothing fails rather
 # than passing vacuously. Restrict with
-# FM_SEND_INBOX_LIVE_HARNESSES="codex opencode ..." when needed, and tune the
+# FM_SEND_INBOX_LIVE_HARNESSES="opencode pi ..." when needed, and tune the
 # per-harness wait with FM_SEND_INBOX_LIVE_TIMEOUT (seconds, default 240).
 # Record the dated per-harness result in
 # docs/verification/runtime-backends.md ("Steering-inbox doorbell").
@@ -81,7 +81,6 @@ harness_version() {  # <binary>
 # interactive approval.
 launch_cmd() {  # <name>
   case "$1" in
-    codex) printf '%s' 'codex --dangerously-bypass-approvals-and-sandbox' ;;
     opencode) printf '%s' "OPENCODE_CONFIG_CONTENT='{\"permission\":{\"*\":\"allow\"}}' opencode" ;;
     pi|pi-signed) printf '%s' "$1" ;;
     *) return 1 ;;
@@ -181,7 +180,7 @@ check_harness_doorbell() {  # <name>
   tmux -L "$SOCKET" kill-window -t "$SESSION:$win" 2>/dev/null || true
 }
 
-HARNESSES=${FM_SEND_INBOX_LIVE_HARNESSES:-'codex opencode pi'}
+HARNESSES=${FM_SEND_INBOX_LIVE_HARNESSES:-'opencode pi pi-signed'}
 for h in $HARNESSES; do
   if command -v "$h" >/dev/null 2>&1; then
     check_harness_doorbell "$h"

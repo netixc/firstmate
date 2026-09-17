@@ -5,18 +5,13 @@
 # bin/fm-guard.sh is pull-based and can warn only when another command runs.
 # This push-based guard is invoked by verified harness turn-end integrations so
 # a primary cannot finish a turn while required supervision is absent.
-# Codex can block directly by preserving exit status 2 and stderr.
-# OpenCode and Pi adapters turn that refusal into one bounded continuation
-# through their own native event surfaces.
+# OpenCode and Pi adapters turn exit status 2 and stderr into one bounded
+# continuation through their own native event surfaces.
 #
 # The guard scopes itself to a genuine primary checkout and stays inert inside
 # child task worktrees.
 # Away mode transfers supervision to the identity-matched away daemon, whose
 # fresh beacon is accepted even while its one-shot watcher is between cycles.
-#
-# Loop prevention is payload-owned through Codex's stop_hook_active field.
-# A true value means this stop already follows a guard-driven continuation, so
-# the guard allows it rather than creating an unbounded loop.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -29,23 +24,10 @@ WATCH="$SCRIPT_DIR/fm-watch.sh"
 
 [ "$#" -eq 0 ] || { echo "usage: $(basename "$0")" >&2; exit 2; }
 
-# Read the whole turn-end hook payload once; never block on unreadable or absent
-# stdin.
+# Read the turn-end integration payload once; never block on unreadable or
+# absent stdin. Retained integrations own their bounded-continuation guards.
 PAYLOAD=$(cat 2>/dev/null || true)
 [ -n "$PAYLOAD" ] || exit 0
-
-# jq is the established JSON dependency.
-# Without it the loop field cannot be trusted, so the hook steps aside.
-command -v jq >/dev/null 2>&1 || exit 0
-
-STOP_HOOK_ACTIVE=$(printf '%s' "$PAYLOAD" | jq -r '
-  if type != "object" then error("payload")
-  elif has("stop_hook_active") then
-    if ((.stop_hook_active | type) == "boolean") then .stop_hook_active else error("stop_hook_active") end
-  else false
-  end
-' 2>/dev/null) || exit 0
-[ "$STOP_HOOK_ACTIVE" != true ] || exit 0
 
 # shellcheck source=bin/fm-supervision-lib.sh
 . "$SCRIPT_DIR/fm-supervision-lib.sh"

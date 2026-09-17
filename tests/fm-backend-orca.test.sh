@@ -173,7 +173,7 @@ test_send_text_submit_verifies_empty_composer_after_enter() {
 }
 
 test_composer_state_stale_banner_never_wins() {
-  # The audit's confidently-wrong case (section 3.3): codex's startup banner
+  # The audit's confidently-wrong case (section 3.3): pi's startup banner
   # (`│ permissions: YOLO mode │` inside a rounded box) classified as the
   # composer, reading `pending` for a row that is not a composer at all. With
   # the full shape catalogue the live bare row below the banner wins; with a
@@ -185,7 +185,7 @@ test_composer_state_stale_banner_never_wins() {
   out=$( PATH="$FB:$PATH" FM_ORCA_LOG="$LOG" FM_ORCA_RESPONSES="$RESP" \
     bash -c '. "$0/bin/backends/orca.sh"; fm_backend_orca_composer_state term-123' "$ROOT" )
   [ "$out" != pending ] || fail "a stale startup banner must never classify as pending composer text"
-  [ "$out" = unknown ] || fail "the plain-capture codex hint should defer as unknown, got '$out'"
+  [ "$out" = unknown ] || fail "the plain-capture pi hint should defer as unknown, got '$out'"
   pass "fm_backend_orca_composer_state: a stale startup banner cannot outrank the live composer row"
 }
 

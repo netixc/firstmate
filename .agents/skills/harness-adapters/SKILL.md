@@ -3,7 +3,7 @@ name: harness-adapters
 description: >-
   Agent-only reference for firstmate harness operations.
   Use before spawning or recovering a crewmate or secondmate, handling a trust dialog, sending a harness-specific skill invocation, interrupting or exiting an agent, resuming an exited agent, or verifying a new harness adapter.
-  Contains verified facts for codex, opencode, pi, and pi-signed.
+  Contains verified facts for opencode, pi, and pi-signed.
 user-invocable: false
 metadata:
   internal: true
@@ -80,7 +80,6 @@ A new tool remains undispatchable until the `verify` plan, its harness entry, ev
     "verify": {"default": ["references/common/dispatch.md", "references/common/control-and-recovery.md", "references/common/primary-hooks.md", "references/common/model-and-effort.md"]}
   },
   "harnesses": {
-    "codex": "references/harness/codex.md",
     "opencode": "references/harness/opencode.md",
     "pi": "references/harness/pi.md",
     "pi-signed": "references/harness/pi.md"

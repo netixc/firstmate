@@ -81,7 +81,7 @@ SKIPPED=
 
 # The verified adapters, in the order the harness-adapters skill router records
 # them. An adapter that gains a verified launch path belongs here too.
-for harness in codex opencode pi pi-signed; do
+for harness in opencode pi pi-signed; do
   if ! bin_path=$(resolve_harness_binary "$harness"); then
     SKIPPED="$SKIPPED $harness"
     note "skip: $harness is not installed on this machine, so its classification is unverified here"
@@ -140,10 +140,9 @@ for harness in codex opencode pi pi-signed; do
   # The reject-other-harness cross-check below judges COMM-strength vantages only.
   # An args-strength verdict is path-ambiguous by construction: harness_ancestry's
   # bare-interpreter branch matches a harness name anywhere in the script path, so a
-  # harness-spawned MCP server running as `node <home>/.codex/mcp/<server>.js`
-  # answers `args codex` purely from the .codex path component, and such a server
-  # is normally a child of the agent binary rather than a sibling of it, so it can
-  # be the deepest descendant and sit ON this path. That ambiguity is the sole source
+  # harness-spawned helper under a harness-named configuration directory can
+  # produce an args-strength match without being the agent itself. Such a helper
+  # can be the deepest descendant and sit ON this path. That ambiguity is the sole source
   # of the false failure; a comm-strength verdict carries the real process name and
   # cannot be produced that way. The comm-strength REQUIREMENT is unchanged - some
   # vantage on the path must still name the expected harness at comm strength,

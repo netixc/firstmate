@@ -236,8 +236,8 @@ test_spawn_tmux_and_fakebin() {
   [ -z "$out" ] || fail "spawn tmux pane path should default to empty, got '$out'"
   out=$("$fakebin/tmux" display-message -p '#S')
   [ "$out" = firstmate ] || fail "spawn tmux session name should be firstmate, got '$out'"
-  FM_FAKE_LAUNCH_LOG="$log" "$fakebin/tmux" send-keys -t @w -l 'codex --yolo'
-  assert_grep 'codex --yolo' "$log" "send-keys -l payload was not logged"
+  FM_FAKE_LAUNCH_LOG="$log" "$fakebin/tmux" send-keys -t @w -l 'pi --yolo'
+  assert_grep 'pi --yolo' "$log" "send-keys -l payload was not logged"
   [ -x "$fakebin/treehouse" ] || fail "spawn fakebin should include treehouse"
   [ -x "$fakebin/gh-axi" ] || fail "extra exit-0 tools should land in the spawn fakebin"
   "$fakebin/treehouse" get
@@ -270,11 +270,11 @@ test_send_stubs_and_ssh() {
 
 test_spawn_home_layout() {
   local home="$TMP_ROOT/home"
-  fm_test_spawn_home "$home" codex
+  fm_test_spawn_home "$home" pi
   fm_test_spawn_brief "$home" t1 'do the thing'
   assert_present "$home/data" "spawn home missing data/"
   assert_present "$home/state/.last-watcher-beat" "spawn home missing watcher beat"
-  assert_grep codex "$home/config/crew-harness" "crew-harness was not pinned"
+  assert_grep pi "$home/config/crew-harness" "crew-harness was not pinned"
   assert_grep 'do the thing' "$home/data/t1/brief.md" "brief text was not written"
   pass "spawn-home layout writes harness pin, beat, and brief"
 }

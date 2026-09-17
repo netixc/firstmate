@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Opt-in live guard for the Codex exec and Pi RUN-tier session-open adapters.
+# Opt-in live guard for Pi's RUN-tier session-open adapter.
 #
 # Three facts in this area come from the vendor, not from Firstmate, so a stub
 # can only confirm the assumption already written into the stub:
@@ -164,17 +164,12 @@ exit 0
 SH
   chmod +x "$lab/bin/fm-sessionstart-run.sh"
 
-  case "$harness" in
-    codex) mkdir -p "$lab/.codex"; cp "$ROOT/.codex/hooks.json" "$lab/.codex/hooks.json" ;;
-    pi)
-      mkdir -p "$lab/.pi/extensions/lib"
-      cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$lab/.pi/extensions/"
-      cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" \
-        "$ROOT/.pi/extensions/lib/fm-sessionstart-supervisor.mjs" "$lab/.pi/extensions/lib/"
-      cp "$ROOT/bin/fm-operational-input.sh" "$lab/bin/"
-      printf '%s\n' '{"compaction":{"keepRecentTokens":200}}' > "$lab/.pi/settings.json"
-      ;;
-  esac
+  mkdir -p "$lab/.pi/extensions/lib"
+  cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$lab/.pi/extensions/"
+  cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" \
+    "$ROOT/.pi/extensions/lib/fm-sessionstart-supervisor.mjs" "$lab/.pi/extensions/lib/"
+  cp "$ROOT/bin/fm-operational-input.sh" "$lab/bin/"
+  printf '%s\n' '{"compaction":{"keepRecentTokens":200}}' > "$lab/.pi/settings.json"
   printf '%s\n' "$lab"
 }
 
@@ -580,38 +575,27 @@ if [ "${FM_PI_SESSIONSTART_RACE_LIVE_E2E:-0}" = 1 ]; then
   fi
 fi
 
-# --- per-harness drivers ------------------------------------------------------
+# --- retained harness driver -------------------------------------------------
 
-for harness in codex pi; do
-  if ! command -v "$harness" >/dev/null 2>&1; then
-    ABSENT="$ABSENT $harness"
-    note "$harness: not installed on this host, so its run-tier evidence was NOT refreshed"
-    continue
-  fi
+harness=pi
+if ! command -v "$harness" >/dev/null 2>&1; then
+  ABSENT="$ABSENT $harness"
+  note "$harness: not installed on this host, so its run-tier evidence was NOT refreshed"
+else
   version=$("$harness" --version 2>/dev/null | head -n 1)
   [ -n "$version" ] || version=unknown
   lab=$(make_lab "$harness")
 
-  case "$harness" in
-    codex)
-      probe_process_opens codex "$version" "$lab" resume \
-        codex exec --dangerously-bypass-hook-trust --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check \
-        -- codex exec resume --last --dangerously-bypass-hook-trust --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check
-      note "codex $version: codex exec run-tier evidence refreshed; the interactive TUI remains uncovered because tracked project hooks provide no session-open or re-emit channel there"
-      ;;
-    pi)
-      probe_process_opens pi "$version" "$lab" resume \
-        pi -p -e "$lab/.pi/extensions/fm-primary-turnend-guard.ts" --no-context-files --no-tools \
-        -- pi -p -c -e "$lab/.pi/extensions/fm-primary-turnend-guard.ts" --no-context-files --no-tools
-      probe_context_reset pi "$version" "$lab" /new \
-        pi -e "$lab/.pi/extensions/fm-primary-turnend-guard.ts" --no-context-files
-      ;;
-  esac
+  probe_process_opens pi "$version" "$lab" resume \
+    pi -p -e "$lab/.pi/extensions/fm-primary-turnend-guard.ts" --no-context-files --no-tools \
+    -- pi -p -c -e "$lab/.pi/extensions/fm-primary-turnend-guard.ts" --no-context-files --no-tools
+  probe_context_reset pi "$version" "$lab" /new \
+    pi -e "$lab/.pi/extensions/fm-primary-turnend-guard.ts" --no-context-files
   CHECKED=$((CHECKED + 1))
-done
+fi
 
 [ "$CHECKED" -gt 0 ] \
-  || fail "no run-tier harness was installed, so this guard verified nothing; install codex or pi before trusting its evidence"
+  || fail "Pi was not installed, so this guard verified nothing"
 [ -z "$ABSENT" ] \
   || note "run-tier evidence was refreshed for $CHECKED harness(es); still missing:$ABSENT"
 echo "# fm-sessionstart-hook-live-e2e.test.sh: all live assertions passed"

@@ -726,19 +726,18 @@ test_composer_state_bare_prompt_is_empty() {
   pass "fm_backend_cmux_composer_state: a bordered composer row reads empty"
 }
 
-test_composer_state_borderless_codex_text_is_unknown_plain() {
+test_composer_state_borderless_retired_text_is_unknown_plain() {
   # Capability degradation (the consolidated classifier's styled=0 rule): on
-  # cmux's plain-text capture, text after a bare agent glyph is unreadable -
-  # it may be Codex's own idle suggestion ("Use /skills ..."), which a plain
-  # read cannot tell from typed input. The verdict is `unknown` (defer, loud
+  # cmux's plain-text capture, text after an unrecognized bare glyph is
+  # unreadable. The verdict is `unknown` (defer, loud
   # refusal at fm-send), never a
   # false `pending` that would misreport an idle pane as holding unsent text.
   # The same bytes on a styled backend (tmux/herdr/zellij) classify pending
   # when bright and empty when ghost - pinned in tests/fm-composer-lib.test.sh.
   local dir fb out
-  dir="$TMP_ROOT/composer-borderless-codex-text"; mkdir -p "$dir/responses"
+  dir="$TMP_ROOT/composer-borderless-retired-text"; mkdir -p "$dir/responses"
   cmux_panes_response "$dir" 1 "bbbbbbbb-1111-1111-1111-111111111111"
-  cmux_read_screen_response "$dir" 2 $'transcript\n› retain this message\nCodex footer'
+  cmux_read_screen_response "$dir" 2 $'transcript\n› retain this message\nretired runtime footer'
   fb=$(make_cmux_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_CMUX_LOG="$dir/log" FM_CMUX_RESPONSES="$dir/responses" \
     bash -c '. "$0/bin/backends/cmux.sh"; fm_backend_cmux_composer_state "aaaaaaaa-0000-0000-0000-000000000000:bbbbbbbb-1111-1111-1111-111111111111"' "$ROOT" )
@@ -1107,7 +1106,7 @@ test_send_text_line_clears_partial_input_when_enter_fails
 test_send_text_line_reports_unsafe_input_when_cleanup_fails
 test_current_path_probes_with_marker
 test_composer_state_bare_prompt_is_empty
-test_composer_state_borderless_codex_text_is_unknown_plain
+test_composer_state_borderless_retired_text_is_unknown_plain
 test_composer_state_ghost_placeholder_is_empty
 test_composer_state_real_text_is_pending
 test_composer_state_popup_placeholder_fill_is_pending

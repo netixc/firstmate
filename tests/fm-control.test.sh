@@ -35,7 +35,7 @@ mkdir -p "$TMP_ROOT"
 TMP_ROOT=$(cd "$TMP_ROOT" && pwd)
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
-VERIFIED_HARNESSES="codex opencode pi pi-signed"
+VERIFIED_HARNESSES="opencode pi pi-signed"
 
 # The expectation table, written out independently of the implementation so a
 # silent change to either side shows up here. The fourth field is the composer
@@ -43,7 +43,6 @@ VERIFIED_HARNESSES="codex opencode pi pi-signed"
 # its composer empty on cancel.
 verified_adapter_contract() {  # <harness> -> exit command, interrupt key, repeat, clear key
   case "$1" in
-    codex) printf '/quit\tEscape\t1\t\n' ;;
     opencode) printf '/exit\tEscape\t2\t\n' ;;
     pi) printf '/quit\tEscape\t1\t\n' ;;
     pi-signed) printf '/quit\tEscape\t1\t\n' ;;
@@ -236,9 +235,7 @@ test_interrupt_sends_each_harness_verified_key() {
 # are reached through one prefix rule rather than an exact string match.
 test_harness_family_resolution() {
   local pair recorded want got
-  for pair in codex:codex codex-cli:codex \
-      opencode:opencode pi:pi \
-      pi-signed:pi-signed; do
+  for pair in opencode:opencode opencode-cli:opencode pi:pi pi-signed:pi-signed; do
     recorded=${pair%%:*}
     want=${pair#*:}
     got=$(fm_control_harness_family "$recorded") \
@@ -276,23 +273,23 @@ test_harness_family_resolution() {
 test_prefixed_recorded_harness_reaches_each_control_verb() {
   local dir out rc
   dir=$(new_case prefixed-interrupt)
-  add_task "$dir" t1 codex-cli-2
-  alive_as "$dir" codex-cli-2
+  add_task "$dir" t1 opencode-cli-2
+  alive_as "$dir" opencode-cli-2
   out=$(run_control "$dir" t1 interrupt); rc=$?
   expect_code 0 "$rc" "interrupt should resolve a prefixed recorded harness"$'\n'"$out"
-  [ "$(keys_sent "$dir")" = Escape ] \
-    || fail "a codex-prefixed task should receive codex's interrupt key"
-  assert_contains "$out" "harness=codex" \
+  [ "$(keys_sent "$dir")" = $'Escape\nEscape' ] \
+    || fail "an opencode-prefixed task should receive OpenCode's interrupt keys"
+  assert_contains "$out" "harness=opencode" \
     "interrupt should report the verified adapter that supplied its mechanics"
 
   dir=$(new_case prefixed-exit)
-  add_task "$dir" t1 codex-cli-2
-  alive_as "$dir" codex-cli-2
+  add_task "$dir" t1 opencode-cli-2
+  alive_as "$dir" opencode-cli-2
   out=$(run_control "$dir" t1 exit); rc=$?
   expect_code 0 "$rc" "exit should resolve a prefixed recorded harness"$'\n'"$out"
-  [ "$(literals "$dir")" = /quit ] \
-    || fail "a codex-prefixed task should receive codex's exit command"
-  assert_contains "$out" "stopped t1 harness=codex" \
+  [ "$(literals "$dir")" = /exit ] \
+    || fail "an opencode-prefixed task should receive OpenCode's exit command"
+  assert_contains "$out" "stopped t1 harness=opencode" \
     "exit should report the verified adapter that supplied its mechanics"
   pass "fm-control: prefixed recorded harnesses reach interrupt and exit mechanics"
 }
@@ -362,7 +359,7 @@ test_harness_kind_capability() {
     fm_control_harness_supports_kind "$harness" scout \
       || fail "$harness should be able to run a scout task"
   done
-  for harness in pi codex opencode pi-signed; do
+  for harness in pi opencode pi-signed; do
     fm_control_harness_supports_kind "$harness" secondmate \
       || fail "$harness should be able to run a secondmate"
   done
@@ -595,7 +592,7 @@ test_relaunch_only_flags_are_rejected_on_other_verbs() {
   dir=$(new_case flags)
   add_task "$dir" t1 pi
   alive_as "$dir" pi
-  out=$(run_control "$dir" t1 exit --harness codex); rc=$?
+  out=$(run_control "$dir" t1 exit --harness opencode); rc=$?
   expect_code 1 "$rc" "--harness should not apply to exit"
   assert_contains "$out" "apply to 'relaunch' only" "the refusal should scope the flags"
   pass "fm-control: profile and note flags belong to relaunch only"

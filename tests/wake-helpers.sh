@@ -206,8 +206,18 @@ case "${1:-}" in
         -l) shift; [ "$#" -gt 0 ] && {
           printf '%s\n' "$1" >> "${FM_FAKE_TMUX_SENT:-/dev/null}"
           # Reflect sent text into capture so pane_input_pending sees it as
-          # pending input (text in the composer).
-          [ -n "${FM_FAKE_TMUX_CAPTURE:-}" ] && printf '%s\n' "$1" >> "$FM_FAKE_TMUX_CAPTURE"
+          # pending input. Retained bordered composers update their content
+          # row; older non-box fixtures keep the append behavior.
+          if [ -n "${FM_FAKE_TMUX_CAPTURE:-}" ]; then
+            if grep -q '^╭' "$FM_FAKE_TMUX_CAPTURE" 2>/dev/null; then
+              _tmp=$(mktemp 2>/dev/null) || _tmp="${FM_FAKE_TMUX_CAPTURE}.tmp"
+              awk -v text="$1" 'NR == 2 { print "│ > " text " │"; next } { print }' \
+                "$FM_FAKE_TMUX_CAPTURE" > "$_tmp" && mv -f "$_tmp" "$FM_FAKE_TMUX_CAPTURE"
+              rm -f "$_tmp" 2>/dev/null
+            else
+              printf '%s\n' "$1" >> "$FM_FAKE_TMUX_CAPTURE"
+            fi
+          fi
         } ;;
         Enter)
           # Optionally swallow Enter (file-based flag) to test the retry path.
@@ -215,11 +225,16 @@ case "${1:-}" in
             rm -f "$FM_FAKE_TMUX_SWALLOW_FILE"
           else
             printf '[ENTER]\n' >> "${FM_FAKE_TMUX_SENT:-/dev/null}"
-            # Enter submits: clear the last line (the typed text) from the
-            # capture, simulating the composer being cleared on submit.
+            # Enter submits: clear the typed text from the capture, simulating
+            # the composer being cleared on submit.
             if [ -n "${FM_FAKE_TMUX_CAPTURE:-}" ] && [ -s "$FM_FAKE_TMUX_CAPTURE" ]; then
               _tmp=$(mktemp 2>/dev/null) || _tmp="${FM_FAKE_TMUX_CAPTURE}.tmp"
-              sed '$d' "$FM_FAKE_TMUX_CAPTURE" > "$_tmp" 2>/dev/null && mv -f "$_tmp" "$FM_FAKE_TMUX_CAPTURE"
+              if grep -q '^╭' "$FM_FAKE_TMUX_CAPTURE" 2>/dev/null; then
+                awk 'NR == 2 { print "│ >                      │"; next } { print }' \
+                  "$FM_FAKE_TMUX_CAPTURE" > "$_tmp" 2>/dev/null && mv -f "$_tmp" "$FM_FAKE_TMUX_CAPTURE"
+              else
+                sed '$d' "$FM_FAKE_TMUX_CAPTURE" > "$_tmp" 2>/dev/null && mv -f "$_tmp" "$FM_FAKE_TMUX_CAPTURE"
+              fi
               rm -f "$_tmp" 2>/dev/null
             fi
           fi

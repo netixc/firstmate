@@ -14,8 +14,8 @@
 #      with a notice, and the steer is still durably sent (exit 0).
 #   5. A failed doorbell is still a sent steer (exit 0, record durable): the
 #      watcher's re-ring ladder owns delivery from the record on.
-#   6. Carve-outs keep the typed plane: a leading "/" (any harness), a leading
-#      "$" to codex, an explicit backend target, and the --key path.
+#   6. Carve-outs keep the typed plane: a leading "/", an explicit backend
+#      target, and the --key path.
 #   7. A marked secondmate steer carries its marker + corr token in the record
 #      body, and the pending-reply expectation is marked delivered at enqueue.
 #   8. Pending-reply bookkeeping failure after enqueue never reports a
@@ -86,7 +86,7 @@ SH
 }
 
 setup_case() {  # <name> [harness] -> echoes case dir with home/state + t1 meta
-  local name=$1 harness=${2:-codex} dir
+  local name=$1 harness=${2:-pi} dir
   dir="$TMP_ROOT/$name"
   mkdir -p "$dir/home/state"
   make_stubs "$dir" >/dev/null
@@ -195,19 +195,14 @@ test_harness_invocations_stay_typed() {
   typed=$(cat "$dir/send.log")
   assert_contains "$typed" "/no-mistakes" "the slash command should be typed literally"
   [ ! -d "$dir/home/state/t1.inbox" ] || fail "a slash command must not be routed to the inbox"
-  # A codex `$<skill>` invocation likewise stays typed.
-  dir=$(setup_case codexskill codex); err="$dir/send.err"
-  run_send "$dir" "$err" -- t1 '$no-mistakes' || fail "a codex \$skill send should succeed"
-  assert_contains "$(cat "$dir/send.log")" '$no-mistakes' "the codex \$skill should be typed literally"
-  [ ! -d "$dir/home/state/t1.inbox" ] || fail "a codex \$skill must not be routed to the inbox"
-  # The same `$` message to a non-codex harness is plain text: inbox plane.
+  # Dollar-prefixed ordinary text uses the durable inbox like any other text.
   dir=$(setup_case dollartext pi); err="$dir/send.err"
   run_send "$dir" "$err" -- t1 '$5/month is cheap' || fail "a Pi \$-text send should succeed"
-  [ -f "$dir/home/state/t1.inbox/001.msg" ] || fail "a non-codex \$-message should ride the inbox"
+  [ -f "$dir/home/state/t1.inbox/001.msg" ] || fail "a \$-message should ride the inbox"
   case "$(cat "$dir/send.log")" in
-    *'$5/month'*) fail "a non-codex \$-message payload was typed" ;;
+    *'$5/month'*) fail "a \$-message payload was typed" ;;
   esac
-  pass "fm-send planes: slash and codex \$skill invocations stay typed; plain \$-text rides the inbox"
+  pass "fm-send planes: slash commands stay typed; ordinary dollar-prefixed text rides the inbox"
 }
 
 test_explicit_target_stays_typed() {

@@ -7,20 +7,20 @@
     },
     {
       "when": "The task is a trivial mechanical edit such as a rote rename, formatting sweep, targeted typo fix, or simple file gathering.",
-      "use": { "harness": "codex", "model": "gpt-5.5", "effort": "low" },
+      "use": { "harness": "pi", "model": "openai-codex/gpt-5.5", "effort": "low" },
       "why": "Use a low-effort profile when the task is narrow and low ambiguity."
     },
     {
       "when": "The task is a big or ambiguous multi-file feature, a risky refactor, or work that requires holding many moving parts in mind.",
       "use": [
         { "harness": "pi", "model": "anthropic/claude-sonnet-5", "effort": "high" },
-        { "harness": "codex", "model": "gpt-5.5", "effort": "high" }
+        { "harness": "pi", "model": "openai-codex/gpt-5.5", "effort": "high" }
       ],
       "why": "Use a strong coding profile for big, ambiguous work; resolve the alternatives through quota-array-dispatch."
     }
   ],
   "default": [
-    { "harness": "codex", "model": "gpt-5.5", "effort": "medium" },
+    { "harness": "pi", "model": "openai-codex/gpt-5.5", "effort": "medium" },
     { "harness": "pi", "model": "anthropic/claude-sonnet-5", "effort": "medium" }
   ]
 }

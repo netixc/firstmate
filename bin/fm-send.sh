@@ -55,8 +55,8 @@
 # delivery proof on this plane, and a failed ring never fails the send.
 #
 # TYPED - the LOCAL text that must reach the terminal itself: a harness-native
-# invocation (a leading "/", or a leading "$" to a codex target) must reach
-# the harness's own parser, and an explicit backend target names an endpoint,
+# slash command must reach the harness's own parser, and an explicit backend
+# target names an endpoint,
 # not a task, so it stays typed even when local metadata happens to match it
 # (the same boundary that keeps it unmarked and outside --resolve-key). These
 # type the literal
@@ -72,8 +72,8 @@
 # tmux adapter shares its composer/submit core with the away-mode daemon via
 # bin/fm-tmux-lib.sh. Tune with FM_SEND_RETRIES (default 3) / FM_SEND_SLEEP
 # (0.4). Slash
-# commands, and codex `$...` skill invocations resolved through harness meta,
-# get a longer pre-Enter settle so completion popups do not swallow Enter.
+# commands get a longer pre-Enter settle so completion popups do not swallow
+# Enter.
 # A remote secondmate target has no typed text plane at all:
 # every remote text steer rides the inbox (a marked secondmate request already
 # reaches the harness as marker-prefixed chat rather than a parser command, so
@@ -653,11 +653,9 @@ fm_send_feed_resolved_holds() {  # <answer-text>
   fi
 }
 
-# Resolve the target's harness from its meta (recorded by fm-spawn), used only to
-# scope the codex `$<skill>` popup-settle below. A task selector carries
-# meta; an explicit backend-target escape hatch has none, so its harness is
-# unknown and treated as non-codex (the safe default that keeps the fast path).
-# The target's BACKEND comes from selector meta, from matching an explicit target
+# Resolve the target's harness from its meta (recorded by fm-spawn) for
+# lifecycle-key handling. The target's BACKEND comes from selector meta, from
+# matching an explicit target
 # back to recorded meta, or from strict explicit-target shape validation.
 # Do not add a separate passive liveness preflight here. Active send paths own
 # backend readiness: herdr, for example, must route through its session-aware
@@ -762,10 +760,9 @@ else
   # Data-plane selection (see the header): text addressed to a task selector
   # resolved through this home's metadata rides the inbox plane, unless it is
   # a LOCAL harness-native invocation that must reach the harness's own parser
-  # - a leading "/" (slash command), or a leading "$" to a codex target (skill
-  # invocation). A remote secondmate selector always rides the inbox: its
-  # requests are marked, and a marked request reaches the harness as
-  # marker-prefixed chat rather than a parser command anyway, so no remote
+  # - a leading "/" (slash command). A remote secondmate selector always rides
+  # the inbox: its requests are marked, and a marked request reaches the harness
+  # as marker-prefixed chat rather than a parser command anyway, so no remote
   # text has a typed plane to lose. An explicit backend target stays typed
   # even when it happens to match local metadata: it names an endpoint, not a
   # task, the same boundary that keeps it unmarked and outside --resolve-key.
@@ -780,7 +777,6 @@ else
     else
       case "$RESOLVE_ANSWER_TEXT" in
         /*) ;;
-        \$*) [ "$TARGET_HARNESS" = codex ] || INBOX_PLANE=1 ;;
         *) INBOX_PLANE=1 ;;
       esac
     fi
@@ -988,19 +984,11 @@ else
     esac
     exit 0
   fi
-  # Slash commands open a completion popup in some TUIs (verified on codex);
-  # submitting too fast selects nothing, so give the popup time to settle before
-  # the (retried) Enter. Codex opens the same kind of popup for a `$<skill>`
-  # invocation, so a `$...` message to a codex target gets the same settle. That
-  # `$` case is scoped to codex on purpose: unlike `/`, a leading `$` commonly
-  # starts ordinary text ("$5/month", "$HOME"), so a universal `$` rule would
-  # needlessly slow plain text to opencode/pi. The target backend's
-  # verified submit retry still backs the settle up either way.
+  # Slash commands open a completion popup in some TUIs. Submitting too fast
+  # selects nothing, so give the popup time to settle before the retried Enter.
+  # The target backend's verified submit retry still backs the settle up.
   case "$*" in
     /*) settle=1.2 ;;
-    \$*)
-      if [ "$TARGET_HARNESS" = codex ]; then settle=1.2; else settle=0.3; fi
-      ;;
     *) settle=0.3 ;;
   esac
   retries=${FM_SEND_RETRIES:-3}

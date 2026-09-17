@@ -97,15 +97,15 @@ test_harness_resolution() {
     [ "$got_crew" = "$exp_crew" ] || fail "$label: crew resolved '$got_crew', expected '$exp_crew'"
   done <<'ROWS'
 both absent -> own (backward-compat)^-^-^pi^pi
-crew set, secondmate absent -> crew (backward-compat)^codex^-^codex^codex
-crew set, secondmate set -> secondmate wins, crew untouched^codex^opencode^opencode^codex
+crew set, secondmate absent -> crew (backward-compat)^pi^-^pi^pi
+crew set, secondmate set -> secondmate wins, crew untouched^pi^opencode^opencode^pi
 crew absent, secondmate set -> secondmate value, crew own^-^opencode^opencode^pi
-signed Pi wrapper remains a distinct secondmate value^codex^pi-signed^pi-signed^codex
-secondmate=default defers to crew^codex^default^codex^codex
+signed Pi wrapper remains a distinct secondmate value^pi^pi-signed^pi-signed^pi
+secondmate=default defers to crew^pi^default^pi^pi
 crew=default resolves to own, secondmate follows^default^-^pi^pi
 secondmate=default with crew absent -> own^-^default^pi^pi
 retired crew harness falls back to own^claude^-^pi^pi
-retired secondmate harness falls back to verified crew^codex^claude^codex^codex
+retired secondmate harness falls back to verified crew^pi^claude^pi^pi
 ROWS
   pass "A1 fm-harness.sh secondmate resolves the fallback chain; crew mode unchanged"
 }
@@ -140,7 +140,7 @@ absent file -> own harness, empty model/effort^ABSENT^pi^^
 bare harness only -> empty model/effort (backward-compat)^pi^pi^^
 harness + model -> model only^pi model-x^pi^model-x^
 harness + model + effort -> both^pi model-x high^pi^model-x^high
-signed Pi wrapper + model + effort preserves every token^pi-signed openai-codex/gpt-5.6-sol max^pi-signed^openai-codex/gpt-5.6-sol^max
+signed Pi wrapper + model + effort preserves every token^pi-signed openai-pi/gpt-5.6-sol max^pi-signed^openai-pi/gpt-5.6-sol^max
 default harness token -> falls back to own, empty model/effort^default^pi^^
 extra whitespace between tokens is tolerated^opencode   opencode-4    xhigh^opencode^opencode-4^xhigh
 leading/trailing blank lines and a comment are skipped^# a comment\n\npi model-x low\n^pi^model-x^low
@@ -229,11 +229,11 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 case "$pid:$field" in
-  4242:comm=) printf '%s\n' '/opt/test/bin/codex' ;;
-  4242:args=) printf '%s\n' 'codex' ;;
+  4242:comm=) printf '%s\n' '/opt/test/bin/pi' ;;
+  4242:args=) printf '%s\n' 'pi' ;;
   4242:ppid=) printf '%s\n' 1 ;;
-  5252:comm=) printf '%s\n' '-codex' ;;
-  5252:args=) printf '%s\n' '-codex' ;;
+  5252:comm=) printf '%s\n' '-opencode' ;;
+  5252:args=) printf '%s\n' '-opencode' ;;
   5252:ppid=) printf '%s\n' 1 ;;
   *:comm=) printf '%s\n' '-zsh' ;;
   *:args=) printf '%s\n' '-zsh' ;;
@@ -245,7 +245,7 @@ SH
   err="$dir/fm-harness.err"
   got=$(env -u PI_CODING_AGENT \
     PATH="$fakebin:$BASE_PATH" "$ROOT/bin/fm-harness.sh" 2>"$err")
-  [ "$got" = codex ] || fail "dash-leading shell ancestry resolved '$got', expected codex"
+  [ "$got" = pi ] || fail "dash-leading shell ancestry resolved '$got', expected pi"
   [ ! -s "$err" ] || fail "fm-harness wrote basename option noise for literal -zsh: $(cat "$err")"
 
   err="$dir/fm-session-lock-ancestry.err"
@@ -258,8 +258,8 @@ SH
   PATH="$fakebin:$BASE_PATH" bash -c \
     '. "$0/bin/fm-session-lock-lib.sh"; kill() { return 0; }; fm_harness_pid_alive 5252' \
     "$ROOT" 2>"$err"; status=$?
-  expect_code 0 "$status" "session-lock liveness should accept literal -codex as a harness process name"
-  [ ! -s "$err" ] || fail "session-lock liveness wrote basename option noise for literal -codex: $(cat "$err")"
+  expect_code 0 "$status" "session-lock liveness should accept literal -opencode as a harness process name"
+  [ ! -s "$err" ] || fail "session-lock liveness wrote basename option noise for literal -opencode: $(cat "$err")"
 
   pass "harness identity: dash-leading ps command names are basename operands, not options"
 }
@@ -276,8 +276,8 @@ test_propagate_lib() {
   mkdir -p "$src" "$dest" "$home/state"
 
   # 1. present source is copied
-  printf '{"default":{"harness":"codex"}}\n' > "$src/crew-dispatch.json"
-  printf 'codex\n' > "$src/crew-harness"
+  printf '{"default":{"harness":"pi"}}\n' > "$src/crew-dispatch.json"
+  printf 'pi\n' > "$src/crew-harness"
   printf 'manual\n' > "$src/backlog-backend"
   printf 'tmux\n' > "$src/backend"
   : > "$src/herdr-presentation-spaces"
@@ -287,8 +287,8 @@ test_propagate_lib() {
   propagate_inheritable_config "$src" "$dest" >"$stdout" 2>"$stderr" || fail "propagate returned non-zero"
   [ ! -s "$stdout" ] || fail "clean copy wrote to stdout"
   [ ! -s "$stderr" ] || fail "clean copy wrote to stderr"
-  [ "$(cat "$dest/crew-dispatch.json")" = '{"default":{"harness":"codex"}}' ] || fail "crew-dispatch.json not propagated"
-  [ "$(cat "$dest/crew-harness")" = codex ] || fail "crew-harness not propagated"
+  [ "$(cat "$dest/crew-dispatch.json")" = '{"default":{"harness":"pi"}}' ] || fail "crew-dispatch.json not propagated"
+  [ "$(cat "$dest/crew-harness")" = pi ] || fail "crew-harness not propagated"
   [ "$(cat "$dest/backlog-backend")" = manual ] || fail "backlog-backend not propagated"
   [ "$(cat "$dest/backend")" = tmux ] || fail "backend not propagated"
   [ -f "$dest/herdr-presentation-spaces" ] || fail "herdr-presentation-spaces not propagated"
@@ -309,13 +309,13 @@ test_propagate_lib() {
   [ "$m1" = "$m2" ] || fail "idempotent re-run churned mtime ($m1 -> $m2)"
 
   # 3. a changed source value converges downstream
-  printf '{"default":{"harness":"codex"}}\n' > "$src/crew-dispatch.json"
-  printf 'codex\n' > "$src/crew-harness"
+  printf '{"default":{"harness":"pi"}}\n' > "$src/crew-dispatch.json"
+  printf 'pi\n' > "$src/crew-harness"
   printf 'tasks-axi\n' > "$src/backlog-backend"
   printf 'zellij\n' > "$src/backend"
   propagate_inheritable_config "$src" "$dest"
-  [ "$(cat "$dest/crew-dispatch.json")" = '{"default":{"harness":"codex"}}' ] || fail "changed dispatch profile did not converge"
-  [ "$(cat "$dest/crew-harness")" = codex ] || fail "changed value did not converge"
+  [ "$(cat "$dest/crew-dispatch.json")" = '{"default":{"harness":"pi"}}' ] || fail "changed dispatch profile did not converge"
+  [ "$(cat "$dest/crew-harness")" = pi ] || fail "changed value did not converge"
   [ "$(cat "$dest/backlog-backend")" = tasks-axi ] || fail "changed backlog backend did not converge"
   [ "$(cat "$dest/backend")" = zellij ] || fail "changed backend did not converge"
 
@@ -358,16 +358,16 @@ test_propagate_lib() {
 
   # 5. secondmate-harness is never inherited; backend still is
   printf 'opencode\n' > "$src/secondmate-harness"
-  printf '{"default":{"harness":"codex"}}\n' > "$src/crew-dispatch.json"
-  printf 'codex\n' > "$src/crew-harness"
+  printf '{"default":{"harness":"pi"}}\n' > "$src/crew-dispatch.json"
+  printf 'pi\n' > "$src/crew-harness"
   printf 'manual\n' > "$src/backlog-backend"
   printf 'herdr\n' > "$src/backend"
   rm -rf "$d/home2"
   mkdir -p "$d/home2/config" "$d/home2/state"
   propagate_inheritable_config "$src" "$d/home2/config"
   [ -e "$d/home2/config/secondmate-harness" ] && fail "secondmate-harness was inherited (must not be)"
-  [ "$(cat "$d/home2/config/crew-dispatch.json")" = '{"default":{"harness":"codex"}}' ] || fail "crew-dispatch.json not propagated alongside"
-  [ "$(cat "$d/home2/config/crew-harness")" = codex ] || fail "crew-harness not propagated alongside"
+  [ "$(cat "$d/home2/config/crew-dispatch.json")" = '{"default":{"harness":"pi"}}' ] || fail "crew-dispatch.json not propagated alongside"
+  [ "$(cat "$d/home2/config/crew-harness")" = pi ] || fail "crew-harness not propagated alongside"
   [ "$(cat "$d/home2/config/backlog-backend")" = manual ] || fail "backlog-backend not propagated alongside"
   [ "$(cat "$d/home2/config/backend")" = herdr ] || fail "backend not propagated alongside"
 
@@ -458,8 +458,8 @@ spawn_secondmate() {
 
 meta_harness() { grep '^harness=' "$1" 2>/dev/null | tail -1 | cut -d= -f2-; }
 
-# Split active: crew-harness=pi + secondmate-harness=codex. The secondmate
-# agent launches on Codex; its own workers inherit Pi; secondmate-harness
+# Split active: crew-harness=pi + secondmate-harness=opencode. The secondmate
+# agent launches on OpenCode; its own workers inherit Pi; secondmate-harness
 # does not flow into the home.
 test_spawn_split_and_inherit() {
   local w sm meta
@@ -468,7 +468,7 @@ test_spawn_split_and_inherit() {
   mkdir -p "$w/home/config"
   printf '{"default":{"harness":"pi","model":"model-x","effort":"low"}}\n' > "$w/home/config/crew-dispatch.json"
   printf 'pi\n' > "$w/home/config/crew-harness"
-  printf 'codex\n' > "$w/home/config/secondmate-harness"
+  printf 'opencode\n' > "$w/home/config/secondmate-harness"
   printf 'manual\n' > "$w/home/config/backlog-backend"
   printf 'zellij\n' > "$w/home/config/backend"
   make_seeded_home "$sm" sm
@@ -477,8 +477,8 @@ test_spawn_split_and_inherit() {
 
   meta="$w/home/state/sm.meta"
   [ -f "$meta" ] || fail "split: no meta written"
-  [ "$(meta_harness "$meta")" = codex ] \
-    || fail "split: secondmate launched on '$(meta_harness "$meta")', expected codex"
+  [ "$(meta_harness "$meta")" = opencode ] \
+    || fail "split: secondmate launched on '$(meta_harness "$meta")', expected opencode"
   [ "$(cat "$sm/config/crew-harness" 2>/dev/null)" = pi ] \
     || fail "split: home crew-harness not inherited as pi (got '$(cat "$sm/config/crew-harness" 2>/dev/null)')"
   [ "$(cat "$sm/config/crew-dispatch.json" 2>/dev/null)" = '{"default":{"harness":"pi","model":"model-x","effort":"low"}}' ] \
@@ -500,16 +500,16 @@ test_spawn_backward_compat_crew_fallback() {
   w="$TMP_ROOT/spawn-compat"
   sm="$w/sm"
   mkdir -p "$w/home/config"
-  printf 'codex\n' > "$w/home/config/crew-harness"
+  printf 'pi\n' > "$w/home/config/crew-harness"
   make_seeded_home "$sm" sm
 
   spawn_secondmate "$w" sm "$sm"
 
   meta="$w/home/state/sm.meta"
-  [ "$(meta_harness "$meta")" = codex ] \
-    || fail "compat: secondmate launched on '$(meta_harness "$meta")', expected the crew harness codex"
-  [ "$(cat "$sm/config/crew-harness" 2>/dev/null)" = codex ] \
-    || fail "compat: home crew-harness not inherited as codex"
+  [ "$(meta_harness "$meta")" = pi ] \
+    || fail "compat: secondmate launched on '$(meta_harness "$meta")', expected the crew harness pi"
+  [ "$(cat "$sm/config/crew-harness" 2>/dev/null)" = pi ] \
+    || fail "compat: home crew-harness not inherited as pi"
   pass "B3 spawn: an absent secondmate-harness falls back to the crew harness (backward-compat)"
 }
 
@@ -538,14 +538,14 @@ test_spawn_explicit_harness_wins() {
   w="$TMP_ROOT/spawn-explicit"
   sm="$w/sm"
   mkdir -p "$w/home/config"
-  printf 'codex\n' > "$w/home/config/secondmate-harness"
+  printf 'opencode\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
-  spawn_secondmate "$w" sm "$sm" codex
+  spawn_secondmate "$w" sm "$sm" pi
 
   meta="$w/home/state/sm.meta"
-  [ "$(meta_harness "$meta")" = codex ] \
-    || fail "explicit: launched on '$(meta_harness "$meta")', expected explicit codex over config codex"
+  [ "$(meta_harness "$meta")" = pi ] \
+    || fail "explicit: launched on '$(meta_harness "$meta")', expected explicit pi over config opencode"
   pass "B5 spawn: an explicit per-spawn harness arg overrides config/secondmate-harness"
 }
 
@@ -702,7 +702,7 @@ test_spawn_bare_harness_no_model_effort_flag() {
   sm="$w/sm"
   launchlog="$w/launch.log"
   mkdir -p "$w/home/config"
-  printf 'codex\n' > "$w/home/config/secondmate-harness"
+  printf 'pi\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
   out=$(spawn_secondmate_capture "$w" sm "$sm" "$launchlog" 2>&1); status=$?
@@ -712,8 +712,8 @@ test_spawn_bare_harness_no_model_effort_flag() {
   [ "$(meta_field "$meta" model)" = default ] || fail "bare-tokens: meta model not default (got '$(meta_field "$meta" model)')"
   [ "$(meta_field "$meta" effort)" = default ] || fail "bare-tokens: meta effort not default (got '$(meta_field "$meta" effort)')"
   launch=$(cat "$launchlog")
-  assert_contains "$launch" "codex" \
-    "bare-tokens: Codex secondmate launch did not invoke Codex"
+  assert_contains "$launch" "pi" \
+    "bare-tokens: Pi secondmate launch did not invoke Pi"
   assert_not_contains "$launch" "--model" "bare-tokens: launch must not carry a --model flag"
   assert_not_contains "$launch" "--effort" "bare-tokens: launch must not carry an --effort flag"
   pass "C2 spawn: a bare harness-only secondmate-harness file launches with no model/effort flag (backward-compat)"
@@ -727,17 +727,17 @@ test_spawn_secondmate_harness_model_token() {
   sm="$w/sm"
   launchlog="$w/launch.log"
   mkdir -p "$w/home/config"
-  printf 'codex opus\n' > "$w/home/config/secondmate-harness"
+  printf 'pi opus\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
   spawn_secondmate_capture "$w" sm "$sm" "$launchlog" >/dev/null 2>&1
 
   meta="$w/home/state/sm.meta"
-  [ "$(meta_field "$meta" harness)" = codex ] || fail "model-token: meta harness not codex"
+  [ "$(meta_field "$meta" harness)" = pi ] || fail "model-token: meta harness not pi"
   [ "$(meta_field "$meta" model)" = opus ] || fail "model-token: meta model not opus (got '$(meta_field "$meta" model)')"
   [ "$(meta_field "$meta" effort)" = default ] || fail "model-token: meta effort not default (got '$(meta_field "$meta" effort)')"
   launch=$(cat "$launchlog")
-  assert_contains "$launch" "codex --model 'opus' --dangerously-bypass-approvals-and-sandbox" \
+  assert_contains "$launch" "--model 'opus'" \
     "model-token: launch did not carry --model opus"
   assert_not_contains "$launch" "--effort" "model-token: launch must not carry an --effort flag"
   pass "C3 spawn: config/secondmate-harness's model token threads --model into the launch and meta"
@@ -750,7 +750,7 @@ test_spawn_secondmate_harness_model_and_effort_tokens() {
   sm="$w/sm"
   launchlog="$w/launch.log"
   mkdir -p "$w/home/config"
-  printf 'codex opus high\n' > "$w/home/config/secondmate-harness"
+  printf 'pi opus high\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
   spawn_secondmate_capture "$w" sm "$sm" "$launchlog" >/dev/null 2>&1
@@ -759,8 +759,8 @@ test_spawn_secondmate_harness_model_and_effort_tokens() {
   [ "$(meta_field "$meta" model)" = opus ] || fail "model-effort-tokens: meta model not opus"
   [ "$(meta_field "$meta" effort)" = high ] || fail "model-effort-tokens: meta effort not high (got '$(meta_field "$meta" effort)')"
   launch=$(cat "$launchlog")
-  assert_contains "$launch" "codex --model 'opus' -c 'model_reasoning_effort=\"high\"' --dangerously-bypass-approvals-and-sandbox" \
-    "model-effort-tokens: launch did not carry both --model opus and --effort high"
+  assert_contains "$launch" "--model 'opus' --thinking 'high'" \
+    "model-effort-tokens: launch did not carry both model and effort"
   pass "C4 spawn: config/secondmate-harness's model+effort tokens thread into the launch and meta"
 }
 
@@ -771,7 +771,7 @@ test_spawn_explicit_model_overrides_secondmate_harness_token() {
   sm="$w/sm"
   launchlog="$w/launch.log"
   mkdir -p "$w/home/config"
-  printf 'codex opus high\n' > "$w/home/config/secondmate-harness"
+  printf 'pi opus high\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
   spawn_secondmate_capture "$w" sm "$sm" "$launchlog" --model sonnet >/dev/null 2>&1
@@ -793,7 +793,7 @@ test_spawn_explicit_effort_overrides_secondmate_harness_token() {
   sm="$w/sm"
   launchlog="$w/launch.log"
   mkdir -p "$w/home/config"
-  printf 'codex opus high\n' > "$w/home/config/secondmate-harness"
+  printf 'pi opus high\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
   spawn_secondmate_capture "$w" sm "$sm" "$launchlog" --effort low >/dev/null 2>&1
@@ -803,8 +803,8 @@ test_spawn_explicit_effort_overrides_secondmate_harness_token() {
   [ "$(meta_field "$meta" effort)" = low ] \
     || fail "explicit-effort: meta effort not low (got '$(meta_field "$meta" effort)'), explicit flag did not win over file token"
   launch=$(cat "$launchlog")
-  assert_contains "$launch" "model_reasoning_effort=\"low\"" "explicit-effort: launch did not use the explicit effort"
-  assert_not_contains "$launch" "model_reasoning_effort=\"high\"" "explicit-effort: launch leaked the file's effort token"
+  assert_contains "$launch" "--thinking 'low'" "explicit-effort: launch did not use the explicit effort"
+  assert_not_contains "$launch" "--thinking 'high'" "explicit-effort: launch leaked the file's effort token"
   pass "C6 spawn: an explicit --effort overrides config/secondmate-harness's effort token; the file's model token still applies"
 }
 
@@ -814,21 +814,21 @@ test_spawn_explicit_harness_does_not_inherit_secondmate_harness_tokens() {
   sm="$w/sm"
   launchlog="$w/launch.log"
   mkdir -p "$w/home/config"
-  printf 'codex opus high\n' > "$w/home/config/secondmate-harness"
+  printf 'pi opus high\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
-  spawn_secondmate_capture "$w" sm "$sm" "$launchlog" --harness codex >/dev/null 2>&1
+  spawn_secondmate_capture "$w" sm "$sm" "$launchlog" --harness pi >/dev/null 2>&1
 
   meta="$w/home/state/sm.meta"
-  [ "$(meta_field "$meta" harness)" = codex ] || fail "explicit-harness-no-tokens: meta harness not codex"
+  [ "$(meta_field "$meta" harness)" = pi ] || fail "explicit-harness-no-tokens: meta harness not pi"
   [ "$(meta_field "$meta" model)" = default ] || fail "explicit-harness-no-tokens: meta model should stay default"
   [ "$(meta_field "$meta" effort)" = default ] || fail "explicit-harness-no-tokens: meta effort should stay default"
   launch=$(cat "$launchlog")
-  assert_contains "$launch" "codex --dangerously-bypass-approvals-and-sandbox" \
-    "explicit-harness-no-tokens: launch did not use codex"
+  assert_contains "$launch" "FM_PI_HARNESS=pi" \
+    "explicit-harness-no-tokens: launch did not use pi"
   assert_not_contains "$launch" "--model" "explicit-harness-no-tokens: launch must not carry a --model flag"
-  assert_not_contains "$launch" "model_reasoning_effort" \
-    "explicit-harness-no-tokens: launch must not carry a codex effort flag"
+  assert_not_contains "$launch" "--thinking" \
+    "explicit-harness-no-tokens: launch must not carry a pi effort flag"
   pass "C7 spawn: an explicit --harness starts with clean model/effort defaults"
 }
 
@@ -838,29 +838,29 @@ test_spawn_explicit_harness_uses_explicit_profile_axes() {
   sm="$w/sm"
   launchlog="$w/launch.log"
   mkdir -p "$w/home/config"
-  printf 'codex opus high\n' > "$w/home/config/secondmate-harness"
+  printf 'pi opus high\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
-  spawn_secondmate_capture "$w" sm "$sm" "$launchlog" --harness codex --model gpt-5.5 --effort xhigh >/dev/null 2>&1
+  spawn_secondmate_capture "$w" sm "$sm" "$launchlog" --harness pi --model gpt-5.5 --effort xhigh >/dev/null 2>&1
 
   meta="$w/home/state/sm.meta"
-  [ "$(meta_field "$meta" harness)" = codex ] || fail "explicit-harness-explicit-axes: meta harness not codex"
+  [ "$(meta_field "$meta" harness)" = pi ] || fail "explicit-harness-explicit-axes: meta harness not pi"
   [ "$(meta_field "$meta" model)" = gpt-5.5 ] || fail "explicit-harness-explicit-axes: meta model did not use explicit value"
   [ "$(meta_field "$meta" effort)" = xhigh ] || fail "explicit-harness-explicit-axes: meta effort did not use explicit value"
   launch=$(cat "$launchlog")
   assert_contains "$launch" "--model 'gpt-5.5'" \
     "explicit-harness-explicit-axes: launch did not use the explicit --model"
-  assert_contains "$launch" "-c 'model_reasoning_effort=\"xhigh\"'" \
+  assert_contains "$launch" "--thinking 'xhigh'" \
     "explicit-harness-explicit-axes: launch did not use the explicit --effort"
   assert_not_contains "$launch" "--model 'opus'" \
     "explicit-harness-explicit-axes: launch leaked the file's model token"
-  assert_not_contains "$launch" "model_reasoning_effort=\"high\"" \
+  assert_not_contains "$launch" "--thinking 'high'" \
     "explicit-harness-explicit-axes: launch leaked the file's effort token"
   pass "C8 spawn: an explicit --harness still honors explicit model/effort flags"
 }
 
 test_spawned_secondmate_uses_its_harness_supervision_model() {
-  local harness=codex w sm launchlog launch fakebin out
+  local harness=pi w sm launchlog launch fakebin out
   w="$TMP_ROOT/spawn-supervision-model-$harness"
     sm="$w/sm"
     launchlog="$w/launch.log"
@@ -883,7 +883,7 @@ SH
     launch=$(cat "$launchlog")
     out=$(PATH="$fakebin:$BASE_PATH" bash -c "$launch" 2>&1)
   assert_contains "$out" 'WATCHER DOWN - SUPERVISION IS OFF' \
-    "Codex secondmate should use its persistent watcher model"
+    "Pi secondmate should use its persistent watcher model"
   pass "C9 spawn: secondmate launch pins supervision to its own harness"
 }
 
@@ -897,14 +897,14 @@ test_spawn_fallback_chain_and_crew_scout_unaffected() {
   sm="$w/sm"
   launchlog="$w/launch.log"
   mkdir -p "$w/home/config"
-  printf 'codex\n' > "$w/home/config/crew-harness"
+  printf 'pi\n' > "$w/home/config/crew-harness"
   make_seeded_home "$sm" sm
 
   spawn_secondmate_capture "$w" sm "$sm" "$launchlog" >/dev/null 2>&1
 
   meta="$w/home/state/sm.meta"
-  [ "$(meta_field "$meta" harness)" = codex ] \
-    || fail "fallback: secondmate harness did not fall back to crew-harness codex"
+  [ "$(meta_field "$meta" harness)" = pi ] \
+    || fail "fallback: secondmate harness did not fall back to crew-harness pi"
   [ "$(meta_field "$meta" model)" = default ] || fail "fallback: meta model should stay default with no tokens anywhere"
   [ "$(meta_field "$meta" effort)" = default ] || fail "fallback: meta effort should stay default with no tokens anywhere"
 
@@ -935,7 +935,7 @@ EOF
     "$ROOT/bin/fm-spawn.sh" "$id" "$proj" --mode no-mistakes --yolo off >/dev/null 2>&1
   meta="$home/state/$id.meta"
   [ "$(meta_field "$meta" kind)" = ship ] || fail "crew-unaffected: expected an ordinary ship task"
-  [ "$(meta_field "$meta" harness)" = codex ] || fail "crew-unaffected: crew harness resolution changed"
+  [ "$(meta_field "$meta" harness)" = pi ] || fail "crew-unaffected: crew harness resolution changed"
   [ "$(meta_field "$meta" model)" = default ] || fail "crew-unaffected: crew task must not invent a model"
   [ "$(meta_field "$meta" effort)" = default ] || fail "crew-unaffected: crew task must not invent an effort"
   launch=$(cat "$launchlog")
@@ -1026,7 +1026,7 @@ case "$*" in
     sed -n 's/^window=[^:]*://p' "${FM_HOME:?}"/state/*.meta
     exit 0
     ;;
-  *display-message*'#{pane_current_command}'*) printf '%s\n' codex; exit 0 ;;
+  *display-message*'#{pane_current_command}'*) printf '%s\n' pi; exit 0 ;;
   *display-message*'#{pane_id}'*) printf '%s\n' '%1'; exit 0 ;;
   *display-message*'#{cursor_y}'*) printf '%s\n' 0; exit 0 ;;
   *capture-pane*) printf '›\n'; exit 0 ;;
@@ -1214,17 +1214,17 @@ test_bootstrap_sweep_propagates_and_reconverges() {
   c1=$(git -C "$w/main" rev-parse HEAD)
   add_sm_worktree "$w" sm "$c1"
 
-  # Initial push: primary crew-harness=codex, secondmate-harness=opencode (must NOT flow).
-  printf '{"default":{"harness":"codex"}}\n' > "$w/home/config/crew-dispatch.json"
-  printf 'codex\n' > "$w/home/config/crew-harness"
+  # Initial push: primary crew-harness=pi, secondmate-harness=opencode (must NOT flow).
+  printf '{"default":{"harness":"pi"}}\n' > "$w/home/config/crew-dispatch.json"
+  printf 'pi\n' > "$w/home/config/crew-harness"
   printf 'manual\n' > "$w/home/config/backlog-backend"
   printf 'tmux\n' > "$w/home/config/backend"
   : > "$w/home/config/trace-context"
   printf 'opencode\n' > "$w/home/config/secondmate-harness"
   run_bootstrap "$w" >/dev/null
-  [ "$(cat "$w/sm/config/crew-harness" 2>/dev/null)" = codex ] \
+  [ "$(cat "$w/sm/config/crew-harness" 2>/dev/null)" = pi ] \
     || fail "sweep: crew-harness not pushed into the live home"
-  [ "$(cat "$w/sm/config/crew-dispatch.json" 2>/dev/null)" = '{"default":{"harness":"codex"}}' ] \
+  [ "$(cat "$w/sm/config/crew-dispatch.json" 2>/dev/null)" = '{"default":{"harness":"pi"}}' ] \
     || fail "sweep: crew-dispatch.json not pushed into the live home"
   [ "$(cat "$w/sm/config/backlog-backend" 2>/dev/null)" = manual ] \
     || fail "sweep: backlog-backend not pushed into the live home"
@@ -1236,14 +1236,14 @@ test_bootstrap_sweep_propagates_and_reconverges() {
     && fail "sweep: secondmate-harness was inherited (must not be)"
 
   # Re-converge: primary changes inherited config values; the home follows on the next sweep.
-  printf '{"default":{"harness":"codex"}}\n' > "$w/home/config/crew-dispatch.json"
-  printf 'codex\n' > "$w/home/config/crew-harness"
+  printf '{"default":{"harness":"pi"}}\n' > "$w/home/config/crew-dispatch.json"
+  printf 'pi\n' > "$w/home/config/crew-harness"
   printf 'tasks-axi\n' > "$w/home/config/backlog-backend"
   printf 'zellij\n' > "$w/home/config/backend"
   run_bootstrap "$w" >/dev/null
-  [ "$(cat "$w/sm/config/crew-harness" 2>/dev/null)" = codex ] \
+  [ "$(cat "$w/sm/config/crew-harness" 2>/dev/null)" = pi ] \
     || fail "sweep: home did not re-converge to the primary's new crew-harness"
-  [ "$(cat "$w/sm/config/crew-dispatch.json" 2>/dev/null)" = '{"default":{"harness":"codex"}}' ] \
+  [ "$(cat "$w/sm/config/crew-dispatch.json" 2>/dev/null)" = '{"default":{"harness":"pi"}}' ] \
     || fail "sweep: home did not re-converge to the primary's new crew-dispatch.json"
   [ "$(cat "$w/sm/config/backlog-backend" 2>/dev/null)" = tasks-axi ] \
     || fail "sweep: home did not re-converge to the primary's new backlog-backend"
@@ -1273,14 +1273,14 @@ test_bootstrap_sweep_propagates_when_tracked_current() {
   head=$(git -C "$w/main" rev-parse HEAD)
   add_sm_worktree "$w" sm "$head"   # already on the primary's HEAD (ff is a no-op)
 
-  printf '{"default":{"harness":"codex"}}\n' > "$w/home/config/crew-dispatch.json"
-  printf 'codex\n' > "$w/home/config/crew-harness"
+  printf '{"default":{"harness":"pi"}}\n' > "$w/home/config/crew-dispatch.json"
+  printf 'pi\n' > "$w/home/config/crew-harness"
   printf 'manual\n' > "$w/home/config/backlog-backend"
   printf 'tmux\n' > "$w/home/config/backend"
   run_bootstrap "$w" >/dev/null
-  [ "$(cat "$w/sm/config/crew-dispatch.json" 2>/dev/null)" = '{"default":{"harness":"codex"}}' ] \
+  [ "$(cat "$w/sm/config/crew-dispatch.json" 2>/dev/null)" = '{"default":{"harness":"pi"}}' ] \
     || fail "crew-dispatch.json did not propagate to a tracked-current home"
-  [ "$(cat "$w/sm/config/crew-harness" 2>/dev/null)" = codex ] \
+  [ "$(cat "$w/sm/config/crew-harness" 2>/dev/null)" = pi ] \
     || fail "config did not propagate to a tracked-current home"
   [ "$(cat "$w/sm/config/backlog-backend" 2>/dev/null)" = manual ] \
     || fail "backlog-backend did not propagate to a tracked-current home"
@@ -1300,8 +1300,8 @@ test_bootstrap_sweep_defers_dispatch_on_stale_unignored_home() {
   git -C "$w/main" add .gitignore
   git -C "$w/main" commit -qm c2
 
-  printf '{"default":{"harness":"codex"}}\n' > "$w/home/config/crew-dispatch.json"
-  printf 'codex\n' > "$w/home/config/crew-harness"
+  printf '{"default":{"harness":"pi"}}\n' > "$w/home/config/crew-dispatch.json"
+  printf 'pi\n' > "$w/home/config/crew-harness"
   printf 'manual\n' > "$w/home/config/backlog-backend"
   out=$(run_bootstrap "$w")
 
@@ -1309,7 +1309,7 @@ test_bootstrap_sweep_defers_dispatch_on_stale_unignored_home() {
     "stale dispatch: expected fast-forward skip"
   [ ! -e "$w/sm/config/crew-dispatch.json" ] \
     || fail "stale dispatch: crew-dispatch.json was copied before the home ignored it"
-  [ "$(cat "$w/sm/config/crew-harness" 2>/dev/null)" = codex ] \
+  [ "$(cat "$w/sm/config/crew-harness" 2>/dev/null)" = pi ] \
     || fail "stale dispatch: existing ignored config stopped propagating"
   [ "$(cat "$w/sm/config/backlog-backend" 2>/dev/null)" = manual ] \
     || fail "stale dispatch: backlog backend stopped propagating"
@@ -1458,14 +1458,14 @@ test_bootstrap_rereads_after_partial_propagation() {
   w=$(new_world boot-prop-partial)
   head=$(git -C "$w/main" rev-parse HEAD)
   add_sm_worktree "$w" sm "$head"
-  printf '{"default":{"harness":"codex"}}\n' > "$w/home/config/crew-dispatch.json"
+  printf '{"default":{"harness":"pi"}}\n' > "$w/home/config/crew-dispatch.json"
   printf 'invalid shared header\n' > "$w/home/data/captain-shared.md"
   log="$w/boot-prop-partial.tmux.log"
 
   out=$(run_bootstrap "$w" "$log")
   assert_contains "$out" "SECONDMATE_SYNC: secondmate sm: skipped: inheritance failed" \
     "partial bootstrap propagation did not remain diagnostic"
-  [ "$(cat "$w/sm/config/crew-dispatch.json")" = '{"default":{"harness":"codex"}}' ] \
+  [ "$(cat "$w/sm/config/crew-dispatch.json")" = '{"default":{"harness":"pi"}}' ] \
     || fail "partial bootstrap propagation did not retain the completed config write"
   instruction=$(reread_instruction_path "$w/sm") || fail "partial bootstrap reread instruction missing"
   assert_present "$instruction" "partial bootstrap propagation did not write a reread instruction"
@@ -1491,8 +1491,8 @@ test_config_push_propagates_reports_without_ff_or_nudge() {
   git -C "$w/main" commit -qm c2
   old_head=$(git -C "$w/sm" rev-parse HEAD)
 
-  printf '{"default":{"harness":"codex"}}\n' > "$w/home/config/crew-dispatch.json"
-  printf 'codex\n' > "$w/home/config/crew-harness"
+  printf '{"default":{"harness":"pi"}}\n' > "$w/home/config/crew-dispatch.json"
+  printf 'pi\n' > "$w/home/config/crew-harness"
   printf 'manual\n' > "$w/home/config/backlog-backend"
   printf 'tmux\n' > "$w/home/config/backend"
   record_live_watcher_fixture "$w/home"
@@ -1573,8 +1573,8 @@ test_config_push_reports_skips_dirty_and_invalid_home() {
     printf 'home=%s\n' "$bad_home"
   } > "$w/home/state/bad.meta"
 
-  printf '{"default":{"harness":"codex"}}\n' > "$w/home/config/crew-dispatch.json"
-  printf 'codex\n' > "$w/home/config/crew-harness"
+  printf '{"default":{"harness":"pi"}}\n' > "$w/home/config/crew-dispatch.json"
+  printf 'pi\n' > "$w/home/config/crew-harness"
   printf 'manual\n' > "$w/home/config/backlog-backend"
   err="$w/config-push-warnings.err"
   out=$(run_config_push "$w" 2>"$err"); status=$?
@@ -1602,7 +1602,7 @@ test_config_push_exits_nonzero_on_copy_error() {
   head=$(git -C "$w/main" rev-parse HEAD)
   add_sm_worktree "$w" sm "$head"
   sm_real=$(cd "$w/sm" && pwd -P)
-  printf 'codex\n' > "$w/home/config/crew-harness"
+  printf 'pi\n' > "$w/home/config/crew-harness"
   mkdir -p "$w/sm/config/crew-harness"
 
   err="$w/config-push-error.err"
@@ -1624,7 +1624,7 @@ test_config_push_rereads_after_partial_propagation() {
   w=$(new_world config-push-partial)
   head=$(git -C "$w/main" rev-parse HEAD)
   add_sm_worktree "$w" sm "$head"
-  printf '{"default":{"harness":"codex"}}\n' > "$w/home/config/crew-dispatch.json"
+  printf '{"default":{"harness":"pi"}}\n' > "$w/home/config/crew-dispatch.json"
   printf 'invalid shared header\n' > "$w/home/data/captain-shared.md"
   log="$w/config-push-partial.tmux.log"
   err="$w/config-push-partial.err"
@@ -1637,7 +1637,7 @@ test_config_push_rereads_after_partial_propagation() {
     "partial propagation did not report the failed shared item"
   assert_contains "$out" "config-reread: sent" \
     "partial propagation lost the completed config reread"
-  [ "$(cat "$w/sm/config/crew-dispatch.json")" = '{"default":{"harness":"codex"}}' ] \
+  [ "$(cat "$w/sm/config/crew-dispatch.json")" = '{"default":{"harness":"pi"}}' ] \
     || fail "partial propagation did not retain the completed config write"
   instruction=$(reread_instruction_path "$w/sm") || fail "partial propagation reread instruction missing"
   assert_present "$instruction" "partial propagation did not write a reread instruction"
@@ -1673,13 +1673,13 @@ test_config_reread_per_home_changed_sets_and_exact_bytes() {
   mkdir -p "$w/alpha/config" "$w/beta/config" "$w/alpha/state" "$w/beta/state"
 
   # alpha is stale on harness + backlog; beta is stale on multiline dispatch only.
-  printf 'pi\n' > "$w/alpha/config/crew-harness"
+  printf 'old-pi\n' > "$w/alpha/config/crew-harness"
   printf 'tasks-axi\n' > "$w/alpha/config/backlog-backend"
   printf '{"default":{"harness":"old"}}\n' > "$w/beta/config/crew-dispatch.json"
 
   multiline_json=$(printf '{\n  "default": {\n    "harness": "opencode",\n    "model": "opencode-4.5"\n  },\n  "rules": [\n    {"when": "news", "use": {"harness": "opencode"}}\n  ]\n}\n')
   printf '%s' "$multiline_json" > "$w/home/config/crew-dispatch.json"
-  printf 'codex\n' > "$w/home/config/crew-harness"
+  printf 'pi\n' > "$w/home/config/crew-harness"
   printf 'manual\n' > "$w/home/config/backlog-backend"
   printf 'tmux\n' > "$w/home/config/backend"
   {
@@ -1699,7 +1699,7 @@ test_config_reread_per_home_changed_sets_and_exact_bytes() {
     || fail "alpha did not receive multiline dispatch"
   cmp -s "$w/home/config/crew-dispatch.json" "$w/beta/config/crew-dispatch.json" \
     || fail "beta did not receive multiline dispatch"
-  [ "$(cat "$w/alpha/config/crew-harness")" = codex ] || fail "alpha harness not updated"
+  [ "$(cat "$w/alpha/config/crew-harness")" = pi ] || fail "alpha harness not updated"
   [ "$(cat "$w/alpha/config/backlog-backend")" = manual ] || fail "alpha backlog-backend not updated"
   [ "$(cat "$w/alpha/config/backend")" = tmux ] || fail "alpha backend not updated"
 
@@ -1732,7 +1732,7 @@ test_config_reread_per_home_changed_sets_and_exact_bytes() {
   # Exact multiline JSON appears byte-for-byte between delimiters.
   assert_contains "$(cat "$instr_a")" "$multiline_json" \
     "alpha instruction must include exact multiline dispatch bytes"
-  assert_contains "$(cat "$instr_a")" $'-----BEGIN config/crew-harness-----\ncodex\n-----END config/crew-harness-----' \
+  assert_contains "$(cat "$instr_a")" $'-----BEGIN config/crew-harness-----\npi\n-----END config/crew-harness-----' \
     "alpha instruction must include exact harness scalar bytes"
   assert_contains "$(cat "$instr_a")" $'-----BEGIN config/backlog-backend-----\nmanual\n-----END config/backlog-backend-----' \
     "alpha instruction must include exact backlog-backend scalar bytes"
@@ -1758,8 +1758,8 @@ test_config_reread_per_home_changed_sets_and_exact_bytes() {
   # pre-push stale unique value.
   assert_not_contains "$(cat "$instr_a")" '"harness":"old"' \
     "alpha must not receive beta's pre-push stale dispatch"
-  assert_not_contains "$(cat "$instr_b")" $'pi\n' \
-    "beta instruction must not leak alpha-only stale harness bytes as a standalone scalar block incorrectly"
+  assert_not_contains "$(cat "$instr_b")" $'old-pi\n' \
+    "beta instruction must not leak alpha-only stale harness bytes"
 
   # Routed send used the from-firstmate marker and carried only the pointer,
   # read from alpha's durable steer records (the typed channel now carries only
@@ -1787,7 +1787,7 @@ test_config_reread_isolation_and_absent_and_send_failure() {
   printf 'old-harness\n' > "$w/alpha/config/crew-harness"
   printf '{"stale":true}\n' > "$w/beta/config/crew-dispatch.json"
   # Primary has only crew-harness set; dispatch and backlog absent.
-  printf 'codex\n' > "$w/home/config/crew-harness"
+  printf 'pi\n' > "$w/home/config/crew-harness"
   rm -f "$w/home/config/crew-dispatch.json" "$w/home/config/backlog-backend"
 
   log="$w/config-reread-absent.tmux.log"
@@ -1802,7 +1802,7 @@ test_config_reread_isolation_and_absent_and_send_failure() {
 
   # alpha changed harness only.
   assert_contains "$(cat "$instr_a")" "config/crew-harness" "alpha should mention harness"
-  assert_contains "$(cat "$instr_a")" $'-----BEGIN config/crew-harness-----\ncodex\n-----END config/crew-harness-----' \
+  assert_contains "$(cat "$instr_a")" $'-----BEGIN config/crew-harness-----\npi\n-----END config/crew-harness-----' \
     "alpha harness block exact"
   assert_not_contains "$(cat "$instr_a")" "config/crew-dispatch.json" \
     "alpha must not list unchanged/absent-both dispatch"
@@ -1906,7 +1906,7 @@ test_config_reread_publication_failure_retries_exact_generation() {
   add_sm_worktree "$w" alpha "$head"
   mkdir -p "$w/alpha/config" "$w/alpha/state"
   printf 'old\n' > "$w/alpha/config/crew-harness"
-  printf 'codex\n' > "$w/home/config/crew-harness"
+  printf 'pi\n' > "$w/home/config/crew-harness"
 
   fakebin=$(make_fake_toolchain "$w")
   real_mv=$(command -v mv)
@@ -1925,12 +1925,12 @@ SH
   assert_contains "$out" "CONFIG_REREAD: secondmate" "publication failure diagnostic missing"
   assert_not_contains "$out" "config-reread: sent" \
     "publication failure must not claim reread delivery"
-  [ "$(cat "$w/alpha/config/crew-harness")" = codex ] \
+  [ "$(cat "$w/alpha/config/crew-harness")" = pi ] \
     || fail "publication failure did not retain the completed config write"
   stage=$(reread_retry_stage_path "$w/home" alpha) \
     || fail "publication failure did not retain an exact retry generation"
   assert_contains "$(cat "$stage")" \
-    $'-----BEGIN config/crew-harness-----\ncodex\n-----END config/crew-harness-----' \
+    $'-----BEGIN config/crew-harness-----\npi\n-----END config/crew-harness-----' \
     "retry generation did not retain exact destination bytes"
   assert_no_reread_instructions "$w/alpha"
 
@@ -1956,7 +1956,7 @@ test_config_reread_write_failure_retains_exact_retry_generation() {
   add_sm_worktree "$w" sm "$head"
   mkdir -p "$w/sm/config" "$w/sm/state"
   printf 'old\n' > "$w/sm/config/crew-harness"
-  printf 'codex\n' > "$w/home/config/crew-harness"
+  printf 'pi\n' > "$w/home/config/crew-harness"
   fakebin=$(make_fake_toolchain "$w")
   real_mv=$(command -v mv)
   mkdir -p "$w/home/state/.fm-inherited-config-reread-retry/sm"
@@ -1984,7 +1984,7 @@ SH
   stage_path=$(reread_retry_stage_path "$w/home" sm) \
     || fail "instruction-write failure did not leave a durable exact generation"
   assert_contains "$(cat "$stage_path")" \
-    $'-----BEGIN config/crew-harness-----\ncodex\n-----END config/crew-harness-----' \
+    $'-----BEGIN config/crew-harness-----\npi\n-----END config/crew-harness-----' \
     "instruction-write failure did not retain the original exact bytes"
   printf 'changed-before-retry\n' > "$w/home/config/crew-harness"
   rm -f "$fakebin/mv"
@@ -1999,7 +1999,7 @@ SH
     || fail "later changed push did not deliver both generations"
   instr="$old_instr"
   assert_contains "$(cat "$instr")" \
-    $'-----BEGIN config/crew-harness-----\ncodex\n-----END config/crew-harness-----' \
+    $'-----BEGIN config/crew-harness-----\npi\n-----END config/crew-harness-----' \
     "exact retry delivery did not preserve the original destination bytes"
   assert_contains "$(cat "$new_instr")" "changed-before-retry" \
     "later changed push did not deliver its new destination bytes"
@@ -2015,7 +2015,7 @@ test_config_reread_exact_temp_survives_adoption_failure() {
   add_sm_worktree "$w" sm "$head"
   mkdir -p "$w/sm/config" "$w/sm/state"
   printf 'old\n' > "$w/sm/config/crew-harness"
-  printf 'codex\n' > "$w/home/config/crew-harness"
+  printf 'pi\n' > "$w/home/config/crew-harness"
   fakebin=$(make_fake_toolchain "$w")
   real_mv=$(command -v mv)
   real_cp=$(command -v cp)
@@ -2055,7 +2055,7 @@ SH
   [ ! -e "$stage_path.report" ] \
     || fail "exact temporary fallback created a lossy retry report"
   assert_contains "$(cat "$stage_path")" \
-    $'-----BEGIN config/crew-harness-----\ncodex\n-----END config/crew-harness-----' \
+    $'-----BEGIN config/crew-harness-----\npi\n-----END config/crew-harness-----' \
     "exact temporary fallback did not preserve the original bytes"
   printf 'changed-before-retry\n' > "$w/home/config/crew-harness"
   rm -f "$fakebin/mv" "$fakebin/cp"
@@ -2067,7 +2067,7 @@ SH
   [ -n "$old_instr" ] && [ -n "$new_instr" ] && [ "$old_instr" != "$new_instr" ] \
     || fail "later push did not deliver both exact generations"
   assert_contains "$(cat "$old_instr")" \
-    $'-----BEGIN config/crew-harness-----\ncodex\n-----END config/crew-harness-----' \
+    $'-----BEGIN config/crew-harness-----\npi\n-----END config/crew-harness-----' \
     "later push rebuilt the retained temporary from newer bytes"
   assert_contains "$(cat "$new_instr")" "changed-before-retry" \
     "later push did not deliver the new destination bytes"
@@ -2287,8 +2287,8 @@ test_config_reread_skips_when_unchanged_and_reads_after_push() {
   add_sm_worktree "$w" sm "$head"
   mkdir -p "$w/sm/config" "$w/sm/state"
 
-  printf 'codex\n' > "$w/home/config/crew-harness"
-  printf 'codex\n' > "$w/sm/config/crew-harness"
+  printf 'pi\n' > "$w/home/config/crew-harness"
+  printf 'pi\n' > "$w/sm/config/crew-harness"
   log="$w/config-reread-unchanged.tmux.log"
   out=$(run_config_push "$w" "$log" 2>/dev/null); status=$?
   expect_code 0 "$status" "unchanged push should succeed"
@@ -2351,27 +2351,27 @@ test_config_reread_bootstrap_path_and_spawn_flexibility() {
   add_sm_worktree "$w" sm "$head"
   mkdir -p "$w/sm/config" "$w/sm/state"
   printf 'old\n' > "$w/sm/config/crew-harness"
-  printf 'codex\n' > "$w/home/config/crew-harness"
+  printf 'pi\n' > "$w/home/config/crew-harness"
 
   fakebin=$(make_fake_toolchain "$w")
   log="$w/bootstrap-reread.tmux.log"
   out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" \
     FM_SEND_SETTLE=0 FM_FAKE_TMUX_LOG="$log" \
     "$ROOT/bin/fm-bootstrap.sh" 2>/dev/null)
-  [ "$(cat "$w/sm/config/crew-harness")" = codex ] || fail "bootstrap did not push harness"
+  [ "$(cat "$w/sm/config/crew-harness")" = pi ] || fail "bootstrap did not push harness"
   instr=$(reread_instruction_path "$w/sm") || fail "bootstrap reread instruction missing"
   assert_present "$instr" "bootstrap must write a config reread instruction when config changed"
   assert_contains "$(inbox_stream "$w/home/state" sm)" "[fm-from-firstmate]" \
     "bootstrap config reread must use routed secondmate send"
   assert_contains "$(cat "$instr")" \
-    $'-----BEGIN config/crew-harness-----\ncodex\n-----END config/crew-harness-----' \
+    $'-----BEGIN config/crew-harness-----\npi\n-----END config/crew-harness-----' \
     "bootstrap instruction must carry exact post-write harness bytes"
 
   # fm-spawn still permits a conscious explicit runtime outside the config
   # (defaults/rules only - never harden spawn against deliberate choice).
   w=$(new_world config-reread-spawn-flex)
-  printf 'codex\n' > "$w/home/config/crew-harness"
-  printf 'codex\n' > "$w/home/config/secondmate-harness"
+  printf 'pi\n' > "$w/home/config/crew-harness"
+  printf 'pi\n' > "$w/home/config/secondmate-harness"
   sm="$w/sm-flex"
   make_seeded_home "$sm" sm-flex
   mkdir -p "$sm/state"
@@ -2388,7 +2388,7 @@ test_config_reread_bootstrap_path_and_spawn_flexibility() {
   assert_no_reread_instructions "$sm"
   launch=$(cat "$launchlog")
   assert_contains "$launch" "pi" \
-    "explicit --harness pi must still win over configured codex defaults"
+    "explicit --harness pi must still win over configured pi defaults"
   pass "B18 bootstrap config reread path works; spawn flexibility remains defaults-only"
 }
 
@@ -2398,9 +2398,9 @@ test_bootstrap_respawns_before_config_reread() {
   head=$(git -C "$w/main" rev-parse HEAD)
   add_sm_worktree "$w" sm "$head"
   mkdir -p "$w/sm/config" "$w/sm/state"
-  printf 'harness=codex\n' >> "$w/home/state/sm.meta"
+  printf 'harness=pi\n' >> "$w/home/state/sm.meta"
   printf '%s' old > "$w/sm/config/crew-harness"
-  printf '%s' codex > "$w/home/config/crew-harness"
+  printf '%s' pi > "$w/home/config/crew-harness"
   report="$w/sm/state/stale-reread.report"
   printf '%s\n' $'crew-harness\tpushed\t' > "$report"
   stale="$w/sm/state/.fm-inherited-config-reread.stale-generation"
@@ -2414,7 +2414,7 @@ cat > "$w/main/bin/fm-spawn.sh" <<SH
 #!/usr/bin/env bash
 . '$w/main/bin/fm-config-inherit-lib.sh'
 printf '%s' spawn >> '$log'
-printf '%s' codex > '$w/sm/config/crew-harness'
+printf '%s' pi > '$w/sm/config/crew-harness'
 printf '%s\n' 7500 > '$w/sm/config/startup-memory-budget'
 SH
   chmod +x "$w/main/bin/fm-spawn.sh"
@@ -2452,7 +2452,7 @@ test_spawn_quarantines_pending_rereads_on_cleanup_failure() {
   w=$(new_world config-reread-spawn-quarantine)
   sm="$w/sm"
   mkdir -p "$w/home/config"
-  printf 'codex\n' > "$w/home/config/crew-harness"
+  printf 'pi\n' > "$w/home/config/crew-harness"
   make_seeded_home "$sm" sm
   mkdir -p "$sm/state"
   report="$sm/state/stale-reread.report"

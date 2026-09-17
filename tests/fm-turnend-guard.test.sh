@@ -192,12 +192,6 @@ install_guard_scripts() {
   chmod +x "$dir/bin/fm-turnend-guard.sh" "$dir/bin/fm-operational-input.sh" "$dir/bin/fm-supervision-instructions.sh" "$dir/bin/fm-harness.sh"
 }
 
-mark_codex_hook_root() {
-  local dir=$1
-  mkdir -p "$dir/.codex"
-  printf '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"fm-turnend-guard.sh"}]}]}}\n' > "$dir/.codex/hooks.json"
-}
-
 # A primary-shaped checkout: plain (non-worktree) git repo, AGENTS.md, bin/,
 # state/ - everything the hook's scoping check requires to treat it as primary.
 make_primary_dir() {
@@ -261,9 +255,9 @@ make_secondmate_linked_home_dir() {
 }
 
 run_hook() {
-  local dir=$1 stop_active=$2 home
+  local dir=$1 home
   home=$(cd "$dir" && pwd)
-  printf '{"stop_hook_active":%s}' "$stop_active" | PATH="$BLIND_BIN:$PATH" \
+  printf '{}' | PATH="$BLIND_BIN:$PATH" \
     PI_CODING_AGENT=true FM_PI_HARNESS=pi FM_HOME="$home" bash "$dir/bin/fm-turnend-guard.sh" 2>&1
 }
 
@@ -317,9 +311,9 @@ test_hook_blocks_source_only_home() {
   mkdir -p "$dir/state/procevent"
   : > "$dir/state/procevent/source-only.source"
   out=$(run_hook "$dir" false); status=$?
-  expect_code 2 "$status" "non-Codex hook must block when a source-only home has no watcher"
+  expect_code 2 "$status" "turn-end guard must block when a source-only home has no watcher"
   assert_contains "$out" "1 process-event source(s) registered" "block reason must identify the source-only supervision need"
-  pass "fm-turnend-guard: non-Codex path blocks a source-only home"
+  pass "fm-turnend-guard: source-only home without supervision is blocked"
 }
 
 test_hook_blocks_when_dead_lock_has_fresh_beacon() {
@@ -394,7 +388,7 @@ test_hook_blocks_from_fm_home_state() {
   home="$TMP_ROOT/hook-fm-home-op"
   mkdir -p "$home/state"
   : > "$home/state/task1.meta"
-  out=$(printf '{"stop_hook_active":false}' | PATH="$BLIND_BIN:$PATH" \
+  out=$(printf '{}' | PATH="$BLIND_BIN:$PATH" \
     PI_CODING_AGENT=true FM_PI_HARNESS=pi FM_HOME="$home" \
     bash "$dir/bin/fm-turnend-guard.sh" 2>&1); status=$?
   expect_code 2 "$status" "hook must inspect the active FM_HOME state dir"
@@ -442,7 +436,7 @@ test_hook_ignores_repo_state_when_fm_home_set() {
   home="$TMP_ROOT/hook-fm-home-quiet"
   mkdir -p "$home/state"
   : > "$dir/state/task1.meta"
-  out=$(printf '{"stop_hook_active":false}' | FM_HOME="$home" bash "$dir/bin/fm-turnend-guard.sh" 2>&1); status=$?
+  out=$(printf '{}' | FM_HOME="$home" bash "$dir/bin/fm-turnend-guard.sh" 2>&1); status=$?
   expect_code 0 "$status" "hook must ignore repo-root state when FM_HOME selects another state dir"
   [ -z "$out" ] || fail "hook produced output from stale repo-root state despite FM_HOME: $out"
   pass "fm-turnend-guard: ignores stale repo-root state when FM_HOME is set"
@@ -455,22 +449,12 @@ test_hook_uses_state_override() {
   state="$TMP_ROOT/hook-state-override-active"
   mkdir -p "$home/state" "$state"
   : > "$state/task1.meta"
-  out=$(printf '{"stop_hook_active":false}' | PATH="$BLIND_BIN:$PATH" \
+  out=$(printf '{}' | PATH="$BLIND_BIN:$PATH" \
     PI_CODING_AGENT=true FM_PI_HARNESS=pi FM_HOME="$home" FM_STATE_OVERRIDE="$state" \
     bash "$dir/bin/fm-turnend-guard.sh" 2>&1); status=$?
   expect_code 2 "$status" "hook must let FM_STATE_OVERRIDE win over FM_HOME/state"
   assert_contains "$out" "$REQUIRED_REASON" "block reason must contain the exact required instruction"
   pass "fm-turnend-guard: uses FM_STATE_OVERRIDE ahead of FM_HOME/state"
-}
-
-test_hook_loop_guard_allows_retry() {
-  local dir out status
-  dir=$(make_primary_dir "$TMP_ROOT/hook-loopguard")
-  : > "$dir/state/task1.meta"
-  out=$(run_hook "$dir" true); status=$?
-  expect_code 0 "$status" "hook must allow the stop when stop_hook_active is already true"
-  [ -z "$out" ] || fail "hook produced output on the loop-guarded retry: $out"
-  pass "fm-turnend-guard: stop_hook_active=true always allows the stop (never blocks twice in one turn)"
 }
 
 # A secondmate's OWN home runs a primary firstmate session and must be guarded
@@ -498,19 +482,6 @@ test_hook_silent_in_idle_secondmate_home() {
   expect_code 0 "$status" "hook must stay silent in an idle, empty-queue secondmate home"
   [ -z "$out" ] || fail "idle secondmate home produced guard output: $out"
   pass "fm-turnend-guard: idle-by-default - silent in a secondmate home with nothing in flight"
-}
-
-# The stop_hook_active loop guard bounds the secondmate to one forced
-# continuation per turn, exactly as it does for the main primary - no wedged,
-# un-endable session.
-test_hook_secondmate_loop_guard_allows_retry() {
-  local dir out status
-  dir=$(make_secondmate_dir "$TMP_ROOT/hook-secondmate-loopguard")
-  : > "$dir/state/task1.meta"
-  out=$(run_hook "$dir" true); status=$?
-  expect_code 0 "$status" "hook must allow the stop in a secondmate home when stop_hook_active is already true"
-  [ -z "$out" ] || fail "secondmate loop-guarded retry produced output: $out"
-  pass "fm-turnend-guard: stop_hook_active=true allows the stop in a secondmate home (never blocks twice in one turn)"
 }
 
 # The guard's half of the deferred-death recovery loop in a secondmate home,
@@ -637,22 +608,6 @@ test_hook_silent_in_crewmate_worktree() {
   pass "fm-turnend-guard: inert in a crewmate/scout task worktree (linked git worktree) even when unhealthy"
 }
 
-test_hook_silent_without_jq() {
-  local dir out status fakebin tool tool_path
-  dir=$(make_primary_dir "$TMP_ROOT/hook-nojq")
-  : > "$dir/state/task1.meta"
-  fakebin=$(fm_fakebin "$TMP_ROOT/hook-nojq-fake")
-  for tool in bash sh git cat printf date uname stat mkdir dirname; do
-    tool_path=$(command -v "$tool") || fail "test host must provide $tool"
-    ln -s "$tool_path" "$fakebin/$tool"
-  done
-  out=$(printf '{"stop_hook_active":false}' | PATH="$fakebin" bash "$dir/bin/fm-turnend-guard.sh" 2>&1)
-  status=$?
-  expect_code 0 "$status" "hook must fail open (exit 0) when jq is unavailable"
-  [ -z "$out" ] || fail "hook produced output without jq: $out"
-  pass "fm-turnend-guard: fails open (never blocks) when jq is missing"
-}
-
 test_hook_silent_without_stdin() {
   local dir out status
   dir=$(make_primary_dir "$TMP_ROOT/hook-nostdin")
@@ -672,71 +627,6 @@ test_hook_runs_fast() {
   elapsed_s=$((SECONDS - start))
   [ "$elapsed_s" -lt 3 ] || fail "hook took ${elapsed_s}s, expected well under a second (generous 3s CI margin)"
   pass "fm-turnend-guard: runs well under the generous timing margin (${elapsed_s}s)"
-}
-
-# The tracked Codex registration authenticates its project root before invoking
-# the shared guard, so payload paths cannot redirect it into another project.
-test_codex_hook_uses_process_pwd_when_payload_cwd_is_outside_root() {
-  local settings command dir expected_root outside payload out status
-  settings="$ROOT/.codex/hooks.json"
-  [ -f "$settings" ] || fail "tracked .codex/hooks.json is missing"
-  command=$(jq -r '.hooks.Stop[0].hooks[0].command // empty' "$settings")
-  [ -n "$command" ] || fail "Stop hook command is missing from .codex/hooks.json"
-  dir=$(make_primary_dir "$TMP_ROOT/codex-hook-root")
-  mark_codex_hook_root "$dir"
-  expected_root=$(cd "$dir" && pwd -P)
-  outside="$TMP_ROOT/codex-hook-outside"
-  mkdir -p "$outside"
-  cat > "$dir/bin/fm-turnend-guard.sh" <<'EOF'
-#!/usr/bin/env bash
-printf 'guard=%s\n' "$0"
-cat
-EOF
-  chmod +x "$dir/bin/fm-turnend-guard.sh"
-  payload=$(jq -cn --arg cwd "$outside" '{cwd:$cwd,stop_hook_active:false}')
-  out=$(printf '%s' "$payload" | (cd "$dir" && bash -c "$command") 2>&1); status=$?
-  expect_code 0 "$status" "codex hook must execute successfully when payload cwd is outside the firstmate root"
-  assert_contains "$out" "guard=$expected_root/bin/fm-turnend-guard.sh" "codex hook must use the hook process root"
-  assert_contains "$out" "$payload" "codex hook must pass the original payload to the guard"
-  pass ".codex/hooks.json: Stop hook uses hook process root when payload cwd is outside"
-}
-
-test_codex_hook_ignores_nested_git_root_guard() {
-  local settings command dir nested subdir expected_root payload out status
-  settings="$ROOT/.codex/hooks.json"
-  [ -f "$settings" ] || fail "tracked .codex/hooks.json is missing"
-  command=$(jq -r '.hooks.Stop[0].hooks[0].command // empty' "$settings")
-  [ -n "$command" ] || fail "Stop hook command is missing from .codex/hooks.json"
-  dir=$(make_primary_dir "$TMP_ROOT/codex-hook-outer")
-  mark_codex_hook_root "$dir"
-  expected_root=$(cd "$dir" && pwd -P)
-  nested="$dir/projects/other"
-  mkdir -p "$nested"
-  git init -q "$nested"
-  git -C "$nested" commit -q --allow-empty -m init
-  mkdir -p "$nested/bin" "$nested/.codex"
-  : > "$nested/AGENTS.md"
-  printf '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"fm-turnend-guard.sh"}]}]}}\n' > "$nested/.codex/hooks.json"
-  cat > "$nested/bin/fm-turnend-guard.sh" <<'EOF'
-#!/usr/bin/env bash
-printf 'nested guard executed\n'
-exit 99
-EOF
-  chmod +x "$nested/bin/fm-turnend-guard.sh"
-  cat > "$dir/bin/fm-turnend-guard.sh" <<'EOF'
-#!/usr/bin/env bash
-printf 'guard=%s\n' "$0"
-cat
-EOF
-  chmod +x "$dir/bin/fm-turnend-guard.sh"
-  subdir="$nested/deep/path"
-  mkdir -p "$subdir"
-  payload=$(jq -cn --arg cwd "$subdir" '{cwd:$cwd,stop_hook_active:false}')
-  out=$(printf '%s' "$payload" | (cd "$dir" && bash -c "$command") 2>&1); status=$?
-  expect_code 0 "$status" "codex hook must not execute a nested project guard"
-  assert_contains "$out" "guard=$expected_root/bin/fm-turnend-guard.sh" "codex hook must keep using the outer firstmate guard"
-  assert_not_contains "$out" "nested guard executed" "codex hook must not execute nested project code"
-  pass ".codex/hooks.json: Stop hook ignores nested git root guard scripts"
 }
 
 test_opencode_plugin_anchors_guard_to_worktree() {
@@ -1175,21 +1065,16 @@ test_hook_x_mode_only_blocks_in_default_mode
 test_hook_registered_check_only_blocks_with_check_banner
 test_hook_ignores_repo_state_when_fm_home_set
 test_hook_uses_state_override
-test_hook_loop_guard_allows_retry
 test_hook_blocks_in_secondmate_own_home
 test_hook_silent_in_idle_secondmate_home
-test_hook_secondmate_loop_guard_allows_retry
 test_hook_secondmate_reinvoke_recovery_loop
 test_hook_silent_in_secondmate_child_worktree
 test_hook_blocks_in_treehouse_leased_secondmate_home
 test_hook_exempts_linked_worktree_with_stray_marker
 test_hook_exempts_linked_worktree_with_non_ascii_marker
 test_hook_silent_in_crewmate_worktree
-test_hook_silent_without_jq
 test_hook_silent_without_stdin
 test_hook_runs_fast
-test_codex_hook_uses_process_pwd_when_payload_cwd_is_outside_root
-test_codex_hook_ignores_nested_git_root_guard
 test_opencode_plugin_anchors_guard_to_worktree
 test_pi_extension_injects_once_per_logical_agent_run
 test_pi_extension_retries_after_followup_delivery_failure

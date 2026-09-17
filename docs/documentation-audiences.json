@@ -177,10 +177,6 @@
       "audience": "agent-runtime"
     },
     {
-      "path": ".agents/skills/harness-adapters/references/harness/codex.md",
-      "audience": "agent-runtime"
-    },
-    {
       "path": ".agents/skills/harness-adapters/references/harness/opencode.md",
       "audience": "agent-runtime"
     },
@@ -347,10 +343,6 @@
     {
       "path": "docs/sessionstart-nudge.md",
       "audience": "operator-current"
-    },
-    {
-      "path": "docs/supervision-protocols/codex.md",
-      "audience": "agent-runtime"
     },
     {
       "path": "docs/supervision-protocols/opencode.md",

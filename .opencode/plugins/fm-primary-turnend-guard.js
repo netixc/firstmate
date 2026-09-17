@@ -44,7 +44,7 @@ function resolvePath(anchor) {
 
 function runGuard(root) {
   if (!root) return Promise.resolve({ code: 0, stderr: "" });
-  return runProcess(`${root}/bin/fm-turnend-guard.sh`, [], '{"stop_hook_active":false}');
+  return runProcess(`${root}/bin/fm-turnend-guard.sh`, [], '{}');
 }
 
 async function letWatchArmRun(sessionID, client) {

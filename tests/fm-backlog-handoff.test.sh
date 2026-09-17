@@ -32,7 +32,7 @@ setup_homes() {
   cat > "$home/state/$id.meta" <<EOF
 window=firstmate:fm-$id
 kind=secondmate
-harness=codex
+harness=pi
 backend=tmux
 home=$sub_abs
 worktree=$sub_abs
@@ -65,7 +65,7 @@ test_handoff_wakes_live_local_receiver() {
   cat > "$home/state/design.meta" <<EOF
 window=firstmate:fm-design
 kind=secondmate
-harness=codex
+harness=pi
 backend=tmux
 home=$sub
 worktree=$sub
@@ -134,7 +134,7 @@ EOF
   cat > "$home/state/design.meta" <<EOF
 window=firstmate:fm-design
 kind=secondmate
-harness=codex
+harness=pi
 backend=tmux
 home=$sub
 worktree=$sub
@@ -1163,7 +1163,7 @@ test_indented_heading_is_not_section_boundary() {
 
   cat > "$home/data/backlog.md" <<'EOF'
 ## Queued
-- [ ] ha-codex-fast-default-4e - harness default work (repo: firstmate)
+- [ ] ha-pi-fast-default-4e - harness default work (repo: firstmate)
   Context for the secondmate.
   ## Intent
   Deliver the full spec, not the title alone.
@@ -1174,18 +1174,18 @@ test_indented_heading_is_not_section_boundary() {
 EOF
 
   local expected_block
-  expected_block=$(extract_item_block "$home/data/backlog.md" ha-codex-fast-default-4e)
+  expected_block=$(extract_item_block "$home/data/backlog.md" ha-pi-fast-default-4e)
 
-  FM_HOME="$home" "$ROOT/bin/fm-backlog-handoff.sh" design ha-codex-fast-default-4e >/dev/null \
+  FM_HOME="$home" "$ROOT/bin/fm-backlog-handoff.sh" design ha-pi-fast-default-4e >/dev/null \
     || fail "handoff of ## Intent body item failed"
 
   local dest_block
-  dest_block=$(extract_item_block "$sub/data/backlog.md" ha-codex-fast-default-4e)
+  dest_block=$(extract_item_block "$sub/data/backlog.md" ha-pi-fast-default-4e)
   assert_block_equals "tokenizer trap: indented ## lines must move with the item" \
     "$expected_block" "$dest_block"
 
   # Source must not treat ## Intent / ## Acceptance as new sections that split the file.
-  if grep -E 'ha-codex-fast-default-4e|Deliver the full spec|body survives handoff' \
+  if grep -E 'ha-pi-fast-default-4e|Deliver the full spec|body survives handoff' \
     "$home/data/backlog.md" >/dev/null; then
     fail "tokenizer trap left item fragments in the source backlog"
   fi

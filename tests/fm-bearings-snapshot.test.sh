@@ -148,7 +148,7 @@ EOF
     "window=firstmate:fm-mate" \
     "worktree=$mate" \
     "project=$mate" \
-    "harness=codex" \
+    "harness=pi" \
     "kind=secondmate" \
     "mode=secondmate" \
     "home=$mate" \
@@ -487,7 +487,7 @@ test_active_child_overrides_old_parent_event() {
 EOF
   fm_write_meta "$mate/state/phase8.meta" \
     "window=firstmate:fm-phase8" "worktree=$mate/projects/phase8" "project=sample" \
-    "harness=codex" "kind=ship" "mode=no-mistakes"
+    "harness=pi" "kind=ship" "mode=no-mistakes"
   printf 'working [key=phase8]: implementing Phase 8 parity\nneeds-decision [key=release]: choose release A or B\n' \
     > "$mate/state/phase8.status"
   fakebin=$(make_fakebin "$home")
@@ -612,7 +612,7 @@ test_bad_secondmate_homes_never_revive_parent_work() {
   printf '## In flight\n- [ ] slow - Slow child (repo: sample) (kind: ship) (since 2026-07-13)\n\n## Queued\n\n## Done\n' > "$unknown_child/data/backlog.md"
   fm_write_meta "$unknown_child/state/slow.meta" \
     "window=firstmate:fm-slow" "worktree=$wt" "project=sample" \
-    "harness=codex" "kind=ship" "mode=no-mistakes"
+    "harness=pi" "kind=ship" "mode=no-mistakes"
   append_secondmate_registry "$home" unknown-child "$unknown_child"
   write_parent_secondmate_event "$home" unknown-child "$unknown_child" "old unknown work"
 
@@ -1469,7 +1469,7 @@ write_large_fixture() {  # <home> <count>
       "window=firstmate:fm-$id" \
       "worktree=$home/projects/$id" \
       "project=repo-$i" \
-      "harness=codex" \
+      "harness=pi" \
       "kind=scout" \
       "mode=scout" \
       "pr=https://github.com/acme/repo-$i/pull/$i"
@@ -1584,7 +1584,7 @@ test_completed_scout_report_not_pending() {
     "window=firstmate:fm-lavish-103" \
     "worktree=$home/projects/lav-wt" \
     "project=firstmate" \
-    "harness=codex" \
+    "harness=pi" \
     "kind=scout" \
     "mode=scout"
   printf 'needs-decision: adopt approach A or B for Lavish issue 103\n' > "$home/state/lavish-103.status"
@@ -2153,7 +2153,7 @@ EOF
     "window=firstmate:fm-structured-ship" \
     "worktree=$home/projects/structured-ship" \
     "project=firstmate" \
-    "harness=codex" \
+    "harness=pi" \
     "kind=ship" \
     "mode=no-mistakes"
   printf 'working: structured sibling still projects\n' > "$home/state/structured-ship.status"
@@ -2197,7 +2197,7 @@ EOF
     "window=firstmate:fm-visible-ship" \
     "worktree=$home/projects/orphan-ship" \
     "project=firstmate" \
-    "harness=codex" \
+    "harness=pi" \
     "kind=ship" \
     "mode=no-mistakes"
   printf 'working: visible sibling\n' > "$home/state/visible-ship.status"
@@ -2214,7 +2214,7 @@ EOF
     "window=firstmate:fm-orphan-ship" \
     "worktree=$home/projects/orphan-ship" \
     "project=firstmate" \
-    "harness=codex" \
+    "harness=pi" \
     "kind=ship" \
     "mode=no-mistakes"
   printf 'working: orphan now has meta\n' > "$home/state/orphan-ship.status"
@@ -2595,7 +2595,7 @@ EOF
 EOF
   fm_write_meta "$sshhip/state/unreadable-child.meta" \
     "window=firstmate:dead-sshhip-child" "worktree=$sshhip/projects/child" "project=sshhip" \
-    "harness=codex" "kind=ship" "mode=no-mistakes"
+    "harness=pi" "kind=ship" "mode=no-mistakes"
 
   cat > "$ha/data/backlog.md" <<'EOF'
 ## In flight
@@ -2817,11 +2817,11 @@ test_main_captain_readiness_matches_secondmate_projection() {
 EOF
   fm_write_meta "$home/state/prep.meta" \
     "window=firstmate:fm-prep" "worktree=$home/projects/prep" "project=firstmate" \
-    "harness=codex" "kind=ship" "mode=no-mistakes"
+    "harness=pi" "kind=ship" "mode=no-mistakes"
   printf 'working: preparing main canary\n' > "$home/state/prep.status"
   fm_write_meta "$home/state/observation.meta" \
     "window=firstmate:fm-observation" "worktree=$home/projects/observation" "project=firstmate" \
-    "harness=codex" "kind=scout" "mode=scout"
+    "harness=pi" "kind=scout" "mode=scout"
   printf 'paused: observation is deliberately held\n' > "$home/state/observation.status"
   fakebin=$(make_fakebin "$home")
   json=$(run "$home" "$fakebin" --json)

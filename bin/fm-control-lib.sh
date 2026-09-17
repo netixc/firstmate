@@ -35,9 +35,9 @@
 #      backend is refused rather than performed blind.
 #
 # `resume` is deliberately NOT a verb. It is not deterministic across the
-# verified adapters: codex resumes only from a session id printed at exit,
-# opencode resumes the most recent session for the cwd with --continue, and pi
-# and pi-signed have no verified pane-resume contract at all. `relaunch`
+# verified adapters: opencode resumes the most recent session for the cwd with
+# --continue, while pi and pi-signed have no verified pane-resume contract at
+# all. `relaunch`
 # covers the same need deterministically for every adapter,
 # because the brief on disk - not a harness-private session - is the durable
 # instruction.
@@ -63,7 +63,7 @@ fm_control_verb_allowed() {  # <verb>
 # than guessed at, exactly as a spawn on it would be.
 fm_control_harness_supported() {  # <harness>
   case "${1-}" in
-    codex|opencode|pi|pi-signed) return 0 ;;
+    opencode|pi|pi-signed) return 0 ;;
   esac
   return 1
 }
@@ -79,7 +79,6 @@ fm_control_harness_family() {  # <recorded-harness>
   case "${1-}" in
     pi) printf 'pi' ;;
     pi-signed) printf 'pi-signed' ;;
-    codex*) printf 'codex' ;;
     opencode*) printf 'opencode' ;;
     *) return 1 ;;
   esac
@@ -97,7 +96,7 @@ fm_control_harness_supports_kind() {  # <harness> <kind>
 # The key that cancels a running turn.
 fm_control_interrupt_key() {  # <harness>
   case "${1-}" in
-    codex|opencode|pi|pi-signed) printf 'Escape' ;;
+    opencode|pi|pi-signed) printf 'Escape' ;;
     *) return 1 ;;
   esac
 }
@@ -107,7 +106,7 @@ fm_control_interrupt_key() {  # <harness>
 fm_control_interrupt_repeat() {  # <harness>
   case "${1-}" in
     opencode) printf '2' ;;
-    codex|pi|pi-signed) printf '1' ;;
+    pi|pi-signed) printf '1' ;;
     *) return 1 ;;
   esac
 }
@@ -117,14 +116,14 @@ fm_control_interrupt_repeat() {  # <harness>
 # with no verified mechanics returns nonzero, matching the tables above.
 fm_control_interrupt_clear_key() {  # <harness>
   case "${1-}" in
-    codex|opencode|pi|pi-signed) ;;
+    opencode|pi|pi-signed) ;;
     *) return 1 ;;
   esac
 }
 
 fm_control_interrupt_ack_source() {  # <harness>
   case "${1-}" in
-    codex|opencode|pi|pi-signed) printf 'none' ;;
+    opencode|pi|pi-signed) printf 'none' ;;
     *) return 1 ;;
   esac
 }
@@ -133,7 +132,7 @@ fm_control_interrupt_ack_source() {  # <harness>
 fm_control_exit_command() {  # <harness>
   case "${1-}" in
     opencode) printf '/exit' ;;
-    codex|pi|pi-signed) printf '/quit' ;;
+    pi|pi-signed) printf '/quit' ;;
     *) return 1 ;;
   esac
 }
