@@ -255,9 +255,9 @@ make_secondmate_linked_home_dir() {
 }
 
 run_hook() {
-  local dir=$1 stop_active=$2 home
+  local dir=$1 home
   home=$(cd "$dir" && pwd)
-  printf '{"stop_hook_active":%s}' "$stop_active" | PATH="$BLIND_BIN:$PATH" \
+  printf '{}' | PATH="$BLIND_BIN:$PATH" \
     PI_CODING_AGENT=true FM_PI_HARNESS=pi FM_HOME="$home" bash "$dir/bin/fm-turnend-guard.sh" 2>&1
 }
 
@@ -388,7 +388,7 @@ test_hook_blocks_from_fm_home_state() {
   home="$TMP_ROOT/hook-fm-home-op"
   mkdir -p "$home/state"
   : > "$home/state/task1.meta"
-  out=$(printf '{"stop_hook_active":false}' | PATH="$BLIND_BIN:$PATH" \
+  out=$(printf '{}' | PATH="$BLIND_BIN:$PATH" \
     PI_CODING_AGENT=true FM_PI_HARNESS=pi FM_HOME="$home" \
     bash "$dir/bin/fm-turnend-guard.sh" 2>&1); status=$?
   expect_code 2 "$status" "hook must inspect the active FM_HOME state dir"
@@ -436,7 +436,7 @@ test_hook_ignores_repo_state_when_fm_home_set() {
   home="$TMP_ROOT/hook-fm-home-quiet"
   mkdir -p "$home/state"
   : > "$dir/state/task1.meta"
-  out=$(printf '{"stop_hook_active":false}' | FM_HOME="$home" bash "$dir/bin/fm-turnend-guard.sh" 2>&1); status=$?
+  out=$(printf '{}' | FM_HOME="$home" bash "$dir/bin/fm-turnend-guard.sh" 2>&1); status=$?
   expect_code 0 "$status" "hook must ignore repo-root state when FM_HOME selects another state dir"
   [ -z "$out" ] || fail "hook produced output from stale repo-root state despite FM_HOME: $out"
   pass "fm-turnend-guard: ignores stale repo-root state when FM_HOME is set"
@@ -449,22 +449,12 @@ test_hook_uses_state_override() {
   state="$TMP_ROOT/hook-state-override-active"
   mkdir -p "$home/state" "$state"
   : > "$state/task1.meta"
-  out=$(printf '{"stop_hook_active":false}' | PATH="$BLIND_BIN:$PATH" \
+  out=$(printf '{}' | PATH="$BLIND_BIN:$PATH" \
     PI_CODING_AGENT=true FM_PI_HARNESS=pi FM_HOME="$home" FM_STATE_OVERRIDE="$state" \
     bash "$dir/bin/fm-turnend-guard.sh" 2>&1); status=$?
   expect_code 2 "$status" "hook must let FM_STATE_OVERRIDE win over FM_HOME/state"
   assert_contains "$out" "$REQUIRED_REASON" "block reason must contain the exact required instruction"
   pass "fm-turnend-guard: uses FM_STATE_OVERRIDE ahead of FM_HOME/state"
-}
-
-test_hook_loop_guard_allows_retry() {
-  local dir out status
-  dir=$(make_primary_dir "$TMP_ROOT/hook-loopguard")
-  : > "$dir/state/task1.meta"
-  out=$(run_hook "$dir" true); status=$?
-  expect_code 0 "$status" "hook must allow the stop when stop_hook_active is already true"
-  [ -z "$out" ] || fail "hook produced output on the loop-guarded retry: $out"
-  pass "fm-turnend-guard: stop_hook_active=true always allows the stop (never blocks twice in one turn)"
 }
 
 # A secondmate's OWN home runs a primary firstmate session and must be guarded
@@ -492,19 +482,6 @@ test_hook_silent_in_idle_secondmate_home() {
   expect_code 0 "$status" "hook must stay silent in an idle, empty-queue secondmate home"
   [ -z "$out" ] || fail "idle secondmate home produced guard output: $out"
   pass "fm-turnend-guard: idle-by-default - silent in a secondmate home with nothing in flight"
-}
-
-# The stop_hook_active loop guard bounds the secondmate to one forced
-# continuation per turn, exactly as it does for the main primary - no wedged,
-# un-endable session.
-test_hook_secondmate_loop_guard_allows_retry() {
-  local dir out status
-  dir=$(make_secondmate_dir "$TMP_ROOT/hook-secondmate-loopguard")
-  : > "$dir/state/task1.meta"
-  out=$(run_hook "$dir" true); status=$?
-  expect_code 0 "$status" "hook must allow the stop in a secondmate home when stop_hook_active is already true"
-  [ -z "$out" ] || fail "secondmate loop-guarded retry produced output: $out"
-  pass "fm-turnend-guard: stop_hook_active=true allows the stop in a secondmate home (never blocks twice in one turn)"
 }
 
 # The guard's half of the deferred-death recovery loop in a secondmate home,
@@ -629,22 +606,6 @@ test_hook_silent_in_crewmate_worktree() {
   expect_code 0 "$status" "hook must never block inside a crewmate task worktree"
   [ -z "$out" ] || fail "hook produced output inside a crewmate task worktree: $out"
   pass "fm-turnend-guard: inert in a crewmate/scout task worktree (linked git worktree) even when unhealthy"
-}
-
-test_hook_silent_without_jq() {
-  local dir out status fakebin tool tool_path
-  dir=$(make_primary_dir "$TMP_ROOT/hook-nojq")
-  : > "$dir/state/task1.meta"
-  fakebin=$(fm_fakebin "$TMP_ROOT/hook-nojq-fake")
-  for tool in bash sh git cat printf date uname stat mkdir dirname; do
-    tool_path=$(command -v "$tool") || fail "test host must provide $tool"
-    ln -s "$tool_path" "$fakebin/$tool"
-  done
-  out=$(printf '{"stop_hook_active":false}' | PATH="$fakebin" bash "$dir/bin/fm-turnend-guard.sh" 2>&1)
-  status=$?
-  expect_code 0 "$status" "hook must fail open (exit 0) when jq is unavailable"
-  [ -z "$out" ] || fail "hook produced output without jq: $out"
-  pass "fm-turnend-guard: fails open (never blocks) when jq is missing"
 }
 
 test_hook_silent_without_stdin() {
@@ -1104,17 +1065,14 @@ test_hook_x_mode_only_blocks_in_default_mode
 test_hook_registered_check_only_blocks_with_check_banner
 test_hook_ignores_repo_state_when_fm_home_set
 test_hook_uses_state_override
-test_hook_loop_guard_allows_retry
 test_hook_blocks_in_secondmate_own_home
 test_hook_silent_in_idle_secondmate_home
-test_hook_secondmate_loop_guard_allows_retry
 test_hook_secondmate_reinvoke_recovery_loop
 test_hook_silent_in_secondmate_child_worktree
 test_hook_blocks_in_treehouse_leased_secondmate_home
 test_hook_exempts_linked_worktree_with_stray_marker
 test_hook_exempts_linked_worktree_with_non_ascii_marker
 test_hook_silent_in_crewmate_worktree
-test_hook_silent_without_jq
 test_hook_silent_without_stdin
 test_hook_runs_fast
 test_opencode_plugin_anchors_guard_to_worktree
