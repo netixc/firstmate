@@ -3128,6 +3128,13 @@ fm_backend_herdr_composer_state() {  # <target> -> empty|pending|pending-unprove
 # submit vocabulary. Empty means confirmed submitted for every backend; how
 # each backend confirms it is an internal decision.
 
+fm_backend_herdr_queued_enter_busy() {
+  case "$(fm_backend_herdr_agent_status_raw "$FM_BACKEND_HERDR_SESSION" "$FM_BACKEND_HERDR_PANE")" in
+    working) printf 'busy' ;;
+    *) printf 'idle' ;;
+  esac
+}
+
 fm_backend_herdr_send_text_submit() {  # <target> <text> <retries> <enter-sleep> <settle>
   local target=$1 text=$2 retries=$3 sleep_s=$4 settle=$5 i=0 verdict baseline confirm_sleep
   local raw_status enter_sent=0
@@ -3177,7 +3184,7 @@ fm_backend_herdr_send_text_submit() {  # <target> <text> <retries> <enter-sleep>
       if [ "$enter_sent" -eq 0 ]; then
         printf 'send-failed'
       else
-        printf '%s' "$verdict"
+        fm_composer_queued_enter_verdict "$verdict" "$(fm_backend_herdr_queued_enter_busy)"
       fi
       return 0
     fi
