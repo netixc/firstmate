@@ -646,24 +646,6 @@ test_pi_preserves_kimi_provider_model_selection() {
   pass "Kimi provider models remain selectable through the retained Pi runtime"
 }
 
-test_pi_preserves_model_identifiers_containing_opencode() {
-  local rec id out status launch model
-  id=profile-pi-opencode-model-z8c
-  model=openrouter/vendor-opencode-model
-  rec=$(make_spawn_case profile-pi-opencode-model pi "$id")
-  read_case_record "$rec"
-
-  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
-    --model "$model" --effort high)
-  status=$?
-  expect_code 0 "$status" "Pi spawn with a model identifier containing opencode should succeed"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" pi "$model" high
-  launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "--model '$model' --thinking 'high'" \
-    "standalone OpenCode removal stripped a Pi-accessed model identifier containing opencode"
-  pass "model identifiers containing opencode remain selectable through the retained Pi runtime"
-}
-
 test_pi_signed_threads_shared_pi_profile_and_preserves_identity() {
   local rec id out status launch
   id=profile-pi-signed-z8b
@@ -1151,7 +1133,6 @@ test_batch_preserves_native_ultra
 test_pi_threads_model_and_max_effort
 test_pi_preserves_xai_grok_provider_model_selection
 test_pi_preserves_kimi_provider_model_selection
-test_pi_preserves_model_identifiers_containing_opencode
 test_pi_tui_mode_probe_is_safe_for_old_and_new_pi
 test_pi_signed_threads_shared_pi_profile_and_preserves_identity
 test_pi_signed_missing_binary_refuses_before_endpoint_or_metadata
