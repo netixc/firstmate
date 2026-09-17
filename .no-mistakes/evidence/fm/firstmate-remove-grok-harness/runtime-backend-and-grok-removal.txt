@@ -1,0 +1,27 @@
+$ bash tests/fm-backend-tmux-smoke.test.sh
+@1
+ok - real tmux: fm_backend_tmux_create_task creates a window and refuses a duplicate
+ok - real tmux: fm_backend_tmux_send_text_line sends literal text and submits with Enter
+ok - real tmux: fm_backend_tmux_send_literal + fm_backend_tmux_send_key Enter submit as two separate steps
+ok - real tmux: fm_backend_tmux_capture's -S -N bound trims old history for a small window and reaches it for a large one
+ok - real tmux: fm_backend_tmux_resolve_bare_selector (list-live) finds the created window by name
+ok - real tmux: fm_backend_tmux_resolve_bare_selector fails for a window that does not exist
+ok - real tmux: kill removes the window and the readable session inventory authoritatively classifies it missing
+
+$ bash tests/fm-backend-herdr-workspace-per-home-e2e.test.sh
+ok - real herdr E2E: a primary-shaped home spawns a crewmate on the herdr backend
+ok - real herdr E2E: the primary-shaped home's crewmate landed in the 'firstmate' workspace
+ok - real herdr E2E: the primary spawns a --secondmate task on the herdr backend
+ok - real herdr E2E: a --secondmate spawn by the PRIMARY lands in the SECONDMATE's own labeled workspace, distinct from the primary's
+ok - real herdr E2E: a crewmate spawns successfully FROM a secondmate-shaped home's own fm-spawn.sh process
+ok - real herdr E2E: a crewmate spawned FROM the secondmate-shaped home lands in the secondmate's OWN workspace - falls out of per-home resolution, no glue needed
+ok - real herdr E2E: list_live from the primary's own context sees only the primary's own task
+ok - real herdr E2E: list_live from the secondmate's own context sees only tasks in the secondmate's own workspace (both its own tab and its crewmate's)
+ok - real herdr E2E: tearing down cm1 closes only its own tab - the secondmate's and cm2's tabs survive untouched
+ok - real herdr E2E: tearing down cm2 closes only its own tab - the secondmate's own tab (same workspace) survives untouched
+
+$ explicit standalone harness probe
+exit=1
+error: unknown harness 'grok'; pass a raw launch command to use an unverified adapter
+meta_exists=no
+endpoint_exists=no
