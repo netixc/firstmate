@@ -1,0 +1,25 @@
+warning: /tmp/fm-live-spawn.T1rFiB/home/data/live-pi-dispatch/launch-brief.md records no delivery contract line (scaffolded before ship briefs recorded one); launching on the explicit --mode local-only - confirm its definition of done matches
+notice: live-pi-dispatch ships mode=local-only while the standing posture for 01M2QPCAEDCHMR2C5HQ2SCSP5K is no-mistakes - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state
+warning: herdr presentation parent is absent or ambiguous; using the ordinary flat layout without projection
+spawned live-pi-dispatch harness=pi kind=ship mode=local-only yolo=off window=fm-live-spawn-herdr-22754:w1:p2 worktree=/Users/control/.treehouse/01M2QPCAEDCHMR2C5HQ2SCSP5K-b46c78/1/01M2QPCAEDCHMR2C5HQ2SCSP5K
+exit=0
+--- metadata ---
+window=fm-live-spawn-herdr-22754:w1:p2
+endpoint_task_id=live-pi-dispatch
+worktree=/Users/control/.treehouse/01M2QPCAEDCHMR2C5HQ2SCSP5K-b46c78/1/01M2QPCAEDCHMR2C5HQ2SCSP5K
+project=/Users/control/.no-mistakes/worktrees/874f0de57f61/01M2QPCAEDCHMR2C5HQ2SCSP5K
+harness=pi
+kind=ship
+mode=local-only
+yolo=off
+tasktmp=/tmp/fm-live-pi-dispatch
+model=openai-codex/gpt-5.6-sol
+effort=high
+busy_gen=g1789665120.24688.22886
+spawn_gen=s1789665120.22758.31791
+backend=herdr
+herdr_session=fm-live-spawn-herdr-22754
+herdr_workspace_id=w1
+herdr_tab_id=w1:t2
+herdr_pane_id=w1:p2
+lab=/tmp/fm-live-spawn.T1rFiB

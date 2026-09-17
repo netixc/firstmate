@@ -1,0 +1,4 @@
+error: unknown harness 'opencode'; pass a raw launch command to use an unverified adapter
+exit=1
+meta=absent
+endpoint_or_task_files=absent

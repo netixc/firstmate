@@ -1,0 +1,5 @@
+ok - pi (0.85.1): real idle composer classifies empty
+# harness absent, not verified here: pi-signed
+ok - strict posture live: a blank shell row classifies unknown and injection defers
+# harness absent, not verified here: zellij (false-positive regression not exercised)
+ok - live composer-matrix guard verified 2 live surface(s)

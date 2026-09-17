@@ -1,0 +1,3 @@
+ok - retired harness process names and markers no longer identify an adapter or hide retained Pi
+ok - a harness that publishes a marker inside its own process tree is unchanged
+ok - an agreeing marker keeps Pi's finer identity that ancestry cannot prove
