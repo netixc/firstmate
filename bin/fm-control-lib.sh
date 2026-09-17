@@ -34,11 +34,8 @@
 #      stopped. A verb whose postcondition cannot be proven on the recorded
 #      backend is refused rather than performed blind.
 #
-# `resume` is deliberately NOT a verb. It is not deterministic across the
-# verified adapters: opencode resumes the most recent session for the cwd with
-# --continue, while pi and pi-signed have no verified pane-resume contract at
-# all. `relaunch`
-# covers the same need deterministically for every adapter,
+# `resume` is deliberately NOT a verb. Pi and pi-signed have no verified
+# pane-resume contract. `relaunch` covers the same need deterministically,
 # because the brief on disk - not a harness-private session - is the durable
 # instruction.
 
@@ -63,7 +60,7 @@ fm_control_verb_allowed() {  # <verb>
 # than guessed at, exactly as a spawn on it would be.
 fm_control_harness_supported() {  # <harness>
   case "${1-}" in
-    opencode|pi|pi-signed) return 0 ;;
+    pi|pi-signed) return 0 ;;
   esac
   return 1
 }
@@ -79,7 +76,6 @@ fm_control_harness_family() {  # <recorded-harness>
   case "${1-}" in
     pi) printf 'pi' ;;
     pi-signed) printf 'pi-signed' ;;
-    opencode*) printf 'opencode' ;;
     *) return 1 ;;
   esac
 }
@@ -96,16 +92,14 @@ fm_control_harness_supports_kind() {  # <harness> <kind>
 # The key that cancels a running turn.
 fm_control_interrupt_key() {  # <harness>
   case "${1-}" in
-    opencode|pi|pi-signed) printf 'Escape' ;;
+    pi|pi-signed) printf 'Escape' ;;
     *) return 1 ;;
   esac
 }
 
-# How many times the interrupt key must be delivered. OpenCode needs a double
-# Escape; every other verified adapter interrupts on a single press.
+# How many times the interrupt key must be delivered.
 fm_control_interrupt_repeat() {  # <harness>
   case "${1-}" in
-    opencode) printf '2' ;;
     pi|pi-signed) printf '1' ;;
     *) return 1 ;;
   esac
@@ -116,14 +110,14 @@ fm_control_interrupt_repeat() {  # <harness>
 # with no verified mechanics returns nonzero, matching the tables above.
 fm_control_interrupt_clear_key() {  # <harness>
   case "${1-}" in
-    opencode|pi|pi-signed) ;;
+    pi|pi-signed) ;;
     *) return 1 ;;
   esac
 }
 
 fm_control_interrupt_ack_source() {  # <harness>
   case "${1-}" in
-    opencode|pi|pi-signed) printf 'none' ;;
+    pi|pi-signed) printf 'none' ;;
     *) return 1 ;;
   esac
 }
@@ -131,7 +125,6 @@ fm_control_interrupt_ack_source() {  # <harness>
 # The command that exits the agent from its own composer.
 fm_control_exit_command() {  # <harness>
   case "${1-}" in
-    opencode) printf '/exit' ;;
     pi|pi-signed) printf '/quit' ;;
     *) return 1 ;;
   esac
@@ -176,7 +169,6 @@ fm_control_harness_wiring_paths() {  # <harness> <worktree> <state-dir> <id>
   local harness=${1-} wt=${2-} state=${3-} id=${4-}
   [ -n "$wt" ] && [ -n "$state" ] && [ -n "$id" ] || return 1
   case "$harness" in
-    opencode) printf '%s\n' "$wt/.opencode/plugins/fm-busy-state.js" ;;
     pi|pi-signed) printf '%s\n' "$state/$id.pi-ext.ts" ;;
   esac
 }

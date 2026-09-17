@@ -98,8 +98,8 @@ test_harness_resolution() {
   done <<'ROWS'
 both absent -> own (backward-compat)^-^-^pi^pi
 crew set, secondmate absent -> crew (backward-compat)^pi^-^pi^pi
-crew set, secondmate set -> secondmate wins, crew untouched^pi^opencode^opencode^pi
-crew absent, secondmate set -> secondmate value, crew own^-^opencode^opencode^pi
+crew set, secondmate set -> secondmate wins, crew untouched^pi^pi-signed^pi-signed^pi
+crew absent, secondmate set -> secondmate value, crew own^-^pi-signed^pi-signed^pi
 signed Pi wrapper remains a distinct secondmate value^pi^pi-signed^pi-signed^pi
 secondmate=default defers to crew^pi^default^pi^pi
 crew=default resolves to own, secondmate follows^default^-^pi^pi
@@ -142,7 +142,7 @@ harness + model -> model only^pi model-x^pi^model-x^
 harness + model + effort -> both^pi model-x high^pi^model-x^high
 signed Pi wrapper + model + effort preserves every token^pi-signed openai-pi/gpt-5.6-sol max^pi-signed^openai-pi/gpt-5.6-sol^max
 default harness token -> falls back to own, empty model/effort^default^pi^^
-extra whitespace between tokens is tolerated^opencode   opencode-4    xhigh^opencode^opencode-4^xhigh
+extra whitespace between tokens is tolerated^pi-signed   pi-signed-4    xhigh^pi-signed^pi-signed-4^xhigh
 leading/trailing blank lines and a comment are skipped^# a comment\n\npi model-x low\n^pi^model-x^low
 ROWS
   pass "C1 fm-harness.sh secondmate-model/secondmate-effort resolve the optional tokens; bare harness stays empty (backward-compat)"
@@ -258,8 +258,8 @@ SH
   PATH="$fakebin:$BASE_PATH" bash -c \
     '. "$0/bin/fm-session-lock-lib.sh"; kill() { return 0; }; fm_harness_pid_alive 5252' \
     "$ROOT" 2>"$err"; status=$?
-  expect_code 0 "$status" "session-lock liveness should accept literal -opencode as a harness process name"
-  [ ! -s "$err" ] || fail "session-lock liveness wrote basename option noise for literal -opencode: $(cat "$err")"
+  expect_code 1 "$status" "session-lock liveness should reject a retired runtime process name"
+  [ ! -s "$err" ] || fail "session-lock liveness wrote basename option noise for a retired dash-leading name: $(cat "$err")"
 
   pass "harness identity: dash-leading ps command names are basename operands, not options"
 }
@@ -357,7 +357,7 @@ test_propagate_lib() {
   rm -rf "$dest/crew-harness"
 
   # 5. secondmate-harness is never inherited; backend still is
-  printf 'opencode\n' > "$src/secondmate-harness"
+  printf 'pi-signed\n' > "$src/secondmate-harness"
   printf '{"default":{"harness":"pi"}}\n' > "$src/crew-dispatch.json"
   printf 'pi\n' > "$src/crew-harness"
   printf 'manual\n' > "$src/backlog-backend"
@@ -386,7 +386,7 @@ test_propagate_lib() {
   printf 'guard\n' > "$guard_repo/README.md"
   git -C "$guard_repo" add -A
   git -C "$guard_repo" commit -qm guard
-  printf '{"default":{"harness":"opencode"}}\n' > "$src/crew-dispatch.json"
+  printf '{"default":{"harness":"pi-signed"}}\n' > "$src/crew-dispatch.json"
   stdout="$d/guard-skip.out"
   stderr="$d/guard-skip.err"
   FM_INHERITABLE_CONFIG=crew-dispatch.json propagate_inheritable_config "$src" "$guard_repo/config" >"$stdout" 2>"$stderr" \
@@ -443,6 +443,7 @@ spawn_secondmate() {
   local world=$1 id=$2 home=$3 harness=${4:-} fakebin
   mkdir -p "$world/home/state" "$world/home/data"
   fakebin=$(make_noop_tmux "$world/tmux-$id")
+  ln -sf "$(command -v pi)" "$fakebin/pi-signed"
   # An empty harness must contribute zero args, not an empty positional; build the
   # arg list explicitly so the optional harness is omitted cleanly.
   local spawn_args=("$id" "$home")
@@ -458,8 +459,8 @@ spawn_secondmate() {
 
 meta_harness() { grep '^harness=' "$1" 2>/dev/null | tail -1 | cut -d= -f2-; }
 
-# Split active: crew-harness=pi + secondmate-harness=opencode. The secondmate
-# agent launches on OpenCode; its own workers inherit Pi; secondmate-harness
+# Split active: crew-harness=pi + secondmate-harness=pi-signed. The secondmate
+# agent launches on Pi-signed; its own workers inherit Pi; secondmate-harness
 # does not flow into the home.
 test_spawn_split_and_inherit() {
   local w sm meta
@@ -468,7 +469,7 @@ test_spawn_split_and_inherit() {
   mkdir -p "$w/home/config"
   printf '{"default":{"harness":"pi","model":"model-x","effort":"low"}}\n' > "$w/home/config/crew-dispatch.json"
   printf 'pi\n' > "$w/home/config/crew-harness"
-  printf 'opencode\n' > "$w/home/config/secondmate-harness"
+  printf 'pi-signed\n' > "$w/home/config/secondmate-harness"
   printf 'manual\n' > "$w/home/config/backlog-backend"
   printf 'zellij\n' > "$w/home/config/backend"
   make_seeded_home "$sm" sm
@@ -477,8 +478,8 @@ test_spawn_split_and_inherit() {
 
   meta="$w/home/state/sm.meta"
   [ -f "$meta" ] || fail "split: no meta written"
-  [ "$(meta_harness "$meta")" = opencode ] \
-    || fail "split: secondmate launched on '$(meta_harness "$meta")', expected opencode"
+  [ "$(meta_harness "$meta")" = pi-signed ] \
+    || fail "split: secondmate launched on '$(meta_harness "$meta")', expected pi-signed"
   [ "$(cat "$sm/config/crew-harness" 2>/dev/null)" = pi ] \
     || fail "split: home crew-harness not inherited as pi (got '$(cat "$sm/config/crew-harness" 2>/dev/null)')"
   [ "$(cat "$sm/config/crew-dispatch.json" 2>/dev/null)" = '{"default":{"harness":"pi","model":"model-x","effort":"low"}}' ] \
@@ -538,14 +539,14 @@ test_spawn_explicit_harness_wins() {
   w="$TMP_ROOT/spawn-explicit"
   sm="$w/sm"
   mkdir -p "$w/home/config"
-  printf 'opencode\n' > "$w/home/config/secondmate-harness"
+  printf 'pi-signed\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
   spawn_secondmate "$w" sm "$sm" pi
 
   meta="$w/home/state/sm.meta"
   [ "$(meta_harness "$meta")" = pi ] \
-    || fail "explicit: launched on '$(meta_harness "$meta")', expected explicit pi over config opencode"
+    || fail "explicit: launched on '$(meta_harness "$meta")', expected explicit pi over config pi-signed"
   pass "B5 spawn: an explicit per-spawn harness arg overrides config/secondmate-harness"
 }
 
@@ -1214,13 +1215,13 @@ test_bootstrap_sweep_propagates_and_reconverges() {
   c1=$(git -C "$w/main" rev-parse HEAD)
   add_sm_worktree "$w" sm "$c1"
 
-  # Initial push: primary crew-harness=pi, secondmate-harness=opencode (must NOT flow).
+  # Initial push: primary crew-harness=pi, secondmate-harness=pi-signed (must NOT flow).
   printf '{"default":{"harness":"pi"}}\n' > "$w/home/config/crew-dispatch.json"
   printf 'pi\n' > "$w/home/config/crew-harness"
   printf 'manual\n' > "$w/home/config/backlog-backend"
   printf 'tmux\n' > "$w/home/config/backend"
   : > "$w/home/config/trace-context"
-  printf 'opencode\n' > "$w/home/config/secondmate-harness"
+  printf 'pi-signed\n' > "$w/home/config/secondmate-harness"
   run_bootstrap "$w" >/dev/null
   [ "$(cat "$w/sm/config/crew-harness" 2>/dev/null)" = pi ] \
     || fail "sweep: crew-harness not pushed into the live home"
@@ -1677,7 +1678,7 @@ test_config_reread_per_home_changed_sets_and_exact_bytes() {
   printf 'tasks-axi\n' > "$w/alpha/config/backlog-backend"
   printf '{"default":{"harness":"old"}}\n' > "$w/beta/config/crew-dispatch.json"
 
-  multiline_json=$(printf '{\n  "default": {\n    "harness": "opencode",\n    "model": "opencode-4.5"\n  },\n  "rules": [\n    {"when": "news", "use": {"harness": "opencode"}}\n  ]\n}\n')
+  multiline_json=$(printf '{\n  "default": {\n    "harness": "pi-signed",\n    "model": "pi-signed-4.5"\n  },\n  "rules": [\n    {"when": "news", "use": {"harness": "pi-signed"}}\n  ]\n}\n')
   printf '%s' "$multiline_json" > "$w/home/config/crew-dispatch.json"
   printf 'pi\n' > "$w/home/config/crew-harness"
   printf 'manual\n' > "$w/home/config/backlog-backend"
@@ -1767,9 +1768,9 @@ test_config_reread_per_home_changed_sets_and_exact_bytes() {
   pointer="CONFIG_REREAD: $(reread_instruction_path "$w/alpha")"
   assert_contains "$(inbox_stream "$w/home/state" alpha)" "[fm-from-firstmate]" "reread send must be marked"
   assert_contains "$(inbox_stream "$w/home/state" alpha)" "$pointer" "reread send must point to the durable instruction file"
-  assert_not_contains "$(inbox_stream "$w/home/state" alpha)" '"harness": "opencode"' "sent message must not inline multiline JSON"
+  assert_not_contains "$(inbox_stream "$w/home/state" alpha)" '"harness": "pi-signed"' "sent message must not inline multiline JSON"
   assert_not_contains "$(inbox_stream "$w/home/state" alpha)" "Default worker" "sent message must not summarize"
-  assert_not_contains "$(cat "$log")" '"harness": "opencode"' "the typed doorbell must not inline multiline JSON"
+  assert_not_contains "$(cat "$log")" '"harness": "pi-signed"' "the typed doorbell must not inline multiline JSON"
   pass "B15 config reread is per-home, exact-byte, ordered, and pointer-only"
 }
 
@@ -1844,7 +1845,7 @@ test_config_reread_isolation_and_absent_and_send_failure() {
   rm -rf "$w/home/state/alpha.inbox" "$w/home/state/beta.inbox"
   : > "$w/home/state/alpha.inbox"
   : > "$w/home/state/beta.inbox"
-  printf 'opencode\n' > "$w/home/config/crew-harness"
+  printf 'pi-signed\n' > "$w/home/config/crew-harness"
   err="$w/config-reread-send-fail.err"
   out=$(PATH="$(make_fake_toolchain "$w"):$BASE_PATH" \
     FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" FM_SEND_SETTLE=0 \

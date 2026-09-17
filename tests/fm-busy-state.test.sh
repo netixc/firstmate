@@ -218,7 +218,7 @@ test_stale_gen_record_unknown() {
 test_missing_record_unknown_not_idle() {
   local state out h
   state=$(new_state_dir missing)
-  for h in opencode pi pi-signed; do
+  for h in pi pi-signed; do
     out=$(fm_busy_classify tmux w1 "$h" t1 "$state")
     [ "$out" = "unknown missing" ] || fail "$h with no record must be 'unknown missing', got '$out'"
   done
@@ -262,8 +262,6 @@ test_source_mismatch_cross_adapter() {
   state=$(new_state_dir cross-adapter)
   gen=$("$EV" arm "$state" t1)
   "$EV" apply "$state" t1 busy --gen "$gen" --source pi-ext --event agent-start
-  out=$(fm_busy_classify tmux w1 opencode t1 "$state")
-  [ "$out" = "unknown source-mismatch" ] || fail "pi-ext record on an OpenCode task must be untrusted, got '$out'"
   out=$(fm_busy_classify tmux w1 pi t1 "$state")
   [ "$out" = "busy pi-ext" ] || fail "pi-ext record on a pi task must classify, got '$out'"
   out=$(fm_busy_classify tmux w1 unknown-harness t1 "$state")
@@ -275,10 +273,9 @@ test_converted_adapters_ignore_footer_text() {
   local state out h
   state=$(new_state_dir no-footer)
   local tail='• Working (6s • esc to interrupt)
-   ■■■■⬝⬝⬝⬝  esc interrupt
 Working...
 Ctrl+c:cancel'
-  for h in opencode pi pi-signed; do
+  for h in pi pi-signed; do
     out=$(fm_busy_classify tmux w1 "$h" t1 "$state" "$tail")
     [ "$out" = "unknown missing" ] || fail "$h must never classify from footer text, got '$out'"
   done

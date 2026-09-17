@@ -246,25 +246,22 @@ The installed extension API has no supported global transcript filter, user-mess
 Pi 0.81.1 through 0.82.0, Pi 0.84.4, and Pi 0.85.1 export `AssistantMessageComponent` and `InteractiveMode`, so Calm uses separate idempotent, API-probed adapters for assistant thinking layout and the complete operational-user transcript row while leaving all message data and non-Calm rendering unchanged; see the [compatibility contract](calm.md#pi-compatibility) for how a future Pi lacking one of those exports is handled.
 General component replacement, ANSI cursor erasure, provider-context mutation, and installed-file patching remain rejected as unsupported or preservation-breaking workarounds.
 
-## Cross-harness verification record
+## Harness verification record
 
-The cross-harness inspection was performed on 2026-07-22, with every remaining integration surface rechecked and Pi reverified at 0.81.1 on 2026-07-23 for the latest Calm presentation change.
+Pi was reverified at 0.81.1 on 2026-07-23 for the latest Calm presentation change.
 
 ```text
-$ opencode --version
-1.17.18
 $ pi --version
 0.81.1
 ```
 
 | Harness | Conclusion | Evidence |
 | --- | --- | --- |
-| OpenCode 1.17.18 | Not feasible without violating the preservation boundary. | Plugins expose events and tool execution hooks, not a built-in transcript-row renderer; same-name tool replacement changes execution rather than presentation alone. |
 | Pi (verified 0.81.1 through 0.82.0) | Partially feasible with two API-probed exported-class adapters. | Public APIs control working visibility, collapsed labels, known tool slots, custom entries, and expansion redraws; exported assistant and interactive-mode classes provide the collapsed-thinking and operational-user layout boundaries, gated on the exact method's presence rather than a version number, while generic user, tool, and status filtering remains unavailable. |
 
 These conclusions are deliberately limited to the named versions and supported surfaces.
 They do not claim that a harness can never add the missing renderer API.
-For the duplicate-turn fix and the latest presentation change, the launch templates for OpenCode and Pi and the watcher, turn-end, session-start, away-supervisor, and from-firstmate producers were re-inspected.
+For the duplicate-turn fix and the latest presentation change, the Pi launch template and the watcher, turn-end, session-start, away-supervisor, and from-firstmate producers were re-inspected.
 The canonical encoder and every non-Pi delivery path remain unchanged, and the tmux, Herdr, Zellij, Orca, and cmux runtime surfaces continue to transport the same input selected by the harness adapter.
 Only Pi's Calm presentation implementation changed; every producer and non-Pi transport remains unchanged.
 

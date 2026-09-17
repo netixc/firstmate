@@ -8,11 +8,7 @@ Task-specific chronology, temporary paths, run identifiers, and delivery transcr
 
 ## Native session-start delivery
 
-The cross-harness transport pass ran on 2026-07-17 with OpenCode 1.17.18 and Pi 0.80.10.
-
-OpenCode was checked in both headless and interactive modes.
-`client.session.promptAsync` accepted the nudge in both cases; the persistent TUI completed the generated turn, while `opencode run` exited before another turn.
-This is the current headless fail-open limit.
+The native transport pass ran on 2026-07-17 with Pi 0.80.10.
 
 Pi command shape:
 
@@ -110,7 +106,6 @@ Each pass polled `state/<id>.busy-state` while a real turn ran.
 | Harness | Version verified | Semantic source | Observed result |
 | --- | --- | --- | --- |
 | Pi | 0.82.0 | Extension `agent_start` / `agent_settled` with `ctx.isIdle()` | The spawn seed `busy source=fm-spawn`, then `busy source=pi-ext event=agent-start`, then `idle source=pi-ext event=agent-settled`; the turn-end marker was still touched. |
-| OpenCode | 1.17.18 | Plugin `session.status` | In a real TUI pane: seed, then `busy source=opencode-plugin event=session-busy`, then `idle source=opencode-plugin event=session-status-idle`. |
 Deterministic entry points:
 
 ```sh
@@ -125,7 +120,6 @@ The blocking and bounded-follow-up mechanisms were validated across the supporte
 
 | Harness | Version verified | Mechanism | Observed result |
 | --- | --- | --- | --- |
-| OpenCode | 1.17.6 | Passive `session.idle` callback | Throwing could not block, while `promptAsync` scheduled one TUI follow-up; headless remained fail-open. |
 | Pi | 0.80.5 | Passive `agent_settled` callback | Exactly one guard follow-up ran for an unhealthy cycle, with no recursion across tool turns. |
 Session-lock ownership in `bin/fm-session-lock-lib.sh` is decided against a session's whole contiguous recognized-runtime ancestry rather than one chosen pid.
 `tests/fm-session-lock-ancestry.test.sh` pins the supported runtime reporting semantics behind a deterministic process table.
@@ -195,13 +189,11 @@ The cross-harness evidence combines the supported-runtime live passes against is
 No credential material was copied into a fixture.
 
 ```text
-OpenCode 1.17.18
 Pi 0.80.10
 ```
 
 | Harness | Exact opt-in command | Observed guarantee |
 | --- | --- | --- |
-| OpenCode | `FM_OPENCODE_LIVE_E2E=1 tests/fm-opencode-primary-live-e2e.test.sh` | A verified successor existed before prompt handling, with no model re-arm or turn-end fallback. |
 | Pi | `FM_PI_LIVE_E2E=1 tests/fm-pi-primary-live-e2e.test.sh` | One initial tool call led to extension-owned successors and clean child retirement on exit. |
 
 Pi 0.81.1 repeated the continuity and clean-exit lifecycle on 2026-07-23 after the Calm presentation changes.

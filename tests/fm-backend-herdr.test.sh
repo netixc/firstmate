@@ -4122,25 +4122,6 @@ test_send_text_submit_confirms_blocked_after_enter() {
   pass "fm_backend_herdr_send_text_submit: a post-Enter blocked state confirms delivery without retrying into the prompt"
 }
 
-test_send_text_submit_preexisting_working_pending_is_queued_enter() {
-  local dir log resp fb out enter_count
-  dir="$TMP_ROOT/submit-preexisting-working-queued"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  # Native working + proven pending after the retry budget is the OpenCode
-  # busy-queued Enter: the harness accepted Enter and will submit when the
-  # current turn ends. Footer transition is not the confirmation path here
-  # because the pre-Enter native status is already working.
-  printf '{"result":{"agent":{"agent_status":"working"}}}\n' > "$resp/2.out"
-  printf '  ╭────────────────────────╮\n  │ > hello captain        │\n  ╰────────────────────────╯\n' > "$resp/4.out"
-  printf '{"result":{"agent":{"agent_status":"working"}}}\n' > "$resp/5.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_send_text_submit default:w1:p2 "hello captain" 1 0.01 0.01' "$ROOT" )
-  [ "$out" = empty ] || fail "a working native baseline plus proven pending after retries is a queued Enter, got '$out'"
-  enter_count=$(grep -c $'\x1f''pane'$'\x1f''send-keys'$'\x1f''w1:p2'$'\x1f''enter' "$log")
-  [ "$enter_count" -eq 1 ] || fail "queued-Enter confirmation should use the configured retry count, sent $enter_count Enter(s)"
-  pass "fm_backend_herdr_send_text_submit: native working + proven pending after retries reports empty (queued Enter)"
-}
-
 test_send_text_submit_preexisting_working_does_not_confirm_failed_enter() {
   local dir log resp fb out enter_count
   dir="$TMP_ROOT/submit-preexisting-working-enter-failed"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
@@ -4207,26 +4188,9 @@ test_send_text_submit_confirms_despite_idle_tip_composer() {
 }
 
 # Companion regression for the pre-injection empty-box guard itself
-# (bin/fm-supervise-daemon.sh's pane_input_pending): an OpenCode idle composer
+# (bin/fm-supervise-daemon.sh's pane_input_pending): an Pi idle composer
 # can show faint ghost suggestions. The guard must ignore that faint text or
 # away-mode escalation delivery would defer despite no human input.
-test_composer_state_opencode_dynamic_idle_tip_reads_empty_when_faint() {
-  local dir log resp fb out
-  dir="$TMP_ROOT/composer-opencode-dynamic-tip"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
-  printf '┃\n┃  \x1b[2mAsk anything...\x1b[0m\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high\n╹▀▀▀▀\n' > "$resp/1.out"
-  fb=$(make_herdr_fakebin "$dir")
-  out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
-    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_composer_state default:w1:p2' "$ROOT" )
-  [ "$out" = empty ] || fail "a faint OpenCode dynamic idle-tip row should read empty, got '$out'"
-  pass "fm_backend_herdr_composer_state: a faint OpenCode dynamic idle-tip composer row reads empty"
-}
-
-# Regression guard for the PRE-injection empty-box guard itself
-# (bin/fm-supervise-daemon.sh's pane_input_pending, dispatched via
-# fm_backend_composer_state -> fm_backend_herdr_composer_state): this task
-# changes ONLY submit confirmation, so genuine unsubmitted text in the
-# composer must still read 'pending' and the guard must still refuse to
-# inject into it.
 test_composer_state_guard_still_refuses_real_pending_text_after_submit_confirmation_change() {
   local dir log resp fb out
   dir="$TMP_ROOT/composer-guard-still-refuses"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
@@ -4675,7 +4639,7 @@ set_fake_agent() {  # <agent-dir> <window-or-pane> <status>
 
 test_normalize_event_leaves_from_empty() {
   local rec
-  rec=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_normalize_event wG:pQ wG blocked opencode' "$ROOT")
+  rec=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_normalize_event wG:pQ wG blocked pi' "$ROOT")
   [ "$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_pane_id "$1"' "$ROOT" "$rec")" = "wG:pQ" ] \
     || fail "normalize_event pane_id wrong: $rec"
   [ "$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_from_status "$1"' "$ROOT" "$rec")" = "" ] \
@@ -4696,7 +4660,7 @@ test_escalation_marker_keys_like_watcher() {
 test_apply_transition_blocked_requires_commit_to_dedupe() {
   local dir state rec out rc marker
   dir="$TMP_ROOT/apply-blocked"; state="$dir/state"; mkdir -p "$state"
-  rec=$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_record wG:pQ wG "" blocked opencode' "$ROOT")
+  rec=$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_record wG:pQ wG "" blocked pi' "$ROOT")
   marker="$state/.herdr-escalated-default_wG_pQ"
   out=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_apply_transition "$1" "$2" "$3"' "$ROOT" "$state" default "$rec"); rc=$?
   [ "$rc" = 0 ] || fail "a fresh blocked edge must return 0 (actionable), got $rc"
@@ -4715,8 +4679,8 @@ test_apply_transition_working_clears_marker() {
   local dir state blocked working marker rc
   dir="$TMP_ROOT/apply-working"; state="$dir/state"; mkdir -p "$state"
   marker="$state/.herdr-escalated-default_wG_pQ"
-  blocked=$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_record wG:pQ wG "" blocked opencode' "$ROOT")
-  working=$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_record wG:pQ wG "" working opencode' "$ROOT")
+  blocked=$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_record wG:pQ wG "" blocked pi' "$ROOT")
+  working=$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_record wG:pQ wG "" working pi' "$ROOT")
   bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_commit_transition "$1" "$2" "$3"' "$ROOT" "$state" default "$blocked"
   [ -e "$marker" ] || fail "setup: committed blocked edge should have set the marker"
   bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_apply_transition "$1" "$2" "$3"' "$ROOT" "$state" default "$working"; rc=$?
@@ -4744,7 +4708,7 @@ test_apply_transition_defer_and_fallback_are_noops() {
   marker="$state/.herdr-escalated-default_wG_pQ"
   for s in idle "done" unknown ""; do
     local rec
-    rec=$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_record wG:pQ wG "" "$1" opencode' "$ROOT" "$s")
+    rec=$(bash -c '. "$0/bin/fm-transition-lib.sh"; fm_transition_record wG:pQ wG "" "$1" pi' "$ROOT" "$s")
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_apply_transition "$1" "$2" "$3"' "$ROOT" "$state" default "$rec"; rc=$?
     [ "$rc" = 1 ] || fail "defer/fallback status '$s' must return 1 (no fast action), got $rc"
     [ ! -e "$marker" ] || fail "defer/fallback status '$s' must not touch the escalation marker"
@@ -4822,7 +4786,7 @@ test_wait_transition_stream_blocked_returns_record() {
   fb=$(make_herdr_eventfake "$dir")
   set_fake_agent "$agent" "wG:pQ" idle   # reconcile sees idle -> proceeds to stream
   reader=$(make_fake_reader "$dir"); lines="$dir/lines"
-  printf 'wG:pQ\t\tblocked\topencode\n' > "$lines"
+  printf 'wG:pQ\t\tblocked\tpi\n' > "$lines"
   marker="$state/.herdr-escalated-sess_wG_pQ"
   out=$(PATH="$fb:$PATH" FM_BACKEND_HERDR_EVENTS_FORCE=1 FM_FAKE_SESSION_NAME=sess FM_FAKE_SOCKET="$dir/x.sock" FM_FAKE_AGENT_DIR="$agent" \
     FM_BACKEND_HERDR_EVENT_READER="$reader" FM_FAKE_READER_LINES="$lines" \
@@ -4844,7 +4808,7 @@ test_wait_transition_stream_absorb_clears_then_timeout() {
   # Stream a working edge (absorb) then an idle edge (defer). Neither is a fresh
   # actionable edge, so the wait ends as a clean timeout (rc 1) and the marker
   # is cleared by the working edge.
-  printf 'wG:pQ\t\tworking\topencode\nwG:pQ\t\tidle\topencode\n' > "$lines"
+  printf 'wG:pQ\t\tworking\tpi\nwG:pQ\t\tidle\tpi\n' > "$lines"
   rc=$(PATH="$fb:$PATH" FM_BACKEND_HERDR_EVENTS_FORCE=1 FM_FAKE_SESSION_NAME=sess FM_FAKE_SOCKET="$dir/x.sock" FM_FAKE_AGENT_DIR="$agent" \
     FM_BACKEND_HERDR_EVENT_READER="$reader" FM_FAKE_READER_LINES="$lines" \
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_wait_transition sess 2 "$1" sess:wG:pQ; echo $?' "$ROOT" "$state" | tail -1)
@@ -5063,12 +5027,10 @@ test_send_text_submit_detects_landed_send
 test_send_text_submit_detects_swallowed_enter
 test_send_text_submit_popup_autocomplete_requires_second_enter
 test_send_text_submit_confirms_blocked_after_enter
-test_send_text_submit_preexisting_working_pending_is_queued_enter
 test_send_text_submit_preexisting_working_does_not_confirm_failed_enter
 test_send_text_submit_idle_baseline_does_not_confirm_failed_enter
 test_send_text_submit_idle_native_empty_composer_confirms_delivery
 test_send_text_submit_confirms_despite_idle_tip_composer
-test_composer_state_opencode_dynamic_idle_tip_reads_empty_when_faint
 test_composer_state_guard_still_refuses_real_pending_text_after_submit_confirmation_change
 test_send_text_submit_slow_transition_within_one_enter_needs_no_extra_enter
 test_send_text_submit_send_failed

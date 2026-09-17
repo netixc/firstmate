@@ -113,11 +113,11 @@ Live GitHub enrichment exists only behind the bearings `--include-prs` opt-in.
 Optional Relay integrates with the watcher only after explicit opt-in; [configuration.md](configuration.md#relay-env) owns its generated-artifact and dispatch mechanics.
 
 At session start, `bin/fm-session-start.sh` emits exactly one primary-harness supervision block rendered by `bin/fm-supervision-instructions.sh` from `docs/supervision-protocols/`.
-That block owns the live wait shape for the running primary harness: Pi and pi-signed use the same two tracked primary extensions, and OpenCode uses its TUI plugin.
+That block owns the live wait shape for the running primary harness: Pi and pi-signed use the same two tracked primary extensions.
 `bin/fm-watch-arm.sh` remains the verified arm wrapper for protocols that call it; it forks the watcher as a tracked child, verifies it is genuinely alive with a fresh liveness beacon, and prints an honest `started`, `attached`, or nonzero `FAILED` status.
 [`watcher-continuity.md`](watcher-continuity.md#arm-layer-cycle-contract) owns the arm layer's successor, terminal-delivery, re-arm recovery, and typed clean-close failure contract.
 The arm layer records one bounded lifecycle row per observed cycle in `state/.watch-cycle-exits.log`; `state/.watch-triage.log` remains exclusively the absorbed-wake debug log.
-Pi and OpenCode verify session-lock ownership and launch one singleton successor from their child-close handlers before delivering an actionable wake prompt, with bounded exponential retry for failed restoration.
+Pi verifies session-lock ownership and launches one singleton successor from its child-close handler before delivering an actionable wake prompt, with bounded exponential retry for failed restoration.
 The existing turn-end guard remains the final backstop for every harness-engine protocol, with pi-signed sharing Pi's protocol.
 Its `--restart` mode signals only the watcher recorded in the current home's `state/.watch.lock`, so restarting one home cannot kill sibling secondmate watchers.
 A pull-based guard (`bin/fm-guard.sh`) warns through supervision tool output if the primary checkout is tangled or if work, process-event sources, registered custom checks, or Relay polling has an unhealthy model-aware supervision verdict; on main it also warns when queued wakes are waiting for main itself to drain.
@@ -135,7 +135,7 @@ The record's presence is the posture on every harness, `bin/fm-afk-launch.sh` ow
 While the record exists neither supervisor rechecks an item held for the captain, and a declared external wait names when it clears with `until` for a condition-aware recheck in both postures that occurs at the declared time or the hours-long `FM_PAUSE_RESURFACE_SECS` bound, whichever comes first.
 This release records clauses and does not execute them.
 On Pi and pi-signed the away daemon is no longer launched: the ordinary supervision session continues under the record.
-A presence-gated sub-supervisor (`bin/fm-supervise-daemon.sh`) still extends this for walk-away supervision on the other harnesses: the `/afk` skill starts it through the tracked foreground helper `bin/fm-afk-start.sh` once the record exists, after which the watcher reverts to daemon-managed one-shot mode and the daemon self-handles routine wakes in bash.
+A presence-gated sub-supervisor (`bin/fm-supervise-daemon.sh`) still extends this for walk-away supervision on unknown harnesses: the `/afk` skill starts it through the tracked foreground helper `bin/fm-afk-start.sh` once the record exists, after which the watcher reverts to daemon-managed one-shot mode and the daemon self-handles routine wakes in bash.
 The watcher and daemon share `bin/fm-classify-lib.sh` for captain-relevant status verbs, declared-wait vocabulary (a `paused:` external wait and a verified `captain-held` transfer alike, through one combined predicate), and status-scan primitives.
 Terminal verbs remain captain-relevant, while a nonterminal progress verb cannot become terminal merely because its prose contains a legacy free-text token such as `merged`; bare legacy free-text lines remain compatible.
 Both supervisors classify the status bytes appended since they last classified that log, never its last line alone, and report every actionable event through the captured endpoint before committing that position.
@@ -150,7 +150,6 @@ Away-mode housekeeping has no worktree-write deferral of its own, so while `stat
 The daemon escalates captain-relevant events, plus a bounded recheck for a declared external wait that is still declared, as one batched, single-line digest using the canonical `away-supervisor` kind from `bin/fm-operational-input.sh` so firstmate can distinguish it structurally from real messages; captain-held transfers remain silent until return while the posture record exists.
 Its supervisor injection path supports tmux and herdr panes, with `FM_SUPERVISOR_BACKEND` and `FM_SUPERVISOR_TARGET` resolved independently from the task-spawn backend.
 Pane existence, busy checks, composer checks, capture, and verified submit route through `bin/fm-backend.sh`; the backend-specific confirmation signals are owned by [`tmux-backend.md`](tmux-backend.md) and [`herdr-backend.md`](herdr-backend.md).
-The retries-exhausted queued-Enter decision is owned by `fm_composer_queued_enter_verdict` in `bin/fm-composer-lib.sh`; tmux and herdr provide only their backend-specific busy signals.
 Composer classification has one shared owner, `bin/fm-composer-lib.sh`: tmux, herdr, Zellij, Orca, and cmux contribute only a screen capture plus declarative styled, cursor, identity, and row capabilities, while the shared classifier owns every shape and the `empty`/`pending`/`pending-unproven`/`unknown` verdict.
 The daemon injects only into an affirmatively `empty` composer, so every other or future verdict defers; positive container proof is required, and a blank unidentified row or bare dead-shell prompt cannot receive an escalation.
 The current operator boundary is in [Composer and injection safety](herdr-backend.md#composer-and-injection-safety).
@@ -171,7 +170,7 @@ Text for a worker to read and commands that drive a worker's process are separat
 `bin/fm-busy-lib.sh` is the single owner of what "this worker is busy" means, and `bin/fm-busy-event.sh` is the only writer of the per-task records it reads.
 Every classification returns a verdict of busy, idle, unknown, or dead together with the source that produced it, so a consumer or a diagnostic can never confuse semantic state with a fallback.
 
-Each converted adapter reports its own turn lifecycle through a machine-readable contract the vendor already exposes, rather than through rendered footer text: Pi and pi-signed through the Firstmate-owned extension's `agent_start` and `agent_settled` confirmed by `ctx.isIdle()`, and OpenCode through its plugin's semantic `session.status`.
+Each converted adapter reports its own turn lifecycle through the Firstmate-owned Pi extension's `agent_start` and `agent_settled`, with settlement confirmed by `ctx.isIdle()` rather than rendered footer text.
 Kimi providers behind Pi inherit Pi's lifecycle.
 
 Missing, malformed, stale, untrusted, or unverified semantic state is unknown, never idle, and unknown is never promoted to busy either.
@@ -248,7 +247,7 @@ The session-start bootstrap step keeps valid dispatch configuration silent unles
 When the file exists, `fm-spawn.sh` refuses crewmate and scout launches without an explicit harness, so `config/crew-harness` is only automatic when no dispatch profile file is active.
 Secondmate launches are exempt because they resolve the secondmate harness and any optional secondmate model or effort tokens instead.
 Unsupported effort values are still recorded in task meta when passed to `fm-spawn.sh`, but the launch template omits any effort flag that the selected harness does not accept.
-That keeps spawn launch compatible across opencode, pi, and pi-signed while preserving the requested profile for later audit.
+That keeps spawn launch compatible across pi and pi-signed while preserving the requested profile for later audit.
 
 ## Optional secondmates
 

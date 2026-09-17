@@ -35,7 +35,7 @@ mkdir -p "$TMP_ROOT"
 TMP_ROOT=$(cd "$TMP_ROOT" && pwd)
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
-VERIFIED_HARNESSES="opencode pi pi-signed"
+VERIFIED_HARNESSES="pi pi-signed"
 
 # The expectation table, written out independently of the implementation so a
 # silent change to either side shows up here. The fourth field is the composer
@@ -43,7 +43,6 @@ VERIFIED_HARNESSES="opencode pi pi-signed"
 # its composer empty on cancel.
 verified_adapter_contract() {  # <harness> -> exit command, interrupt key, repeat, clear key
   case "$1" in
-    opencode) printf '/exit\tEscape\t2\t\n' ;;
     pi) printf '/quit\tEscape\t1\t\n' ;;
     pi-signed) printf '/quit\tEscape\t1\t\n' ;;
     *) return 1 ;;
@@ -235,7 +234,7 @@ test_interrupt_sends_each_harness_verified_key() {
 # are reached through one prefix rule rather than an exact string match.
 test_harness_family_resolution() {
   local pair recorded want got
-  for pair in opencode:opencode opencode-cli:opencode pi:pi pi-signed:pi-signed; do
+  for pair in pi:pi pi-signed:pi-signed; do
     recorded=${pair%%:*}
     want=${pair#*:}
     got=$(fm_control_harness_family "$recorded") \
@@ -268,49 +267,6 @@ test_harness_family_resolution() {
   fm_control_harness_family kimi \
     && fail "the retired Kimi adapter must not resolve to a control family"
   pass "fm-control-lib: a recorded harness resolves to its verified adapter without guessing"
-}
-
-test_prefixed_recorded_harness_reaches_each_control_verb() {
-  local dir out rc
-  dir=$(new_case prefixed-interrupt)
-  add_task "$dir" t1 opencode-cli-2
-  alive_as "$dir" opencode-cli-2
-  out=$(run_control "$dir" t1 interrupt); rc=$?
-  expect_code 0 "$rc" "interrupt should resolve a prefixed recorded harness"$'\n'"$out"
-  [ "$(keys_sent "$dir")" = $'Escape\nEscape' ] \
-    || fail "an opencode-prefixed task should receive OpenCode's interrupt keys"
-  assert_contains "$out" "harness=opencode" \
-    "interrupt should report the verified adapter that supplied its mechanics"
-
-  dir=$(new_case prefixed-exit)
-  add_task "$dir" t1 opencode-cli-2
-  alive_as "$dir" opencode-cli-2
-  out=$(run_control "$dir" t1 exit); rc=$?
-  expect_code 0 "$rc" "exit should resolve a prefixed recorded harness"$'\n'"$out"
-  [ "$(literals "$dir")" = /exit ] \
-    || fail "an opencode-prefixed task should receive OpenCode's exit command"
-  assert_contains "$out" "stopped t1 harness=opencode" \
-    "exit should report the verified adapter that supplied its mechanics"
-  pass "fm-control: prefixed recorded harnesses reach interrupt and exit mechanics"
-}
-
-test_opencode_interrupts_twice_and_others_once() {
-  # The one adapter that differs, asserted through the delivered keys rather
-  # than the table, so a regression in either shows up here.
-  local dir
-  dir=$(new_case int-double)
-  add_task "$dir" t1 opencode
-  alive_as "$dir" opencode
-  run_control "$dir" t1 interrupt >/dev/null
-  [ "$(keys_sent "$dir" | wc -l | tr -d ' ')" = 2 ] \
-    || fail "opencode should receive a double Escape"
-  dir=$(new_case int-single)
-  add_task "$dir" t1 pi
-  alive_as "$dir" pi
-  run_control "$dir" t1 interrupt >/dev/null
-  [ "$(keys_sent "$dir" | wc -l | tr -d ' ')" = 1 ] \
-    || fail "pi should receive a single Escape"
-  pass "fm-control interrupt: opencode needs a double Escape, pi a single one"
 }
 
 test_unverified_harness_is_refused() {
@@ -359,7 +315,7 @@ test_harness_kind_capability() {
     fm_control_harness_supports_kind "$harness" scout \
       || fail "$harness should be able to run a scout task"
   done
-  for harness in pi opencode pi-signed; do
+  for harness in pi pi-signed; do
     fm_control_harness_supports_kind "$harness" secondmate \
       || fail "$harness should be able to run a secondmate"
   done
@@ -581,7 +537,7 @@ test_resume_is_refused_with_its_reason() {
   add_task "$dir" t1 pi
   out=$(run_control "$dir" t1 resume); rc=$?
   expect_code 2 "$rc" "resume should be refused"
-  assert_contains "$out" "not deterministic across the verified adapters" \
+  assert_contains "$out" "no verified pane-resume contract" \
     "the refusal should explain why resume is excluded"
   assert_contains "$out" "relaunch" "the refusal should point at the deterministic alternative"
   pass "fm-control: resume is refused with the determinism reason and the alternative"
@@ -592,7 +548,7 @@ test_relaunch_only_flags_are_rejected_on_other_verbs() {
   dir=$(new_case flags)
   add_task "$dir" t1 pi
   alive_as "$dir" pi
-  out=$(run_control "$dir" t1 exit --harness opencode); rc=$?
+  out=$(run_control "$dir" t1 exit --harness pi); rc=$?
   expect_code 1 "$rc" "--harness should not apply to exit"
   assert_contains "$out" "apply to 'relaunch' only" "the refusal should scope the flags"
   pass "fm-control: profile and note flags belong to relaunch only"
@@ -789,10 +745,8 @@ test_fm_send_still_marks_the_same_secondmate_task() {
 
 test_exit_types_each_harness_verified_command
 test_interrupt_sends_each_harness_verified_key
-test_opencode_interrupts_twice_and_others_once
 test_unverified_harness_is_refused
 test_harness_family_resolution
-test_prefixed_recorded_harness_reaches_each_control_verb
 test_backend_key_capability_matrix
 test_harness_kind_capability
 test_orca_refuses_an_escape_harness_interrupt

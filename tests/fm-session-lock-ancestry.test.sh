@@ -48,8 +48,8 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 case "$pid:$field" in
-  1:comm=) printf '%s\n' "${FM_TEST_PID1_COMM:-opencode}" ;;
-  1:args=) printf '%s\n' "${FM_TEST_PID1_COMM:-opencode}" ;;
+  1:comm=) printf '%s\n' "${FM_TEST_PID1_COMM:-pi}" ;;
+  1:args=) printf '%s\n' "${FM_TEST_PID1_COMM:-pi}" ;;
   1:ppid=) printf '%s\n' 0 ;;
   *:comm=) printf '%s\n' bash ;;
   *:args=) printf '%s\n' 'bash /repo/bin/fm-watch.sh' ;;
@@ -90,8 +90,8 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 case "$pid:$field:${FM_TEST_PATH_SHAPE:-hookdir}" in
-  810:comm=:hookdir) printf '%s\n' '/home/u/opencode-cache/hooks/notify.sh' ;;
-  810:args=:hookdir) printf '%s\n' '/home/u/opencode-cache/hooks/notify.sh --quiet' ;;
+  810:comm=:hookdir) printf '%s\n' '/home/u/pi-cache/hooks/notify.sh' ;;
+  810:args=:hookdir) printf '%s\n' '/home/u/pi-cache/hooks/notify.sh --quiet' ;;
   810:comm=:piprefix) printf '%s\n' '/opt/pipeline/bin/runner' ;;
   810:args=:piprefix) printf '%s\n' '/opt/pipeline/bin/runner --once' ;;
   810:ppid=:*) printf '%s\n' 1 ;;
@@ -137,14 +137,14 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 case "$pid:$field" in
-  900:comm=) printf '%s\n' opencode ;;
-  900:args=) printf '%s\n' 'opencode' ;;
+  900:comm=) printf '%s\n' pi ;;
+  900:args=) printf '%s\n' 'pi' ;;
   900:ppid=) printf '%s\n' 910 ;;
   910:comm=) printf '%s\n' bash ;;
   910:args=) printf '%s\n' 'bash tests/run.sh' ;;
   910:ppid=) printf '%s\n' 920 ;;
-  920:comm=) printf '%s\n' opencode ;;
-  920:args=) printf '%s\n' 'opencode' ;;
+  920:comm=) printf '%s\n' pi ;;
+  920:args=) printf '%s\n' 'pi' ;;
   920:ppid=) printf '%s\n' 1 ;;
   *:comm=) printf '%s\n' bash ;;
   *:args=) printf '%s\n' bash ;;

@@ -13,14 +13,14 @@
 # Usage:
 #   bin/fm-arm-pretool-check.sh --command '<cmd>'
 #
-# OpenCode and Pi adapters extract and pass the exact command string.
+# Pi adapters extract and pass the exact command string.
 #
 # Exit/output contract:
 #   ALLOW - exit 0 and no output.
 #   DENY - exit 2 and a structured deny object on stderr.
 #   FAIL OPEN - missing Node or policy owner, or an invalid policy response.
 #
-# OpenCode and Pi consume exit 2 plus stderr.
+# Pi adapters consume exit 2 plus stderr.
 set -u
 
 CMD=""

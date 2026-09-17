@@ -63,7 +63,7 @@ make_spawn_case() {
 
 enable_dispatch_profile() {
   local home=$1
-  printf '%s\n' '{"rules":[{"when":"current events","use":{"harness":"pi","model":"xai/grok-4","effort":"high"}}],"default":{"harness":"opencode","model":"anthropic/claude-sonnet-4-5"}}' \
+  printf '%s\n' '{"rules":[{"when":"current events","use":{"harness":"pi","model":"xai/grok-4","effort":"high"}}],"default":{"harness":"pi-signed","model":"anthropic/claude-sonnet-4-5"}}' \
     > "$home/config/crew-dispatch.json"
 }
 
@@ -522,23 +522,21 @@ test_retired_codex_harness_refuses_before_provisioning() {
   pass "retired standalone Codex harness refuses before task publication or launch"
 }
 
-test_opencode_threads_model_and_ignores_effort_axis() {
-  local rec id out status launch
-  id=profile-opencode-z7
-  rec=$(make_spawn_case profile-opencode opencode "$id")
+test_removed_opencode_harness_refuses_before_provisioning() {
+  local rec id out status
+  id=profile-removed-opencode-z7
+  rec=$(make_spawn_case profile-removed-opencode pi "$id")
   read_case_record "$rec"
 
-  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" --model anthropic/claude-sonnet-4-5 --effort high)
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
+    "$id" "$PROJ_DIR" --harness opencode 2>&1)
   status=$?
-  expect_code 0 "$status" "opencode spawn with model and ignored effort should succeed"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" opencode anthropic/claude-sonnet-4-5 high
-  launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "opencode --model 'anthropic/claude-sonnet-4-5' --prompt" \
-    "opencode launch did not thread model"
-  assert_not_contains "$launch" "--effort" "opencode launch must not pass unsupported --effort"
-  assert_not_contains "$launch" "--variant" "opencode launch must not pass run-only --variant"
-  assert_not_contains "$launch" "--thinking" "opencode launch must not pass pi thinking flag"
-  pass "opencode receives --model and omits the unsupported effort axis"
+  expect_code 1 "$status" "removed standalone OpenCode harness should refuse"
+  assert_contains "$out" "harness 'opencode'" "removed OpenCode selection did not use the generic unsupported-harness refusal"
+  assert_absent "$HOME_DIR/state/$id.meta" "removed OpenCode selection published task metadata"
+  assert_absent "$HOME_DIR/state/$id.busy-gen" "removed OpenCode selection provisioned lifecycle wiring"
+  [ ! -s "$LAUNCH_LOG" ] || fail "removed OpenCode selection created or launched an endpoint"
+  pass "removed standalone OpenCode selection refuses before task publication or endpoint launch"
 }
 
 test_native_effort_validator_keeps_axes_separate() {
@@ -570,7 +568,7 @@ test_native_pi_ultra_is_explicit_and_model_scoped() {
       assert_not_contains "$launch" "'max'" "native Ultra was aliased to max"
     done
   done
-  for native_profile in 'opencode:codex-native/gpt-6-astra' 'pi:openai-codex/gpt-6-astra' 'pi:default' 'pi:codex-native/'; do
+  for native_profile in 'pi:openai-codex/gpt-6-astra' 'pi:default' 'pi:codex-native/'; do
     harness=${native_profile%%:*}; model=${native_profile#*:}; id="ultra-refused-$RANDOM"
     rec=$(make_spawn_case "$id" "$harness" "$id")
     read_case_record "$rec"
@@ -663,6 +661,24 @@ test_pi_preserves_kimi_provider_model_selection() {
   assert_contains "$launch" "FM_PI_HARNESS=pi '$FAKEBIN_DIR/pi' --tui-mode regular --model 'kimi-coding/k2p5' --thinking 'high' -e" \
     "standalone Kimi removal stripped Pi's Kimi provider model"
   pass "Kimi provider models remain selectable through the retained Pi runtime"
+}
+
+test_pi_preserves_model_identifiers_containing_opencode() {
+  local rec id out status launch model
+  id=profile-pi-opencode-model-z8c
+  model=openrouter/vendor-opencode-model
+  rec=$(make_spawn_case profile-pi-opencode-model pi "$id")
+  read_case_record "$rec"
+
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+    --model "$model" --effort high)
+  status=$?
+  expect_code 0 "$status" "Pi spawn with a model identifier containing opencode should succeed"
+  assert_meta_profile "$HOME_DIR/state/$id.meta" pi "$model" high
+  launch=$(cat "$LAUNCH_LOG")
+  assert_contains "$launch" "--model '$model' --thinking 'high'" \
+    "standalone OpenCode removal stripped a Pi-accessed model identifier containing opencode"
+  pass "model identifiers containing opencode remain selectable through the retained Pi runtime"
 }
 
 test_pi_signed_threads_shared_pi_profile_and_preserves_identity() {
@@ -1146,13 +1162,14 @@ test_retired_agy_harness_refuses_without_touching_external_settings
 test_retired_rovo_harness_refuses_without_touching_project_files
 test_retired_kimi_harness_refuses_without_touching_external_config
 test_retired_codex_harness_refuses_before_provisioning
-test_opencode_threads_model_and_ignores_effort_axis
+test_removed_opencode_harness_refuses_before_provisioning
 test_native_effort_validator_keeps_axes_separate
 test_native_pi_ultra_is_explicit_and_model_scoped
 test_batch_preserves_native_ultra
 test_pi_threads_model_and_max_effort
 test_pi_preserves_xai_grok_provider_model_selection
 test_pi_preserves_kimi_provider_model_selection
+test_pi_preserves_model_identifiers_containing_opencode
 test_pi_tui_mode_probe_is_safe_for_old_and_new_pi
 test_pi_signed_threads_shared_pi_profile_and_preserves_identity
 test_pi_signed_missing_binary_refuses_before_endpoint_or_metadata

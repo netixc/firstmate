@@ -449,11 +449,8 @@ test_all_tmux_harness_composers_share_classification() {
   dir="$TMP_ROOT/all-harness-composers"; mkdir -p "$dir"
   fb=$(make_fake_tmux "$dir")
   capture="$dir/styled.txt"
-  for harness in opencode pi pi-signed; do
-    case "$harness" in
-      opencode) printf '╭────────────╮\n│ >          │\n╰────────────╯\n' > "$capture" ;;
-      pi|pi-signed) printf '╭────────────╮\n│            │\n╰────────────╯\n' > "$capture" ;;
-    esac
+  for harness in pi pi-signed; do
+    printf '╭────────────╮\n│            │\n╰────────────╯\n' > "$capture"
     out=$(PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=1 \
       fm_tmux_composer_state "fakepane")
     [ "$out" = empty ] \

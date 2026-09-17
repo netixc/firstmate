@@ -68,15 +68,13 @@ Every other direct `FM_GUARD_GRACE` reader (`bin/fm-guard.sh`, the strict-watche
 
 ## Harness integrations
 
-- OpenCode listens for `session.idle` in `.opencode/plugins/fm-primary-turnend-guard.js`, lets the watcher coordinator act first, and calls `client.session.promptAsync` once when the guard returns 2.
 - Pi listens for `agent_settled` in `.pi/extensions/fm-primary-turnend-guard.ts`, runs once per logical agent run, and calls `pi.sendUserMessage(..., { deliverAs: "followUp" })` once when the guard returns 2.
 
-OpenCode, Pi, and pi-signed expose passive callbacks for this purpose.
+Pi and pi-signed expose passive callbacks for this purpose.
 Their adapters fail open at the hook boundary to protect the user session but schedule one bounded follow-up when the predicate blocks.
 The generated prompts use the canonical `turn-end-guard` kind after the U+2063 `FIRSTMATE_OP: ` prefix, so Ahoy does not treat them as captain messages.
 Each passive adapter owns a loop latch.
 Pi keeps the latch across internal tool turns and clears it only when the generated follow-up settles or delivery fails.
-OpenCode's forced follow-up is supported for persistent TUI sessions and remains fail-open in headless `opencode run`.
 
 If a passive adapter cannot invoke its SDK, the next pull-based `fm-guard.sh` call reports the problem.
 That warning uses `bin/fm-supervision-instructions.sh --repair-line`, so it always points to the active harness protocol rather than embedding another repair command.
@@ -86,7 +84,6 @@ That warning uses `bin/fm-supervision-instructions.sh --repair-line`, so it alwa
 - Child crewmate and scout worktrees are outside scope.
 - A valid secondmate home is in scope; an idle secondmate endpoint with no Relay poll remains healthy because it has no supervision need.
 - The blocking and bounded-follow-up mechanisms are limited to the primary integrations listed above.
-- OpenCode headless mode remains fail-open at the host boundary.
 - No harness adapter uses a shell ampersand to manufacture supervision.
 
 ## Regression coverage

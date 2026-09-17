@@ -1131,8 +1131,7 @@ test_composer_state_reads_styled_dump() {
   local dir fb out
   dir="$TMP_ROOT/composer-styled"; mkdir -p "$dir/responses"
   zellij_pane_response "$dir" 1 7 3
-  # OpenCode's styled idle rows include a dim rotating suggestion.
-  printf 'transcript line\n┃\n┃  \033[2mAsk anything...\033[0m\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high\n╹▀▀▀▀' > "$dir/responses/2.out"
+  printf 'transcript line\n╭────────────────────╮\n│ ❯ \033[2mType a message...\033[0m│\n╰────────────────────╯' > "$dir/responses/2.out"
   fb=$(make_zellij_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_ZELLIJ_LOG="$dir/log" FM_ZELLIJ_RESPONSES="$dir/responses" \
     FM_ZELLIJ_SESSION_LIST="firstmate" \
@@ -1140,7 +1139,7 @@ test_composer_state_reads_styled_dump() {
   [ "$out" = empty ] || fail "a retained harness's styled Zellij dump should classify empty, got '$out'"
   assert_contains "$(cat "$dir/log")" $'\x1f''dump-screen'$'\x1f''--pane-id'$'\x1f''7'$'\x1f''--ansi' \
     "composer_state did not request the styled dump"
-  pass "fm_backend_zellij_composer_state: classifies an OpenCode --ansi dump as empty"
+  pass "fm_backend_zellij_composer_state: classifies a styled bordered --ansi dump as empty"
 }
 
 test_composer_state_dead_pane_is_unknown() {

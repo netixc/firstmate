@@ -5,7 +5,7 @@
 # bin/fm-guard.sh is pull-based and can warn only when another command runs.
 # This push-based guard is invoked by verified harness turn-end integrations so
 # a primary cannot finish a turn while required supervision is absent.
-# OpenCode and Pi adapters turn exit status 2 and stderr into one bounded
+# Pi adapters turn exit status 2 and stderr into one bounded
 # continuation through their own native event surfaces.
 #
 # The guard scopes itself to a genuine primary checkout and stays inert inside

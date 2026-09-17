@@ -303,11 +303,11 @@ SH
 #!/usr/bin/env bash
 exit 0
 SH
-  cat > "$CASE_BIN/opencode" <<'SH'
+  cat > "$CASE_BIN/pi" <<'SH'
 #!/usr/bin/env bash
 exit 0
 SH
-  chmod +x "$CASE_BIN/uname" "$CASE_BIN/launchctl" "$CASE_BIN/dscl" "$CASE_BIN/tasks-axi" "$CASE_BIN/treehouse" "$CASE_BIN/opencode"
+  chmod +x "$CASE_BIN/uname" "$CASE_BIN/launchctl" "$CASE_BIN/dscl" "$CASE_BIN/tasks-axi" "$CASE_BIN/treehouse" "$CASE_BIN/pi"
   cat > "$CASE_BIN/sleep" <<'SH'
 #!/usr/bin/env bash
 exit 0
@@ -809,9 +809,8 @@ pass "a non-darwin host skips launch agents and starts its herdr server directly
 new_case Linux with-herdr no-gui
 MANAGER_BIN="$CASE_HOME/.nvm/versions/node/v24/bin"
 mkdir -p "$MANAGER_BIN"
-printf '#!/usr/bin/env bash\nexit 0\n' > "$MANAGER_BIN/opencode"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$MANAGER_BIN/pi"
-chmod +x "$MANAGER_BIN/opencode" "$MANAGER_BIN/pi"
+chmod +x "$MANAGER_BIN/pi"
 mv "$CASE_BIN/tasks-axi" "$MANAGER_BIN/tasks-axi"
 doctor
 expect_code 1 "$DOCTOR_RC" "a version-manager-only required tool was reported ready"
@@ -827,14 +826,13 @@ assert_grep '# Firstmate remote tool wrapper v1' "$CASE_HOME/.local/bin/tasks-ax
   "the generated wrapper is not marked Firstmate-owned"
 assert_grep "$MANAGER_BIN/tasks-axi" "$CASE_HOME/.local/bin/tasks-axi" \
   "the generated wrapper does not execute the discovered absolute target"
-assert_absent "$CASE_HOME/.local/bin/opencode" "--fix wrapped a harness when OpenCode already satisfied readiness"
-assert_absent "$CASE_HOME/.local/bin/pi" "--fix wrapped an alternate harness when OpenCode already satisfied readiness"
+assert_absent "$CASE_HOME/.local/bin/pi" "--fix wrapped a harness when Pi already satisfied readiness"
 
-rm -f "$CASE_BIN/opencode"
+rm -f "$CASE_BIN/pi"
 doctor --fix
 expect_code 0 "$DOCTOR_RC" "--fix did not wrap one discoverable harness when none resolved"
-assert_present "$CASE_HOME/.local/bin/opencode" "--fix did not create the first needed harness wrapper"
-assert_absent "$CASE_HOME/.local/bin/pi" "--fix created more harness wrappers than readiness requires"
+assert_present "$CASE_HOME/.local/bin/pi" "--fix did not create the first needed harness wrapper"
+assert_absent "$CASE_HOME/.local/bin/pi-signed" "--fix created more harness wrappers than readiness requires"
 
 mv "$CASE_BIN/treehouse" "$MANAGER_BIN/treehouse"
 mkdir -p "$CASE_HOME/.local/bin"
@@ -852,7 +850,7 @@ CASE_REMOTE_JOB_ACTIVE=
 CASE_PLATFORM_OVERRIDE=Linux
 rm -f "$CASE_BIN/sleep" "$CASE_BIN/uname"
 mkdir -p "$CASE_HOME/.local/bin"
-for tool in herdr tasks-axi treehouse opencode; do
+for tool in herdr tasks-axi treehouse pi; do
   ln -s "$CASE_BIN/$tool" "$CASE_HOME/.local/bin/$tool"
 done
 HOME="$CASE_HOME" FM_ROOT_OVERRIDE="$ROOT" FM_REMOTE_JOB_PLATFORM_OVERRIDE=Linux \

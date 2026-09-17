@@ -343,7 +343,7 @@ family_for_basename() {
     fm-harness-liveness-drift-live-e2e.test.sh|\
     fm-herdr-version-floor-live-e2e.test.sh|\
     fm-herdr-pi-stale-registration-live-e2e.test.sh|\
-    fm-opencode-primary-live-e2e.test.sh|fm-pi-branch-live-e2e.test.sh|\
+    fm-pi-branch-live-e2e.test.sh|\
     fm-pi-branch-responsiveness-live-e2e.test.sh|\
     fm-pi-primary-live-e2e.test.sh|fm-pi-codex-native.test.sh|\
     fm-sessionstart-hook-live-e2e.test.sh|fm-sessionstart-instruction-refresh-live-e2e.test.sh|\
@@ -695,7 +695,6 @@ tests/fm-lint-workflows.test.sh 855
 tests/fm-live-gate.test.sh 6000
 tests/fm-no-mistakes-required.test.sh 370
 tests/fm-on.test.sh 34087
-tests/fm-opencode-primary-live-e2e.test.sh 21
 tests/fm-operational-input.test.sh 231
 tests/fm-peek-remote.test.sh 1018
 tests/fm-pending-reply.test.sh 86711

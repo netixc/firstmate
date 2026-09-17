@@ -130,8 +130,8 @@ test_real_text_is_pending() {
 # correctness matrix (audit data/fm-composer-consolidation-audit-s1, task
 # fm-composer-thin-adapter-refactor-r1).
 #
-# Fixtures cover retained Pi (blank rows between solid `─` rules) and OpenCode
-# 1.14.46 (left-bar `┃` rows), plus a retired bare-runtime negative.
+# Fixtures cover retained Pi (blank rows between solid `─` rules), plus a
+# retired bare-runtime negative.
 #
 # Capability profiles mirror the real adapters' descriptors: tmux
 # (styled+cursor+identity), herdr/zellij (styled), cmux/orca (plain). Every
@@ -200,33 +200,6 @@ test_matrix_pi_separated_needs_identity() {
   pass "matrix: pi's separated composer needs identity + structure; the blank row alone never proves it"
 }
 
-test_matrix_opencode_leftbar_signals() {
-  # Real idle opencode: `┃`-prefixed rows holding the "Ask anything..." hint,
-  # blanks, and a Build-mode footer. Two independent idle signals: the shared
-  # idle-placeholder pattern (works on plain captures) and the ghost strip
-  # (works on styled captures even if the pattern is overridden away).
-  local screen typed dim_screen out
-  screen=$'  ┃\n  ┃  Ask anything... "What is the tech stack?"\n  ┃\n  ┃  Build · GPT-5.5 Fast OpenAI · high\n  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀'
-  dim_screen=$'  ┃\n  ┃  '"${ESC}[2mAsk anything...${ESC}[0m"$'\n  ┃\n  ┃  Build · GPT-5.5 Fast OpenAI · high\n  ╹▀▀▀▀'
-  assert_screen "opencode idle on tmux (cursor on hint)" empty "$CAPS_TMUX" "$dim_screen" 1
-  assert_screen "opencode idle on herdr" empty "$CAPS_STYLED" "$dim_screen"
-  assert_screen "opencode idle on zellij" empty "$CAPS_STYLED_NOID" "$dim_screen"
-  assert_screen "opencode idle on cmux/orca" empty "$CAPS_PLAIN" "$screen"
-  # Signal separation: with the idle pattern overridden to something that
-  # cannot match, a DIM-styled hint still proves empty through the ghost strip.
-  out=$(FM_COMPOSER_IDLE_RE='^NEVER-MATCHES$' fm_composer_classify_screen "$CAPS_TMUX" "$dim_screen" 1)
-  [ "$out" = empty ] || fail "a dim opencode hint must stay empty via the ghost strip alone, got '$out'"
-  typed=$'┃\n┃  refactor the parser please\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high\n╹▀▀▀▀'
-  assert_screen "opencode typed on tmux" pending "$CAPS_TMUX" "$typed" 1
-  assert_screen "opencode typed on plain backends" unknown "$CAPS_PLAIN" "$typed"
-  typed=$'┃  Ask anything... please investigate\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high\n╹▀▀▀▀'
-  assert_screen "opencode placeholder-like input on tmux" pending "$CAPS_TMUX" "$typed" 0
-  assert_screen "opencode placeholder-like input on plain backends" unknown "$CAPS_PLAIN" "$typed"
-  typed=$'┃  refactor the parser please\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high'
-  assert_screen "opencode multiline draft above blank cursor row" pending "$CAPS_TMUX" "$typed" 1
-  pass "matrix: opencode's left-bar composer reads empty everywhere and scans the full active run"
-}
-
 test_matrix_bordered_shell_glyph_box() {
   # A bordered `│ > │` composer is a shared-classifier safety case: the
   # container makes a shell glyph an agent composer rather than a dead shell.
@@ -266,23 +239,16 @@ test_strict_blank_row_divergence() {
 }
 
 test_cursorless_container_rejects_contiguous_lower_activity() {
-  local box leftbar blank_separated bordered opencode
+  local box blank_separated bordered
   box=$'╭────────────────────────╮\n│ ❯                      │\n╰────────────────────────╯\nWorking on request...'
   assert_screen "stale box above activity on herdr" unknown "$CAPS_STYLED" "$box"
   assert_screen "stale box above activity on zellij" unknown "$CAPS_STYLED_NOID" "$box"
   assert_screen "stale box above activity on cmux/orca" unknown "$CAPS_PLAIN" "$box"
 
-  leftbar=$'┃\n┃  Ask anything...\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high\n╹▀▀▀▀▀▀▀▀\nWorking on request...'
-  assert_screen "stale left-bar above activity on herdr" unknown "$CAPS_STYLED" "$leftbar"
-  assert_screen "stale left-bar above activity on zellij" unknown "$CAPS_STYLED_NOID" "$leftbar"
-  assert_screen "stale left-bar above activity on cmux/orca" unknown "$CAPS_PLAIN" "$leftbar"
-
   blank_separated=$'╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯\n\nstatus'
   bordered=$'╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯\n\nstatus'
-  opencode=$'┃\n┃  Ask anything...\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high\n╹▀▀▀▀▀▀▀▀\n\nOpenCode status'
   assert_screen "blank-separated bordered footer with styling" empty "$CAPS_STYLED_NOID" "$blank_separated"
   assert_screen "blank-separated bordered footer" empty "$CAPS_PLAIN" "$bordered"
-  assert_screen "left-bar floor and blank-separated footer" empty "$CAPS_STYLED_NOID" "$opencode"
   pass "fm_composer_classify_screen: cursorless containers reject only contiguous unclaimed activity"
 }
 
@@ -332,10 +298,6 @@ test_selected_content_is_composer_scoped_and_wrap_normalized() {
   out=$(fm_composer_extract_selected_content "$CAPS_STYLED_NOID" "$screen")
   [ "$out" = 'unrelated draft' ] \
     || fail "box extraction should contain only normalized selected composer rows, got '$out'"
-  screen=$'hello captain in transcript\n┃ hello\n┃ captain\n┃ Build · GPT-5.5 Fast OpenAI · high'
-  out=$(fm_composer_extract_selected_content "$CAPS_STYLED_NOID" "$screen")
-  [ "$out" = 'hello captain' ] \
-    || fail "left-bar extraction should join user rows without footer furniture, got '$out'"
   screen=$'╭────────────────────╮\n│ ❯ '"${ESC}[2mType a message...${ESC}[0m"$'│\n╰────────────────────╯'
   out=$(fm_composer_extract_selected_content "$CAPS_STYLED_NOID" "$screen")
   [ -z "$out" ] \
@@ -366,7 +328,6 @@ test_idle_placeholder_case_mode_is_explicit
 test_real_text_is_pending
 test_matrix_retired_bare_shape_is_unknown
 test_matrix_pi_separated_needs_identity
-test_matrix_opencode_leftbar_signals
 test_matrix_bordered_shell_glyph_box
 test_strict_blank_row_divergence
 test_cursorless_container_rejects_contiguous_lower_activity
@@ -375,34 +336,3 @@ test_incomplete_lower_box_invalidates_stale_candidate
 test_titled_bottom_requires_matching_width
 test_cursor_on_proven_box_bottom_classifies_content
 test_selected_content_is_composer_scoped_and_wrap_normalized
-
-test_queued_enter_verdict_busy_pending_is_empty() {
-  local out
-  out=$(fm_composer_queued_enter_verdict pending busy)
-  [ "$out" = empty ] || fail "busy + proven pending must be queued delivery (empty), got '$out'"
-  pass "fm_composer_queued_enter_verdict: pending + busy returns empty (queued Enter)"
-}
-
-test_queued_enter_verdict_idle_pending_stays_pending() {
-  local out
-  out=$(fm_composer_queued_enter_verdict pending idle)
-  [ "$out" = pending ] || fail "idle + proven pending must stay a genuine swallow, got '$out'"
-  out=$(fm_composer_queued_enter_verdict pending unknown)
-  [ "$out" = pending ] || fail "unknown busy is not proof of a queue, got '$out'"
-  pass "fm_composer_queued_enter_verdict: pending + idle/unknown stays pending"
-}
-
-test_queued_enter_verdict_does_not_convert_other_states() {
-  local state out
-  for state in empty pending-unproven unknown send-failed future-state; do
-    out=$(fm_composer_queued_enter_verdict "$state" busy)
-    [ "$out" = "$state" ] || fail "busy must not convert '$state', got '$out'"
-    out=$(fm_composer_queued_enter_verdict "$state" idle)
-    [ "$out" = "$state" ] || fail "idle must not convert '$state', got '$out'"
-  done
-  pass "fm_composer_queued_enter_verdict: only proven pending is converted"
-}
-
-test_queued_enter_verdict_busy_pending_is_empty
-test_queued_enter_verdict_idle_pending_stays_pending
-test_queued_enter_verdict_does_not_convert_other_states

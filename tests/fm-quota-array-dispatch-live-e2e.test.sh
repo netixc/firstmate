@@ -262,11 +262,11 @@ write_fixture <<'JSON'
 JSON
 run_case \
   "higher spendPriority beats more headroom after the three gates" \
-  "SELECTED=opencode" \
+  "SELECTED=pi-signed" \
   "TOON" \
-  "Resolve this matched dispatch profile array now. Load quota-array-dispatch and run quota-axi with no flags (default TOON) exactly once. Do not pass --json. Both profiles have comparable required task fit and the same strongest reasoning class. The authoritative catalogs already prove Pi with Anthropic/Claude Sonnet and OpenCode/GPT models supported in their stated provider families, and their selected authentication surfaces are usable. The likely task-completion horizon is two hours with established confidence. Both candidates have known runway that supports that horizon. Return exact lines FACT=pi|headroom=80|spendPriority=-1.1111|runway_seconds=241920 and FACT=opencode|headroom=20|spendPriority=-0.8333|runway_seconds=90720 to preserve candidate accounting, then an exact final line SELECTED=<pi|opencode>. Do not use other vendor or model commands and do not modify files." \
+  "Resolve this matched dispatch profile array now. Load quota-array-dispatch and run quota-axi with no flags (default TOON) exactly once. Do not pass --json. Both profiles have comparable required task fit and the same strongest reasoning class. The authoritative catalogs already prove Pi with Anthropic/Claude Sonnet and Pi-signed/GPT models supported in their stated provider families, and their selected authentication surfaces are usable. The likely task-completion horizon is two hours with established confidence. Both candidates have known runway that supports that horizon. Return exact lines FACT=pi|headroom=80|spendPriority=-1.1111|runway_seconds=241920 and FACT=pi-signed|headroom=20|spendPriority=-0.8333|runway_seconds=90720 to preserve candidate accounting, then an exact final line SELECTED=<pi|pi-signed>. Do not use other vendor or model commands and do not modify files." \
   "FACT=pi|headroom=80|spendPriority=-1.1111|runway_seconds=241920" \
-  "FACT=opencode|headroom=20|spendPriority=-0.8333|runway_seconds=90720"
+  "FACT=pi-signed|headroom=20|spendPriority=-0.8333|runway_seconds=90720"
 
 write_fixture <<'JSON'
 {
@@ -342,12 +342,12 @@ write_fixture <<'JSON'
 JSON
 run_case \
   "unmeasurable runway stays eligible and is accounted for explicitly" \
-  "DECISION=OPENCODE" \
+  "DECISION=PI_SIGNED" \
   "TOON
 JSON" \
-  "Resolve this matched dispatch profile array now. Load quota-array-dispatch and consult quota-axi's default TOON first. Because the Pi/Anthropic candidate spendPriority is the literal unknown, use the permitted quota-axi --json fallback once before deciding. Both profiles have comparable required task fit and the same strongest reasoning class. The authoritative catalogs already prove both models supported in their stated provider families, and their selected authentication surfaces are usable. The likely task-completion horizon is two hours with established confidence. The Pi/Anthropic candidate has higher known headroom but explicitly unmeasurable runway and unknown spendPriority, while OpenCode has lower known headroom, known spendPriority, and established runway that supports completion. The Pi/Anthropic candidate remains eligible and its uncertainty must be disclosed. Never read unknown spendPriority as 0. Return exact lines FACT=pi|eligible=yes|headroom=55|runway=unknown|spendPriority=unknown|unmeasurable=weekly and FACT=opencode|eligible=yes|headroom=45|spendPriority=-0.404|runway_seconds=222676|supports_horizon=yes, then an exact final line DECISION=OPENCODE. Do not use other vendor or model commands and do not modify files." \
+  "Resolve this matched dispatch profile array now. Load quota-array-dispatch and consult quota-axi's default TOON first. Because the Pi/Anthropic candidate spendPriority is the literal unknown, use the permitted quota-axi --json fallback once before deciding. Both profiles have comparable required task fit and the same strongest reasoning class. The authoritative catalogs already prove both models supported in their stated provider families, and their selected authentication surfaces are usable. The likely task-completion horizon is two hours with established confidence. The Pi/Anthropic candidate has higher known headroom but explicitly unmeasurable runway and unknown spendPriority, while Pi-signed has lower known headroom, known spendPriority, and established runway that supports completion. The Pi/Anthropic candidate remains eligible and its uncertainty must be disclosed. Never read unknown spendPriority as 0. Return exact lines FACT=pi|eligible=yes|headroom=55|runway=unknown|spendPriority=unknown|unmeasurable=weekly and FACT=pi-signed|eligible=yes|headroom=45|spendPriority=-0.404|runway_seconds=222676|supports_horizon=yes, then an exact final line DECISION=PI_SIGNED. Do not use other vendor or model commands and do not modify files." \
   "FACT=pi|eligible=yes|headroom=55|runway=unknown|spendPriority=unknown|unmeasurable=weekly" \
-  "FACT=opencode|eligible=yes|headroom=45|spendPriority=-0.404|runway_seconds=222676|supports_horizon=yes"
+  "FACT=pi-signed|eligible=yes|headroom=45|spendPriority=-0.404|runway_seconds=222676|supports_horizon=yes"
 
 write_fixture <<'JSON'
 {
@@ -431,9 +431,9 @@ run_case \
   "required strongest reasoning class is not downgraded for quota" \
   "SELECTED=pi" \
   "TOON" \
-  "Resolve this matched dispatch profile array now. Load quota-array-dispatch and run quota-axi with no flags (default TOON) exactly once. Do not pass --json. The likely task-completion horizon is two hours with established confidence. Pi with Anthropic/Claude Sonnet is catalog-supported with usable authentication and is the only profile that meets the task's required strongest reasoning class. OpenCode/GPT is catalog-supported with usable authentication but is a weaker reasoning class and cannot meet the requirement. Return exact lines FACT=pi|reasoning=required|headroom=5|spendPriority=-1.8|runway_seconds=15916 and FACT=opencode|reasoning=weaker|headroom=80|spendPriority=-0.3921|runway_seconds=362880, then an exact final line SELECTED=<pi|opencode>. Do not use other vendor or model commands and do not modify files." \
+  "Resolve this matched dispatch profile array now. Load quota-array-dispatch and run quota-axi with no flags (default TOON) exactly once. Do not pass --json. The likely task-completion horizon is two hours with established confidence. Pi with Anthropic/Claude Sonnet is catalog-supported with usable authentication and is the only profile that meets the task's required strongest reasoning class. Pi-signed/GPT is catalog-supported with usable authentication but is a weaker reasoning class and cannot meet the requirement. Return exact lines FACT=pi|reasoning=required|headroom=5|spendPriority=-1.8|runway_seconds=15916 and FACT=pi-signed|reasoning=weaker|headroom=80|spendPriority=-0.3921|runway_seconds=362880, then an exact final line SELECTED=<pi|pi-signed>. Do not use other vendor or model commands and do not modify files." \
   "FACT=pi|reasoning=required|headroom=5|spendPriority=-1.8|runway_seconds=15916" \
-  "FACT=opencode|reasoning=weaker|headroom=80|spendPriority=-0.3921|runway_seconds=362880"
+  "FACT=pi-signed|reasoning=weaker|headroom=80|spendPriority=-0.3921|runway_seconds=362880"
 
 write_fixture <<'JSON'
 {
@@ -515,10 +515,10 @@ write_fixture <<'JSON'
 JSON
 run_case \
   "runway versus completion horizon remains a hard gate over spendPriority" \
-  "SELECTED=opencode" \
+  "SELECTED=pi-signed" \
   "TOON" \
-  "Resolve this matched dispatch profile array now. Load quota-array-dispatch and run quota-axi with no flags (default TOON) exactly once. Do not pass --json. Both profiles have comparable required task fit and the same strongest reasoning class. The authoritative catalogs already prove Pi with Anthropic/Claude Sonnet and OpenCode/GPT models supported in their stated provider families, and their selected authentication surfaces are usable. The likely task-completion horizon is two hours with established confidence. The Pi/Anthropic candidate has known spendPriority of -0.8333 and runway of 2700 seconds. OpenCode has known spendPriority of -1.8 and runway of 15916 seconds. Return exact lines FACT=pi|spendPriority=-0.8333|runway_seconds=2700|supports_horizon=no and FACT=opencode|spendPriority=-1.8|runway_seconds=15916|supports_horizon=yes to preserve candidate accounting, then an exact final line SELECTED=<pi|opencode>. Do not use other vendor or model commands and do not modify files." \
+  "Resolve this matched dispatch profile array now. Load quota-array-dispatch and run quota-axi with no flags (default TOON) exactly once. Do not pass --json. Both profiles have comparable required task fit and the same strongest reasoning class. The authoritative catalogs already prove Pi with Anthropic/Claude Sonnet and Pi-signed/GPT models supported in their stated provider families, and their selected authentication surfaces are usable. The likely task-completion horizon is two hours with established confidence. The Pi/Anthropic candidate has known spendPriority of -0.8333 and runway of 2700 seconds. Pi-signed has known spendPriority of -1.8 and runway of 15916 seconds. Return exact lines FACT=pi|spendPriority=-0.8333|runway_seconds=2700|supports_horizon=no and FACT=pi-signed|spendPriority=-1.8|runway_seconds=15916|supports_horizon=yes to preserve candidate accounting, then an exact final line SELECTED=<pi|pi-signed>. Do not use other vendor or model commands and do not modify files." \
   "FACT=pi|spendPriority=-0.8333|runway_seconds=2700|supports_horizon=no" \
-  "FACT=opencode|spendPriority=-1.8|runway_seconds=15916|supports_horizon=yes"
+  "FACT=pi-signed|spendPriority=-1.8|runway_seconds=15916|supports_horizon=yes"
 
 echo "# all quota-array-dispatch live behavior tests passed"

@@ -813,8 +813,8 @@ make_routine_bootstrap_fixture() {
   sm="$case_dir/sm"
   fm_git_identity
   mkdir -p "$home/config" "$home/state"
-  printf '%s\n' opencode > "$home/config/crew-harness"
-  printf '%s\n' '{"rules":[{"when":"normal work","use":{"harness":"opencode"}}],"default":{"harness":"pi","effort":"low"}}' \
+  printf '%s\n' pi > "$home/config/crew-harness"
+  printf '%s\n' '{"rules":[{"when":"normal work","use":{"harness":"pi"}}],"default":{"harness":"pi","effort":"low"}}' \
     > "$home/config/crew-dispatch.json"
   git init -q -b main "$root"
   {
@@ -835,7 +835,7 @@ make_routine_bootstrap_fixture() {
   {
     printf 'window=firstmate:fm-sm\n'
     printf 'kind=secondmate\n'
-    printf 'harness=opencode\n'
+    printf 'harness=pi\n'
     printf 'home=%s\n' "$sm"
   } > "$home/state/sm.meta"
   fakebin=$(make_fake_toolchain "$case_dir")
@@ -846,7 +846,7 @@ case "${1:-}" in
   display-message)
     case "$*" in
       *'#{cursor_y}'*) printf '%s\n' 0 ;;
-      *) printf '%s\n' opencode ;;
+      *) printf '%s\n' pi ;;
     esac
     ;;
   capture-pane) printf '›\n' ;;
@@ -1081,7 +1081,7 @@ test_crew_dispatch_active_rules_are_verbose_bootstrap_info() {
   case_dir="$TMP_ROOT/dispatch-active"
   mkdir -p "$case_dir/home/config"
   printf '%s\n' manual > "$case_dir/home/config/backlog-backend"
-  printf '%s\n' '{"rules":[{"when":"fresh news","use":{"harness":"opencode"},"why":"current context"},{"when":"big feature","use":[{"harness":"pi","model":"anthropic/claude-sonnet-5","effort":"high"},{"harness":"pi-signed","model":"openai-codex/gpt-5.5","effort":"high"}]},{"when":"legacy feature","use":[{"harness":"pi"},{"harness":"pi-signed"}],"select":"quota-balanced"}],"default":[{"harness":"pi","model":"anthropic/claude-sonnet-5","effort":"high"},{"harness":"opencode"}]}' > "$case_dir/home/config/crew-dispatch.json"
+  printf '%s\n' '{"rules":[{"when":"fresh news","use":{"harness":"pi-signed"},"why":"current context"},{"when":"big feature","use":[{"harness":"pi","model":"anthropic/claude-sonnet-5","effort":"high"},{"harness":"pi-signed","model":"openai-codex/gpt-5.5","effort":"high"}]},{"when":"legacy feature","use":[{"harness":"pi"},{"harness":"pi-signed"}],"select":"quota-balanced"}],"default":[{"harness":"pi","model":"anthropic/claude-sonnet-5","effort":"high"},{"harness":"pi-signed"}]}' > "$case_dir/home/config/crew-dispatch.json"
   fakebin=$(make_fake_toolchain "$case_dir")
   add_real_jq "$fakebin"
 
@@ -1092,7 +1092,7 @@ test_crew_dispatch_active_rules_are_verbose_bootstrap_info() {
   out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$case_dir/home" FM_ROOT_OVERRIDE="$case_dir/home" \
     FM_BOOTSTRAP_VERBOSE_FACTS=1 FM_FAKE_TREEHOUSE_LEASE_HELP=1 "$ROOT/bin/fm-bootstrap.sh")
 
-  expect=$'BOOTSTRAP_INFO: crew dispatch active config/crew-dispatch.json\nBOOTSTRAP_INFO: crew dispatch rule: fresh news -> opencode\nBOOTSTRAP_INFO: crew dispatch rule: big feature -> quota-balanced[pi/anthropic/claude-sonnet-5/high, pi-signed/openai-codex/gpt-5.5/high]\nBOOTSTRAP_INFO: crew dispatch rule: legacy feature -> quota-balanced[pi, pi-signed]\nBOOTSTRAP_INFO: crew dispatch default: quota-balanced[pi/anthropic/claude-sonnet-5/high, opencode]'
+  expect=$'BOOTSTRAP_INFO: crew dispatch active config/crew-dispatch.json\nBOOTSTRAP_INFO: crew dispatch rule: fresh news -> pi-signed\nBOOTSTRAP_INFO: crew dispatch rule: big feature -> quota-balanced[pi/anthropic/claude-sonnet-5/high, pi-signed/openai-codex/gpt-5.5/high]\nBOOTSTRAP_INFO: crew dispatch rule: legacy feature -> quota-balanced[pi, pi-signed]\nBOOTSTRAP_INFO: crew dispatch default: quota-balanced[pi/anthropic/claude-sonnet-5/high, pi-signed]'
   [ "$out" = "$expect" ] || fail "active dispatch verbose info block mismatch"$'\n'"expected: $expect"$'\n'"actual:   $out"
   pass "bootstrap surfaces active crew-dispatch rules only as verbose BOOTSTRAP_INFO"
 }
@@ -1128,26 +1128,24 @@ native signed pi ultra is accepted^{"rules":[{"when":"native reasoning","use":{"
 ordinary pi ultra is refused^{"default":{"harness":"pi","model":"openai-codex/gpt-6-astra","effort":"ultra"}}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - invalid effort: pi:ultra
 missing native model ultra is refused^{"default":{"harness":"pi","effort":"ultra"}}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - invalid effort: pi:ultra
 empty native model ultra is refused^{"default":{"harness":"pi","model":"codex-native/","effort":"ultra"}}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - invalid effort: pi:ultra
-opencode harness ultra is refused^{"default":{"harness":"opencode","model":"anthropic/claude-sonnet-5","effort":"ultra"}}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - invalid effort: opencode:ultra
+removed OpenCode dispatch harness is rejected^{"default":{"harness":"opencode","model":"anthropic/claude-sonnet-5","effort":"ultra"}}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - unverified harness: opencode
 pi max effort is accepted^{"rules":[{"when":"deep coding","use":{"harness":"pi","model":"openai-codex/gpt-5.6-sol","effort":"max"}}]}^empty^
 pi-signed max effort is accepted^{"rules":[{"when":"signed coding","use":{"harness":"pi-signed","model":"openai-codex/gpt-5.6-sol","effort":"max"}}]}^empty^
 retired Muse dispatch harness is rejected^{"rules":[{"when":"old Muse config","use":{"harness":"muse","effort":"high"}}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - unverified harness: muse
 retired Gemini CLI dispatch harness is rejected^{"rules":[{"when":"old Gemini CLI config","use":{"harness":"gemini","model":"gemini-2.5-pro"}}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - unverified harness: gemini
 retired Rovo dispatch harness is rejected^{"rules":[{"when":"old Rovo config","use":{"harness":"rovo","effort":"high"}}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - unverified harness: rovo
 retired AGY dispatch harness is rejected^{"rules":[{"when":"old AGY config","use":{"harness":"agy","model":"gemini-3.8-flash-high","effort":"high"}}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - unverified harness: agy
-unsupported opencode effort is flagged^{"rules":[{"when":"opencode work","use":{"harness":"opencode","model":"anthropic/claude-sonnet-4-5","effort":"high"}}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - invalid effort: opencode:high
 retired Kimi dispatch harness is rejected^{"rules":[{"when":"old Kimi config","use":{"harness":"kimi","model":"kimi-code/k3","effort":"high"}}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - unverified harness: kimi
 cursor harness is unverified^{"rules":[{"when":"cursor work","use":{"harness":"cursor"}}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - unverified harness: cursor
 array use with quota-balanced is accepted^{"rules":[{"when":"big feature","use":[{"harness":"pi","model":"anthropic/claude-sonnet-5","effort":"high"},{"harness":"pi-signed","model":"openai-codex/gpt-5.5","effort":"high"}],"select":"quota-balanced"}]}^empty^
 array use without select is accepted^{"rules":[{"when":"big feature","use":[{"harness":"pi"},{"harness":"pi-signed"}]}]}^empty^
 one-element array use is accepted^{"rules":[{"when":"focused feature","use":[{"harness":"pi"}]}]}^empty^
-default array is accepted^{"default":[{"harness":"pi","model":"anthropic/claude-sonnet-5"},{"harness":"opencode"}]}^empty^
+default array is accepted^{"default":[{"harness":"pi","model":"anthropic/claude-sonnet-5"},{"harness":"pi-signed"}]}^empty^
 one-element default array is accepted^{"default":[{"harness":"pi"}]}^empty^
 empty array use is flagged^{"rules":[{"when":"big feature","use":[]}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - each rule needs at least one use profile
 array profile without harness is flagged^{"rules":[{"when":"big feature","use":[{"model":"gpt-5.5"}]}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - each use profile needs harness
 array profile with malformed model is flagged^{"rules":[{"when":"big feature","use":[{"harness":"pi","model":5}]}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - use profile model and effort must be non-empty strings when present
 unknown select is flagged^{"rules":[{"when":"big feature","use":[{"harness":"pi"},{"harness":"pi-signed"}],"select":"mystery"}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - unknown select: mystery
-array profile unsupported effort is flagged^{"rules":[{"when":"big feature","use":[{"harness":"opencode","effort":"max"}]}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - invalid effort: opencode:max
 empty default array is flagged^{"default":[]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - default needs at least one profile
 non-object default array entry is flagged^{"default":["pi"]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - each default profile must be an object
 default array profile without harness is flagged^{"default":[{"model":"gpt-5.5"}]}^exact^CREW_DISPATCH: invalid config/crew-dispatch.json - each default profile needs harness

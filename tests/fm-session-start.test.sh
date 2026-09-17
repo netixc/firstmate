@@ -213,7 +213,7 @@ make_fake_ps_harness() {
 #!/usr/bin/env bash
 set -u
 # The ancestry this stub reports defaults to the harness the fixture was built
-# for, so a case that builds a pi (or opencode) fixture gets pi (or opencode) ancestry
+# for, so a case that builds a pi (or pi) fixture gets pi (or pi) ancestry
 # without having to repeat it per run; FM_FAKE_HARNESS still overrides it.
 harness=\${FM_FAKE_HARNESS:-$harness}
 SH
@@ -507,10 +507,10 @@ SH
 # run_session_start <home> <root> <path>
 # Drop every harness env marker from bin/fm-harness.sh detect_own so the
 # surrounding interactive shell cannot leak past the suite's fake ps harness.
-# Markers today: (opencode), PI_CODING_AGENT plus FM_PI_HARNESS
+# Markers today: (pi), PI_CODING_AGENT plus FM_PI_HARNESS
 # (Pi family).
-# opencode and opencode have no env markers (ancestry only). Without this, a local
-# opencode/pi session fails cases that pin a different fake harness while CI
+# pi and pi have no env markers (ancestry only). Without this, a local
+# pi/pi session fails cases that pin a different fake harness while CI
 # (no ambient markers) still passes.
 run_session_start() {
   local home=$1 root=$2 path=$3 pi_harness=${4:-}
@@ -890,14 +890,14 @@ done
 case "$*" in
   *"comm="*)
     if [ -f "$FM_FAKE_LOCK_STATE/harness-$pid" ]; then
-      printf '%s\n' /usr/local/bin/opencode
+      printf '%s\n' /usr/local/bin/pi
     else
       printf '%s\n' /bin/bash
     fi
     ;;
   *"args="*)
     if [ -f "$FM_FAKE_LOCK_STATE/harness-$pid" ]; then
-      printf '%s\n' opencode
+      printf '%s\n' pi
     else
       printf '%s\n' bash
     fi
@@ -1429,7 +1429,7 @@ test_non_pi_session_start_leaves_branch_state_untouched() {
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_harness "$fakebin" opencode
+  make_fake_ps_harness "$fakebin" pi
 
   FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" append \
     --task task-b --verdict captain --summary 'unread Pi branch outcome' >/dev/null \
@@ -1632,7 +1632,7 @@ EOF
 #!/usr/bin/env bash
 set -u
 case "$*" in
-  *"-p 999999"*) printf 'opencode\n'; exit 0 ;;
+  *"-p 999999"*) printf 'pi\n'; exit 0 ;;
   *"comm="*|*"args="*) printf 'bash\n'; exit 0 ;;
 esac
 exit 0
@@ -2040,11 +2040,11 @@ for argument in "$@"; do
 done
 case "$*" in
   *"comm="*)
-    if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then printf '%s\n' /usr/local/bin/opencode
+    if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then printf '%s\n' /usr/local/bin/pi
     else printf '%s\n' /bin/bash; fi
     ;;
   *"args="*)
-    if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then printf '%s\n' opencode
+    if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then printf '%s\n' pi
     else printf '%s\n' bash; fi
     ;;
   *"ppid="*) /bin/ps -o ppid= -p "$pid" ;;

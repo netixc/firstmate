@@ -29,21 +29,21 @@ jq -e --arg model "$MODEL" '.models | any(.name == $model)' "$TMP_ROOT/tags.json
 cat > "$EXPECTED_JSON" <<'JSON'
 {
   "cases": [
-    {"id":"start.default","common":["references/common/dispatch.md","references/common/model-and-effort.md"],"harness":"references/harness/opencode.md"},
-    {"id":"start.trust-dialog","common":["references/common/control-and-recovery.md"],"harness":"references/harness/opencode.md"},
-    {"id":"trust.default","common":["references/common/control-and-recovery.md"],"harness":"references/harness/opencode.md"},
+    {"id":"start.default","common":["references/common/dispatch.md","references/common/model-and-effort.md"],"harness":"references/harness/pi.md"},
+    {"id":"start.trust-dialog","common":["references/common/control-and-recovery.md"],"harness":"references/harness/pi.md"},
+    {"id":"trust.default","common":["references/common/control-and-recovery.md"],"harness":"references/harness/pi.md"},
     {"id":"skill.default","common":["references/common/control-and-recovery.md"],"harness":"references/harness/pi.md"},
     {"id":"interrupt.default","common":["references/common/control-and-recovery.md"],"harness":"references/harness/pi.md"},
-    {"id":"exit.default","common":["references/common/control-and-recovery.md"],"harness":"references/harness/opencode.md"},
-    {"id":"resume.default","common":["references/common/control-and-recovery.md"],"harness":"references/harness/opencode.md"},
-    {"id":"recovery.default","common":["references/common/control-and-recovery.md"],"harness":"references/harness/opencode.md"},
+    {"id":"exit.default","common":["references/common/control-and-recovery.md"],"harness":"references/harness/pi.md"},
+    {"id":"resume.default","common":["references/common/control-and-recovery.md"],"harness":"references/harness/pi.md"},
+    {"id":"recovery.default","common":["references/common/control-and-recovery.md"],"harness":"references/harness/pi.md"},
     {"id":"recovery.replacement-profile","common":["references/common/control-and-recovery.md","references/common/dispatch.md","references/common/model-and-effort.md"],"harness":"references/harness/pi.md"},
-    {"id":"recovery.secondmate","common":["references/common/control-and-recovery.md","references/common/primary-hooks.md"],"harness":"references/harness/opencode.md"},
-    {"id":"recovery.replacement-secondmate","common":["references/common/control-and-recovery.md","references/common/dispatch.md","references/common/model-and-effort.md","references/common/primary-hooks.md"],"harness":"references/harness/opencode.md"},
-    {"id":"primary.default","common":["references/common/primary-hooks.md"],"harness":"references/harness/opencode.md"},
+    {"id":"recovery.secondmate","common":["references/common/control-and-recovery.md","references/common/primary-hooks.md"],"harness":"references/harness/pi.md"},
+    {"id":"recovery.replacement-secondmate","common":["references/common/control-and-recovery.md","references/common/dispatch.md","references/common/model-and-effort.md","references/common/primary-hooks.md"],"harness":"references/harness/pi.md"},
+    {"id":"primary.default","common":["references/common/primary-hooks.md"],"harness":"references/harness/pi.md"},
     {"id":"model-effort.default","common":["references/common/model-and-effort.md"],"harness":"references/harness/pi.md"},
     {"id":"model-effort.configured-profile","common":["references/common/model-and-effort.md","references/common/dispatch.md"],"harness":"references/harness/pi.md"},
-    {"id":"verify.default","common":["references/common/dispatch.md","references/common/control-and-recovery.md","references/common/primary-hooks.md","references/common/model-and-effort.md"],"harness":"references/harness/opencode.md"}
+    {"id":"verify.default","common":["references/common/dispatch.md","references/common/control-and-recovery.md","references/common/primary-hooks.md","references/common/model-and-effort.md"],"harness":"references/harness/pi.md"}
   ]
 }
 JSON
@@ -54,21 +54,21 @@ JSON
   printf '%s\n' 'Copy harness paths literally from the router map; never construct a filename from an identity, including when two identities share one path.'
   printf '%s\n' 'The requests, in output order, are:'
   printf '%s\n' \
-    'start.default opencode' \
-    'start.trust-dialog opencode' \
-    'trust.default opencode' \
+    'start.default pi' \
+    'start.trust-dialog pi' \
+    'trust.default pi' \
     'skill.default pi' \
     'interrupt.default pi-signed' \
-    'exit.default opencode' \
-    'resume.default opencode' \
-    'recovery.default opencode' \
+    'exit.default pi' \
+    'resume.default pi' \
+    'recovery.default pi' \
     'recovery.replacement-profile pi' \
-    'recovery.secondmate opencode' \
-    'recovery.replacement-secondmate opencode' \
-    'primary.default opencode' \
+    'recovery.secondmate pi' \
+    'recovery.replacement-secondmate pi' \
+    'primary.default pi' \
     'model-effort.default pi' \
     'model-effort.configured-profile pi-signed' \
-    'verify.default opencode'
+    'verify.default pi'
   printf '%s\n' 'Return only one JSON object with a cases array; each item must have id, common, and harness fields.'
   printf '%s\n' 'ROUTER START'
   cat "$ROUTER"
@@ -92,7 +92,7 @@ if ! diff -u \
   <(jq -S . "$TMP_ROOT/normalized-response.json") > "$TMP_ROOT/diff"; then
   fail "local model $MODEL did not follow the routing instructions: $(tr '\n' ' ' < "$TMP_ROOT/diff")"
 fi
-pass "local model $MODEL selected every operation scenario and all three harness identities"
+pass "local model $MODEL selected every operation scenario and both harness identities"
 
 CHECKED=0
 MISSING=
@@ -106,7 +106,7 @@ resolve_native_binary() {
   return 1
 }
 
-for harness in opencode opencode pi pi-signed; do
+for harness in pi pi-signed; do
   if binary=$(resolve_native_binary "$harness"); then
     version=$("$binary" --version 2>/dev/null | head -1 | tr -d '\r') || version=unknown
     printf '# native loader not claimed: %s %s is installed, but this harness-neutral evaluation does not exercise its provider transport\n' "$harness" "$version"

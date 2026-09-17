@@ -20,7 +20,7 @@ It tokenizes the bytes and classifies lexical execution positions only.
 
 ## Transport and fail-open behavior
 
-`bin/fm-arm-pretool-check.sh` accepts `--command <exact string>` from OpenCode, Pi, and pi-signed.
+`bin/fm-arm-pretool-check.sh` accepts `--command <exact string>` from Pi and pi-signed.
 
 The wrapper discovers the code root from its own location.
 The active firstmate home is `${FM_HOME:-<code-root>}`.
@@ -140,14 +140,12 @@ Prose may improve without changing adapter behavior.
 
 - Allow returns exit 0 with both streams empty.
 - Deny returns exit 2 and writes `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[code] reason"}` to stderr.
-- OpenCode throws only when the checker exits 2.
 - Pi and pi-signed return `{block: true}` only when the checker exits 2.
 
 ## Harness wiring
 
 | Harness | Exact command field | Adapter behavior on checker exit 2 |
 | --- | --- | --- |
-| OpenCode | `output.args.command` | `.opencode/plugins/fm-primary-pretool-check.js` passes one `--command` argument and throws only for exit 2. |
 | Pi / pi-signed | `event.input.command` | `.pi/extensions/fm-primary-turnend-guard.ts` passes one `--command` argument and returns `{block: true}` only for exit 2. |
 ## Live validation record, 2026-07-09
 
@@ -155,12 +153,9 @@ Validation ran in a git-initialized scratch firstmate-shaped project under this 
 The scratch project contained copies of the modified checker and policy, unchanged tracked adapters, a dummy arm script, a harmless `tmux` argument-capture fixture, and a private sentinel path.
 No modified file was installed into the primary checkout or a live harness configuration.
 No live watcher, fleet state, or herdr lifecycle command was used.
-The OpenCode interactive check used the dedicated tmux socket `fm-pretool-smoke`.
-
 Harness versions were:
 
 ```text
-OpenCode 1.17.15
 Pi 0.80.5
 ```
 
@@ -176,7 +171,6 @@ bin/fm-watch-arm.sh &
 The real harness launch commands were:
 
 ```sh
-OPENCODE_CONFIG_CONTENT='{"permission":{"*":"allow"}}' opencode run --print-logs --log-level INFO "$PROMPT"
 pi -p -e .pi/extensions/fm-primary-turnend-guard.ts --no-context-files --no-session "$PROMPT"
 ```
 
@@ -186,12 +180,10 @@ The stable reason was `[watcher-background] a protected watcher command cannot r
 The dummy arm body would have created `<harness>.sentinel` if the denied command executed.
 Every deny sentinel remained absent.
 
-OpenCode displayed the three allowed command outputs and then `bin/fm-watch-arm.sh & failed` with the stderr deny object.
 Pi reported that calls one through four ran and the final call was blocked.
 
 Native supervision paths were also validated in the same scratch project:
 
-- OpenCode ran in an interactive TUI on `tmux -L fm-pretool-smoke`, reached `session.idle`, and its unchanged watch-arm plugin created the scratch automatic-arm marker.
 - Pi loaded both primary extensions, called `fm_watch_arm_pi`, and created the scratch automatic-arm marker.
 
 Every native-path automatic marker was present and every deny sentinel remained absent.
@@ -199,7 +191,7 @@ Every native-path automatic marker was present and every deny sentinel remained 
 ## Automated validation
 
 `tests/fm-arm-pretool-check.test.sh` owns the adversarial acceptance matrix.
-Every row runs through OpenCode-shaped and Pi-shaped CLI entry forms.
+Every row runs through the Pi-shaped CLI entry form.
 The suite also verifies real newline bytes, direct classifier reason codes, comments, heredoc data, malformed and unsupported protected syntax, constructed dynamic payloads, malformed transport fail-open behavior, missing runtime fail-open behavior, output shapes, and exact adapter field forwarding plus exit-2 mapping.
 
 Run:

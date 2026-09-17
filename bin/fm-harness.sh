@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Detect the agent harness this process tree runs on.
-# Usage: fm-harness.sh                  print own harness: opencode|pi|pi-signed|unknown
+# Usage: fm-harness.sh                  print own harness: pi|pi-signed|unknown
 #        fm-harness.sh crew             print the effective CREWMATE harness
 #                                        (config/crew-harness; "default" resolves to own)
 #        fm-harness.sh secondmate       print the harness the PRIMARY uses to launch
@@ -70,8 +70,6 @@ harness_marker() {
     if [ "${FM_PI_HARNESS:-}" = pi-signed ]; then echo pi-signed; else echo pi; fi
     return
   fi
-  # opencode publishes no harness-identity marker, so it is identified by
-  # ancestry alone.
   return 0
 }
 
@@ -87,7 +85,6 @@ harness_process_verdict() {  # <pid>
   local pid=$1 comm args
   comm=$(ps -o comm= -p "$pid" 2>/dev/null) || return 0
   case "$(basename -- "$comm")" in
-    *opencode*) echo "comm opencode"; return ;;
     # Both Pi identities share this launcher name. Ancestry can only prove the
     # FAMILY; only the launch-boundary marker selects the signed identity, which
     # is why detect_own keeps a marker that agrees on the family.
@@ -97,7 +94,6 @@ harness_process_verdict() {  # <pid>
       # Bare interpreter: match the harness name in its script path.
       args=$(ps -o args= -p "$pid" 2>/dev/null)
       case "$args" in
-        *opencode*) echo "args opencode"; return ;;
         *" pi "*|*/pi) echo "args pi"; return ;;
       esac ;;
   esac

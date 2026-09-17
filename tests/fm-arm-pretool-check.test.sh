@@ -123,7 +123,7 @@ run_matrix_entry() {
   err_file="$MATRIX_TMP/$id-$entry.err"
 
   case "$entry" in
-    opencode|pi)
+    pi)
       "$CHECK" --command "$cmd" >"$out_file" 2>"$err_file"
       rc=$?
       ;;
@@ -148,10 +148,10 @@ run_matrix_entry() {
 test_full_acceptance_matrix() {
   local i entry
   for ((i = 0; i < ${#MATRIX_IDS[@]}; i++)); do
-    for entry in opencode pi; do
+    for entry in pi; do
       run_matrix_entry "${MATRIX_IDS[$i]}" "${MATRIX_EXPECTED[$i]}" "$entry" "${MATRIX_COMMANDS[$i]}"
     done
-    pass "matrix ${MATRIX_IDS[$i]}: ${MATRIX_EXPECTED[$i]} through retained entry forms"
+    pass "matrix ${MATRIX_IDS[$i]}: ${MATRIX_EXPECTED[$i]} through the retained entry form"
   done
 }
 

@@ -1412,12 +1412,12 @@ test_escalate_batches_into_one_digest() {
   state="$dir/state"
   fakebin="$dir/fakebin"
   sent="$dir/sent.log"; : > "$sent"
-  capture="$dir/pane.txt"; printf '┃\n' > "$capture"  # a proven-empty OpenCode composer: strict injection needs positive proof
+  capture="$dir/pane.txt"; printf '╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯\n' > "$capture"  # a proven-empty bordered composer
   escalate_add "$state" "event A: done: PR 1"
   escalate_add "$state" "event B: done: PR 2"
   afk_enter "$state"
   PATH="$fakebin:$PATH" FM_FAKE_TMUX_PANE_ALIVE=1 FM_FAKE_TMUX_SENT="$sent" \
-    FM_FAKE_TMUX_CAPTURE="$capture" FM_ESCALATE_BATCH_SECS=0 escalate_flush "$state" \
+    FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=1 FM_ESCALATE_BATCH_SECS=0 escalate_flush "$state" \
     || fail "escalate_flush failed"
   grep -F 'FIRSTMATE_OP: v1 away-supervisor: ' "$sent" >/dev/null \
     || fail "batch digest lacks the exact current away-supervisor kind"
@@ -1438,13 +1438,13 @@ test_escalate_batch_age_uses_first_append() {
   state="$dir/state"
   fakebin="$dir/fakebin"
   sent="$dir/sent.log"; : > "$sent"
-  capture="$dir/pane.txt"; printf '┃\n' > "$capture"  # a proven-empty OpenCode composer: strict injection needs positive proof
+  capture="$dir/pane.txt"; printf '╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯\n' > "$capture"  # a proven-empty bordered composer
   escalate_add "$state" "event A: done: PR 1"
   escalate_add "$state" "event B: done: PR 2"
   echo $(( $(date +%s) - 100 )) > "$state/.subsuper-escalations.since"
   afk_enter "$state"
   PATH="$fakebin:$PATH" FM_FAKE_TMUX_PANE_ALIVE=1 FM_FAKE_TMUX_SENT="$sent" \
-    FM_FAKE_TMUX_CAPTURE="$capture" FM_ESCALATE_BATCH_SECS=90 FM_HOUSEKEEPING_TICK=0 \
+    FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=1 FM_ESCALATE_BATCH_SECS=90 FM_HOUSEKEEPING_TICK=0 \
     housekeeping "$state"
   grep -F 'event A: done: PR 1 | event B: done: PR 2' "$sent" >/dev/null \
     || fail "backdated batch did not flush as a joined digest (max-delay measured from last append)"
@@ -1671,7 +1671,7 @@ test_afk_absent_daemon_does_not_inject() {
   state="$dir/state"
   fakebin="$dir/fakebin"
   sent="$dir/sent.log"; : > "$sent"
-  capture="$dir/pane.txt"; printf '┃\n' > "$capture"  # a proven-empty OpenCode composer: strict injection needs positive proof
+  capture="$dir/pane.txt"; printf '╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯\n' > "$capture"  # a proven-empty bordered composer
   escalate_add "$state" "done: PR 1"
   # afk flag deliberately NOT set
   if PATH="$fakebin:$PATH" FM_FAKE_TMUX_PANE_ALIVE=1 FM_FAKE_TMUX_SENT="$sent" \
@@ -2626,12 +2626,10 @@ test_primary_busy_guard_is_harness_scoped() {
     fm_backend_busy_state() { printf 'unknown'; }
     fm_backend_capture() { printf 'esc interrupt\n'; }
     if FM_DAEMON_PRIMARY_HARNESS=pi pane_is_busy "default:w1:p2" herdr; then
-      fail "OpenCode's rendered signature must not classify a Pi primary busy"
+      fail "a retired rendered signature must not classify a Pi primary busy"
     fi
-    FM_DAEMON_PRIMARY_HARNESS=opencode pane_is_busy "default:w1:p2" herdr \
-      || fail "OpenCode's rendered signature should classify an OpenCode primary busy"
   ) || fail "harness-scoped primary busy guard subshell failed"
-  pass "primary busy guard isolates rendered signatures by detected harness"
+  pass "primary busy guard ignores retired rendered signatures"
 }
 
 test_pane_input_pending_herdr_dispatch() {

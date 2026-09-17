@@ -912,7 +912,7 @@ pass "marked send and routed reply complete through the existing parent correlat
 rm -f "$PARENT/state/.wake-queue"
 
 printf '{"revision":2}\n' > "$PARENT/config/crew-dispatch.json"
-printf 'opencode\n' > "$PARENT/config/crew-harness"
+printf 'pi-signed\n' > "$PARENT/config/crew-harness"
 set +e
 FM_FAKE_SSH_MODE=inherit-partial remote_env "$ROOT/bin/fm-config-push.sh" \
   > "$TMP_ROOT/config-partial.out" 2>&1
@@ -920,14 +920,14 @@ config_partial_rc=$?
 set -e
 [ "$config_partial_rc" -ne 0 ] || fail "partial remote inheritance claimed complete convergence"
 assert_grep '"revision":2' "$REMOTE_HOME/config/crew-dispatch.json" "partial inheritance did not apply its first file"
-[ "$(cat "$REMOTE_HOME/config/crew-harness")" != opencode ] \
+[ "$(cat "$REMOTE_HOME/config/crew-harness")" != pi-signed ] \
   || fail "partial inheritance unexpectedly applied the failed file"
 NUDGE_MARKER="$PARENT/state/.secondmate-nudge-pending/ios.pending"
 assert_grep 'remote=1' "$NUDGE_MARKER" "partial inheritance left no durable remote reread marker"
 publish_healthy_watcher_identity "$PARENT/state" "$PARENT" "$REMOTE_ROOT/bin/fm-watch.sh"
 remote_env "$ROOT/bin/fm-bootstrap.sh" > "$TMP_ROOT/config-partial-retry.out" \
   || fail "bootstrap did not converge partial remote inheritance"
-[ "$(cat "$REMOTE_HOME/config/crew-harness")" = opencode ] \
+[ "$(cat "$REMOTE_HOME/config/crew-harness")" = pi-signed ] \
   || fail "bootstrap did not apply the remaining inherited file"
 assert_absent "$NUDGE_MARKER" "bootstrap cleared no remote reread marker after convergence"
 PARTIAL_CONFIG_CORR=$(newest_remote_inbox_corr)

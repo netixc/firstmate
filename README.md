@@ -58,7 +58,7 @@ Full detail on every feature lives in [docs/architecture.md](docs/architecture.m
 
 ### Requirements
 
-- A verified primary agent harness: Pi, `pi-signed`, or OpenCode.
+- A verified primary agent harness: Pi or `pi-signed`.
 - Git and the GitHub CLI, authenticated through `gh auth login`.
 - The CLI and dependencies for your selected runtime backend; tmux is the reference default.
 
@@ -69,8 +69,6 @@ Backend-specific setup is linked in [Documentation](#documentation).
 
 **Pi is the recommended primary harness**, with `pi-signed` supported as Pi's distinct signed-wrapper identity.
 Pi uses its tracked primary watcher extension and has a verified turn-end guard path when launched with the documented setup.
-
-OpenCode is also verified and supported as a primary harness through its TUI plugin.
 
 ### Install and launch
 
@@ -199,7 +197,7 @@ Firstmate's skills live in two separate places with different audiences:
 - [docs/gitlab-merge-watch.md](docs/gitlab-merge-watch.md) - maintainer verification for watching and merging GitLab merge requests on arbitrary instances.
 - [docs/turnend-guard.md](docs/turnend-guard.md) - the primary session's current "no turn ends blind" backstop, scope, loop safety, and compatibility limits.
 - [docs/verification/supervision.md](docs/verification/supervision.md) - active maintainer verification for session-start, guard, continuity, and wedge integrations.
-- [docs/supervision-protocols/](docs/supervision-protocols/) - rendered primary-harness watcher protocols for OpenCode, Pi and `pi-signed`, and the unknown-harness fallback.
+- [docs/supervision-protocols/](docs/supervision-protocols/) - rendered primary-harness watcher protocols for Pi and `pi-signed`, and the unknown-harness fallback.
 - [docs/scripts.md](docs/scripts.md) - the `bin/` toolbelt reference.
 - [docs/documentation-audiences.md](docs/documentation-audiences.md) - documentation audiences and the machine-checked placement boundary.
 - [`AGENTS.md`](AGENTS.md) - the supervisor contract, role boundary, and routing index for conditional procedures.
