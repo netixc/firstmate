@@ -35,7 +35,7 @@ make_spawn_fakebin() {
   fakebin=$(fm_test_make_spawn_fakebin "$dir")
   cat > "$fakebin/timeout" <<'SH'
 #!/usr/bin/env bash
-shift
+shift 3
 exec "$@"
 SH
   chmod +x "$fakebin/timeout"
