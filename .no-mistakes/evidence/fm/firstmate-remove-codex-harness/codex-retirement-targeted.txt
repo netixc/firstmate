@@ -1,0 +1,10 @@
+Standalone runtime retirement and retained-path evidence
+--- fm-harness executable interface ---
+default=unknown
+retired-codex-marker=pi
+pi-marker=pi
+pi-signed-marker=pi-signed
+--- live Pi /new hook exercise ---
+ok - Pi 0.85.1: immediate and completed-before-prompt /new paths each made one first provider call with exactly one native startup context and no manual execution
+# fm-sessionstart-hook-live-e2e.test.sh: offline Pi /new race assertions passed
+--- retired Codex spawn refusal assertion ---
