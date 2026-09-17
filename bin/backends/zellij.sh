@@ -350,6 +350,16 @@ fm_backend_zellij_create_task() {  # <session> <label> <cwd>
   esac
   pane_id=$(fm_backend_zellij_pane_for_tab "$session" "$tab_id")
   if [ -z "$pane_id" ]; then
+    # Headless zellij sessions can create an empty tab. Populate it explicitly
+    # before treating the tab as unusable.
+    fm_backend_zellij_cli "$session" action new-pane --tab-id "$tab_id" --cwd "$cwd" >/dev/null 2>&1 || true
+    for _ in $(seq 1 20); do
+      pane_id=$(fm_backend_zellij_pane_for_tab "$session" "$tab_id")
+      [ -n "$pane_id" ] && break
+      sleep 0.1
+    done
+  fi
+  if [ -z "$pane_id" ]; then
     echo "error: could not find a terminal pane for zellij tab $tab_id (session '$session')" >&2
     return 1
   fi

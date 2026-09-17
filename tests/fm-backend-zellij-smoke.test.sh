@@ -73,6 +73,19 @@ if [ -z "$TAB_ID" ] || [ -z "$PANE_ID" ]; then
 fi
 TARGET="$SESSION:$PANE_ID"
 
+# A headless zellij server may report newly-created panes as 1x1 when no
+# client has supplied a terminal size. Such a pane cannot support this
+# lifecycle smoke test's interactive send/capture assertions.
+PANE_DIMENSIONS=$(fm_backend_zellij_cli "$SESSION" action list-panes --json 2>/dev/null \
+  | jq -r --argjson p "$PANE_ID" '.[]? | select(.id == $p and .is_plugin == false) | "\(.pane_rows) \(.pane_columns)"' \
+  | head -1)
+PANE_ROWS=${PANE_DIMENSIONS%% *}
+PANE_COLUMNS=${PANE_DIMENSIONS#* }
+if [ "${PANE_ROWS:-0}" -lt 2 ] || [ "${PANE_COLUMNS:-0}" -lt 10 ]; then
+  echo "skip: zellij created a pane without a usable terminal size (${PANE_DIMENSIONS:-unknown})"
+  exit 0
+fi
+
 if fm_backend_zellij_create_task "$SESSION" "$LABEL" /tmp >/dev/null 2>&1; then
   fail "create_task should refuse a duplicate tab name (zellij itself does not enforce uniqueness)"
 fi
