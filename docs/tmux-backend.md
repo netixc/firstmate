@@ -85,6 +85,7 @@ Text left in established structure remains `pending`, text in ambiguous structur
 An ordinary local `fm-send.sh` text steer and every remote text steer no longer ride this verified submit at all: they become durable steering-inbox records plus best-effort constant doorbell lines (`bin/fm-task-inbox-lib.sh`).
 The verdicts above are delivery-critical only for the local typed plane - harness-native invocations and explicit backend targets - where `fm-send.sh` still never retypes or assumes a confirmed submit for an unconfirmed verdict; its header owns the distinct delivered-unconfirmed exit status and operator response.
 
+After the normal retry budget, proven pending text plus a generating busy signal is accepted as a queued delivered Enter, while an idle pending composer remains a genuine swallowed Enter and ambiguous pending text never receives the conversion.
 A baseline-gated conversion covers Pi when its mid-turn screen replaces the separated composer: when and only when the pane was idle before the text was typed, an idle-to-busy transition across the submit's own Enter confirms delivery, the same turn-started signal Herdr reads natively.
 Without that baseline, an `unknown` verdict is preserved untouched, so a busy-looking pane can never convert an unread composer into a confirmation.
 `tests/fm-tmux-submit-busy.test.sh` covers busy and idle panes with proven, ambiguous, and cleared composers.
