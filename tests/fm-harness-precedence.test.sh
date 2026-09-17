@@ -25,7 +25,6 @@ set -u
 unset PI_CODING_AGENT FM_PI_HARNESS
 
 HARNESS="$ROOT/bin/fm-harness.sh"
-RENDER="$ROOT/bin/fm-supervision-instructions.sh"
 TMP_ROOT=$(fm_test_tmproot fm-harness-precedence)
 BASE_PATH=${FM_TEST_BASE_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
 

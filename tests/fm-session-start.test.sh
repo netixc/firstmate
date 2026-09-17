@@ -1429,7 +1429,7 @@ test_non_pi_session_start_leaves_branch_state_untouched() {
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_harness "$fakebin" pi
+  make_fake_ps_harness "$fakebin" zellij
 
   FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" append \
     --task task-b --verdict captain --summary 'unread Pi branch outcome' >/dev/null \

@@ -126,11 +126,11 @@ EOF
 
 test_cross_language_adapter_uses_the_owner() {
   local encoded parsed
-  encoded=$(FM_TEST_ROOT="$ROOT" HELPER="$ROOT/.pi/plugins/lib/fm-operational-input.js" \
-    node --input-type=module <<'JS'
+  encoded=$(FM_TEST_ROOT="$ROOT" HELPER="$ROOT/.pi/extensions/lib/fm-operational-input.ts" \
+    node --experimental-strip-types --input-type=module <<'JS'
 import { pathToFileURL } from "node:url";
 const { encodeFirstmateOperationalInput } = await import(pathToFileURL(process.env.HELPER).href);
-process.stdout.write(await encodeFirstmateOperationalInput(process.env.FM_TEST_ROOT, "watcher", "CROSS_LANGUAGE_BODY"));
+process.stdout.write(encodeFirstmateOperationalInput("watcher", "CROSS_LANGUAGE_BODY"));
 JS
   ) || fail "Pi cross-language adapter could not invoke the canonical owner"
   fm_operational_input_kind "$encoded" parsed \
