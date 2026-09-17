@@ -174,11 +174,9 @@ run_matrix_entry() {
 }
 
 test_full_acceptance_matrix() {
-  local i entry
+  local i
   for ((i = 0; i < ${#MATRIX_IDS[@]}; i++)); do
-    for entry in pi; do
-      run_matrix_entry "${MATRIX_IDS[$i]}" "${MATRIX_EXPECTED[$i]}" "$entry" "${MATRIX_COMMANDS[$i]}"
-    done
+    run_matrix_entry "${MATRIX_IDS[$i]}" "${MATRIX_EXPECTED[$i]}" pi "${MATRIX_COMMANDS[$i]}"
   done
   pass "cd-guard acceptance matrix: ${#MATRIX_IDS[@]} cases x 1 retained entry form, block/allow all correct"
 }
