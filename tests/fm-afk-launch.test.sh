@@ -31,7 +31,7 @@ export HARNESS_BIN
 cat > "$HARNESS_BIN/ps" <<'SH'
 #!/usr/bin/env bash
 case "$*" in
-  *comm=*|*args=*) printf 'pi\n' ;;
+  *comm=*|*args=*) printf 'opencode\n' ;;
   *) /bin/ps "$@" ;;
 esac
 SH

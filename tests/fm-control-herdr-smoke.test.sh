@@ -163,6 +163,7 @@ EOF
 chmod +x "$FAKEBIN/pi"
 printf -v FAKEBIN_Q '%q' "$FAKEBIN"
 printf -v PROJ_Q '%q' "$PROJ"
+export PATH="$FAKEBIN:$PATH"
 fm_backend_herdr_send_text_line "$SESSION:$PANE_ID" "export PATH=$FAKEBIN_Q:\$PATH" \
   || fail "could not put the inert test harness on the pane PATH"
 fm_backend_herdr_send_text_line "$SESSION:$PANE_ID" "cd -- $PROJ_Q" \
