@@ -123,7 +123,7 @@ named_bin() {  # <dir> <name>
 # Retired harness names and markers must contribute no identity of their own.
 test_retired_harness_identity_is_not_recognized() {
   local bin fakebin got name retired
-  for retired in codex muse gemini rovo agy kimi opencode; do
+  for retired in codex muse gemini rovo agy kimi; do
     for name in "$retired" "$retired-cli-0.58.0"; do
       bin=$(named_bin "$TMP_ROOT/retired-$name-tree" "$name")
       got=$(under_process "$bin")

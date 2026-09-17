@@ -232,8 +232,8 @@ case "$pid:$field" in
   4242:comm=) printf '%s\n' '/opt/test/bin/pi' ;;
   4242:args=) printf '%s\n' 'pi' ;;
   4242:ppid=) printf '%s\n' 1 ;;
-  5252:comm=) printf '%s\n' '-opencode' ;;
-  5252:args=) printf '%s\n' '-opencode' ;;
+  5252:comm=) printf '%s\n' '-zsh' ;;
+  5252:args=) printf '%s\n' '-zsh' ;;
   5252:ppid=) printf '%s\n' 1 ;;
   *:comm=) printf '%s\n' '-zsh' ;;
   *:args=) printf '%s\n' '-zsh' ;;

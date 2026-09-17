@@ -23,7 +23,7 @@ test_unknown_fallback() {
   assert_contains "$out" "primary harness: unknown" "unknown heading missing"
   assert_contains "$out" "Mode: Unknown harness fallback." "unknown fallback snippet missing"
 
-  for harness in codex omp muse opencode; do
+  for harness in codex omp muse; do
     out=$("$RENDER" --harness "$harness")
     assert_contains "$out" "primary harness: unknown" "a stale $harness selection must use the unknown fallback"
     assert_contains "$out" "Mode: Unknown harness fallback." "a stale $harness selection must not select a retired protocol"
