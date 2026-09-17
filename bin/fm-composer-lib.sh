@@ -593,11 +593,7 @@ _fm_composer_scan_screen() {  # <plain-screen> <cursor-or-empty> [extract-wrap]
             heavy) bottom_inner=${bottom_inner#┗}; bottom_inner=${bottom_inner%┛}; bottom_spaces=${bottom_inner//━/ } ;;
             ascii) bottom_inner=${bottom_inner#+}; bottom_inner=${bottom_inner%+}; bottom_spaces=${bottom_inner//-/ } ;;
           esac
-          if [ "$bottom_spaces" != "$top_spaces" ] \
-             && { [ "${FM_COMPOSER_ALLOW_TITLED_BOTTOM:-0}" != 1 ] \
-               || ! _fm_composer_titled_bottom_ok "$family" "$bottom_inner" "$top_spaces"; }; then
-            geometry_ambiguous=1
-          fi
+          [ "$bottom_spaces" = "$top_spaces" ] || geometry_ambiguous=1
         fi
         if [ -n "$cy" ]; then
           if [ "$top" -lt "$cy" ] && [ "$cy" -le "$row" ]; then
@@ -686,28 +682,6 @@ fm_composer_row_has_edge() {  # <trimmed-row>
       ;;
   esac
   return 1
-}
-
-_fm_composer_titled_bottom_ok() {  # <family> <bottom-inner> <top-spaces>
-  local family=$1 inner=$2 expected=$3 dash spaces
-  fm_composer_normalize_trim_var inner
-  case "$family" in
-    rounded|light) dash='─' ;;
-    double) dash='═' ;;
-    heavy) dash='━' ;;
-    ascii) dash='-' ;;
-    *) return 1 ;;
-  esac
-  case "$inner" in
-    "$dash"*"$dash") ;;
-    *) return 1 ;;
-  esac
-  spaces=${inner//"$dash"/ }
-  spaces=$(printf '%s' "$spaces" | LC_ALL=C sed 's/[!-~]/ /g')
-  case "$spaces" in
-    *[![:space:]]*) return 1 ;;
-  esac
-  [ "$spaces" = "$expected" ]
 }
 
 # fm_composer_geometry_spaces: prove a box content row blank to the same width
@@ -1060,13 +1034,11 @@ EOF
 fm_composer_classify_screen() {  # <caps> <screen> [cursor_row] [identity]
   local caps=$1 screen=$2 cy=${3:-} identity=${4:-}
   local styled=0 cursor=0 has_identity=0 kv plain
-  FM_COMPOSER_ALLOW_TITLED_BOTTOM=0
   while IFS= read -r kv; do
     case "$kv" in
       styled=1) styled=1 ;;
       cursor=1) cursor=1 ;;
       identity=1) has_identity=1 ;;
-      titled-bottom=1) FM_COMPOSER_ALLOW_TITLED_BOTTOM=1 ;;
     esac
   done <<EOF
 $caps
