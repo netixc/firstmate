@@ -153,7 +153,10 @@ if command -v zellij >/dev/null 2>&1; then
     || fail "zellij ($zj_version): adapter source failed"
 
   zellij delete-session --force "$ZELLIJ_SESSION" >/dev/null 2>&1 || true
-  zellij --session "$ZELLIJ_SESSION" options --default-shell bash >/dev/null 2>&1 &
+  command -v script >/dev/null 2>&1 \
+    || fail "zellij ($zj_version): script is required to provision the isolated pseudo-terminal"
+  script -q /dev/null bash -c "stty rows 40 cols 120; exec zellij attach --create '$ZELLIJ_SESSION'" \
+    >/dev/null 2>&1 &
   ZJ_BG=$!
   i=0
   while [ "$i" -lt 10 ] && ! fm_backend_zellij_session_exists "$ZELLIJ_SESSION"; do
@@ -162,6 +165,20 @@ if command -v zellij >/dev/null 2>&1; then
   done
   fm_backend_zellij_session_exists "$ZELLIJ_SESSION" \
     || fail "zellij ($zj_version): probe session setup failed"
+  pane_dimensions=
+  for i in $(seq 1 20); do
+    pane_dimensions=$(fm_backend_zellij_cli "$ZELLIJ_SESSION" action list-panes --json 2>/dev/null \
+      | jq -r '.[]? | select(.is_plugin == false) | "\(.pane_rows) \(.pane_columns)"' \
+      | head -1)
+    pane_rows=${pane_dimensions%% *}
+    pane_columns=${pane_dimensions#* }
+    if [ "${pane_rows:-0}" -ge 2 ] && [ "${pane_columns:-0}" -ge 10 ]; then
+      break
+    fi
+    sleep 0.2
+  done
+  [ "${pane_rows:-0}" -ge 2 ] && [ "${pane_columns:-0}" -ge 10 ] \
+    || fail "zellij ($zj_version): isolated client did not provision a usable terminal size (${pane_dimensions:-unknown})"
   panes=$(fm_backend_zellij_cli "$ZELLIJ_SESSION" action list-panes --json 2>/dev/null) \
     || fail "zellij ($zj_version): pane discovery command failed"
   pane_id=$(printf '%s' "$panes" | jq -r '.[]? | select(.is_plugin == false) | .id' 2>/dev/null | head -1)

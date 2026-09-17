@@ -28,9 +28,11 @@ command -v jq >/dev/null 2>&1 || { echo "skip: jq not found (required by the zel
 
 SESSION="fm-backend-smoke-$$"
 export FM_ZELLIJ_SESSION="$SESSION"
+ZJ_CLIENT_PID=
 trap cleanup_all EXIT
 
 cleanup_all() {
+  [ -z "${ZJ_CLIENT_PID:-}" ] || kill "$ZJ_CLIENT_PID" 2>/dev/null || true
   zellij_safe_delete "$SESSION"
 }
 
@@ -61,6 +63,13 @@ CONTAINER2=$(fm_backend_zellij_container_ensure) || fail "second container_ensur
 [ "$CONTAINER2" = "$CONTAINER" ] || fail "container_ensure is not idempotent: '$CONTAINER' vs '$CONTAINER2'"
 pass "real zellij: container_ensure is idempotent (reuses the existing session)"
 
+# Detached zellij sessions fall back to a 1x1 terminal. Attach a disposable
+# client through a real 40x120 pseudo-terminal for interactive checks.
+command -v script >/dev/null 2>&1 || fail "script is required to provision the isolated zellij pseudo-terminal"
+script -q /dev/null bash -c "stty rows 40 cols 120; exec zellij attach '$SESSION'" >/dev/null 2>&1 &
+ZJ_CLIENT_PID=$!
+sleep 0.5
+
 # --- create_task + duplicate refusal -----------------------------------------
 
 LABEL="fm-smoke1"
@@ -82,8 +91,7 @@ PANE_DIMENSIONS=$(fm_backend_zellij_cli "$SESSION" action list-panes --json 2>/d
 PANE_ROWS=${PANE_DIMENSIONS%% *}
 PANE_COLUMNS=${PANE_DIMENSIONS#* }
 if [ "${PANE_ROWS:-0}" -lt 2 ] || [ "${PANE_COLUMNS:-0}" -lt 10 ]; then
-  echo "skip: zellij created a pane without a usable terminal size (${PANE_DIMENSIONS:-unknown})"
-  exit 0
+  fail "zellij client did not provision a usable terminal size (${PANE_DIMENSIONS:-unknown})"
 fi
 
 if fm_backend_zellij_create_task "$SESSION" "$LABEL" /tmp >/dev/null 2>&1; then
