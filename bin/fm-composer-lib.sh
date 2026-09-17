@@ -888,6 +888,18 @@ fm_composer_submit_retry_core() {  # <send-key-fn> <state-fn> <target> <retries>
   done
 }
 
+# Convert a proven pending composer to empty only when the adapter proves that
+# the submission was accepted while the worker was busy.
+fm_composer_queued_enter_verdict() {  # <composer-state> <busy|idle|unknown>
+  local state=$1 busy=${2:-}
+  [ "$state" = pending ] || { printf '%s' "$state"; return 0; }
+  if [ "$busy" = busy ]; then
+    printf 'empty'
+  else
+    printf 'pending'
+  fi
+}
+
 _fm_composer_classify_pi_rows() {  # <screen> <styled>
   local screen=$1 styled=$2 row raw content
   row=$((FM_COMPOSER_SCAN_PI_OPEN + 1))
