@@ -1,0 +1,14 @@
+### tests/fm-composer-matrix-live-e2e.test.sh
+ok - pi (0.85.1): real idle composer classifies empty
+# harness absent, not verified here: pi-signed
+ok - strict posture live: a blank shell row classifies unknown and injection defers
+# harness absent, not verified here: zellij (false-positive regression not exercised)
+ok - live composer-matrix guard verified 2 live surface(s)
+### tests/fm-harness-liveness-drift-live-e2e.test.sh
+# pi 0.85.1: title='node' foreground=[pi node <defunct> <defunct> ]
+ok - harness liveness: pi 0.85.1 classifies alive
+# pi 0.85.1: ancestry verdicts=[comm pi]
+ok - harness detection: pi 0.85.1 is identified by the ancestry walk at comm strength
+# skip: pi-signed is not installed on this machine, so its classification is unverified here
+# unverified on this machine (not installed): pi-signed
+# checked 1 installed harness(es)
