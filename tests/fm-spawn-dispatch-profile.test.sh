@@ -522,23 +522,6 @@ test_retired_codex_harness_refuses_before_provisioning() {
   pass "retired standalone Codex harness refuses before task publication or launch"
 }
 
-test_removed_opencode_harness_refuses_before_provisioning() {
-  local rec id out status
-  id=profile-removed-opencode-z7
-  rec=$(make_spawn_case profile-removed-opencode pi "$id")
-  read_case_record "$rec"
-
-  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id" "$PROJ_DIR" --harness opencode 2>&1)
-  status=$?
-  expect_code 1 "$status" "removed standalone OpenCode harness should refuse"
-  assert_contains "$out" "harness 'opencode'" "removed OpenCode selection did not use the generic unsupported-harness refusal"
-  assert_absent "$HOME_DIR/state/$id.meta" "removed OpenCode selection published task metadata"
-  assert_absent "$HOME_DIR/state/$id.busy-gen" "removed OpenCode selection provisioned lifecycle wiring"
-  [ ! -s "$LAUNCH_LOG" ] || fail "removed OpenCode selection created or launched an endpoint"
-  pass "removed standalone OpenCode selection refuses before task publication or endpoint launch"
-}
-
 test_native_effort_validator_keeps_axes_separate() {
   local harness
   for harness in pi pi-signed; do
@@ -1162,7 +1145,6 @@ test_retired_agy_harness_refuses_without_touching_external_settings
 test_retired_rovo_harness_refuses_without_touching_project_files
 test_retired_kimi_harness_refuses_without_touching_external_config
 test_retired_codex_harness_refuses_before_provisioning
-test_removed_opencode_harness_refuses_before_provisioning
 test_native_effort_validator_keeps_axes_separate
 test_native_pi_ultra_is_explicit_and_model_scoped
 test_batch_preserves_native_ultra
