@@ -83,12 +83,12 @@ FM_HARNESS_LIVENESS_DRIFT=1 bin/fm-test-run.sh tests/fm-harness-liveness-drift-l
 
 ### 2026-09-06 default-on drift refresh
 
-The retained-adapter portion of the macOS 26.5.2 arm64 run checked three installed harness entries and classified every one `alive`:
+The retained-adapter portion of the macOS 26.5.2 arm64 run checked two installed harness entries and classified every one `alive`:
 
 ```text
 # pi 0.84.4: title='pi-launcher' foreground=[/opt/homebrew/bin/pi-signed .../pi ]
 # pi-signed 0.84.4: title='pi-launcher' foreground=[/opt/homebrew/bin/pi-signed .../pi ]
-# checked 3 installed harness(es)
+# checked 2 installed harness(es)
 ```
 
 Bounded output from the 2026-08-03 run that produced the first table above:
@@ -213,7 +213,7 @@ Observed output:
 ok - pi (0.84.0): real idle composer classifies empty
 ok - strict posture live: a blank shell row classifies unknown and injection defers
 ok - zellij (zellij 0.44.0): unrelated pane change never confirms delivery (verdict: unknown)
-ok - live composer-matrix guard verified 5 live surface(s)
+ok - live composer-matrix guard verified 3 live surface(s)
 ```
 
 Pi's real idle composer reached a proven `empty` through the tmux foreground-process identity probe.
