@@ -42,7 +42,7 @@ HERDR_PROVISIONED=0
 cleanup() {
   local rc=$?
   trap - EXIT
-  TMUX= TMUX_TMPDIR="$TMUX_TMPDIR_TEST" tmux kill-server >/dev/null 2>&1 || true
+  TMUX='' TMUX_TMPDIR="$TMUX_TMPDIR_TEST" tmux kill-server >/dev/null 2>&1 || true
   if [ "$HERDR_PROVISIONED" -eq 1 ] && ! "$LAB_HELPER" teardown "$SESSION"; then
     rc=1
   fi
@@ -151,12 +151,12 @@ prod() { # <backend> <parent-home> <command...>
   local backend=$1 parent=$2
   shift 2
   if [ "$backend" = herdr ]; then
-    PATH="$FAKEBIN:$ORIGINAL_PATH" HERDR_SESSION="$SESSION" TMUX= \
+    PATH="$FAKEBIN:$ORIGINAL_PATH" HERDR_SESSION="$SESSION" TMUX='' \
       FM_HOME="$parent" FM_STATE_OVERRIDE="$parent/state" FM_DATA_OVERRIDE="$parent/data" \
       FM_CONFIG_OVERRIDE="$parent/config" FM_PROJECTS_OVERRIDE="$parent/projects" \
       "$@"
   else
-    PATH="$FAKEBIN:$ORIGINAL_PATH" TMUX= TMUX_TMPDIR="$TMUX_TMPDIR_TEST" HERDR_SESSION= \
+    PATH="$FAKEBIN:$ORIGINAL_PATH" TMUX='' TMUX_TMPDIR="$TMUX_TMPDIR_TEST" HERDR_SESSION='' \
       FM_HOME="$parent" FM_STATE_OVERRIDE="$parent/state" FM_DATA_OVERRIDE="$parent/data" \
       FM_CONFIG_OVERRIDE="$parent/config" FM_PROJECTS_OVERRIDE="$parent/projects" \
       "$@"
@@ -176,7 +176,7 @@ wait_for_capture_count() { # <home> <needle> <count>
 }
 
 find_inbox_record() { # <inbox>
-  local inbox=$1 candidate name found= count=0
+  local inbox=$1 candidate name found='' count=0
   for candidate in "$inbox"/*.msg "$inbox/handled"/*.msg; do
     [ -f "$candidate" ] || continue
     name=${candidate##*/}
@@ -290,8 +290,8 @@ run_backend_lifecycle() { # <herdr|tmux>
     "$LAB_HELPER" run "$SESSION" pane send-text "$pane" "$direct" >/dev/null
     "$LAB_HELPER" run "$SESSION" pane send-keys "$pane" enter >/dev/null
   else
-    TMUX= TMUX_TMPDIR="$TMUX_TMPDIR_TEST" tmux send-keys -t "$target" -l -- "$direct"
-    TMUX= TMUX_TMPDIR="$TMUX_TMPDIR_TEST" tmux send-keys -t "$target" Enter
+    TMUX='' TMUX_TMPDIR="$TMUX_TMPDIR_TEST" tmux send-keys -t "$target" -l -- "$direct"
+    TMUX='' TMUX_TMPDIR="$TMUX_TMPDIR_TEST" tmux send-keys -t "$target" Enter
   fi
   wait_for_capture_count "$mate" "$direct" 1 || fail "$backend: direct terminal input never reached Pi"
   got=$(jq -r --arg home "$mate" --arg needle "$direct" \
