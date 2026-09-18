@@ -376,7 +376,7 @@ fi
 assert_contains "$out" "required herdr=$DOCTOR_BIN/herdr" "the remote doctor did not require herdr"
 assert_contains "$out" "required tasks-axi=$DOCTOR_BIN/tasks-axi" "the remote doctor did not require compatible tasks-axi"
 assert_contains "$out" "required treehouse=$DOCTOR_BIN/treehouse" "the remote doctor did not require treehouse"
-assert_contains "$out" "required harness=pi:$DOCTOR_BIN/pi" "the remote doctor did not require a verified harness"
+assert_contains "$out" "required harness=pi:$DOCTOR_BIN/pi" "the remote doctor did not require plain Pi"
 assert_not_contains "$out" 'required tools do not resolve' "a resolved required tool was still reported missing"
 pass "the remote doctor reports its required runtime tool set and optional tools"
 

@@ -6,7 +6,7 @@
 #
 # Reads one already-captured quota-axi default TOON or JSON snapshot from the
 # provided file, or from stdin when --snapshot is omitted. For each --candidate
-# in order, it maps <harness> to its primary provider family, then applies the
+# in order, it validates <harness> as Pi and maps Pi to its configured primary provider family, then applies the
 # provider-wide scopes and exact model or product scopes for <model>. A candidate
 # is eligible only when no applicable runway is `exhausted_now` and its known
 # effective percent remaining is greater than zero. The first eligible
@@ -23,17 +23,16 @@
 # reasoning-class or runway-feasibility gates; it only answers which ordered
 # candidate remains eligible under the captured quota evidence.
 #
-# Multi-provider limitation: this helper maps each harness to ONE primary
-# provider family (see provider_for_harness below) and checks quota for that
-# family only. Some harnesses can run models from several providers - for
-# example, Pi and OpenCode may dispatch xAI, Anthropic, or other models - so a
-# candidate whose established provider differs from the harness's primary family
+# Multi-provider limitation: this helper maps Pi to ONE primary provider family
+# (see provider_for_harness below) and checks quota for that family only. Pi can
+# run models from several providers - for example, xAI, Anthropic, or other
+# models - so a candidate whose established provider differs from Pi's primary family
 # is checked against the wrong quota row. This is an accepted limitation of the
 # optional helper. Authoritative multi-provider routing - including provider
 # discovery from the harness catalog and quota matching by that explicit
 # provider - is owned by AGENTS.md section 4 and the quota-array-dispatch skill,
 # not by this helper. Use this helper only when the brief already fixed the
-# candidate order and every candidate's provider is the harness's primary family.
+# candidate order and every candidate's provider is Pi's primary family.
 #
 set -u
 
@@ -83,8 +82,9 @@ done
 
 [ "${#CANDIDATES[@]}" -gt 0 ] || die "no candidates supplied"
 
-# A candidate is <harness>:<model>. A bare harness with no colon means the
-# default model. Reject empty harnesses and characters that cannot form a safe
+# A candidate is <harness>:<model>; the harness field must resolve to Pi at
+# intake. A bare harness with no colon means the default model. Reject empty
+# runtime fields and characters that cannot form a safe
 # token. A colon-separated model is legal (e.g. model:codex_bengalfox).
 for c in "${CANDIDATES[@]}"; do
   case "$c" in
@@ -301,15 +301,14 @@ printf '%s\n' "$QUOTA_JSON" | fm_quota_json_valid || die "invalid quota-axi prov
 
 # provider_for_harness <harness> [<model>]
 # Map a firstmate harness name to its primary quota-axi provider family.
-# Multi-provider harnesses (Pi, OpenCode) map to their primary family only; see
+# Pi maps to its primary family only; see
 # the header limitation note. Authoritative multi-provider routing is owned by
 # AGENTS.md section 4 and the
 # quota-array-dispatch skill, not this helper.
 provider_for_harness() {
   case "$1" in
-    opencode)     printf 'codex\n' ;;
-    pi|pi-signed) printf 'pi\n' ;;
-    *)            return 1 ;;
+    pi) printf 'pi\n' ;;
+    *)  return 1 ;;
   esac
 }
 

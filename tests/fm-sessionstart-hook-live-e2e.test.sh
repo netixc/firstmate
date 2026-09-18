@@ -4,7 +4,7 @@
 # Three facts in this area come from the vendor, not from Firstmate, so a stub
 # can only confirm the assumption already written into the stub:
 #
-#   (a) the harness tells the hook WHICH session open this is, well enough that
+#   (a) Pi tells the hook WHICH session open this is, well enough that
 #       a context-preserving reopen is never mistaken for a context reset,
 #   (b) hook stdout actually reaches model context on a context-RESET open
 #       (clear/compact), not only on a cold startup, and
@@ -12,26 +12,26 @@
 #       moved every external-network call into such a worker
 #       (bin/fm-startup-network.sh), so a harness that reaps the hook's process
 #       tree would silently stop running the sweeps entirely. Whether it does is
-#       a vendor behavior no portable test can see.
+#       Pi behavior no portable test can see.
 #
 # docs/sessionstart-nudge.md owns the routing facts (a) and (b) feed, and
 # tests/fm-sessionstart-nudge.test.sh pins that routing portably with real
-# processes and no harness. This guard covers only what CI cannot see.
+# processes and no Pi process. This guard covers only what CI cannot see.
 #
 # It swaps a RECORDER in for bin/fm-sessionstart-run.sh inside a throwaway lab
 # checkout, so nothing here touches a real home, lock, or fleet. The recorder
-# logs the source the harness supplied and prints a source-stamped token; the
+# logs the source Pi supplied and prints a source-stamped token; the
 # model is then asked to quote that token back, which is the only way to prove
 # the stdout genuinely landed in context rather than merely being produced.
 # The token index advances on every open, so a stale earlier token can never
 # satisfy a later assertion and no case can go quietly vacuous.
 #
-# Run it after every harness upgrade and before trusting refreshed evidence in
+# Run it after every Pi upgrade and before trusting refreshed evidence in
 # docs/verification/supervision.md:
 #
 #   FM_SESSIONSTART_HOOK_LIVE_E2E=1 tests/fm-sessionstart-hook-live-e2e.test.sh
 #
-# That mode costs real model turns on every installed adapter in this suite.
+# That mode costs real Pi model turns.
 # The Pi `/new` provider-prerequisite regression has a separate offline mode
 # using a deterministic local provider and no user credentials:
 #
@@ -176,9 +176,8 @@ SH
 # --- (a) cold open and context-preserving reopen ------------------------------
 #
 # Both run headless, because a cold open and a resume are whole processes and
-# need no TUI driving. The expected resume source is passed per harness rather
-# than assumed uniform: the harnesses genuinely disagree, and what matters is
-# only that a reopen is never reported as a context RESET, which would make the
+# need no TUI driving. The expected Pi resume source is explicit; what matters
+# is that a reopen is never reported as a context RESET, which would make the
 # run tier skip sweeps it never ran.
 probe_process_opens() {  # <harness> <version> <lab> <expect-resume> <cold-argv...> -- <resume-argv...>
   local harness=$1 version=$2 lab=$3 expect_resume=$4
@@ -245,11 +244,10 @@ probe_context_reset() {  # <harness> <version> <lab> <clear-command> <launch-arg
     "$*" \
     || fail "$harness $version: could not start an interactive lab session"
 
-  # Every run-tier TUI asks whether it trusts a folder it has not seen, and the
-  # session-open hook only fires once that is answered. Each harness's default
-  # selection IS the trusting one, so a bare Enter clears it; the loop keeps
-  # waiting for the recorded open either way, so a harness that stops prompting
-  # costs nothing. harness-adapters owns trust handling outside tests.
+  # Pi asks whether it trusts a folder it has not seen, and the session-open
+  # hook only fires once that is answered. Pi's default selection is the trusting
+  # one, so a bare Enter clears it; the loop keeps waiting for the recorded open
+  # either way, so a Pi release that stops prompting costs nothing.
   n=0
   while [ "$n" -lt 60 ] && ! grep -q . "$record" 2>/dev/null; do
     if capture "$session" | grep -qiE 'trust (this|the|parent)?[[:space:]]*(folder|project)'; then

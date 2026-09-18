@@ -396,7 +396,8 @@ class Credentials:
         self._source = None
         self._resolved = None
         self._ambient_spent = False
-        self._lock = asyncio.Lock()
+        self._lock = None
+        self._lock_loop = None
 
     def _usable(self):
         if self._creds is None:
@@ -408,6 +409,10 @@ class Credentials:
         return time.time() + self.REFRESH_MARGIN < self._expires
 
     async def get(self):
+        loop = asyncio.get_running_loop()
+        if self._lock is None or self._lock_loop is not loop:
+            self._lock = asyncio.Lock()
+            self._lock_loop = loop
         async with self._lock:
             if not self._usable():
                 spend = self._source == FROM_ENVIRONMENT and bool(self.profile)

@@ -1,30 +1,13 @@
 #!/usr/bin/env bash
-# tests/fm-tmux-agent-liveness.test.sh - portable regression for the tmux
-# agent-liveness classifier (bin/backends/tmux.sh).
-#
-# It runs REAL processes in a REAL tmux server on a private socket (`-L`), and
-# needs no harness and no credentials, so it runs everywhere CI runs tmux. The
-# live per-harness counterpart is tests/fm-harness-liveness-drift-live-e2e.test.sh.
-#
-# The defect it exists for: a harness that rewrites its own process title made
-# `#{pane_current_command}` report a version string, the classifier could not
-# attribute the pane, and supervision lost the agent. The version-string case
-# below carries the proof that the verdict never depends on a single name
-# surface: it drives the two sources apart on purpose and asserts that
-# divergence, so it cannot go quietly vacuous. tmux and `ps -o comm=` read
-# different name surfaces, and which one a given construction blinds differs
-# between macOS and Linux, so every case asserts only the platform-independent
-# property that the verdict itself is correct.
+# Portable real-tmux regression for plain Pi process attribution.
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-
 fail() { printf 'not ok - %s\n' "$1" >&2; cleanup_all; exit 1; }
 pass() { printf 'ok - %s\n' "$1"; }
 
 command -v tmux >/dev/null 2>&1 || { echo "skip: tmux not found"; exit 0; }
 SLEEP_BIN=$(command -v sleep) || { echo "skip: sleep not found"; exit 0; }
-
 REAL_TMUX=$(command -v tmux)
 SOCKET="fm-liveness-$$"
 LAB=$(mktemp -d "${TMPDIR:-/tmp}/fm-liveness.XXXXXX")
@@ -36,9 +19,7 @@ cleanup_all() {
 }
 trap cleanup_all EXIT
 
-# A `tmux` shim on PATH so bin/backends/tmux.sh's bare `tmux` calls reach the
-# private socket and never touch the host's real sessions.
-mkdir -p "$LAB/shim" "$LAB/bin" "$LAB/bin/decoy" "$LAB/wt"
+mkdir -p "$LAB/shim" "$LAB/bin" "$LAB/wt"
 cat > "$LAB/shim/tmux" <<SH
 #!/usr/bin/env bash
 exec "$REAL_TMUX" -L "$SOCKET" "\$@"
@@ -47,45 +28,9 @@ chmod +x "$LAB/shim/tmux"
 PATH="$LAB/shim:$PATH"
 export PATH
 
-# Stand-in "harness" binaries. These are SYMLINKS to a real long-running system
-# binary, never copies: a copied platform binary fails code-signing validation
-# and is killed on macOS arm64. The symlink name is what the kernel records as
-# the executable identity, which is exactly the signal under test.
-ln -s "$SLEEP_BIN" "$LAB/bin/opencode-link"
 ln -s "$SLEEP_BIN" "$LAB/bin/pi"
-ln -s "$SLEEP_BIN" "$LAB/bin/notaharness"
-# Retired OMP task records can still point at one of these process names.
-# None is a verified agent identity after support is removed.
-ln -s "$SLEEP_BIN" "$LAB/bin/omp"
-ln -s "$SLEEP_BIN" "$LAB/bin/ompd"
-ln -s "$SLEEP_BIN" "$LAB/bin/comp"
-# Retired Muse executable names and unrelated similarly named commands must all
-# remain unclassified.
-ln -s "$SLEEP_BIN" "$LAB/bin/muse"
-ln -s "$SLEEP_BIN" "$LAB/bin/muse-bin-0.1.0-R708.1"
-ln -s "$SLEEP_BIN" "$LAB/bin/musescore"
-ln -s "$SLEEP_BIN" "$LAB/bin/amuse"
-ln -s "$SLEEP_BIN" "$LAB/bin/muse-binary"
-ln -s "$SLEEP_BIN" "$LAB/bin/muse-bind"
-# Retired Gemini CLI, Rovo, and AGY executable names must remain unclassified.
-ln -s "$SLEEP_BIN" "$LAB/bin/gemini"
-ln -s "$SLEEP_BIN" "$LAB/bin/gemini-cli-0.58.0"
-ln -s "$SLEEP_BIN" "$LAB/bin/rovo"
-ln -s "$SLEEP_BIN" "$LAB/bin/atlassian_cli_rovodev"
-ln -s "$SLEEP_BIN" "$LAB/bin/agy"
-ln -s "$SLEEP_BIN" "$LAB/bin/kimi"
-ln -s "$SLEEP_BIN" "$LAB/bin/kimi-code"
-
-# A launcher whose own process identity is a bare shell, running the harness as
-# a child in the same foreground process group - the shape the real Pi Launcher
-# path takes, and the one where trusting a single name source can produce a
-# false `dead`.
-cat > "$LAB/bin/agent-launcher" <<SH
-#!/bin/sh
-"$LAB/bin/pi" 900 &
-wait
-SH
-chmod +x "$LAB/bin/agent-launcher"
+ln -s "$SLEEP_BIN" "$LAB/bin/pi-helper"
+ln -s "$SLEEP_BIN" "$LAB/bin/not-a-worker"
 
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-backend.sh"
@@ -94,16 +39,14 @@ fm_backend_source tmux || fail "fm_backend_source tmux failed"
 "$REAL_TMUX" -L "$SOCKET" new-session -d -s "$SESSION" -n idle -c "$LAB/wt" \
   || fail "could not start the private tmux server"
 
-# Run the pane's process DIRECTLY as the window command rather than typing into
-# a shell, so no case depends on interactive shell readiness.
-new_window() {  # <name> <cmd...>
+new_window() {
   local name=$1
   shift
   "$REAL_TMUX" -L "$SOCKET" new-window -d -t "$SESSION:" -n "$name" -c "$LAB/wt" -- "$@" \
     || fail "could not create window $name"
 }
 
-wait_for_state() {  # <target> <expected> [tries]
+wait_for_state() {
   local target=$1 expected=$2 tries=${3:-100} got i=0
   while [ "$i" -lt "$tries" ]; do
     got=$(fm_backend_agent_state tmux "$target")
@@ -111,167 +54,52 @@ wait_for_state() {  # <target> <expected> [tries]
     sleep 0.1
     i=$((i + 1))
   done
-  printf 'last verdict for %s was %s (expected %s); title=%s comms=[%s]\n' \
-    "$target" "${got:-<none>}" "$expected" \
-    "$(fm_backend_tmux_current_command "$target")" \
-    "$(fm_backend_tmux_foreground_comms "$target" | tr '\n' ' ')" >&2
+  printf 'last verdict for %s was %s (expected %s)\n' "$target" "${got:-<none>}" "$expected" >&2
   return 1
 }
 
-# Does the tmux current-command source, on its own, name a verified harness?
-title_classifies_agent() {  # <target>
-  local name
-  name=$(fm_backend_tmux_current_command "$1" 2>/dev/null)
-  [ "$(fm_agent_process_classify_name "$name")" = agent ]
-}
-
-# Does the foreground-process-group identity, including argv[0], name one?
-comms_classify_agent() {  # <target>
-  local name
-  while IFS= read -r name; do
-    [ -n "$name" ] || continue
-    [ "$(fm_agent_process_classify_name "$name")" = agent ] && return 0
-  done <<EOF
-$(fm_backend_tmux_foreground_comms "$1")
-EOF
-  while IFS= read -r name; do
-    [ -n "$name" ] || continue
-    [ "$(fm_agent_process_classify_name '' "$name")" = agent ] && return 0
-  done <<EOF
-$(fm_backend_tmux_foreground_argv0s "$1")
-EOF
-  return 1
-}
-
-# The core anti-brittleness assertion: the two name sources must genuinely
-# DISAGREE for this case, so a verdict of alive proves the surviving source
-# carried it. Without this the divergence cases could silently go vacuous.
-assert_sources_disagree() {  # <target> <label>
-  local t=0 c=0
-  title_classifies_agent "$1" && t=1
-  comms_classify_agent "$1" && c=1
-  [ $((t + c)) -eq 1 ] || fail \
-    "$2: the two name sources were expected to disagree, but title=$t comms=$c (title='$(fm_backend_tmux_current_command "$1")' comms='$(fm_backend_tmux_foreground_comms "$1" | tr '\n' ' ')')"
-}
-
-# --- a harness-named foreground process -------------------------------------
-# Invoking the symlink by its harness name proves the ordinary positive path
-# with a real process. macOS exposes different names for the symlink through
-# tmux and ps, while Linux can expose the symlink name through both, so the
-# version-string case below owns the cross-platform divergence assertion.
-
-new_window agent "$LAB/bin/opencode-link" 900
+new_window agent "$LAB/bin/pi" 900
 wait_for_state "$SESSION:agent" alive \
-  || fail "a running harness-named foreground process must classify alive"
-pass "tmux liveness: a harness-named foreground process classifies alive"
+  || fail "an exact Pi foreground process must classify alive"
+pass "tmux liveness: exact Pi foreground process classifies alive"
 
-# --- retired Muse process identity ------------------------------------------
-# A stale Muse task must never make the tmux classifier treat its retired
-# executable or an unrelated similarly named command as a supported live agent.
-for retired in muse muse-bin-0.1.0-R708.1 musescore amuse muse-binary muse-bind; do
-  new_window "retired-$retired" "$LAB/bin/$retired" 900
-  wait_for_state "$SESSION:retired-$retired" ambiguous \
-    || fail "'$retired' must not classify as a verified live agent pane"
-done
-pass "tmux liveness: stale Muse and unrelated similarly named processes stay ambiguous"
+new_window lookalike "$LAB/bin/pi-helper" 900
+wait_for_state "$SESSION:lookalike" ambiguous \
+  || fail "a Pi lookalike must not classify as a worker"
+pass "tmux liveness: a Pi lookalike remains ambiguous"
 
-# --- retired Gemini CLI process identity -----------------------------------
-for retired in gemini gemini-cli-0.58.0; do
-  new_window "retired-$retired" "$LAB/bin/$retired" 900
-  wait_for_state "$SESSION:retired-$retired" ambiguous \
-    || fail "'$retired' must not classify as a verified live agent pane"
-done
-pass "tmux liveness: stale Gemini CLI process names stay ambiguous"
-
-# --- retired Rovo process identity ----------------------------------------
-for retired in rovo atlassian_cli_rovodev; do
-  new_window "retired-$retired" "$LAB/bin/$retired" 900
-  wait_for_state "$SESSION:retired-$retired" ambiguous \
-    || fail "'$retired' must not classify as a verified live agent pane"
-done
-pass "tmux liveness: stale Rovo process names stay ambiguous"
-
-# --- retired AGY process identity -----------------------------------------
-new_window retired-agy "$LAB/bin/agy" 900
-wait_for_state "$SESSION:retired-agy" ambiguous \
-  || fail "'agy' must not classify as a verified live agent pane"
-pass "tmux liveness: stale AGY process names stay ambiguous"
-
-# --- retired Kimi process identity ----------------------------------------
-for retired in kimi kimi-code; do
-  new_window "retired-$retired" "$LAB/bin/$retired" 900
-  wait_for_state "$SESSION:retired-$retired" ambiguous \
-    || fail "'$retired' must not classify as a verified live agent pane"
-done
-pass "tmux liveness: stale Kimi process names stay ambiguous"
-
-# --- retired OMP process identity ------------------------------------------
-# A stale OMP task must never make the tmux classifier treat its retired
-# executable, a lookalike, or an ordinary similarly named command as a
-# supported live agent.
-for retired in omp ompd comp; do
-  new_window "retired-$retired" "$LAB/bin/$retired" 900
-  wait_for_state "$SESSION:retired-$retired" ambiguous \
-    || fail "'$retired' must not classify as a verified live agent pane"
-done
-pass "tmux liveness: stale OMP and unrelated similarly named processes stay ambiguous"
-
-# --- neither source names a harness: no invented agent ----------------------
-
-new_window unknown bash -c "exec -a 9.9.9 '$LAB/bin/notaharness' 900"
+new_window unknown "$LAB/bin/not-a-worker" 900
 wait_for_state "$SESSION:unknown" ambiguous \
-  || fail "a foreground process no name source attributes must stay ambiguous"
-pass "tmux liveness: a process neither name source attributes stays ambiguous rather than inventing an agent"
+  || fail "an unknown foreground process must remain ambiguous"
+pass "tmux liveness: unknown process remains ambiguous"
 
-# --- a launcher whose own identity reads as a bare shell --------------------
-# The single-source classifier would read this pane as an idle shell and call
-# it dead - the one verdict that can start a duplicate agent on a live worktree.
-
-new_window launcher "$LAB/bin/agent-launcher"
-wait_for_state "$SESSION:launcher" alive \
-  || fail "a launcher running a harness child must classify alive, never dead"
-comms_classify_agent "$SESSION:launcher" \
-  || fail "the launcher's harness child must be visible in the foreground process group"
-pass "tmux liveness: a launcher whose own identity reads as a bare shell classifies alive from its harness child"
-
-# --- an idle shell is still confidently dead --------------------------------
+if command -v node >/dev/null 2>&1; then
+  new_window node "$(command -v node)" -e 'setInterval(() => {}, 1000)'
+  wait_for_state "$SESSION:node" ambiguous \
+    || fail "a generic Node process must not classify as Pi"
+  pass "tmux liveness: generic Node is not broad-matched as Pi"
+else
+  pass "tmux liveness: generic Node check skipped (node not found)"
+fi
 
 wait_for_state "$SESSION:idle" dead \
   || fail "an idle shell pane must classify dead"
-pass "tmux liveness: an idle shell pane classifies dead"
+pass "tmux liveness: idle shell classifies dead"
 
-# --- a harness-named BACKGROUND process must not fake an agent --------------
-# Scoping to the foreground process group is what prevents this false alive; a
-# descendant walk of the pane would report this pane as running an agent.
-# `set -m` gives the background job its own process group, which is what an
-# interactive shell does for a job an exited agent left behind.
-
-new_window background bash -c "set -m; '$LAB/bin/opencode-link' 900 & printf '%s\n' \"\$!\" > '$LAB/bg.pid'; exec /bin/sh"
+new_window background bash -c "set -m; '$LAB/bin/pi' 900 & printf '%s\n' \"\$!\" > '$LAB/bg.pid'; exec /bin/sh"
 bg_pid=
 for _ in $(seq 1 100); do
   [ -s "$LAB/bg.pid" ] && bg_pid=$(cat "$LAB/bg.pid") && break
   sleep 0.1
 done
-[ -n "$bg_pid" ] || fail "the background harness-named process never started"
-kill -0 "$bg_pid" 2>/dev/null \
-  || fail "the background harness-named process is not running, so this case would prove nothing"
+[ -n "$bg_pid" ] || fail "the background Pi process never started"
 wait_for_state "$SESSION:background" dead \
-  || fail "a pane whose only harness-named process is backgrounded must classify dead"
-kill -0 "$bg_pid" 2>/dev/null \
-  || fail "the background harness-named process died during the check, so this case proves nothing"
-pass "tmux liveness: a harness-named background process in an idle pane still classifies dead"
+  || fail "a background-only Pi process must not make an idle pane alive"
+pass "tmux liveness: background Pi does not claim an idle pane"
 
-# --- an absent window never inherits tmux's active-window fallback ----------
-# tmux answers a display-message for an absent target from the CLIENT's active
-# window instead of failing, so both raw name reads can describe a completely
-# different pane. The classifier's window-membership check is what contains
-# that, and this case proves the composed verdict does not inherit it.
-
-fm_backend_tmux_foreground_comms "$SESSION:no-such-window" >/dev/null \
-  || fail "the foreground-comms read must stay best-effort for an absent window"
 [ "$(fm_backend_agent_state tmux "$SESSION:no-such-window")" = missing ] \
-  || fail "an absent window in a readable session must classify missing, not whatever the fallback pane runs"
-pass "tmux liveness: an absent window classifies missing rather than inheriting tmux's active-window fallback"
+  || fail "an absent window must classify missing"
+pass "tmux liveness: absent window classifies missing"
 
 cleanup_all
 trap - EXIT

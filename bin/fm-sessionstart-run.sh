@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Session-open entry point for harnesses that RUN the digest instead of asking
-# the agent to. It is the one command those harnesses' session-open adapters
+# Session-open entry point for Pi to RUN the digest instead of asking the
+# agent to. It is the one command Pi's session-open adapter
 # invoke, and it decides, from the session-open source, whether this open needs
 # the full digest, a context re-emit, or nothing at all.
 #
@@ -21,7 +21,7 @@
 #             native attempt that settled without output. Every ordinary hook
 #             invocation retains the always-zero compatibility contract below.
 #
-# Source routing (see docs/sessionstart-nudge.md for the per-harness names):
+# Source routing (see docs/sessionstart-nudge.md for Pi's source names):
 #   startup, new            full digest - this process has not taken the helm
 #   clear, compact          `--reemit` digest only when this lock owner recorded
 #                           a completed full startup; otherwise a full digest,

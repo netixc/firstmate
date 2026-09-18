@@ -1667,7 +1667,7 @@ test_no_run_idle_pane_uses_keyed_log() {
 
 # (g') no run + idle pane on a DECLARED external-wait pause -> state: paused, so a
 # supervisor reading the crew sees a distinct pause (and its reason) rather than a
-# wedge-suspect idle. This is the reader half the watcher/daemon build on.
+# wedge-suspect idle. This is the reader half the watcher builds on.
 test_no_run_idle_pane_paused() {
   reset_fakes
   local d; d=$(new_case paused)

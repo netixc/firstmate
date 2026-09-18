@@ -6,8 +6,8 @@ The tool reference establishes either that identity's empirical path or its unsu
 ## Turn end
 
 `../../../docs/turnend-guard.md` owns the "no turn ends blind" contract, hook installation, per-surface blocking behavior, and tradeoffs when a hook cannot block.
-`../../../docs/supervision-protocols/` and `../../../bin/fm-supervision-instructions.sh` own harness-specific wake protocols.
-Never substitute another harness's wait shape.
+`../../../docs/supervision-protocols/pi.md` and `../../../bin/fm-supervision-instructions.sh` own Pi's wake protocol.
+Never substitute an ad hoc wait shape.
 `../../../bin/fm-busy-lib.sh` remains the semantic busy owner; a tool reference names only its source and evidence.
 
 Validate any turn-end change against the real harness in a scratch project or throwaway home.

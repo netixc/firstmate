@@ -788,7 +788,7 @@ pass "credentials are resolved once per relay, refreshed before expiry, off the 
 # the stderr the client inherits and a relay restarted by hand.
 
 python3 - "$ROOT/bin" <<'PY' || fail "failed turn"
-import asyncio, sys
+import asyncio, sys, threading
 sys.path.insert(0, sys.argv[1])
 import importlib.util, pathlib
 spec = importlib.util.spec_from_file_location(
@@ -819,7 +819,7 @@ class Stub:
         self.raises = raises
         self.replies = 0
         self.failed = False
-        self.ended = asyncio.Event()
+        self.ended = threading.Event()
         self.turn = {}
         self.calls = []
 

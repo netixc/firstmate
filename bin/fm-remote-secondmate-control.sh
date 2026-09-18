@@ -158,8 +158,8 @@ cmd_launch() {
   validate_id "$id"
   validate_home "$id"
   case "$harness" in
-    opencode|pi|pi-signed) ;;
-    *) die "unverified remote secondmate harness: $harness" ;;
+    pi) ;;
+    *) die "unsupported remote secondmate harness: $harness" ;;
   esac
   case "$effort" in -|low|medium|high|xhigh|max|ultra) ;; *) die "invalid remote secondmate effort: $effort" ;; esac
   if [ "$effort" = ultra ]; then
@@ -230,8 +230,8 @@ cmd_relaunch() {
   validate_id "$id"
   validate_home "$id"
   case "$harness" in
-    opencode|pi|pi-signed) ;;
-    *) die "unverified remote secondmate harness: $harness" ;;
+    pi) ;;
+    *) die "unsupported remote secondmate harness: $harness" ;;
   esac
   case "$effort" in -|default|low|medium|high|xhigh|max|ultra) ;; *) die "invalid remote secondmate effort: $effort" ;; esac
   case "$model" in *[[:space:]]*) die "invalid remote secondmate model: $model" ;; esac

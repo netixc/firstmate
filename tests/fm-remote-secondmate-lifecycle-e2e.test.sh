@@ -124,7 +124,7 @@ cat > "$PARENT/data/projects.md" <<EOF
 EOF
 printf 'pi\n' > "$PARENT/config/secondmate-harness"
 printf 'tmux\n' > "$PARENT/config/backend"
-printf 'primary harness defaults\n' > "$PARENT/config/crew-harness"
+printf 'pi\n' > "$PARENT/config/crew-harness"
 
 cat > "$FAKEBIN/fake-ssh" <<'SH'
 #!/usr/bin/env bash
@@ -149,7 +149,7 @@ IFS=$'\t' read -r command_name _command_action command_rel <<EOF
 $command_fields
 EOF
 case "${FM_FAKE_SSH_MODE:-normal}:$command_name:$command_rel" in
-  inherit-partial:fm-remote-inherit.sh:config/crew-harness) exit 255 ;;
+  inherit-partial:fm-remote-inherit.sh:config/backend) exit 255 ;;
   inherit-block:fm-remote-inherit.sh:data/captain-shared.md)
     cat > "$FM_FAKE_INHERIT_PAYLOAD"
     touch "$FM_FAKE_INHERIT_ENTERED"
@@ -912,7 +912,7 @@ pass "marked send and routed reply complete through the existing parent correlat
 rm -f "$PARENT/state/.wake-queue"
 
 printf '{"revision":2}\n' > "$PARENT/config/crew-dispatch.json"
-printf 'opencode\n' > "$PARENT/config/crew-harness"
+printf 'herdr\n' > "$PARENT/config/backend"
 set +e
 FM_FAKE_SSH_MODE=inherit-partial remote_env "$ROOT/bin/fm-config-push.sh" \
   > "$TMP_ROOT/config-partial.out" 2>&1
@@ -920,14 +920,14 @@ config_partial_rc=$?
 set -e
 [ "$config_partial_rc" -ne 0 ] || fail "partial remote inheritance claimed complete convergence"
 assert_grep '"revision":2' "$REMOTE_HOME/config/crew-dispatch.json" "partial inheritance did not apply its first file"
-[ "$(cat "$REMOTE_HOME/config/crew-harness")" != opencode ] \
+[ "$(cat "$REMOTE_HOME/config/backend" 2>/dev/null || true)" != herdr ] \
   || fail "partial inheritance unexpectedly applied the failed file"
 NUDGE_MARKER="$PARENT/state/.secondmate-nudge-pending/ios.pending"
 assert_grep 'remote=1' "$NUDGE_MARKER" "partial inheritance left no durable remote reread marker"
 publish_healthy_watcher_identity "$PARENT/state" "$PARENT" "$REMOTE_ROOT/bin/fm-watch.sh"
 remote_env "$ROOT/bin/fm-bootstrap.sh" > "$TMP_ROOT/config-partial-retry.out" \
   || fail "bootstrap did not converge partial remote inheritance"
-[ "$(cat "$REMOTE_HOME/config/crew-harness")" = opencode ] \
+[ "$(cat "$REMOTE_HOME/config/backend")" = herdr ] \
   || fail "bootstrap did not apply the remaining inherited file"
 assert_absent "$NUDGE_MARKER" "bootstrap cleared no remote reread marker after convergence"
 PARTIAL_CONFIG_CORR=$(newest_remote_inbox_corr)
@@ -979,7 +979,7 @@ wait "$config_second" || fail "bootstrap inheritance transaction failed after wa
   || fail "later bootstrap convergence was overwritten by stale inherited bytes"
 pass "config push and bootstrap serialize remote inheritance convergence"
 
-printf 'pi\n' > "$PARENT/config/crew-harness"
+printf 'tmux\n' > "$PARENT/config/backend"
 # A failed reread nudge now means the durable remote inbox RECORD could not be
 # written (a swallowed doorbell alone no longer fails a recorded steer), so
 # the failure is induced by making the remote steering inbox unwritable.
@@ -1072,12 +1072,12 @@ pass "remote update imports and fast-forwards the persistent home on its configu
 # the whole safety property of asking before anything is stopped.
 RELAUNCH_UNVERIFIED=$(remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh \
   relaunch ios notaharness - - 2>&1) && fail "an unverified runtime should refuse a remote restart"
-assert_contains "$RELAUNCH_UNVERIFIED" 'unverified remote secondmate harness' \
-  "the remote restart verb did not refuse an unverified runtime"
-RELAUNCH_KIMI=$(remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh \
-  relaunch ios kimi - - 2>&1) && fail "the retired Kimi runtime should refuse a remote restart"
-assert_contains "$RELAUNCH_KIMI" 'unverified remote secondmate harness: kimi' \
-  "the remote restart verb accepted retired Kimi"
+assert_contains "$RELAUNCH_UNVERIFIED" 'unsupported remote secondmate harness' \
+  "the remote restart verb did not refuse an unsupported runtime"
+RELAUNCH_UNKNOWN=$(remote_env "$ROOT/bin/fm-on.sh" ios fm-remote-secondmate-control.sh \
+  relaunch ios unsupported-runtime - - 2>&1) && fail "an unknown runtime should refuse a remote restart"
+assert_contains "$RELAUNCH_UNKNOWN" 'unsupported remote secondmate harness: unsupported-runtime' \
+  "the remote restart verb accepted an unknown runtime"
 RELAUNCH_ROUTE_META="$REMOTE_HOME/state/parent-route/ios.meta"
 cp "$RELAUNCH_ROUTE_META" "$TMP_ROOT/ios-before-relaunch.meta"
 mkdir -p "$TMP_ROOT/not-a-checkout"

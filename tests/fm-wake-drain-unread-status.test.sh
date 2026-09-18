@@ -227,12 +227,10 @@ test_retired_task_id_starts_new_status_unread() {
     _fm_open_decisions_file_ident "$STATE/reused.status" > "$2"
     printf "40@$(cat "$2")" > "$(status_signal_seen_marker_path "$STATE" reused)"
     printf "40@$(cat "$2")" > "$(status_heartbeat_seen_marker_path "$STATE" reused)"
-    printf "40@$(cat "$2")" > "$(status_daemon_seen_marker_path "$STATE" reused)"
     status_retire_presentation_task "$STATE" reused || exit 1
     for marker in \
       "$(status_signal_seen_marker_path "$STATE" reused)" \
-      "$(status_heartbeat_seen_marker_path "$STATE" reused)" \
-      "$(status_daemon_seen_marker_path "$STATE" reused)"; do
+      "$(status_heartbeat_seen_marker_path "$STATE" reused)"; do
       [ ! -e "$marker" ] && [ ! -L "$marker" ] || exit 1
     done
   ' _ "$ROOT" "$dir/old-ident" || fail "retiring the reused task presentation state failed"

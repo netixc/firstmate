@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pin the Pi/OpenCode recovery-loop fix: one announcement per generation, and a
+# Pin the Pi recovery-loop fix: one announcement per generation, and a
 # handling successor that keeps supervising instead of going blind.
 set -u
 

@@ -3,8 +3,8 @@
 #
 # ONE tmux source for delivery-busy detection, composer capture primitives,
 # and verified submit.
-# Both the away-mode daemon and bin/fm-send.sh reach these primitives through
-# backend dispatch, while bin/fm-composer-lib.sh owns the shared verdict.
+# bin/fm-send.sh reaches these primitives through backend dispatch, while
+# bin/fm-composer-lib.sh owns the shared verdict.
 #
 # Composer shapes and verdicts are owned by bin/fm-composer-lib.sh.
 # This file owns only tmux's styled capture, cursor and Pi identity primitives,
@@ -12,8 +12,8 @@
 # Styled captures remain internal; fm-peek and every human-facing capture stay
 # plain.
 #
-# OpenCode's busy-queued Enter conversion accepts only structurally proven
-# pending text after retries, while the separate turn-started conversion accepts
+# Busy-queued Enter conversion accepts only structurally proven pending text
+# after retries, while the separate turn-started conversion accepts
 # an unknown post-Enter composer only after this submit observed an idle baseline
 # become busy.
 # The queued-Enter policy itself lives in fm_composer_queued_enter_verdict
@@ -85,10 +85,10 @@ fm_tmux_composer_caps() {
 # separated (pi) composer shape, tmux's analogue of herdr's native
 # `agent get`. It answers only for pi, from two live signals:
 #   - identity: the pane tty's FOREGROUND process group (pgid = tpgid, the
-#     same scoping as fm_backend_tmux_foreground_comms) contains a pi-family
-#     process (pi, pi-signed, pi-launcher - docs/verification/
-#     runtime-backends.md "Agent liveness name sources"), falling back to
-#     tmux's own foreground-derived #{pane_current_command}. A pane whose
+#     same scoping as fm_backend_tmux_foreground_comms) contains the plain Pi
+#     process name, falling back to tmux's foreground-derived
+#     #{pane_current_command}. The npm Pi CLI sets its process title to `pi`,
+#     so no broad Node-process match is needed. A pane whose
 #     agent died to a shell has no pi foreground process and gets NO identity,
 #     which is exactly what keeps the strict blank-row rule honest: a blank
 #     row between two stale rules stays unknown.
@@ -105,7 +105,7 @@ fm_tmux_composer_identity() {  # <target>
         [ -n "$comm" ] || continue
         [ "$pgid" = "$tpgid" ] || continue
         case "${comm##*/}" in
-          pi|pi-signed|pi-launcher|Pi) found=1 ;;
+          pi) found=1 ;;
         esac
       done <<EOF
 $(LC_ALL=C ps -t "${tty#/dev/}" -o pid=,pgid=,tpgid=,comm= 2>/dev/null)
@@ -115,7 +115,7 @@ EOF
   if [ "$found" -ne 1 ]; then
     comm=$(tmux display-message -p -t "$target" '#{pane_current_command}' 2>/dev/null) || comm=
     case "${comm##*/}" in
-      pi|pi-signed|pi-launcher) found=1 ;;
+      pi) found=1 ;;
     esac
   fi
   [ "$found" -eq 1 ] || return 1
@@ -180,8 +180,8 @@ fm_pane_is_busy() {  # <target> [harness]
 # swallowed Enter leaves our text in the composer and retyping would duplicate
 # it. Echoes the final proof-carrying verdict on stdout so callers can require
 # exact `empty` before treating submission as confirmed.
-# Busy-queued Enter (opencode 1.18.4): the harness accepts Enter while mid-turn
-# and queues it for after the current turn, but keeps the typed text visible in
+# Busy-queued Enter: the harness accepts Enter while mid-turn and queues it for
+# after the current turn, but keeps the typed text visible in
 # the composer. Once the Enter-retry budget is spent and a structurally proven
 # composer still reads "pending", the submit core falls back to
 # `fm_pane_is_busy`: a busy pane means the Enter was accepted and queued (report

@@ -49,7 +49,7 @@
 #     status log (the outcome itself is still stored), so the branch's report
 #     of a teardown it just performed leaves no index behind.
 #     Main-actor drain calls processed-init under the outcome lock when that
-#     ready marker is absent or invalid, on every harness; only a genuine store
+#     ready marker is absent or invalid; only a genuine store
 #     fault keeps the lost-wake backstop skipped.
 #   - Every mutation runs under $STATE/.branch-outcomes.lock so the branch
 #     extension and a concurrent session-start replay cannot interleave.

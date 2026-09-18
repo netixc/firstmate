@@ -17,9 +17,9 @@ Only `AGENTS.md`, `bin/`, and `.agents/skills/` are a running firstmate instruct
 This skill performs that pull for the running main firstmate and every secondmate, without disturbing any in-flight work.
 
 Pulling the files is only half of it.
-A running agent holds `AGENTS.md` and every skill it has already loaded frozen from the moment it launched, and no verified harness offers a reload, so new bytes on disk change nothing for it until it starts a fresh conversation.
+A running Pi agent holds `AGENTS.md` and every skill it has already loaded frozen from the moment it launched, and Pi offers no reload, so new bytes on disk change nothing until it starts a fresh conversation.
 A re-read cannot substitute: it appends a second copy of the mate's own job description with no defined precedence, and it cannot reach a skill that is already loaded.
-Replacing the agent is also the only thing that re-resolves the launch-time wiring - turn-end hooks, harness flags, per-harness feature switches - which the mate froze when it started and which nothing on disk describes.
+Replacing the agent is also the only thing that re-resolves the launch-time wiring - turn-end hooks, Pi flags, and feature switches - which the mate froze when it started and which nothing on disk describes.
 
 That is why **every live second mate is restarted after a successful update, including one that was already on the target commit.**
 Launch-time wiring is not derivable from a file diff, so an unchanged tracked surface is not evidence the running agent is already on the current behavior.

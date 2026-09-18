@@ -6,7 +6,7 @@
 # forked it ever reads that line. An arm that ATTACHED to an existing cycle holds
 # no handle on it and can observe only a released lock, which is why a completely
 # successful cycle used to be reported as
-# "watcher: FAILED - cycle ended without an actionable reason" on every harness
+# "watcher: FAILED - cycle ended without an actionable reason" under Pi
 # whose protocol reads that line. These are real-process tests: a real
 # bin/fm-watch.sh holds the singleton, a real bin/fm-watch-arm.sh attaches to it,
 # and a real status change drives a real wake through the watcher-bound delivery

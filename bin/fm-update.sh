@@ -35,7 +35,7 @@
 # The two sets are disjoint, and restart is UNCONDITIONAL on a successful update
 # of that home. It is deliberately not gated on the git diff: replacing the agent
 # is the only thing that re-resolves the launch-time wiring - turn-end hooks,
-# harness flags, per-harness feature switches - which a running agent froze when
+# Pi flags and feature switches - which a running agent froze when
 # it started and which no changed_instr list describes. An unchanged tracked
 # surface therefore is NOT evidence that the running agent is already on the
 # current behavior, so an ALREADY-CURRENT home restarts too.

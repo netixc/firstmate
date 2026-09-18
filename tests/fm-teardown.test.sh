@@ -665,52 +665,6 @@ make_path_without_lsof() {  # <case-dir>
   printf '%s\n' "$path_dir"
 }
 
-test_stale_retired_harness_tasks_refuse_even_forced_cleanup_without_removing_work() {
-  local harness case_dir rc
-  for harness in omp muse kimi; do
-    case_dir=$(make_case "stale-$harness-task")
-    write_meta "$case_dir" local-only ship
-    printf 'harness=%s\n' "$harness" >> "$case_dir/state/task-x1.meta"
-    : > "$case_dir/state/task-x1.status"
-    if [ "$harness" = muse ]; then
-      printf 'legacy Muse binding\n' > "$case_dir/state/task-x1.muse-session"
-    elif [ "$harness" = kimi ]; then
-      printf 'fm.123456789012\n' > "$case_dir/state/task-x1.kimi-turnend-token"
-      printf 'token=fm.123456789012\n' > "$case_dir/wt/.fm-kimi-turnend"
-    fi
-    : > "$case_dir/treehouse.log"
-    : > "$case_dir/tmux.log"
-    cat > "$case_dir/fakebin/treehouse" <<SH
-#!/usr/bin/env bash
-printf '%s\n' "\$*" >> "$case_dir/treehouse.log"
-SH
-    cat > "$case_dir/fakebin/tmux" <<SH
-#!/usr/bin/env bash
-printf '%s\n' "\$*" >> "$case_dir/tmux.log"
-SH
-    chmod +x "$case_dir/fakebin/treehouse" "$case_dir/fakebin/tmux"
-
-    rc=0
-    run_teardown "$case_dir" --force > "$case_dir/stdout" 2> "$case_dir/stderr" || rc=$?
-
-    expect_code 1 "$rc" "stale-$harness-task: cleanup must refuse even with --force"
-    assert_grep "records retired harness '$harness'" "$case_dir/stderr" \
-      "stale-$harness-task: refusal did not explain the retired harness record"
-    assert_present "$case_dir/state/task-x1.meta" "stale-$harness-task: refusal removed the task record"
-    assert_present "$case_dir/state/task-x1.status" "stale-$harness-task: refusal removed task status"
-    if [ "$harness" = muse ]; then
-      assert_present "$case_dir/state/task-x1.muse-session" "stale-Muse-task: refusal removed the legacy sidecar"
-    elif [ "$harness" = kimi ]; then
-      assert_present "$case_dir/state/task-x1.kimi-turnend-token" "stale-Kimi-task: refusal removed the legacy token"
-      assert_present "$case_dir/wt/.fm-kimi-turnend" "stale-Kimi-task: refusal removed the legacy pointer"
-    fi
-    [ -d "$case_dir/wt" ] || fail "stale-$harness-task: refusal removed the isolated copy"
-    [ ! -s "$case_dir/treehouse.log" ] || fail "stale-$harness-task: refusal returned the isolated copy"
-    [ ! -s "$case_dir/tmux.log" ] || fail "stale-$harness-task: refusal sent lifecycle input"
-  done
-  pass "stale OMP, Muse, and Kimi task cleanup refuses without removing retained work or records"
-}
-
 test_local_only_fork_remote_allows() {
   local case_dir rc
   case_dir=$(make_case fork-allow)
@@ -749,149 +703,6 @@ test_local_only_fork_remote_allows() {
   ' "$case_dir/state/home-summary.json" >/dev/null \
     || fail "successful task teardown did not publish the task's removal from the home summary ledger"
   pass "local-only worktree with HEAD on a fork remote is torn down and the home summary is refreshed"
-}
-
-test_retired_kimi_registry_entry_mismatch_refuses_cleanup() {
-  local case_dir home token target head rc=0
-  case_dir=$(make_case retired-kimi-registry-mismatch)
-  home="$case_dir/home"
-  mkdir -p "$home/.kimi-code/fm-turn-end.d"
-  write_meta "$case_dir" local-only ship
-  wt_commit "$case_dir" "landed Kimi cleanup fixture"
-  head=$(git -C "$case_dir/wt" rev-parse HEAD)
-  add_fork_with_pushed_branch "$case_dir"
-  seed_backlog_in_flight "$case_dir"
-  token=fm.123456789012
-  target="$home/state/unrelated.turn-ended"
-  printf '%s\n' "$token" > "$case_dir/state/task-x1.kimi-turnend-token"
-  printf '%s\n' "$target" > "$home/.kimi-code/fm-turn-end.d/$token"
-
-  set +e
-  HOME="$home" run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
-  rc=$?
-  set -e
-
-  [ "$rc" -ne 0 ] || fail "retired-kimi-registry-mismatch: teardown deleted an unrelated registry target"
-  grep -q "does not name this task's turn-end marker" "$case_dir/stderr" \
-    || fail "retired-kimi-registry-mismatch: refusal did not identify the mismatched target"
-  assert_present "$case_dir/state/task-x1.meta" \
-    "retired-kimi-registry-mismatch: refusal removed the task record"
-  assert_present "$home/.kimi-code/fm-turn-end.d/$token" \
-    "retired-kimi-registry-mismatch: refusal removed the unrelated registry entry"
-  assert_refusal_retained_task_state "$case_dir" \
-    "retired-kimi-registry-mismatch" "$head"
-  [ "$(backlog_row_state "$case_dir")" = in_flight ] \
-    || fail "retired-kimi-registry-mismatch: refusal changed the backlog state"
-  pass "teardown refuses a mismatched retired Kimi registry entry without deleting it"
-}
-
-test_retired_kimi_registry_entry_revalidates_before_delete() {
-  local case_dir home token target rc=0
-  case_dir=$(make_case retired-kimi-final-revalidation)
-  home="$case_dir/home"
-  mkdir -p "$home/.kimi-code/fm-turn-end.d"
-  write_meta "$case_dir" local-only ship
-  wt_commit "$case_dir" "landed Kimi final validation fixture"
-  add_fork_with_pushed_branch "$case_dir"
-  token=fm.123456789012
-  target="$case_dir/state/task-x1.turn-ended"
-  printf '%s\n' "$token" > "$case_dir/state/task-x1.kimi-turnend-token"
-  printf '%s\n' "$target" > "$home/.kimi-code/fm-turn-end.d/$token"
-  cat > "$case_dir/fakebin/treehouse" <<SH
-#!/usr/bin/env bash
-printf '%s\n' 'user replacement' > "$home/.kimi-code/fm-turn-end.d/$token"
-exit 0
-SH
-  chmod +x "$case_dir/fakebin/treehouse"
-
-  HOME="$home" run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr" || rc=$?
-  [ "$rc" -ne 0 ] || fail "retired-kimi-final-revalidation: teardown deleted a replaced registry entry"
-  [ "$(cat "$home/.kimi-code/fm-turn-end.d/$token")" = 'user replacement' ] \
-    || fail "retired-kimi-final-revalidation: replaced registry bytes were not preserved"
-  assert_present "$case_dir/state/task-x1.meta" \
-    "retired-kimi-final-revalidation: refusal removed the task record"
-  pass "teardown revalidates a replaced Kimi registry entry before deletion"
-}
-
-test_retired_kimi_registry_entry_preserves_replacement_during_quarantine() {
-  local case_dir home token target real_mv rc=0
-  case_dir=$(make_case retired-kimi-quarantine-race)
-  home="$case_dir/home"
-  mkdir -p "$home/.kimi-code/fm-turn-end.d"
-  write_meta "$case_dir" local-only ship
-  wt_commit "$case_dir" "landed Kimi quarantine race fixture"
-  add_fork_with_pushed_branch "$case_dir"
-  token=fm.123456789012
-  target="$case_dir/state/task-x1.turn-ended"
-  printf '%s\n' "$token" > "$case_dir/state/task-x1.kimi-turnend-token"
-  printf '%s\n' "$target" > "$home/.kimi-code/fm-turn-end.d/$token"
-  real_mv=$(command -v mv)
-  cat > "$case_dir/fakebin/mv" <<SH
-#!/usr/bin/env bash
-if [ "\${1:-}" = -- ] && [ "\${2:-}" = "$home/.kimi-code/fm-turn-end.d/$token" ]; then
-  printf '%s\n' 'user replacement' > "\${2}"
-fi
-exec "$real_mv" "\$@"
-SH
-  chmod +x "$case_dir/fakebin/mv"
-
-  HOME="$home" run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr" || rc=$?
-  [ "$rc" -ne 0 ] || fail "retired-kimi-quarantine-race: teardown deleted a replaced registry entry"
-  [ "$(cat "$home/.kimi-code/fm-turn-end.d/$token")" = 'user replacement' ] \
-    || fail "retired-kimi-quarantine-race: replaced registry bytes were not preserved"
-  assert_present "$case_dir/state/task-x1.meta" \
-    "retired-kimi-quarantine-race: refusal removed the task record"
-  pass "teardown preserves a registry replacement during identity quarantine"
-}
-
-test_retired_kimi_registry_entry_accepts_canonical_state_path() {
-  local case_dir home state_alias token target rc=0
-  case_dir=$(make_case retired-kimi-canonical-state)
-  home="$case_dir/home"
-  mkdir -p "$home/.kimi-code/fm-turn-end.d"
-  write_meta "$case_dir" local-only ship
-  wt_commit "$case_dir" "landed canonical Kimi cleanup fixture"
-  add_fork_with_pushed_branch "$case_dir"
-  state_alias="$case_dir/state/../state"
-  token=fm.123456789012
-  target="$case_dir/state/task-x1.turn-ended"
-  printf '%s\n' "$token" > "$case_dir/state/task-x1.kimi-turnend-token"
-  printf '%s\n' "$target" > "$home/.kimi-code/fm-turn-end.d/$token"
-
-  HOME="$home" FM_TEARDOWN_STATE_OVERRIDE="$state_alias" run_teardown "$case_dir" \
-    > "$case_dir/stdout" 2> "$case_dir/stderr" || rc=$?
-  [ "$rc" -eq 0 ] || fail "retired-kimi-canonical-state: teardown rejected a canonical registry target"
-  assert_absent "$home/.kimi-code/fm-turn-end.d/$token" \
-    "retired-kimi-canonical-state: teardown left the valid registry entry"
-  assert_absent "$case_dir/state/task-x1.meta" \
-    "retired-kimi-canonical-state: teardown left the task record"
-  pass "teardown accepts a retired Kimi registry target written with canonical state spelling"
-}
-
-test_retired_kimi_traversal_token_name_refuses_cleanup() {
-  local case_dir home rc=0
-  case_dir=$(make_case retired-kimi-traversal-token)
-  home="$case_dir/home"
-  mkdir -p "$home/.kimi-code/fm-turn-end.d"
-  write_meta "$case_dir" local-only ship
-  wt_commit "$case_dir" "landed malformed Kimi token fixture"
-  add_fork_with_pushed_branch "$case_dir"
-  printf '%s\n' 'fm.aa/../../xxxx' > "$case_dir/state/task-x1.kimi-turnend-token"
-  printf '%s\n' "$case_dir/state/task-x1.turn-ended" > "$home/.kimi-code/xxxx"
-
-  set +e
-  HOME="$home" run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
-  rc=$?
-  set -e
-
-  [ "$rc" -ne 0 ] || fail "retired-kimi-traversal-token: teardown accepted a traversal token name"
-  grep -q "invalid token name" "$case_dir/stderr" \
-    || fail "retired-kimi-traversal-token: refusal did not identify the malformed token"
-  assert_present "$case_dir/state/task-x1.meta" \
-    "retired-kimi-traversal-token: refusal removed the task record"
-  assert_present "$home/.kimi-code/xxxx" \
-    "retired-kimi-traversal-token: refusal deleted the escaped registry target"
-  pass "teardown refuses traversal token names without deleting escaped files"
 }
 
 test_teardown_closes_the_backlog_item_itself() {
@@ -2099,10 +1910,6 @@ test_secondmate_home_teardown_delivers_final_line_or_refuses() {
   channel="$case_dir/parent/state/mate-x.status"
   write_meta "$case_dir" local-only ship
   mkdir -p "$case_dir/tasktmp"
-  mkdir -p "$home/.kimi-code/fm-turn-end.d"
-  printf 'fm.123456789012\n' > "$case_dir/state/task-x1.kimi-turnend-token"
-  printf '%s\n' "$case_dir/state/task-x1.turn-ended" > \
-    "$home/.kimi-code/fm-turn-end.d/fm.123456789012"
   printf 'tasktmp=%s\n' "$case_dir/tasktmp" >> "$case_dir/state/task-x1.meta"
   wt_commit "$case_dir" "merged work"
   wt_head=$(git -C "$case_dir/wt" rev-parse HEAD)
@@ -2117,11 +1924,9 @@ test_secondmate_home_teardown_delivers_final_line_or_refuses() {
     || fail "mate-teardown-refuses: refusal did not name the parent channel: $(cat "$case_dir/stderr")"
   [ -f "$case_dir/state/task-x1.meta" ] && [ -f "$case_dir/state/task-x1.status" ] \
     || fail "mate-teardown-refuses: refusal did not retain the task records"
-  [ -f "$case_dir/state/task-x1.kimi-turnend-token" ] \
-    && [ -d "$case_dir/tasktmp" ] \
-    || fail "mate-teardown-refuses: refusal removed endpoint records before parent delivery"
+  [ -d "$case_dir/tasktmp" ] \
+    || fail "mate-teardown-refuses: refusal removed task data before parent delivery"
   rmdir "$channel"
-  rm -f "$case_dir/state/task-x1.kimi-turnend-token"
   err=$(FM_HOME="$case_dir/home" FM_STATE_OVERRIDE="$case_dir/state" \
     "$ROOT/bin/fm-wake-drain.sh" 2>&1 >/dev/null)
   seq=$(printf '%s\n' "$err" | sed -n 's/^WAKE_ACK_REQUIRED:.*--ack-through \([0-9][0-9]*\) --recovery-generation .*/\1/p')
@@ -2518,54 +2323,6 @@ configure_secondmate_with_tmux_children() {  # <case-dir>
       "mode=local-only"
     : > "$home/state/$child.status"
   done
-}
-
-test_forced_secondmate_stale_retired_child_refuses_before_cleanup() {
-  local harness case_dir home rc
-  for harness in omp muse kimi; do
-    case_dir=$(make_case "stale-$harness-child")
-    write_meta "$case_dir" local-only secondmate
-    configure_secondmate_with_tmux_children "$case_dir"
-    home="$case_dir/secondmate-home"
-    printf 'harness=%s\n' "$harness" >> "$home/state/child-a.meta"
-    if [ "$harness" = muse ]; then
-      printf 'legacy Muse binding\n' > "$home/state/child-a.muse-session"
-    elif [ "$harness" = kimi ]; then
-      printf 'fm.123456789012\n' > "$home/state/child-a.kimi-turnend-token"
-      printf 'token=fm.123456789012\n' > "$case_dir/child-a-wt/.fm-kimi-turnend"
-    fi
-    : > "$case_dir/kill.log"
-    : > "$case_dir/treehouse.log"
-    cat > "$case_dir/fakebin/tmux" <<SH
-#!/usr/bin/env bash
-printf '%s\n' "\$*" >> "$case_dir/kill.log"
-SH
-    cat > "$case_dir/fakebin/treehouse" <<SH
-#!/usr/bin/env bash
-printf '%s\n' "\$*" >> "$case_dir/treehouse.log"
-SH
-    chmod +x "$case_dir/fakebin/tmux" "$case_dir/fakebin/treehouse"
-
-    rc=0
-    run_teardown "$case_dir" --force > "$case_dir/stdout" 2> "$case_dir/stderr" || rc=$?
-
-    expect_code 1 "$rc" "stale-$harness-child: forced parent cleanup must refuse"
-    assert_grep "descendant task child-a records retired harness '$harness'" "$case_dir/stderr" \
-      "stale-$harness-child: refusal did not name the descendant stale record"
-    assert_present "$case_dir/state/task-x1.meta" "stale-$harness-child: refusal removed the parent record"
-    assert_present "$home/state/child-a.meta" "stale-$harness-child: refusal removed the descendant record"
-    if [ "$harness" = muse ]; then
-      assert_present "$home/state/child-a.muse-session" "stale-Muse-child: refusal removed the legacy sidecar"
-    elif [ "$harness" = kimi ]; then
-      assert_present "$home/state/child-a.kimi-turnend-token" "stale-Kimi-child: refusal removed the legacy token"
-      assert_present "$case_dir/child-a-wt/.fm-kimi-turnend" "stale-Kimi-child: refusal removed the legacy pointer"
-    fi
-    [ -d "$home" ] && [ -d "$case_dir/child-a-wt" ] \
-      || fail "stale-$harness-child: refusal removed the secondmate home or descendant copy"
-    [ ! -s "$case_dir/kill.log" ] || fail "stale-$harness-child: refusal sent lifecycle input"
-    [ ! -s "$case_dir/treehouse.log" ] || fail "stale-$harness-child: refusal returned an isolated copy"
-  done
-  pass "forced secondmate cleanup refuses stale OMP, Muse, and Kimi descendants without removing retained work"
 }
 
 test_forced_secondmate_teardown_holds_descendant_lifecycle_locks() {
@@ -3907,13 +3664,7 @@ EOF
   pass "the run abort and the leaked-process reap both complete before the destructive worktree return"
 }
 
-test_stale_retired_harness_tasks_refuse_even_forced_cleanup_without_removing_work
 test_local_only_fork_remote_allows
-test_retired_kimi_registry_entry_mismatch_refuses_cleanup
-test_retired_kimi_registry_entry_revalidates_before_delete
-test_retired_kimi_registry_entry_preserves_replacement_during_quarantine
-test_retired_kimi_registry_entry_accepts_canonical_state_path
-test_retired_kimi_traversal_token_name_refuses_cleanup
 test_teardown_closes_the_backlog_item_itself
 test_teardown_manual_backend_leaves_the_backlog_to_the_operator
 test_local_only_truly_unpushed_refuses
@@ -3929,7 +3680,6 @@ test_herdr_flat_teardown_refuses_orphaning_records_then_retry_completes
 test_herdr_flat_teardown_refuses_records_on_unparseable_presence
 test_herdr_flat_teardown_preflight_refuses_before_changes
 test_forced_secondmate_herdr_child_preflight_refuses_before_changes
-test_forced_secondmate_stale_retired_child_refuses_before_cleanup
 test_forced_secondmate_teardown_holds_descendant_lifecycle_locks
 test_forced_secondmate_herdr_child_retains_records_when_close_unconfirmed
 test_forced_teardown_retains_nested_secondmate_home_when_grandchild_close_unconfirmed

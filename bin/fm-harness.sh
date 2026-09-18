@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Detect the agent harness this process tree runs on.
-# Usage: fm-harness.sh                  print own harness: opencode|pi|pi-signed|unknown
+# Usage: fm-harness.sh                  print own harness: pi|unknown
 #        fm-harness.sh crew             print the effective CREWMATE harness
 #                                        (config/crew-harness; "default" resolves to own)
 #        fm-harness.sh secondmate       print the harness the PRIMARY uses to launch
@@ -14,11 +14,10 @@
 #        fm-harness.sh secondmate-effort   print the optional EFFORT token from
 #                                        config/secondmate-harness, or empty when absent.
 #        fm-harness.sh validate-native-effort <harness> <model> <effort>
-#                                        Refuse ultra unless the harness is pi or
-#                                        pi-signed and the model explicitly names
-#                                        codex-native/<id>. Other efforts retain
-#                                        their adapter's existing policy. Native
-#                                        Codex validates model support at startup.
+#                                        Refuse ultra unless the harness is pi and
+#                                        the model explicitly names codex-native/<id>.
+#                                        Other efforts retain Pi's existing policy.
+#                                        Native Codex validates model support at startup.
 #        fm-harness.sh ancestry [<pid>] print "<strength> <harness>" for the nearest
 #                                        harness process at or above <pid> (default this
 #                                        process), or nothing when the walk finds none.
@@ -67,45 +66,22 @@ CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 # decides whether that claim survives contradicting ancestry.
 harness_marker() {
   if [ "${PI_CODING_AGENT:-}" = "true" ]; then
-    if [ "${FM_PI_HARNESS:-}" = pi-signed ]; then echo pi-signed; else echo pi; fi
+    echo pi
     return
   fi
-  # opencode publishes no harness-identity marker, so it is identified by
-  # ancestry alone.
   return 0
 }
 
-# Print "<strength> <harness>" when one process identifies a harness, or nothing.
-# Strength records how the match was made:
-#   comm - the ancestor's own executable name identifies the harness. This is a
-#          structural fact about the running program, so it outranks a marker.
-#   args - a bare interpreter matched only because a harness name appears in the
-#          script path it was handed. This is the weakest inference in this file
-#          (any node process holding a harness-shaped path matches it), so it is
-#          used only when no marker is present.
+# Print `comm pi` only when the process's own executable name is exactly `pi`.
+# Arguments and generic interpreter names are never identity evidence.
 harness_process_verdict() {  # <pid>
-  local pid=$1 comm args
+  local pid=$1 comm
   comm=$(ps -o comm= -p "$pid" 2>/dev/null) || return 0
-  case "$(basename -- "$comm")" in
-    *opencode*) echo "comm opencode"; return ;;
-    # Both Pi identities share this launcher name. Ancestry can only prove the
-    # FAMILY; only the launch-boundary marker selects the signed identity, which
-    # is why detect_own keeps a marker that agrees on the family.
-    pi-signed) echo "comm pi"; return ;;
-    pi) echo "comm pi"; return ;;
-    node*|python*)
-      # Bare interpreter: match the harness name in its script path.
-      args=$(ps -o args= -p "$pid" 2>/dev/null)
-      case "$args" in
-        *opencode*) echo "args opencode"; return ;;
-        *" pi "*|*/pi) echo "args pi"; return ;;
-      esac ;;
-  esac
+  [ "$(basename -- "$comm")" = pi ] && echo "comm pi"
 }
 
-# Print the verdict for the NEAREST harness process in the parent chain, or
-# nothing when the walk finds none. The nearest match wins, so a worker nested
-# inside another harness resolves to its own harness.
+# Print the verdict for the nearest Pi process in the parent chain, or nothing
+# when the walk finds none. The nearest match wins for a nested Pi worker.
 harness_ancestry() {  # [<pid>]
   local pid=${1:-$$} verdict
   for _ in 1 2 3 4 5 6 7 8; do
@@ -132,7 +108,7 @@ harness_ancestry() {  # [<pid>]
 # or pathological tree cannot make this walk unbounded.
 process_descent_path() {  # <root> [<eligible-leaf-pid>...]
   local root=${1:-$$} eligible any hit pairs frontier next pid child parent verdict
-  local parents='' depth=0 best best_depth=0 best_strength='' hops=0
+  local parents='' depth=0 best best_depth=0 best_exact=0 hops=0
   case "$root" in '' | *[!0-9]*) return 0 ;; esac
   shift 2>/dev/null || true
   eligible=" ${*+$*} "
@@ -162,16 +138,12 @@ process_descent_path() {  # <root> [<eligible-leaf-pid>...]
           if [ $((depth + 1)) -gt "$best_depth" ]; then
             best=$child
             best_depth=$((depth + 1))
-            best_strength=${verdict%% *}
-          # At equal depth, prefer the leaf whose own executable reaches comm
-          # strength. Otherwise an earlier MCP interpreter carrying a foreign
-          # harness path can hide a native harness sibling purely through ps
-          # ordering. This repairs the chosen path's comm-strength guarantee;
-          # args-strength foreign verdicts remain excluded from cross-checking.
+            case "$verdict" in 'comm pi') best_exact=1 ;; *) best_exact=0 ;; esac
+          # At equal depth, prefer a leaf whose own executable is exactly Pi.
           elif [ $((depth + 1)) -eq "$best_depth" ] \
-            && [ "$best_strength" != comm ] && [ "${verdict%% *}" = comm ]; then
+            && [ "$best_exact" != 1 ] && [ "$verdict" = 'comm pi' ]; then
             best=$child
-            best_strength='comm'
+            best_exact=1
           fi
         fi
       done <<EOF
@@ -197,23 +169,11 @@ EOF
   done
 }
 
-# Print each DISTINCT "<strength> <harness>" verdict harness_ancestry reaches from
-# the vantages on the upward path between the deepest descendant of <root> and
-# <root>, one per line, deepest first.
-#
-# Why a descent path and not <root> alone: detect_own always runs from a TOOL
-# SUBPROCESS inside a session, never from the process at the top of it, and that
-# difference decides whether a retained foreign marker can rename the session. A
-# harness that ships as an interpreter shim spawning its native binary as a CHILD
-# is only args strength when asked from the shim, and detect_own hands an
-# args-strength verdict straight back to the marker; the native child is comm
-# strength and outranks it. Asking from below is what puts the question at the
-# vantage point a real session uses, so a guard built on this can assert the
-# strength the shipped guarantee actually depends on
-# (tests/fm-harness-liveness-drift-live-e2e.test.sh).
-#
-# Why the upward path and not the whole subtree: harness_ancestry only ever climbs,
-# so a sibling branch is a vantage Firstmate's own detection can never occupy.
+# Print each distinct `comm pi` verdict reached from vantages on the upward path
+# between the deepest foreground descendant of <root> and <root>, deepest first.
+# The descent mirrors where Pi tool subprocesses run; only exact executable-name
+# evidence is admitted. The upward path, not the whole subtree, matches the
+# direction harness_ancestry can actually inspect.
 harness_ancestry_descent() {  # <root> [<eligible-leaf-pid>...]
   local pid verdict seen=
   for pid in $(process_descent_path "$@"); do
@@ -225,45 +185,20 @@ harness_ancestry_descent() {  # <root> [<eligible-leaf-pid>...]
   done
 }
 
-# Collapse a verdict to the harness FAMILY its evidence can actually prove, so a
-# marker's more specific verdict and ancestry's coarser one are not read as a
-# disagreement. Only Pi has two identities behind one launcher name.
-harness_family() {
-  case "$1" in
-    pi-signed) printf 'pi\n' ;;
-    *) printf '%s\n' "$1" ;;
-  esac
-}
-
-# Combine the two evidence layers. The precedence boundary, in one rule: a
-# marker names its harness, but only ancestry proves which harness owns this
-# process tree, so a structural (comm) ancestor of a DIFFERENT harness wins.
-#   - No ancestry match: the marker is the only evidence there is.
-#   - No marker: ancestry is the only evidence there is.
-#   - Same family: keep the marker's verdict, which is the more specific one
-#     (pi-signed, which ancestry can only see as pi).
-#   - Different harness, structural ancestor: ancestry wins. This is what stops
-#     an inherited or multiplexer-retained marker from renaming a structurally
-#     identified session.
-#   - Different harness, interpreter-args ancestor only: the marker wins, because
-#     a harness-shaped path in some node process's arguments is weaker evidence
-#     than a harness publishing its own identity.
+# Combine Pi's two evidence layers. Exact Pi ancestry is structural evidence;
+# when it is absent, PI_CODING_AGENT is the only accepted marker. Arguments and
+# generic interpreter processes never contribute identity.
 detect_own() {
-  local marker ancestry strength harness
+  local marker ancestry
   marker=$(harness_marker)
   ancestry=$(harness_ancestry)
-  if [ -z "$ancestry" ]; then
-    if [ -n "$marker" ]; then echo "$marker"; else echo unknown; fi
-    return
+  if [ -n "$ancestry" ]; then
+    echo pi
+  elif [ -n "$marker" ]; then
+    echo pi
+  else
+    echo unknown
   fi
-  strength=${ancestry%% *}
-  harness=${ancestry#* }
-  [ -n "$marker" ] || { echo "$harness"; return; }
-  if [ "$(harness_family "$marker")" = "$(harness_family "$harness")" ]; then
-    echo "$marker"
-    return
-  fi
-  if [ "$strength" = comm ]; then echo "$harness"; else echo "$marker"; fi
 }
 
 # Resolve the effective crewmate harness: config/crew-harness (a bare adapter
@@ -272,8 +207,6 @@ resolve_crew() {
   local crew=
   [ -f "$CONFIG/crew-harness" ] && crew=$(tr -d '[:space:]' < "$CONFIG/crew-harness" || true)
   if [ -z "$crew" ] || [ "$crew" = "default" ]; then
-    detect_own
-  elif [ "$crew" = "claude" ]; then
     detect_own
   else
     echo "$crew"
@@ -313,18 +246,15 @@ secondmate_field() {
   esac
 }
 
-# Resolve the harness the PRIMARY uses to launch SECONDMATE agents: a fallback
-# chain config/secondmate-harness -> config/crew-harness -> own. An absent or
-# "default" secondmate-harness token defers to the crew resolution, so an unset
-# secondmate-harness behaves exactly as before this knob existed (a secondmate
-# launched on the crew harness). config/secondmate-harness is the PRIMARY's own
+# Resolve the runtime the PRIMARY uses to launch SECONDMATE agents:
+# config/secondmate-harness -> config/crew-harness -> own Pi identity. An absent
+# or "default" secondmate-harness token defers to crew resolution.
+# config/secondmate-harness is the PRIMARY's own
 # setting and is never inherited downstream - secondmates do not spawn secondmates.
 resolve_secondmate() {
   local sm
   sm=$(secondmate_field 1)
   if [ -z "$sm" ] || [ "$sm" = "default" ]; then
-    resolve_crew
-  elif [ "$sm" = "claude" ]; then
     resolve_crew
   else
     echo "$sm"
@@ -332,8 +262,7 @@ resolve_secondmate() {
 }
 
 # Print the optional model token (2nd field) from config/secondmate-harness, or
-# empty when the harness token is absent/"default" (harness-only file, same as
-# today) or when no model token is present.
+# empty when the harness token is absent/"default" or no model token is present.
 resolve_secondmate_model() {
   local sm
   sm=$(secondmate_field 1)
@@ -354,11 +283,11 @@ validate_native_effort() {
   local harness=${1:-} model=${2:-} effort=${3:-}
   [ "$effort" = ultra ] || return 0
   case "$harness" in
-    pi|pi-signed)
+    pi)
       case "$model" in codex-native/?*) return 0 ;; esac
       ;;
   esac
-  echo "error: ultra effort requires pi or pi-signed with an explicit codex-native/<model> model" >&2
+  echo "error: ultra effort requires pi with an explicit codex-native/<model> model" >&2
   return 1
 }
 

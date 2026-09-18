@@ -20,7 +20,6 @@ TMP_ROOT=$(fm_test_tmproot fm-turnend-guard)
 fm_git_identity fmtest fmtest@example.invalid
 
 REQUIRED_REASON='repair a missing or failed watcher cycle with the Pi tool fm_watch_arm_pi'
-AWAY_REQUIRED_REASON='Away mode owns watcher supervision'
 
 # Cases asserting REQUIRED_REASON pin Pi while blinding structural ancestry.
 # Watcher-liveness queries still reach the real process table.
@@ -485,12 +484,10 @@ test_hook_silent_in_idle_secondmate_home() {
 }
 
 # The guard's half of the deferred-death recovery loop in a secondmate home,
-# proven deterministically without a live model or any daemon: silent while the
-# watcher is live (the secondmate ends its turn and relies on the background
-# re-invoke), then blocks to force the re-arm once the watcher has exited and a
-# second child event lands. A harness adapter's live follow-up transport needs a
-# real session and cannot be a hermetic CI assertion; this test owns only the
-# shared guard behavior.
+# proven deterministically without a live model: silent while the watcher is
+# live, then blocks to force Pi's re-arm once the watcher has exited and a
+# second child event lands. Pi's live follow-up transport needs a real session
+# and cannot be a hermetic CI assertion; this test owns only shared guard behavior.
 test_hook_secondmate_reinvoke_recovery_loop() {
   local dir pid identity out status
   dir=$(make_secondmate_dir "$TMP_ROOT/hook-secondmate-reinvoke")
@@ -629,65 +626,6 @@ test_hook_runs_fast() {
   pass "fm-turnend-guard: runs well under the generous timing margin (${elapsed_s}s)"
 }
 
-test_opencode_plugin_anchors_guard_to_worktree() {
-  local plugin parent worktree_dir wrong_dir out status
-  plugin="$ROOT/.opencode/plugins/fm-primary-turnend-guard.js"
-  [ -f "$plugin" ] || fail "tracked OpenCode primary plugin is missing"
-  parent="$TMP_ROOT/opencode-plugin-parent"
-  git init -q "$parent"
-  worktree_dir="$parent/nested/opencode-plugin-worktree"
-  wrong_dir="$TMP_ROOT/opencode-plugin-cwd/subdir"
-  mkdir -p "$worktree_dir/bin" "$wrong_dir"
-  cat > "$worktree_dir/bin/fm-turnend-guard.sh" <<'EOF'
-#!/usr/bin/env bash
-cat >/dev/null
-printf 'guard-fired\n' >&2
-exit 2
-EOF
-  chmod +x "$worktree_dir/bin/fm-turnend-guard.sh"
-  # Runtime module-format warnings are host noise; this assertion owns plugin output only.
-  out=$(NODE_NO_WARNINGS=1 PLUGIN="$plugin" DIRECTORY="$wrong_dir" WORKTREE="$worktree_dir" node 2>&1 <<'EOF'
-import { pathToFileURL } from "node:url";
-
-const mod = await import(pathToFileURL(process.env.PLUGIN).href);
-let promptBody = "";
-const client = {
-  session: {
-    promptAsync: async (request) => {
-      promptBody = request.body.parts[0].text;
-    },
-  },
-};
-const hooks = await mod.FmPrimaryTurnendGuard({
-  client,
-  directory: process.env.DIRECTORY,
-  worktree: process.env.WORKTREE,
-});
-await hooks.event({ event: { type: "session.idle", properties: { sessionID: "session-test" } } });
-if (!promptBody.startsWith("\u2063FIRSTMATE_OP: v1 turn-end-guard: ")) {
-  console.error(`untyped operational prompt: ${promptBody}`);
-  process.exit(1);
-}
-if (!promptBody.includes("guard-fired")) {
-  console.error(`missing prompt body: ${promptBody}`);
-  process.exit(1);
-}
-if (!promptBody.includes("watcher cycle is missing, failed, or unhealthy")) {
-  console.error(`missing recovery-only preamble: ${promptBody}`);
-  process.exit(1);
-}
-if (promptBody.includes("Resume supervision according to the session-start operating block")) {
-  console.error(`ordinary continuity leaked into guard follow-up: ${promptBody}`);
-  process.exit(1);
-}
-EOF
-)
-  status=$?
-  expect_code 0 "$status" "OpenCode plugin must run the guard from worktree even when directory is elsewhere"
-  [ -z "$out" ] || fail "OpenCode plugin worktree-root test printed output: $out"
-  pass ".opencode primary plugin: guard path is anchored to worktree, not directory"
-}
-
 test_pi_extension_injects_once_per_logical_agent_run() {
   local repo home ext log out status
   repo="$TMP_ROOT/pi-logical-run-root"
@@ -804,240 +742,25 @@ EOF
   pass ".pi primary extension: delivery failure resets the logical-run latch"
 }
 
-# --- AWAY MODE: the daemon owns supervision ----------------------------------
-#
-# While state/.afk exists, bin/fm-supervise-daemon.sh owns supervision and runs
-# bin/fm-watch.sh ONE-SHOT: the watcher exits on every wake and the daemon
-# starts its replacement, so a turn boundary regularly lands in a hand-off with
-# no watcher process holding the lock and nothing wrong. The guard must accept a
-# live identity-matched daemon there, and must keep blocking on every genuine
-# lapse - no daemon, a dead or pid-reused daemon, a stale beacon - and must not
-# accept a daemon at all when away mode is off.
+# --- AWAY AND QUIET POSTURE KEEP ORDINARY PI SUPERVISION --------------------
 
-# Record a live away-mode daemon holding this home, the way the daemon does at
-# startup: its singleton lock names the daemon pid plus the process identity it
-# computed for itself (watcher_identity is that same fm_pid_identity read).
-record_daemon_lock() {  # <dir> <pid> [identity]
-  local dir=$1 pid=$2 identity=${3:-} lockdir
-  if [ -z "$identity" ]; then
-    identity=$(watcher_identity "$dir" "$pid") || return 1
-  fi
-  lockdir="$dir/state/.supervise-daemon.lock"
-  mkdir -p "$lockdir"
-  printf '%s\n' "$pid" > "$lockdir/pid"
-  printf '%s\n' "$identity" > "$lockdir/pid-identity"
-}
+test_postures_keep_ordinary_pi_supervision_required() {
+  local posture dir out status
+  for posture in away quiet; do
+    dir=$(make_primary_dir "$TMP_ROOT/hook-$posture-posture")
+    : > "$dir/state/task1.meta"
+    touch "$dir/state/.last-watcher-beat"
+    if [ "$posture" = away ]; then
+      : > "$dir/state/.afk-contract"
+    else
+      printf 'quiet\n%s\n' "$(date '+%s')" > "$dir/state/.afk"
+    fi
 
-# An away-mode home mid-watcher-cycle: away flag, work in flight, a fresh beacon
-# from the watcher that just exited, and NO watcher lock at all.
-make_away_home_between_cycles() {  # <dir-path>
-  local dir=$1
-  dir=$(make_primary_dir "$dir")
-  : > "$dir/state/task1.meta"
-  : > "$dir/state/.afk"
-  touch "$dir/state/.last-watcher-beat"
-  printf '%s\n' "$dir"
-}
-
-test_hook_away_daemon_allows_between_watcher_cycles() {
-  local dir pid out status
-  dir=$(make_away_home_between_cycles "$TMP_ROOT/hook-afk-daemon-live")
-  sleep 60 &
-  pid=$!
-  record_daemon_lock "$dir" "$pid" || {
-    kill "$pid" 2>/dev/null || true
-    wait "$pid" 2>/dev/null || true
-    fail "could not identify live away-mode daemon holder"
-  }
-  out=$(run_hook "$dir" false); status=$?
-  expect_code 0 "$status" "away mode with a live daemon must not block between watcher cycles"
-  [ -z "$out" ] || fail "away-mode daemon ownership still produced a block banner: $out"
-  kill "$pid" 2>/dev/null || true
-  wait "$pid" 2>/dev/null || true
-  pass "fm-turnend-guard: a live away-mode daemon satisfies supervision with no watcher holding the lock"
-}
-
-test_hook_away_daemon_allows_over_dead_watcher_lock() {
-  local dir pid dead out status
-  dir=$(make_away_home_between_cycles "$TMP_ROOT/hook-afk-daemon-dead-watcher")
-  dead=$(nonexistent_pid)
-  record_watcher_lock "$dir" "$dead" "dead watcher identity"
-  sleep 60 &
-  pid=$!
-  record_daemon_lock "$dir" "$pid" || {
-    kill "$pid" 2>/dev/null || true
-    wait "$pid" 2>/dev/null || true
-    fail "could not identify live away-mode daemon holder"
-  }
-  out=$(run_hook "$dir" false); status=$?
-  kill "$pid" 2>/dev/null || true
-  wait "$pid" 2>/dev/null || true
-  expect_code 0 "$status" "a live away-mode daemon must outweigh a watcher lock its exited child left behind"
-  [ -z "$out" ] || fail "away-mode daemon ownership still produced a block banner: $out"
-  pass "fm-turnend-guard: away-mode daemon ownership survives a leftover dead watcher lock"
-}
-
-test_hook_away_mode_blocks_without_any_supervisor() {
-  local dir out status
-  dir=$(make_away_home_between_cycles "$TMP_ROOT/hook-afk-no-supervisor")
-  out=$(run_hook "$dir" false); status=$?
-  expect_code 2 "$status" "away mode with no daemon and no watcher must still block"
-  assert_contains "$out" "$AWAY_REQUIRED_REASON" "away-mode block must point at the daemon, not normal supervision"
-  pass "fm-turnend-guard: away mode with no daemon and no watcher still blocks"
-}
-
-test_hook_away_mode_blocks_on_dead_daemon() {
-  local dir dead out status
-  dir=$(make_away_home_between_cycles "$TMP_ROOT/hook-afk-dead-daemon")
-  dead=$(nonexistent_pid)
-  record_daemon_lock "$dir" "$dead" "dead daemon identity"
-  out=$(run_hook "$dir" false); status=$?
-  expect_code 2 "$status" "a daemon lock left by a dead daemon must not satisfy supervision"
-  assert_contains "$out" "$AWAY_REQUIRED_REASON" "away-mode block must point at the daemon, not normal supervision"
-  pass "fm-turnend-guard: away mode blocks on a dead away-mode daemon"
-}
-
-test_hook_away_mode_blocks_on_pid_reused_daemon() {
-  local dir pid out status
-  dir=$(make_away_home_between_cycles "$TMP_ROOT/hook-afk-reused-daemon")
-  sleep 60 &
-  pid=$!
-  # Same pid, an identity from some earlier process: exactly what a recycled pid
-  # looks like, and the reason a bare kill -0 is not ownership evidence.
-  record_daemon_lock "$dir" "$pid" "some other process identity"
-  out=$(run_hook "$dir" false); status=$?
-  kill "$pid" 2>/dev/null || true
-  wait "$pid" 2>/dev/null || true
-  expect_code 2 "$status" "a live pid whose recorded identity does not match must not satisfy supervision"
-  assert_contains "$out" "$AWAY_REQUIRED_REASON" "away-mode block must point at the daemon, not normal supervision"
-  pass "fm-turnend-guard: away mode blocks on a pid-reused away-mode daemon lock"
-}
-
-test_hook_away_mode_blocks_on_stale_beacon() {
-  local dir pid out status
-  dir=$(make_away_home_between_cycles "$TMP_ROOT/hook-afk-stale-beacon")
-  touch -t 202001010000 "$dir/state/.last-watcher-beat"
-  sleep 60 &
-  pid=$!
-  record_daemon_lock "$dir" "$pid" || {
-    kill "$pid" 2>/dev/null || true
-    wait "$pid" 2>/dev/null || true
-    fail "could not identify live away-mode daemon holder"
-  }
-  out=$(run_hook "$dir" false); status=$?
-  kill "$pid" 2>/dev/null || true
-  wait "$pid" 2>/dev/null || true
-  expect_code 2 "$status" "a live daemon that stopped restarting its watcher must block once the beacon goes stale"
-  assert_contains "$out" "$AWAY_REQUIRED_REASON" "away-mode block must point at the daemon, not normal supervision"
-  pass "fm-turnend-guard: away-mode daemon ownership never substitutes for a fresh beacon"
-}
-
-test_hook_daemon_lock_is_ignored_without_away_mode() {
-  local dir pid out status
-  dir=$(make_away_home_between_cycles "$TMP_ROOT/hook-no-afk-daemon-lock")
-  rm -f "$dir/state/.afk"
-  sleep 60 &
-  pid=$!
-  record_daemon_lock "$dir" "$pid" || {
-    kill "$pid" 2>/dev/null || true
-    wait "$pid" 2>/dev/null || true
-    fail "could not identify live daemon holder"
-  }
-  out=$(run_hook "$dir" false); status=$?
-  kill "$pid" 2>/dev/null || true
-  wait "$pid" 2>/dev/null || true
-  expect_code 2 "$status" "with away mode off the strict watcher predicate must be unchanged"
-  assert_contains "$out" "$REQUIRED_REASON" "block reason must contain the exact required instruction"
-  pass "fm-turnend-guard: a daemon lock proves nothing while away mode is off"
-}
-
-# --- AWAY MODE: beacon grace derives from the poll cadence -------------------
-#
-# The daemon starts a fresh one-shot watcher only after it finishes handling
-# the previous wake, and that handling can legitimately outrun a flat 300s
-# window under load (a slow registered check, a busy supervisor pane) with the
-# daemon perfectly healthy throughout (fm-turnend-guard-afk-race). The guard
-# must accept a live daemon there once FM_POLL justifies the wider window, but
-# must still block a dead daemon or a beacon older than that wider grace.
-
-test_hook_away_daemon_allows_beacon_within_poll_derived_grace() {
-  local dir pid out status beat
-  dir=$(make_away_home_between_cycles "$TMP_ROOT/hook-afk-poll-grace-healthy")
-  sleep 60 &
-  pid=$!
-  record_daemon_lock "$dir" "$pid" || {
-    kill "$pid" 2>/dev/null || true
-    wait "$pid" 2>/dev/null || true
-    fail "could not identify live away-mode daemon holder"
-  }
-  # 400s is stale under the flat 300s default, but not under the poll-derived
-  # grace (max(300, FM_POLL + 60) = 660 at FM_POLL=600) - a live daemon that
-  # simply has not finished restarting its watcher yet.
-  beat=$(( $(date +%s) - 400 ))
-  fm_touch_epoch "$beat" "$dir/state/.last-watcher-beat"
-  out=$(FM_GUARD_GRACE='' FM_POLL=600 run_hook "$dir" false); status=$?
-  kill "$pid" 2>/dev/null || true
-  wait "$pid" 2>/dev/null || true
-  expect_code 0 "$status" "a live daemon with a beacon within the poll-derived grace must not block"
-  [ -z "$out" ] || fail "away-mode daemon within poll-derived grace still produced a block banner: $out"
-  pass "fm-turnend-guard: away-mode beacon freshness uses the poll-derived grace, not the flat default"
-}
-
-test_hook_away_daemon_blocks_dead_daemon_despite_poll_derived_grace() {
-  local dir dead out status
-  dir=$(make_away_home_between_cycles "$TMP_ROOT/hook-afk-poll-grace-dead-daemon")
-  dead=$(nonexistent_pid)
-  record_daemon_lock "$dir" "$dead" "dead daemon identity"
-  out=$(FM_GUARD_GRACE='' FM_POLL=600 run_hook "$dir" false); status=$?
-  expect_code 2 "$status" "a wider poll-derived grace must not paper over a dead daemon"
-  assert_contains "$out" "$AWAY_REQUIRED_REASON" "away-mode block must point at the daemon, not normal supervision"
-  pass "fm-turnend-guard: a dead away-mode daemon still blocks under the poll-derived grace"
-}
-
-test_hook_away_daemon_blocks_beacon_older_than_poll_derived_grace() {
-  local dir pid out status beat
-  dir=$(make_away_home_between_cycles "$TMP_ROOT/hook-afk-poll-grace-stale")
-  sleep 60 &
-  pid=$!
-  record_daemon_lock "$dir" "$pid" || {
-    kill "$pid" 2>/dev/null || true
-    wait "$pid" 2>/dev/null || true
-    fail "could not identify live away-mode daemon holder"
-  }
-  # 700s exceeds even the wider poll-derived grace (660 at FM_POLL=600), so a
-  # live daemon that has genuinely stopped restarting its watcher still blocks.
-  beat=$(( $(date +%s) - 700 ))
-  fm_touch_epoch "$beat" "$dir/state/.last-watcher-beat"
-  out=$(FM_GUARD_GRACE='' FM_POLL=600 run_hook "$dir" false); status=$?
-  kill "$pid" 2>/dev/null || true
-  wait "$pid" 2>/dev/null || true
-  expect_code 2 "$status" "a beacon older than the poll-derived grace must still block"
-  assert_contains "$out" "$AWAY_REQUIRED_REASON" "away-mode block must point at the daemon, not normal supervision"
-  pass "fm-turnend-guard: the poll-derived grace is bounded, not unlimited"
-}
-
-test_hook_no_afk_ignores_poll_derived_grace() {
-  local dir pid out status beat
-  dir=$(make_away_home_between_cycles "$TMP_ROOT/hook-no-afk-poll-grace")
-  rm -f "$dir/state/.afk"
-  sleep 60 &
-  pid=$!
-  record_daemon_lock "$dir" "$pid" || {
-    kill "$pid" 2>/dev/null || true
-    wait "$pid" 2>/dev/null || true
-    fail "could not identify live daemon holder"
-  }
-  # 400s would be within the poll-derived grace the away-mode branch would
-  # accept, but away mode is off here, so the strict watcher predicate and its
-  # flat default govern instead - old behavior, unaffected by FM_POLL.
-  beat=$(( $(date +%s) - 400 ))
-  fm_touch_epoch "$beat" "$dir/state/.last-watcher-beat"
-  out=$(FM_GUARD_GRACE='' FM_POLL=600 run_hook "$dir" false); status=$?
-  kill "$pid" 2>/dev/null || true
-  wait "$pid" 2>/dev/null || true
-  expect_code 2 "$status" "without .afk, FM_POLL must not widen the strict watcher predicate's grace"
-  assert_contains "$out" "$REQUIRED_REASON" "block reason must contain the exact required instruction"
-  pass "fm-turnend-guard: with away mode off, the poll-derived grace never applies"
+    out=$(run_hook "$dir" false); status=$?
+    expect_code 2 "$status" "$posture posture without Pi's watcher must block"
+    assert_contains "$out" "$REQUIRED_REASON" "$posture posture did not request ordinary Pi supervision repair"
+  done
+  pass "away and quiet posture keep Pi's ordinary supervision cycle required"
 }
 
 test_predicate_healthy_no_inflight
@@ -1075,17 +798,6 @@ test_hook_exempts_linked_worktree_with_non_ascii_marker
 test_hook_silent_in_crewmate_worktree
 test_hook_silent_without_stdin
 test_hook_runs_fast
-test_opencode_plugin_anchors_guard_to_worktree
 test_pi_extension_injects_once_per_logical_agent_run
 test_pi_extension_retries_after_followup_delivery_failure
-test_hook_away_daemon_allows_between_watcher_cycles
-test_hook_away_daemon_allows_over_dead_watcher_lock
-test_hook_away_mode_blocks_without_any_supervisor
-test_hook_away_mode_blocks_on_dead_daemon
-test_hook_away_mode_blocks_on_pid_reused_daemon
-test_hook_away_mode_blocks_on_stale_beacon
-test_hook_daemon_lock_is_ignored_without_away_mode
-test_hook_away_daemon_allows_beacon_within_poll_derived_grace
-test_hook_away_daemon_blocks_dead_daemon_despite_poll_derived_grace
-test_hook_away_daemon_blocks_beacon_older_than_poll_derived_grace
-test_hook_no_afk_ignores_poll_derived_grace
+test_postures_keep_ordinary_pi_supervision_required

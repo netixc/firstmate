@@ -40,7 +40,6 @@ exec "$@"
 SH
   chmod +x "$fakebin/timeout"
   make_spawn_pi_probe "$fakebin" pi
-  make_spawn_pi_probe "$fakebin" pi-signed
   printf '%s\n' "$fakebin"
 }
 
@@ -63,7 +62,7 @@ make_spawn_case() {
 
 enable_dispatch_profile() {
   local home=$1
-  printf '%s\n' '{"rules":[{"when":"current events","use":{"harness":"pi","model":"xai/grok-4","effort":"high"}}],"default":{"harness":"opencode","model":"anthropic/claude-sonnet-4-5"}}' \
+  printf '%s\n' '{"rules":[{"when":"current events","use":{"harness":"pi","model":"xai/grok-4","effort":"high"}}],"default":{"harness":"pi","model":"anthropic/claude-sonnet-4-5"}}' \
     > "$home/config/crew-dispatch.json"
 }
 
@@ -296,7 +295,7 @@ test_active_dispatch_profile_allows_explicit_harness() {
   pass "active crew-dispatch profile allows an explicit resolved harness"
 }
 
-test_active_dispatch_profile_allows_positional_harness() {
+test_active_dispatch_profile_rejects_positional_runtime() {
   local rec id out status
   id=profile-positional-z14
   rec=$(make_spawn_case profile-positional pi "$id")
@@ -306,247 +305,33 @@ test_active_dispatch_profile_allows_positional_harness() {
   out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
     "$id" "$PROJ_DIR" pi --model anthropic/claude-sonnet-5 --effort high)
   status=$?
-  expect_code 0 "$status" "positional harness should satisfy active dispatch-profile requirement"
-  assert_contains "$out" "spawned $id harness=pi" "spawn did not report positional pi harness"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" pi anthropic/claude-sonnet-5 high
-  pass "active crew-dispatch profile allows the legacy positional harness form"
+  [ "$status" -ne 0 ] || fail "positional runtime compatibility was accepted"
+  assert_contains "$out" 'require exactly <task-id> <project-dir>' \
+    "positional runtime rejection did not name the current invocation shape"
+  assert_absent "$HOME_DIR/state/$id.meta" "positional runtime rejection should happen before metadata publication"
+  pass "crew-dispatch profiles reject the removed positional runtime form"
 }
 
-test_active_dispatch_profile_allows_raw_launch_command() {
-  local rec id out status launch
-  id=profile-raw-z15
-  rec=$(make_spawn_case profile-raw pi "$id")
+test_active_dispatch_profile_rejects_unknown_runtime() {
+  local rec id out status
+  id=profile-unsupported-z15
+  rec=$(make_spawn_case profile-unsupported pi "$id")
   read_case_record "$rec"
   enable_dispatch_profile "$HOME_DIR"
 
   out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id" "$PROJ_DIR" "custom-agent --flag")
+    "$id" "$PROJ_DIR" --harness unsupported-runtime 2>&1)
   status=$?
-  expect_code 0 "$status" "raw launch command should satisfy active dispatch-profile requirement"
-  assert_contains "$out" "spawned $id harness=custom-agent" "spawn did not report raw command harness"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" custom-agent default default
-  launch=$(cat "$LAUNCH_LOG")
-  [ "$launch" = "custom-agent --flag" ] || fail "raw launch command changed"$'\n'"actual: $launch"
-  pass "active crew-dispatch profile allows the raw launch-command escape hatch"
-}
-
-test_retired_kimi_raw_launch_commands_refuse_before_provisioning() {
-  local selection command rec id out status
-  for selection in configured explicit; do
-    id="retired-kimi-raw-$selection-z16"
-    rec=$(make_spawn_case "retired-kimi-raw-$selection" pi "$id")
-    read_case_record "$rec"
-    if [ "$selection" = configured ]; then
-      printf '%s\n' 'kimi' > "$HOME_DIR/config/crew-harness"
-      out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-        "$id" "$PROJ_DIR" 2>&1)
-    else
-      for command in 'kimi --model k3' '/opt/kimi-code --model k3'; do
-        out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-          "$id" "$PROJ_DIR" "$command" 2>&1)
-        status=$?
-        expect_code 1 "$status" "retired Kimi raw explicit command should refuse"
-        assert_contains "$out" "retired Kimi launch commands" \
-          "retired Kimi raw explicit refusal omitted the reason"
-        assert_absent "$HOME_DIR/state/$id.meta" \
-          "retired Kimi raw explicit command published task metadata"
-        [ ! -s "$LAUNCH_LOG" ] || fail "retired Kimi raw explicit command reached the launch backend"
-      done
-      continue
-    fi
-    status=$?
-    expect_code 1 "$status" "retired Kimi raw $selection command should refuse"
-    assert_contains "$out" "no launch template for harness 'kimi'" \
-      "retired Kimi configured refusal omitted the reason"
-    assert_absent "$HOME_DIR/state/$id.meta" \
-      "retired Kimi raw $selection command published task metadata"
-    [ ! -s "$LAUNCH_LOG" ] || fail "retired Kimi raw $selection command reached the launch backend"
-  done
-  pass "configured and explicit raw Kimi commands refuse before endpoint provisioning"
-}
-
-
-test_retired_gemini_harness_refuses_without_touching_settings() {
-  local selection rec id out status project_before user_before
-  for selection in configured explicit; do
-    id="retired-gemini-$selection"
-    rec=$(make_spawn_case "$id" gemini "$id")
-    read_case_record "$rec"
-    mkdir -p "$WT_DIR/.gemini" "$HOME_DIR/user/.gemini"
-    printf '%s\n' '{"project":"keep-byte-for-byte"}' > "$WT_DIR/.gemini/settings.json"
-    printf '%s\n' '{"user":"keep-byte-for-byte"}' > "$HOME_DIR/user/.gemini/settings.json"
-    project_before="$CASE_DIR/project-settings.before"
-    user_before="$CASE_DIR/user-settings.before"
-    cp "$WT_DIR/.gemini/settings.json" "$project_before"
-    cp "$HOME_DIR/user/.gemini/settings.json" "$user_before"
-    if [ "$selection" = configured ]; then
-      out=$(HOME="$HOME_DIR/user" run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-        "$id" "$PROJ_DIR" 2>&1)
-    else
-      out=$(HOME="$HOME_DIR/user" run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-        "$id" "$PROJ_DIR" --harness gemini 2>&1)
-    fi
-    status=$?
-    expect_code 1 "$status" "retired Gemini CLI $selection selection should refuse"
-    assert_contains "$out" "harness 'gemini'" "retired Gemini CLI refusal did not name the stale harness"
-    assert_absent "$HOME_DIR/state/$id.meta" "retired Gemini CLI refusal published task metadata"
-    [ ! -s "$LAUNCH_LOG" ] || fail "retired Gemini CLI refusal typed a launch command"
-    cmp -s "$project_before" "$WT_DIR/.gemini/settings.json" \
-      || fail "retired Gemini CLI refusal rewrote project .gemini settings"
-    cmp -s "$user_before" "$HOME_DIR/user/.gemini/settings.json" \
-      || fail "retired Gemini CLI refusal rewrote user .gemini settings"
-  done
-  pass "retired Gemini CLI config and explicit selections refuse before launch and byte-preserve unrelated settings"
-}
-
-test_retired_agy_harness_refuses_without_touching_external_settings() {
-  local selection rec id out status antigravity_before gemini_before
-  for selection in configured explicit; do
-    id="retired-agy-$selection"
-    rec=$(make_spawn_case "$id" agy "$id")
-    read_case_record "$rec"
-    mkdir -p "$HOME_DIR/user/.gemini/antigravity-cli"
-    printf '%s\n' '{"trustedWorkspaces":["/keep/me"],"theme":"keep-byte-for-byte"}' \
-      > "$HOME_DIR/user/.gemini/antigravity-cli/settings.json"
-    printf '%s\n' '{"gemini":"unrelated-and-preserved"}' \
-      > "$HOME_DIR/user/.gemini/settings.json"
-    antigravity_before="$CASE_DIR/antigravity-settings.before"
-    gemini_before="$CASE_DIR/gemini-settings.before"
-    cp "$HOME_DIR/user/.gemini/antigravity-cli/settings.json" "$antigravity_before"
-    cp "$HOME_DIR/user/.gemini/settings.json" "$gemini_before"
-    if [ "$selection" = configured ]; then
-      out=$(HOME="$HOME_DIR/user" run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-        "$id" "$PROJ_DIR" 2>&1)
-    else
-      out=$(HOME="$HOME_DIR/user" run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-        "$id" "$PROJ_DIR" --harness agy 2>&1)
-    fi
-    status=$?
-    expect_code 1 "$status" "retired AGY $selection selection should refuse"
-    assert_contains "$out" "harness 'agy'" "retired AGY refusal did not name the stale harness"
-    assert_absent "$HOME_DIR/state/$id.meta" "retired AGY refusal published task metadata"
-    [ ! -s "$LAUNCH_LOG" ] || fail "retired AGY refusal typed a launch command"
-    cmp -s "$antigravity_before" "$HOME_DIR/user/.gemini/antigravity-cli/settings.json" \
-      || fail "retired AGY refusal rewrote unrelated Antigravity settings"
-    cmp -s "$gemini_before" "$HOME_DIR/user/.gemini/settings.json" \
-      || fail "retired AGY refusal rewrote unrelated Gemini settings"
-  done
-  pass "retired AGY config and explicit selections refuse before launch and byte-preserve external settings"
-}
-
-test_retired_rovo_harness_refuses_without_touching_project_files() {
-  local selection rec id out status rovo_before atlassian_before
-  for selection in configured explicit; do
-    id="retired-rovo-$selection"
-    rec=$(make_spawn_case "$id" rovo "$id")
-    read_case_record "$rec"
-    mkdir -p "$WT_DIR/.rovo" "$WT_DIR/.atlassian"
-    printf '%s\n' 'project: keep-byte-for-byte' > "$WT_DIR/.rovo/config.yml"
-    printf '%s\n' '{"jira":"keep-byte-for-byte"}' > "$WT_DIR/.atlassian/project.json"
-    rovo_before="$CASE_DIR/rovo-config.before"
-    atlassian_before="$CASE_DIR/atlassian-project.before"
-    cp "$WT_DIR/.rovo/config.yml" "$rovo_before"
-    cp "$WT_DIR/.atlassian/project.json" "$atlassian_before"
-    if [ "$selection" = configured ]; then
-      out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-        "$id" "$PROJ_DIR" 2>&1)
-    else
-      out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-        "$id" "$PROJ_DIR" --harness rovo 2>&1)
-    fi
-    status=$?
-    expect_code 1 "$status" "retired Rovo $selection selection should refuse"
-    assert_contains "$out" "harness 'rovo'" "retired Rovo refusal did not name the stale harness"
-    assert_absent "$HOME_DIR/state/$id.meta" "retired Rovo refusal published task metadata"
-    [ ! -s "$LAUNCH_LOG" ] || fail "retired Rovo refusal typed a launch command"
-    cmp -s "$rovo_before" "$WT_DIR/.rovo/config.yml" \
-      || fail "retired Rovo refusal rewrote project .rovo configuration"
-    cmp -s "$atlassian_before" "$WT_DIR/.atlassian/project.json" \
-      || fail "retired Rovo refusal rewrote unrelated Atlassian project data"
-  done
-  pass "retired Rovo config and explicit selections refuse before launch and byte-preserve project files"
-}
-
-test_retired_kimi_harness_refuses_without_touching_external_config() {
-  local selection rec id out status config_before hook_before
-  for selection in configured explicit; do
-    id="retired-kimi-$selection"
-    rec=$(make_spawn_case "$id" kimi "$id")
-    read_case_record "$rec"
-    mkdir -p "$HOME_DIR/user/.kimi-code"
-    cat > "$HOME_DIR/user/.kimi-code/config.toml" <<'TOML'
-# user bytes that a rejected selection must not rewrite
-[[hooks]]
-event = "Custom"
-command = "keep"
-TOML
-    printf '%s\n' '# unrelated user hook' > "$HOME_DIR/user/.kimi-code/fm-turn-end.sh"
-    cp "$HOME_DIR/user/.kimi-code/config.toml" "$CASE_DIR/config-before"
-    cp "$HOME_DIR/user/.kimi-code/fm-turn-end.sh" "$CASE_DIR/hook-before"
-    config_before="$CASE_DIR/config-before"
-    hook_before="$CASE_DIR/hook-before"
-    if [ "$selection" = configured ]; then
-      printf 'kimi\n' > "$HOME_DIR/config/crew-harness"
-      out=$(HOME="$HOME_DIR/user" run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-        "$id" "$PROJ_DIR" 2>&1)
-    else
-      out=$(HOME="$HOME_DIR/user" run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-        "$id" "$PROJ_DIR" --harness kimi 2>&1)
-    fi
-    status=$?
-    expect_code 1 "$status" "retired Kimi $selection selection should refuse"
-    assert_contains "$out" "harness 'kimi'" "retired Kimi refusal did not name the stale harness"
-    assert_absent "$HOME_DIR/state/$id.meta" "retired Kimi refusal published task metadata"
-    [ ! -s "$LAUNCH_LOG" ] || fail "retired Kimi refusal typed a launch command"
-    cmp -s "$config_before" "$HOME_DIR/user/.kimi-code/config.toml" \
-      || fail "retired Kimi refusal rewrote external config.toml"
-    cmp -s "$hook_before" "$HOME_DIR/user/.kimi-code/fm-turn-end.sh" \
-      || fail "retired Kimi refusal changed unrelated external hook bytes"
-  done
-  pass "retired Kimi config and explicit selections refuse before launch and byte-preserve external configuration"
-}
-
-test_retired_codex_harness_refuses_before_provisioning() {
-  local rec id out status
-  id=profile-retired-codex-z4
-  rec=$(make_spawn_case profile-retired-codex pi "$id")
-  read_case_record "$rec"
-
-  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id" "$PROJ_DIR" --harness codex 2>&1)
-  status=$?
-  expect_code 1 "$status" "retired standalone Codex harness should refuse"
-  assert_contains "$out" "harness 'codex'" "retired Codex refusal did not name the stale harness"
-  assert_absent "$HOME_DIR/state/$id.meta" "retired Codex refusal published task metadata"
-  [ ! -s "$LAUNCH_LOG" ] || fail "retired Codex refusal typed a launch command"
-  pass "retired standalone Codex harness refuses before task publication or launch"
-}
-
-test_opencode_threads_model_and_ignores_effort_axis() {
-  local rec id out status launch
-  id=profile-opencode-z7
-  rec=$(make_spawn_case profile-opencode opencode "$id")
-  read_case_record "$rec"
-
-  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" --model anthropic/claude-sonnet-4-5 --effort high)
-  status=$?
-  expect_code 0 "$status" "opencode spawn with model and ignored effort should succeed"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" opencode anthropic/claude-sonnet-4-5 high
-  launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "opencode --model 'anthropic/claude-sonnet-4-5' --prompt" \
-    "opencode launch did not thread model"
-  assert_not_contains "$launch" "--effort" "opencode launch must not pass unsupported --effort"
-  assert_not_contains "$launch" "--variant" "opencode launch must not pass run-only --variant"
-  assert_not_contains "$launch" "--thinking" "opencode launch must not pass pi thinking flag"
-  pass "opencode receives --model and omits the unsupported effort axis"
+  expect_code 1 "$status" "an unknown runtime should be rejected"
+  assert_contains "$out" "only 'pi' is supported" "unknown-runtime rejection omitted the supported runtime"
+  assert_absent "$HOME_DIR/state/$id.meta" "unknown-runtime rejection published task metadata"
+  [ ! -s "$LAUNCH_LOG" ] || fail "unknown-runtime rejection reached the launch backend"
+  pass "active crew-dispatch profile accepts only plain Pi"
 }
 
 test_native_effort_validator_keeps_axes_separate() {
-  local harness
-  for harness in pi pi-signed; do
-    "$ROOT/bin/fm-harness.sh" validate-native-effort "$harness" codex-native/gpt-6-astra ultra \
-      || fail "native validator refused supported harness $harness"
-  done
+  "$ROOT/bin/fm-harness.sh" validate-native-effort pi codex-native/gpt-6-astra ultra \
+    || fail "native validator refused plain Pi"
   if "$ROOT/bin/fm-harness.sh" validate-native-effort 'pi:codex-native/forged' '' ultra 2>/dev/null; then
     fail "native validator accepted a model prefix embedded in the harness axis"
   fi
@@ -554,30 +339,32 @@ test_native_effort_validator_keeps_axes_separate() {
 }
 
 test_native_pi_ultra_is_explicit_and_model_scoped() {
-  local rec id out launch harness mode native_profile model
-  for harness in pi pi-signed; do
-    for mode in no-mistakes direct-PR; do
-      id="ultra-$harness-$mode"
-      rec=$(make_spawn_case "$id" "$harness" "$id")
-      read_case_record "$rec"
-      out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
-        --harness "$harness" --model codex-native/gpt-6-astra --effort ultra --mode "$mode" --yolo off)
-      expect_code 0 "$?" "native Ultra spawn failed: $out"
-      assert_meta_profile "$HOME_DIR/state/$id.meta" "$harness" codex-native/gpt-6-astra ultra
-      launch=$(cat "$LAUNCH_LOG")
-      assert_contains "$launch" "--model 'codex-native/gpt-6-astra' --codex-effort 'ultra'" "native Ultra flag missing"
-      assert_not_contains "$launch" "--thinking" "native Ultra was converted into Pi thinking"
-      assert_not_contains "$launch" "'max'" "native Ultra was aliased to max"
-    done
+  local rec id out launch harness=pi mode native_profile model
+  for mode in no-mistakes direct-PR; do
+    id="ultra-$harness-$mode"
+    rec=$(make_spawn_case "$id" "$harness" "$id")
+    read_case_record "$rec"
+    out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
+      --harness "$harness" --model codex-native/gpt-6-astra --effort ultra --mode "$mode" --yolo off)
+    expect_code 0 "$?" "native Ultra spawn failed: $out"
+    assert_meta_profile "$HOME_DIR/state/$id.meta" "$harness" codex-native/gpt-6-astra ultra
+    launch=$(cat "$LAUNCH_LOG")
+    assert_contains "$launch" "--model 'codex-native/gpt-6-astra' --codex-effort 'ultra'" "native Ultra flag missing"
+    assert_not_contains "$launch" "--thinking" "native Ultra was converted into Pi thinking"
+    assert_not_contains "$launch" "'max'" "native Ultra was aliased to max"
   done
-  for native_profile in 'opencode:codex-native/gpt-6-astra' 'pi:openai-codex/gpt-6-astra' 'pi:default' 'pi:codex-native/'; do
+  for native_profile in 'unsupported-runtime:codex-native/gpt-6-astra' 'pi:openai-codex/gpt-6-astra' 'pi:default' 'pi:codex-native/'; do
     harness=${native_profile%%:*}; model=${native_profile#*:}; id="ultra-refused-$RANDOM"
     rec=$(make_spawn_case "$id" "$harness" "$id")
     read_case_record "$rec"
     out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
       --harness "$harness" --model "$model" --effort ultra 2>&1)
     expect_code 1 "$?" "unsupported Ultra profile should refuse: $native_profile"
-    assert_contains "$out" "ultra effort requires pi or pi-signed" "native-only refusal missing"
+    if [ "$harness" = pi ]; then
+      assert_contains "$out" "ultra effort requires pi" "native-only refusal missing"
+    else
+      assert_contains "$out" "only 'pi' is supported" "unsupported-runtime refusal missing"
+    fi
     [ ! -e "$HOME_DIR/state/$id.meta" ] || fail "unsupported Ultra published metadata"
     [ ! -e "$HOME_DIR/state/$id.busy-gen" ] || fail "unsupported Ultra provisioned lifecycle wiring"
     [ ! -s "$LAUNCH_LOG" ] || fail "unsupported Ultra launched an agent"
@@ -587,10 +374,10 @@ test_native_pi_ultra_is_explicit_and_model_scoped() {
   read_case_record "$rec"
   out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
     'pi --offline' --model codex-native/gpt-6-astra --effort ultra 2>&1)
-  expect_code 1 "$?" "raw launch silently omitted the native Ultra flag"
-  [ ! -e "$HOME_DIR/state/$id.meta" ] || fail "raw Ultra launch published metadata"
-  assert_contains "$out" "canonical --harness pi or pi-signed" "raw launch refusal was not actionable"
-  pass "Ultra is explicit for native Pi and Pi-signed, including direct-PR, and refuses unsupported profiles before provisioning"
+  expect_code 2 "$?" "removed raw positional launch form was accepted"
+  [ ! -e "$HOME_DIR/state/$id.meta" ] || fail "raw positional launch published metadata"
+  assert_contains "$out" 'require exactly <task-id> <project-dir>' "raw positional launch refusal did not name the current invocation"
+  pass "Ultra is explicit for plain Pi, including direct-PR, and refuses unsupported profiles before provisioning"
 }
 
 test_batch_preserves_native_ultra() {
@@ -621,7 +408,7 @@ test_pi_threads_model_and_max_effort() {
   expect_code 0 "$status" "pi spawn with max effort should succeed"
   assert_meta_profile "$HOME_DIR/state/$id.meta" pi openai-codex/gpt-5.6-sol max
   launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "FM_PI_HARNESS=pi '$FAKEBIN_DIR/pi' --tui-mode regular --model 'openai-codex/gpt-5.6-sol' --thinking 'max' -e" \
+  assert_contains "$launch" "'$FAKEBIN_DIR/pi' --tui-mode regular --model 'openai-codex/gpt-5.6-sol' --thinking 'max' -e" \
     "pi launch did not force the regular TUI while threading the requested model and max thinking level"
   assert_not_contains "$launch" "FM_FIRSTMATE_PI_LAUNCH_BRIEF=" \
     "pi launch still exports the removed Calm input-reroute binding"
@@ -642,7 +429,7 @@ test_pi_preserves_xai_grok_provider_model_selection() {
   expect_code 0 "$status" "Pi spawn with an xAI Grok provider model should succeed"
   assert_meta_profile "$HOME_DIR/state/$id.meta" pi xai/grok-4.5 high
   launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "FM_PI_HARNESS=pi '$FAKEBIN_DIR/pi' --tui-mode regular --model 'xai/grok-4.5' --thinking 'high' -e" \
+  assert_contains "$launch" "'$FAKEBIN_DIR/pi' --tui-mode regular --model 'xai/grok-4.5' --thinking 'high' -e" \
     "standalone Grok removal stripped Pi's xAI Grok provider model"
   assert_not_contains "$launch" "grok --" "Pi's xAI model must not invoke a standalone Grok runtime"
   pass "Grok models remain selectable through Pi's xAI provider"
@@ -660,152 +447,35 @@ test_pi_preserves_kimi_provider_model_selection() {
   expect_code 0 "$status" "Pi spawn with a Kimi provider model should succeed"
   assert_meta_profile "$HOME_DIR/state/$id.meta" pi kimi-coding/k2p5 high
   launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "FM_PI_HARNESS=pi '$FAKEBIN_DIR/pi' --tui-mode regular --model 'kimi-coding/k2p5' --thinking 'high' -e" \
-    "standalone Kimi removal stripped Pi's Kimi provider model"
+  assert_contains "$launch" "'$FAKEBIN_DIR/pi' --tui-mode regular --model 'kimi-coding/k2p5' --thinking 'high' -e" \
+    "runtime contraction stripped Pi's Kimi provider model"
   pass "Kimi provider models remain selectable through the retained Pi runtime"
 }
 
-test_pi_signed_threads_shared_pi_profile_and_preserves_identity() {
-  local rec id out status launch
-  id=profile-pi-signed-z8b
-  rec=$(make_spawn_case profile-pi-signed pi-signed "$id")
-  read_case_record "$rec"
-
-  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR" \
-    --model openai-codex/gpt-5.6-sol --effort max)
-  status=$?
-  expect_code 0 "$status" "pi-signed spawn with max effort should succeed"
-  assert_contains "$out" "spawned $id harness=pi-signed" "pi-signed spawn did not preserve its visible identity"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" pi-signed openai-codex/gpt-5.6-sol max
-  launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "FM_PI_HARNESS=pi-signed '$FAKEBIN_DIR/pi-signed' --tui-mode regular --model 'openai-codex/gpt-5.6-sol' --thinking 'max' -e" \
-    "pi-signed launch did not force the regular TUI with Pi's model, thinking, and extension semantics"
-  assert_contains "$launch" "fm-operational-input.sh' encode launch-brief" \
-    "pi-signed launch lost the canonical typed launch-brief envelope"
-  assert_present "$HOME_DIR/state/$id.pi-ext.ts" "pi-signed launch did not install Pi's turn-end extension"
-  assert_present "$HOME_DIR/state/$id.busy-gen" "pi-signed spawn did not arm the busy-state contract"
-  assert_contains "$(cat "$HOME_DIR/state/$id.busy-state")" "state=busy source=fm-spawn" \
-    "pi-signed spawn did not seed the busy-state record from the launch brief"
-  local ext gen
-  ext=$(cat "$HOME_DIR/state/$id.pi-ext.ts")
-  gen=$(cat "$HOME_DIR/state/$id.busy-gen")
-  assert_contains "$ext" 'pi.on("agent_start"' "pi extension lost the semantic agent_start busy edge"
-  assert_contains "$ext" 'pi.on("agent_settled"' "pi extension lost the semantic agent_settled idle edge"
-  assert_contains "$ext" 'ctx.isIdle()' "pi extension no longer confirms idle with ctx.isIdle()"
-  assert_contains "$ext" "\"--gen\", \"$gen\"" "pi extension does not carry the armed incarnation gen"
-  assert_contains "$ext" '"--source", "pi-ext"' "pi extension does not attribute its semantic source"
-  assert_contains "$ext" 'pi.on("turn_end"' "pi extension lost the turn-end notification touch"
-  pass "pi-signed shares Pi launch semantics while preserving its configured and recorded identity"
-}
-
 test_pi_tui_mode_probe_is_safe_for_old_and_new_pi() {
-  local harness version rec id out status launch
-  for harness in pi pi-signed; do
-    for version in 0.82.0 0.84.0; do
-      id="profile-${harness}-tui-${version//./}-z8d"
-      rec=$(make_spawn_case "profile-__MODELFLAG__-${harness}-tui-${version//./}" "$harness" "$id")
-      read_case_record "$rec"
+  local harness=pi version rec id out status launch
+  for version in 0.82.0 0.84.0; do
+    id="profile-${harness}-tui-${version//./}-z8d"
+    rec=$(make_spawn_case "profile-__MODELFLAG__-${harness}-tui-${version//./}" "$harness" "$id")
+    read_case_record "$rec"
 
-      out=$(FM_TEST_PI_VERSION="$version" \
-        run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-        "$id" "$PROJ_DIR")
-      status=$?
-      expect_code 0 "$status" "$harness $version spawn should succeed"
-      launch=$(cat "$LAUNCH_LOG")
-      assert_contains "$launch" "'$FAKEBIN_DIR/$harness'" \
-        "$harness $version launch must use the executable selected for probing"
-      assert_not_contains "$launch" "FM_PI_HARNESS=$harness $harness" \
-        "$harness $version launch must not re-resolve a bare executable in the worker"
-      if [ "$version" = 0.82.0 ]; then
-        assert_not_contains "$launch" "--tui-mode" \
-          "$harness $version launch must omit unsupported --tui-mode"
-      else
-        assert_contains "$launch" "'$FAKEBIN_DIR/$harness' --tui-mode regular" \
-          "$harness $version launch must preserve the regular TUI"
-      fi
-    done
+    out=$(FM_TEST_PI_VERSION="$version" \
+      run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
+      "$id" "$PROJ_DIR")
+    status=$?
+    expect_code 0 "$status" "$harness $version spawn should succeed"
+    launch=$(cat "$LAUNCH_LOG")
+    assert_contains "$launch" "'$FAKEBIN_DIR/$harness'" \
+      "$harness $version launch must use the executable selected for probing"
+    if [ "$version" = 0.82.0 ]; then
+      assert_not_contains "$launch" "--tui-mode" \
+        "$harness $version launch must omit unsupported --tui-mode"
+    else
+      assert_contains "$launch" "'$FAKEBIN_DIR/$harness' --tui-mode regular" \
+        "$harness $version launch must preserve the regular TUI"
+    fi
   done
   pass "Pi launch probing omits --tui-mode on older Pi and preserves it on supporting Pi"
-}
-
-test_pi_signed_missing_binary_refuses_before_endpoint_or_metadata() {
-  local rec id out status
-  id=profile-pi-signed-missing-z8c
-  rec=$(make_spawn_case profile-pi-signed-missing pi-signed "$id")
-  read_case_record "$rec"
-  rm -f "$FAKEBIN_DIR/pi-signed"
-  : > "$LAUNCH_LOG"
-
-  out=$(FM_ROOT_OVERRIDE='' FM_HOME="$HOME_DIR" \
-    FM_STATE_OVERRIDE="$HOME_DIR/state" FM_DATA_OVERRIDE="$HOME_DIR/data" \
-    FM_PROJECTS_OVERRIDE="$HOME_DIR/projects" FM_CONFIG_OVERRIDE="$HOME_DIR/config" \
-    FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$WT_DIR" TMUX="fake,1,0" \
-    FM_FAKE_LAUNCH_LOG="$LAUNCH_LOG" PATH="$FAKEBIN_DIR:/usr/bin:/bin:/usr/sbin:/sbin" \
-    "$SPAWN" "$id" "$PROJ_DIR" --mode no-mistakes --yolo off 2>&1)
-  status=$?
-  expect_code 1 "$status" "a missing pi-signed executable should refuse the spawn"
-  assert_contains "$out" "pi-signed executable not found on PATH" \
-    "missing pi-signed refusal did not name the actionable requirement"
-  assert_absent "$HOME_DIR/state/$id.meta" "missing pi-signed refusal wrote task metadata"
-  [ ! -s "$LAUNCH_LOG" ] || fail "missing pi-signed refusal typed a launch command"
-  pass "pi-signed refuses safely and actionably when the selected executable is unavailable"
-}
-
-test_retired_kimi_secondmate_selection_refuses_before_endpoint() {
-  local selection rec id sm out status
-  for selection in configured explicit; do
-    id="retired-kimi-secondmate-$selection"
-    rec=$(make_spawn_case "$id" pi "$id")
-    read_case_record "$rec"
-    sm="$CASE_DIR/secondmate-home"
-    make_seeded_secondmate_home "$sm" "$id"
-    if [ "$selection" = configured ]; then
-      printf 'kimi\n' > "$HOME_DIR/config/secondmate-harness"
-      out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$sm" --secondmate 2>&1)
-    else
-      out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$sm" --secondmate --harness kimi 2>&1)
-    fi
-    status=$?
-    expect_code 1 "$status" "retired Kimi $selection secondmate selection should refuse"
-    assert_contains "$out" "harness 'kimi'" "retired Kimi secondmate refusal omitted the stale harness"
-    assert_absent "$HOME_DIR/state/$id.meta" "retired Kimi secondmate refusal published endpoint metadata"
-    [ ! -s "$LAUNCH_LOG" ] || fail "retired Kimi secondmate refusal typed a launch command"
-  done
-  pass "retired Kimi local secondmate config and explicit selections refuse before endpoint creation"
-}
-
-test_pi_signed_persistent_secondmate_uses_pi_extensions_and_identity() {
-  local rec id sm out status launch
-  id=profile-pi-signed-secondmate-z8d
-  rec=$(make_spawn_case profile-pi-signed-secondmate pi "$id")
-  read_case_record "$rec"
-  printf '%s\n' pi-signed > "$HOME_DIR/config/secondmate-harness"
-  sm="$CASE_DIR/secondmate-home"
-  make_seeded_secondmate_home "$sm" "$id"
-  sm=$(cd "$sm" && pwd -P)
-  cp "$ROOT/AGENTS.md" "$sm/AGENTS.md"
-  cp "$sm/data/charter.md" "$CASE_DIR/charter-before"
-
-  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$sm" --secondmate)
-  status=$?
-  expect_code 0 "$status" "pi-signed persistent secondmate spawn should succeed"
-  assert_contains "$out" "spawned $id harness=pi-signed kind=secondmate" \
-    "pi-signed secondmate spawn did not preserve its runtime identity"
-  assert_meta_profile "$HOME_DIR/state/$id.meta" pi-signed default default
-  cmp -s "$ROOT/AGENTS.md" "$sm/AGENTS.md" || fail "secondmate launch rewrote the supervisor contract"
-  cmp -s "$CASE_DIR/charter-before" "$sm/data/charter.md" || fail "secondmate launch rewrote the charter"
-  assert_absent "$HOME_DIR/data/$id/launch-brief.md" "secondmate launch received a worker overlay"
-  launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "< '$sm/data/charter.md'" "secondmate launch lost its original charter"
-  assert_contains "$launch" "FM_PI_HARNESS=pi-signed '$FAKEBIN_DIR/pi-signed' --tui-mode regular -e '$sm/.pi/extensions/fm-primary-turnend-guard.ts' -e '$sm/.pi/extensions/fm-primary-pi-watch.ts'" \
-    "pi-signed secondmate did not force the regular TUI with Pi's primary extension launch shape"
-  if [ "${FM_TEST_EVIDENCE:-0}" = 1 ]; then
-    printf '# evidence begin: persistent secondmate\n%s\n' "$out"
-    printf 'launch command:\n%s\noriginal charter:\n' "$launch"
-    cat "$sm/data/charter.md"
-    printf 'supervisor AGENTS.md and charter remain byte-identical; no worker overlay created\n# evidence end\n'
-  fi
-  pass "pi-signed is a distinct persistent secondmate runtime with shared Pi supervision semantics"
 }
 
 test_batch_forwards_shared_profile_flags() {
@@ -849,7 +519,7 @@ test_active_dispatch_profile_does_not_block_secondmate_launch() {
 # fake backend records delivery, while real shells exercise the env boundary.
 # No developer environment or credential values are inspected by these probes.
 test_launch_environment_allowlist() {
-  local setting rec id out status probe result expected launch value pane_shell pane_path
+  local setting rec id out status result expected launch value pane_shell pane_path
   # shellcheck disable=SC2016
   value='synthetic value; $(touch SHOULD_NOT_EXIST) `false` "quoted"'
   for setting in absent missing-config enabled empty; do
@@ -861,15 +531,19 @@ test_launch_environment_allowlist() {
       enabled) printf '# Synthetic credential name\nFM_TEST_ALLOWED\nFM_TEST_EMPTY\nFM_TEST_UNSET\n' > "$HOME_DIR/config/launch-env-allowlist" ;;
       empty) : > "$HOME_DIR/config/launch-env-allowlist" ;;
     esac
-    probe="$CASE_DIR/probe.sh"
-    cat > "$probe" <<'SH'
+    cat > "$FAKEBIN_DIR/pi" <<'SH'
 #!/bin/sh
+if [ "${1:-}" = --help ]; then
+  printf '%s\n' 'Pi 0.84.0' 'Options: --help --tui-mode <mode>'
+  exit 0
+fi
 printf '%s\n' "${FM_TEST_AMBIENT_SENTINEL-unset}" "${FM_TEST_ALLOWED-unset}" \
   "${FM_TEST_EMPTY-unset}" "${FM_TEST_UNSET-unset}" "$HOME" "$PATH" "$TERM" "$TMUX" "$GOTMPDIR"
 SH
+    chmod +x "$FAKEBIN_DIR/pi"
     out=$(FM_TEST_AMBIENT_SENTINEL=synthetic-unrelated \
       run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-      "$id" "$PROJ_DIR" --harness "/bin/sh '$probe'")
+      "$id" "$PROJ_DIR" --harness pi)
     status=$?
     expect_code 0 "$status" "allowlist=$setting spawn should succeed: $out"
     launch=$(cat "$LAUNCH_LOG")
@@ -1138,15 +812,8 @@ test_unresolvable_relative_overrides_fail_loudly
 test_active_dispatch_profile_requires_explicit_harness_for_ship
 test_active_dispatch_profile_requires_explicit_harness_for_scout
 test_active_dispatch_profile_allows_explicit_harness
-test_active_dispatch_profile_allows_positional_harness
-test_active_dispatch_profile_allows_raw_launch_command
-test_retired_kimi_raw_launch_commands_refuse_before_provisioning
-test_retired_gemini_harness_refuses_without_touching_settings
-test_retired_agy_harness_refuses_without_touching_external_settings
-test_retired_rovo_harness_refuses_without_touching_project_files
-test_retired_kimi_harness_refuses_without_touching_external_config
-test_retired_codex_harness_refuses_before_provisioning
-test_opencode_threads_model_and_ignores_effort_axis
+test_active_dispatch_profile_rejects_positional_runtime
+test_active_dispatch_profile_rejects_unknown_runtime
 test_native_effort_validator_keeps_axes_separate
 test_native_pi_ultra_is_explicit_and_model_scoped
 test_batch_preserves_native_ultra
@@ -1154,10 +821,6 @@ test_pi_threads_model_and_max_effort
 test_pi_preserves_xai_grok_provider_model_selection
 test_pi_preserves_kimi_provider_model_selection
 test_pi_tui_mode_probe_is_safe_for_old_and_new_pi
-test_pi_signed_threads_shared_pi_profile_and_preserves_identity
-test_pi_signed_missing_binary_refuses_before_endpoint_or_metadata
-test_retired_kimi_secondmate_selection_refuses_before_endpoint
-test_pi_signed_persistent_secondmate_uses_pi_extensions_and_identity
 test_batch_forwards_shared_profile_flags
 test_active_dispatch_profile_does_not_block_secondmate_launch
 

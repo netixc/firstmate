@@ -18,7 +18,7 @@
 #     inventory omits the exact window, regardless of display-message fallback.
 #   - The Herdr classifier preserves the proven husk mapping while separating a
 #     missing pane from an existing agent-less pane.
-#   - fm_backend_agent_alive preserves the older three-state compatibility view.
+#   - fm_backend_agent_alive supplies the coarse alive/dead/unknown projection.
 #   - bin/fm-bootstrap.sh's secondmate_liveness_sweep recovers only dead or
 #     missing endpoints, keeps successful recovery and already-live results
 #     silent by default, and reports ambiguous and unreadable targets distinctly.
@@ -97,11 +97,9 @@ SH
 test_tmux_agent_state_classifies() {
   local fb out
 
-  for harness in opencode opencode opencode pi pi-signed pi-launcher Pi; do
-    fb=$(make_probe_tmux "$TMP_ROOT/tmux-$harness" "$harness")
-    out=$(PATH="$fb:$BASE_PATH" bash -c '. "$0/bin/fm-backend.sh"; fm_backend_agent_state tmux sess:win' "$ROOT")
-    [ "$out" = alive ] || fail "a live $harness foreground process should classify as alive, got '$out'"
-  done
+  fb=$(make_probe_tmux "$TMP_ROOT/tmux-pi" pi)
+  out=$(PATH="$fb:$BASE_PATH" bash -c '. "$0/bin/fm-backend.sh"; fm_backend_agent_state tmux sess:win' "$ROOT")
+  [ "$out" = alive ] || fail "a live Pi foreground process should classify as alive, got '$out'"
 
   for shell in zsh bash -zsh; do
     fb=$(make_probe_tmux "$TMP_ROOT/tmux-${shell#-}" "$shell")
@@ -109,17 +107,23 @@ test_tmux_agent_state_classifies() {
     [ "$out" = dead ] || fail "a bare $shell foreground process should classify as dead, got '$out'"
   done
 
+  for lookalike in Pi pi-helper; do
+    fb=$(make_probe_tmux "$TMP_ROOT/tmux-$lookalike" "$lookalike")
+    out=$(PATH="$fb:$BASE_PATH" bash -c '. "$0/bin/fm-backend.sh"; fm_backend_agent_state tmux sess:win' "$ROOT")
+    [ "$out" = ambiguous ] || fail "the Pi lookalike $lookalike should remain ambiguous, got '$out'"
+  done
+
   fb=$(make_probe_tmux "$TMP_ROOT/tmux-node" node)
   out=$(PATH="$fb:$BASE_PATH" bash -c '. "$0/bin/fm-backend.sh"; fm_backend_agent_state tmux sess:win' "$ROOT")
   [ "$out" = ambiguous ] || fail "an existing node process should classify as ambiguous, got '$out'"
   [ "$(PATH="$fb:$BASE_PATH" bash -c '. "$0/bin/fm-backend.sh"; fm_backend_agent_alive tmux sess:win' "$ROOT")" = unknown ] \
-    || fail "the compatibility view must keep an existing node process unknown"
+    || fail "the coarse view must keep an existing node process unknown"
 
   fb=$(make_failed_probe_tmux "$TMP_ROOT/tmux-missing" missing)
   out=$(PATH="$fb:$BASE_PATH" bash -c '. "$0/bin/fm-backend.sh"; fm_backend_agent_state tmux sess:fm-sm1' "$ROOT")
   [ "$out" = missing ] || fail "a readable inventory omitting the target should classify as missing, got '$out'"
   [ "$(PATH="$fb:$BASE_PATH" bash -c '. "$0/bin/fm-backend.sh"; fm_backend_agent_alive tmux sess:fm-sm1' "$ROOT")" = dead ] \
-    || fail "the compatibility view should treat an authoritatively missing target as dead"
+    || fail "the coarse view should treat an authoritatively missing target as dead"
 
   for inventory in present unreadable; do
     fb=$(make_failed_probe_tmux "$TMP_ROOT/tmux-$inventory" "$inventory")
@@ -172,30 +176,27 @@ test_herdr_agent_state_preserves_husk_classifier() {
   out=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_agent_state "no-colon-target"' "$ROOT")
   [ "$out" = unreadable ] || fail "an unparseable Herdr target should classify as unreadable, got '$out'"
 
-  out=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_pane_agent_state() { printf "no-agent"; }; fm_backend_herdr_agent_alive "sess:p1"' "$ROOT")
-  [ "$out" = dead ] || fail "the Herdr compatibility view should keep a no-agent husk dead, got '$out'"
-
   pass "fm_backend_herdr_agent_state: preserves missing/no-agent/live/unknown husk behavior"
 }
 
 # --- unit level: the generic dispatchers ------------------------------------
 
-test_agent_state_dispatcher_and_compatibility() {
+test_agent_state_dispatcher_and_coarse_projection() {
   local fb out
 
-  fb=$(make_probe_tmux "$TMP_ROOT/dispatch-tmux" opencode)
+  fb=$(make_probe_tmux "$TMP_ROOT/dispatch-tmux" pi)
   out=$(PATH="$fb:$BASE_PATH" bash -c '. "$0/bin/fm-backend.sh"; fm_backend_agent_state tmux sess:win' "$ROOT")
   [ "$out" = alive ] || fail "detailed dispatcher should route tmux, got '$out'"
 
   out=$(bash -c '. "$0/bin/fm-backend.sh"; fm_backend_source herdr; fm_backend_herdr_pane_agent_state() { printf "live"; }; fm_backend_agent_state herdr sess:p1' "$ROOT")
   [ "$out" = alive ] || fail "detailed dispatcher should route Herdr, got '$out'"
 
-  out=$(bash -c '. "$0/bin/fm-backend.sh"; fm_backend_agent_state zellij sess:7' "$ROOT")
-  [ "$out" = unverified ] || fail "Zellij should remain unverified, got '$out'"
-  out=$(bash -c '. "$0/bin/fm-backend.sh"; fm_backend_agent_alive zellij sess:7' "$ROOT")
-  [ "$out" = unknown ] || fail "the compatibility dispatcher should map unverified to unknown, got '$out'"
+  out=$(bash -c '. "$0/bin/fm-backend.sh"; fm_backend_agent_state unsupported-backend sess:7' "$ROOT")
+  [ "$out" = unverified ] || fail "an unknown backend should remain unverified, got '$out'"
+  out=$(bash -c '. "$0/bin/fm-backend.sh"; fm_backend_agent_alive unsupported-backend sess:7' "$ROOT")
+  [ "$out" = unknown ] || fail "the coarse dispatcher should map unverified to unknown, got '$out'"
 
-  pass "fm_backend_agent_state: routes tmux/Herdr and keeps Zellij unverified"
+  pass "fm_backend_agent_state: routes tmux/Herdr and keeps unknown backends unverified"
 }
 
 # --- sweep level: bin/fm-bootstrap.sh's secondmate_liveness_sweep -----------
@@ -206,7 +207,15 @@ test_agent_state_dispatcher_and_compatibility() {
 make_toolchain() {
   local dir=$1 fakebin
   fakebin=$(fm_fakebin "$dir")
-  fm_fake_exit0 "$fakebin" node chrome-devtools-axi pi-signed
+  fm_fake_exit0 "$fakebin" node chrome-devtools-axi
+  cat > "$fakebin/pi" <<'SH'
+#!/usr/bin/env bash
+if [ "${1:-}" = --help ]; then
+  printf '%s\n' 'Pi 0.84.0' 'Options: --help --tui-mode <mode>'
+fi
+exit 0
+SH
+  chmod +x "$fakebin/pi"
   fm_fake_version_tool "$fakebin" lavish-axi FM_FAKE_LAVISH_AXI_VERSION 0.1.46
   cat > "$fakebin/gh-axi" <<'SH'
 #!/usr/bin/env bash
@@ -322,7 +331,7 @@ new_world() {
   w="$TMP_ROOT/$name"
   mkdir -p "$w/home/state" "$w/home/config"
   touch "$w/home/state/.last-watcher-beat"
-  printf 'opencode\n' > "$w/home/config/crew-harness"
+  printf 'pi\n' > "$w/home/config/crew-harness"
   printf '%s\n' "$w"
 }
 
@@ -331,7 +340,7 @@ new_world() {
 # worktree; a non-git home just makes the unrelated fast-forward sweep log a
 # harmless "not a git repo" skip.
 add_sm_home() {
-  local w=$1 id=$2 window=$3 harness=${4:-opencode}
+  local w=$1 id=$2 window=$3 harness=${4:-pi}
   local home="$w/$id"
   mkdir -p "$home/bin" "$home/data" "$home/state" "$home/config" "$home/projects"
   printf '%s\n' "$id" > "$home/.fm-secondmate-home"
@@ -377,13 +386,13 @@ test_sweep_leaves_alive_secondmate_untouched() {
   fb=$(make_toolchain "$w"); tmuxfb=$(make_liveness_tmux "$w")
   log="$w/calls.log"; : > "$log"
 
-  out=$(run_bootstrap "$tmuxfb:$fb" "$w/home" opencode "$log")
+  out=$(run_bootstrap "$tmuxfb:$fb" "$w/home" pi "$log")
 
   assert_not_contains "$out" "SECONDMATE_LIVENESS: secondmate sm1: already-live" \
     "an already-live secondmate should be handled silently"
   [ ! -s "$log" ] || fail "an already-live secondmate must never be killed or respawned: $(cat "$log")"
 
-  out=$(run_bootstrap "$tmuxfb:$fb" "$w/home" opencode "$log" FM_BOOTSTRAP_VERBOSE_FACTS=1)
+  out=$(run_bootstrap "$tmuxfb:$fb" "$w/home" pi "$log" FM_BOOTSTRAP_VERBOSE_FACTS=1)
   assert_contains "$out" "BOOTSTRAP_INFO: secondmate sm1 already live (backend=tmux)" \
     "verbose diagnostics should identify the already-live outcome"
   [ ! -s "$log" ] || fail "verbose reporting must not touch an already-live secondmate: $(cat "$log")"
@@ -403,25 +412,6 @@ test_sweep_respawns_authoritatively_missing_pi_secondmate() {
   assert_contains "$(cat "$log")" "new-window" "an authoritatively missing Pi secondmate should be relaunched"
   assert_not_contains "$(cat "$log")" "kill-window" "an absent window should not need a destructive pre-kill"
   pass "sweep: an authoritatively missing Pi secondmate window is relaunched"
-}
-
-test_sweep_respawns_authoritatively_missing_pi_signed_secondmate() {
-  local w fb tmuxfb log out
-  w=$(new_world sweep-missing-pi-signed)
-  printf '%s\n' pi-signed > "$w/home/config/secondmate-harness"
-  add_sm_home "$w" sm1 firstmate:fm-sm1 pi-signed
-  fb=$(make_toolchain "$w"); tmuxfb=$(make_liveness_tmux "$w")
-  log="$w/calls.log"; : > "$log"
-
-  out=$(run_bootstrap "$tmuxfb:$fb" "$w/home" missing "$log")
-
-  assert_not_contains "$out" "unverified for recovery" \
-    "a recorded pi-signed secondmate should be verified for recovery"
-  assert_contains "$(cat "$log")" "new-window" \
-    "an authoritatively missing pi-signed secondmate should be relaunched"
-  assert_not_contains "$(cat "$log")" "kill-window" \
-    "an absent pi-signed window should not need a destructive pre-kill"
-  pass "sweep: an authoritatively missing pi-signed secondmate window is relaunched"
 }
 
 test_sweep_never_acts_on_ambiguous_existing_process() {
@@ -468,19 +458,19 @@ test_sweep_reports_missing_endpoint_relaunch_failure() {
   pass "sweep: failed relaunch diagnostics distinguish a confidently missing endpoint"
 }
 
-test_sweep_never_acts_on_unverified_harness_dead_reading() {
+test_sweep_never_acts_on_unsupported_runtime_dead_reading() {
   local w fb tmuxfb log out
-  w=$(new_world sweep-unverified-harness)
-  add_sm_home "$w" sm1 firstmate:fm-sm1 custom-agent
+  w=$(new_world sweep-unsupported-runtime)
+  add_sm_home "$w" sm1 firstmate:fm-sm1 unsupported-runtime
   fb=$(make_toolchain "$w"); tmuxfb=$(make_liveness_tmux "$w")
   log="$w/calls.log"; : > "$log"
 
   out=$(run_bootstrap "$tmuxfb:$fb" "$w/home" zsh "$log")
 
-  assert_contains "$out" "SECONDMATE_LIVENESS: secondmate sm1: skipped: recorded harness 'custom-agent' is unverified for recovery" \
-    "an unverified harness should not let a dead endpoint become actionable"
-  [ ! -s "$log" ] || fail "an unverified harness must never trigger kill or relaunch: $(cat "$log")"
-  pass "sweep: an unverified harness blocks recovery with a concrete diagnostic"
+  assert_contains "$out" "SECONDMATE_LIVENESS: secondmate sm1: skipped: recorded runtime 'unsupported-runtime' is not supported; only pi can be recovered" \
+    "an unsupported runtime should not let a dead endpoint become actionable"
+  [ ! -s "$log" ] || fail "an unsupported runtime must never trigger kill or relaunch: $(cat "$log")"
+  pass "sweep: an unsupported runtime blocks recovery with a concrete diagnostic"
 }
 
 test_sweep_converges_no_retouch_once_alive() {
@@ -498,7 +488,7 @@ test_sweep_converges_no_retouch_once_alive() {
   # Round 2: the (now-respawned) secondmate is genuinely alive - a second
   # sweep must converge to a pure no-op, not respawn again.
   : > "$log"
-  out2=$(run_bootstrap "$tmuxfb:$fb" "$w/home" opencode "$log")
+  out2=$(run_bootstrap "$tmuxfb:$fb" "$w/home" pi "$log")
   assert_not_contains "$out2" "SECONDMATE_LIVENESS: secondmate sm1: already-live" "round 2 should handle the already-live secondmate silently"
   [ ! -s "$log" ] || fail "round 2 must not re-kill or re-respawn an already-live secondmate: $(cat "$log")"
   pass "sweep: idempotent by construction - a live secondmate is never re-touched on a later run"
@@ -509,7 +499,7 @@ test_sweep_skipped_under_detect_only() {
   w=$(new_world sweep-detect-only)
   add_sm_home "$w" sm1 firstmate:fm-sm1
   mkdir -p "$w/home/config"
-  printf 'opencode\n' > "$w/home/config/crew-harness"
+  printf 'pi\n' > "$w/home/config/crew-harness"
   fb=$(make_toolchain "$w"); tmuxfb=$(make_liveness_tmux "$w")
   log="$w/calls.log"; : > "$log"
 
@@ -543,15 +533,14 @@ test_sweep_noop_with_no_secondmate_meta() {
 test_tmux_agent_state_classifies
 test_tmux_agent_state_rejects_malformed_targets_before_probe
 test_herdr_agent_state_preserves_husk_classifier
-test_agent_state_dispatcher_and_compatibility
+test_agent_state_dispatcher_and_coarse_projection
 test_sweep_respawns_confirmed_dead_secondmate
 test_sweep_leaves_alive_secondmate_untouched
 test_sweep_respawns_authoritatively_missing_pi_secondmate
-test_sweep_respawns_authoritatively_missing_pi_signed_secondmate
 test_sweep_never_acts_on_ambiguous_existing_process
 test_sweep_never_acts_on_transient_unreadability
 test_sweep_reports_missing_endpoint_relaunch_failure
-test_sweep_never_acts_on_unverified_harness_dead_reading
+test_sweep_never_acts_on_unsupported_runtime_dead_reading
 test_sweep_converges_no_retouch_once_alive
 test_sweep_skipped_under_detect_only
 test_sweep_noop_with_no_secondmate_meta

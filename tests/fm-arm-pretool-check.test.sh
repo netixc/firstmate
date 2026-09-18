@@ -4,7 +4,7 @@
 #
 # bin/fm-arm-command-policy.mjs is the single owner of command classification.
 # This suite drives the stable shell transport through all three retained entry
-# forms and asserts the per-harness wiring contract without spawning a harness.
+# forms and asserts Pi's wiring contract without spawning Pi.
 # Empirical harness evidence lives in docs/arm-pretool-check.md.
 set -u
 
@@ -123,13 +123,11 @@ run_matrix_entry() {
   err_file="$MATRIX_TMP/$id-$entry.err"
 
   case "$entry" in
-    opencode|pi)
+    pi)
       "$CHECK" --command "$cmd" >"$out_file" 2>"$err_file"
       rc=$?
       ;;
-    *)
-      fail "unknown matrix entry form: $entry"
-      ;;
+    *) fail "unknown matrix entry form: $entry" ;;
   esac
 
   if [ "$expected" = allow ]; then
@@ -146,12 +144,10 @@ run_matrix_entry() {
 }
 
 test_full_acceptance_matrix() {
-  local i entry
+  local i entry=pi
   for ((i = 0; i < ${#MATRIX_IDS[@]}; i++)); do
-    for entry in opencode pi; do
-      run_matrix_entry "${MATRIX_IDS[$i]}" "${MATRIX_EXPECTED[$i]}" "$entry" "${MATRIX_COMMANDS[$i]}"
-    done
-    pass "matrix ${MATRIX_IDS[$i]}: ${MATRIX_EXPECTED[$i]} through retained entry forms"
+    run_matrix_entry "${MATRIX_IDS[$i]}" "${MATRIX_EXPECTED[$i]}" "$entry" "${MATRIX_COMMANDS[$i]}"
+    pass "matrix ${MATRIX_IDS[$i]}: ${MATRIX_EXPECTED[$i]} through Pi"
   done
 }
 

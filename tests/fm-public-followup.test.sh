@@ -2685,9 +2685,9 @@ test_remote_retire_accepts_nonwritable_absence() {
   chmod 555 "$remote/state"
 
   rc=0
-  run_pf_remote "$home" retire pf-remote-no-link --reason "already cleared" --force >/dev/null 2>&1 || rc=$?
+  EXPECT_OUT=$(run_pf_remote "$home" retire pf-remote-no-link --reason "already cleared" --force 2>&1) || rc=$?
   chmod 700 "$remote/state"
-  [ "$rc" -eq 0 ] || fail "retire must accept an absent link without requiring write access"
+  [ "$rc" -eq 0 ] || fail "retire must accept an absent link without requiring write access: $EXPECT_OUT"
   assert_present "$home/state/public-followup/retired/pf-remote-no-link" \
     "an absent link must permit a retirement receipt"
   assert_absent "$home/state/public-followup/registry/pf-remote-no-link" \

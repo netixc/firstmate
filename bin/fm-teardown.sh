@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Tear down a finished task: return the treehouse worktree, release the Orca
-# worktree, or retire a secondmate home; kill the recorded runtime endpoint,
+# Tear down a finished task: return the Treehouse worktree or retire a
+# secondmate home; kill the recorded runtime endpoint,
 # clear volatile state, and transition this home's backlog item for ship and
 # scout tasks before reporting success (a secondmate teardown transitions none,
 # since secondmates are not backlog items), then refresh/prune the project's
@@ -124,11 +124,6 @@
 # These refusals are not relaxed by --force: --force authorizes discarding THIS
 # task's unlanded work, never another task's live work. Nothing of this task's
 # own is removed by a refusal; reconcile whichever record is wrong and re-run.
-# Orca is not a pool slot and proves its path through
-# require_orca_worktree_path_match instead.
-# Orca tasks use the same safety checks, then close the recorded terminal and
-# remove the recorded worktree through `orca worktree rm`; teardown never guesses
-# an Orca target from ambient CLI state.
 # A Herdr presentation journal never authorizes cleanup. Teardown still closes
 # only the exact task pane from ordinary endpoint metadata and never calls
 # `workspace close`. It retires the non-authoritative journal only when a
@@ -338,7 +333,6 @@ if [ -f "$META" ] && [ ! -L "$META" ]; then
   TEARDOWN_LOCK_WT=$(fm_meta_get "$META" worktree)
   TEARDOWN_LOCK_PROJECT=$(fm_meta_get "$META" project)
   if [ "$TEARDOWN_LOCK_KIND" != secondmate ] \
-     && [ "$TEARDOWN_LOCK_BACKEND" != orca ] \
      && fm_treehouse_pool_slot "$TEARDOWN_LOCK_PROJECT" "$TEARDOWN_LOCK_WT"; then
     TREEHOUSE_SLOT_LOCK_REQUIRED=1
     TREEHOUSE_PROJECT_LOCK=$(fm_treehouse_project_lock_path "$TEARDOWN_LOCK_PROJECT") || {
@@ -423,12 +417,6 @@ fm_backlog_record_present "$META" "task record" "$STATE" || {
 TEARDOWN_META_KIND=$(fm_meta_get "$META" kind)
 [ -n "$TEARDOWN_META_KIND" ] || TEARDOWN_META_KIND=ship
 TEARDOWN_META_HARNESS=$(fm_meta_get "$META" harness)
-case "$TEARDOWN_META_HARNESS" in
-  omp|muse|kimi)
-    echo "error: task $ID records retired harness '$TEARDOWN_META_HARNESS'; refusing cleanup so its endpoint, local copy, and durable records remain available for manual migration" >&2
-    exit 1
-    ;;
-esac
 TEARDOWN_CLEANUP_RECOVERY=$(fm_meta_get "$META" cleanup_recovery)
 TEARDOWN_META_SPAWN_GEN=
 TEARDOWN_LEGACY_PENDING=0
@@ -438,17 +426,15 @@ TEARDOWN_LEGACY_RETAINED_STAMP=
 TEARDOWN_LEGACY_PRESTAMP_SIZE=0
 TEARDOWN_BACKLOG_APPLIES=0
 TEARDOWN_BACKLOG_SKIP_REASON=
-if [ "$TEARDOWN_CLEANUP_RECOVERY" != orca ]; then
-  if fm_backlog_transition_applies "$CONFIG" "$DATA" "$TEARDOWN_META_KIND"; then
-    TEARDOWN_BACKLOG_APPLIES=1
-  else
-    TEARDOWN_BACKLOG_GATE_STATUS=$?
-    if [ "$TEARDOWN_BACKLOG_GATE_STATUS" -eq 2 ]; then
-      echo "error: task $ID cannot be torn down because its backlog data directory is inaccessible: $DATA ($FM_BACKLOG_TRANSITION_ERROR)" >&2
-      exit 1
-    fi
-    TEARDOWN_BACKLOG_SKIP_REASON=$FM_BACKLOG_TRANSITION_SKIP
+if fm_backlog_transition_applies "$CONFIG" "$DATA" "$TEARDOWN_META_KIND"; then
+  TEARDOWN_BACKLOG_APPLIES=1
+else
+  TEARDOWN_BACKLOG_GATE_STATUS=$?
+  if [ "$TEARDOWN_BACKLOG_GATE_STATUS" -eq 2 ]; then
+    echo "error: task $ID cannot be torn down because its backlog data directory is inaccessible: $DATA ($FM_BACKLOG_TRANSITION_ERROR)" >&2
+    exit 1
   fi
+  TEARDOWN_BACKLOG_SKIP_REASON=$FM_BACKLOG_TRANSITION_SKIP
 fi
 if [ "$TEARDOWN_BACKLOG_APPLIES" = 1 ]; then
   if ! fm_backlog_meta_spawn_gen "$META" "$STATE"; then
@@ -924,8 +910,6 @@ BACKEND=$FM_BACKEND_VALIDATED_BACKEND
 T=$FM_BACKEND_VALIDATED_TARGET
 WT=$(fm_meta_get "$META" worktree)
 PROJ=$(fm_meta_get "$META" project)
-T_ORCA=
-[ "$BACKEND" != orca ] || T_ORCA=$T
 if [ "${FM_TEARDOWN_GUARD_DONE:-0}" != 1 ]; then
   "$FM_ROOT/bin/fm-guard.sh" || true
 fi
@@ -938,13 +922,11 @@ BUSY_GEN=$(fm_meta_get "$META" busy_gen)
 if [ -z "$BUSY_GEN" ]; then
   BUSY_GEN=$(cat "$STATE/$ID.busy-gen" 2>/dev/null || true)
 fi
-ORCA_WORKTREE_ID=$(fm_meta_get "$META" orca_worktree_id)
-ORCA_PATH_MATCH_VERIFIED=0
 CLEANUP_RECOVERY=$TEARDOWN_CLEANUP_RECOVERY
 
 KIND=$TEARDOWN_META_KIND
 EXPECTED_TREEHOUSE_PROJECT_LOCK=
-if [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ] \
+if [ "$KIND" != secondmate ] \
    && fm_treehouse_pool_slot "$PROJ" "$WT"; then
   EXPECTED_TREEHOUSE_PROJECT_LOCK=$(fm_treehouse_project_lock_path "$PROJ") || {
     echo "REFUSED: cannot resolve the shared Treehouse project lock for ${PROJ:-<missing>}; nothing was changed" >&2
@@ -1147,156 +1129,6 @@ default_branch() {
 meta_value() {
   local meta=$1 key=$2
   fm_meta_get "$meta" "$key"
-}
-
-require_orca_worktree_id() {
-  local meta=$1 id
-  id=$(meta_value "$meta" orca_worktree_id)
-  if [ -z "$id" ]; then
-    echo "error: missing orca_worktree_id in $meta; cannot remove Orca worktree" >&2
-    return 1
-  fi
-  printf '%s\n' "$id"
-}
-
-require_orca_terminal() {
-  local meta=$1 terminal
-  terminal=$(meta_value "$meta" terminal)
-  if [ -z "$terminal" ]; then
-    echo "error: missing terminal in $meta; cannot close Orca terminal" >&2
-    return 1
-  fi
-  printf '%s\n' "$terminal"
-}
-
-if [ "$BACKEND" = orca ] && [ "$KIND" != secondmate ]; then
-  ORCA_WORKTREE_ID=$(require_orca_worktree_id "$META") || exit 1
-  T_ORCA=$(meta_value "$META" terminal)
-  [ -z "$T_ORCA" ] || T=$T_ORCA
-fi
-
-# Cleanup-only compatibility for a task that now runs on a retained harness but
-# still carries a Kimi token from an older incarnation. Kimi is not a supported
-# control family, so its retired path must not remain in fm-control-lib's active
-# capability tables. Only a conservative token may name an owned registry file.
-validate_retired_kimi_turnend_auth() {
-  local state_dir=$1 id=$2 token_path="$1/$2.kimi-turnend-token" token='' extra='' state_real expected_path kimi_root registry token_owner registry_target
-  if [ -e "$token_path" ] || [ -L "$token_path" ]; then
-    if [ ! -f "$token_path" ] || [ -L "$token_path" ]; then
-      echo "error: retired Kimi token record is not a regular file: $token_path" >&2
-      return 1
-    fi
-    exec 3< "$token_path" || return 1
-    IFS= read -r token <&3 || [ -n "$token" ] || { exec 3<&-; return 1; }
-    if IFS= read -r extra <&3; then
-      exec 3<&-
-      echo "error: retired Kimi token record has multiple lines: $token_path" >&2
-      return 1
-    fi
-    exec 3<&-
-  fi
-  [ -n "$token" ] || return 0
-  if [[ ! "$token" =~ ^fm\.[A-Za-z0-9]{12}$ ]]; then
-    echo "error: retired Kimi token record has an invalid token name: $token_path" >&2
-    return 1
-  fi
-  state_real=$(cd "$state_dir" 2>/dev/null && pwd -P) || {
-    echo "error: retired Kimi state directory is not accessible: $state_dir" >&2
-    return 1
-  }
-  expected_path="$state_real/$id.turn-ended"
-  kimi_root="$HOME/.kimi-code"
-  registry="$kimi_root/fm-turn-end.d"
-  if { [ -e "$kimi_root" ] || [ -L "$kimi_root" ]; } && [ -L "$kimi_root" ]; then
-    echo "error: retired Kimi root is symlinked; refusing artifact cleanup: $kimi_root" >&2
-    return 1
-  fi
-  if { [ -e "$registry" ] || [ -L "$registry" ]; } && { [ ! -d "$registry" ] || [ -L "$registry" ]; }; then
-    echo "error: retired Kimi registry is not a regular directory: $registry" >&2
-    return 1
-  fi
-  if [ ! -f "$registry/$token" ] || [ -L "$registry/$token" ] \
-    || [ "$(fm_pr_file_link_count "$registry/$token")" != 1 ]; then
-    echo "error: retired Kimi registry entry is not a task-owned regular file: $registry/$token" >&2
-    return 1
-  fi
-  if [ "$(uname)" = Darwin ]; then
-    token_owner=$(/usr/bin/stat -f %u "$registry/$token" 2>/dev/null) || return 1
-  else
-    token_owner=$(stat -c %u "$registry/$token" 2>/dev/null) || return 1
-  fi
-  [ "$token_owner" = "$(id -u)" ] || {
-    echo "error: retired Kimi registry entry is not owned by this user: $registry/$token" >&2
-    return 1
-  }
-  exec 4< "$registry/$token" || return 1
-  IFS= read -r registry_target <&4 || [ -n "$registry_target" ] || { exec 4<&-; return 1; }
-  if IFS= read -r _ <&4; then
-    exec 4<&-
-    echo "error: retired Kimi registry entry has multiple lines: $registry/$token" >&2
-    return 1
-  fi
-  exec 4<&-
-  [ "$registry_target" = "$expected_path" ] || {
-    echo "error: retired Kimi registry entry does not name this task's turn-end marker: $registry/$token" >&2
-    return 1
-  }
-  RETIRED_KIMI_VALIDATED_TOKEN=$token
-}
-
-remove_retired_kimi_turnend_auth() {
-  local state_dir=$1 id=$2 registry token_path entry quarantine initial_token entry_identity quarantine_identity entry_owner quarantine_owner state_real expected_path registry_target current_token extra
-  RETIRED_KIMI_VALIDATED_TOKEN=
-  validate_retired_kimi_turnend_auth "$state_dir" "$id" || return 1
-  [ -n "$RETIRED_KIMI_VALIDATED_TOKEN" ] || return 0
-  initial_token=$RETIRED_KIMI_VALIDATED_TOKEN
-  RETIRED_KIMI_VALIDATED_TOKEN=
-  validate_retired_kimi_turnend_auth "$state_dir" "$id" || return 1
-  [ "$RETIRED_KIMI_VALIDATED_TOKEN" = "$initial_token" ] || {
-    echo "error: retired Kimi token changed during final cleanup validation; refusing artifact deletion" >&2
-    return 1
-  }
-  registry="$HOME/.kimi-code/fm-turn-end.d"
-  token_path="$state_dir/$id.kimi-turnend-token"
-  entry="$registry/$RETIRED_KIMI_VALIDATED_TOKEN"
-  entry_identity=$(fm_pr_file_identity "$entry") || return 1
-  entry_owner=$(if [ "$(uname)" = Darwin ]; then /usr/bin/stat -f %u "$entry"; else stat -c %u "$entry"; fi) || return 1
-  quarantine="$registry/.fm-retired-kimi.$$.${BASHPID:-0}"
-  [ ! -e "$quarantine" ] && [ ! -L "$quarantine" ] || return 1
-  mv -- "$entry" "$quarantine" || return 1
-  quarantine_identity=$(fm_pr_file_identity "$quarantine" 2>/dev/null || true)
-  state_real=$(cd "$state_dir" 2>/dev/null && pwd -P) || quarantine_identity=
-  expected_path="$state_real/$id.turn-ended"
-  current_token=
-  extra=
-  if exec 5< "$token_path" 2>/dev/null; then
-    IFS= read -r current_token <&5 || true
-    IFS= read -r extra <&5 || true
-    exec 5<&-
-  fi
-  registry_target=
-  if [ -f "$quarantine" ] && [ ! -L "$quarantine" ]; then
-    IFS= read -r registry_target < "$quarantine" || [ -n "$registry_target" ] || true
-  fi
-  quarantine_owner=$(if [ "$(uname)" = Darwin ]; then /usr/bin/stat -f %u "$quarantine"; else stat -c %u "$quarantine"; fi 2>/dev/null || true)
-  if [ ! -f "$quarantine" ] || [ -L "$quarantine" ] \
-    || [ "$quarantine_identity" != "$entry_identity" ] \
-    || [ "$(fm_pr_file_link_count "$quarantine" 2>/dev/null || true)" != 1 ] \
-    || [ "$entry_owner" != "$quarantine_owner" ] \
-    || [ "$current_token" != "$initial_token" ] || [ -n "$extra" ] \
-    || [ "$registry_target" != "$expected_path" ]; then
-    if [ -e "$entry" ] || [ -L "$entry" ]; then
-      echo "error: retired Kimi registry entry changed during identity-preserving cleanup; preserving both artifacts" >&2
-      return 1
-    fi
-    mv -- "$quarantine" "$entry" || {
-      echo "error: retired Kimi registry entry could not be restored after identity validation failed" >&2
-      return 1
-    }
-    echo "error: retired Kimi registry entry changed during identity-preserving cleanup; refusing artifact deletion" >&2
-    return 1
-  fi
-  rm -f -- "$quarantine"
 }
 
 retire_busy_state() {
@@ -1527,7 +1359,6 @@ backlog_done_args() {
 backlog_refresh_reminder() {
   local backlog_display root backend=markdown
   [ "$KIND" = secondmate ] && return 0
-  [ "$CLEANUP_RECOVERY" = orca ] && return 0
   if root=$(fm_backlog_root "$DATA"); then
     backend=$(fm_tasks_axi_backend "$root") || return 2
   fi
@@ -1777,7 +1608,7 @@ validate_worktree_teardown_safety() {
     echo "Restore the git index state, or get the captain's explicit OK to discard, then --force." >&2
     return 1
   fi
-  dirty=$(printf '%s\n' "$dirty_raw" | grep -vE '^\?\? \.fm-kimi-turnend$' | head -1 || true)
+  dirty=$(printf '%s\n' "$dirty_raw" | head -1 || true)
 
   if ! unpushed_raw=$(git -C "$WT" log --oneline HEAD --not --remotes -- 2>/dev/null); then
     if worktree_safety_blocked_by_lock "commits not on a remote"; then
@@ -2168,33 +1999,6 @@ EOF
   [ -z "$TASK_PIDS" ] && return 0
   echo "REFUSED: leaked $label processes for $ID remain after $max_passes reap attempts; preserving the worktree/tasktmp for manual inspection or retry." >&2
   return 1
-}
-
-require_orca_worktree_path_match() {
-  local worktree_id=$1 inspected=$2 resolved inspected_abs resolved_abs
-  resolved=$(fm_backend_worktree_path orca "$worktree_id") || {
-    echo "REFUSED: cannot resolve Orca worktree id $worktree_id to a path; preserving metadata." >&2
-    return 1
-  }
-  inspected_abs=$(canonical_existing_dir "$inspected") || {
-    echo "REFUSED: cannot canonicalize inspected worktree ${inspected:-<missing>}; preserving metadata." >&2
-    return 1
-  }
-  resolved_abs=$(canonical_existing_dir "$resolved") || {
-    echo "REFUSED: Orca worktree id $worktree_id resolved to uninspectable path ${resolved:-<missing>}; preserving metadata." >&2
-    return 1
-  }
-  if [ "$resolved_abs" != "$inspected_abs" ]; then
-    echo "REFUSED: Orca worktree id $worktree_id resolves to $resolved_abs, not inspected worktree $inspected_abs." >&2
-    echo "Cannot verify dirty or unlanded work for the worktree Orca would remove; preserving metadata." >&2
-    return 1
-  fi
-}
-
-require_orca_worktree_path_match_if_present() {
-  local worktree_id=$1 inspected=$2
-  [ -n "$inspected" ] && [ -e "$inspected" ] || return 0
-  require_orca_worktree_path_match "$worktree_id" "$inspected"
 }
 
 # The task's own live slot, canonicalized, or empty when this record has no slot
@@ -2799,14 +2603,6 @@ preflight_descendant_task_locks() {
     }
     kind=$(meta_value "$meta" kind)
     [ -n "$kind" ] || kind=ship
-    harness=$(meta_value "$meta" harness)
-    case "$harness" in
-      omp|muse|kimi)
-        echo "REFUSED: descendant task $task_id records retired harness '$harness'; forced teardown changed nothing so its endpoint, local copy, and durable records remain available for manual migration" >&2
-        return 1
-        ;;
-    esac
-    validate_retired_kimi_turnend_auth "$state" "$task_id" || return 1
     [ "$kind" = "${DESCENDANT_TASK_KINDS[$i]}" ] || {
       echo "REFUSED: descendant task $task_id changed kind while forced teardown acquired its locks; forced teardown changed nothing" >&2
       return 1
@@ -2831,10 +2627,9 @@ preflight_descendant_treehouse_slots() {
     meta="$state/$task_id.meta"
     kind=$(meta_value "$meta" kind)
     [ -n "$kind" ] || kind=ship
-    backend=$(fm_backend_of_meta "$meta")
     worktree=$(meta_value "$meta" worktree)
     project=$(meta_value "$meta" project)
-    if [ "$kind" = secondmate ] || [ "$backend" = orca ]; then
+    if [ "$kind" = secondmate ]; then
       continue
     fi
     if ! fm_treehouse_pool_slot "$project" "$worktree"; then
@@ -2864,10 +2659,9 @@ preflight_descendant_treehouse_slots() {
     meta="$state/$task_id.meta"
     kind=$(meta_value "$meta" kind)
     [ -n "$kind" ] || kind=ship
-    backend=$(fm_backend_of_meta "$meta")
     worktree=$(meta_value "$meta" worktree)
     project=$(meta_value "$meta" project)
-    if [ "$kind" = secondmate ] || [ "$backend" = orca ]; then
+    if [ "$kind" = secondmate ]; then
       continue
     fi
     if ! fm_treehouse_pool_slot "$project" "$worktree"; then
@@ -2885,7 +2679,7 @@ preflight_descendant_treehouse_slots() {
 }
 
 validate_firstmate_home_children_removal() {
-  local home=$1 sub_state child_meta child_id child_wt child_proj child_kind child_home child_backend child_orca_worktree_id
+  local home=$1 sub_state child_meta child_id child_wt child_proj child_kind child_home
   sub_state="$home/state"
   [ -d "$sub_state" ] || return 0
   for child_meta in "$sub_state"/*.meta; do
@@ -2902,13 +2696,6 @@ validate_firstmate_home_children_removal() {
       [ -n "$child_home" ] || child_home=$child_wt
       validate_firstmate_home_for_removal "$child_home" "child firstmate home" "$child_id" >/dev/null || return 1
       validate_firstmate_home_children_removal "$child_home" || return 1
-    elif [ "$child_backend" = orca ]; then
-      child_orca_worktree_id=$(require_orca_worktree_id "$child_meta") || return 1
-      if [ -n "$child_wt" ] && [ -e "$child_wt" ]; then
-        child_proj=$(meta_value "$child_meta" project)
-        validate_child_worktree_for_removal "$child_wt" "$child_proj" >/dev/null || return 1
-        require_orca_worktree_path_match "$child_orca_worktree_id" "$child_wt" || return 1
-      fi
     elif [ -n "$child_wt" ] && [ -e "$child_wt" ]; then
       child_proj=$(meta_value "$child_meta" project)
       validate_child_worktree_for_removal "$child_wt" "$child_proj" >/dev/null || return 1
@@ -3052,7 +2839,7 @@ preflight_firstmate_home_herdr_children() {  # <home>
 }
 
 cleanup_firstmate_home_children() {
-  local home=$1 sub_state child_meta child_id child_t child_wt child_proj child_kind child_home child_backend child_orca_worktree_id child_return_rc child_busy_gen child_owner_rc
+  local home=$1 sub_state child_meta child_id child_t child_wt child_proj child_kind child_home child_backend child_return_rc child_busy_gen child_owner_rc
   sub_state="$home/state"
   [ -d "$sub_state" ] || return 0
   for child_meta in "$sub_state"/*.meta; do
@@ -3063,17 +2850,7 @@ cleanup_firstmate_home_children() {
     child_kind=$(meta_value "$child_meta" kind)
     [ -n "$child_kind" ] || child_kind=ship
     child_backend=$(fm_backend_of_meta "$child_meta")
-    if [ "$child_backend" = orca ]; then
-      child_t=$(meta_value "$child_meta" terminal)
-    else
-      child_t=$(fm_backend_target_of_meta "$child_meta")
-    fi
-    if [ "$child_backend" = orca ] && [ "$child_kind" != secondmate ]; then
-      child_orca_worktree_id=$(require_orca_worktree_id "$child_meta") || return 1
-      if [ -n "$child_wt" ] && [ -e "$child_wt" ]; then
-        validate_child_worktree_for_removal "$child_wt" "$child_proj" >/dev/null || return 1
-      fi
-    fi
+    child_t=$(fm_backend_target_of_meta "$child_meta")
     if [ -n "$child_t" ]; then
       if [ "$child_backend" = herdr ]; then
         fm_backend_herdr_parse_target "$child_t" || return 1
@@ -3086,12 +2863,8 @@ cleanup_firstmate_home_children() {
           echo "error: herdr pane $child_t for child $child_id is not confirmed gone; retaining that child's durable identity records and stopping forced cleanup" >&2
           return 1
         fi
-      elif [ "$child_backend" = zellij ]; then
-        # Zellij titles are scoped by the owning home tag, so forced secondmate
-        # cleanup must verify child tabs as that child home, not the parent.
-        ( unset FM_ROOT_OVERRIDE; FM_HOME=$home FM_ROOT=$home fm_backend_kill "$child_backend" "$child_t" "$(meta_value "$child_meta" zellij_tab_id)" "fm-$child_id" ) 2>/dev/null || true
       else
-        fm_backend_kill "$child_backend" "$child_t" "$(meta_value "$child_meta" zellij_tab_id)" "fm-$child_id" 2>/dev/null || true
+        fm_backend_kill "$child_backend" "$child_t" 2>/dev/null || true
       fi
     fi
     if [ "$child_kind" = secondmate ]; then
@@ -3101,13 +2874,6 @@ cleanup_firstmate_home_children() {
         cleanup_firstmate_home_children "$child_home" || return $?
         remove_firstmate_home "$child_home" "child firstmate home" "$child_id" || return $?
       fi
-    elif [ "$child_backend" = orca ]; then
-      if [ -n "$child_wt" ] && [ -d "$child_wt" ]; then
-        validate_child_worktree_for_removal "$child_wt" "$child_proj" >/dev/null || return 1
-        rm -f "$child_wt/.opencode/plugins/fm-turn-end.js" \
-          "$child_wt/.fm-kimi-turnend"
-      fi
-      fm_backend_remove_worktree "$child_backend" "$child_orca_worktree_id" || return 1
     elif [ -n "$child_wt" ] && [ -d "$child_wt" ]; then
       # The same ownership determination as the parent's own slot: a child
       # slot reassigned to another task is not this child's to kill, reset,
@@ -3123,9 +2889,6 @@ cleanup_firstmate_home_children() {
         require_owned_worktree_slot_record "$child_id" "$child_wt" || return 1
       else
         validate_child_worktree_for_removal "$child_wt" "$child_proj" >/dev/null || return 1
-        rm -f "$child_wt/.opencode/plugins/fm-turn-end.js" \
-          "$child_wt/.opencode/plugins/fm-busy-state.js" \
-          "$child_wt/.fm-kimi-turnend"
         if [ -n "$child_proj" ] && [ -d "$child_proj" ] && command -v treehouse >/dev/null 2>&1; then
           if teardown_treehouse_return "$child_wt" "$child_proj" "child worktree"; then
             fm_treehouse_slot_owner_release "$child_wt" "$child_id"
@@ -3141,7 +2904,6 @@ cleanup_firstmate_home_children() {
         fi
       fi
     fi
-    remove_retired_kimi_turnend_auth "$sub_state" "$child_id" || return 1
     remove_pr_poll_artifacts "$sub_state" "$child_id" || return 1
     child_busy_gen=$(meta_value "$child_meta" busy_gen)
     if [ -z "$child_busy_gen" ]; then
@@ -3152,7 +2914,6 @@ cleanup_firstmate_home_children() {
     fm_backlog_atomic_transition remove "$sub_state/$child_id.meta" "task record" "$sub_state" || return 1
     rm -f "$sub_state/$child_id.turn-ended" "$sub_state/$child_id.progress" \
       "$sub_state/$child_id.pi-ext.ts" \
-      "$sub_state/$child_id.kimi-turnend-token" \
       "$sub_state/$child_id.reconcile-nudged" \
       "$sub_state/.$child_id.branch-outcome-index"
   done
@@ -3177,7 +2938,6 @@ require_exclusive_task_worktree_slot || exit 1
 require_owned_task_worktree_slot || exit 1
 
 validate_pr_poll_cleanup "$STATE" "$ID" || exit 1
-validate_retired_kimi_turnend_auth "$STATE" "$ID" || exit 1
 
 if [ "$KIND" = secondmate ]; then
   LOCAL_REGISTRY_LOCK=$(secondmate_registry_lock_path "$STATE")
@@ -3271,16 +3031,6 @@ fi
 X_REQUEST=$(grep '^x_request=' "$META" 2>/dev/null | tail -1 | cut -d= -f2- || true)
 if [ -n "$X_REQUEST" ]; then
   echo "warning: task $ID still carries an unreconciled Relay request link ($X_REQUEST) on its task record." >&2
-fi
-
-if [ "$BACKEND" = orca ] && [ "$KIND" != scout ] && [ "$KIND" != secondmate ] && [ "$FORCE" != "--force" ]; then
-  if ! inspectable_git_worktree "$WT"; then
-    echo "REFUSED: Orca ship task $ID has no inspectable git worktree at ${WT:-<missing>}." >&2
-    echo "Cannot verify dirty or unlanded work; restore the worktree path or get explicit OK to discard, then --force." >&2
-    exit 1
-  fi
-  require_orca_worktree_path_match "$ORCA_WORKTREE_ID" "$WT" || exit 1
-  ORCA_PATH_MATCH_VERIFIED=1
 fi
 
 if teardown_owns_worktree && [ -d "$WT" ] && [ "$FORCE" != "--force" ]; then
@@ -3384,11 +3134,7 @@ teardown_legacy_stamp_rollback() {
     exit 1
   fi
 else
-  if [ "$CLEANUP_RECOVERY" = orca ]; then
-    BACKLOG_SKIP_REASON="Orca cleanup recovery is not a launched backlog worker"
-  else
-    BACKLOG_SKIP_REASON=$TEARDOWN_BACKLOG_SKIP_REASON
-  fi
+  BACKLOG_SKIP_REASON=$TEARDOWN_BACKLOG_SKIP_REASON
 fi
 
 # Every landed/discard-work refusal above has now passed (or --force skipped
@@ -3410,25 +3156,7 @@ fi
 "$SCRIPT_DIR/fm-remote-job-reap-orphans.sh" >&2 || true
 
 # Best-effort: drop the local task branch so the shared repo does not accumulate refs.
-if [ "$BACKEND" = orca ] && [ "$KIND" != secondmate ]; then
-  if [ "$ORCA_PATH_MATCH_VERIFIED" != 1 ]; then
-    require_orca_worktree_path_match_if_present "$ORCA_WORKTREE_ID" "$WT" || exit 1
-    ORCA_PATH_MATCH_VERIFIED=1
-  fi
-  if [ -d "$WT" ]; then
-    branch=$(git -C "$WT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo HEAD)
-    if [ "$branch" != "HEAD" ]; then
-      if git -C "$WT" checkout --detach -q 2>/dev/null; then
-        git -C "$WT" branch -D "$branch" >/dev/null 2>&1 || true
-      fi
-    fi
-    rm -f "$WT/.opencode/plugins/fm-turn-end.js" \
-      "$WT/.opencode/plugins/fm-busy-state.js" \
-      "$WT/.fm-kimi-turnend"
-  fi
-  [ -z "$T_ORCA" ] || fm_backend_kill "$BACKEND" "$T" "$(meta_value "$META" zellij_tab_id)" "fm-$ID" 2>/dev/null || true
-  fm_backend_remove_worktree "$BACKEND" "$ORCA_WORKTREE_ID"
-elif [ "$KIND" != secondmate ] && ! teardown_owns_worktree; then
+if [ "$KIND" != secondmate ] && ! teardown_owns_worktree; then
   :
 elif [ -d "$WT" ] && [ "$KIND" != secondmate ]; then
   branch=$(git -C "$WT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo HEAD)
@@ -3437,9 +3165,6 @@ elif [ -d "$WT" ] && [ "$KIND" != secondmate ]; then
       git -C "$WT" branch -D "$branch" >/dev/null 2>&1 || true
     fi
   fi
-  # Remove our hook file so a reused pool worktree cannot fire signals for a dead task.
-  rm -f "$WT/.opencode/plugins/fm-turn-end.js" \
-    "$WT/.fm-kimi-turnend"
   # Kills remaining processes in the worktree (including the agent), resets, returns
   # to pool. treehouse resolves the pool from the working directory, so run it from
   # the project. teardown_treehouse_return tolerates transient and stale git locks
@@ -3503,8 +3228,8 @@ elif [ "$BACKEND" = herdr ]; then
   else
     echo "warning: herdr session presentation lock path is unavailable; skipping the pane close rather than closing unlocked" >&2
   fi
-elif [ "$BACKEND" != orca ]; then
-  fm_backend_kill "$BACKEND" "$T" "$(meta_value "$META" zellij_tab_id)" "fm-$ID" 2>/dev/null || true
+else
+  fm_backend_kill "$BACKEND" "$T" 2>/dev/null || true
 fi
 if [ "$HERDR_PRESENTATION_RETIRE_CANDIDATE" = 1 ]; then
   if [ "$(fm_backend_herdr_pane_agent_state "$HERDR_PRESENTATION_SESSION" "$HERDR_PRESENTATION_PANE")" = dead ]; then
@@ -3556,7 +3281,6 @@ if [ "$KIND" = secondmate ]; then
     || { echo "error: receiver wake cleanup failed; preserving the secondmate route for retry" >&2; exit 1; }
   remove_secondmate_registry_entry "$ID"
 fi
-remove_retired_kimi_turnend_auth "$STATE" "$ID" || exit 1
 fm_backend_clear_transition "$BACKEND" "$STATE" "$T" || true
 # Remove the per-task temp root (/tmp/fm-<id>/, incl. its gotmp/) recorded by spawn.
 # Read before the state-file rm below; empty (pre-fix tasks without tasktmp=) is a no-op.
@@ -3565,7 +3289,7 @@ remove_pr_poll_artifacts "$STATE" "$ID" || exit 1
 retire_busy_state "$STATE" "$ID" "$BUSY_GEN" || exit 1
 status_retire_presentation_task "$STATE" "$ID" || exit 1
 rm -f "$STATE/$ID.turn-ended" "$STATE/$ID.progress" \
-  "$STATE/$ID.pi-ext.ts" "$STATE/$ID.kimi-turnend-token" \
+  "$STATE/$ID.pi-ext.ts" \
   "$STATE/$ID.control-relaunch" "$STATE/$ID.control-relaunch.meta-prior" \
   "$STATE/$ID.control-relaunch.brief-prior" "$STATE/$ID.control-relaunch.note" \
   "$STATE/$ID.reconcile-nudged" \

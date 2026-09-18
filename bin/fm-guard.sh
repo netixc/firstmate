@@ -8,7 +8,7 @@
 # Then, if the home needs supervision (bin/fm-supervision-lib.sh owns that
 # condition set) and that supervision is not healthy, prints a loud, clearly
 # delimited banner so the agent cannot skim past
-# it in the tool output of whatever it was doing - the one channel every harness
+# it in the tool output of whatever it was doing - the one channel Pi
 # has. Supervision health is MODEL-AWARE (fm_watcher_supervision_verdict in
 # bin/fm-wake-lib.sh): under the Pi extension model the extension tears the
 # watcher down and respawns it on every
@@ -208,16 +208,12 @@ if [ "$watcher_healthy" = false ]; then
     print_full_banner=1
   fi
   if [ "$print_full_banner" -eq 1 ]; then
-    afk=0
-    [ -e "$STATE/.afk" ] && afk=1
     queue_arg=0
     "$queue_pending" && queue_arg=1
     x_mode=0
     [ -f "$CONFIG/x-mode.env" ] && x_mode=1
     fix=$("$SCRIPT_DIR/fm-supervision-instructions.sh" \
       --read-only "$READ_ONLY" \
-      --afk "$afk" \
-      --afk-mode "$(fm_afk_mode "$STATE")" \
       --x-mode "$x_mode" \
       --queue-pending "$queue_arg" \
       --repair-line 2>/dev/null || printf '%s\n' 'Repair missing watcher supervision according to the session-start operating block.')

@@ -224,12 +224,12 @@ pass "the resolver has no sleep/timeout/command hang source and always returns s
 # --- harness/backend/kind independence (code only, comments stripped) ---------
 
 LIB_CODE=$(sed 's/#.*$//' "$ROOT/bin/fm-trace-context-lib.sh")
-for tok in harness backend tmux herdr zellij orca cmux opencode kind ship scout secondmate ; do
-  case "$LIB_CODE" in
-    *"$tok"*) fail "trace-context lib code must be harness/backend/kind agnostic, but references '$tok'" ;;
-  esac
+for tok in harness backend tmux herdr pi kind ship scout secondmate ; do
+  if printf '%s\n' "$LIB_CODE" | grep -Eq "(^|[^[:alnum:]_])${tok}([^[:alnum:]_]|$)"; then
+    fail "trace-context lib code must be harness/backend/kind agnostic, but references '$tok'"
+  fi
 done
-pass "the carrier is minted identically for every harness, backend, and spawn kind (no such branching in the lib code)"
+pass "the carrier is minted identically on tmux and Herdr for every spawn kind"
 
 # --- no prompt / task-prose reads (code only, comments stripped) --------------
 

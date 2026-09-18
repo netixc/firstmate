@@ -49,7 +49,7 @@ test_stripped_unbordered_content_uses_plain_content() {
     || fail "a stripped retired-runtime glyph '$plain' must remain unknown, got '$out'"
   out=$(classify 0 '' '' sensitive '❯')
   [ "$out" = unknown ] \
-    || fail "a stripped retired OMP glyph on a bare row must stay unknown, got '$out'"
+    || fail "a stripped unsupported-tool glyph on a bare row must stay unknown, got '$out'"
   pass "fm_composer_classify_content: stripped unbordered content remains unknown"
 }
 
@@ -79,8 +79,8 @@ test_verified_prompt_glyph_scope() {
   local out
   out=$(classify 0 '›'); [ "$out" = pending ] || fail "retired bare '›' content should not be recognized as empty, got '$out'"
   out=$(classify 1 '›'); [ "$out" = pending ] || fail "retired bordered '›' content should not be recognized as empty, got '$out'"
-  out=$(classify 0 '⟩'); [ "$out" = pending ] || fail "a stale bare Muse '⟩' must remain non-empty, got '$out'"
-  out=$(classify 0 '❯'); [ "$out" = unknown ] || fail "a stale bare OMP '❯' must read unknown, got '$out'"
+  out=$(classify 0 '⟩'); [ "$out" = pending ] || fail "a unsupported bare tool '⟩' must remain non-empty, got '$out'"
+  out=$(classify 0 '❯'); [ "$out" = unknown ] || fail "a stale bare unsupported tool '❯' must read unknown, got '$out'"
   out=$(classify 1 '❯'); [ "$out" = empty ] || fail "bordered container-only '❯' should read empty, got '$out'"
   pass "fm_composer_classify_content: bare glyphs require a retained agent identity while container-only glyphs require structure"
 }
@@ -130,11 +130,11 @@ test_real_text_is_pending() {
 # correctness matrix (audit data/fm-composer-consolidation-audit-s1, task
 # fm-composer-thin-adapter-refactor-r1).
 #
-# Fixtures cover retained Pi (blank rows between solid `─` rules) and OpenCode
-# 1.14.46 (left-bar `┃` rows), plus a retired bare-runtime negative.
+# Fixtures cover retained Pi (blank rows between solid `─` rules), plus an
+# unsupported bare-runtime negative.
 #
 # Capability profiles mirror the real adapters' descriptors: tmux
-# (styled+cursor+identity), herdr/zellij (styled), cmux/orca (plain). Every
+# (styled+cursor+identity), herdr/styled backend (styled), plain backend (plain). Every
 # emptiness verdict is asserted under the ambient UTF-8 locale AND LC_ALL=C,
 # pinning the locale-safe Unicode-space normalization (issue #1988).
 # =============================================================================
@@ -142,8 +142,8 @@ test_real_text_is_pending() {
 ESC=$(printf '\033')
 CAPS_TMUX=$'styled=1\ncursor=1\nidentity=1\nrows=0'
 CAPS_STYLED=$'styled=1\ncursor=0\nidentity=1\nrows=20'      # herdr
-CAPS_STYLED_NOID=$'styled=1\ncursor=0\nidentity=0\nrows=20' # zellij
-CAPS_PLAIN=$'styled=0\ncursor=0\nidentity=0\nrows=20'       # cmux, orca
+CAPS_STYLED_NOID=$'styled=1\ncursor=0\nidentity=0\nrows=20' # styled backend
+CAPS_PLAIN=$'styled=0\ncursor=0\nidentity=0\nrows=20'       # plain backends
 
 # assert_screen <label> <want> <caps> <screen> [cursor] [identity]: one
 # verdict, asserted under the ambient locale AND LC_ALL=C.
@@ -160,10 +160,10 @@ test_matrix_retired_bare_shape_is_unknown() {
   local styled plain
   styled=$'banner\n'"${ESC}[1m›${ESC}[0m ${ESC}[2mUse /skills to list available skills${ESC}[0m"
   plain=$'banner\n› Use /skills to list available skills'
-  assert_screen "retired bare shape on tmux" unknown "$CAPS_TMUX" "$styled" 1
-  assert_screen "retired bare shape on herdr" unknown "$CAPS_STYLED" "$styled"
-  assert_screen "retired bare shape on zellij" unknown "$CAPS_STYLED_NOID" "$styled"
-  assert_screen "retired bare shape on plain backends" unknown "$CAPS_PLAIN" "$plain"
+  assert_screen "unverified bare shape on tmux" unknown "$CAPS_TMUX" "$styled" 1
+  assert_screen "unverified bare shape on herdr" unknown "$CAPS_STYLED" "$styled"
+  assert_screen "unverified bare shape on styled backend" unknown "$CAPS_STYLED_NOID" "$styled"
+  assert_screen "unverified bare shape on plain backends" unknown "$CAPS_PLAIN" "$plain"
   pass "matrix: retired bare-runtime shape is no longer recognized"
 }
 
@@ -178,11 +178,11 @@ test_matrix_pi_separated_needs_identity() {
   pi_blocked=$(printf 'pi\tblocked')
   assert_screen "pi idle with identity" empty "$CAPS_STYLED" "$screen" '' "$pi_idle"
   assert_screen "pi idle on tmux with identity" empty "$CAPS_TMUX" "$screen" 2 "$pi_idle"
-  assert_screen "pi idle on zellij" unknown "$CAPS_STYLED_NOID" "$screen"
+  assert_screen "pi idle on styled backend" unknown "$CAPS_STYLED_NOID" "$screen"
   # Identity-capable but unfetched: the adapter is asked to probe lazily.
   [ "$(fm_composer_classify_screen "$CAPS_STYLED" "$screen")" = need-identity ] \
     || fail "an identity-capable profile should request the lazy identity probe"
-  # No identity capability (cmux/orca/zellij): the shape is unprovable.
+  # No identity capability (plain backend/styled backend): the shape is unprovable.
   assert_screen "pi pair without identity capability" unknown "$CAPS_PLAIN" "$screen"
   # A working pi cannot authorize injection into the blank region.
   assert_screen "working pi defers" unknown "$CAPS_STYLED" "$screen" '' "$pi_working"
@@ -200,42 +200,15 @@ test_matrix_pi_separated_needs_identity() {
   pass "matrix: pi's separated composer needs identity + structure; the blank row alone never proves it"
 }
 
-test_matrix_opencode_leftbar_signals() {
-  # Real idle opencode: `┃`-prefixed rows holding the "Ask anything..." hint,
-  # blanks, and a Build-mode footer. Two independent idle signals: the shared
-  # idle-placeholder pattern (works on plain captures) and the ghost strip
-  # (works on styled captures even if the pattern is overridden away).
-  local screen typed dim_screen out
-  screen=$'  ┃\n  ┃  Ask anything... "What is the tech stack?"\n  ┃\n  ┃  Build · GPT-5.5 Fast OpenAI · high\n  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀'
-  dim_screen=$'  ┃\n  ┃  '"${ESC}[2mAsk anything...${ESC}[0m"$'\n  ┃\n  ┃  Build · GPT-5.5 Fast OpenAI · high\n  ╹▀▀▀▀'
-  assert_screen "opencode idle on tmux (cursor on hint)" empty "$CAPS_TMUX" "$dim_screen" 1
-  assert_screen "opencode idle on herdr" empty "$CAPS_STYLED" "$dim_screen"
-  assert_screen "opencode idle on zellij" empty "$CAPS_STYLED_NOID" "$dim_screen"
-  assert_screen "opencode idle on cmux/orca" empty "$CAPS_PLAIN" "$screen"
-  # Signal separation: with the idle pattern overridden to something that
-  # cannot match, a DIM-styled hint still proves empty through the ghost strip.
-  out=$(FM_COMPOSER_IDLE_RE='^NEVER-MATCHES$' fm_composer_classify_screen "$CAPS_TMUX" "$dim_screen" 1)
-  [ "$out" = empty ] || fail "a dim opencode hint must stay empty via the ghost strip alone, got '$out'"
-  typed=$'┃\n┃  refactor the parser please\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high\n╹▀▀▀▀'
-  assert_screen "opencode typed on tmux" pending "$CAPS_TMUX" "$typed" 1
-  assert_screen "opencode typed on plain backends" unknown "$CAPS_PLAIN" "$typed"
-  typed=$'┃  Ask anything... please investigate\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high\n╹▀▀▀▀'
-  assert_screen "opencode placeholder-like input on tmux" pending "$CAPS_TMUX" "$typed" 0
-  assert_screen "opencode placeholder-like input on plain backends" unknown "$CAPS_PLAIN" "$typed"
-  typed=$'┃  refactor the parser please\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high'
-  assert_screen "opencode multiline draft above blank cursor row" pending "$CAPS_TMUX" "$typed" 1
-  pass "matrix: opencode's left-bar composer reads empty everywhere and scans the full active run"
-}
-
 test_matrix_bordered_shell_glyph_box() {
   # A bordered `│ > │` composer is a shared-classifier safety case: the
   # container makes a shell glyph an agent composer rather than a dead shell.
   local screen
   screen=$'╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯'
   assert_screen "bordered shell glyph on tmux" empty "$CAPS_TMUX" "$screen" 1
-  assert_screen "bordered shell glyph on cmux/orca" empty "$CAPS_PLAIN" "$screen"
+  assert_screen "bordered shell glyph on plain backend" empty "$CAPS_PLAIN" "$screen"
   assert_screen "bordered shell glyph on herdr" empty "$CAPS_STYLED" "$screen"
-  assert_screen "bordered shell glyph on zellij" empty "$CAPS_STYLED_NOID" "$screen"
+  assert_screen "bordered shell glyph on styled backend" empty "$CAPS_STYLED_NOID" "$screen"
   pass "matrix: bordered shell-glyph boxes read empty only through their proven container"
 }
 
@@ -266,23 +239,16 @@ test_strict_blank_row_divergence() {
 }
 
 test_cursorless_container_rejects_contiguous_lower_activity() {
-  local box leftbar blank_separated bordered opencode
+  local box blank_separated bordered
   box=$'╭────────────────────────╮\n│ ❯                      │\n╰────────────────────────╯\nWorking on request...'
   assert_screen "stale box above activity on herdr" unknown "$CAPS_STYLED" "$box"
-  assert_screen "stale box above activity on zellij" unknown "$CAPS_STYLED_NOID" "$box"
-  assert_screen "stale box above activity on cmux/orca" unknown "$CAPS_PLAIN" "$box"
-
-  leftbar=$'┃\n┃  Ask anything...\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high\n╹▀▀▀▀▀▀▀▀\nWorking on request...'
-  assert_screen "stale left-bar above activity on herdr" unknown "$CAPS_STYLED" "$leftbar"
-  assert_screen "stale left-bar above activity on zellij" unknown "$CAPS_STYLED_NOID" "$leftbar"
-  assert_screen "stale left-bar above activity on cmux/orca" unknown "$CAPS_PLAIN" "$leftbar"
+  assert_screen "stale box above activity on styled backend" unknown "$CAPS_STYLED_NOID" "$box"
+  assert_screen "stale box above activity on plain backend" unknown "$CAPS_PLAIN" "$box"
 
   blank_separated=$'╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯\n\nstatus'
   bordered=$'╭────────────────────────╮\n│ >                      │\n╰────────────────────────╯\n\nstatus'
-  opencode=$'┃\n┃  Ask anything...\n┃\n┃  Build · GPT-5.5 Fast OpenAI · high\n╹▀▀▀▀▀▀▀▀\n\nOpenCode status'
   assert_screen "blank-separated bordered footer with styling" empty "$CAPS_STYLED_NOID" "$blank_separated"
   assert_screen "blank-separated bordered footer" empty "$CAPS_PLAIN" "$bordered"
-  assert_screen "left-bar floor and blank-separated footer" empty "$CAPS_STYLED_NOID" "$opencode"
   pass "fm_composer_classify_screen: cursorless containers reject only contiguous unclaimed activity"
 }
 
@@ -332,10 +298,6 @@ test_selected_content_is_composer_scoped_and_wrap_normalized() {
   out=$(fm_composer_extract_selected_content "$CAPS_STYLED_NOID" "$screen")
   [ "$out" = 'unrelated draft' ] \
     || fail "box extraction should contain only normalized selected composer rows, got '$out'"
-  screen=$'hello captain in transcript\n┃ hello\n┃ captain\n┃ Build · GPT-5.5 Fast OpenAI · high'
-  out=$(fm_composer_extract_selected_content "$CAPS_STYLED_NOID" "$screen")
-  [ "$out" = 'hello captain' ] \
-    || fail "left-bar extraction should join user rows without footer furniture, got '$out'"
   screen=$'╭────────────────────╮\n│ ❯ '"${ESC}[2mType a message...${ESC}[0m"$'│\n╰────────────────────╯'
   out=$(fm_composer_extract_selected_content "$CAPS_STYLED_NOID" "$screen")
   [ -z "$out" ] \
@@ -366,7 +328,6 @@ test_idle_placeholder_case_mode_is_explicit
 test_real_text_is_pending
 test_matrix_retired_bare_shape_is_unknown
 test_matrix_pi_separated_needs_identity
-test_matrix_opencode_leftbar_signals
 test_matrix_bordered_shell_glyph_box
 test_strict_blank_row_divergence
 test_cursorless_container_rejects_contiguous_lower_activity

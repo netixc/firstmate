@@ -146,9 +146,3 @@ first_settle 0.3 'explicit target $message -> fast path (unknown harness)' --exp
 # The `/` slash case stays universal and unchanged: long settle regardless of
 # harness (here a Pi target).
 first_settle 1.2 'pi /command -> long settle (slash unchanged)' pi '/no-mistakes'
-
-# A `/` to OpenCode likewise uses the long settle.
-first_settle 1.2 'opencode /command -> long settle' opencode '/help'
-
-# Plain text to OpenCode rides the inbox.
-rides_inbox 'opencode plain text' opencode 'just a normal steer'

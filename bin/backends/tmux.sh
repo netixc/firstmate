@@ -14,10 +14,9 @@
 # inline with these same send/current-path primitives.
 #
 # The verified composer/busy-detection and verify-and-retry-submit primitives
-# already live in bin/fm-tmux-lib.sh, shared with the away-mode daemon
-# (bin/fm-supervise-daemon.sh); this adapter sources that file and re-exports
-# its submit core under the backend's naming convention rather than
-# duplicating it, so the two consumers cannot drift apart.
+# already live in bin/fm-tmux-lib.sh. This adapter sources that file and
+# re-exports its submit core under the backend's naming convention rather than
+# duplicating it.
 # shellcheck source=bin/fm-tmux-lib.sh
 . "$FM_BACKEND_LIB_DIR/fm-tmux-lib.sh"
 # shellcheck source=bin/fm-session-lock-lib.sh
@@ -173,10 +172,7 @@ fm_backend_tmux_current_command() {  # <target>
 # Scoping to the foreground process group rather than to the pane's descendants
 # is what keeps the probe honest in the other direction: a harness-named process
 # left running in the background of an otherwise idle pane is deliberately NOT
-# reported, so a genuinely agent-free pane still classifies `dead`. It also
-# reports every member of a multi-process launcher (the Pi Launcher path runs a
-# `pi-signed` wrapper and a `pi` engine in one group), so no launcher needs its
-# own special case here.
+# reported, so a genuinely agent-free pane still classifies `dead`.
 #
 # Like fm_backend_tmux_current_command this is a RAW pane read: tmux answers an
 # absent target from the client's active window rather than failing, so callers
@@ -220,7 +216,7 @@ fm_backend_tmux_foreground_argv0s() {  # <target>
 # transient tmux problem never licenses a duplicate.
 #
 # The verdict combines two independent name sources rather than trusting either
-# alone. Either source naming a verified harness is enough for `alive`, because
+# alone. Either source naming exact Pi identity is enough for `alive`, because
 # a false `dead` is the one outcome that can launch a duplicate agent onto a
 # live worktree, while the foreground process group - when it is readable - is
 # authoritative for the negative verdicts, since it is the only source that can
@@ -306,15 +302,5 @@ EOF
   case "$(fm_agent_process_classify_name "$comm")" in
     shell) printf 'dead' ;;
     *) printf 'ambiguous' ;;
-  esac
-}
-
-# Backward-compatible three-state view for callers that only need a yes/no
-# agent verdict. The detailed state contract is owned by fm_backend_agent_state.
-fm_backend_tmux_agent_alive() {  # <target>
-  case "$(fm_backend_tmux_agent_state "$1")" in
-    alive) printf 'alive' ;;
-    dead|missing) printf 'dead' ;;
-    *) printf 'unknown' ;;
   esac
 }

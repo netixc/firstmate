@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bin/backends/herdr.sh - the herdr session-provider adapter (EXPERIMENTAL).
+# bin/backends/herdr.sh - the supported Herdr session-provider adapter.
 #
 # Design: data/fm-backend-design-d7/herdr-addendum.md ("Interface mapping",
 # decisions D1-D6) and the empirical verification recorded in
@@ -1659,7 +1659,7 @@ fm_backend_herdr_server_ensure() {  # <session>
   [ "$running" = "true" ] && return 0
   (
     unset FM_HOME FM_ROOT_OVERRIDE FM_STATE_OVERRIDE FM_DATA_OVERRIDE FM_PROJECTS_OVERRIDE FM_CONFIG_OVERRIDE \
-      PI_CODING_AGENT FM_PI_HARNESS FM_SUPERVISION_MODEL
+      PI_CODING_AGENT FM_SUPERVISION_MODEL
     fm_backend_herdr_cli "$session" server >/dev/null 2>&1 &
   ) || return 1
   for i in $(seq 1 20); do
@@ -2073,13 +2073,13 @@ fm_backend_herdr_explicit_close_pane_confirmed() {  # <session> <pane_id>
 # the foreground process group is authoritative, read through the shared
 # classifier in bin/fm-agent-process-lib.sh.
 #
-#   agent      - a foreground process is a verified harness (any identity
+#   agent      - a foreground process has exact Pi identity (any identity
 #                surface: kernel name, argv[0], or a node-bundle argument), or
-#                a verified harness is still a descendant of the pane shell
+#                Pi is still a descendant of the pane shell
 #                outside the foreground group (suspended or backgrounded). A
 #                registered agent whose process still exists is never demoted.
 #   shell      - every foreground process is a recognized shell AND no
-#                descendant of the pane shell is a verified harness: positive
+#                descendant of the pane shell is Pi: positive
 #                proof the pane is shell-only. The descendant walk is what makes
 #                this safe for the crew shape, where a nested `treehouse get`
 #                shell sits under the pane's top shell.
@@ -2350,16 +2350,6 @@ fm_backend_herdr_agent_state() {  # <target>
         *) printf 'unreadable' ;;
       esac
       ;;
-  esac
-}
-
-# Backward-compatible three-state view for callers that only need a yes/no
-# agent verdict. The detailed state contract is owned by fm_backend_agent_state.
-fm_backend_herdr_agent_alive() {  # <target>
-  case "$(fm_backend_herdr_agent_state "$1")" in
-    alive) printf 'alive' ;;
-    dead|missing) printf 'dead' ;;
-    *) printf 'unknown' ;;
   esac
 }
 
@@ -3028,12 +3018,10 @@ fm_backend_herdr_capture_ansi() {  # <target> <lines>
 #
 # These functions are the ONLY herdr-specific composer knowledge left: the
 # ANSI pane capture (with its small-N workaround), the native `agent get`
-# identity probe, and the capability descriptor. Every shape - the bordered
-# box, the bare agent-glyph row, opencode's left-bar, and pi's
-# identity-gated separated pair (which this adapter pioneered) - now lives in
-# the shared owner (bin/fm-composer-lib.sh, fm_composer_classify_screen), so
-# a new harness shape is taught there once and every backend learns it in the
-# same commit.
+# identity probe, and the capability descriptor. Pi's composer shapes live in
+# the shared owner (bin/fm-composer-lib.sh, fm_composer_classify_screen), so a
+# new Pi shape is taught there once and every backend learns it in the same
+# commit.
 
 fm_backend_herdr_agent_identity_raw() {  # <session> <pane> -> <agent>\t<status>
   local out
@@ -3117,10 +3105,9 @@ fm_backend_herdr_rendered_busy_state() {  # <target> [harness] -> busy|idle|unkn
 # generating busy signal is a queued Enter via
 # fm_composer_queued_enter_verdict (bin/fm-composer-lib.sh).
 #
-# Incident (2026-07-07, followed up on 2026-07-08): a redelivery loop in the
-# away-mode daemon. Root cause: composer-content submit confirmation was too
-# sensitive to harness rendering details. The shared ANSI-aware composer
-# classifier handles retained runtime shapes, and idle-baseline submit
+# Composer-content submit confirmation must not redeliver text when Pi takes
+# time to transition after Enter. The shared ANSI-aware composer classifier
+# handles Pi's retained shapes, and idle-baseline submit
 # confirmation still prefers native agent-state so a faint idle tip cannot
 # block a landed send. Composer content is consulted only after native
 # state stays idle, as the empty/pending owner, and for submit attempts whose
@@ -3148,8 +3135,8 @@ fm_backend_herdr_rendered_busy_state() {  # <target> [harness] -> busy|idle|unkn
 # A harness whose native baseline is active or unreadable takes the conservative
 # composer branch: only a cleared composer confirms delivery before the retry
 # budget is exhausted.
-# Queued-while-busy Enter (OpenCode 1.18.4, and any harness that keeps typed
-# text visible until the current turn ends): after the retry budget, a proven
+# Queued-while-busy Enter (when Pi keeps typed text visible until the current
+# turn ends): after the retry budget, a proven
 # pending composer plus native agent_status=working is delivered, not swallowed.
 # blocked is not working and does not receive this conversion. On an idle
 # native baseline, a rendered busy

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Compatibility source for real-Herdr tests.
+# Shared safety helpers for real-Herdr tests.
 # The production owner of the isolation, refuse-default, teardown, and
 # fleet-state tripwire contract is bin/fm-herdr-lab.sh.
 set -u
@@ -42,4 +42,21 @@ herdr_refuse_if_default() { # <session>
 
 herdr_safe_stop_and_delete() { # <session>
   fm_herdr_lab_teardown "$1"
+}
+
+# Install a deterministic test-only `pi` executable for Herdr placement tests.
+# These tests exercise the real backend lifecycle without submitting a provider
+# prompt; the separate Pi live guards own proof against the installed npm CLI.
+herdr_make_test_pi() { # <bin-dir> [<marker>]
+  local dir=$1 marker=${2:-herdr-test-pi-ready}
+  mkdir -p "$dir" || return 1
+  cat > "$dir/pi" <<EOF
+#!/bin/sh
+case " \$* " in
+  *" --help "*) printf '%s\\n' '  --tui-mode <mode>'; exit 0 ;;
+esac
+printf '%s\\n' '$marker'
+while :; do sleep 60; done
+EOF
+  chmod +x "$dir/pi"
 }

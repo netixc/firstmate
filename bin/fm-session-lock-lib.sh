@@ -1,41 +1,28 @@
 #!/usr/bin/env bash
 # Shared session-lock harness identity.
 #
-# ONE owner of the "which verified-harness process holds this home's session
-# lock, and does the current process descend from that same harness?" decision.
+# ONE owner of the "which exact Pi process holds this home's session lock,
+# and does the current process descend from that same Pi process?" decision.
 # bin/fm-lock.sh uses it to acquire and inspect state/.lock.
 # This file is sourced by scripts and has no side effects on source.
 
-# Known harness command names; extend when a new adapter is verified.
-FM_HARNESS_RE='opencode|^pi$|^pi-signed$'
+# The only supported worker-runtime command name.
+FM_HARNESS_RE='^pi$'
 
-# The same harnesses as exact executable names. Keep in sync with
-# FM_HARNESS_RE. Used only for the stricter path evidence below.
-FM_HARNESS_NAMES=(opencode pi-signed pi)
-
-# Print the exact harness name carried by executable path $1 - its own basename
-# or any directory component - or return 1.
+# Print `pi` only when executable path $1 itself has the exact basename `pi`.
+# Parent directory names and arguments are never process identity evidence.
 fm_harness_path_name() {  # <path>
-  local path=$1 name
+  local path=$1 base
   [ -n "$path" ] || return 1
-  for name in "${FM_HARNESS_NAMES[@]}"; do
-    case "/$path/" in
-      */"$name"/*) printf '%s' "$name"; return 0 ;;
-    esac
-  done
-  return 1
+  base=${path##*/}
+  base=${base#-}
+  [ "$base" = pi ] || return 1
+  printf '%s' pi
 }
 
-# True when the process described by command name $1 and full argument string $2
-# is a verified harness.
-#
-# Evidence, in order:
-#   1. the basename of the reported command name, against FM_HARNESS_RE.
-#   2. an exact harness component in that command path or in argv[0]. Both are
-#      needed because the two platforms report different things: macOS reports
-#      argv[0] in `ps -o comm=`, while procps on Linux reports the kernel exec
-#      name and ignores argv[0] entirely.
-#   3. a bare interpreter (node, python) running a harness script path.
+# True only when the process's command or argv[0] has the exact executable
+# basename `pi`. Generic Node/Python processes, parent directory names, and
+# later arguments never count as Pi identity.
 fm_harness_process_matches() {  # <comm> <args>
   local comm=$1 args=$2 base argv0 name
   base=$(basename -- "$comm")
@@ -46,19 +33,11 @@ fm_harness_process_matches() {  # <comm> <args>
   if name=$(fm_harness_path_name "$comm") || name=$(fm_harness_path_name "$argv0"); then
     return 0
   fi
-  # Bare interpreter (e.g. node): match the harness name in its script path.
-  case "$comm" in
-    *node*|*python*)
-      if printf '%s' "$args" | grep -qE "$FM_HARNESS_RE"; then
-        return 0
-      fi
-      ;;
-  esac
   return 1
 }
 
 # Walk the current process ancestry (up to 16 hops) and print this session's
-# verified harness pid.
+# exact Pi pid.
 #
 # The walk climbs freely until the first harness match, because the caller is
 # normally an ordinary shell several levels below its session. After that first
@@ -66,10 +45,7 @@ fm_harness_process_matches() {  # <comm> <args>
 # into an unrelated harness further up the real process tree - for example the
 # live session that launched a test as its own subprocess.
 #
-# The innermost match is the session, which is where Pi's shared signed-wrapper
-# ancestry holds the lock: a "pi-signed" launcher can be the direct parent of the
-# inner "pi" engine pid that owns the lock, and the wrapper pid above it is not
-# that owner.
+# The innermost match is the Pi session that owns the lock.
 fm_harness_ancestry_pids() {
   local pid=$$ comm args printed=0
   for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
@@ -105,7 +81,7 @@ EOF
   printf '%s\n' "$outermost"
 }
 
-# True if $1 is a live process that looks like a verified harness.
+# True if $1 is a live process with exact Pi identity.
 fm_harness_pid_alive() {
   local pid=$1 comm args
   kill -0 "$pid" 2>/dev/null || return 1

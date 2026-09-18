@@ -16,7 +16,7 @@
 #
 # Installs <dir>/stale/herdr (default 0.8.2, protocol 20, refused by the
 # protocol-22 server) and <dir>/current/herdr (default 0.9.0, protocol 22)
-# whose pane and agent reads model one live opencode agent at fm-remote:wCY:p2,
+# whose pane and agent reads model one live pi agent at fm-remote:wCY:p2,
 # plus <dir>/tools/jq so a PATH made of only these directories still parses
 # JSON. Each fake appends its argv to <dir>/stale.log or <dir>/current.log;
 # callers export FM_HERDR_PAIR_DIR=<dir>.
@@ -46,16 +46,16 @@ SH
   cat >> "$dir/current/herdr" <<'SH'
   "pane get")
     if [ "${3:-}" = wCY:p2 ]; then
-      printf '{"id":"cli:pane:get","result":{"pane":{"agent":"opencode","agent_status":"idle","pane_id":"wCY:p2","tab_id":"wCY:t2","workspace_id":"wCY"},"type":"pane_info"}}\n'
+      printf '{"id":"cli:pane:get","result":{"pane":{"agent":"pi","agent_status":"idle","pane_id":"wCY:p2","tab_id":"wCY:t2","workspace_id":"wCY"},"type":"pane_info"}}\n'
     else
       printf '{"id":"cli:pane:get","error":{"code":"pane_not_found","message":"no such pane"}}\n' >&2; exit 1
     fi ;;
   "agent get")
-    printf '{"id":"cli:agent:get","result":{"agent":{"agent":"opencode","agent_status":"idle","pane_id":"wCY:p2"},"type":"agent_info"}}\n' ;;
+    printf '{"id":"cli:agent:get","result":{"agent":{"agent":"pi","agent_status":"idle","pane_id":"wCY:p2"},"type":"agent_info"}}\n' ;;
   "pane process-info")
     # The registration above is only trusted once a live harness process backs
     # it (issue #4115), so the compatible client also serves the process view.
-    printf '{"id":"cli:pane:process_info","result":{"process_info":{"pane_id":"wCY:p2","shell_pid":4242,"foreground_process_group_id":4243,"foreground_processes":[{"pid":4243,"name":"opencode","argv0":"opencode","argv":["opencode"],"cmdline":"opencode"}]},"type":"pane_process_info"}}\n' ;;
+    printf '{"id":"cli:pane:process_info","result":{"process_info":{"pane_id":"wCY:p2","shell_pid":4242,"foreground_process_group_id":4243,"foreground_processes":[{"pid":4243,"name":"pi","argv0":"pi","argv":["pi"],"cmdline":"pi"}]},"type":"pane_process_info"}}\n' ;;
   *) : ;;
 esac
 exit 0

@@ -92,7 +92,7 @@ You never:
 - write to any project checkout or worktree;
 - talk to the captain, post publicly, or send anything outside this home's fleet.
 Ordinary teardown of a confirmed-landed task, steering, lifecycle control, PR checks, and backlog status moves are yours, under the task's lease.
-While away mode is active you receive no wakes at all; the away daemon owns supervision then.
+Away and quiet posture do not change your wake eligibility or supervision ownership.
 
 # Discipline
 

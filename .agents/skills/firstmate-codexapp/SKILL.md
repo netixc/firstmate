@@ -13,12 +13,12 @@ metadata:
 ## Overview
 
 Use this playbook when Firstmate work needs a visible Codex Desktop thread.
-The current supported shape is Desktop host-tool choreography plus an explicit status-file return-channel check, not a `codex-app` value in `FM_BACKEND`.
+The supported shape is Desktop host-tool choreography for a companion thread, never a worker launch or `FM_BACKEND` value.
 
 ## Boundary
 
-Codex Desktop visible threads are companion host-tool workflows, not a selectable Firstmate backend.
-Read `docs/codex-app-backend.md` when it exists in this checkout; that document owns the acceptance contract, bridge requirement, status-return requirement, and staged rollout.
+Codex Desktop visible threads are companion host-tool workflows, not Firstmate workers or selectable backends.
+Read `docs/codex-app-coordination.md`; it owns the permanent Pi/tmux/Herdr boundary and the optional status-return rule.
 
 If local helper scripts exist for Codex App work, use only helpers explicitly provided by the operator or maintained by Firstmate.
 For helpers outside `bin/`, inspect the source or header before running `--help`.
@@ -30,9 +30,9 @@ For helpers outside `bin/`, inspect the source or header before running `--help`
 2. Confirm the target repository is already saved as a Codex Desktop project.
    No host tool currently creates Codex App projects for an agent, so the human must add the project in Desktop before a created thread can reliably land there.
 3. Do not create projectless threads for repo work.
-   If the project is absent, stop and ask for the project to be added or use a normal Firstmate backend instead.
-4. Decide whether this is a real Firstmate-managed task or a visible companion thread.
-   A real task needs a task id, an isolated worktree or Desktop-owned cwd, a branch plan, and a writable `state/<id>.status` path.
+   If the project is absent, stop and ask for the project to be added or dispatch a plain Pi worker on tmux or Herdr instead.
+4. Treat the Desktop thread as a visible companion.
+   Any Firstmate-managed ship, scout, or secondmate remains a plain Pi worker with its ordinary isolated-copy and lifecycle contract.
 
 ## Create And Send
 
@@ -57,7 +57,7 @@ If the user types directly into the visible thread, treat that as authoritative 
 A Desktop-owned Codex thread can append to Firstmate status files only when the prompt gives an absolute path and the Desktop permission context can write that checkout.
 That makes status writes a verified return-channel requirement, not a fact to assume.
 
-For a Firstmate-managed task, include an explicit status instruction:
+When a companion thread is intentionally linked to existing Firstmate work, include an explicit status instruction:
 
 ```text
 Append supervisor-visible status lines to <absolute-firstmate-home>/state/<task-id>.status.
@@ -72,8 +72,8 @@ Verify the return channel before treating the thread as supervised:
 - The local `state/<task-id>.status` file contains the expected line.
 - If available, the transcript includes a file-change entry for that status file.
 
-If the thread cannot write the status file, keep it as a visible companion thread only.
-Do not claim it is a complete Firstmate backend.
+If the thread cannot write the status file, keep it visibly unsupervised and reconcile through `read_thread`.
+Do not claim it is a Firstmate worker.
 
 ## Observe And Reconcile
 
@@ -103,8 +103,8 @@ If there is a real Firstmate task record, leave teardown decisions to the normal
 
 ## Failure Signals
 
-- Missing Desktop project: ask the human to add the target project in Codex Desktop, or use a normal backend.
-- Missing host tools: do not simulate them with shell files; use a terminal backend instead.
+- Missing Desktop project: ask the human to add the target project in Codex Desktop, or use a plain Pi worker.
+- Missing host tools: do not simulate them with shell files; use Pi on tmux or Herdr instead.
 - Status file not updated: treat the thread as unsupervised until the return channel is proven.
 - Worker editing the saved project checkout instead of its Desktop cwd: stop and decide whether to salvage the branch before continuing.
-- Production `codex-app` backend request: read `docs/codex-app-backend.md` and do not invent a local adapter.
+- Request to make Codex App a worker runtime or backend: read `docs/codex-app-coordination.md` and preserve the Pi/tmux/Herdr boundary.

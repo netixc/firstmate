@@ -444,27 +444,22 @@ test_wide_composer_text_is_pending() {
   pass "fm_tmux_composer_state: emoji and CJK text remain pending under the C locale"
 }
 
-test_all_tmux_harness_composers_share_classification() {
-  local dir fb capture out harness
-  dir="$TMP_ROOT/all-harness-composers"; mkdir -p "$dir"
+test_pi_tmux_composer_classification() {
+  local dir fb capture out
+  dir="$TMP_ROOT/pi-composer"; mkdir -p "$dir"
   fb=$(make_fake_tmux "$dir")
   capture="$dir/styled.txt"
-  for harness in opencode pi pi-signed; do
-    case "$harness" in
-      opencode) printf '╭────────────╮\n│ >          │\n╰────────────╯\n' > "$capture" ;;
-      pi|pi-signed) printf '╭────────────╮\n│            │\n╰────────────╯\n' > "$capture" ;;
-    esac
-    out=$(PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=1 \
-      fm_tmux_composer_state "fakepane")
-    [ "$out" = empty ] \
-      || fail "$harness aligned idle composer should be empty, got '$out'"
-    printf '╭────────────╮\n│ > fix      │\n╰────────────╯\n' > "$capture"
-    out=$(PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=1 \
-      fm_tmux_composer_state "fakepane")
-    [ "$out" = pending ] \
-      || fail "$harness composer with text should be pending, got '$out'"
-  done
-  pass "fm_tmux_composer_state: all tmux harnesses share empty and pending classification"
+  printf '╭────────────╮\n│            │\n╰────────────╯\n' > "$capture"
+  out=$(PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=1 \
+    fm_tmux_composer_state "fakepane")
+  [ "$out" = empty ] \
+    || fail "Pi's aligned idle composer should be empty, got '$out'"
+  printf '╭────────────╮\n│ > fix      │\n╰────────────╯\n' > "$capture"
+  out=$(PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=1 \
+    fm_tmux_composer_state "fakepane")
+  [ "$out" = pending ] \
+    || fail "Pi's composer with text should be pending, got '$out'"
+  pass "fm_tmux_composer_state: Pi classifies empty and pending composers"
 }
 
 test_unrecognized_state_defers_input_guard() {
@@ -500,7 +495,7 @@ test_single_capture_leaves_no_fallback_race() {
 
 test_stale_omp_composer_is_not_safe_for_injection() {
   local dir fb capture out nbsp
-  dir="$TMP_ROOT/stale-omp-composer"; mkdir -p "$dir"
+  dir="$TMP_ROOT/unsupported-tool-composer"; mkdir -p "$dir"
   fb=$(make_fake_tmux "$dir")
   capture="$dir/styled.txt"
   nbsp=$(printf '\302\240')
@@ -508,8 +503,8 @@ test_stale_omp_composer_is_not_safe_for_injection() {
   out=$(PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=1 \
     fm_tmux_composer_state "fakepane")
   [ "$out" = unknown ] \
-    || fail "a stale OMP composer must remain unsafe for injection, got '$out'"
-  pass "fm_tmux_composer_state: a stale OMP composer is not treated as a verified empty input"
+    || fail "a unsupported-tool composer must remain unsafe for injection, got '$out'"
+  pass "fm_tmux_composer_state: a unsupported-tool composer is not treated as a verified empty input"
 }
 
 test_legitimate_empty_routes_remain_empty() {
@@ -519,7 +514,7 @@ test_legitimate_empty_routes_remain_empty() {
   capture="$dir/styled.txt"
   # A blank pane is deliberately absent here: under the strict container-proof
   # rule (captain decision blank-row-injection-posture) a blank cursor row is
-  # unknown, pinned by tests/fm-daemon.test.sh and tests/fm-composer-lib.test.sh.
+  # unknown, pinned here and by tests/fm-composer-lib.test.sh.
   for fixture in bordered double-bordered; do
     case "$fixture" in
       bordered) printf '╭────╮\n│    │\n╰────╯\n' > "$capture"; cursor=1 ;;
@@ -608,7 +603,7 @@ test_misaligned_box_is_unknown
 test_unproved_empty_geometry_fails_closed
 test_differing_widths_use_asymmetric_verdicts
 test_wide_composer_text_is_pending
-test_all_tmux_harness_composers_share_classification
+test_pi_tmux_composer_classification
 test_unrecognized_state_defers_input_guard
 test_single_capture_leaves_no_fallback_race
 test_stale_omp_composer_is_not_safe_for_injection

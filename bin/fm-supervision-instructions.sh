@@ -22,10 +22,10 @@ usage() {
   cat <<'EOF'
 Usage: fm-supervision-instructions.sh [--harness <name>] [--read-only 0|1] [--afk 0|1] [--afk-mode away|quiet] [--x-mode 0|1] [--repair-line] [--queue-pending 0|1]
 
-Print the current primary harness's supervision operating instructions.
+Print Pi's supervision operating instructions.
 With --repair-line, print one concise repair instruction for guard and hook messages.
---afk-mode only matters when --afk 1 (present); it selects the away-mode vs
-quiet-mode (kunchenguid/firstmate#2356) wording, and defaults to away.
+--afk-mode only matters when --afk 1 (present); it selects the away-posture vs
+quiet-posture wording and defaults to away. Both keep Pi's ordinary supervision active.
 EOF
 }
 
@@ -92,8 +92,7 @@ if [ -z "$HARNESS" ]; then
 fi
 
 case "$HARNESS" in
-  opencode|pi) SNIPPET="$DOC_DIR/$HARNESS.md" ;;
-  pi-signed) SNIPPET="$DOC_DIR/pi.md" ;;
+  pi) SNIPPET="$DOC_DIR/pi.md" ;;
   *) HARNESS=unknown; SNIPPET="$DOC_DIR/unknown.md" ;;
 esac
 [ -f "$SNIPPET" ] || SNIPPET="$DOC_DIR/unknown.md"
@@ -130,15 +129,6 @@ repair_line() {
     printf '%s\n' 'Watcher repair belongs to the session holding the fleet lock; do not drain, arm, or repair from this read-only session.'
     return 0
   fi
-  if [ "$AFK" -eq 1 ]; then
-    if [ "$AFK_MODE" = quiet ]; then
-      printf '%s\n' 'Quiet mode owns watcher supervision; load /quiet and ensure the daemon is running instead of starting normal supervision directly.'
-    else
-      printf '%s\n' 'Away mode owns watcher supervision; load /afk and ensure the daemon is running instead of starting normal supervision directly.'
-    fi
-    return 0
-  fi
-
   prefix=
   if [ "$QUEUE_PENDING" -eq 1 ]; then
     prefix='After draining queued wakes, '
@@ -148,11 +138,8 @@ repair_line() {
   fi
 
   case "$HARNESS" in
-    pi|pi-signed)
+    pi)
       printf '%s%s%s%s%s%s\n' "$prefix" 'repair a missing or failed watcher cycle with the Pi tool fm_watch_arm_pi, or restart Pi with -e ' "$pi_turnend_ext" ' -e ' "$pi_ext" ' if the extensions are not loaded.'
-      ;;
-    opencode)
-      printf '%s%s\n' "$prefix" 'repair missing watcher supervision by letting the OpenCode TUI plugin arm after idle; use bin/fm-watch-arm.sh only as a manual recovery probe if the plugin reports failure.'
       ;;
     *)
       printf '%s%s\n' "$prefix" 'repair missing watcher supervision according to the session-start block for this harness; do not use shell &.'
@@ -162,11 +149,8 @@ repair_line() {
 
 ordinary_wake_line() {
   case "$HARNESS" in
-    pi|pi-signed)
+    pi)
       printf '%s\n' '- Ordinary wake: the Pi extension already owns watcher continuity; do not arm another cycle.'
-      ;;
-    opencode)
-      printf '%s\n' '- Ordinary wake: the OpenCode TUI plugin already owns watcher continuity; do not arm manually.'
       ;;
     *)
       printf '%s\n' '- Ordinary wake: follow the continuation in the harness protocol below; do not use shell &.'
@@ -187,13 +171,13 @@ printf 'Current state:\n'
 if [ "$READ_ONLY" -eq 1 ]; then
   printf '%s\n' '- Lock: read-only; do not drain, arm, spawn, steer, merge, or repair fleet state here.'
 else
-  printf '%s\n' '- Lock: held by this session; this session owns normal supervision unless away mode says otherwise.'
+  printf '%s\n' '- Lock: held by this session; this session owns normal supervision.'
 fi
 if [ "$AFK" -eq 1 ]; then
   if [ "$AFK_MODE" = quiet ]; then
-    printf '%s\n' '- Quiet mode: active; load /quiet and keep normal harness supervision paused while the daemon owns the watcher. Ordinary captain chat does NOT exit it - only an explicit /quiet off does.'
+    printf '%s\n' '- Quiet posture: active; load /quiet. Pi ordinary supervision remains active, while routine captain-facing updates stay batched. Ordinary captain chat does NOT exit it - only an explicit /quiet off does.'
   else
-    printf '%s\n' '- Away mode: active; load /afk and keep normal harness supervision paused while the daemon owns the watcher.'
+    printf '%s\n' '- Away posture: active; load /afk. Pi ordinary supervision remains active, while captain-facing updates follow the away policy.'
   fi
 else
   printf '%s\n' '- Away/quiet mode: inactive.'

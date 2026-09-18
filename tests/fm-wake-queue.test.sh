@@ -4,8 +4,8 @@
 # waits, interruption safety, signal catch-up while no watcher runs, stale/check enqueue-before-suppressor
 # ordering, atomic double-drain, duplicate collapse, and liveness assertion.
 # Nothing is lost and nothing is double-consumed. General watcher/lock liveness
-# lives in fm-watcher-lock.test.sh; daemon classification/injection in
-# fm-daemon.test.sh.
+# lives in fm-watcher-lock.test.sh; classification lives in the watcher triage
+# suite.
 set -u
 
 # shellcheck source=tests/wake-helpers.sh

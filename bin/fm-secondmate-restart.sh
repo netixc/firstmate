@@ -6,7 +6,7 @@
 #
 # This is the executable half of /updatefirstmate's reload step. A running agent
 # holds AGENTS.md and every skill it has loaded frozen from launch, and no
-# verified harness offers a reload, so a re-read steer cannot replace either -
+# Pi offers no reload, so a re-read steer cannot replace either -
 # it appends a second copy of the mate's own job description with no defined
 # precedence. Replacing the agent is the only mechanism that guarantees the new
 # bytes are the ones read, and the only one that re-resolves the launch-time

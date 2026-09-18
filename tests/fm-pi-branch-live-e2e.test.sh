@@ -26,7 +26,7 @@
 # model resolution stays empty by construction. The 429 probe intercepts its
 # only request before transport, and the precedence probes read only a local
 # placeholder key for their never-contacted fake provider. Run after
-# every Pi upgrade and before trusting refreshed per-harness evidence
+# every Pi upgrade and before trusting refreshed Pi evidence
 # (docs/verification/runtime-backends.md).
 set -u
 

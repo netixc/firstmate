@@ -1587,17 +1587,17 @@ if (dispatch("check: unresolved fleet event", []).accepted) {
   throw new Error("branch accepted an unscoped, non-heartbeat fleet wake");
 }
 
-// Away mode still owns supervision regardless of default-on eligibility.
-writeFileSync(`${home}/state/.afk`, "");
-if (dispatch("signal: while afk").accepted) throw new Error("branch accepted a wake during away mode");
+// Away and quiet are posture only; the ordinary supervision branch stays active.
+writeFileSync(`${home}/state/.afk`, "quiet\n");
+if (!dispatch("signal: while quiet").accepted) throw new Error("branch refused a wake during quiet posture");
 rmSync(`${home}/state/.afk`);
-if (!dispatch("signal: gates cleared").accepted) throw new Error("branch refused a wake with gates cleared");
-await settle(() => (globalThis.__fmPrompts ?? []).length === 3, "branch wake prompts");
+if (!dispatch("signal: posture cleared").accepted) throw new Error("branch refused a wake after posture cleared");
+await settle(() => (globalThis.__fmPrompts ?? []).length === 4, "branch wake prompts");
 process.exit(0);
 EOF
   status=$?
   out=$(cat "$TMP_ROOT/node-output")
-  expect_code 0 "$status" "default-on eligibility, heartbeat routing, and afk gating must bind: $out"
+  expect_code 0 "$status" "default-on eligibility, heartbeat routing, and posture-only supervision must bind: $out"
 
   PLUGIN="$repo/.pi/extensions/fm-branch-supervision.ts" FM_HOME="$TMP_ROOT/gating-home-2" FM_ROOT_OVERRIDE="$broken" \
     DRIVER_PRELUDE="$DRIVER_PRELUDE" node --input-type=module > "$TMP_ROOT/node-output" 2>&1 <<'EOF'

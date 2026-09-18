@@ -1,7 +1,7 @@
-# Pi and Pi-signed
+# Plain Pi
 
-The combined contract is genuine: Pi and the signed wrapper expose the same verified CLI and TUI behavior.
-Verified on 2026-07-27 with Pi and Pi-signed 0.82.0 unless a fact gives another version.
+Plain npm-installed Pi is Firstmate's only verified worker runtime.
+The authoritative executable verified for the current contraction is `/opt/homebrew/bin/pi`, version 0.85.1, resolving to `@earendil-works/pi-coding-agent/dist/bundle/cli.js`.
 
 ## Operating facts
 
@@ -12,7 +12,7 @@ Verified on 2026-07-27 with Pi and Pi-signed 0.82.0 unless a fact gives another 
 | Interrupt | Single Escape. |
 | Skill invocation | No separate verified form beyond normal command behavior; use natural language when the exact command is uncertain. |
 | Model flag | `--model <model>`. |
-| Effort flag | `--thinking <low\|medium\|high\|xhigh\|max>`; both identities expose the same levels and completed the same model-qualified max-thinking smoke. |
+| Effort flag | `--thinking <low\|medium\|high\|xhigh\|max>`. |
 | Model discovery | Run the selected executable as `<executable> --list-models [search]`; Pi's installed `docs/models.md` owns how built-in, extension-registered, and custom provider/model entries reach that list. |
 
 Native Codex sessions may request `ultra` through the native extension flag described by `../../../bin/fm-spawn.sh`; it is separate from Pi's thinking levels.
@@ -21,11 +21,7 @@ Pi's installed `packages/coding-agent/docs/settings.md` UI and display section d
 Fullscreen can bury steering messages by rewriting scrollback, so Firstmate avoids it when the installed CLI supports the override.
 `../../../bin/fm-spawn.sh --help` owns the executable-pinning and version-safe launch mechanics.
 
-Pi-signed is the signed wrapper identity verified on version 0.82.0.
-Firstmate records `pi-signed` without normalization and refuses rather than falling back to `pi` when that wrapper is unavailable.
-The observed signed process tree has an exact `pi-signed` wrapper parent with the Pi application as its child, while tmux reports the foreground command as the exact `pi-launcher` name for either selected executable.
-The installed plain `pi` command also execs that signed launcher.
-The router's Detection section owns how launch markers and ancestry select between the identities.
+Runtime identity must remain exactly `pi`; generic Node processes and lookalike names are not Pi liveness evidence.
 
 Keep the instructions as one positional argument.
 Multiple positional arguments become separate queued messages; the spawn template already preserves the one-argument shape.
@@ -38,8 +34,8 @@ The decision persists per path in `~/.pi/agent/trust.json`, so later spawns in t
 
 `../../../bin/fm-spawn.sh` keeps the worker turn-end extension in `state/`, outside the worktree, because project-local extension files worsen the trust gate and pollute the project.
 The extension listens for Pi's `turn_end` event, not `agent_end`, so supervision is notified after each completed turn rather than only when the whole run exits.
-Native-harness progress uses the separate generation-bound marker owned by `../../../bin/fm-busy-event.sh`; it never fabricates Pi turn completion.
-Pi sets `PI_CODING_AGENT=true` for its children as its harness-detection marker.
+Native Pi progress uses the separate generation-bound marker owned by `../../../bin/fm-busy-event.sh`; it never fabricates Pi turn completion.
+Pi sets `PI_CODING_AGENT=true` for its children as its runtime-detection marker.
 
 ## Primary integration
 
@@ -51,10 +47,10 @@ On native Windows, the extension runs its session-start, both PreToolUse, turn-e
 The primary watcher protocol also requires `.pi/extensions/fm-primary-pi-watch.ts`.
 The Pi engine auto-discovers both tracked project-local extensions once the project is trusted.
 The model arms through the `fm_watch_arm_pi` tool, never through a foreground shell arm.
-Native-harness adapters can discover the same guarded FirstMate tools and operational message allowlist through the public Pi event-bus contract in `.pi/extensions/lib/fm-native-contract.ts`; no Pi built-in tools cross that contract.
+Pi extensions can discover the same guarded Firstmate tools and operational-message allowlist through the public event-bus contract in `.pi/extensions/lib/fm-native-contract.ts`; no Pi built-in tools cross that contract.
 The tool result and clean-exit fallback are owned by `../../../docs/supervision-protocols/pi.md`.
-`../../../bin/fm-session-start.sh` reports when the live Pi-family session has not loaded both extensions and points at the selected executable after project trust as the fix, with `-e` as a trust-free fallback.
+`../../../bin/fm-session-start.sh` reports when the live Pi session has not loaded both extensions and points at `pi` after project trust as the fix, with `-e` as a trust-free fallback.
 
-When a secondmate is launched on Pi or Pi-signed, `../../../bin/fm-spawn.sh --secondmate` launches the selected executable with both `-e .pi/extensions/fm-primary-turnend-guard.ts` and `-e .pi/extensions/fm-primary-pi-watch.ts`.
+When a secondmate is launched, `../../../bin/fm-spawn.sh --secondmate` launches Pi with both `-e .pi/extensions/fm-primary-turnend-guard.ts` and `-e .pi/extensions/fm-primary-pi-watch.ts`.
 Both files already exist in the secondmate home's git worktree.
 The PreToolUse-equivalent watcher-arm seatbelt returns `{block: true}` from the `tool_call` event.
