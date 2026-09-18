@@ -56,9 +56,8 @@
 #   config/backend, then runtime auto-detection from the runtime firstmate's
 #   environment: $TMUX or HERDR_ENV=1, then tmux.
 #   Spawn-capable backends are tmux and Herdr. An auto-detected Herdr spawn
-#   prints a notice; auto-detected tmux stays silent. Codex App is not a session
-#   backend; docs/codex-app-coordination.md owns that companion boundary. Default
-#   tmux spawns do not write backend= to meta; absent backend= means tmux.
+#   prints a notice; auto-detected tmux stays silent. Default tmux spawns do not
+#   write backend= to meta; absent backend= means tmux.
 #   A backend spawn refusal (missing dependency, version gate, unauthenticated
 #   socket, or unsupported secondmate mode) is terminal for that selected backend;
 #   callers must surface it instead of silently retrying another backend.

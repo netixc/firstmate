@@ -5,8 +5,6 @@
 # tmux and Herdr are the complete supported backend set. Selection is explicit
 # through `--backend`, `FM_BACKEND`, or `config/backend`, with runtime
 # auto-detection only when no explicit choice exists.
-# Codex App companion threads are outside this backend set;
-# docs/codex-app-coordination.md owns that boundary.
 #
 # Compatibility contract: a task's meta may omit `backend=`; every reader here
 # treats that as `tmux` (fm_backend_of_meta), and fm-spawn.sh does not write
@@ -36,7 +34,6 @@ FM_BACKEND_CONFIG_DIR="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 # bin/backends/<name>.sh and empirical verification, mirroring AGENTS.md
 # section 4's harness-verification discipline. Herdr is verified against its
 # required real-binary CI lane but newer than tmux's long-proven default path.
-# Codex App remains outside the backend matrix; see docs/codex-app-coordination.md.
 FM_BACKEND_KNOWN="tmux herdr"
 FM_BACKEND_SPAWN="tmux herdr"
 

@@ -186,7 +186,6 @@ For capable Herdr sessions, the watcher replaces its terminal sleep with a bound
 Tmux and Herdr both have verified agent-process classifiers for secondmate recovery.
 Herdr uses Treehouse worktrees and one tab per task; [Watching and task containers](herdr-backend.md#watching-and-task-containers) owns workspace placement and recovery scope.
 Its optional presentation projection may place one clean new task in a disposable workspace without changing endpoint authority or lifecycle ownership; [Presentation spaces](herdr-backend.md#presentation-spaces) owns that behavior.
-Codex App remains a separate companion-thread surface documented in [`codex-app-coordination.md`](codex-app-coordination.md), outside the worker runtime matrix.
 
 ## Worktrees, not branches in your checkout
 

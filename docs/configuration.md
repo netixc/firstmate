@@ -130,7 +130,6 @@ New spawns choose the backend in this order: an explicit `--backend` flag author
 When both markers are present, `$TMUX` wins because it is the innermost session layer.
 Auto-detected Herdr prints a stderr notice naming `config/backend` and `--backend tmux` as opt-outs; auto-detected tmux stays silent.
 Any value other than `tmux` or `herdr` is rejected.
-Codex App is not a worker backend; [`docs/codex-app-coordination.md`](codex-app-coordination.md) owns its separate companion-thread boundary.
 
 The session-start secondmate liveness sweep uses the recovery-grade `fm_backend_agent_state` classifier where verified.
 The comment above that function in `bin/fm-backend.sh` is the single owner of its detailed state contract and recovery authorization.
