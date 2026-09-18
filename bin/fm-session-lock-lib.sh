@@ -24,13 +24,13 @@ fm_harness_path_name() {  # <path>
 # basename `pi`. Generic Node/Python processes, parent directory names, and
 # later arguments never count as Pi identity.
 fm_harness_process_matches() {  # <comm> <args>
-  local comm=$1 args=$2 base argv0 name
+  local comm=$1 args=$2 base argv0
   base=$(basename -- "$comm")
   if printf '%s' "$base" | grep -qE "$FM_HARNESS_RE"; then
     return 0
   fi
   argv0=${args%% *}
-  if name=$(fm_harness_path_name "$comm") || name=$(fm_harness_path_name "$argv0"); then
+  if fm_harness_path_name "$comm" || fm_harness_path_name "$argv0"; then
     return 0
   fi
   return 1

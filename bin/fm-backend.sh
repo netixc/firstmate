@@ -549,7 +549,7 @@ fm_backend_composer_state() {  # <backend> <target> [expected-label] -> empty|pe
 # primitive so callers that only need a fast alive/dead read (recovery
 # digests, the session-start fleet digest) do not re-derive it inline.
 fm_backend_target_exists() {  # <backend> <target> [expected-label]
-  local backend=$1 target=$2 expected_label=${3:-} session pane
+  local backend=$1 target=$2 session pane
   case "$backend" in
     tmux)
       tmux display-message -p -t "$target" '#{pane_id}' >/dev/null 2>&1
