@@ -1126,7 +1126,7 @@ fm_firstmate_root_home() {
 # separate clones of one origin share a single lock; an origin-less local-only
 # project falls back to its own worktree top instead of failing to resolve.
 fm_treehouse_project_lock_path() {  # <project-dir>
-  local project=$1 root origin identity hash top
+  local project=$1 root root_state origin identity hash top
   [ -d "$project" ] || return 1
   root=$(fm_firstmate_root_home "$FM_HOME") || return 1
   origin=$(git -C "$project" remote get-url origin 2>/dev/null || true)
@@ -1143,8 +1143,10 @@ fm_treehouse_project_lock_path() {  # <project-dir>
     identity=$top
   fi
   hash=$(printf '%s' "$identity" | git hash-object --stdin 2>/dev/null) || return 1
-  [ -d "$root/state" ] || return 1
-  printf '%s/.treehouse-project-%s.lock\n' "$root/state" "$hash"
+  root_state="$root/state"
+  [ "$root" = "$(CDPATH='' cd -- "$FM_HOME" 2>/dev/null && pwd -P)" ] && root_state=$STATE
+  [ -d "$root_state" ] || return 1
+  printf '%s/.treehouse-project-%s.lock\n' "$root_state" "$hash"
 }
 
 # A Treehouse slot has the managed pool's fixed <pool>/<slot>/<repo> layout.
