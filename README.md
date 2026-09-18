@@ -137,7 +137,7 @@ Setup guides for tmux (the default) and Herdr are linked in [Documentation](#doc
 
 You chat with the first mate.
 It routes each request to a crewmate in its own session endpoint and git worktree, supervises the fleet with a zero-token event-driven watcher, and brings you finished PRs, approved local merges, or investigation reports.
-Optional secondmates extend this to persistent local or whole-home remote second mates, dispatch profiles let you steer which harness handles which task, and opt-in Relay lets the same fleet answer public mentions.
+Optional secondmates extend this to persistent local or whole-home remote second mates, dispatch profiles let you steer which Pi model and effort handle each task, and opt-in Relay lets the same fleet answer public mentions.
 Codex App remains a coordination surface, not a worker runtime or session backend; [docs/codex-app-coordination.md](docs/codex-app-coordination.md) owns that boundary.
 
 Full architecture - the supervision engine, worktree isolation, secondmates, dispatch profiles, project modes, optional Relay, fleet sync, and self-update - is in [docs/architecture.md](docs/architecture.md).

@@ -15,7 +15,7 @@ The design source is the captain-approved forked-supervision architecture board,
 The supervision branch lives in `.pi/extensions/fm-branch-supervision.ts` and is loaded only by Pi.
 The bash-side additions (leases, the outcome store, session-start recovery) are inert in a home with no branch state: no lease files exist, no actor variable is set, every guard passes silently, and no new state appears (`tests/fm-branch-supervision.test.sh` holds this).
 A home that already has an outcome store still receives the shared drain recovery described in [Lost-wake outcome backstop](#lost-wake-outcome-backstop).
-- It does not change which harness is primary and never moves a home to Pi.
+- It does not change the primary's plain-Pi runtime.
 
 ## Components and their owners
 
