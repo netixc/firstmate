@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 # Behavior tests for fm-spawn.sh batch dispatch (`id=repo` pairs).
 #
-# These exercise argument routing only: each spawn attempt fails fast at the
-# missing-brief check, which is reached before any tmux/treehouse side effect, so
-# the tests create no windows or worktrees. FM_SPAWN_NO_GUARD=1 keeps them off the
-# live watcher guard / state. Parser and path-scoping cases are table-driven; the
-# only behavior asserted on its own is "a multi-pair batch does not stop after the
-# first failure".
+# These exercise argument routing only: each spawn attempt fails at or before
+# the missing-brief check, so the tests create no windows or worktrees.
+# FM_SPAWN_NO_GUARD=1 keeps them off the live watcher guard / state. Parser and
+# path-scoping cases are table-driven; the only behavior asserted on its own is
+# "a multi-pair batch does not stop after the first failure".
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -14,7 +13,11 @@ set -u
 
 SPAWN="$ROOT/bin/fm-spawn.sh"
 TMP_ROOT=$(fm_test_tmproot fm-spawn-batch)
-export FM_BACKEND=tmux
+FAKEBIN="$TMP_ROOT/fakebin"
+mkdir -p "$FAKEBIN"
+fm_fake_exit0 "$FAKEBIN" pi
+PATH="$FAKEBIN:$PATH"
+export FM_BACKEND PATH
 
 # Clear ambient firstmate overrides so the behavior test owns its environment.
 run_spawn() {
@@ -100,7 +103,7 @@ test_projects_path_scoping() {
     [ "$status" -ne 0 ] || fail "$label: spawn with missing brief should fail"
     expected="error: task $id has no brief at inaccessible data path $home/data/$id/brief.md"
     printf '%s\n' "$out" | grep -F "$expected" >/dev/null \
-      || fail "$label: projects/alpha was not resolved through the home before the brief check"
+      || fail "$label: projects/alpha was not resolved through the home before the brief check: $out"
     printf '%s\n' "$out" | grep -F 'cd: projects/alpha' >/dev/null \
       && fail "$label: spawn resolved projects/alpha from the caller cwd"
   done <<'ROWS'
