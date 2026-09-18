@@ -624,7 +624,10 @@ EOF
 
 run_session_start_herdr_secondmate() {
   local root=$1 home=$2 fakebin=$3 mate=$4 log=$5 state=$6
-  FM_BACKEND=herdr FM_FAKE_HERDR_LOG="$log" FM_FAKE_HERDR_STATE="$state" \
+  # This fixture isolates Herdr husk recovery; its synthetic home is not a
+  # checkout, so do not let the production pre-launch sync obscure that path.
+  FM_BACKEND=herdr FM_SKIP_SECONDMATE_SYNC=1 \
+    FM_FAKE_HERDR_LOG="$log" FM_FAKE_HERDR_STATE="$state" \
     FM_FAKE_SECOND_MATE_ID="$SESSION_START_HERDR_SECOND_MATE_ID" \
     FM_FAKE_HARNESS_PID=$$ \
     run_session_start "$home" "$root" "$fakebin:$BASE_PATH"

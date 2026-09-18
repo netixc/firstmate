@@ -165,7 +165,9 @@ prod() { # <backend> <parent-home> <command...>
 
 wait_for_capture_count() { # <home> <needle> <count>
   local home=$1 needle=$2 count=$3 found _
-  for _ in $(seq 1 240); do
+  # Hosted Herdr runners can be busy after the preceding real-Herdr family;
+  # keep this bounded while allowing the production Pi startup to settle.
+  for _ in $(seq 1 600); do
     found=$(jq -r --arg home "$home" --arg needle "$needle" \
       'select(.kind == "prompt" and .home == $home and (.prompt | contains($needle))) | 1' \
       "$CAPTURE" 2>/dev/null | wc -l | tr -d ' ')
