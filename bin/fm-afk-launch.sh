@@ -63,16 +63,24 @@ catchup_pending() {
 }
 
 record_quiet() {
-  local pending
+  local pending marker="$STATE/.afk"
   catchup_pending && return 1
   if fm_afk_contract_present "$STATE"; then
     log "away posture is already active; return from it before entering quiet posture"
     return 1
   fi
-  [ ! -d "$STATE/.afk" ] || { log "state/.afk is not a regular posture marker"; return 1; }
+  if [ -e "$marker" ] || [ -L "$marker" ]; then
+    if [ -L "$marker" ] || [ ! -f "$marker" ] \
+      || [ "$(sed -n '1p' "$marker")" != quiet ] \
+      || ! sed -n '2p' "$marker" | grep -Eq '^[0-9]+$' \
+      || [ "$(wc -l < "$marker" | tr -d ' ')" -ne 2 ]; then
+      log "state/.afk is not a valid quiet posture marker"
+      return 1
+    fi
+  fi
   pending=$(mktemp "$STATE/.afk.pending.XXXXXX") || return 1
   { printf 'quiet\n'; date '+%s'; } > "$pending" || { rm -f "$pending"; return 1; }
-  mv "$pending" "$STATE/.afk" || { rm -f "$pending"; return 1; }
+  mv "$pending" "$marker" || { rm -f "$pending"; return 1; }
   log "quiet posture recorded; Pi ordinary supervision remains active"
 }
 

@@ -60,6 +60,35 @@ test_quiet_refresh_is_idempotent_and_stop_clears_it() {
   pass "quiet posture refreshes and stops without another process"
 }
 
+test_quiet_refuses_malformed_existing_marker_without_overwrite() {
+  local home before out rc
+  home=$(new_home quiet-malformed)
+  printf 'away\n123\n' > "$home/state/.afk"
+  before=$(cat "$home/state/.afk")
+  set +e
+  out=$(run_launch "$home" quiet 2>&1)
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "quiet entry should refuse a non-quiet marker"
+  assert_contains "$out" 'not a valid quiet posture marker' \
+    "malformed marker refusal omitted its reason"
+  [ "$(cat "$home/state/.afk")" = "$before" ] \
+    || fail "quiet entry overwrote a non-quiet marker"
+
+  home=$(new_home quiet-symlink)
+  printf 'quiet\n123\n' > "$home/target"
+  ln -s "$home/target" "$home/state/.afk"
+  set +e
+  out=$(run_launch "$home" quiet 2>&1)
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "quiet entry should refuse a symlink marker"
+  [ -L "$home/state/.afk" ] || fail "quiet entry replaced a symlink marker"
+  [ "$(readlink "$home/state/.afk")" = "$home/target" ] \
+    || fail "quiet entry changed the symlink target"
+  pass "quiet posture refuses malformed and symlink markers without overwriting"
+}
+
 test_away_confirm_uses_contract_and_clears_quiet() {
   local home out
   home=$(new_home away-confirm)
@@ -131,6 +160,7 @@ test_unknown_command_is_rejected_generically() {
 test_help_names_only_posture_commands
 test_quiet_records_marker_without_launch_state
 test_quiet_refresh_is_idempotent_and_stop_clears_it
+test_quiet_refuses_malformed_existing_marker_without_overwrite
 test_away_confirm_uses_contract_and_clears_quiet
 test_quiet_refuses_during_away_posture
 test_stop_archives_away_contract
