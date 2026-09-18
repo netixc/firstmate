@@ -140,7 +140,7 @@ cat > "$FAKEBIN/pi" <<EOF
 case " \$* " in
   *" --help "*|*" --version "*) exec '$REAL_PI' "\$@" ;;
 esac
-exec '$REAL_PI' -e '$CAPTURE_EXTENSION' "\$@"
+exec '$REAL_PI' --offline -e '$CAPTURE_EXTENSION' "\$@"
 EOF
 chmod +x "$FAKEBIN/pi"
 
