@@ -217,6 +217,7 @@ run_backend_lifecycle() { # <herdr|tmux>
   local meta target record handled body corr pending phase got
 
   mkdir -p "$parent/state" "$parent/data" "$parent/config" "$parent/projects"
+  printf 'pi\n' > "$parent/config/secondmate-harness"
   git clone -q --no-hardlinks "$ROOT" "$mate"
   git -C "$mate" checkout -q --detach HEAD
   mkdir -p "$mate/state" "$mate/data" "$mate/config" "$mate/projects"
