@@ -610,6 +610,42 @@ test_secondmate_relaunch_picks_up_the_configured_harness_pin() {
   pass "fm-control relaunch: a secondmate relaunch re-resolves its durable configured harness pin"
 }
 
+test_secondmate_relaunch_rejects_unsupported_configured_harness_before_stop() {
+  local dir home out rc
+  dir=$(new_case smunsupported sm5)
+  home="$dir/home"
+  mkdir -p "$home/config" "$home/data/sm5"
+  printf 'unsupported-runtime\n' > "$home/config/secondmate-harness"
+  printf '# secondmate brief\n' > "$home/data/sm5/brief.md"
+  fm_git_worktree "$dir/proj" "$dir/smhome" sm-branch
+  mkdir -p "$dir/smhome/state" "$dir/smhome/data" "$dir/smhome/bin"
+  printf 'sm5\n' > "$dir/smhome/.fm-secondmate-home"
+  printf '# agents\n' > "$dir/smhome/AGENTS.md"
+  {
+    echo "window=fmses:fm-sm5"
+    echo "endpoint_task_id=sm5"
+    echo "worktree=$dir/smhome"
+    echo "project=$dir/smhome"
+    echo "harness=pi"
+    echo "kind=secondmate"
+    echo "mode=secondmate"
+    echo "yolo=off"
+    echo "model=default"
+    echo "effort=default"
+    echo "home=$dir/smhome"
+  } > "$home/state/sm5.meta"
+  printf '%s\n' "fm-sm5" > "$dir/fake/windows"
+  printf '%s' "$dir/smhome" > "$dir/fake/cwd"
+  printf 'pi' > "$dir/fake/becomes"
+  out=$(run_control "$dir" sm5 relaunch); rc=$?
+  expect_code 1 "$rc" "an unsupported configured secondmate harness should refuse"
+  assert_contains "$out" "only 'pi' is supported" \
+    "the relaunch refusal should state the Pi-only boundary"
+  [ "$(cat "$dir/fake/command")" = pi ] \
+    || fail "a configured harness refusal must not stop the running agent"
+  pass "fm-control relaunch: unsupported configured secondmate runtime is refused before stop"
+}
+
 test_secondmate_relaunch_ignores_invalid_configured_effort_before_stop() {
   local dir home out rc
   dir=$(new_case invalid-effort sm6)
@@ -1305,6 +1341,7 @@ test_native_ultra_relaunch_preserves_profile_and_rejects_before_stop
 test_explicit_model_wins_over_the_recorded_one
 test_relaunch_onto_an_unsupported_runtime_is_refused
 test_secondmate_relaunch_picks_up_the_configured_harness_pin
+test_secondmate_relaunch_rejects_unsupported_configured_harness_before_stop
 test_secondmate_relaunch_ignores_invalid_configured_effort_before_stop
 test_explicit_secondmate_harness_ignores_configured_profile_axes
 test_ship_relaunch_ignores_the_crew_harness_config
