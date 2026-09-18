@@ -175,8 +175,35 @@ wait_for_capture_count() { # <home> <needle> <count>
   return 1
 }
 
-wait_for_handled() { # <record>
-  local record=$1 handled="${1%/*}/handled/${1##*/}" _
+find_inbox_record() { # <inbox>
+  local inbox=$1 candidate name found= count=0
+  for candidate in "$inbox"/*.msg "$inbox/handled"/*.msg; do
+    [ -f "$candidate" ] || continue
+    name=${candidate##*/}
+    case "${name%.msg}" in
+      ''|*[!0-9]*) continue ;;
+    esac
+    found=$candidate
+    count=$((count + 1))
+  done
+  [ "$count" -eq 1 ] || return 1
+  printf '%s\n' "$found"
+}
+
+wait_for_inbox_record() { # <inbox>
+  local inbox=$1 record _
+  for _ in $(seq 1 240); do
+    if record=$(find_inbox_record "$inbox"); then
+      printf '%s\n' "$record"
+      return 0
+    fi
+    sleep 0.25
+  done
+  return 1
+}
+
+wait_for_handled() { # <handled-record>
+  local handled=$1 _
   for _ in $(seq 1 240); do
     [ -f "$handled" ] && return 0
     sleep 0.25
@@ -219,10 +246,11 @@ run_backend_lifecycle() { # <herdr|tmux>
 
   prod "$backend" "$parent" "$ROOT/bin/fm-send.sh" "$id" "$request" >/dev/null \
     || fail "$backend: production send wrapper failed"
-  record=$(find "$parent/state/$id.inbox" -maxdepth 1 -name '*.msg' -print | sort | tail -1)
-  [ -n "$record" ] || fail "$backend: send did not enqueue the exact task inbox record"
-  handled="${record%/*}/handled/${record##*/}"
-  wait_for_handled "$record" || fail "$backend: worker did not acknowledge the durable inbox record"
+  record=$(wait_for_inbox_record "$parent/state/$id.inbox") \
+    || fail "$backend: send did not leave exactly one numeric task inbox record"
+  record="$parent/state/$id.inbox/${record##*/}"
+  handled="$parent/state/$id.inbox/handled/${record##*/}"
+  wait_for_handled "$handled" || fail "$backend: worker did not acknowledge the durable inbox record"
   [ ! -e "$record" ] || fail "$backend: acknowledged inbox record remained unhandled"
   [ -f "$handled" ] || fail "$backend: acknowledged inbox record was not moved into handled/"
   body=$(fm_task_inbox_body "$handled") || fail "$backend: handled record body could not be read"
