@@ -492,6 +492,24 @@ test_remote_mate_restarts_over_the_transport_hop() {
   pass "T6 a remote mate restarts through the host-local control plane over the fm-on hop"
 }
 
+test_remote_restart_rejects_unsupported_parent_harness() {
+  local dir out rc
+  dir=$(new_case remote-unsupported)
+  setup_remote_case "$dir" sm2 ok
+  printf 'unsupported-runtime\n' > "$dir/home/config/secondmate-harness"
+
+  out=$(run_restart "$dir" sm2); rc=$?
+
+  expect_code 3 "$rc" "an unsupported parent harness must not permit a remote restart"$'\n'"$out"
+  assert_contains "$out" "nudged: sm2: the configured secondmate harness is unsupported" \
+    "the remote mate must be kept on the safe fallback path"
+  assert_not_contains "$out" "restarted: sm2" \
+    "an unsupported parent harness must not be reported as restarted"
+  assert_not_contains "$(cat "$dir/ssh.log")" "fm-remote-secondmate-control.sh relaunch" \
+    "an unsupported parent harness must not cross the relaunch transport"
+  pass "a remote restart rejects unsupported parent harness configuration"
+}
+
 # --- T7: an unreachable host is unknown, never a claimed reload --------------
 test_unreachable_host_is_reported_unknown() {
   local dir out rc
@@ -782,6 +800,7 @@ test_refused_restart_falls_back_without_claiming_a_reload
 test_local_restart_uses_the_home_pin_and_reports_what_ran
 test_native_ultra_restart_keeps_local_and_remote_profiles
 test_remote_mate_restarts_over_the_transport_hop
+test_remote_restart_rejects_unsupported_parent_harness
 test_unreachable_host_is_reported_unknown
 test_concurrent_reply_cannot_release_persist_gate
 test_persist_waits_are_polled_together
