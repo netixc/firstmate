@@ -973,6 +973,29 @@ SH
   pass "fail-on-gate-skip converts herdr-not-found into a hard failure"
 }
 
+test_repeated_fail_on_gate_skip_tokens() {
+  local tmp skip_f out rc
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-repeat.XXXXXX")
+  skip_f="$tmp/repeated-skip.test.sh"
+  out="$tmp/out.txt"
+  cat >"$skip_f" <<'SH'
+#!/usr/bin/env bash
+echo "skip: live: herdr absent"
+exit 0
+SH
+  chmod +x "$skip_f"
+  set +e
+  "$RUNNER" --fail-on-gate-skip 'live: herdr absent' \
+    --fail-on-gate-skip 'live: pi absent' "$skip_f" >"$out" 2>"$tmp/err.txt"
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || fail "any repeated fail-on-gate-skip token must be enforced"
+  grep -q 'FM_TEST_SUMMARY total=1 failed=1' "$out" \
+    || fail "repeated fail-on-gate-skip summary must report failed=1"
+  rm -rf "$tmp"
+  pass "repeated fail-on-gate-skip tokens are all enforced"
+}
+
 test_exclude_family() {
   local listed
   listed=$("$RUNNER" --list --all --exclude-family real-herdr-gated)
@@ -1755,6 +1778,7 @@ test_gate_skip_reason_is_recorded
 test_a_run_that_ran_records_no_skip_reason
 test_live_guards_expect_a_capability_skip_class
 test_fail_on_gate_skip_token
+test_repeated_fail_on_gate_skip_tokens
 test_exclude_family
 test_list_scheduled_proven_isolated_uses_serial_weights
 test_list_scheduled_non_lane_selections_use_serial_weights

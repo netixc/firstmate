@@ -350,9 +350,9 @@ jobs:
           # Serial only. Herdr and the credential-safe real Pi lifecycle
           # regression are mandatory in this lane; neither may gate-skip.
           bin/fm-test-run.sh --family real-herdr-gated \
-            --fail-on-gate-skip 'herdr absent' \
-            --fail-on-gate-skip 'pi absent' \
-            --fail-on-gate-skip 'tmux absent' \
+            --fail-on-gate-skip 'live: herdr absent' \
+            --fail-on-gate-skip 'live: pi absent' \
+            --fail-on-gate-skip 'live: tmux absent' \
             --json "$RUNNER_TEMP/fm-test/fm-test-timing-herdr-${RUNNER_OS}.json"
       - name: Cleanup job-owned Herdr lab sessions
         if: always()

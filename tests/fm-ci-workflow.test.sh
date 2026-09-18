@@ -169,8 +169,8 @@ puts JSON.generate(
   [ "$oses" = "ubuntu-latest macos-14" ] \
     || fail "required Herdr CI must cover hosted Linux and macOS, got: $oses"
   [ "$pi_step" = true ] || fail "required Herdr CI no longer installs plain Pi for lifecycle coverage"
-  for needle in "--family real-herdr-gated" "--fail-on-gate-skip 'herdr absent'" \
-    "--fail-on-gate-skip 'pi absent'" "--fail-on-gate-skip 'tmux absent'"; do
+  for needle in "--family real-herdr-gated" "--fail-on-gate-skip 'live: herdr absent'" \
+    "--fail-on-gate-skip 'live: pi absent'" "--fail-on-gate-skip 'live: tmux absent'"; do
     case "$run" in *"$needle"*) ;; *) fail "required Herdr family step lost: $needle" ;; esac
   done
   pass "required Herdr CI keeps hosted Linux/macOS and hard-fails missing Herdr, Pi, or tmux lifecycle coverage"

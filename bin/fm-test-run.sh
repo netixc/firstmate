@@ -48,7 +48,8 @@
 #                   dedicated required Herdr lane owns that coverage)
 #   --fail-on-gate-skip <token>
 #                   after each script, fail the run if any output line contains
-#                   "skip: <token>" (e.g. --fail-on-gate-skip 'herdr absent').
+#                   "skip: <token>" (repeatable; e.g. --fail-on-gate-skip
+#                   'herdr absent').
 #                   The required Herdr CI lane uses this so a missing pin cannot
 #                   silently pass as a gate skip.
 #   --jobs N        run the selected scripts with up to N concurrent workers.
@@ -175,7 +176,7 @@ BASE_REF=origin/main
 JSON_PATH=
 SCRIPTS=()
 EXCLUDE_FAMILIES=()
-FAIL_ON_GATE_SKIP=
+FAIL_ON_GATE_SKIPS=()
 JOBS=1
 JOBS_EXPLICIT=0
 JOBS_MAX=8
@@ -1631,6 +1632,17 @@ detect_gate_skip_token() {
   grep -F -q "skip: $token" "$file" 2>/dev/null
 }
 
+required_gate_skip_token() {
+  local file=$1 token
+  for token in "${FAIL_ON_GATE_SKIPS[@]+${FAIL_ON_GATE_SKIPS[@]}}"; do
+    if detect_gate_skip_token "$file" "$token"; then
+      printf '%s\n' "$token"
+      return 0
+    fi
+  done
+  return 1
+}
+
 apply_exclude_families() {
   local s fam keep ex
   local -a kept=()
@@ -1864,11 +1876,11 @@ while [ "$#" -gt 0 ]; do
       ;;
     --fail-on-gate-skip)
       [ "$#" -gt 1 ] || die "--fail-on-gate-skip requires a token (e.g. 'herdr not found')"
-      FAIL_ON_GATE_SKIP=$2
+      FAIL_ON_GATE_SKIPS+=("$2")
       shift 2
       ;;
     --fail-on-gate-skip=*)
-      FAIL_ON_GATE_SKIP=${1#--fail-on-gate-skip=}
+      FAIL_ON_GATE_SKIPS+=("${1#--fail-on-gate-skip=}")
       shift
       ;;
     -h|--help)
@@ -1995,8 +2007,8 @@ apply_exclude_families
 if [ "${#EXCLUDE_FAMILIES[@]}" -gt 0 ]; then
   SELECTION_DESC="${SELECTION_DESC};exclude-family=$(IFS=,; printf '%s' "${EXCLUDE_FAMILIES[*]}")"
 fi
-if [ -n "$FAIL_ON_GATE_SKIP" ]; then
-  SELECTION_DESC="${SELECTION_DESC};fail-on-gate-skip=$FAIL_ON_GATE_SKIP"
+if [ "${#FAIL_ON_GATE_SKIPS[@]}" -gt 0 ]; then
+  SELECTION_DESC="${SELECTION_DESC};fail-on-gate-skip=$(IFS=,; printf '%s' "${FAIL_ON_GATE_SKIPS[*]}")"
 fi
 if [ "$LIST_ONLY" -eq 1 ] || [ "$LIST_SCHEDULED" -eq 1 ]; then
   if [ "$LIST_SCHEDULED" -eq 1 ]; then
@@ -2213,8 +2225,8 @@ record_script_result() {
   family=$(family_for_basename "$base")
   expected=$(expected_gate_skip_for_family "$family")
 
-  if [ -n "$FAIL_ON_GATE_SKIP" ] && detect_gate_skip_token "$out" "$FAIL_ON_GATE_SKIP"; then
-    log "required gate skip token seen in $script: skip: $FAIL_ON_GATE_SKIP"
+  if token=$(required_gate_skip_token "$out"); then
+    log "required gate skip token seen in $script: skip: $token"
     rc=1
   fi
 
