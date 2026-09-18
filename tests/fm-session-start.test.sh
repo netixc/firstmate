@@ -423,7 +423,7 @@ spawned="${state}.spawned"
 printf '%s\n' "$*" >> "$log"
 case "${1:-} ${2:-}" in
   "status --json")
-    printf '%s\n' '{"client":{"protocol":14,"version":"test"},"server":{"running":true}}'
+    printf '%s\n' '{"client":{"protocol":22,"version":"0.9.0"},"server":{"running":true}}'
     ;;
   "session list")
     printf '{"sessions":[{"name":"default","running":true,"socket_path":"%s.sock"}]}\n' "$state"
