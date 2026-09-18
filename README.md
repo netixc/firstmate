@@ -138,7 +138,6 @@ Setup guides for tmux (the default) and Herdr are linked in [Documentation](#doc
 You chat with the first mate.
 It routes each request to a crewmate in its own session endpoint and git worktree, supervises the fleet with a zero-token event-driven watcher, and brings you finished PRs, approved local merges, or investigation reports.
 Optional secondmates extend this to persistent local or whole-home remote second mates, dispatch profiles let you steer which Pi model and effort handle each task, and opt-in Relay lets the same fleet answer public mentions.
-Codex App remains a coordination surface, not a worker runtime or session backend; [docs/codex-app-coordination.md](docs/codex-app-coordination.md) owns that boundary.
 
 Full architecture - the supervision engine, worktree isolation, secondmates, dispatch profiles, project modes, optional Relay, fleet sync, and self-update - is in [docs/architecture.md](docs/architecture.md).
 
@@ -184,7 +183,6 @@ Firstmate's skills live in two separate places with different audiences:
 - [docs/voice-relay.md](docs/voice-relay.md) - the optional spoken interface: setup on both machines, measured round-trip cost, what a spoken answer may read, and what this build does not do yet.
 - [docs/tmux-backend.md](docs/tmux-backend.md) - current setup and limits for the tmux reference backend.
 - [docs/herdr-backend.md](docs/herdr-backend.md) - current setup, CI coverage, safety boundaries, and limits for the Herdr backend.
-- [docs/codex-app-coordination.md](docs/codex-app-coordination.md) - visible Codex Desktop companion-thread coordination outside the worker runtime matrix.
 - [docs/verification/runtime-backends.md](docs/verification/runtime-backends.md) - active maintainer verification for runtime backend guarantees.
 - [docs/gitlab-merge-watch.md](docs/gitlab-merge-watch.md) - maintainer verification for watching and merging GitLab merge requests on arbitrary instances.
 - [docs/turnend-guard.md](docs/turnend-guard.md) - the primary session's current "no turn ends blind" backstop, scope, loop safety, and compatibility limits.
