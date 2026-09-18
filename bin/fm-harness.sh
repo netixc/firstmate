@@ -201,6 +201,18 @@ detect_own() {
   fi
 }
 
+# Reject configuration that cannot select the only supported worker runtime.
+configured_harness() {  # <config-name> <harness>
+  local source=$1 harness=$2
+  case "$harness" in
+    pi) printf '%s\n' "$harness" ;;
+    *)
+      echo "error: unsupported harness '$harness' in config/$source; only 'pi' is supported" >&2
+      return 1
+      ;;
+  esac
+}
+
 # Resolve the effective crewmate harness: config/crew-harness (a bare adapter
 # name) wins; absent or "default" mirrors firstmate's own harness.
 resolve_crew() {
@@ -209,7 +221,7 @@ resolve_crew() {
   if [ -z "$crew" ] || [ "$crew" = "default" ]; then
     detect_own
   else
-    echo "$crew"
+    configured_harness crew-harness "$crew"
   fi
 }
 
@@ -257,7 +269,7 @@ resolve_secondmate() {
   if [ -z "$sm" ] || [ "$sm" = "default" ]; then
     resolve_crew
   else
-    echo "$sm"
+    configured_harness secondmate-harness "$sm"
   fi
 }
 

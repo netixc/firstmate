@@ -71,6 +71,23 @@ test_pid_namespace_pi_is_examined() {
   pass "Pi detection examines pid 1 in a namespace"
 }
 
+test_unsupported_configured_harness_is_rejected_at_resolution() {
+  local source cfg err rc
+  for source in crew-harness secondmate-harness; do
+    cfg="$TMP_ROOT/config-$source"
+    mkdir -p "$cfg"
+    printf 'unsupported-runtime\n' > "$cfg/$source"
+    err="$cfg/error"
+    rc=0
+    PATH="$BASE_PATH" PI_CODING_AGENT=true FM_CONFIG_OVERRIDE="$cfg" \
+      "$HARNESS" "${source%-harness}" >/dev/null 2>"$err" || rc=$?
+    [ "$rc" -ne 0 ] || fail "$source should fail during harness resolution"
+    assert_contains "$(cat "$err")" "only 'pi' is supported" \
+      "$source rejection should state the Pi-only boundary"
+  done
+  pass "unsupported harness configuration is rejected by the shared resolver"
+}
+
 test_unknown_runtime_uses_unknown_protocol() {
   local out
   out=$("$RENDER" --harness unknown)
@@ -96,5 +113,6 @@ test_pi_protocol_and_effort_validation() {
 test_marker_identifies_pi_without_ancestry
 test_pi_ancestry_identifies_pi
 test_pid_namespace_pi_is_examined
+test_unsupported_configured_harness_is_rejected_at_resolution
 test_unknown_runtime_uses_unknown_protocol
 test_pi_protocol_and_effort_validation
