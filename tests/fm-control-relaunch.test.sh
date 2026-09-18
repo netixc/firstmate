@@ -506,75 +506,7 @@ test_relaunch_requires_a_note_for_a_ship_task() {
   pass "fm-control relaunch: a ship task refuses without the progress note its replacement needs"
 }
 
-# --- 2. harness switch -------------------------------------------------------
-
-
-test_harness_switch_does_not_carry_the_old_profile_axes() {
-  local dir out rc
-  dir=$(new_case profile rl5)
-  add_ship_task "$dir" rl5 pi
-  sed 's/^model=default$/model=opus/; s/^effort=default$/effort=xhigh/' \
-    "$dir/home/state/rl5.meta" > "$dir/home/state/rl5.meta.tmp"
-  mv "$dir/home/state/rl5.meta.tmp" "$dir/home/state/rl5.meta"
-  printf 'opencode' > "$dir/fake/becomes"
-  out=$(run_control "$dir" rl5 relaunch --harness opencode --note "switching runtime"); rc=$?
-  expect_code 0 "$rc" "a harness switch should succeed"$'\n'"$out"
-  [ "$(meta_field "$dir" rl5 model)" = default ] \
-    || fail "a model chosen for the old harness must not carry to a different one"
-  [ "$(meta_field "$dir" rl5 effort)" = default ] \
-    || fail "an effort chosen for the old harness must not carry to a different one"
-  pass "fm-control relaunch: a harness switch resets model and effort unless they are named too"
-}
-
-test_harness_switch_resolves_a_prefixed_recorded_harness() {
-  local dir out rc
-  dir=$(new_case prefixcontrol rl32)
-  add_ship_task "$dir" rl32 opencode-2
-  printf 'opencode-2' > "$dir/fake/command"
-
-  out=$(run_control "$dir" rl32 relaunch --harness pi --note "switching runtime"); rc=$?
-  expect_code 0 "$rc" "relaunch should resolve a prefixed recorded harness"$'\n'"$out"
-  [ "$(sed -n '1p' "$dir/fake/literal")" = /exit ] \
-    || fail "relaunch should stop an opencode-prefixed task with OpenCode's exit command"
-  [ "$(meta_field "$dir" rl32 harness)" = pi ] \
-    || fail "relaunch should publish the explicitly selected replacement harness"
-  [ "$(journal_field "$dir" rl32 from_harness)" = opencode-2 ] \
-    || fail "relaunch should retain the recorded harness basename in its provenance"
-  assert_contains "$out" "harness=pi from=opencode-2" \
-    "relaunch should report the recorded-to-selected harness transition"
-  pass "fm-control relaunch: a prefixed recorded harness can switch adapters transactionally"
-}
-
-test_prefixed_recorded_harness_requires_explicit_replacement() {
-  local dir out rc meta brief
-  dir=$(new_case prefixrefuse rl34)
-  add_ship_task "$dir" rl34 opencode-2
-  printf 'opencode-2' > "$dir/fake/command"
-  meta="$dir/home/state/rl34.meta"
-  brief="$dir/home/data/rl34/brief.md"
-  cp "$meta" "$dir/meta.before"
-  cp "$brief" "$dir/brief.before"
-
-  out=$(run_control "$dir" rl34 relaunch --note "continue safely"); rc=$?
-  expect_code 1 "$rc" "implicit relaunch from a prefixed command should refuse"
-  assert_contains "$out" "original launch command cannot be reconstructed from its recorded basename" \
-    "the refusal should name the missing launch identity"
-  assert_contains "$out" "would substitute the canonical adapter 'opencode'" \
-    "the refusal should name the unsafe substitution"
-  assert_contains "$out" "Pass an explicit --harness" \
-    "the refusal should name the deliberate replacement path"
-  cmp -s "$meta" "$dir/meta.before" \
-    || fail "a refused prefixed relaunch must leave metadata byte-identical"
-  cmp -s "$brief" "$dir/brief.before" \
-    || fail "a refused prefixed relaunch must leave instructions byte-identical"
-  [ "$(cat "$dir/fake/command")" = opencode-2 ] \
-    || fail "a refused prefixed relaunch must leave the original agent alive"
-  [ -z "$(cat "$dir/fake/literal")" ] && [ -z "$(cat "$dir/fake/keys")" ] \
-    || fail "a refused prefixed relaunch must deliver no lifecycle input"
-  [ ! -e "$dir/home/state/rl34.control-relaunch" ] \
-    || fail "a refused prefixed relaunch must not create a durable journal"
-  pass "fm-control relaunch: a prefixed command requires an explicit replacement harness"
-}
+# --- 2. profile preservation -----------------------------------------------
 
 test_same_harness_relaunch_keeps_the_profile_axes() {
   local dir out rc
@@ -603,7 +535,7 @@ test_native_ultra_relaunch_preserves_profile_and_rejects_before_stop() {
   mv "$dir/home/state/$id.meta.tmp" "$dir/home/state/$id.meta"
   out=$(run_control "$dir" "$id" relaunch --model openai-codex/gpt-6-astra --note "invalid native effort transfer"); rc=$?
   expect_code 1 "$rc" "Ultra transferred to ordinary Pi"
-  assert_contains "$out" "ultra effort requires pi or pi-signed" "model-aware relaunch refusal missing"
+  assert_contains "$out" "ultra effort requires pi" "model-aware relaunch refusal missing"
   [ "$(cat "$dir/fake/command")" = pi ] || fail "invalid Ultra relaunch stopped the running agent"
   [ ! -s "$dir/fake/literal" ] || fail "invalid Ultra relaunch sent lifecycle input"
   out=$(run_control "$dir" "$id" relaunch --note "preserve explicit native effort"); rc=$?
@@ -626,15 +558,15 @@ test_explicit_model_wins_over_the_recorded_one() {
   pass "fm-control relaunch: explicit model and effort win over the recorded ones"
 }
 
-test_relaunch_onto_an_unverified_harness_is_refused() {
+test_relaunch_onto_an_unsupported_runtime_is_refused() {
   local dir out rc
-  dir=$(new_case badharness rl8)
+  dir=$(new_case unsupported-runtime rl8)
   add_ship_task "$dir" rl8 pi
-  out=$(run_control "$dir" rl8 relaunch --harness someagent --note "x"); rc=$?
-  expect_code 1 "$rc" "an unverified target harness should refuse"
-  assert_contains "$out" "not a verified harness" "the refusal should name the unverified adapter"
+  out=$(run_control "$dir" rl8 relaunch --harness unsupported-runtime --note "x"); rc=$?
+  expect_code 1 "$rc" "an unsupported target runtime should refuse"
+  assert_contains "$out" "not supported; fm-control relaunch supports only pi" "the refusal should name the Pi-only contract"
   [ "$(cat "$dir/fake/command")" = pi ] || fail "a refused relaunch must not stop the agent"
-  pass "fm-control relaunch: refuses to relaunch onto an adapter with no verified mechanics"
+  pass "fm-control relaunch: refuses every runtime other than Pi"
 }
 
 
@@ -674,8 +606,44 @@ test_secondmate_relaunch_picks_up_the_configured_harness_pin() {
     || fail "the configured model token should come with the pin"
   [ "$(journal_field "$dir" sm3 to_effort)" = high ] \
     || fail "the configured effort token should come with the pin"
-  assert_not_contains "$out" "not a verified harness" "pi is a verified harness"
+  assert_not_contains "$out" "not supported" "pi is the supported runtime"
   pass "fm-control relaunch: a secondmate relaunch re-resolves its durable configured harness pin"
+}
+
+test_secondmate_relaunch_rejects_unsupported_configured_harness_before_stop() {
+  local dir home out rc
+  dir=$(new_case smunsupported sm5)
+  home="$dir/home"
+  mkdir -p "$home/config" "$home/data/sm5"
+  printf 'unsupported-runtime\n' > "$home/config/secondmate-harness"
+  printf '# secondmate brief\n' > "$home/data/sm5/brief.md"
+  fm_git_worktree "$dir/proj" "$dir/smhome" sm-branch
+  mkdir -p "$dir/smhome/state" "$dir/smhome/data" "$dir/smhome/bin"
+  printf 'sm5\n' > "$dir/smhome/.fm-secondmate-home"
+  printf '# agents\n' > "$dir/smhome/AGENTS.md"
+  {
+    echo "window=fmses:fm-sm5"
+    echo "endpoint_task_id=sm5"
+    echo "worktree=$dir/smhome"
+    echo "project=$dir/smhome"
+    echo "harness=pi"
+    echo "kind=secondmate"
+    echo "mode=secondmate"
+    echo "yolo=off"
+    echo "model=default"
+    echo "effort=default"
+    echo "home=$dir/smhome"
+  } > "$home/state/sm5.meta"
+  printf '%s\n' "fm-sm5" > "$dir/fake/windows"
+  printf '%s' "$dir/smhome" > "$dir/fake/cwd"
+  printf 'pi' > "$dir/fake/becomes"
+  out=$(run_control "$dir" sm5 relaunch); rc=$?
+  expect_code 1 "$rc" "an unsupported configured secondmate harness should refuse"
+  assert_contains "$out" "only 'pi' is supported" \
+    "the relaunch refusal should state the Pi-only boundary"
+  [ "$(cat "$dir/fake/command")" = pi ] \
+    || fail "a configured harness refusal must not stop the running agent"
+  pass "fm-control relaunch: unsupported configured secondmate runtime is refused before stop"
 }
 
 test_secondmate_relaunch_ignores_invalid_configured_effort_before_stop() {
@@ -714,45 +682,6 @@ test_secondmate_relaunch_ignores_invalid_configured_effort_before_stop() {
   pass "fm-control relaunch: invalid configured effort is ignored before stop"
 }
 
-# A stale Muse relaunch target is unsupported. The control plane must reject it
-# before touching the currently running secondmate, rather than discovering the
-# retired adapter only after the current agent has stopped.
-test_secondmate_relaunch_onto_retired_muse_refuses_before_stop() {
-  local dir home out rc
-  dir=$(new_case smkind sm7)
-  home="$dir/home"
-  mkdir -p "$home/config" "$home/data/sm7"
-  printf '# secondmate brief\n' > "$home/data/sm7/brief.md"
-  fm_git_worktree "$dir/proj" "$dir/smhome" sm-branch
-  mkdir -p "$dir/smhome/state" "$dir/smhome/data" "$dir/smhome/bin"
-  printf 'sm7\n' > "$dir/smhome/.fm-secondmate-home"
-  printf '# agents\n' > "$dir/smhome/AGENTS.md"
-  {
-    echo "window=fmses:fm-sm7"
-    echo "endpoint_task_id=sm7"
-    echo "worktree=$dir/smhome"
-    echo "project=$dir/smhome"
-    echo "harness=pi"
-    echo "kind=secondmate"
-    echo "mode=secondmate"
-    echo "yolo=off"
-    echo "model=default"
-    echo "effort=default"
-    echo "home=$dir/smhome"
-  } > "$home/state/sm7.meta"
-  printf '%s\n' "fm-sm7" > "$dir/fake/windows"
-  printf '%s' "$dir/smhome" > "$dir/fake/cwd"
-  out=$(run_control "$dir" sm7 relaunch --harness muse); rc=$?
-  expect_code 1 "$rc" "a retired adapter should refuse a secondmate relaunch"
-  assert_contains "$out" "is not a verified harness" \
-    "the refusal should reject the retired target"
-  [ "$(cat "$dir/fake/command")" = pi ] \
-    || fail "the refusal must land before the running agent is stopped"
-  [ "$(meta_field "$dir" sm7 harness)" = pi ] \
-    || fail "a refused relaunch must leave the durable record on the recorded harness"
-  pass "fm-control relaunch: a retired Muse target refuses before the agent is stopped"
-}
-
 test_explicit_secondmate_harness_ignores_configured_profile_axes() {
   local dir home out rc
   dir=$(new_case smexplicit sm4)
@@ -780,8 +709,8 @@ test_explicit_secondmate_harness_ignores_configured_profile_axes() {
   } > "$home/state/sm4.meta"
   printf '%s\n' "fm-sm4" > "$dir/fake/windows"
   printf '%s' "$dir/smhome" > "$dir/fake/cwd"
-  printf 'opencode' > "$dir/fake/becomes"
-  out=$(run_control "$dir" sm4 relaunch --harness opencode); rc=$?
+  printf 'pi' > "$dir/fake/becomes"
+  out=$(run_control "$dir" sm4 relaunch --harness pi); rc=$?
   expect_code 0 "$rc" "an explicit secondmate harness should relaunch"$'\n'"$out"
   [ "$(meta_field "$dir" sm4 model)" = default ] \
     || fail "an explicit secondmate harness must not inherit the configured model"
@@ -795,7 +724,7 @@ test_ship_relaunch_ignores_the_crew_harness_config() {
   dir=$(new_case crewcfg rl20)
   add_ship_task "$dir" rl20 pi
   mkdir -p "$dir/home/config"
-  printf 'opencode\n' > "$dir/home/config/crew-harness"
+  printf 'unsupported-runtime\n' > "$dir/home/config/crew-harness"
   out=$(run_control "$dir" rl20 relaunch --note "same worker, same runtime")
   assert_contains "$out" "harness=pi from=pi" \
     "a ship relaunch must keep its recorded harness rather than re-reading crew config"
@@ -809,7 +738,7 @@ test_spawn_relaunch_without_a_harness_reuses_the_recorded_one() {
   dir=$(new_case spawnharness rl21)
   add_ship_task "$dir" rl21 pi
   mkdir -p "$dir/home/config"
-  printf 'opencode\n' > "$dir/home/config/crew-harness"
+  printf 'unsupported-runtime\n' > "$dir/home/config/crew-harness"
   printf 'zsh' > "$dir/fake/command"
   out=$(run_spawn "$dir" rl21 --relaunch)
   [ "$(meta_field "$dir" rl21 harness)" = pi ] \
@@ -818,11 +747,6 @@ test_spawn_relaunch_without_a_harness_reuses_the_recorded_one() {
   pass "fm-spawn --relaunch: with no explicit harness it reuses the task's recorded one, never the crew default"
 }
 
-# fm-spawn arms per-task wiring on harness PREFIXES, because a task launched
-# from a raw command records that command's basename rather than the exact
-# adapter name. Retirement must resolve the same way, or a task recorded as
-# `opencode-2` would have its turn-end token and hook pointer armed and never
-# retired - leaving a registry entry that outlives the agent that owned it.
 # --- 3 and 4. refusals before the agent is touched ---------------------------
 
 test_missing_worktree_refuses_before_stopping_anything() {
@@ -896,7 +820,7 @@ test_launch_failure_keeps_the_prior_record_and_reports_it() {
   # The endpoint's shell is not in the recorded worktree, so the launch owner
   # refuses AFTER the previous agent has already been stopped.
   printf '%s' "$dir/proj" > "$dir/fake/cwd"
-  out=$(run_control "$dir" rl13 relaunch --harness opencode --note "carry this forward"); rc=$?
+  out=$(run_control "$dir" rl13 relaunch --harness pi --note "carry this forward"); rc=$?
   expect_code 1 "$rc" "a failed launch should fail closed"$'\n'"$out"
   assert_contains "$out" "no agent is running" "the failure should say no agent is running"
   assert_contains "$out" "$dir/wt" "the failure should say where the work is preserved"
@@ -917,7 +841,7 @@ test_prepublication_failure_keeps_concurrent_durable_metadata() {
   add_ship_task "$dir" rl30 pi
   printf '%s' "$dir/proj" > "$dir/fake/cwd"
   FM_FAKE_CWD_RACE_READY="$dir/cwd-race-ready" \
-    run_control "$dir" rl30 relaunch --harness opencode --note "preserve concurrent metadata" \
+    run_control "$dir" rl30 relaunch --harness pi --note "preserve concurrent metadata" \
       > "$dir/control.out" &
   control_pid=$!
   while [ ! -e "$dir/cwd-race-ready" ] && [ "$i" -lt 200 ]; do
@@ -948,11 +872,11 @@ test_post_publication_launch_failure_keeps_the_new_record() {
   local dir out rc
   dir=$(new_case published rl24)
   add_ship_task "$dir" rl24 pi
-  printf 'opencode' > "$dir/fake/becomes"
+  printf 'unsupported-runtime' > "$dir/fake/becomes"
   out=$(FM_FAKE_LAUNCH_TRANSPORT_FAIL_AFTER_START=1 \
-    run_control "$dir" rl24 relaunch --harness opencode --note "keep the published record"); rc=$?
+    run_control "$dir" rl24 relaunch --harness pi --note "keep the published record"); rc=$?
   expect_code 1 "$rc" "a post-publication launch failure should fail closed"$'\n'"$out"
-  [ "$(meta_field "$dir" rl24 harness)" = opencode ] \
+  [ "$(meta_field "$dir" rl24 harness)" = pi ] \
     || fail "a published replacement record must not be rewritten to the prior harness"
   [ -n "$(meta_field "$dir" rl24 control_relaunch_tx)" ] \
     || fail "the published replacement record should identify its relaunch transaction"
@@ -983,17 +907,17 @@ test_complete_journal_failure_rolls_back_from_durable_phase() {
   local dir out rc real_mv
   dir=$(new_case completejournal rl27)
   add_ship_task "$dir" rl27 pi
-  printf 'opencode' > "$dir/fake/becomes"
+  printf 'pi' > "$dir/fake/becomes"
   real_mv=$(command -v mv)
   make_mv_failure_stub "$dir"
   out=$(FM_REAL_MV="$real_mv" FM_FAKE_COMPLETE_JOURNAL_MV_FAIL=1 \
-    run_control "$dir" rl27 relaunch --harness opencode --note "keep durable phase honest"); rc=$?
+    run_control "$dir" rl27 relaunch --harness pi --note "keep durable phase honest"); rc=$?
   expect_code 1 "$rc" "a failed complete journal replacement should fail closed"$'\n'"$out"
   [ "$(journal_field "$dir" rl27 phase)" = failed:launching ] \
     || fail "rollback should start from the last durable launching phase"
   [ "$(journal_field "$dir" rl27 rollback)" = none-new-agent-confirmed ] \
     || fail "rollback should retain the confirmed-running replacement"
-  [ "$(meta_field "$dir" rl27 harness)" = opencode ] \
+  [ "$(meta_field "$dir" rl27 harness)" = pi ] \
     || fail "journal failure must not rewrite the published replacement record"
   assert_contains "$out" "replacement is running" \
     "journal failure should report the confirmed-running replacement"
@@ -1412,16 +1336,13 @@ test_relaunch_serializes_concurrent_durable_metadata_publication
 test_disabled_relaunch_clears_prior_trace_context
 test_relaunch_appends_the_progress_note_to_the_instructions
 test_relaunch_requires_a_note_for_a_ship_task
-test_harness_switch_does_not_carry_the_old_profile_axes
-test_harness_switch_resolves_a_prefixed_recorded_harness
-test_prefixed_recorded_harness_requires_explicit_replacement
 test_same_harness_relaunch_keeps_the_profile_axes
 test_native_ultra_relaunch_preserves_profile_and_rejects_before_stop
 test_explicit_model_wins_over_the_recorded_one
-test_relaunch_onto_an_unverified_harness_is_refused
+test_relaunch_onto_an_unsupported_runtime_is_refused
 test_secondmate_relaunch_picks_up_the_configured_harness_pin
+test_secondmate_relaunch_rejects_unsupported_configured_harness_before_stop
 test_secondmate_relaunch_ignores_invalid_configured_effort_before_stop
-test_secondmate_relaunch_onto_retired_muse_refuses_before_stop
 test_explicit_secondmate_harness_ignores_configured_profile_axes
 test_ship_relaunch_ignores_the_crew_harness_config
 test_spawn_relaunch_without_a_harness_reuses_the_recorded_one

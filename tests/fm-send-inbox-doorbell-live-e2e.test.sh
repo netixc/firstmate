@@ -7,25 +7,21 @@
 # act on its records in numeric order, then mv each into handled/. A stub can
 # only confirm the assumption already
 # written into the stub, so per .agents/skills/firstmate-coding-guidelines
-# this is proven against every INSTALLED verified harness: each is launched
+# this is proven against installed plain Pi, launched
 # idle in an isolated tmux server, steered through the REAL fm-send (durable
 # record + doorbell), and must both ACT on the instruction (create a named
-# file) and ACKNOWLEDGE it (the mv into handled/), failing loudly with the
-# harness name and version.
+# file) and ACKNOWLEDGE it (the mv into handled/), failing loudly with Pi's
+# version.
 #
 # Run explicitly with FM_SEND_INBOX_LIVE_E2E=1. This test spends a small
-# number of real model tokens per installed harness (one short turn each) -
-# authorized by the harness-dependent-checks rule. An absent harness is
-# reported explicitly and skipped; a run that verified nothing fails rather
-# than passing vacuously. Restrict with
-# FM_SEND_INBOX_LIVE_HARNESSES="opencode pi ..." when needed, and tune the
-# per-harness wait with FM_SEND_INBOX_LIVE_TIMEOUT (seconds, default 240).
-# Record the dated per-harness result in
+# number of real model tokens for one short Pi turn. Missing Pi is a failure,
+# never a vacuous pass. Tune FM_SEND_INBOX_LIVE_TIMEOUT (seconds, default 240).
+# Record the dated Pi result in
 # docs/verification/runtime-backends.md ("Steering-inbox doorbell").
 #
-# Folder trust: harnesses launch with the repo root as cwd, which the
-# operator's machine has normally already trusted; a trust dialog is a real
-# unready state and correctly fails that harness's check.
+# Folder trust: Pi launches with the repo root as cwd, which the operator's
+# machine has normally already trusted; a trust dialog is a real unready state
+# and correctly fails the check.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -81,8 +77,7 @@ harness_version() {  # <binary>
 # interactive approval.
 launch_cmd() {  # <name>
   case "$1" in
-    opencode) printf '%s' "OPENCODE_CONFIG_CONTENT='{\"permission\":{\"*\":\"allow\"}}' opencode" ;;
-    pi|pi-signed) printf '%s' "$1" ;;
+    pi) printf '%s' pi ;;
     *) return 1 ;;
   esac
 }
@@ -180,21 +175,19 @@ check_harness_doorbell() {  # <name>
   tmux -L "$SOCKET" kill-window -t "$SESSION:$win" 2>/dev/null || true
 }
 
-HARNESSES=${FM_SEND_INBOX_LIVE_HARNESSES:-'opencode pi pi-signed'}
-for h in $HARNESSES; do
-  if command -v "$h" >/dev/null 2>&1; then
-    check_harness_doorbell "$h"
-  else
-    note "harness absent, not verified here: $h"
-  fi
-done
+if command -v pi >/dev/null 2>&1; then
+  check_harness_doorbell pi
+else
+  printf 'not ok - plain Pi is not installed; live doorbell proof cannot run\n' >&2
+  exit 1
+fi
 
 if [ "$FAILED" -ne 0 ]; then
   printf 'not ok - live steering-inbox doorbell guard found failures above\n' >&2
   exit 1
 fi
 if [ "$CHECKED" -eq 0 ]; then
-  printf 'not ok - live steering-inbox doorbell guard verified nothing (no harness installed?)\n' >&2
+  printf 'not ok - live steering-inbox doorbell guard verified nothing\n' >&2
   exit 1
 fi
-pass "live steering-inbox doorbell guard: $CHECKED harness(es) honored the doorbell contract"
+pass "live steering-inbox doorbell guard: Pi honored the doorbell contract"

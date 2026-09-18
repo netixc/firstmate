@@ -9,8 +9,8 @@
 # proves the decision matrix, the harness-output shaping, the primary-checkout
 # scoping (including the deliberate secondmate-home difference from the turn-end
 # guard), the fail-open transport behavior, the prefilter fast path, the
-# end-to-end cwd-leak regression, and the per-harness wiring. No harness is
-# spawned; live per-harness evidence lives in docs/cd-guard.md.
+# end-to-end cwd-leak regression, and Pi wiring. Pi is not spawned; live Pi
+# evidence lives in docs/cd-guard.md.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -151,13 +151,11 @@ run_matrix_entry() {
   err_file="$MATRIX_TMP/$id-$entry.err"
 
   case "$entry" in
-    opencode|pi)
+    pi)
       "$CHECK" --command "$cmd" >"$out_file" 2>"$err_file"
       rc=$?
       ;;
-    *)
-      fail "unknown matrix entry form: $entry"
-      ;;
+    *) fail "unknown matrix entry form: $entry" ;;
   esac
 
   if [ "$expected" = allow ]; then
@@ -174,13 +172,11 @@ run_matrix_entry() {
 }
 
 test_full_acceptance_matrix() {
-  local i entry
+  local i entry=pi
   for ((i = 0; i < ${#MATRIX_IDS[@]}; i++)); do
-    for entry in opencode pi; do
-      run_matrix_entry "${MATRIX_IDS[$i]}" "${MATRIX_EXPECTED[$i]}" "$entry" "${MATRIX_COMMANDS[$i]}"
-    done
+    run_matrix_entry "${MATRIX_IDS[$i]}" "${MATRIX_EXPECTED[$i]}" "$entry" "${MATRIX_COMMANDS[$i]}"
   done
-  pass "cd-guard acceptance matrix: ${#MATRIX_IDS[@]} cases x 2 retained entry forms, block/allow all correct"
+  pass "cd-guard acceptance matrix: ${#MATRIX_IDS[@]} Pi cases, block/allow all correct"
 }
 
 # --- primary-checkout scoping ----------------------------------------------
@@ -350,7 +346,7 @@ test_policy_cli_direct() {
   pass "cd-guard: fm-cd-command-policy.mjs CLI honors the deny/allow output contract"
 }
 
-# --- per-harness wiring -----------------------------------------------------
+# --- Pi wiring --------------------------------------------------------------
 
 # Delegated to bin/fm-lint.sh, the single owner of the lint definition including
 # --external-sources; calling the linter directly here would be a second copy of

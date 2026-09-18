@@ -36,19 +36,16 @@ install_runner() {  # <case-dir>
   cp "$ROOT/bin/fm-backlog-transition-lib.sh" "$dir/bin/"
   cp "$ROOT/.tasks.toml" "$dir/home/.tasks.toml"
   printf '## In flight\n\n## Queued\n\n## Done\n' > "$dir/home/data/backlog.md"
-  # The fake stop mirrors the real one's ordering: the away flag goes, then the
-  # posture record is archived through its owner.
+  # The fake stop mirrors the posture owner's ordering: quiet posture clears,
+  # then a confirmed away record is archived through its owner.
   cat > "$dir/bin/fm-afk-launch.sh" <<'SH'
 #!/usr/bin/env bash
 [ "${1:-}" = stop ] || exit 2
 printf 'stop\n' >> "$FM_HOME/stop.log"
 rm -f "$FM_HOME/state/.afk"
-if [ -e "$FM_HOME/state/.fail-terminal-stop-once" ]; then
-  rm -f "$FM_HOME/state/.fail-terminal-stop-once"
-  exit 1
+if [ -f "$FM_HOME/state/.afk-contract" ]; then
+  "$(dirname "$0")/fm-afk-contract.sh" archive >/dev/null
 fi
-rm -f "$FM_HOME/state/.afk-daemon-terminal"
-"$(dirname "$0")/fm-afk-contract.sh" archive >/dev/null
 SH
   cat > "$dir/bin/fm-wake-drain.sh" <<'SH'
 #!/usr/bin/env bash
@@ -111,9 +108,7 @@ test_return_gate_owns_remediation_and_reports_catchup_to_bearings() {
     done
     printf '\n## Done\n'
   } > "$dir/home/data/backlog.md"
-  date +%s > "$dir/home/state/.afk"
-  printf 'repair-task.status: blocked synthetic dependency\n' > "$dir/home/state/.subsuper-escalations"
-  printf 'fm away-mode inject WEDGED: 4555s undelivered\n' > "$dir/home/state/.subsuper-inject-wedged"
+  printf 'quiet\n%s\n' "$(date +%s)" > "$dir/home/state/.afk"
   {
     printf '1784074271\t2\tsignal\trepair-task.status\tsignal: synthetic status\n'
     printf 'wake annotation: latest wake-EVENT observed at drain, not current state: repair-task.status: blocked synthetic dependency\n'
@@ -130,8 +125,6 @@ test_return_gate_owns_remediation_and_reports_catchup_to_bearings() {
   grep -F $'evidence\twake\t1784074271' "$gate" >/dev/null || fail "drained wake evidence was not retained in the durable gate"
   grep -F $'evidence\twake\twake annotation: latest wake-EVENT observed at drain, not current state: repair-task.status: blocked synthetic dependency' "$gate" >/dev/null \
     || fail "the separate drain annotation was not retained as away-return evidence"
-  grep -F $'evidence\twedge\tfm away-mode inject WEDGED: 4555s undelivered' "$gate" >/dev/null || fail "wedge evidence was not retained in the durable gate"
-  grep -F $'evidence\tescalation\trepair-task.status: blocked synthetic dependency' "$gate" >/dev/null || fail "buffered escalation evidence was not retained in the durable gate"
   [ "$(wc -l < "$dir/home/stop.log" | tr -d ' ')" -eq 1 ] || fail "return begin did not stop away mode exactly once"
   [ -s "$dir/home/state/.fake-drain" ] || fail "blocked return acknowledged its emitted wake before handling completed"
   [ ! -e "$dir/home/state/.fake-drain-acks" ] || fail "blocked return crossed the post-handling acknowledgement boundary"
@@ -178,12 +171,9 @@ test_return_gate_owns_remediation_and_reports_catchup_to_bearings() {
   rc=$?
   set -e
   [ "$rc" -eq 3 ] || fail "repeated begin should preserve the unresolved gate"
-  [ "$(wc -l < "$dir/home/stop.log" | tr -d ' ')" -eq 1 ] || fail "repeated begin stopped an already-stopped daemon twice"
+  [ "$(wc -l < "$dir/home/stop.log" | tr -d ' ')" -eq 1 ] || fail "repeated begin ended an already-ended posture twice"
   wake_count=$(grep -c $'^evidence\twake\t1784074271' "$gate" || true)
   [ "$wake_count" -eq 1 ] || fail "repeated begin duplicated retained wake evidence ($wake_count copies)"
-  [ "$(grep -c $'^evidence\twedge\t' "$gate" || true)" -eq 1 ] || fail "repeated begin duplicated retained wedge evidence"
-  [ "$(grep -c $'^evidence\tescalation\t' "$gate" || true)" -eq 1 ] || fail "repeated begin duplicated retained escalation evidence"
-
   printf 'resolved [key=synthetic-dependency]: refreshed the synthetic token and resumed the task\n' >> "$dir/home/state/repair-task.status"
   out=$(run_return "$dir" check) || fail "resolved blocker did not clear return catch-up: $out"
   FM_HOME="$dir/home" FM_STATE_OVERRIDE="$dir/home/state" "$ROOT/bin/fm-bearings-snapshot.sh" --json \
@@ -191,8 +181,6 @@ test_return_gate_owns_remediation_and_reports_catchup_to_bearings() {
     || fail "the cleared gate left the catch-up posture row in Bearings"
   assert_contains "$out" 'catch-up clear' "successful check did not announce that ordinary work may proceed"
   [ ! -e "$gate" ] || fail "successful check left the return gate behind"
-  [ ! -e "$dir/home/state/.subsuper-escalations" ] || fail "successful check left delivered escalation state behind"
-  [ ! -e "$dir/home/state/.subsuper-inject-wedged" ] || fail "successful check left the wedge marker behind"
   [ -s "$dir/home/state/.fake-drain" ] || fail "successful return consumed its wake before handling completed"
   [ ! -e "$dir/home/state/.fake-drain-acks" ] || fail "successful return acknowledged its wake inside evidence publication"
   assert_contains "$out" 'WAKE_ACK_REQUIRED: after handling completes' "successful return did not hand acknowledgement to the handling turn"
@@ -297,7 +285,7 @@ test_away_reentry_refuses_pending_return_gate() {
   mkdir -p "$dir/home/state" "$dir/home/data" "$dir/home/config"
   printf 'schema\tfm-afk-return.v1\nphase\tblocked\n' > "$dir/home/state/.afk-return-catchup"
   set +e
-  out=$(FM_HOME="$dir/home" FM_STATE_OVERRIDE="$dir/home/state" "$ROOT/bin/fm-afk-launch.sh" start-native 2>&1)
+  out=$(FM_HOME="$dir/home" FM_STATE_OVERRIDE="$dir/home/state" "$ROOT/bin/fm-afk-launch.sh" confirm 2>&1)
   rc=$?
   set -e
   [ "$rc" -ne 0 ] || fail "away re-entry succeeded while return catch-up was pending"
@@ -319,33 +307,8 @@ test_return_is_mode_agnostic_for_quiet_mode() {
   out=$(run_return "$dir" begin) || fail "return did not succeed cleanly against a quiet-mode flag: $out"
   assert_contains "$out" 'catch-up clear' "quiet-mode return did not announce ordinary work may proceed"
   [ ! -e "$dir/home/state/.afk" ] || fail "quiet-mode return left the mode flag behind"
-  [ "$(wc -l < "$dir/home/stop.log" | tr -d ' ')" -eq 1 ] || fail "quiet-mode return did not stop the daemon exactly once"
-  pass "/quiet off's return path behaves identically for a quiet-content flag as for a legacy away-content one"
-}
-
-test_check_retries_recorded_terminal_teardown() {
-  local dir gate out rc
-  dir="$TMP_ROOT/terminal-teardown"
-  install_runner "$dir"
-  gate="$dir/home/state/.afk-return-catchup"
-  date +%s > "$dir/home/state/.afk"
-  printf 'herdr\tsynthetic:pane\tsynthetic-workspace\n' > "$dir/home/state/.afk-daemon-terminal"
-  touch "$dir/home/state/.fail-terminal-stop-once"
-
-  set +e
-  out=$(run_return "$dir" begin)
-  rc=$?
-  set -e
-  [ "$rc" -eq 3 ] || fail "failed terminal teardown should keep return catch-up gated (rc=$rc): $out"
-  [ -e "$gate" ] || fail "failed terminal teardown cleared the return gate"
-  [ -e "$dir/home/state/.afk-daemon-terminal" ] || fail "failed terminal teardown discarded its durable record"
-  [ ! -e "$dir/home/state/.afk" ] || fail "failed terminal teardown did not preserve stop ordering"
-
-  out=$(run_return "$dir" check) || fail "check did not retry recorded terminal teardown: $out"
-  [ ! -e "$dir/home/state/.afk-daemon-terminal" ] || fail "successful check left the terminal teardown record behind"
-  [ ! -e "$gate" ] || fail "successful terminal teardown retry left the return gate behind"
-  [ "$(wc -l < "$dir/home/stop.log" | tr -d ' ')" -eq 2 ] || fail "check did not retry terminal teardown exactly once"
-  pass "check retries recorded terminal teardown and keeps catch-up gated until success"
+  [ "$(wc -l < "$dir/home/stop.log" | tr -d ' ')" -eq 1 ] || fail "quiet-mode return did not end the posture exactly once"
+  pass "/quiet off uses the same durable return and catch-up path"
 }
 
 # --- the return brief -------------------------------------------------------
@@ -695,17 +658,17 @@ test_return_brief_does_not_report_an_acked_watcher_down_marker_as_a_gap() {
   pass "the return brief does not report an already-acked watcher-down marker as an open gap"
 }
 
-test_return_brief_without_a_record_reports_the_legacy_flag() {
+test_return_brief_without_an_away_record_reports_quiet_posture() {
   local dir out
-  dir="$TMP_ROOT/brief-legacy"
+  dir="$TMP_ROOT/brief-quiet"
   install_runner "$dir"
-  printf '%s\n' "$(( $(date +%s) - 7200 ))" > "$dir/home/state/.afk"
+  printf 'quiet\n%s\n' "$(( $(date +%s) - 7200 ))" > "$dir/home/state/.afk"
   : > "$dir/home/state/.fake-drain"
-  out=$(run_return "$dir" begin) || fail "a legacy-flag return with no blockers should clear: $out"
-  assert_contains "$out" '(no away-posture record for this window; legacy away flag only)' "the legacy window was not named"
-  assert_contains "$out" ', 2h00m) ===' "the away window was not measured from the legacy flag's own timestamp"
-  [ ! -e "$dir/home/state/.afk" ] || fail "the legacy flag survived the return"
-  pass "a return with only the legacy away flag still renders the brief and measures the window from the flag"
+  out=$(run_return "$dir" begin) || fail "a quiet-posture return with no blockers should clear: $out"
+  assert_contains "$out" '(quiet posture; no away-posture record for this window)' "the quiet window was not named"
+  assert_contains "$out" ', 2h00m) ===' "the window was not measured from the quiet marker's timestamp"
+  [ ! -e "$dir/home/state/.afk" ] || fail "the quiet marker survived the return"
+  pass "a quiet-posture return renders the brief and measures the window from its marker"
 }
 
 
@@ -790,7 +753,6 @@ test_captain_decision_does_not_masquerade_as_firstmate_blocker
 test_evidence_publication_failure_preserves_wake_for_redrain
 test_away_reentry_refuses_pending_return_gate
 test_return_is_mode_agnostic_for_quiet_mode
-test_check_retries_recorded_terminal_teardown
 test_unreadable_superseded_archive_keeps_return_gated
 test_missing_final_archive_keeps_retained_contract_gated
 test_return_brief_composes_from_record_store_and_held_set
@@ -803,4 +765,4 @@ test_unreadable_status_file_keeps_catchup_gated
 test_return_guard_refuses_while_the_record_exists
 test_return_brief_health_leads_with_a_gap
 test_return_brief_does_not_report_an_acked_watcher_down_marker_as_a_gap
-test_return_brief_without_a_record_reports_the_legacy_flag
+test_return_brief_without_an_away_record_reports_quiet_posture

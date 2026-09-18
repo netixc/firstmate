@@ -6,7 +6,7 @@
 #
 # This is the executable half of /updatefirstmate's reload step. A running agent
 # holds AGENTS.md and every skill it has loaded frozen from launch, and no
-# verified harness offers a reload, so a re-read steer cannot replace either -
+# Pi offers no reload, so a re-read steer cannot replace either -
 # it appends a second copy of the mate's own job description with no defined
 # precedence. Replacing the agent is the only mechanism that guarantees the new
 # bytes are the ones read, and the only one that re-resolves the launch-time
@@ -271,8 +271,11 @@ while [ "$i" -lt "${#IDS[@]}" ]; do
     # the file on that host belongs to a different home and re-resolving there
     # would silently move the mate onto another runtime. Resolve the pin here and
     # pass it explicitly, so both placements land on the same decision.
-    HARNESS[i]=$("$SCRIPT_DIR/fm-harness.sh" secondmate 2>/dev/null || true)
-    [ -n "${HARNESS[i]}" ] || HARNESS[i]=$FM_SECONDMATE_RESTART_HARNESS
+    if ! HARNESS[i]=$("$SCRIPT_DIR/fm-harness.sh" secondmate 2>/dev/null); then
+      REASON[i]="the configured secondmate harness is unsupported"
+      i=$((i + 1))
+      continue
+    fi
     MODEL[i]=$("$SCRIPT_DIR/fm-harness.sh" secondmate-model 2>/dev/null || true)
     EFFORT[i]=$("$SCRIPT_DIR/fm-harness.sh" secondmate-effort 2>/dev/null || true)
     case "${EFFORT[i]}" in

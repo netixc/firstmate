@@ -185,17 +185,16 @@ fm_watcher_healthy() {
 # fm_supervision_model
 # Print the supervision model of this home's PRIMARY harness:
 
-#   extension   Pi (and pi-signed): .pi/extensions/fm-primary-pi-watch.ts owns
+#   extension   Pi: .pi/extensions/fm-primary-pi-watch.ts owns
 #               continuity. It tears the watcher down on every actionable wake and
 #               spawns the replacement itself, so a genuinely unheld singleton lock
 #               is healthy during that hand-off only with extension ownership and a
 #               fresh beacon. Any held but unhealthy lock remains down.
-#   persistent  every other harness (opencode background arm, tmux, unknown):
-#               the watcher runs as a tracked live
-#               process, so a live identity-matched pid is the real liveness signal.
+#   persistent  an unknown runtime uses a tracked live watcher process, so a
+#               live identity-matched pid is the real liveness signal.
 # FM_SUPERVISION_MODEL overrides detection (tests, and callers that already know
 # the harness). Otherwise bin/fm-harness.sh is the single detection owner, so this
-# stays consistent with the harness-specific repair line the guards already emit.
+# stays consistent with the Pi repair line the guards already emit.
 fm_supervision_model() {
   local harness
   case "${FM_SUPERVISION_MODEL:-}" in
@@ -204,7 +203,7 @@ fm_supervision_model() {
   harness=$("$FM_WAKE_LIB_DIR/fm-harness.sh" 2>/dev/null || printf unknown)
   case "$harness" in
 
-    pi|pi-signed) printf 'extension\n' ;;
+    pi) printf 'extension\n' ;;
     *) printf 'persistent\n' ;;
   esac
 }
@@ -276,57 +275,6 @@ fm_extension_pair_owns_supervision() {  # <state> <extension-dir> <source:marker
   done
   session_pid=$(sed -n '1p' "$lock" 2>/dev/null)
   fm_pid_alive "$session_pid"
-}
-
-# Away-mode supervision evidence. While state/.afk exists the away-mode daemon
-# (bin/fm-supervise-daemon.sh) owns supervision: it runs bin/fm-watch.sh
-# one-shot, so the watcher exits on EVERY wake and the daemon starts its
-# replacement. Between those cycles no watcher process holds the watch lock,
-# with nothing at all wrong - the supervisor is the daemon, and the watcher is
-# its restarting child.
-#
-# fm_afk_daemon_owns_supervision <state>
-# True when away mode is active AND a live, identity-matched daemon holds this
-# home's singleton daemon lock. The identity match is the same discipline the
-# watcher lock uses (fm_watcher_lock_matches_pid): a recycled pid, a lock left
-# by a killed daemon, or a daemon that never recorded its identity all fail it,
-# so only a daemon process that is genuinely still running counts as ownership.
-# This proves an OWNER, never freshness: callers keep their own beacon test, so
-# a daemon that stops restarting its watcher still fails supervision once the
-# beacon passes grace.
-fm_afk_daemon_owns_supervision() {
-  local state=$1 lockdir pid recorded current
-  [ -e "$state/.afk" ] || return 1
-  lockdir="$state/.supervise-daemon.lock"
-  pid=$(cat "$lockdir/pid" 2>/dev/null) || return 1
-  fm_pid_alive "$pid" || return 1
-  recorded=$(cat "$lockdir/pid-identity" 2>/dev/null) || return 1
-  [ -n "$recorded" ] || return 1
-  current=$(fm_pid_identity "$pid" 2>/dev/null) || return 1
-  [ -n "$current" ] || return 1
-  [ "$current" = "$recorded" ]
-}
-
-# fm_afk_mode <state>
-# The single owner of reading state/.afk's declared mode. Always prints
-# exactly one of "away" or "quiet" and always succeeds - every caller gets a
-# definitive answer, never an error to handle. Presence/liveness stays owned
-# by fm_afk_daemon_owns_supervision and the raw `-e "$state/.afk"` checks
-# throughout the tree; this is the mode of an ALREADY-present flag.
-# "away" (today's return-on-any-unmarked-message behavior) is the safe
-# default: missing, empty, unreadable, or unrecognized content, and the
-# legacy bare-epoch-timestamp content written before mode existed, all read
-# as "away". Only an exact first-line "quiet" ever reads as "quiet" -
-# kunchenguid/firstmate#2356's standing captain-present quiet mode, entered
-# only through /quiet and exited only through an explicit /quiet off
-# (AGENTS.md section 8's away-mode stub).
-fm_afk_mode() {
-  local state=$1 mode
-  mode=$(head -n 1 "$state/.afk" 2>/dev/null) || { printf '%s\n' away; return 0; }
-  case "$mode" in
-    quiet) printf '%s\n' quiet ;;
-    *) printf '%s\n' away ;;
-  esac
 }
 
 # fm_watcher_supervision_verdict <state> <watch-path> [grace] [home] [root]
@@ -1178,7 +1126,7 @@ fm_firstmate_root_home() {
 # separate clones of one origin share a single lock; an origin-less local-only
 # project falls back to its own worktree top instead of failing to resolve.
 fm_treehouse_project_lock_path() {  # <project-dir>
-  local project=$1 root origin identity hash top
+  local project=$1 root root_state origin identity hash top
   [ -d "$project" ] || return 1
   root=$(fm_firstmate_root_home "$FM_HOME") || return 1
   origin=$(git -C "$project" remote get-url origin 2>/dev/null || true)
@@ -1195,8 +1143,10 @@ fm_treehouse_project_lock_path() {  # <project-dir>
     identity=$top
   fi
   hash=$(printf '%s' "$identity" | git hash-object --stdin 2>/dev/null) || return 1
-  [ -d "$root/state" ] || return 1
-  printf '%s/.treehouse-project-%s.lock\n' "$root/state" "$hash"
+  root_state="$root/state"
+  [ "$root" = "$(CDPATH='' cd -- "$FM_HOME" 2>/dev/null && pwd -P)" ] && root_state=$STATE
+  [ -d "$root_state" ] || return 1
+  printf '%s/.treehouse-project-%s.lock\n' "$root_state" "$hash"
 }
 
 # A Treehouse slot has the managed pool's fixed <pool>/<slot>/<repo> layout.

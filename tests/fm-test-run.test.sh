@@ -102,13 +102,13 @@ init_changed_fixture_repo() {
     fm-test-run.test.sh \
     fm-test-fixtures.test.sh \
     fm-cd-pretool-check.test.sh \
-    fm-daemon.test.sh \
+    fm-afk-launch.test.sh \
+    fm-guard-stale-banner.test.sh \
     fm-harness-adapter-instructions-live-e2e.test.sh \
     fm-harness-adapter-references.test.sh \
     fm-backend-herdr-smoke.test.sh \
     fm-secondmate-safety.test.sh \
     fm-session-start.test.sh \
-    fm-afk-pi-herdr-return-e2e.test.sh \
     fm-backend.test.sh \
     fm-pr-merge.test.sh \
     fm-procevent-quota.test.sh \
@@ -117,16 +117,13 @@ init_changed_fixture_repo() {
     fm-pi-windows-shell-invocation.test.sh \
     fm-afk-return.test.sh \
     fm-bearings-snapshot.test.sh \
-    fm-backend-cmux.test.sh \
-    fm-backend-zellij.test.sh \
     fm-control-herdr-smoke.test.sh \
-    fm-backend-orca.test.sh; do
+    fm-unmapped-probe.test.sh; do
     printf '#!/usr/bin/env bash\n# tests/lib.sh\n' >"$repo/tests/$script"
     chmod +x "$repo/tests/$script"
   done
   : >"$repo/tests/lib.sh"
   : >"$repo/tests/fm-backend-herdr-eventwait.test.py"
-  : >"$repo/bin/fm-supervisor-target-lib.sh"
   : >"$repo/bin/fm-control-lib.sh"
   : >"$repo/bin/fm-timeout-lib.sh"
   : >"$repo/bin/fm-procevent-quota.sh"
@@ -143,7 +140,7 @@ init_changed_fixture_repo() {
   # the shape the tests/fixtures/<dir>/ arm is keyed for.
   mkdir -p "$repo/tests/fixtures/demo"
   : >"$repo/tests/fixtures/demo/demo-fixture.sh"
-  printf '# tests/fixtures/demo\n' >>"$repo/tests/fm-backend-orca.test.sh"
+  printf '# tests/fixtures/demo\n' >>"$repo/tests/fm-unmapped-probe.test.sh"
   # A shared helper with no curated family of its own, named by exactly ONE
   # script of the expensive real-Herdr family and consumed by one curated
   # watcher script. This is the shape that made a one-line helper change select
@@ -153,17 +150,16 @@ init_changed_fixture_repo() {
   # shellcheck disable=SC2016  # literal fixture text: the reference must reach
   # the file verbatim so the changed-file scan can find it, not expand here.
   printf '. "$ROOT/bin/shared-probe-lib.sh"\n' >"$repo/bin/fm-watch-probe.sh"
-  printf '# .opencode/plugins/fm-primary-turnend-guard.js\n# .pi/extensions/fm-primary-turnend-guard.ts\n' \
+  printf '# .pi/extensions/fm-primary-turnend-guard.ts\n' \
     >>"$repo/tests/fm-cd-pretool-check.test.sh"
   printf '# .pi/extensions/fm-primary-pi-watch.ts\n' >>"$repo/tests/fm-pi-watch-extension.test.sh"
   mkdir -p \
     "$repo/.agents/skills/example" \
     "$repo/.agents/skills/harness-adapters/references/common" \
-    "$repo/.opencode/plugins" "$repo/.pi/extensions" "$repo/docs" "$repo/src"
+    "$repo/.pi/extensions" "$repo/docs" "$repo/src"
   : >"$repo/.agents/skills/example/SKILL.md"
   : >"$repo/.agents/skills/harness-adapters/SKILL.md"
   : >"$repo/.agents/skills/harness-adapters/references/common/dispatch.md"
-  : >"$repo/.opencode/plugins/fm-primary-turnend-guard.js"
   : >"$repo/.pi/extensions/fm-primary-pi-watch.ts"
   : >"$repo/.pi/extensions/fm-primary-turnend-guard.ts"
   mkdir -p "$repo/.pi/extensions/lib"
@@ -334,24 +330,16 @@ test_changed_dependency_selection_and_unmapped_failure() {
   git -C "$repo" add tests/fm-backend-herdr-eventwait.test.py
   git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm eventwait-change
 
-  printf '\n' >>"$repo/bin/fm-supervisor-target-lib.sh"
-  listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD)
-  assert_contains "$listed" "tests/fm-daemon.test.sh" "supervisor target selects daemon coverage"
-  assert_contains "$listed" "tests/fm-afk-return.test.sh" "supervisor target selects afk coverage"
-  git -C "$repo" add bin/fm-supervisor-target-lib.sh
-  git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm supervisor-change
-
   printf '\n' >>"$repo/.agents/skills/example/SKILL.md"
-  printf '\n' >>"$repo/.opencode/plugins/fm-primary-turnend-guard.js"
   printf '\n' >>"$repo/.pi/extensions/fm-primary-pi-watch.ts"
   printf '\n' >>"$repo/.pi/extensions/fm-primary-turnend-guard.ts"
   listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD)
   assert_contains "$listed" "tests/fm-ask-user-authority.test.sh" "skill source selects pure contract coverage"
-  assert_contains "$listed" "tests/fm-cd-pretool-check.test.sh" "OpenCode and Pi source selects hook coverage"
+  assert_contains "$listed" "tests/fm-cd-pretool-check.test.sh" "Pi source selects hook coverage"
   assert_contains "$listed" "tests/fm-pi-watch-extension.test.sh" "Pi source selects watcher coverage"
   assert_contains "$listed" "tests/fm-pi-windows-shell-invocation.test.sh" \
     "turn-end extension selects native-Windows shell coverage"
-  git -C "$repo" add .agents .opencode .pi
+  git -C "$repo" add .agents .pi
   git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm non-bin-source-change
 
   printf '\n' >>"$repo/.pi/extensions/lib/fm-operational-input.ts"
@@ -424,8 +412,15 @@ test_changed_dependency_selection_and_unmapped_failure() {
   rm -f "$repo/src/unmapped.ts"
   listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD)
   [ -z "$listed" ] || fail "a retired unmapped source without consumers selected tests: $listed"
+
+  printf '# test-only support\n' >"$repo/tests/retired-test-safety.sh"
+  git -C "$repo" add tests/retired-test-safety.sh
+  git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm retired-test-support
+  rm -f "$repo/tests/retired-test-safety.sh"
+  listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD)
+  [ -z "$listed" ] || fail "retired test support without consumers selected tests: $listed"
   rm -rf "$tmp"
-  pass "changed selection covers dependents, fails closed for live unmapped source, and accepts retired unconsumed source"
+  pass "changed selection covers dependents, fails closed for live unmapped source, and accepts retired unconsumed sources"
 }
 
 # A direct test reference is per-script evidence. Widening it to the referencing
@@ -450,7 +445,7 @@ test_changed_bin_reference_selects_per_script_not_per_family() {
       ;;
   esac
   # The curated consumer keeps its family-level coupling.
-  assert_contains "$listed" "tests/fm-daemon.test.sh" \
+  assert_contains "$listed" "tests/fm-guard-stale-banner.test.sh" \
     "a curated consumer of the helper must still select its whole family"
   assert_contains "$listed" "tests/fm-pi-watch-extension.test.sh" \
     "a curated consumer of the helper must still select its whole family"
@@ -467,7 +462,7 @@ test_changed_uses_bounded_automatic_concurrency() {
   repo="$tmp/repo"
   init_changed_fixture_repo "$repo"
   cp "$ROOT/bin/fm-timeout-lib.sh" "$repo/bin/fm-timeout-lib.sh"
-  for script in fm-backend-herdr-smoke.test.sh fm-daemon.test.sh fm-pi-watch-extension.test.sh; do
+  for script in fm-backend-herdr-smoke.test.sh fm-guard-stale-banner.test.sh fm-pi-watch-extension.test.sh; do
     cat >"$repo/tests/$script" <<'SH'
 #!/usr/bin/env bash
 sleep 1
@@ -599,8 +594,8 @@ test_script_list_uses_bounded_automatic_concurrency() {
   init_changed_fixture_repo "$repo"
   rm -f "$repo/bin/fm-timeout-lib.sh"
   # fm-cd-pretool-check and fm-pr-merge are individually proven isolated;
-  # fm-backend-orca is not, so it must still land in the serial tail.
-  for script in fm-cd-pretool-check.test.sh fm-pr-merge.test.sh fm-backend-orca.test.sh; do
+  # fm-unmapped-probe is not, so it must still land in the serial tail.
+  for script in fm-cd-pretool-check.test.sh fm-pr-merge.test.sh fm-unmapped-probe.test.sh; do
     cat >"$repo/tests/$script" <<'SH'
 #!/usr/bin/env bash
 sleep 1
@@ -626,7 +621,7 @@ SH
   # An unproven script in the list is scheduled around, never refused and never
   # run beside another script.
   (cd "$repo" && bin/fm-test-run.sh tests/fm-cd-pretool-check.test.sh tests/fm-pr-merge.test.sh \
-      tests/fm-backend-orca.test.sh) >"$tmp/mixed.out" 2>"$tmp/mixed.err" \
+      tests/fm-unmapped-probe.test.sh) >"$tmp/mixed.out" 2>"$tmp/mixed.err" \
     || fail "mixed proven/unproven script list failed: $(cat "$tmp/mixed.err")"
   mixed_shape=$(grep -E '^FM_TEST_(BEGIN|END)' "$tmp/mixed.out" | awk '{print $1}' | paste -sd, -)
   [ "$mixed_shape" = FM_TEST_BEGIN,FM_TEST_BEGIN,FM_TEST_END,FM_TEST_END,FM_TEST_BEGIN,FM_TEST_END ] \
@@ -648,10 +643,10 @@ assert automatic["selection"].split(";")[-1] == f"jobs={expected}"
 assert serial["selection"].split(";")[-1] == "jobs=1"
 PYJSON
 
-  (cd "$repo" && bin/fm-test-run.sh tests/fm-backend-orca.test.sh) \
+  (cd "$repo" && bin/fm-test-run.sh tests/fm-unmapped-probe.test.sh) \
     >"$tmp/named.out" 2>"$tmp/named.err" \
     || fail "a named script unexpectedly required a timeout helper: $(cat "$tmp/named.err")"
-  grep -Eq '^FM_TEST_END .+ tests/fm-backend-orca\.test\.sh exit=0 ' "$tmp/named.out" \
+  grep -Eq '^FM_TEST_END .+ tests/fm-unmapped-probe\.test\.sh exit=0 ' "$tmp/named.out" \
     || fail "a named script did not run without an automatic bound: $(cat "$tmp/named.out")"
 
   rm -rf "$tmp"
@@ -1004,12 +999,12 @@ test_list_scheduled_proven_isolated_uses_serial_weights() {
 }
 
 test_list_scheduled_non_lane_selections_use_serial_weights() {
-  local tmp repo script selection
+  local tmp repo script selection expected
   local -a scripts=(
     tests/fm-operational-input.test.sh
     tests/fm-lint.test.sh
     tests/fm-captain-hold-lifecycle.test.sh
-    tests/fm-kimi-retirement.test.sh
+    tests/fm-project-mode.test.sh
     tests/fm-brief.test.sh
   )
   tmp=$(fm_test_tmproot fm-test-run-non-lane-schedule)
@@ -1030,18 +1025,23 @@ test_list_scheduled_non_lane_selections_use_serial_weights() {
     tests/fm-brief.test.sh \
     tests/fm-captain-hold-lifecycle.test.sh \
     tests/fm-lint.test.sh \
-    tests/fm-kimi-retirement.test.sh \
-    tests/fm-operational-input.test.sh >"$tmp/expected"
+    tests/fm-operational-input.test.sh >"$tmp/expected-family"
+  printf '%s\n' \
+    tests/fm-brief.test.sh \
+    tests/fm-captain-hold-lifecycle.test.sh \
+    tests/fm-lint.test.sh \
+    tests/fm-project-mode.test.sh \
+    tests/fm-operational-input.test.sh >"$tmp/expected-all"
   for selection in family all changed scripts; do
     case "$selection" in
-      family) set -- --family pure-contract-unit ;;
-      all) set -- --all ;;
-      changed) set -- --changed --base HEAD ;;
-      scripts) set -- "${scripts[@]}" ;;
+      family) set -- --family pure-contract-unit; expected="$tmp/expected-family" ;;
+      all) set -- --all; expected="$tmp/expected-all" ;;
+      changed) set -- --changed --base HEAD; expected="$tmp/expected-all" ;;
+      scripts) set -- "${scripts[@]}"; expected="$tmp/expected-all" ;;
     esac
     "$repo/bin/fm-test-run.sh" --list-scheduled "$@" >"$tmp/actual" \
       || fail "--list-scheduled $selection failed"
-    cmp -s "$tmp/expected" "$tmp/actual" \
+    cmp -s "$expected" "$tmp/actual" \
       || fail "$selection scheduling must use serial hints and path-ordered default ties"
   done
   pass "family, all, changed, and script selections ignore parallel hints"
@@ -1224,7 +1224,7 @@ test_jobs_requires_proven_isolated() {
   grep -Fq 'not in the proven-isolated set' "$tmp/err" \
     || fail "--jobs refusal message missing: $(cat "$tmp/err")"
   set +e
-  "$RUNNER" --jobs 2 tests/fm-afk-inject-e2e.test.sh >"$tmp/out2" 2>"$tmp/err2"
+  "$RUNNER" --jobs 2 tests/fm-afk-return.test.sh >"$tmp/out2" 2>"$tmp/err2"
   rc=$?
   set -e
   [ "$rc" -eq 2 ] || fail "--jobs on a family with no recorded proof must refuse, got $rc"
@@ -1348,7 +1348,7 @@ test_changed_shared_fixture_selects_its_readers() {
   assert_contains "$listed" "tests/fm-secondmate-safety.test.sh" \
     "shared test fixture selects its secondmate reader"
   case "$listed" in
-    *fm-backend-orca.test.sh*)
+    *fm-unmapped-probe.test.sh*)
       fail "shared test fixture selection widened past its readers: $listed" ;;
   esac
   git -C "$repo" add tests/shared-probe-fixture.sh
@@ -1368,7 +1368,7 @@ test_changed_shared_fixture_selects_its_readers() {
   # directory-scan arm rather than the top-level fixture arm's basename scan.
   printf '\n' >>"$repo/tests/fixtures/demo/demo-fixture.sh"
   listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD)
-  assert_contains "$listed" "tests/fm-backend-orca.test.sh" \
+  assert_contains "$listed" "tests/fm-unmapped-probe.test.sh" \
     "a nested fixture selects the suite that reads its directory"
 
   rm -rf "$tmp"

@@ -6,247 +6,99 @@ This record contains reusable version-scoped evidence for active runtime guarant
 The backend guides own current setup, safety boundaries, and limitations.
 Exact task chronology, branch names, temporary homes, local paths, process ids, thread ids, and delivery transcripts remain in private reports or PR evidence.
 
-## Harness detection precedence
+## Plain Pi runtime identity
 
-Firstmate's own harness comes from two evidence classes, and `bin/fm-harness.sh` owns how they combine.
-An environment marker can name a harness, while the nearest supported harness process in the parent chain proves which runtime owns the process tree.
-A marker alone is not ownership proof because ordinary environment state can be inherited or replayed into an unrelated session.
-
-Verified 2026-09-15 with the portable regression, which constructs every process tree from renamed executables and requires no installed harness:
+`bin/fm-harness.sh` accepts only the plain npm-installed Pi CLI identity `pi`.
+Process evidence requires an executable named exactly `pi`; Pi's own environment marker is a separate self-identification signal and never makes a generic Node process count as Pi liveness.
+The portable regression builds synthetic process trees from renamed executables and pins marker-only and exact-ancestry cases:
 
 ```sh
 bin/fm-test-run.sh tests/fm-harness-precedence.test.sh
 ```
 
-The regression proves marker-only, ancestry-only, and agreeing marker-plus-ancestry combinations independently.
-Native OpenCode process ancestry resolves its own runtime.
-Pi's marker retains the finer `pi-signed` identity when ancestry can prove only the shared Pi family.
+Generic Node/Python processes, argument strings, parent directory names, mixed-case or prefixed lookalikes, and unknown runtime names remain unverified.
+Provider/model identifiers such as `codex-native/*` are profile axes behind Pi and never runtime identities.
 
-The same suite pins interpreter-script-path matches, native harness binaries beneath interpreter shims, harnesses running as pid 1 inside a namespace, and the descent probe used by liveness checks.
-A foreign-named interpreter path can contribute an args-strength verdict, but it cannot override a comm-strength native process on the reachable ancestor path.
-Equal-depth descendants prefer the comm-strength leaf, so process-table ordering cannot silently change the selected identity.
+The authoritative executable checked for this contraction was `/opt/homebrew/bin/pi`, version 0.85.1, resolving to `@earendil-works/pi-coding-agent/dist/bundle/cli.js`.
+The live guard launches that executable through a real isolated `fm-spawn.sh` path, records the exact arguments, removes only the final task prompt to avoid a provider call, then executes Pi with the requested provider/model, effort, and generated extension unchanged.
+It proves the recorded runtime remains `pi`, the process has exact Pi identity, and cleanup removes the private tmux endpoint and worktree:
+
+```sh
+bin/fm-test-run.sh tests/fm-pi-spawn-profile-live-e2e.test.sh
+```
+
+Observed 2026-09-18 with Pi 0.85.1:
+
+```text
+ok - plain Pi 0.85.1 launched with provider/model=openai-codex/gpt-5.6-sol effort=xhigh and exact live Pi identity
+ok - isolated tmux spawn and cleanup completed without touching the ambient tmux server
+```
 
 ## tmux
 
-Foreground-process behavior was verified on 2026-07-07 with tmux 3.6a on macOS.
+Foreground-process behavior was verified on tmux with an isolated session: an idle shell reported its shell name, a directly executed command reported that command, and interruption returned the pane to the shell.
+The task liveness classifier recognizes only exact Pi identity from the pane title or exact foreground executable fields.
+A generic `node` process is ambiguous rather than alive, and names such as `Pi` or `pi-helper` do not borrow Pi identity.
+Portable coverage lives in:
 
 ```sh
-tmux new-session -d -s fmtest -n testwin
-tmux display-message -p -t fmtest:testwin '#{pane_current_command}'
-tmux send-keys -t fmtest:testwin 'sleep 30' Enter
-tmux display-message -p -t fmtest:testwin '#{pane_current_command}'
-tmux send-keys -t fmtest:testwin C-c
-tmux display-message -p -t fmtest:testwin '#{pane_current_command}'
+bin/fm-test-run.sh tests/fm-tmux-agent-liveness.test.sh tests/fm-secondmate-liveness.test.sh
 ```
 
-Observed output:
-
-```text
-zsh
-sleep
-zsh
-```
-
-A persistent parent shell waiting for a child remained reported as the parent process, while a shell that directly execed a simple command changed identity with the process itself.
-Pi and pi-signed 0.82.0 were reverified on 2026-07-27 through real isolated `fm-spawn.sh` launches.
-
-### Agent liveness name sources
-
-The earlier record that every harness is observed under its own `#{pane_current_command}` no longer holds and has been replaced by the per-harness evidence below.
-In this macOS run that reading reflected a rewritable process title rather than stable executable identity, so it is now one of two independent name sources rather than the sole basis of a verdict.
-
-The retained primary-capable adapters were relaunched on 2026-08-03 with tmux 3.6a on macOS 26.5.2 arm64, each on a private socket in an isolated lab.
-
-```sh
-tmux -L "$socket" new-window -d -t "$session:" -n "$harness" -c "$wt" -- "$bin"
-tmux -L "$socket" display-message -p -t "$session:$harness" '#{pane_current_command}'
-ps -t "${tty#/dev/}" -o pgid=,tpgid=,comm=      # rows where pgid = tpgid
-```
-
-Observed identities, and the resulting verdict:
-
-| Harness | Version | `#{pane_current_command}` | Foreground `comm` | Verdict |
-| --- | --- | --- | --- | --- |
-| opencode | 1.18.11 | `opencode` | `opencode` | alive |
-| pi | 0.82.0 | `pi-launcher` | `pi-signed`, `pi` | alive |
-| pi-signed | 0.82.0 | `pi-launcher` | `pi-signed`, `pi` | alive |
-
-`#{pane_current_command}` and foreground `ps -o comm=` read different name fields, but which one preserves executable identity is platform-dependent.
-On macOS the pane command reflected the rewritable title while the full install path could survive in `ps -o comm=`; in the Linux portable regression those roles reversed for the version-named native executable, with the identifying path retained in argv[0].
-The classifier therefore accepts a harness basename first, then an exact harness path component in the full executable path, then the same component in argv[0], without depending on which field carries it on a given platform.
-
-The portable regression is CI-enforced.
-The real-harness drift guard spends no model tokens, so under the policy in `.agents/skills/firstmate-coding-guidelines/SKILL.md` it runs by default wherever tmux is installed and reports a capability skip elsewhere; `FM_HARNESS_LIVENESS_DRIFT=1` additionally turns an absent tool into a failure.
-Run the live guard after any harness upgrade and before trusting or refreshing the table above:
+The live drift guard uses a private tmux socket, spends no model tokens unless it actually launches Pi, and must be rerun after Pi upgrades:
 
 ```sh
 FM_HARNESS_LIVENESS_DRIFT=1 bin/fm-test-run.sh tests/fm-harness-liveness-drift-live-e2e.test.sh
 ```
 
-### 2026-09-06 default-on drift refresh
+## Adapter instruction routing
 
-The retained-adapter portion of the macOS 26.5.2 arm64 run checked three installed harness entries and classified every one `alive`:
-
-```text
-# opencode 1.18.29: title='opencode' foreground=[/opt/homebrew/bin/opencode ]
-# pi 0.84.4: title='pi-launcher' foreground=[/opt/homebrew/bin/pi-signed .../pi ]
-# pi-signed 0.84.4: title='pi-launcher' foreground=[/opt/homebrew/bin/pi-signed .../pi ]
-# checked 3 installed harness(es)
-```
-
-Bounded output from the 2026-08-03 run that produced the first table above:
-
-```text
-# checked 6 installed harness(es)
-```
-
-Installed-wrapper checks:
+`tests/fm-harness-adapter-references.test.sh` parses the router's declared contract and proves every Pi reference is readable.
+`tests/fm-harness-adapter-instructions-live-e2e.test.sh` is an opt-in local-model evaluation of every operation scenario and makes no external-provider call:
 
 ```sh
-basename "$(command -v pi-signed)"
-pi-signed --version
-pi --version
+FM_HARNESS_ADAPTER_INSTRUCTION_EVAL=1 \
+FM_HARNESS_ADAPTER_LOCAL_MODEL=<local-model> \
+bin/fm-test-run.sh tests/fm-harness-adapter-instructions-live-e2e.test.sh
 ```
 
-Observed bounded output:
+That check demonstrates instruction routing only; native loader behavior remains the responsibility of the live Pi launch proof.
 
-```text
-pi-signed
-0.82.0
-0.82.0
-```
+## Cleanup endpoint identity
 
-### Harness-adapter instruction routing
-
-Two checks keep the evidence boundaries separate.
-`tests/fm-harness-adapter-references.test.sh` parses the router's declared JSON contract as normalized data and proves every selected reference is readable, which is structural evidence only.
-`tests/fm-harness-adapter-instructions-live-e2e.test.sh` is an opt-in development check that sends the directly loaded router and every operation scenario across all retained harness identities to a local Ollama model, requires the generated plan as normalized JSON, and makes no external-provider call.
+Cleanup validation covers exactly tmux and Herdr before backend dispatch.
+Missing, empty, malformed, ambiguous, unknown-backend, and task-mismatched endpoint records refuse before mutation, while valid task-bound records close only their exact endpoint.
 
 ```sh
-FM_HARNESS_ADAPTER_INSTRUCTION_EVAL=1 FM_HARNESS_ADAPTER_LOCAL_MODEL=ambient-router-gemma4:e4b bin/fm-test-run.sh tests/fm-harness-adapter-instructions-live-e2e.test.sh
+bin/fm-test-run.sh \
+  tests/fm-teardown-endpoint-safety.test.sh \
+  tests/fm-teardown.test.sh \
+  tests/fm-backend-herdr.test.sh
 ```
 
-That local evaluation demonstrates instruction-driven scenario selection, but it does not claim that a native harness loaded the selected files.
-The guard prints the exact installed version or unavailable status for every native harness so absent tools and unexercised provider transports remain explicit rather than becoming passes.
-Native loader behavior still requires the applicable live agent-tool check; no uniform deterministic zero-provider transport currently spans OpenCode and Pi, and other tools remain unavailable where their binaries are absent.
-
-Bounded output from the 2026-08-29 local run:
-
-```text
-ok - local model ambient-router-gemma4:e4b selected every operation scenario and all remaining harness identities
-# native loader not claimed: opencode 1.14.48 is installed, but this harness-neutral evaluation does not exercise its provider transport
-# native loader not claimed: pi 0.84.0 is installed, but this harness-neutral evaluation does not exercise its provider transport
-# unverified native loader: pi-signed is not installed on this machine
-# installed native tools recorded without overstating loader coverage: 2
-# unavailable native tools: pi-signed
-```
-
-The isolated process and endpoint checks used:
-
-```sh
-tmux display-message -p -t "$target" '#{pane_current_command}'
-ps -o comm= -p "$wrapper_pid"
-ps -o comm= -p "$engine_pid"
-FM_HOME="$fixture_home" bin/fm-crew-state.sh "$task_id"
-```
-
-Observed bounded shapes:
-
-```text
-pi-launcher
-.../pi-signed
-.../Pi Launcher.app/Contents/Resources/pi/pi
-state: done ...
-```
-
-Both launches executed a submitted tool instruction and touched the generated `turn_end` marker.
-The pi-signed launch retained `harness=pi-signed`, while the plain comparison retained `harness=pi`.
-The exact wrapper ancestry was `pi-signed` parent to Pi engine child, and the plain Pi Launcher path also traversed the signed wrapper on this installation.
-That shared plain-Pi path is retained as disconfirming evidence against using ancestry as runtime-selection authority.
-Firstmate therefore sets the exact `FM_PI_HARNESS` selection marker on both worker launch paths, while an unmarked Pi-family process remains `pi`.
-Both recorded runtime identities now classify the exact `pi-launcher` foreground command as `alive`.
-
-Backend applicability was reviewed across every spawn adapter.
-Tmux needs the exact `pi-launcher`, `pi-signed`, `pi`, and `Pi` process identities for recovery-grade liveness.
-Herdr uses native registered-agent state and needs no process-name branch.
-Zellij has no verified recovery-grade agent process probe, while Orca and cmux do not support secondmate spawns, so those three retain their existing generic ordinary-launch semantics without a new liveness matcher.
-
-The current classifier matrix and its refresh guard are recorded in [Composer classification matrix](#composer-classification-matrix), with portable shape coverage in `tests/fm-composer-lib.test.sh` and `tests/fm-composer-ghost.test.sh`.
-OpenCode 1.18.4 busy-queue behavior remains pinned by `tests/fm-tmux-submit-busy.test.sh` and `tests/fm-composer-lib.test.sh`.
-Herdr's idle-native submit confirmation is pinned by `tests/fm-backend-herdr.test.sh`.
-
-### Cleanup endpoint identity
-
-The cleanup identity boundary was validated on 2026-07-28 with tmux 3.6a and metadata fixtures for every supported backend.
-
-```sh
-tests/fm-teardown-endpoint-safety.test.sh
-tests/fm-teardown.test.sh
-tests/fm-backend-herdr.test.sh
-tests/fm-backend-zellij.test.sh
-tests/fm-backend-orca.test.sh
-tests/fm-backend-cmux.test.sh
-```
-
-Bounded output from the incident regression:
-
-```text
-ok - fm-teardown: missing, empty, malformed, ambiguous, and task-mismatched endpoints refuse before every mutation or runtime call
-ok - cleanup identity: valid tmux, Herdr, Zellij, Orca, and cmux records validate while every empty backend target refuses
-ok - tmux backend: direct empty target returns nonzero without invoking tmux
-ok - process cleanup: creation-time PID identity removes only the exact child and preserves the control child
-ok - fm-teardown: dedicated-socket invalid cleanup preserves target/control and valid cleanup removes only the exact target
-```
-
-The dedicated tmux cell removed ambient tmux variables, required a socket-bound wrapper, kept one target and one independent control window, and proved the wrapper was not called for invalid metadata or a direct empty target.
-Valid cleanup removed only the exact task-bound target and left the control window live.
-The metadata-only validation covers tmux, Herdr, Zellij, Orca, and cmux before backend dispatch.
-OpenCode, Pi, and pi-signed share that backend cleanup boundary; their harness-specific hook files and tokens are cleaned only after it, so no harness needs a separate endpoint parser.
+The dedicated tmux cell removes ambient tmux variables, uses a socket-bound wrapper, keeps an independent control window, and proves invalid metadata never invokes the backend.
 
 ## Composer classification matrix
 
-The shared composer classifier (`bin/fm-composer-lib.sh`, `fm_composer_classify_screen`) owns every composer shape fleet-wide; each backend contributes only a capture and a capability descriptor.
-The live half of that guarantee was verified on 2026-08-10 from an already-trusted checkout at the branch's final validated head, against every installed harness then covered by the empty-composer matrix on tmux 3.6a, macOS arm64, on an isolated private socket, with no prompt submitted to any harness.
+The shared classifier in `bin/fm-composer-lib.sh` owns every composer verdict; tmux and Herdr contribute captures and declarative capabilities only.
+The live matrix launches plain Pi in an isolated tmux session and proves its real idle composer classifies `empty`, while a blank shell row remains `unknown` and injection defers:
 
 ```sh
 FM_COMPOSER_MATRIX_LIVE=1 tests/fm-composer-matrix-live-e2e.test.sh
 ```
 
-Observed output:
-
-```text
-ok - opencode (1.14.46): real idle composer classifies empty
-ok - pi (0.84.0): real idle composer classifies empty
-ok - strict posture live: a blank shell row classifies unknown and injection defers
-ok - zellij (zellij 0.44.0): unrelated pane change never confirms delivery (verdict: unknown)
-ok - live composer-matrix guard verified 5 live surface(s)
-```
-
-All remaining installed harnesses' real idle composers reached a proven `empty`, including Pi through the tmux foreground-process identity probe and OpenCode through the left-bar shape; OpenCode first parked on a vendor update-available modal that the strict classifier correctly refused until the guard's single non-submitting Escape dismissed it.
-The strict blank-row posture held live (a blank shell row deferred injection), and a zellij pane changing for reasons unrelated to submission never confirmed a delivery, replacing the retired content-diff heuristic's false positive.
-Portable byte-capture regressions in `tests/fm-composer-lib.test.sh` carry the retained adapters' capability profiles under both a UTF-8 locale and `LC_ALL=C`.
-This guard is the refresh command after an upgrade to any matrix-covered harness; rerun it and update the versions above rather than trusting this table across releases.
-`zellij action dump-screen --pane-id <id> --ansi` was verified at zellij 0.44.0 to preserve ANSI styling, which is the capability the zellij composer classifier reads.
+Portable byte-capture coverage lives in `tests/fm-composer-lib.test.sh` and `tests/fm-composer-ghost.test.sh` under both UTF-8 and `LC_ALL=C`.
+Herdr's idle-native submit confirmation is pinned by `tests/fm-backend-herdr.test.sh`.
 
 ## Steering-inbox doorbell
 
-The steering channel's one behavioral assumption - a real worker agent follows the constant self-describing doorbell line (list the inbox, read and act on its records in numeric order, then `mv` each into `handled/`) - was verified on 2026-08-23 against every installed verified harness, on tmux 3.6a, macOS arm64, on an isolated private socket, driving the REAL `bin/fm-send.sh` end to end (durable record plus doorbell, with one mid-wait re-ring playing the watcher's role).
+The live doorbell guard drives the real `bin/fm-send.sh` against plain Pi on an isolated tmux socket and requires Pi to list the named inbox, act on the record, and acknowledge it with the atomic move into `handled/`:
 
 ```sh
 FM_SEND_INBOX_LIVE_E2E=1 tests/fm-send-inbox-doorbell-live-e2e.test.sh
 ```
 
-Observed output:
-
-```text
-ok - opencode (1.18.21): the doorbell reached a real worker, which acted and acked with the mv
-ok - pi (0.84.1): the doorbell reached a real worker, which acted and acked with the mv
-```
-
-Both installed retained harnesses honored the doorbell contract with real model turns: each listed the inbox named by the doorbell, read its record, executed the instruction inside it, and acknowledged with the atomic `mv`.
-An OpenCode vendor update modal swallowed the first doorbell and the single re-ring recovered it, which is exactly the watcher's retry ladder.
-The portable ladder and enqueue regressions in `tests/fm-task-inbox.test.sh` and `tests/fm-send-inbox.test.sh` cover every harness-independent half.
-This guard is the refresh command after any harness upgrade; it spends a small number of real tokens per installed harness, reports an absent harness explicitly, and refuses a run that verified nothing.
+The portable enqueue and retry ladder remain covered by `tests/fm-task-inbox.test.sh` and `tests/fm-send-inbox.test.sh`.
 
 ## Herdr
 
@@ -279,7 +131,7 @@ The CLI matrix was checked directly:
 | Literal send | `herdr pane send-text <pane> <text> --session <name>` | Left text unsubmitted until Enter. |
 | Keys | `herdr pane send-keys <pane> enter|escape|ctrl+c --session <name>` | Enter and Escape worked; Ctrl-C interrupted foreground work. |
 | Capture | `herdr pane read <pane> --source recent --lines N` | Small N could return empty below viewport height; a 200-line request plus local trim was stable. |
-| Native state | `herdr agent get <pane>` | Working and done transitions are visible on some harnesses, while others can keep `agent_status=idle` for an entire landed turn, so submit confirmation falls through to the shared composer verdict. Native `busy` remains positive activity evidence, while native `idle` cannot close a turn and the adapter's semantic lifecycle decides worker state. |
+| Native state | `herdr agent get <pane>` | Pi working and done transitions can be visible, but `agent_status=idle` may persist through a landed turn, so submit confirmation falls through to the shared composer verdict. Native `busy` remains positive activity evidence, while native `idle` cannot close a turn and the adapter's semantic lifecycle decides worker state. |
 | Restart | guarded named-session stop then start | Workspace, tab, pane, and labels persisted; the agent process and registration did not. |
 | Close | `herdr pane close <pane> --session <name>` | The exact one-pane task tab closed; closing a final tab could remove the workspace. |
 
@@ -703,7 +555,7 @@ ok - real herdr: exit on a pane with no registered agent is idempotent success
 ok - real herdr 0.9.0: a gone session reads recoverable while a live pane and a malformed target do not
 ok - real herdr: a drifted agent-free shell returns to its worktree and reuses the same endpoint
 ok - real herdr: interrupt refuses when herdr's own agent registry reports no agent
-ok - real herdr: interrupt delivers the harness's key and proves the agent survived it
+ok - real herdr: interrupt delivers Pi's key and proves the agent survived it
 ok - real herdr: no control verb removed the endpoint or the task's local copy
 ok - real herdr 0.9.0: a registration Herdr keeps after its agent exits reads stale-agent and recovers as dead
 ok - real herdr: exit on a pane with a stale registration is idempotent success
@@ -711,7 +563,7 @@ ok - real herdr: a stale registration no longer blocks relaunch, and the endpoin
 ok - real herdr: an agent that does not stop fails closed instead of being reported as stopped
 ```
 
-The registry read through `herdr pane report-agent` is the same source `fm_backend_herdr_agent_state` classifies, and since 2026-09-10 that registration counts as an agent only while `pane process-info` shows a harness process behind it, so the guard backs the registration with a real process named like a harness (a symlink to `sleep`) and then stops that process, with no real harness launched.
+The registry read through `herdr pane report-agent` is the same source `fm_backend_herdr_agent_state` classifies, and that registration counts as an agent only while `pane process-info` shows exact Pi process identity behind it, so the guard backs the registration with a deterministic test Pi process and then stops it, with no provider prompt submitted.
 That command is the guard that refreshes this record; run it after every Herdr upgrade rather than trusting the version above.
 
 For Pi on Herdr 0.9.0, `herdr agent get` reflects whether the agent process remains live; its registration does not persist merely because the pane and parent shell do.
@@ -841,144 +693,17 @@ ok - real herdr 0.9.0 + pi 0.85.1: a running registered pi classifies alive at p
 ok - real herdr 0.9.0 + pi 0.85.1: the registration left behind by a quit pi reads stale-agent and recovers as dead
 ```
 
-`tests/fm-control-herdr-smoke.test.sh` proves the same shape through the control plane with no harness launched (the two `stale` lines under "Agent lifecycle control" above): a registration over a real agent-named process reads `alive`, stopping that process makes the pane read `stale-agent` and recover as `dead` while `agent get` still reports the record, `exit` then reports `already-stopped`, and `--relaunch` reuses the same endpoint with the local copy intact.
+`tests/fm-control-herdr-smoke.test.sh` proves the same shape through the control plane without a provider prompt (the two `stale` lines under "Agent lifecycle control" above): a registration over a deterministic Pi process reads `alive`, stopping that process makes the pane read `stale-agent` and recover as `dead` while `agent get` still reports the record, `exit` then reports `already-stopped`, and `--relaunch` reuses the same endpoint with the local copy intact.
 `tests/fm-backend-herdr.test.sh` pins the logic portably with canned `process-info` bodies over real processes, driving the signals apart: the identical shell-only foreground reads `stale-agent` for a childless shell and `live` when an agent-named process is still a descendant of that shell, a `working`, `done`, or `blocked` record over a shell-only pane reads the same as `idle`, an unreadable process view reads `unknown` and refuses husk closing, a transient prompt helper beside the shell settles into `stale-agent` on the next shell-only sample while a foreground that never settles within the bound still reads `live`, and `busy_state` verifies a `working` record before reporting busy.
 `tests/fm-crew-state.test.sh` pins the recovery classifier: a stale registration over a shell-only pane reports agent gone rather than alive or unreachable, and a stale `working` record never reports the pane working.
 A stale-registration pane is never a husk: create, reclaim, presentation recovery, and session cleanup keep refusing it, and only recovery reuses it.
 
-### Away-mode transport
+### Away posture
 
-The away daemon is no longer launched on Pi; the away posture there is the record `bin/fm-afk-contract.sh` owns.
-The Pi/Herdr away posture and return transport was verified on 2026-09-08 against a real Pi primary in an isolated Herdr lab session, Herdr 0.9.0 and Pi 0.82.0:
-
-```sh
-FM_AFK_PI_HERDR_E2E=1 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
-  tests/fm-afk-pi-herdr-return-e2e.test.sh
-```
-
-Relevant transport output:
-
-```text
-ok - real Pi primary: the away posture is recorded with no daemon launched
-ok - real Pi/Herdr: nothing injects into the captain pane under the away posture
-evidence: herdr=herdr 0.9.0 pi=0.82.0 target=fm-lab-fm-afk-pi-return-37189-7133:w1:p1 archived-records=2
-```
-
-Observed guarantees: `fm-afk-launch.sh start` refused on the Pi primary and `confirm` recorded the posture with no daemon pid, flag, or terminal; a pending real Pi draft was left untouched with nothing submitted into the captain pane; the unmarked return request was recognized as the return, rendered the brief health first, and opened the catch-up gate on the live blocker; resolving the blocker cleared the gate, and a clean re-entry and return left exactly one archived record per away window.
-The current catch-up reporting boundary is pinned by `tests/fm-afk-return.test.sh` and the same live entry point: Bearings continues through a pending return catch-up, projects its posture as an action-free warning outside Captain's Call, and drops that warning after the gate clears, while an active away window still refuses.
-The fixture captures submitted input through Pi's `input` extension hook, so the lab agent directory needs no provider credentials.
-The daemon injection transport into a live composer keeps its coverage in `tests/fm-afk-inject-herdr-e2e.test.sh` for the harnesses that still run the daemon, and the dedicated Herdr daemon workspace topology is covered by `tests/fm-afk-launch.test.sh` and preserves the captain tab's pane count.
-
-## Zellij
-
-The current compatibility floor and latest verification are Zellij 0.44.0 with `jq` on macOS aarch64.
-All real tests use a uniquely named session and `tests/zellij-test-safety.sh`; they never touch a session named `firstmate` or call all-session deletion.
-
-| Guarantee | Command shape | Result |
-| --- | --- | --- |
-| Headless session | `zellij attach -b <name>` without a TTY | Created a persistent background session and returned. |
-| Session list | `zellij list-sessions --short --no-formatting` | Returned one plain name per line without starting a session. |
-| Create tab | `zellij action new-tab --cwd <dir> --name <title>` | Returned a numeric tab id and focused the new tab when a client was attached. |
-| Pane discovery | `zellij action list-panes --json` | Included terminal pane id, tab id, plugin flag, and top-level `pane_cwd`. |
-| Literal send | `zellij action paste --pane-id <id> -- <text>` | Left text unsubmitted. |
-| Keys | `send-keys --pane-id <id> Enter`, `Esc`, and one argument `Ctrl c` | All three shared operations worked. |
-| Capture | `dump-screen --pane-id <id>` or `--full` | Worked with no attached client; no line-bound flag exists. |
-| Styled capture | `dump-screen --pane-id <id> --ansi` | Preserved ANSI styling ("Composer classification matrix" above); feeds the zellij composer classifier. |
-| Close | `close-tab-by-id <id>` | Removed the live task pane and tab together. |
-| Failure exit | actions against missing targets | Returned exit 0, requiring structural preflight and output-shape validation. |
-
-`pane_cwd` stayed frozen when a foreground subshell changed directory.
-The marker-delimited `pwd` probe returned the live nested cwd and is covered by the real smoke.
-The focus mitigation restored the previously active tab after `new-tab`, with the unavoidable narrow race documented in the operator guide.
-
-```sh
-tests/fm-backend-zellij.test.sh
-tests/fm-backend-zellij-smoke.test.sh
-```
-
-The real lifecycle smoke proved spawn, metadata, nested-subshell worktree discovery, send, capture, unlanded-work refusal, approved local landing, exact tab cleanup, and session cleanup without retaining task-specific ids or branch names here.
-
-## Orca
-
-Real readiness was verified against `/usr/local/bin/orca` with `/Applications/Orca.app` bundle version 1.4.116.
-
-```sh
-orca status --json
-```
-
-Observed fields:
-
-```text
-result.runtime.reachable=true
-result.runtime.state=ready
-```
-
-`orca terminal create --json` returned `result.terminal.handle`.
-`orca worktree create` returned `result.worktree.id` and `result.worktree.path`.
-Speculative bare ids and nested terminal fields were deliberately rejected.
-
-```sh
-tests/fm-backend-orca.test.sh
-tests/fm-backend.test.sh
-tests/fm-bootstrap.test.sh
-```
-
-The fake-Orca suite covers readiness, registration, create response parsing, metadata routing, popup-safe submit, and path-matched release refusal.
-
-## cmux
-
-The current compatibility floor is cmux 0.64, and the active live evidence uses 0.64.17 build 97 on macOS aarch64.
-Real tests use only exact `fm-test-` workspaces guarded by `tests/cmux-test-safety.sh` and never quit or relaunch the captain's app.
-
-```sh
-cmux version
-cmux ping
-```
-
-Observed version:
-
-```text
-cmux 0.64.17 (97) [9ed29d81a]
-```
-
-Source and live checks established the five control modes:
-
-- `off` starts no listener.
-- `cmuxOnly` rejects an external Firstmate process by ancestry.
-- `automation` uses an owner-only 0600 socket with no handshake.
-- `password` uses the same 0600 socket plus `auth <password>`.
-- `allowAll` uses a 0666 socket with no authentication.
-
-The live default rejection was `Access denied - only processes started inside cmux can connect`.
-The live password challenge was `Authentication required - send auth <password> first`.
-The app configuration writer did not retain a hand-added socket password, which is why the operator guide requires Settings and a local Firstmate password source.
-
-Current active CLI findings:
-
-| Guarantee | Command shape | Result |
-| --- | --- | --- |
-| Create | `new-workspace --name <title> --cwd <dir> --focus false --id-format uuids` | Created one workspace with one surface without focusing it. |
-| Fresh readiness | `list-panes --workspace <id> --json --id-format uuids` | Found a brand-new surface before content existed. |
-| Fresh read counterexample | `read-screen` before any write | Returned `internal_error: Failed to read terminal text`. |
-| Literal send | `send --workspace <id> --surface <id> -- <text>` | Left text unsubmitted. |
-| Keys | `send-key ... enter|escape|ctrl-c` | All shared key operations worked. |
-| Nested cwd | `current_directory` plus foreground subshell | Structured cwd froze; the marker-delimited `pwd` probe found the live cwd. |
-| Last surface | `close-surface` on the only surface | Refused with `invalid_state: Cannot close the last surface`. |
-| Last workspace | `close-workspace` on the only workspace in a window | Printed success but left the workspace present. |
-
-The last-workspace workaround was reverified on 2026-07-10 in Automation mode.
-After creating one unfocused unnamed sibling in the same window, `close-workspace` removed the exact task workspace and left only cmux's default sibling.
-A selected non-last workspace closed directly, proving that window cardinality rather than selection is the trigger.
-
-Source inspection confirmed each workspace constructor creates a new UUID with no restored-id input.
-Recovery therefore remains title-based.
-
-```sh
-tests/fm-backend-cmux.test.sh
-tests/fm-backend-cmux-smoke.test.sh
-```
-
-The real smoke proves socket access, fresh readiness, current-path probing, send and keys, bounded capture, title identity, and guarded exact cleanup.
+The away posture is the record `bin/fm-afk-contract.sh` owns; Pi's ordinary supervision cycle remains active.
+`tests/fm-afk-launch.test.sh` pins that away confirmation and quiet entry create posture records only, expose no secondary-process lifecycle command, and leave ordinary Pi supervision active.
+`tests/fm-afk-return.test.sh` pins the catch-up reporting boundary: Bearings continues through pending return catch-up, projects its posture as an action-free warning outside Captain's Call, and drops that warning after the gate clears, while an active away window still refuses.
+`tests/fm-turnend-guard.test.sh`, `tests/fm-session-start.test.sh`, and `tests/fm-supervision-instructions.test.sh` prove that away and quiet posture keep the ordinary Pi watcher requirement and repair path.
 
 ## Codex App host tools
 
@@ -1115,8 +840,7 @@ The current portable regression proves that only consecutive provider errors cou
 `tests/fm-pi-watch-extension.test.sh` owns the provider-free integration evidence that watcher fallback remains pending until Pi accepts the main follow-up or the branch settles successfully, and that a follow-up accepted while main is streaming neither stalls the successor chain nor escapes replacement replay until Pi consumes it.
 [`pi-supervision-branch.md`](../pi-supervision-branch.md) owns the current cooldown, recovery, and re-latch contract and points to the regression that now covers it.
 
-Scope of the earlier evidence: the installed signed `pi` CLI (0.82.0 at verification time) is a compiled binary whose bundled SDK is not importable from Node, so the importable npm package is the only surface the guard and the typecheck can pin.
-The extension executes inside the signed CLI's own runtime, so a CLI upgrade can drift ahead of the pinned npm surface; refresh the SDK construction, picker, renderer, and type evidence after every Pi upgrade by rerunning the applicable live guard probes, picker regression, and strict typecheck above (point `FM_PI_PACKAGE_DIR` at a matching npm install when one exists).
+The extension executes inside the installed Pi CLI's own runtime, so a CLI upgrade can drift ahead of the pinned npm surface; refresh the SDK construction, picker, renderer, and type evidence after every Pi upgrade by rerunning the applicable live guard probes, picker regression, and strict typecheck above (point `FM_PI_PACKAGE_DIR` at a matching npm install when one exists).
 The live guard now drives both extensions through the watcher-owned settlement handshake, requires rejected branch settlement before main delivery, and verifies successor-delivery confirmation; rerun it against the matching importable Pi package to refresh end-to-end fallback evidence.
 
 ### 2026-09-02 streaming-time watcher delivery
@@ -1142,36 +866,6 @@ The live probe loads the tracked watcher extension through Pi's real resource lo
 It proved that a follow-up the extension sends while main is streaming raises no `before_agent_start` at queue time or when the run reaches it, joins the run as a user `message_start` carrying the exact wake text in its own model turn, and is followed by a verified successor and delivery of the next close; a follow-up sent to the idle main raises `before_agent_start` with the exact text before its user `message_start`.
 The portable regression drives the same shape with a fake main that never raises `before_agent_start` while streaming, then proves a replacement replays only the follow-up Pi had not consumed and that an exhausted restoration delivers its typed failure without launching a further arm.
 A second regression holds a branch settlement open while the verified successor exits with a failure, and proves that failure takes the ordinary bounded retry once the delivery settles rather than leaving the generation with no watcher and no retry.
-
-### 2026-09-04 off-thread supervision outcome delivery
-
-The real-TUI responsiveness guard, focused extension suite, store suite, and strict typecheck were run on macOS 26.5.0 arm64, Node v24.13.1, tmux 3.6a, against the signed Pi launcher 0.82.0 for the TUI arms and the npm `@earendil-works/pi-coding-agent` 0.81.1 package for the typecheck.
-The lab used a scratch `FM_HOME`, a scratch project holding a copy of the tracked extension, a private tmux socket, a scratch session directory, and `--offline`; only `/new` was ever sent, so no model turn ran and no request left the machine, and the captain's own Pi session was not touched.
-
-```sh
-FM_PI_BRANCH_RESPONSIVENESS_E2E=1 bash tests/fm-pi-branch-responsiveness-live-e2e.test.sh
-bin/fm-test-run.sh tests/fm-pi-branch-extension.test.sh
-bin/fm-test-run.sh tests/fm-branch-supervision.test.sh
-npm exec --yes --package=typescript@5.9.3 -- bash tests/fm-pi-primary-types.test.sh
-```
-
-```text
-pi 0.82.0 keystroke echo, worst observed: floor 22.6 ms, extension idle 35.6 ms, extension delivering 36.8 ms
-ok - supervision outcome delivery keeps the real Pi 0.82.0 TUI echoing keystrokes at its unloaded floor
-ok - outcome delivery keeps the event loop running and interleaved reports stay ordered and exactly once
-ok - a session replaced mid-delivery cancels cleanly and the stored outcome still arrives exactly once
-ok - a failing store script surfaces to the branch and its outcome is neither lost nor delivered twice
-ok - a failed cursor write re-delivers a routine note exactly once more while a captain outcome stays deduplicated
-skip: installed Pi 0.81.1 predates the stock renderer contract 0.84.4 this case compares against
-ok - tracked Pi extensions pass strict no-emit typecheck against Pi 0.81.1
-```
-
-That skip is the renderer case declining to render a verdict on a Pi older than the contract it compares against: since 0.84.4 the stock renderer no longer supplies an implicit reset at multiline boundaries and the extension emits that reset itself, so an older installed Pi differs legitimately.
-It names the installed version and the floor rather than degrading quietly, and a package whose version cannot be read at all is still a failure.
-
-The same guard against the pre-change extension in the same lab measured a 676.9 ms worst keystroke echo while delivering two outcomes and a 295.3 ms worst echo with nothing to deliver, against a 49.2 ms extension-free floor, and failed as designed.
-Measured through the same real `fm_branch_report` tool and real `bin/` scripts with a 1 ms interval timer, the largest single block of the JavaScript thread fell from 273 ms to 2.0 ms for a routine outcome, from 286 ms to 2.0 ms for a captain outcome, and from 134 ms to 1.9 ms for main's acknowledgement, against a 1.3-2.2 ms idle-loop floor.
-Those absolute figures are specific to this host and Pi version; the guards assert the relationship (delivery must stay in the class of the same machine's own floor) rather than a remembered millisecond number.
 
 ## Native Codex through Pi
 

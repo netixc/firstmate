@@ -91,7 +91,7 @@ SH
 # Add a secondmate home as a DETACHED worktree of the firstmate repo (matching
 # how treehouse leases a secondmate home), plus its state meta. Args: world id.
 # The recorded runtime matters to the action split, so it is part of the fixture:
-# harness defaults to a control-verified adapter on the default (tmux) backend,
+# runtime defaults to Pi on the default (tmux) backend,
 # which is what makes a restart provable. Pass a backend to model one that cannot
 # prove an agent stopped.
 add_sm() {
@@ -209,22 +209,6 @@ test_bin_only_advance_restarts() {
   assert_contains "$out" "restart-secondmates: fm-sm1" "a bin/-only advance must still restart the live mate"
   assert_contains "$out" "nudge-secondmates: none" "a restarted secondmate must not also be nudged"
   pass "T3b a bin/-only advance restarts the secondmate"
-}
-
-# --- T3c: an unverifiable runtime receives the fallback nudge ----------------
-test_unprovable_runtime_gets_fallback_nudge() {
-  local w out
-  w=$(new_world t3c)
-  # zellij has no recovery-grade agent-state classifier, so no restart there can
-  # ever prove the old agent stopped and the replacement came up.
-  add_sm "$w" sm1 pi zellij
-  bump_origin "$w" instr
-
-  out=$(run_update "$w")
-
-  assert_contains "$out" "restart-secondmates: none" "an unprovable runtime must stay out of the restart set"
-  assert_contains "$out" "nudge-secondmates: fm-sm1" "an unverifiable runtime must retain the fallback re-read nudge"
-  pass "T3c an unverifiable secondmate receives the fallback nudge"
 }
 
 # --- T3d: an already-stopped mate is left to startup recovery ---------------
@@ -353,25 +337,6 @@ test_already_current_secondmate_still_restarts() {
     "an already-current live secondmate must still be in the restart set"
   assert_contains "$out" "nudge-secondmates: none" "a restarted secondmate must not also be nudged"
   pass "T6 an already-current live secondmate is still restarted"
-}
-
-# --- T6b: an already-current mate that cannot be restarted stays honest -----
-# Unconditional restart must not become an unconditional CLAIM of one.
-test_already_current_unprovable_mate_is_nudged() {
-  local w out restart_line nudge_line
-  w=$(new_world t6b)
-  add_sm "$w" sm1 pi zellij
-  bump_origin "$w" instr
-  run_update "$w" >/dev/null   # first run advances both
-
-  out=$(run_update "$w")       # second run: the home is already on the tip
-
-  assert_contains "$out" "secondmate sm1: already current" "the mate must need no advance"
-  restart_line=$(printf '%s\n' "$out" | grep '^restart-secondmates:')
-  nudge_line=$(printf '%s\n' "$out" | grep '^nudge-secondmates:')
-  assert_not_contains "$restart_line" "sm1" "an unprovable runtime must stay out of the restart set"
-  assert_contains "$nudge_line" "fm-sm1" "an unprovable runtime must keep the honest re-read steer"
-  pass "T6b an already-current mate with an unprovable runtime is steered, not claimed as reloaded"
 }
 
 # --- T7: registry backstop + dedup + self-exclusion, one world -------------
@@ -510,13 +475,11 @@ test_primary_update_rebinds_local_watch() {
 test_updates_main_and_secondmate
 test_reread_gate_is_instruction_only
 test_bin_only_advance_restarts
-test_unprovable_runtime_gets_fallback_nudge
 test_dead_secondmate_gets_no_action
 test_legacy_remote_advance_restarts
 test_dirty_secondmate_skipped
 test_diverged_secondmate_skipped
 test_already_current_secondmate_still_restarts
-test_already_current_unprovable_mate_is_nudged
 test_registry_backstop_dedup_and_self_exclusion
 test_firstmate_wrong_branch_skipped
 test_firstmate_detached_head_skipped

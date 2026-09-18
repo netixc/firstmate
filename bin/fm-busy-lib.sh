@@ -2,8 +2,8 @@
 # fm-busy-lib.sh - the ONE owner of firstmate's semantic busy-state contract.
 #
 # Design source: the captain-approved semantic busy-state redesign
-# (2026-07-28): each harness adapter reports turn lifecycle through a
-# machine-readable semantic source it owns, classification always exposes
+# (2026-07-28): Pi reports turn lifecycle through its owned machine-readable
+# semantic source, and classification always exposes
 # which source produced it, and missing, malformed, stale, unsupported, or
 # unverified semantic data is UNKNOWN - never idle. Endpoint death is the only
 # process-level override and yields dead, never busy. Child processes, CPU,
@@ -25,11 +25,10 @@
 # newer record.
 #
 # Semantic sources written by adapters (fm_busy_sources_for_harness owns the
-# per-harness trust table; a record whose source is not trusted for the
+# Pi source trust table; a record whose source is not trusted for the
 # task's recorded harness classifies unknown, so one adapter's writer can
 # never classify another adapter):
-#   pi-ext           Pi/pi-signed per-task extension (agent_start/agent_settled)
-#   opencode-plugin  OpenCode per-task plugin (session.status)
+#   pi-ext           Pi per-task extension (agent_start/agent_settled)
 # Firstmate-owned sources accepted for every converted adapter:
 #   fm-spawn         the launch-brief turn seeded at spawn
 #   fm-recovery      a documented recovery reset after relaunch
@@ -89,8 +88,7 @@ fm_busy_current_gen() {  # <state-dir> <id>
 fm_busy_sources_for_harness() {  # <harness>
   local adapter=
   case "${1:-}" in
-    opencode*) adapter=opencode-plugin ;;
-    pi|pi-signed) adapter=pi-ext ;;
+    pi) adapter=pi-ext ;;
     *) printf ''; return 0 ;;
   esac
   printf '%s fm-spawn fm-recovery' "$adapter"

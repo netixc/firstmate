@@ -2,16 +2,13 @@
 # Shared wake classifier: the common source of truth for captain-relevant status
 # tests, declared-external-wait vocabulary, and the working/paused absorb
 # classification that makes no-verb signal and stale-pane wakes safe to absorb.
-# Sourced by BOTH the always-on watcher
-# (bin/fm-watch.sh) and the away-mode daemon (bin/fm-supervise-daemon.sh) so the
-# overlapping triage policy lives in one place instead of two copies that can
-# drift apart.
+# Sourced by the always-on watcher (`bin/fm-watch.sh`) and other read-only
+# classification consumers so status policy has one owner.
 #
 # Most functions are pure, side-effect-free reads of status files: each takes
 # what it needs as arguments and touches no globals beyond the optional
-# FM_CAPTAIN_RE override. Consumers layer their own dedup/marker state on top (the
-# daemon keeps its escalation-digest seen-markers; the watcher keeps its .seen-*
-# signatures).
+# FM_CAPTAIN_RE override. Consumers layer their own deduplication state on top;
+# the watcher keeps its `.seen-*` signatures.
 # Status-span classification captures one file endpoint and reports every
 # actionable event through that endpoint before the endpoint may be committed.
 # An absent status file is a successful empty span, while an existing status
@@ -65,10 +62,10 @@ case $- in *u*) _fm_classify_nounset=on ;; *) _fm_classify_nounset=off ;; esac
 unset _fm_classify_nounset
 
 # Captain-relevant status verbs. A status line carrying any of these is work
-# firstmate must see. Lines without these verbs are no-verb signals: the watcher
-# absorbs them only with positive provably-working evidence, while the daemon uses
-# its away-mode classification. FM_CAPTAIN_RE overrides the whole set when a home
-# needs a custom verb vocabulary; absent, this default applies.
+# firstmate must see. Lines without these verbs are no-verb signals that the
+# watcher absorbs only with positive provably-working evidence. FM_CAPTAIN_RE
+# overrides the whole set when a home needs a custom verb vocabulary; absent,
+# this default applies.
 #
 # Free-text tokens (PR ready, checks green, ready in branch, merged) exist only for
 # legacy lines that lack a standard terminal verb. status_is_captain_relevant is
@@ -85,9 +82,9 @@ FM_CLASSIFY_CAPTAIN_RE_DEFAULT='done:|needs-decision:|blocked:|failed:|PR ready|
 # the stale path absorbs it instead of escalating a possible wedge. It is
 # deliberately NOT in the captain-relevant set above: a pause is a "stop
 # wedge-nagging this idle pane" signal, not work to keep surfacing. This constant
-# is the ONE definition of the verb; both the watcher and the daemon read it here
-# (status_is_paused) rather than hardcoding the literal, so the vocabulary cannot
-# drift between the two consumers. FM_CLASSIFY_PAUSED_VERB overrides it.
+# is the ONE definition of the verb; watcher classification reads it here
+# (status_is_paused) rather than hardcoding the literal. FM_CLASSIFY_PAUSED_VERB
+# overrides it.
 FM_CLASSIFY_PAUSED_VERB_DEFAULT='paused'
 
 # Bounded re-surface cadence for a declared external-wait pause.
@@ -98,11 +95,11 @@ FM_CLASSIFY_PAUSED_VERB_DEFAULT='paused'
 # recheck is a backstop, not progress, and an hourly one only produced nagging
 # (the 2026-09-07 away-window audit). A worker that knows when its wait clears
 # names it with `until` (status_paused_until below) and is rechecked at that
-# time or this cadence bound, whichever comes first. Both consumers read
-# FM_PAUSE_RESURFACE_SECS with this default so
-# the cadence has one owner. An item held for the captain is not rechecked at all
-# while the away-posture record exists (bin/fm-watch.sh owns that rule).
-# shellcheck disable=SC2034 # Read by the watcher and daemon (fm-watch.sh, fm-supervise-daemon.sh), not this lib.
+# time or this cadence bound, whichever comes first. Consumers read
+# FM_PAUSE_RESURFACE_SECS with this default so the cadence has one owner. An
+# item held for the captain is not rechecked at all while the away-posture
+# record exists (bin/fm-watch.sh owns that rule).
+# shellcheck disable=SC2034 # Read by the watcher, not this library itself.
 FM_PAUSE_RESURFACE_SECS_DEFAULT=14400
 
 # fm_utc_iso_to_epoch <YYYY-MM-DDTHH:MM[:SS]Z>: the one portable UTC ISO 8601
@@ -171,10 +168,9 @@ status_is_captain_relevant() {
   printf '%s' "$line" | grep -qiE "${FM_CAPTAIN_RE:-$FM_CLASSIFY_CAPTAIN_RE_DEFAULT}"
 }
 
-# 0 if a status line's leading verb is the pause verb (paused: <reason>). A pure
-# read of the line itself, so the daemon's classify_stale can reuse the last line
-# it already read without a fm-crew-state.sh call. Matches only the verb before the
-# first colon, so a reason mentioning "paused" elsewhere does not false-match.
+# 0 if a status line's leading verb is the pause verb (paused: <reason>).
+# Matches only the verb before the first colon, so a reason mentioning "paused"
+# elsewhere does not false-match.
 status_is_paused() {  # <status-line>
   local line=$1 verb
   [ -n "$line" ] || return 1
@@ -197,11 +193,9 @@ status_is_captain_held() {  # <status-line>
 
 # 0 if a status line declares either an external-wait pause or a verified
 # captain-held transfer.
-# Both declarations can intentionally leave a crew's endpoint idle, so both
-# supervisors give them one cadence: the away-mode daemon defers the wedge and
-# ages a pause marker instead, and the watcher applies its bounded pause cadence
-# once pause_state_class has admitted the wait (fm-watch.sh owns which liveness
-# evidence each kind of crew must supply for that).
+# Both declarations can intentionally leave a crew's endpoint idle, so the
+# watcher applies one bounded pause cadence once pause_state_class has admitted
+# the wait (fm-watch.sh owns which liveness evidence each kind of crew supplies).
 status_is_paused_or_captain_held() {  # <status-line>
   local line=$1
   status_is_paused "$line" || status_is_captain_held "$line"
@@ -727,8 +721,7 @@ _fm_status_file_mtime() {  # <status-file>
 
 # Private scratch path for a one-shot span read, alongside the status file the
 # same way the cursor above is, and PID-scoped so concurrent readers of one log
-# (the watcher and the away-mode daemon both classify the same stream) never
-# truncate each other's chunk.
+# never truncate each other's chunk.
 _fm_status_span_scratch() {  # <status-file>
   printf '%s.span.%s' "$(_fm_open_decisions_cursor_path "$1")" "$$"
 }
@@ -1061,10 +1054,6 @@ status_heartbeat_seen_marker_path() {  # <state> <task-id>
   printf '%s/.hb-surfaced-%s' "$1" "$(printf '%s' "$2" | tr ':/.' '___')"
 }
 
-status_daemon_seen_marker_path() {  # <state> <task-id>
-  printf '%s/.subsuper-seen-status-%s' "$1" "$(printf '%s' "$2" | tr ':/.' '___')"
-}
-
 _status_presentation_signature_valid() {
   local value=$1 size ident encoded
   [ "$value" = unverifiable ] && return 0
@@ -1187,13 +1176,12 @@ status_presentation_marker_commit() {
 
 status_retire_presentation_task() {  # <state> <task-id>
   local state=$1 task=$2 lock manifest tmp data row_task ident offset backstop extra rc=0 found=0
-  local signal_marker heartbeat_marker daemon_marker
+  local signal_marker heartbeat_marker
   lock="$state/.status-presentation-lock"
   manifest="$state/.status-presentation-cursor"
   tmp="$manifest.tmp.$$"
   signal_marker=$(status_signal_seen_marker_path "$state" "$task")
   heartbeat_marker=$(status_heartbeat_seen_marker_path "$state" "$task")
-  daemon_marker=$(status_daemon_seen_marker_path "$state" "$task")
 
   # A remote-home teardown can legitimately retire an endpoint ID that has no
   # status log in that home. Do not contend with that home's unrelated status
@@ -1204,8 +1192,7 @@ status_retire_presentation_task() {  # <state> <task-id>
     && [ ! -e "$state/.$task.open-decisions-cursor" ] \
     && [ ! -L "$state/.$task.open-decisions-cursor" ] \
     && [ ! -e "$signal_marker" ] && [ ! -L "$signal_marker" ] \
-    && [ ! -e "$heartbeat_marker" ] && [ ! -L "$heartbeat_marker" ] \
-    && [ ! -e "$daemon_marker" ] && [ ! -L "$daemon_marker" ]; then
+    && [ ! -e "$heartbeat_marker" ] && [ ! -L "$heartbeat_marker" ]; then
     if [ ! -e "$manifest" ] && [ ! -L "$manifest" ]; then
       return 0
     fi
@@ -1252,7 +1239,7 @@ EOF
   fi
   if [ "$rc" -eq 0 ]; then
     rm -f -- "$state/$task.status" "$state/.$task.open-decisions-cursor" \
-      "$signal_marker" "$heartbeat_marker" "$daemon_marker" || rc=1
+      "$signal_marker" "$heartbeat_marker" || rc=1
   fi
   fm_lock_release "$lock" || rc=1
   return "$rc"
@@ -1964,8 +1951,7 @@ signal_crew_provably_working() {  # <file> ...
 
 # 0 (terminal/actionable) if a stale window's last status line is
 # captain-relevant; 1 otherwise, including the no-status case. A 1 only means
-# "non-terminal"; the always-on watcher then applies crew_is_provably_working,
-# while the away-mode daemon applies its persistence recheck.
+# "non-terminal"; the watcher then applies working and declared-wait evidence.
 stale_is_terminal() {  # <window> <state>
   local win=$1 state=$2 last
   last=$(last_status_line "$state/$(window_to_task "$win" "$state").status")

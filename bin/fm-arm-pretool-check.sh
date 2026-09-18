@@ -6,21 +6,21 @@
 # bin/fm-arm-command-policy.mjs is the sole owner of shell classification,
 # protected execution identity, the blessed setup tree, and deny reason codes.
 # This wrapper only acquires the harness payload, discovers the active roots,
-# invokes that policy, and renders the established harness-specific responses.
+# invokes that policy, and renders Pi's established responses.
 # It never executes, sources, evaluates, or expands the submitted command.
 # See docs/arm-pretool-check.md for the complete contract and validation record.
 #
 # Usage:
 #   bin/fm-arm-pretool-check.sh --command '<cmd>'
 #
-# OpenCode and Pi adapters extract and pass the exact command string.
+# The Pi adapter extracts and passes the exact command string.
 #
 # Exit/output contract:
 #   ALLOW - exit 0 and no output.
 #   DENY - exit 2 and a structured deny object on stderr.
 #   FAIL OPEN - missing Node or policy owner, or an invalid policy response.
 #
-# OpenCode and Pi consume exit 2 plus stderr.
+# Pi consumes exit 2 plus stderr.
 set -u
 
 CMD=""

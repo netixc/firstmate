@@ -11,7 +11,6 @@
 #                 "BACKEND_INVALID: <name> (known: <names>)",
 #                 "STARTUP_MEMORY_BUDGET: invalid config/startup-memory-budget - <reason>",
 #                 "CREW_DISPATCH: invalid config/crew-dispatch.json - <reason>",
-#                 "KIMI_RETIREMENT: <safe cleanup refusal>",
 #                 "FLEET_SYNC: <repo>: skipped|recovered|STUCK: <detail>",
 #                 "HOME_SUMMARY: <ledger never published|not republished since
 #                 <stamp>>; <n> failed attempt(s) ... last: <recorded failure>",
@@ -102,10 +101,10 @@
 #          The `code-root <file>` variant is a detect-only local check that runs
 #          even in a read-only session; detect_code_root_backlog_fork owns what
 #          it reports.
-#          Set FM_BOOTSTRAP_DETECT_ONLY=1 to skip the seven MUTATING sweeps
+#          Set FM_BOOTSTRAP_DETECT_ONLY=1 to skip the six MUTATING sweeps
 #          (backlog_record_reconcile, secondmate_sync,
 #          secondmate_liveness_sweep, secondmate_handoff_resume,
-#          retired_kimi_cleanup, x_mode_setup, fleet_sync) while still
+#          x_mode_setup, fleet_sync) while still
 #          printing every read-only detect line
 #          above; the TANGLE line switches to advisory-only wording with no
 #          checkout command. Used by
@@ -801,9 +800,9 @@ secondmate_liveness_one() {  # <meta> <id>
   [ -n "$target" ] || target="$window"
   agent_state=$(fm_backend_agent_state "$backend" "$target" 2>/dev/null) || agent_state=unreadable
   case "$harness" in
-    opencode|pi|pi-signed) ;;
+    pi) ;;
     *)
-      case "$agent_state" in dead|missing) agent_state=unverified-harness ;; esac
+      case "$agent_state" in dead|missing) agent_state=unsupported-runtime ;; esac
       ;;
   esac
   case "$agent_state" in
@@ -832,8 +831,8 @@ secondmate_liveness_one() {  # <meta> <id>
     unreadable)
       echo "SECONDMATE_LIVENESS: secondmate $id: skipped: endpoint probe unreadable (backend=$backend)"
       ;;
-    unverified-harness)
-      echo "SECONDMATE_LIVENESS: secondmate $id: skipped: recorded harness '$harness' is unverified for recovery (backend=$backend)"
+    unsupported-runtime)
+      echo "SECONDMATE_LIVENESS: secondmate $id: skipped: recorded runtime '$harness' is not supported; only pi can be recovered (backend=$backend)"
       ;;
     *)
       echo "SECONDMATE_LIVENESS: secondmate $id: skipped: agent recovery classifier unverified (backend=$backend)"
@@ -865,8 +864,7 @@ secondmate_handoff_detect() {
 
 install_cmd() {
   case "$1" in
-    tmux|node|git|gh|curl|jq|orca|zellij) echo "brew install $1  # or the platform's package manager" ;;
-    cmux) echo "brew install --cask cmux  # or see https://cmux.com" ;;
+    tmux|node|git|gh|curl|jq) echo "brew install $1  # or the platform's package manager" ;;
     treehouse) echo "curl -fsSL https://kunchenguid.github.io/treehouse/install.sh | sh" ;;
     no-mistakes) echo "curl -fsSL https://raw.githubusercontent.com/kunchenguid/no-mistakes/main/docs/install.sh | sh" ;;
     gh-axi|chrome-devtools-axi|lavish-axi) echo "npm install -g $1 && $1 setup hooks" ;;
@@ -893,9 +891,9 @@ missing_tool_diagnostic() {
 
 # Required-tool detection follows the RESOLVED backend, not a one-size default:
 # a universal toolchain every home needs plus the backend-specific delta owned by
-# fm_backend_required_tools (bin/fm-backend.sh). So a herdr/zellij/cmux home is
-# never told tmux is missing, and only orca drops treehouse. A backend value with
-# no verified dependency set is reported before the universal checks continue.
+# fm_backend_required_tools (bin/fm-backend.sh). A Herdr home is never told tmux
+# is missing. A backend value with no verified dependency set is reported before
+# the universal checks continue.
 COMMON_TOOLS="node git gh no-mistakes gh-axi chrome-devtools-axi tasks-axi quota-axi"
 BACKEND=$(fm_backend_name)
 BACKEND_VALID=1
@@ -1112,13 +1110,12 @@ crew_dispatch_validate() {
     return 0
   fi
   err=$(jq -r '
-    def verified($h): ["opencode","pi","pi-signed"] | index($h);
+    def verified($h): ["pi"] | index($h);
     def effort_ok($h; $m; $e):
       if $e == null then true
       elif ($e | type) != "string" then false
-      elif $e == "ultra" then (($h == "pi" or $h == "pi-signed") and (($m | type) == "string") and ($m | startswith("codex-native/")) and ($m | length) > 13)
-      elif $h == "pi" or $h == "pi-signed" then (["low","medium","high","xhigh","max"] | index($e))
-      elif $h == "opencode" then false
+      elif $e == "ultra" then ($h == "pi" and (($m | type) == "string") and ($m | startswith("codex-native/")) and ($m | length) > 13)
+      elif $h == "pi" then (["low","medium","high","xhigh","max"] | index($e))
       else true
       end;
     def profiles($value):
@@ -1162,8 +1159,8 @@ crew_dispatch_validate() {
         | map(.harness)
         | map(select(. != null))
         | map(select(. as $h | verified($h) | not))
-        | unique) as $bad_harnesses
-      | if ($bad_harnesses | length) > 0 then "unverified harness: " + ($bad_harnesses | join(", "))
+        | unique) as $unsupported_runtimes
+      | if ($unsupported_runtimes | length) > 0 then "unsupported runtime (only pi is accepted): " + ($unsupported_runtimes | join(", "))
         elif (bad_efforts | length) > 0 then "invalid effort: " + (bad_efforts | join(", "))
         else empty
         end
@@ -1297,8 +1294,7 @@ backlog_record_reconcile() {
       fm_lock_release "$meta_lock"
       return 2
     fi
-    if [ "$(fm_meta_get "$meta" kind)" != secondmate ] \
-       && [ "$(fm_meta_get "$meta" cleanup_recovery)" != orca ]; then
+    if [ "$(fm_meta_get "$meta" kind)" != secondmate ]; then
       row=
       if fm_backlog_row_probe "$DATA" "$id"; then
         row=$FM_BACKLOG_ROW_STATE
@@ -1379,8 +1375,7 @@ if [ "${FM_BOOTSTRAP_DETECT_ONLY:-0}" != 1 ] && local_phase; then
           echo "error: bootstrap refused unsafe worker record ($FM_BACKLOG_TRANSITION_ERROR)" >&2
           exit 1
         fi
-        if [ "$(fm_meta_get "$BOOTSTRAP_BACKLOG_META" kind)" != secondmate ] \
-           && [ "$(fm_meta_get "$BOOTSTRAP_BACKLOG_META" cleanup_recovery)" != orca ]; then
+        if [ "$(fm_meta_get "$BOOTSTRAP_BACKLOG_META" kind)" != secondmate ]; then
           BOOTSTRAP_BACKLOG_GATE_KIND=ship
           break
         fi
@@ -1420,9 +1415,8 @@ detect_local_tools() {
   for t in $COMMON_TOOLS; do
     command -v "$t" >/dev/null || missing_tool_diagnostic "$t"
   done
-  # The treehouse lease-support upgrade check is only relevant when the resolved
-  # backend actually requires treehouse (every backend except orca, which owns its
-  # own worktrees); an orca home must not be told to upgrade a provider it never uses.
+  # The treehouse lease-support upgrade check is relevant when the resolved
+  # backend requires Treehouse.
   if fm_backend_list_contains "$TOOLS" treehouse \
     && command -v treehouse >/dev/null 2>&1 && ! treehouse_supports_lease; then
     echo "MISSING: treehouse (install: $(install_cmd treehouse))"
@@ -1442,15 +1436,6 @@ detect_local_tools() {
   if command -v tasks-axi >/dev/null 2>&1 && ! fm_tasks_axi_compatible; then
     echo "MISSING: tasks-axi (install: $(install_cmd tasks-axi))"
   fi
-}
-
-retired_kimi_cleanup() {
-  local out
-  if out=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-retired-kimi-cleanup.sh" 2>&1); then
-    return 0
-  fi
-  out=$(printf '%s' "$out" | head -1)
-  echo "KIMI_RETIREMENT: ${out:-retired global hook cleanup failed without a diagnostic}"
 }
 
 detect_local_config() {
@@ -1606,10 +1591,6 @@ if [ "${FM_BOOTSTRAP_DETECT_ONLY:-0}" != 1 ]; then
       fm_timing_record phase handoff-delivery "$__fm_timing_stamp"
     fi
   fi
-  # Retire only exact Firstmate-owned artifacts from the removed standalone
-  # Kimi adapter. The helper preserves external config bytes and refuses while
-  # any registry token still has a task record.
-  local_phase && retired_kimi_cleanup
   # x_mode_setup writes local Relay artifacts only and never leaves the machine.
   local_phase && x_mode_setup
   if [ -n "$fleet_sync_pid" ]; then

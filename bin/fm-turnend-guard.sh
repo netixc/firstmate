@@ -3,15 +3,15 @@
 # secondmate's own home.
 #
 # bin/fm-guard.sh is pull-based and can warn only when another command runs.
-# This push-based guard is invoked by verified harness turn-end integrations so
-# a primary cannot finish a turn while required supervision is absent.
-# OpenCode and Pi adapters turn exit status 2 and stderr into one bounded
-# continuation through their own native event surfaces.
+# This push-based guard is invoked by Pi's turn-end integration so a primary
+# cannot finish a turn while required supervision is absent.
+# The Pi extension turns exit status 2 and stderr into one bounded
+# continuation through its native event surface.
 #
 # The guard scopes itself to a genuine primary checkout and stays inert inside
 # child task worktrees.
-# Away mode transfers supervision to the identity-matched away daemon, whose
-# fresh beacon is accepted even while its one-shot watcher is between cycles.
+# Away and quiet posture never change ownership: Pi's ordinary supervision
+# cycle remains required in both.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -44,17 +44,9 @@ if fm_watcher_healthy "$STATE" "$WATCH" "$GRACE" "$FM_HOME"; then
   exit 0
 fi
 
-AFK_GRACE=${FM_GUARD_GRACE:-$(fm_poll_derived_grace)}
-if [ "$(fm_path_age "$STATE/.last-watcher-beat")" -lt "$AFK_GRACE" ] \
-  && fm_afk_daemon_owns_supervision "$STATE"; then
-  exit 0
-fi
-
-afk=0
-[ -e "$STATE/.afk" ] && afk=1
 x_mode=0
 [ -f "$CONFIG/x-mode.env" ] && x_mode=1
-reason=$("$SCRIPT_DIR/fm-supervision-instructions.sh" --afk "$afk" --x-mode "$x_mode" --repair-line 2>/dev/null \
+reason=$("$SCRIPT_DIR/fm-supervision-instructions.sh" --x-mode "$x_mode" --repair-line 2>/dev/null \
   || printf '%s\n' 'tasks in flight, no live watcher - repair missing watcher supervision according to the session-start operating block before ending the turn')
 rule='━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
 {

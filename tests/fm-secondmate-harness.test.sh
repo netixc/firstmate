@@ -6,10 +6,9 @@
 # Three capabilities are under test:
 #   A) Harness split. config/secondmate-harness sets the harness the PRIMARY uses
 #      to launch SECONDMATE agents, independent of config/crew-harness (the
-#      crewmate harness). fm-harness.sh secondmate resolves the fallback chain
-#      config/secondmate-harness -> config/crew-harness -> own; an absent or
-#      "default" secondmate-harness behaves exactly as the crew harness did before
-#      this knob existed (full backward-compat). fm-spawn.sh resolves a secondmate
+#      crewmate harness). fm-harness.sh secondmate resolves
+#      config/secondmate-harness -> config/crew-harness -> own Pi; an absent or
+#      "default" secondmate-harness delegates to crew resolution. fm-spawn.sh resolves a secondmate
 #      launch through that mode, durably (every respawn re-resolves), while an
 #      explicit per-spawn harness arg still wins.
 #   B) Inheritance. The primary pushes a declared, extensible set of LOCAL
@@ -35,8 +34,8 @@
 
 #   C) Model/effort pin. config/secondmate-harness may carry optional model and
 #      effort tokens after the harness ("<harness> [<model>] [<effort>]"), read by
-#      fm-harness.sh secondmate-model / secondmate-effort. A bare harness-only
-#      line (today's format) yields empty model/effort - full backward-compat.
+#      fm-harness.sh secondmate-model / secondmate-effort. A bare `pi` line
+#      yields empty model/effort.
 #      fm-spawn.sh populates MODEL/EFFORT from those tokens for a --secondmate
 #      spawn only when the harness also resolves from that file, so the pin is
 #      durable across every respawn while explicit per-spawn harness/model/effort
@@ -50,13 +49,11 @@ set -u
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-config-inherit-lib.sh"
 
-# The harness-detection cases below fake `ps` so process ancestry is fully
-# controlled, but bin/fm-harness.sh also reads verified ENV markers. A suite run
-# from inside one of those harnesses inherits its marker, and it wins over
-# everything these cases set up wherever ancestry is silent. Drop the ambient
-# markers so what this suite asserts does not depend on which harness it was
-# launched from; every case states the marker it means to test.
-unset PI_CODING_AGENT FM_PI_HARNESS
+# The Pi-detection cases below fake `ps` so process ancestry is fully
+# controlled, but bin/fm-harness.sh also reads Pi's environment marker. A suite
+# run inside Pi inherits it, so drop the ambient marker; every case states the
+# evidence it means to test.
+unset PI_CODING_AGENT
 
 BASE_PATH=${FM_TEST_BASE_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
 fm_git_identity fmtest fmtest@example.com
@@ -78,7 +75,7 @@ fm_fake_blind_ancestry "$BLIND_BIN"
 # detect_own is pinned to Pi over a blinded ancestry walk so
 # the "fall through to own" cases are reproducible on any host harness. Each row sets crew-harness / secondmate-harness in a
 # fresh config dir (a literal '-' means leave the file absent) and asserts BOTH
-# the secondmate resolution AND that crew resolution is unchanged (backward-compat).
+# the secondmate resolution and the independent crew resolution.
 #   <label>^<crew-harness>^<secondmate-harness>^<expect-secondmate>^<expect-crew>
 test_harness_resolution() {
   local label crew sm exp_sm exp_crew case_dir cfg got_sm got_crew n
@@ -91,21 +88,18 @@ test_harness_resolution() {
     mkdir -p "$cfg"
     [ "$crew" = "-" ] || printf '%s\n' "$crew" > "$cfg/crew-harness"
     [ "$sm" = "-" ] || printf '%s\n' "$sm" > "$cfg/secondmate-harness"
-    got_sm=$(PATH="$BLIND_BIN:$BASE_PATH" PI_CODING_AGENT=true FM_PI_HARNESS=pi FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh" secondmate)
-    got_crew=$(PATH="$BLIND_BIN:$BASE_PATH" PI_CODING_AGENT=true FM_PI_HARNESS=pi FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh" crew)
+    got_sm=$(PATH="$BLIND_BIN:$BASE_PATH" PI_CODING_AGENT=true FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh" secondmate)
+    got_crew=$(PATH="$BLIND_BIN:$BASE_PATH" PI_CODING_AGENT=true FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh" crew)
     [ "$got_sm" = "$exp_sm" ] || fail "$label: secondmate resolved '$got_sm', expected '$exp_sm'"
     [ "$got_crew" = "$exp_crew" ] || fail "$label: crew resolved '$got_crew', expected '$exp_crew'"
   done <<'ROWS'
-both absent -> own (backward-compat)^-^-^pi^pi
-crew set, secondmate absent -> crew (backward-compat)^pi^-^pi^pi
-crew set, secondmate set -> secondmate wins, crew untouched^pi^opencode^opencode^pi
-crew absent, secondmate set -> secondmate value, crew own^-^opencode^opencode^pi
-signed Pi wrapper remains a distinct secondmate value^pi^pi-signed^pi-signed^pi
+both absent -> own Pi^-^-^pi^pi
+crew set, secondmate absent -> crew^pi^-^pi^pi
+crew set, secondmate set -> explicit Pi, crew untouched^pi^pi^pi^pi
+crew absent, secondmate set -> Pi, crew own^-^pi^pi^pi
 secondmate=default defers to crew^pi^default^pi^pi
 crew=default resolves to own, secondmate follows^default^-^pi^pi
 secondmate=default with crew absent -> own^-^default^pi^pi
-retired crew harness falls back to own^claude^-^pi^pi
-retired secondmate harness falls back to verified crew^pi^claude^pi^pi
 ROWS
   pass "A1 fm-harness.sh secondmate resolves the fallback chain; crew mode unchanged"
 }
@@ -115,7 +109,7 @@ ROWS
 # ===========================================================================
 # config/secondmate-harness holds "<harness> [<model>] [<effort>]" on one line.
 # A bare harness (today's format) must yield empty model/effort - the
-# backward-compat requirement. The file-line field uses \n for an embedded
+# default-resolution requirement. The file-line field uses \n for an embedded
 # newline (expanded via printf '%b') so a row can express a multi-line file; the
 # literal token ABSENT skips creating the file entirely.
 #   <label>^<file-line-or-ABSENT>^<expect-harness>^<expect-model>^<expect-effort>
@@ -129,139 +123,22 @@ test_secondmate_model_effort_tokens() {
     cfg="$case_dir/config"
     mkdir -p "$cfg"
     [ "$line" = ABSENT ] || printf '%b\n' "$line" > "$cfg/secondmate-harness"
-    got_h=$(PATH="$BLIND_BIN:$BASE_PATH" PI_CODING_AGENT=true FM_PI_HARNESS=pi FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh" secondmate)
-    got_m=$(PATH="$BLIND_BIN:$BASE_PATH" PI_CODING_AGENT=true FM_PI_HARNESS=pi FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh" secondmate-model)
-    got_e=$(PATH="$BLIND_BIN:$BASE_PATH" PI_CODING_AGENT=true FM_PI_HARNESS=pi FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh" secondmate-effort)
+    got_h=$(PATH="$BLIND_BIN:$BASE_PATH" PI_CODING_AGENT=true FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh" secondmate)
+    got_m=$(PATH="$BLIND_BIN:$BASE_PATH" PI_CODING_AGENT=true FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh" secondmate-model)
+    got_e=$(PATH="$BLIND_BIN:$BASE_PATH" PI_CODING_AGENT=true FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh" secondmate-effort)
     [ "$got_h" = "$exp_harness" ] || fail "$label: harness resolved '$got_h', expected '$exp_harness'"
     [ "$got_m" = "$exp_model" ] || fail "$label: model resolved '$got_m', expected '$exp_model'"
     [ "$got_e" = "$exp_effort" ] || fail "$label: effort resolved '$got_e', expected '$exp_effort'"
   done <<'ROWS'
 absent file -> own harness, empty model/effort^ABSENT^pi^^
-bare harness only -> empty model/effort (backward-compat)^pi^pi^^
+bare Pi only -> empty model/effort^pi^pi^^
 harness + model -> model only^pi model-x^pi^model-x^
 harness + model + effort -> both^pi model-x high^pi^model-x^high
-signed Pi wrapper + model + effort preserves every token^pi-signed openai-pi/gpt-5.6-sol max^pi-signed^openai-pi/gpt-5.6-sol^max
 default harness token -> falls back to own, empty model/effort^default^pi^^
-extra whitespace between tokens is tolerated^opencode   opencode-4    xhigh^opencode^opencode-4^xhigh
+extra whitespace between tokens is tolerated^pi   model-y    xhigh^pi^model-y^xhigh
 leading/trailing blank lines and a comment are skipped^# a comment\n\npi model-x low\n^pi^model-x^low
 ROWS
-  pass "C1 fm-harness.sh secondmate-model/secondmate-effort resolve the optional tokens; bare harness stays empty (backward-compat)"
-}
-
-# ===========================================================================
-# A/C) pi-signed process identity and shared Pi marker behavior
-# ===========================================================================
-test_pi_signed_detection_and_session_lock_identity() {
-  local dir fakebin got
-  dir="$TMP_ROOT/pi-signed-identity"
-  fakebin=$(fm_fakebin "$dir")
-  cat > "$fakebin/ps" <<'SH'
-#!/usr/bin/env bash
-set -u
-field= pid=
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    -o) field=$2; shift 2 ;;
-    -p) pid=$2; shift 2 ;;
-    *) shift ;;
-  esac
-done
-case "$pid:$field:${FM_TEST_SIGNED_SHAPE:-exact}" in
-  100:comm=:*) printf '%s\n' '/test/Pi.app/bin/pi' ;;
-  100:args=:*) printf '%s\n' 'Pi' ;;
-  100:ppid=:*) printf '%s\n' 200 ;;
-  200:comm=:exact) printf '%s\n' '/opt/test/bin/pi-signed' ;;
-  200:args=:exact) printf '%s\n' 'pi-signed --model test/model' ;;
-  200:comm=:helper) printf '%s\n' '/opt/test/bin/pi-signed-helper' ;;
-  200:args=:helper) printf '%s\n' 'pi-signed-helper' ;;
-  200:comm=:plain) printf '%s\n' '/bin/zsh' ;;
-  200:args=:plain) printf '%s\n' 'zsh' ;;
-  200:ppid=:*) printf '%s\n' 1 ;;
-  *:comm=:*) printf '%s\n' bash ;;
-  *:args=:*) printf '%s\n' bash ;;
-  *:ppid=:*) printf '%s\n' 100 ;;
-esac
-SH
-  chmod +x "$fakebin/ps"
-
-  got=$(env PATH="$fakebin:$BASE_PATH" PI_CODING_AGENT=true "$ROOT/bin/fm-harness.sh")
-  [ "$got" = pi ] || fail "unmarked shared signed-wrapper ancestry resolved '$got', expected pi"
-  got=$(env PATH="$fakebin:$BASE_PATH" PI_CODING_AGENT=true FM_PI_HARNESS=pi-signed "$ROOT/bin/fm-harness.sh")
-  [ "$got" = pi-signed ] || fail "selected signed wrapper resolved '$got', expected pi-signed"
-  got=$(env PATH="$fakebin:$BASE_PATH" PI_CODING_AGENT=true FM_PI_HARNESS=pi "$ROOT/bin/fm-harness.sh")
-  [ "$got" = pi ] || fail "selected plain Pi resolved '$got', expected pi"
-  got=$(env PATH="$fakebin:$BASE_PATH" PI_CODING_AGENT=true FM_PI_HARNESS=pi-signed-helper "$ROOT/bin/fm-harness.sh")
-  [ "$got" = pi ] || fail "inexact signed selection marker resolved '$got', expected pi"
-  got=$(env -u PI_CODING_AGENT PATH="$fakebin:$BASE_PATH" FM_PI_HARNESS=pi-signed "$ROOT/bin/fm-harness.sh")
-  [ "$got" = pi ] || fail "signed selection marker without Pi's family marker resolved '$got', expected pi"
-  got=$(env PATH="$fakebin:$BASE_PATH" PI_CODING_AGENT=true FM_TEST_SIGNED_SHAPE=plain "$ROOT/bin/fm-harness.sh")
-  [ "$got" = pi ] || fail "plain Pi marker resolved '$got', expected pi"
-  got=$(env PATH="$fakebin:$BASE_PATH" PI_CODING_AGENT=true FM_TEST_SIGNED_SHAPE=helper "$ROOT/bin/fm-harness.sh")
-  [ "$got" = pi ] || fail "unrelated pi-signed-helper ancestry resolved '$got', expected pi"
-
-  got=$(PATH="$fakebin:$BASE_PATH" bash -c \
-    '. "$0/bin/fm-session-lock-lib.sh"; fm_harness_ancestry_pid' "$ROOT")
-  [ "$got" = 100 ] || fail "session-lock ancestry selected '$got', expected the inner Pi engine pid 100"
-  PATH="$fakebin:$BASE_PATH" bash -c \
-    '. "$0/bin/fm-session-lock-lib.sh"; kill() { return 0; }; fm_harness_pid_alive 200' "$ROOT" \
-    || fail "session-lock liveness rejected exact pi-signed holder"
-  if PATH="$fakebin:$BASE_PATH" FM_TEST_SIGNED_SHAPE=helper bash -c \
-    '. "$0/bin/fm-session-lock-lib.sh"; kill() { return 0; }; fm_harness_pid_alive 200' "$ROOT"; then
-    fail "session-lock liveness accepted unrelated pi-signed-helper"
-  fi
-
-  pass "pi-signed identity: authoritative launch selection distinguishes shared wrapper ancestry"
-}
-
-test_dash_leading_process_names_are_basename_operands() {
-  local dir fakebin got err status
-  dir="$TMP_ROOT/dash-leading-process-names"
-  fakebin=$(fm_fakebin "$dir")
-  cat > "$fakebin/ps" <<'SH'
-#!/usr/bin/env bash
-set -u
-field= pid=
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    -o) field=$2; shift 2 ;;
-    -p) pid=$2; shift 2 ;;
-    *) shift ;;
-  esac
-done
-case "$pid:$field" in
-  4242:comm=) printf '%s\n' '/opt/test/bin/pi' ;;
-  4242:args=) printf '%s\n' 'pi' ;;
-  4242:ppid=) printf '%s\n' 1 ;;
-  5252:comm=) printf '%s\n' '-opencode' ;;
-  5252:args=) printf '%s\n' '-opencode' ;;
-  5252:ppid=) printf '%s\n' 1 ;;
-  *:comm=) printf '%s\n' '-zsh' ;;
-  *:args=) printf '%s\n' '-zsh' ;;
-  *:ppid=) printf '%s\n' 4242 ;;
-esac
-SH
-  chmod +x "$fakebin/ps"
-
-  err="$dir/fm-harness.err"
-  got=$(env -u PI_CODING_AGENT \
-    PATH="$fakebin:$BASE_PATH" "$ROOT/bin/fm-harness.sh" 2>"$err")
-  [ "$got" = pi ] || fail "dash-leading shell ancestry resolved '$got', expected pi"
-  [ ! -s "$err" ] || fail "fm-harness wrote basename option noise for literal -zsh: $(cat "$err")"
-
-  err="$dir/fm-session-lock-ancestry.err"
-  got=$(PATH="$fakebin:$BASE_PATH" bash -c \
-    '. "$0/bin/fm-session-lock-lib.sh"; fm_harness_ancestry_pid' "$ROOT" 2>"$err")
-  [ "$got" = 4242 ] || fail "session-lock dash-leading ancestry selected '$got', expected pid 4242"
-  [ ! -s "$err" ] || fail "session-lock ancestry wrote basename option noise for literal -zsh: $(cat "$err")"
-
-  err="$dir/fm-session-lock-alive.err"
-  PATH="$fakebin:$BASE_PATH" bash -c \
-    '. "$0/bin/fm-session-lock-lib.sh"; kill() { return 0; }; fm_harness_pid_alive 5252' \
-    "$ROOT" 2>"$err"; status=$?
-  expect_code 0 "$status" "session-lock liveness should accept literal -opencode as a harness process name"
-  [ ! -s "$err" ] || fail "session-lock liveness wrote basename option noise for literal -opencode: $(cat "$err")"
-
-  pass "harness identity: dash-leading ps command names are basename operands, not options"
+  pass "C1 fm-harness.sh secondmate-model/secondmate-effort resolve optional tokens; bare Pi leaves both empty"
 }
 
 # ===========================================================================
@@ -312,12 +189,12 @@ test_propagate_lib() {
   printf '{"default":{"harness":"pi"}}\n' > "$src/crew-dispatch.json"
   printf 'pi\n' > "$src/crew-harness"
   printf 'tasks-axi\n' > "$src/backlog-backend"
-  printf 'zellij\n' > "$src/backend"
+  printf 'herdr\n' > "$src/backend"
   propagate_inheritable_config "$src" "$dest"
   [ "$(cat "$dest/crew-dispatch.json")" = '{"default":{"harness":"pi"}}' ] || fail "changed dispatch profile did not converge"
   [ "$(cat "$dest/crew-harness")" = pi ] || fail "changed value did not converge"
   [ "$(cat "$dest/backlog-backend")" = tasks-axi ] || fail "changed backlog backend did not converge"
-  [ "$(cat "$dest/backend")" = zellij ] || fail "changed backend did not converge"
+  [ "$(cat "$dest/backend")" = herdr ] || fail "changed backend did not converge"
 
   outside="$d/outside-target"
   rm -f "$dest/crew-harness" "$outside"
@@ -357,7 +234,7 @@ test_propagate_lib() {
   rm -rf "$dest/crew-harness"
 
   # 5. secondmate-harness is never inherited; backend still is
-  printf 'opencode\n' > "$src/secondmate-harness"
+  printf 'pi\n' > "$src/secondmate-harness"
   printf '{"default":{"harness":"pi"}}\n' > "$src/crew-dispatch.json"
   printf 'pi\n' > "$src/crew-harness"
   printf 'manual\n' > "$src/backlog-backend"
@@ -386,7 +263,7 @@ test_propagate_lib() {
   printf 'guard\n' > "$guard_repo/README.md"
   git -C "$guard_repo" add -A
   git -C "$guard_repo" commit -qm guard
-  printf '{"default":{"harness":"opencode"}}\n' > "$src/crew-dispatch.json"
+  printf '{"default":{"harness":"pi"}}\n' > "$src/crew-dispatch.json"
   stdout="$d/guard-skip.out"
   stderr="$d/guard-skip.err"
   FM_INHERITABLE_CONFIG=crew-dispatch.json propagate_inheritable_config "$src" "$guard_repo/config" >"$stdout" 2>"$stderr" \
@@ -440,15 +317,12 @@ make_seeded_home() {
 # a blinded ancestry walk pins detect_own. stderr is discarded (the local-HEAD ff sync harmlessly skips a
 # non-worktree home). Inspect <world>/home/state/<id>.meta and <home>/config after.
 spawn_secondmate() {
-  local world=$1 id=$2 home=$3 harness=${4:-} fakebin
+  local world=$1 id=$2 home=$3 fakebin
+  shift 3
   mkdir -p "$world/home/state" "$world/home/data"
   fakebin=$(make_noop_tmux "$world/tmux-$id")
-  # An empty harness must contribute zero args, not an empty positional; build the
-  # arg list explicitly so the optional harness is omitted cleanly.
-  local spawn_args=("$id" "$home")
-  [ -n "$harness" ] && spawn_args+=("$harness")
-  spawn_args+=(--secondmate)
-  PATH="$fakebin:$BLIND_BIN:$BASE_PATH" TMUX='' PI_CODING_AGENT=true FM_PI_HARNESS=pi \
+  local spawn_args=("$id" "$home" "$@" --secondmate)
+  PATH="$fakebin:$BLIND_BIN:$BASE_PATH" TMUX='' PI_CODING_AGENT=true \
     FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$world/home" HOME="$world/home/user-home" \
     FM_STATE_OVERRIDE="$world/home/state" FM_DATA_OVERRIDE="$world/home/data" \
     FM_PROJECTS_OVERRIDE="$world/home/projects" FM_CONFIG_OVERRIDE="$world/home/config" \
@@ -458,8 +332,8 @@ spawn_secondmate() {
 
 meta_harness() { grep '^harness=' "$1" 2>/dev/null | tail -1 | cut -d= -f2-; }
 
-# Split active: crew-harness=pi + secondmate-harness=opencode. The secondmate
-# agent launches on OpenCode; its own workers inherit Pi; secondmate-harness
+# Split active: crew-harness=pi + secondmate-harness=pi. The secondmate
+# agent launches on Pi; its own workers inherit Pi; secondmate-harness
 # does not flow into the home.
 test_spawn_split_and_inherit() {
   local w sm meta
@@ -468,36 +342,35 @@ test_spawn_split_and_inherit() {
   mkdir -p "$w/home/config"
   printf '{"default":{"harness":"pi","model":"model-x","effort":"low"}}\n' > "$w/home/config/crew-dispatch.json"
   printf 'pi\n' > "$w/home/config/crew-harness"
-  printf 'opencode\n' > "$w/home/config/secondmate-harness"
+  printf 'pi\n' > "$w/home/config/secondmate-harness"
   printf 'manual\n' > "$w/home/config/backlog-backend"
-  printf 'zellij\n' > "$w/home/config/backend"
+  printf 'herdr\n' > "$w/home/config/backend"
   make_seeded_home "$sm" sm
 
   spawn_secondmate "$w" sm "$sm"
 
   meta="$w/home/state/sm.meta"
   [ -f "$meta" ] || fail "split: no meta written"
-  [ "$(meta_harness "$meta")" = opencode ] \
-    || fail "split: secondmate launched on '$(meta_harness "$meta")', expected opencode"
+  [ "$(meta_harness "$meta")" = pi ] \
+    || fail "split: secondmate launched on '$(meta_harness "$meta")', expected pi"
   [ "$(cat "$sm/config/crew-harness" 2>/dev/null)" = pi ] \
     || fail "split: home crew-harness not inherited as pi (got '$(cat "$sm/config/crew-harness" 2>/dev/null)')"
   [ "$(cat "$sm/config/crew-dispatch.json" 2>/dev/null)" = '{"default":{"harness":"pi","model":"model-x","effort":"low"}}' ] \
     || fail "split: home crew-dispatch.json not inherited"
   [ "$(cat "$sm/config/backlog-backend" 2>/dev/null)" = manual ] \
     || fail "split: home backlog-backend not inherited as manual"
-  [ "$(cat "$sm/config/backend" 2>/dev/null)" = zellij ] \
-    || fail "split: home backend not inherited as zellij"
+  [ "$(cat "$sm/config/backend" 2>/dev/null)" = herdr ] \
+    || fail "split: home backend not inherited as herdr"
   [ -e "$sm/config/secondmate-harness" ] \
     && fail "split: secondmate-harness leaked into the secondmate home"
   pass "B2 spawn: secondmate runs the secondmate harness; its home inherits declared config"
 }
 
-# Backward-compat: secondmate-harness absent -> the secondmate launches on the
-# crew harness, exactly as before this knob existed, and that crew value is the
-# one inherited.
-test_spawn_backward_compat_crew_fallback() {
+# With secondmate-harness absent, the secondmate uses crew resolution and
+# inherits that crew value.
+test_spawn_crew_resolution_when_secondmate_pin_absent() {
   local w sm meta
-  w="$TMP_ROOT/spawn-compat"
+  w="$TMP_ROOT/spawn-crew-resolution"
   sm="$w/sm"
   mkdir -p "$w/home/config"
   printf 'pi\n' > "$w/home/config/crew-harness"
@@ -507,16 +380,15 @@ test_spawn_backward_compat_crew_fallback() {
 
   meta="$w/home/state/sm.meta"
   [ "$(meta_harness "$meta")" = pi ] \
-    || fail "compat: secondmate launched on '$(meta_harness "$meta")', expected the crew harness pi"
+    || fail "secondmate launched on '$(meta_harness "$meta")', expected crew runtime pi"
   [ "$(cat "$sm/config/crew-harness" 2>/dev/null)" = pi ] \
-    || fail "compat: home crew-harness not inherited as pi"
-  pass "B3 spawn: an absent secondmate-harness falls back to the crew harness (backward-compat)"
+    || fail "home crew-harness not inherited as pi"
+  pass "B3 spawn: an absent secondmate-harness delegates to crew resolution"
 }
 
-# Bare backward-compat: no config at all. The secondmate falls through to its own
-# harness (Pi here), and with no inheritable file the home is left untouched -
-# no config/ side effects.
-test_spawn_bare_backward_compat() {
+# With no config at all, the secondmate resolves to own Pi and no inherited
+# file is materialized in its home.
+test_spawn_with_no_runtime_config_uses_own_pi() {
   local w sm meta
   w="$TMP_ROOT/spawn-bare"
   sm="$w/sm"
@@ -538,29 +410,25 @@ test_spawn_explicit_harness_wins() {
   w="$TMP_ROOT/spawn-explicit"
   sm="$w/sm"
   mkdir -p "$w/home/config"
-  printf 'opencode\n' > "$w/home/config/secondmate-harness"
+  printf 'pi model-z high\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
-  spawn_secondmate "$w" sm "$sm" pi
+  spawn_secondmate "$w" sm "$sm" --harness pi
 
   meta="$w/home/state/sm.meta"
   [ "$(meta_harness "$meta")" = pi ] \
-    || fail "explicit: launched on '$(meta_harness "$meta")', expected explicit pi over config opencode"
+    || fail "explicit: launched on '$(meta_harness "$meta")', expected explicit Pi"
   pass "B5 spawn: an explicit per-spawn harness arg overrides config/secondmate-harness"
 }
 
-# The retired-adapter guard holds on the resolved secondmate path: stale
-# selections abort the spawn before recording or launching anything and name
-# the configuration source.
-test_spawn_stale_retired_secondmate_harnesses_refused() {
-  local spec harness source w sm fakebin err rc
-  for spec in omp:secondmate-harness muse:secondmate-harness muse:crew-harness; do
-    harness=${spec%%:*}
-    source=${spec#*:}
-    w="$TMP_ROOT/spawn-stale-$harness-$source"
+# An unknown runtime in either static harness setting is rejected before spawn.
+test_spawn_unknown_secondmate_harness_refused() {
+  local source w sm fakebin err rc
+  for source in secondmate-harness crew-harness; do
+    w="$TMP_ROOT/spawn-unknown-$source"
     sm="$w/sm"
     mkdir -p "$w/home/config" "$w/home/state"
-    printf '%s\n' "$harness" > "$w/home/config/$source"
+    printf 'unsupported-runtime\n' > "$w/home/config/$source"
     make_seeded_home "$sm" sm
     fakebin=$(make_noop_tmux "$w/tmux")
     err="$w/spawn.err"
@@ -572,14 +440,12 @@ test_spawn_stale_retired_secondmate_harnesses_refused() {
       FM_SPAWN_NO_GUARD=1 \
       "$ROOT/bin/fm-spawn.sh" sm "$sm" --secondmate >/dev/null 2>"$err" || rc=$?
 
-    [ "$rc" -ne 0 ] || fail "stale $harness: spawn should have failed"
-    assert_contains "$(cat "$err")" "no launch template for harness '$harness'" \
-      "stale $harness: error names the rejected harness"
-    assert_contains "$(cat "$err")" "config/secondmate-harness" \
-      "stale $harness from $source: error names the effective secondmate-harness source"
-    [ -e "$w/home/state/sm.meta" ] && fail "stale $harness: a task record was written despite the abort"
+    [ "$rc" -ne 0 ] || fail "unknown runtime from $source should have failed"
+    assert_contains "$(cat "$err")" "only 'pi' is supported" \
+      "unknown runtime error should state the Pi-only boundary"
+    [ -e "$w/home/state/sm.meta" ] && fail "unknown runtime wrote a task record despite refusal"
   done
-  pass "B6 spawn: stale OMP and Muse static configuration is refused before mutation"
+  pass "B6 spawn: unknown static runtime configuration is refused before mutation"
 }
 
 # ===========================================================================
@@ -641,7 +507,7 @@ spawn_secondmate_capture() {
   mkdir -p "$world/home/state" "$world/home/data"
   fakebin=$(make_launch_capturing_tmux "$world/tmux-$id")
   : > "$launchlog"
-  PATH="$fakebin:$BLIND_BIN:$BASE_PATH" TMUX='' PI_CODING_AGENT=true FM_PI_HARNESS=pi \
+  PATH="$fakebin:$BLIND_BIN:$BASE_PATH" TMUX='' PI_CODING_AGENT=true \
     FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$world/home" HOME="$world/home/user-home" \
     FM_STATE_OVERRIDE="$world/home/state" FM_DATA_OVERRIDE="$world/home/data" \
     FM_PROJECTS_OVERRIDE="$world/home/projects" FM_CONFIG_OVERRIDE="$world/home/config" \
@@ -680,22 +546,22 @@ test_spawn_explicit_backend_precedence_over_env_and_inherited_config() {
   printf 'herdr\n' > "$w/home/config/backend"
   make_seeded_home "$sm" sm
 
-  out=$(FM_BACKEND=zellij spawn_secondmate_capture \
+  out=$(FM_BACKEND=herdr spawn_secondmate_capture \
     "$w" sm "$sm" "$launchlog" --backend tmux 2>&1); status=$?
   expect_code 0 "$status" \
-    "explicit --backend tmux should beat FM_BACKEND=zellij and inherited config/backend=herdr"$'\n'"$out"
+    "explicit --backend tmux should beat FM_BACKEND=herdr and inherited config/backend=herdr"$'\n'"$out"
 
   meta="$w/home/state/sm.meta"
   [ "$(cat "$sm/config/backend")" = herdr ] \
     || fail "explicit backend precedence fixture did not inherit config/backend=herdr"
   assert_no_grep '^backend=' "$meta" \
-    "explicit --backend tmux did not beat FM_BACKEND=zellij and inherited config/backend=herdr"
+    "explicit --backend tmux did not beat FM_BACKEND=herdr and inherited config/backend=herdr"
   pass "B5c spawn: explicit --backend wins over FM_BACKEND and inherited config/backend"
 }
 
 # A bare "<harness>" secondmate-harness file (today's format) must launch with
 # NO --model/--effort flag at all, and meta must keep recording model=default,
-# effort=default - the core backward-compat requirement of the new format.
+# effort=default - the bare-Pi configuration contract.
 test_spawn_bare_harness_no_model_effort_flag() {
   local w sm meta launchlog launch out status
   w="$TMP_ROOT/spawn-bare-tokens"
@@ -716,7 +582,7 @@ test_spawn_bare_harness_no_model_effort_flag() {
     "bare-tokens: Pi secondmate launch did not invoke Pi"
   assert_not_contains "$launch" "--model" "bare-tokens: launch must not carry a --model flag"
   assert_not_contains "$launch" "--effort" "bare-tokens: launch must not carry an --effort flag"
-  pass "C2 spawn: a bare harness-only secondmate-harness file launches with no model/effort flag (backward-compat)"
+  pass "C2 spawn: a bare Pi secondmate-harness file launches with no model/effort flag"
 }
 
 # "<harness> <model>" durably threads --model into the secondmate launch and
@@ -824,8 +690,8 @@ test_spawn_explicit_harness_does_not_inherit_secondmate_harness_tokens() {
   [ "$(meta_field "$meta" model)" = default ] || fail "explicit-harness-no-tokens: meta model should stay default"
   [ "$(meta_field "$meta" effort)" = default ] || fail "explicit-harness-no-tokens: meta effort should stay default"
   launch=$(cat "$launchlog")
-  assert_contains "$launch" "FM_PI_HARNESS=pi" \
-    "explicit-harness-no-tokens: launch did not use pi"
+  assert_contains "$launch" "pi" \
+    "explicit-harness-no-tokens: launch did not use Pi"
   assert_not_contains "$launch" "--model" "explicit-harness-no-tokens: launch must not carry a --model flag"
   assert_not_contains "$launch" "--thinking" \
     "explicit-harness-no-tokens: launch must not carry a pi effort flag"
@@ -1214,13 +1080,13 @@ test_bootstrap_sweep_propagates_and_reconverges() {
   c1=$(git -C "$w/main" rev-parse HEAD)
   add_sm_worktree "$w" sm "$c1"
 
-  # Initial push: primary crew-harness=pi, secondmate-harness=opencode (must NOT flow).
+  # Initial push: primary crew-harness=pi, secondmate-harness=pi (must NOT flow).
   printf '{"default":{"harness":"pi"}}\n' > "$w/home/config/crew-dispatch.json"
   printf 'pi\n' > "$w/home/config/crew-harness"
   printf 'manual\n' > "$w/home/config/backlog-backend"
   printf 'tmux\n' > "$w/home/config/backend"
   : > "$w/home/config/trace-context"
-  printf 'opencode\n' > "$w/home/config/secondmate-harness"
+  printf 'pi\n' > "$w/home/config/secondmate-harness"
   run_bootstrap "$w" >/dev/null
   [ "$(cat "$w/sm/config/crew-harness" 2>/dev/null)" = pi ] \
     || fail "sweep: crew-harness not pushed into the live home"
@@ -1239,7 +1105,7 @@ test_bootstrap_sweep_propagates_and_reconverges() {
   printf '{"default":{"harness":"pi"}}\n' > "$w/home/config/crew-dispatch.json"
   printf 'pi\n' > "$w/home/config/crew-harness"
   printf 'tasks-axi\n' > "$w/home/config/backlog-backend"
-  printf 'zellij\n' > "$w/home/config/backend"
+  printf 'herdr\n' > "$w/home/config/backend"
   run_bootstrap "$w" >/dev/null
   [ "$(cat "$w/sm/config/crew-harness" 2>/dev/null)" = pi ] \
     || fail "sweep: home did not re-converge to the primary's new crew-harness"
@@ -1247,7 +1113,7 @@ test_bootstrap_sweep_propagates_and_reconverges() {
     || fail "sweep: home did not re-converge to the primary's new crew-dispatch.json"
   [ "$(cat "$w/sm/config/backlog-backend" 2>/dev/null)" = tasks-axi ] \
     || fail "sweep: home did not re-converge to the primary's new backlog-backend"
-  [ "$(cat "$w/sm/config/backend" 2>/dev/null)" = zellij ] \
+  [ "$(cat "$w/sm/config/backend" 2>/dev/null)" = herdr ] \
     || fail "sweep: home did not re-converge to the primary's new backend"
 
   # Mirror absence: primary clears inherited config; the home's copies are removed.
@@ -1364,12 +1230,12 @@ test_backend_inheritance_present_and_absent() {
   assert_contains "$(cat "$instruction")" $'-----BEGIN config/backend-----\ntmux\n-----END config/backend-----' \
     "backend present reread must include exact bytes"
 
-  printf 'herdr\n' > "$w/sm/config/backend"
-  printf 'zellij\n' > "$w/home/config/backend"
+  printf 'tmux\n' > "$w/sm/config/backend"
+  printf 'herdr\n' > "$w/home/config/backend"
   out=$(run_config_push "$w" 2>"$err"); status=$?
   expect_code 0 "$status" "backend changed push should succeed"
   assert_contains "$out" "backend: pushed" "backend changed value should report pushed"
-  [ "$(cat "$w/sm/config/backend")" = zellij ] \
+  [ "$(cat "$w/sm/config/backend")" = herdr ] \
     || fail "primary backend did not overwrite the divergent destination"
 
   rm -f "$w/home/config/backend"
@@ -1677,7 +1543,7 @@ test_config_reread_per_home_changed_sets_and_exact_bytes() {
   printf 'tasks-axi\n' > "$w/alpha/config/backlog-backend"
   printf '{"default":{"harness":"old"}}\n' > "$w/beta/config/crew-dispatch.json"
 
-  multiline_json=$(printf '{\n  "default": {\n    "harness": "opencode",\n    "model": "opencode-4.5"\n  },\n  "rules": [\n    {"when": "news", "use": {"harness": "opencode"}}\n  ]\n}\n')
+  multiline_json=$(printf '{\n  "default": {\n    "harness": "pi",\n    "model": "pi-4.5"\n  },\n  "rules": [\n    {"when": "news", "use": {"harness": "pi"}}\n  ]\n}\n')
   printf '%s' "$multiline_json" > "$w/home/config/crew-dispatch.json"
   printf 'pi\n' > "$w/home/config/crew-harness"
   printf 'manual\n' > "$w/home/config/backlog-backend"
@@ -1767,9 +1633,9 @@ test_config_reread_per_home_changed_sets_and_exact_bytes() {
   pointer="CONFIG_REREAD: $(reread_instruction_path "$w/alpha")"
   assert_contains "$(inbox_stream "$w/home/state" alpha)" "[fm-from-firstmate]" "reread send must be marked"
   assert_contains "$(inbox_stream "$w/home/state" alpha)" "$pointer" "reread send must point to the durable instruction file"
-  assert_not_contains "$(inbox_stream "$w/home/state" alpha)" '"harness": "opencode"' "sent message must not inline multiline JSON"
+  assert_not_contains "$(inbox_stream "$w/home/state" alpha)" '"harness": "pi"' "sent message must not inline multiline JSON"
   assert_not_contains "$(inbox_stream "$w/home/state" alpha)" "Default worker" "sent message must not summarize"
-  assert_not_contains "$(cat "$log")" '"harness": "opencode"' "the typed doorbell must not inline multiline JSON"
+  assert_not_contains "$(cat "$log")" '"harness": "pi"' "the typed doorbell must not inline multiline JSON"
   pass "B15 config reread is per-home, exact-byte, ordered, and pointer-only"
 }
 
@@ -1844,7 +1710,7 @@ test_config_reread_isolation_and_absent_and_send_failure() {
   rm -rf "$w/home/state/alpha.inbox" "$w/home/state/beta.inbox"
   : > "$w/home/state/alpha.inbox"
   : > "$w/home/state/beta.inbox"
-  printf 'opencode\n' > "$w/home/config/crew-harness"
+  printf 'herdr\n' > "$w/home/config/backend"
   err="$w/config-reread-send-fail.err"
   out=$(PATH="$(make_fake_toolchain "$w"):$BASE_PATH" \
     FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" FM_SEND_SETTLE=0 \
@@ -1864,7 +1730,7 @@ test_config_reread_isolation_and_absent_and_send_failure() {
 
   # A later changed push publishes a distinct generation without overwriting
   # the failed generation, then an unchanged push retries both pointers.
-  printf 'pi\n' > "$w/home/config/crew-harness"
+  printf 'tmux\n' > "$w/home/config/backend"
   err="$w/config-reread-send-fail-second.err"
   out2=$(PATH="$(make_fake_toolchain "$w"):$BASE_PATH" \
     FM_HOME="$w/home" FM_ROOT_OVERRIDE="$w/main" FM_SEND_SETTLE=0 \
@@ -2519,14 +2385,12 @@ SH
 
 test_harness_resolution
 test_secondmate_model_effort_tokens
-test_pi_signed_detection_and_session_lock_identity
-test_dash_leading_process_names_are_basename_operands
 test_propagate_lib
 test_spawn_split_and_inherit
-test_spawn_backward_compat_crew_fallback
-test_spawn_bare_backward_compat
+test_spawn_crew_resolution_when_secondmate_pin_absent
+test_spawn_with_no_runtime_config_uses_own_pi
 test_spawn_explicit_harness_wins
-test_spawn_stale_retired_secondmate_harnesses_refused
+test_spawn_unknown_secondmate_harness_refused
 test_spawn_backend_precedence_over_inherited_config
 test_spawn_explicit_backend_precedence_over_env_and_inherited_config
 test_spawn_bare_harness_no_model_effort_flag

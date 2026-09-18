@@ -146,20 +146,17 @@ test_first_stale_call_prints_full_banner() {
   pass "fm-guard stale banner: first stale call prints the full actionable banner"
 }
 
-test_full_banner_names_quiet_mode_when_active() {
-  # kunchenguid/firstmate#2356: the banner's repair line must not misdirect a
-  # captain in quiet mode to /afk - fm-guard.sh threads the flag's declared
-  # mode through to fm-supervision-instructions.sh's --afk-mode.
+test_full_banner_keeps_pi_supervision_in_quiet_posture() {
   local dir home out
-  dir=$(make_guard_case quiet-mode-banner)
+  dir=$(make_guard_case quiet-posture-banner)
   home=$(case_home "$dir")
   printf 'quiet\n%s\n' "$(date '+%s')" > "$home/state/.afk"
   out=$(run_guard_case "$dir")
-  assert_contains "$out" "Quiet mode owns watcher supervision; load /quiet" \
-    "full banner did not name /quiet for an active quiet-mode flag"
-  assert_not_contains "$out" "Away mode owns watcher supervision" \
-    "full banner misdirected a quiet-mode captain to /afk"
-  pass "fm-guard stale banner: repair line is quiet-mode-aware, not hardcoded to away mode"
+  assert_contains "$out" "repair a missing or failed watcher cycle with the Pi tool fm_watch_arm_pi" \
+    "quiet posture did not request ordinary Pi supervision repair"
+  assert_not_contains "$out" "owns watcher supervision" \
+    "quiet posture transferred supervision ownership"
+  pass "fm-guard stale banner: quiet posture keeps Pi supervision active"
 }
 
 test_repeated_same_episode_prints_reminder_only() {
@@ -595,7 +592,7 @@ test_extension_handoff_keeps_queued_wake_warning() {
 }
 
 # The tolerance is scoped to the extension model alone. Every persistent-watcher
-# primary (pi, opencode, pi, tmux, unknown) must keep alarming on the
+# primary must keep alarming on the
 # same state, even when Pi extension markers happen to be present on disk.
 # The supervision branch runs guarded commands (fm-peek, fm-crew-state) while
 # handling the very rows that are queued. For that actor the drain warning is
@@ -674,36 +671,31 @@ test_extension_live_watcher_is_healthy_without_ownership_evidence() {
 # walk is blinded because a structural ancestor of a different harness outranks the
 # Pi marker, so the harness this suite was launched from would otherwise answer.
 test_pi_harness_routes_itself_to_the_extension_model() {
-  local dir home out pid harness blind
-  local -a pi_env
+  local dir home out pid blind
   blind=$(fm_fakebin "$TMP_ROOT/pi-routing-blind")
   fm_fake_blind_ancestry "$blind"
-  for harness in pi pi-signed; do
-    pi_env=(PI_CODING_AGENT=true)
-    [ "$harness" = pi ] || pi_env+=(FM_PI_HARNESS=pi-signed)
-    dir=$(make_guard_case "harness-routing-$harness")
-    home=$(case_home "$dir")
-    sleep 60 &
-    pid=$!
-    record_pi_extension_session "$dir" "$pid" || fail "could not record the Pi extension session"
-    touch "$home/state/.last-watcher-beat"
-    out=$(env -u FM_SUPERVISION_MODEL \
-      "${pi_env[@]}" \
-      PATH="$blind:$PATH" \
-      FM_ROOT_OVERRIDE="$(case_root "$dir")" \
-      FM_HOME="$home" \
-      FM_GUARD_GRACE=999 \
-      "$ROOT/bin/fm-guard.sh" 2>&1)
-    kill "$pid" 2>/dev/null || true
-    wait "$pid" 2>/dev/null || true
-    [ -z "$out" ] \
-      || fail "a $harness primary must route itself to the extension model, got: $out"
-  done
-  pass "fm-guard stale banner: Pi and pi-signed primaries route themselves to the extension model"
+  dir=$(make_guard_case harness-routing-pi)
+  home=$(case_home "$dir")
+  sleep 60 &
+  pid=$!
+  record_pi_extension_session "$dir" "$pid" || fail "could not record the Pi extension session"
+  touch "$home/state/.last-watcher-beat"
+  out=$(env -u FM_SUPERVISION_MODEL \
+    PI_CODING_AGENT=true \
+    PATH="$blind:$PATH" \
+    FM_ROOT_OVERRIDE="$(case_root "$dir")" \
+    FM_HOME="$home" \
+    FM_GUARD_GRACE=999 \
+    "$ROOT/bin/fm-guard.sh" 2>&1)
+  kill "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+  [ -z "$out" ] \
+    || fail "a Pi primary must route itself to the extension model, got: $out"
+  pass "fm-guard stale banner: Pi routes itself to the extension model"
 }
 
 test_first_stale_call_prints_full_banner
-test_full_banner_names_quiet_mode_when_active
+test_full_banner_keeps_pi_supervision_in_quiet_posture
 test_repeated_same_episode_prints_reminder_only
 test_pi_harness_routes_itself_to_the_extension_model
 test_extension_handoff_with_live_session_is_healthy

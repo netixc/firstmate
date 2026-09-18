@@ -213,7 +213,7 @@ make_fake_ps_harness() {
 #!/usr/bin/env bash
 set -u
 # The ancestry this stub reports defaults to the harness the fixture was built
-# for, so a case that builds a pi (or opencode) fixture gets pi (or opencode) ancestry
+# for, so a Pi fixture gets Pi ancestry
 # without having to repeat it per run; FM_FAKE_HARNESS still overrides it.
 harness=\${FM_FAKE_HARNESS:-$harness}
 SH
@@ -505,13 +505,10 @@ SH
 }
 
 # run_session_start <home> <root> <path>
-# Drop every harness env marker from bin/fm-harness.sh detect_own so the
+# Drop Pi's env markers from bin/fm-harness.sh detect_own so the
 # surrounding interactive shell cannot leak past the suite's fake ps harness.
-# Markers today: (opencode), PI_CODING_AGENT plus FM_PI_HARNESS
-# (Pi family).
-# opencode and opencode have no env markers (ancestry only). Without this, a local
-# opencode/pi session fails cases that pin a different fake harness while CI
-# (no ambient markers) still passes.
+# Pi markers are PI_CODING_AGENT plus FM_PI_HARNESS; clear them so the
+# surrounding interactive shell cannot override each fixture's fake ancestry.
 run_session_start() {
   local home=$1 root=$2 path=$3 pi_harness=${4:-}
   if [ -n "$pi_harness" ]; then
@@ -890,14 +887,14 @@ done
 case "$*" in
   *"comm="*)
     if [ -f "$FM_FAKE_LOCK_STATE/harness-$pid" ]; then
-      printf '%s\n' /usr/local/bin/opencode
+      printf '%s\n' /usr/local/bin/pi
     else
       printf '%s\n' /bin/bash
     fi
     ;;
   *"args="*)
     if [ -f "$FM_FAKE_LOCK_STATE/harness-$pid" ]; then
-      printf '%s\n' opencode
+      printf '%s\n' pi
     else
       printf '%s\n' bash
     fi
@@ -1053,12 +1050,12 @@ SH
     if [ "$mode" = configured ]; then
       printf '%s\n' herdr > "$home/config/backend"
       out=$(TMUX='' HERDR_ENV='' BASH_ENV="$mask" run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
-      assert_not_contains "$out" "NOTICE: auto-detected herdr runtime" \
+      assert_not_contains "$out" "NOTICE: auto-detected herdr backend" \
         "an explicit Herdr home should not be reported as auto-detected"
     else
       out=$(TMUX='' HERDR_ENV=1 BASH_ENV="$mask" run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
-      assert_contains "$out" "NOTICE: auto-detected herdr runtime (HERDR_ENV=1)" \
-        "session start did not preserve the Herdr runtime auto-detection fallback"
+      assert_contains "$out" "NOTICE: auto-detected herdr backend from HERDR_ENV=1" \
+        "session start did not preserve the Herdr backend auto-detection fallback"
     fi
     assert_contains "$out" "SESSION START - $home" "the real session-start path did not run in the throwaway home"
     assert_not_contains "$out" "MISSING: tmux" "Herdr session start falsely required masked tmux"
@@ -1422,30 +1419,6 @@ EOF
   pass "locked Pi session start replays leading routine outcomes, preserves the captain barrier, and sweeps only dead leases"
 }
 
-test_non_pi_session_start_leaves_branch_state_untouched() {
-  local rec root home fakebin out
-  rec=$(new_world non-pi-branch-recovery)
-  IFS='|' read -r root home fakebin <<EOF
-$rec
-EOF
-  make_fake_toolchain "$fakebin"
-  make_fake_ps_harness "$fakebin" opencode
-
-  FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" append \
-    --task task-b --verdict captain --summary 'unread Pi branch outcome' >/dev/null \
-    || fail "could not seed the non-Pi unread branch outcome"
-  rm -f "$home/state/.branch-outcomes-cursor"
-  printf 'branch\t999999\t123\n' > "$home/state/.lease-task-dead"
-
-  out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
-  case "$out" in
-    *"BRANCH OUTCOMES"*|*"unread Pi branch outcome"*) fail "non-Pi session replayed Pi branch outcomes" ;;
-  esac
-  [ -e "$home/state/.lease-task-dead" ] || fail "non-Pi session swept a Pi branch lease"
-  [ ! -e "$home/state/.branch-outcomes-cursor" ] || fail "non-Pi session marked a Pi branch outcome read"
-  pass "non-Pi session start neither sweeps nor replays Pi branch state"
-}
-
 # --- deferred network stage -------------------------------------------------
 
 # install_slow_gh <fakebin> <seconds>: one external-network call the digest used
@@ -1632,7 +1605,7 @@ EOF
 #!/usr/bin/env bash
 set -u
 case "$*" in
-  *"-p 999999"*) printf 'opencode\n'; exit 0 ;;
+  *"-p 999999"*) printf 'pi\n'; exit 0 ;;
   *"comm="*|*"args="*) printf 'bash\n'; exit 0 ;;
 esac
 exit 0
@@ -2040,11 +2013,11 @@ for argument in "$@"; do
 done
 case "$*" in
   *"comm="*)
-    if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then printf '%s\n' /usr/local/bin/opencode
+    if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then printf '%s\n' /usr/local/bin/pi
     else printf '%s\n' /bin/bash; fi
     ;;
   *"args="*)
-    if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then printf '%s\n' opencode
+    if [ "$pid" = "${FM_FAKE_HARNESS_PID:-}" ]; then printf '%s\n' pi
     else printf '%s\n' bash; fi
     ;;
   *"ppid="*) /bin/ps -o ppid= -p "$pid" ;;
@@ -2364,7 +2337,7 @@ EOF
   pass "session start emits X-mode cadence guidance in the harness supervision block"
 }
 
-test_next_step_afk_delegates_to_daemon() {
+test_next_step_away_posture_keeps_pi_supervision() {
   local rec root home fakebin out
   rec=$(new_world next-step-afk)
   IFS='|' read -r root home fakebin <<EOF
@@ -2372,20 +2345,22 @@ $rec
 EOF
   make_fake_toolchain "$fakebin"
   make_fake_ps_primary "$fakebin"
-  : > "$home/state/.afk"
+  FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$ROOT/bin/fm-afk-contract.sh" propose >/dev/null 2>&1 \
+    || fail "could not propose the away posture"
+  FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$ROOT/bin/fm-afk-contract.sh" confirm >/dev/null 2>&1 \
+    || fail "could not confirm the away posture"
 
   out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
 
-  assert_contains "$out" "away-mode supervision is active" "AFK digest did not report away mode"
-  assert_contains "$out" "Away mode is active" "next step did not switch to AFK guidance"
-  assert_contains "$out" "daemon owns the watcher" "next step did not delegate watcher ownership to the daemon"
-  assert_contains "$out" "- Away mode: active" "supervision block did not include active AFK state"
-  assert_not_contains "$out" "  bin/fm-watch-arm.sh" "AFK next step still told the agent to arm the watcher directly"
+  assert_contains "$out" "away posture recorded" "digest did not report away posture"
+  assert_contains "$out" "Away posture is active" "next step did not switch to away guidance"
+  assert_contains "$out" "Pi ordinary supervision continues" "away posture did not preserve Pi supervision"
+  assert_contains "$out" "- Away posture: active" "supervision block did not include away posture"
 
-  pass "next step delegates watcher ownership to the AFK daemon"
+  pass "away posture keeps Pi's ordinary supervision active"
 }
 
-test_next_step_quiet_mode_delegates_to_daemon() {
+test_next_step_quiet_posture_keeps_pi_supervision() {
   local rec root home fakebin out
   rec=$(new_world next-step-quiet)
   IFS='|' read -r root home fakebin <<EOF
@@ -2397,34 +2372,14 @@ EOF
 
   out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
 
-  assert_contains "$out" "quiet-mode supervision is active" "AFK digest did not report quiet mode for a quiet-content flag"
-  assert_contains "$out" "only an explicit /quiet off exits it" "AFK digest lost the explicit-only exit rule"
-  assert_contains "$out" "Quiet mode is active" "next step did not switch to quiet-mode guidance"
+  assert_contains "$out" "quiet posture is active" "digest did not report quiet posture"
+  assert_contains "$out" "only an explicit /quiet off exits it" "quiet posture lost the explicit-only exit rule"
+  assert_contains "$out" "Quiet posture is active" "next step did not switch to quiet guidance"
   assert_contains "$out" "load /quiet" "next step did not name the /quiet skill"
-  assert_contains "$out" "- Quiet mode: active" "supervision block did not include active quiet state"
-  assert_not_contains "$out" "Away mode is active" "quiet-mode flag was misreported as away mode"
-  assert_not_contains "$out" "  bin/fm-watch-arm.sh" "quiet next step still told the agent to arm the watcher directly"
+  assert_contains "$out" "- Quiet posture: active" "supervision block did not include quiet posture"
+  assert_not_contains "$out" "Away posture is active" "quiet posture was misreported as away posture"
 
-  pass "next step delegates watcher ownership to the daemon in quiet mode, distinctly from away mode"
-}
-
-test_next_step_afk_legacy_empty_flag_defaults_away() {
-  local rec root home fakebin out
-  rec=$(new_world next-step-afk-legacy)
-  IFS='|' read -r root home fakebin <<EOF
-$rec
-EOF
-  make_fake_toolchain "$fakebin"
-  make_fake_ps_primary "$fakebin"
-  : > "$home/state/.afk"
-
-  out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
-
-  assert_contains "$out" "away-mode supervision is active" "a legacy empty .afk flag was not read as away mode"
-  assert_contains "$out" "Away mode is active" "a legacy empty .afk flag did not drive away-mode next-step guidance"
-  assert_not_contains "$out" "Quiet mode" "a legacy empty .afk flag leaked quiet-mode text"
-
-  pass "a legacy empty .afk flag (written before mode existed) still reads as away mode"
+  pass "quiet posture keeps Pi's ordinary supervision active"
 }
 
 test_supervision_block_exactly_one_and_pi_diagnostic() {
@@ -2452,29 +2407,6 @@ EOF
   [ "$sup_line" -lt "$context_line" ] || fail "supervision block did not precede context"
 
   pass "session start emits exactly one detected harness block and reports Pi extension load state"
-}
-
-test_pi_signed_primary_uses_pi_extensions_without_identity_normalization() {
-  local rec root home fakebin out
-  rec=$(new_world pi-signed-supervision-block)
-  IFS='|' read -r root home fakebin <<EOF
-$rec
-EOF
-  make_fake_toolchain "$fakebin"
-  make_fake_ps_harness "$fakebin" pi-signed
-
-  out=$(FM_FAKE_HARNESS=pi-signed run_session_start "$home" "$root" "$fakebin:$BASE_PATH" pi-signed)
-
-  assert_contains "$out" "SUPERVISION OPERATING INSTRUCTIONS - primary harness: pi-signed" \
-    "session start normalized a pi-signed primary to pi"
-  assert_contains "$out" "Mode: Pi extension background wake." \
-    "pi-signed primary did not reuse Pi's supervision protocol"
-  assert_contains "$out" "PI_WATCH_EXTENSION: not loaded" \
-    "pi-signed primary skipped Pi extension validation"
-  assert_contains "$out" "restart pi-signed so $root/.pi/extensions/fm-primary-turnend-guard.ts and $root/.pi/extensions/fm-primary-pi-watch.ts auto-load" \
-    "pi-signed extension diagnostic did not preserve the executable identity"
-
-  pass "session start preserves pi-signed primary identity while applying Pi extension guarantees"
 }
 
 test_pi_diagnostic_rejects_stale_loaded_marker() {
@@ -2529,28 +2461,28 @@ EOF
   pass "session start accepts current Pi markers written before lock acquisition"
 }
 
-test_stale_omp_primary_is_not_detected_or_given_retired_artifacts() {
+test_unknown_primary_is_not_detected_as_pi() {
   local rec root home fakebin out block_count
-  rec=$(new_world stale-omp-primary)
+  rec=$(new_world unknown-primary)
   IFS='|' read -r root home fakebin <<EOF
 $rec
 EOF
   make_fake_toolchain "$fakebin"
-  make_fake_ps_harness "$fakebin" omp
+  make_fake_ps_harness "$fakebin" unsupported-runtime
 
-  out=$(FM_FAKE_HARNESS=omp run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+  out=$(FM_FAKE_HARNESS=unsupported-runtime run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
 
   block_count=$(printf '%s\n' "$out" | grep -c '^SUPERVISION OPERATING INSTRUCTIONS - primary harness:')
   [ "$block_count" -eq 1 ] || fail "expected exactly one supervision block, got $block_count"
   assert_contains "$out" "SUPERVISION OPERATING INSTRUCTIONS - primary harness: unknown" \
-    "a stale OMP process must not be detected as a supported primary"
-  assert_contains "$out" "Mode: Unknown harness fallback." \
-    "a stale OMP process must receive only the conservative unknown protocol"
-  assert_not_contains "$out" "OMP_WATCH_EXTENSION" \
-    "a stale OMP process must not trigger retired extension diagnostics"
-  assert_not_contains "$out" ".omp/" \
-    "a stale OMP process must not receive retired generated artifact paths"
-  pass "session start treats a stale OMP primary as unknown without retired artifacts"
+    "an unknown runtime process must not be detected as a supported primary"
+  assert_contains "$out" "Mode: Unsupported runtime." \
+    "an unknown runtime process must receive only the conservative unknown protocol"
+  assert_not_contains "$out" "PI_WATCH_EXTENSION" \
+    "an unknown runtime process must not trigger Pi extension diagnostics"
+  assert_not_contains "$out" ".pi/extensions/" \
+    "an unknown runtime process must not receive Pi extension artifact paths"
+  pass "session start treats a unknown primary as unknown without Pi artifacts"
 }
 
 test_pi_diagnostic_rejects_missing_turnend_guard_marker() {
@@ -2631,21 +2563,18 @@ test_endpoint_liveness_tmux
 test_endpoint_liveness_herdr
 test_composition_invokes_real_scripts
 test_branch_outcome_replay_respects_captain_barrier_and_lease_sweep
-test_non_pi_session_start_leaves_branch_state_untouched
 test_backlog_compact_tasks_axi_omits_bodies_and_keeps_metadata
 test_backlog_queued_bound_discloses_its_remainder
 test_backlog_compact_manual_backend_skips_indented_bodies
 test_backlog_compact_tasks_axi_unavailable_uses_manual_fallback
 test_fleet_digest_empty_fleet
 test_next_step_sources_x_mode_cadence
-test_next_step_afk_delegates_to_daemon
-test_next_step_quiet_mode_delegates_to_daemon
-test_next_step_afk_legacy_empty_flag_defaults_away
+test_next_step_away_posture_keeps_pi_supervision
+test_next_step_quiet_posture_keeps_pi_supervision
 test_supervision_block_exactly_one_and_pi_diagnostic
-test_pi_signed_primary_uses_pi_extensions_without_identity_normalization
 test_pi_diagnostic_rejects_stale_loaded_marker
 test_pi_diagnostic_accepts_prelock_loaded_marker
-test_stale_omp_primary_is_not_detected_or_given_retired_artifacts
+test_unknown_primary_is_not_detected_as_pi
 test_pi_diagnostic_rejects_missing_turnend_guard_marker
 test_pi_diagnostic_rejects_previous_session_loaded_marker
 test_runtime_bound_truncates_loudly_and_exits_zero

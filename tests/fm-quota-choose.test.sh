@@ -25,8 +25,6 @@ SEMANTICS_MISMATCH="$LAB/semantics-mismatch.json"
 PARTIAL="$LAB/partial.json"
 NO_APPLICABLE="$LAB/no-applicable.json"
 APPLICABLE_VETO="$LAB/applicable-veto.json"
-PI_SIGNED_EXHAUSTED="$LAB/pi-signed-exhausted.json"
-PI_SIGNED_POSITIVE="$LAB/pi-signed-positive.json"
 TOON="$LAB/quota.toon"
 RENDERER_TOON="$LAB/renderer-quota.toon"
 EMPTY_TOON="$LAB/empty-quota.toon"
@@ -59,7 +57,7 @@ cat > "$FIXTURE" <<'JSON'
   "schemaVersion": 5,
   "providers": [
     {
-      "provider": "kimi",
+      "provider": "unused-provider",
       "windows": [],
       "quotaSemantics": {
         "status": "known",
@@ -164,7 +162,7 @@ if help=$("$BIN/fm-quota-choose.sh" --help 2>&1); then
   fail "help unexpectedly exited zero"
 fi
 printf '%s\n' "$help" | grep -Fq \
-  "candidate order and every candidate's provider is the harness's primary family." \
+  "candidate order and every candidate's provider is Pi's primary family." \
   || fail "help omitted the multi-provider usage restriction"
 if printf '%s\n' "$help" | grep -Fq 'set -u'; then
   fail "help leaked executable source"
@@ -172,17 +170,17 @@ fi
 ok "help renders the complete header only"
 
 # 1. First candidate with positive effective quota.
-out=$(call_choose --snapshot "$LAB/captured.json" --candidate opencode:model:codex_bengalfox --candidate pi:llama-4-scout)
+out=$(call_choose --snapshot "$LAB/captured.json" --candidate pi:fable --candidate pi:llama-4-scout)
 [ "$out" = "pi llama-4-scout" ] || fail "first positive: expected 'pi llama-4-scout', got '$out'"
 ok "first positive candidate wins"
 
 # 2. Exhausted provider is skipped.
-out=$(call_choose --snapshot "$LAB/captured.json" --candidate opencode:model:codex_bengalfox --candidate pi:llama-4-scout)
+out=$(call_choose --snapshot "$LAB/captured.json" --candidate pi:fable --candidate pi:llama-4-scout)
 [ "$out" = "pi llama-4-scout" ] || fail "exhausted skip: expected 'pi llama-4-scout', got '$out'"
 ok "exhausted provider is skipped"
 
 # 3. No candidates have positive quota.
-if out=$(call_choose --snapshot "$LAB/captured.json" --candidate opencode:model:codex_bengalfox 2>/dev/null); then
+if out=$(call_choose --snapshot "$LAB/captured.json" --candidate pi:fable 2>/dev/null); then
   fail "no positive: expected exit 1, got exit 0 with '$out'"
 fi
 [ "$out" = "none" ] || fail "no positive: expected 'none', got '$out'"
@@ -194,32 +192,20 @@ out=$(call_choose --snapshot "$LAB/captured.json" pi:llama-4-scout)
 ok "positional candidates work"
 
 # 5. A model-specific exhausted scope bounds a healthy all-models scope.
-if out=$(call_choose --snapshot "$LAB/captured.json" --candidate opencode:model:codex_bengalfox 2>/dev/null); then
+if out=$(call_choose --snapshot "$LAB/captured.json" --candidate pi:fable 2>/dev/null); then
   fail "specific scope: expected exit 1, got exit 0 with '$out'"
 fi
 [ "$out" = "none" ] || fail "specific scope: expected 'none', got '$out'"
 ok "specific model scope bounds generic quota"
 
-if err=$(call_choose --snapshot "$LAB/captured.json" --candidate omp:openai-codex/codex_other 2>&1); then
-  fail "retired omp candidate unexpectedly dispatched"
+if err=$(call_choose --snapshot "$LAB/captured.json" --candidate unsupported-runtime:default 2>&1); then
+  fail "unknown runtime unexpectedly dispatched"
 fi
-[ "$err" = "error: unknown harness: omp" ] || fail "retired omp candidate returned: $err"
-ok "retired omp candidate fails closed"
+[ "$err" = "error: unknown harness: unsupported-runtime" ] || fail "unknown runtime returned: $err"
+ok "unknown runtime fails closed"
 
-if err=$(call_choose --snapshot "$LAB/captured.json" --candidate muse:default 2>&1); then
-  fail "retired Muse candidate unexpectedly dispatched"
-fi
-[ "$err" = "error: unknown harness: muse" ] || fail "retired Muse candidate returned: $err"
-ok "retired Muse candidate fails closed"
-
-if err=$(call_choose --snapshot "$LAB/captured.json" --candidate kimi:kimi-coding/k2p5 2>&1); then
-  fail "retired Kimi candidate unexpectedly dispatched"
-fi
-[ "$err" = "error: unknown harness: kimi" ] || fail "retired Kimi candidate returned: $err"
-ok "retired Kimi candidate fails closed while Pi remains available"
-
-out=$(call_choose --snapshot "$LAB/captured.json" --candidate opencode:default)
-[ "$out" = "opencode default" ] || fail "default scope: expected provider-wide quota, got '$out'"
+out=$(call_choose --snapshot "$LAB/captured.json" --candidate pi:default)
+[ "$out" = "pi default" ] || fail "default scope: expected provider-wide quota, got '$out'"
 ok "default model uses provider-wide quota"
 
 out=$(call_choose --snapshot "$LAB/captured.json" --candidate pi:llama-4-scout)
@@ -232,15 +218,15 @@ fi
 [ "$err" = "error: unknown harness: bogus" ] || fail "unknown harness returned: $err"
 ok "unknown harness fails closed"
 
-if err=$(call_choose --snapshot "$LAB/captured.json" --candidate pi:default --candidate agy:default 2>&1); then
+if err=$(call_choose --snapshot "$LAB/captured.json" --candidate pi:default --candidate unsupported-runtime:default 2>&1); then
   fail "trailing unsupported harness was hidden by an earlier selection"
 fi
-[ "$err" = "error: unknown harness: agy" ] || fail "trailing unsupported harness returned: $err"
+[ "$err" = "error: unknown harness: unsupported-runtime" ] || fail "trailing unsupported harness returned: $err"
 
-if err=$(call_choose --snapshot "$LAB/captured.json" --candidate pi:default --candidate 'opencode:' 2>&1); then
+if err=$(call_choose --snapshot "$LAB/captured.json" --candidate pi:default --candidate 'pi:' 2>&1); then
   fail "trailing empty model was hidden by an earlier selection"
 fi
-[ "$err" = "error: invalid candidate: opencode:" ] || fail "trailing empty model returned: $err"
+[ "$err" = "error: invalid candidate: pi:" ] || fail "trailing empty model returned: $err"
 ok "all candidates are validated before selection"
 
 printf '{"schemaVersion":5,"providers":{"provider":"pi","quotaSemantics":{"effectiveAvailability":[{"scope":"all_models","status":"known","effectivePercentRemaining":50,"runway":{"status":"through_reset"}}]}}}\n' > "$MALFORMED"
@@ -301,15 +287,15 @@ out=$(call_choose --candidate pi:default < "$LAB/captured.json")
 [ "$out" = "pi default" ] || fail "stdin snapshot returned '$out'"
 ok "stdin snapshot is accepted"
 
-if err=$(call_choose --snapshot "$LAB/captured.json" --candidate 'opencode:' 2>&1); then
+if err=$(call_choose --snapshot "$LAB/captured.json" --candidate 'pi:' 2>&1); then
   fail "empty model candidate unexpectedly dispatched"
 fi
-[ "$err" = "error: invalid candidate: opencode:" ] || fail "empty model candidate returned: $err"
+[ "$err" = "error: invalid candidate: pi:" ] || fail "empty model candidate returned: $err"
 ok "empty model candidate fails closed"
 
 # A bare harness with no colon means the default model.
-out=$(call_choose --snapshot "$LAB/captured.json" --candidate opencode)
-[ "$out" = "opencode default" ] || fail "bare harness: expected 'opencode default', got '$out'"
+out=$(call_choose --snapshot "$LAB/captured.json" --candidate pi)
+[ "$out" = "pi default" ] || fail "bare harness: expected 'pi default', got '$out'"
 ok "bare harness maps to default model"
 
 cat > "$TOON" <<'TOON'
@@ -516,24 +502,10 @@ fi
 [ "$out" = "none" ] || fail "quoted exhausted model scope returned: $out"
 ok "quoted TOON scope vetoes dispatch"
 
-cp "$LAB/captured.json" "$PI_SIGNED_POSITIVE"
-out=$(call_choose --snapshot "$PI_SIGNED_POSITIVE" --candidate pi-signed:default)
-[ "$out" = "pi-signed default" ] || fail "supported Pi-signed candidate returned: $out"
-ok "Pi-signed candidate is accepted"
-
-jq '(.providers[] | select(.provider == "pi").quotaSemantics.effectiveAvailability[0].effectivePercentRemaining) = 0 |
-    (.providers[] | select(.provider == "pi").quotaSemantics.effectiveAvailability[0].runway.status) = "exhausted_now"' \
-  "$LAB/captured.json" > "$PI_SIGNED_EXHAUSTED"
-if out=$(call_choose --snapshot "$PI_SIGNED_EXHAUSTED" --candidate pi-signed:default 2>/dev/null); then
-  fail "Pi-signed candidate dispatched with exhausted Pi quota"
-fi
-[ "$out" = "none" ] || fail "exhausted Pi quota returned: $out"
-ok "Pi-signed honors Pi quota"
-
-if err=$(call_choose --snapshot "$LAB/captured.json" --candidate agy:default 2>&1); then
+if err=$(call_choose --snapshot "$LAB/captured.json" --candidate unsupported-runtime:default 2>&1); then
   fail "unsupported harness unexpectedly dispatched"
 fi
-[ "$err" = "error: unknown harness: agy" ] || fail "unsupported harness returned: $err"
+[ "$err" = "error: unknown harness: unsupported-runtime" ] || fail "unsupported harness returned: $err"
 ok "unsupported harness is rejected"
 
 jq '.providers += [.providers[] | select(.provider == "pi")]' "$LAB/captured.json" > "$DUPLICATE"

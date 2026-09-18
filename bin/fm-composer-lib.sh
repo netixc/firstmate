@@ -1,32 +1,22 @@
 #!/usr/bin/env bash
 # bin/fm-composer-lib.sh - the ONE fleet-wide owner of composer classification:
-# every shape a verified harness draws, every glyph, every container proof, and
+# every shape Pi draws, every glyph, every container proof, and
 # the empty|pending|pending-unproven|unknown verdict, shared by every
-# session-provider adapter (tmux via bin/fm-tmux-lib.sh, and
-# bin/backends/{herdr,orca,cmux,zellij}.sh).
+# session-provider adapter (tmux via bin/fm-tmux-lib.sh and Herdr).
 #
-# WHY THIS EXISTS (tasks fm-composer-shellglyph-safety and
-# fm-composer-thin-adapter-refactor-r1): the adapters each carried their own
-# copy of composer shape knowledge, and every copy drifted. The audited result
-# (data/fm-composer-consolidation-audit-s1) was a 5-adapter x 6-harness matrix
-# in which no adapter was right about more than five harnesses, no two adapters
-# were wrong in the same places, and one harness was unreadable everywhere.
-# The consolidation rule that prevents a recurrence: an adapter CAPTURES a
-# screen and DESCRIBES its capabilities; it never classifies. A new harness
-# shape is taught to fm_composer_classify_screen below, once, and every backend
-# that can capture a screen learns it in the same commit.
+# WHY THIS EXISTS: tmux and Herdr must not carry separate copies of Pi composer
+# knowledge that can drift. An adapter CAPTURES a screen and DESCRIBES its
+# capabilities; it never classifies. A new Pi shape is taught to
+# fm_composer_classify_screen below once, and both backends learn it together.
 #
 # THE CAPABILITY MODEL: adapters differ in what their capture primitive can
 # see, and those differences enter here as DATA (the <caps> argument), never as
 # adapter code. Capability differences change how CONFIDENTLY a shape can be
 # judged; they never change what the shapes ARE:
 #   styled=1    the capture preserves ANSI styling, so ghost/placeholder text
-#               is detectable and can be stripped (tmux -e, herdr --format
-#               ansi, zellij dump-screen --ansi). With styled=0 (cmux, orca)
-#               ghost text is unreadable, so a left-bar row carrying trailing
-#               non-idle text degrades to `unknown` rather than `pending`: the
-#               text may be the harness's own idle suggestion, and a false
-#               `pending` blocks every safe caller.
+#               is detectable and can be stripped (tmux -e and Herdr's ANSI
+#               format). With styled=0, ghost text is unreadable and ambiguous
+#               content degrades to `unknown` rather than `pending`.
 #   cursor=1    a cursor row is supplied (tmux #{cursor_y} only). The cursor
 #               anchors shape selection: the shape containing the cursor is the
 #               composer. Without it, the bottom-most shape wins.
@@ -45,14 +35,10 @@
 # escalations into whatever it calls empty. Positive container proof means one
 # of the shapes in the catalogue below.
 #
-# THE SHAPE CATALOGUE (all verified against real harnesses; byte-level
-# captures in data/fm-composer-consolidation-audit-s1/report.md and
-# docs/verification/runtime-backends.md):
+# THE SHAPE CATALOGUE (verified against plain Pi; byte-level captures are
+# recorded in docs/verification/runtime-backends.md):
 #   bordered   - a complete boxed composer: a top border, side-bordered content
 #                rows of the same family, and a matching bottom border.
-#   left-bar   - opencode: rows prefixed by a heavy left bar `┃` with no
-#                closing border, holding the idle hint, blank rows, and a
-#                mode/model footer line.
 #   separated  - pi: content rows between two solid horizontal `─` rules, no
 #                glyph and no side border. Provable only with a live agent
 #                identity reporting an idle/done pi (herdr `agent
@@ -75,12 +61,12 @@
 #
 # UNICODE WHITESPACE (issue #1988; open PRs #1995/#2047 target the same
 # defect and #1995's naming is adopted here so the implementations converge):
-# a harness may separate its prompt glyph from composer content with a
-# non-ASCII space. A verified harness may draw its empty composer as a prompt
+# Pi may separate its prompt glyph from composer content with a non-ASCII
+# space and may draw its empty composer as a prompt
 # glyph followed by U+00A0 NO-BREAK SPACE. POSIX `[[:space:]]` includes U+00A0 only
 # under some locales, so every trim used to be locale-dependent: the same live
-# pane read `empty` under a UTF-8 shell and `pending` under LC_ALL=C (a
-# daemon, launchd, or ssh context), deferring every away-mode escalation.
+# pane read `empty` under a UTF-8 shell and `pending` under LC_ALL=C (for
+# example under launchd or ssh), changing submit classification.
 # fm_composer_normalize_trim_var is the one fix: it maps every code point
 # Unicode gives the property White_Space=Yes outside ASCII onto a plain ASCII
 # space before any trim or comparison, byte-exactly, so the verdict cannot
@@ -221,22 +207,16 @@ fm_composer_strip_ghost() {
 # These live here, in the ONE shared composer/delivery owner, rather than in any
 # single backend adapter, because every backend needs them for the SAME job:
 # proving a submitted Enter actually landed. Keeping them in bin/fm-tmux-lib.sh
-# made harness signatures reachable only from tmux, even though herdr, zellij,
-# cmux, and orca run the same harnesses and face the same acknowledgement
-# problem.
+# made harness signatures reachable only from tmux, even though Herdr runs the
+# same harness and faces the same acknowledgement problem.
 #
 # This is a DELIVERY guard, deliberately NOT a worker-state source. The semantic
 # busy contract - what firstmate records and supervises on - is owned by
 # bin/fm-busy-lib.sh, which forbids classifying a harness from rendered text.
 # Matching a footer to confirm a keystroke landed is a different question from
 # asking what a worker is doing, and the two must not be conflated.
-# Delivery-only rendered busy footers per harness. OpenCode uses
-# "esc interrupt" and Pi uses "Working...".
-# The harness-less default is the UNION of the per-harness tokens below, used
-# when a caller has no recorded harness for the pane (the submit cores read the
-# baseline and the post-Enter transition this way).
-FM_DELIVERY_BUSY_REGEX_DEFAULT='esc interrupt|Working\.\.\.'
-FM_DELIVERY_OPENCODE_BUSY_REGEX_DEFAULT='esc interrupt'
+# Delivery-only rendered busy footer for Pi.
+FM_DELIVERY_BUSY_REGEX_DEFAULT='Working\.\.\.'
 FM_DELIVERY_PI_BUSY_REGEX_DEFAULT='Working\.\.\.'
 
 fm_busy_lines_match() {  # [harness]
@@ -246,11 +226,10 @@ fm_busy_lines_match() {  # [harness]
     regex=$FM_BUSY_REGEX
   else
     case "$harness" in
-      opencode) regex=$FM_DELIVERY_OPENCODE_BUSY_REGEX_DEFAULT ;;
-      pi|pi-signed) regex=$FM_DELIVERY_PI_BUSY_REGEX_DEFAULT ;;
+      pi) regex=$FM_DELIVERY_PI_BUSY_REGEX_DEFAULT ;;
       '') regex=$FM_DELIVERY_BUSY_REGEX_DEFAULT ;;
       *)
-        # A supplied harness must never borrow another harness's signature.
+        # An unsupported runtime must never borrow Pi's signature.
         # Register its verified signature explicitly before classifying it busy.
         regex=
         ;;
@@ -267,15 +246,8 @@ FM_COMPOSER_SHELL_PROMPT_GLYPHS=$(printf '%s\n' '>' '$' '%' '#' '❯')
 
 # The ONE fleet-wide idle-placeholder set: composer text a harness renders in
 # an EMPTY composer that a plain capture cannot tell from typed text.
-# OpenCode's left-bar hint continues with a rotating quoted suggestion, hence
-# the unanchored tail. FM_COMPOSER_IDLE_RE overrides
-# for an unverified harness; matching is case-insensitive.
+# Idle-placeholder matching is overridable for a future verified Pi shape.
 FM_COMPOSER_IDLE_RE_DEFAULT='^Type a message\.\.\.$|^Ask anything\.\.\.'
-
-# Opencode draws a mode/model footer line INSIDE its left-bar composer
-# ("Build · GPT-5.5 Fast OpenAI · high"). It is composer furniture, not typed
-# text, and only the run's LAST row is ever matched against it.
-FM_COMPOSER_LEFTBAR_FOOTER_RE_DEFAULT='^(Build|Plan)[[:space:]]+·[[:space:]]+'
 # The bounded row window adapters should capture for a composer read. One
 # shared policy (previously three per-backend variables that had drifted to
 # 20/20/200): the composer is bottom-anchored, so a small tail window is
@@ -433,14 +405,12 @@ _fm_composer_scan_screen() {  # <plain-screen> <cursor-or-empty> [extract-wrap]
   FM_COMPOSER_SCAN_UNSAFE=0
   FM_COMPOSER_SCAN_CURSOR_EDGE=0
   FM_COMPOSER_SCAN_SHELL_ROW=-1
-  FM_COMPOSER_SCAN_LEFTBAR_START=-1
-  FM_COMPOSER_SCAN_LEFTBAR_END=-1
   FM_COMPOSER_SCAN_PI_PAIR_FOUND=0
   FM_COMPOSER_SCAN_PI_PAIR_VALID=0
   FM_COMPOSER_SCAN_PI_OPEN=-1
   FM_COMPOSER_SCAN_PI_CLOSE=-1
   FM_COMPOSER_SCAN_PI_LAST_SEPARATOR=-1
-  local leftbar_start=-1 pi_open=-1 pi_lines=0 pi_max
+  local pi_open=-1 pi_lines=0 pi_max
   pi_max=$FM_COMPOSER_PI_MAX_LINES
   case "$pi_max" in ''|*[!0-9]*|0) pi_max=8 ;; esac
   while IFS= read -r line; do
@@ -481,17 +451,6 @@ _fm_composer_scan_screen() {  # <plain-screen> <cursor-or-empty> [extract-wrap]
     elif [ "$pi_open" -ge 0 ]; then
       pi_lines=$((pi_lines + 1))
     fi
-    # Left-bar rows (opencode): a heavy left bar `┃` opening the row with no
-    # closing side border. A `┃…┃` row is a bordered box row, not a left bar.
-    case "$trimmed" in
-      '┃'*'┃') leftbar_start=-1 ;;
-      '┃'*)
-        if [ "$leftbar_start" -lt 0 ]; then leftbar_start=$row; fi
-        FM_COMPOSER_SCAN_LEFTBAR_START=$leftbar_start
-        FM_COMPOSER_SCAN_LEFTBAR_END=$row
-        ;;
-      *) leftbar_start=-1 ;;
-    esac
     # Bare prompt glyphs are not composer candidates (dead-shell rule). Keep
     # lower shell prompts as staleness evidence for cursorless selection.
     if [ "$top" -lt 0 ] && fm_composer_leading_shell_glyph_var glyph "$trimmed"; then
@@ -730,56 +689,6 @@ _fm_composer_classify_rows() {  # <screen> <styled> <ambiguous> <first-row> <las
   fi
 }
 
-# _fm_composer_classify_leftbar: opencode's left-bar composer. Blank rows and
-# the idle hint read empty; the run's LAST row may be the mode/model footer
-# (composer furniture, never typed text). Real content is pending when styling
-# can prove it real, unknown otherwise.
-_fm_composer_classify_leftbar() {  # <screen> <styled> <first-row> <last-row>
-  local screen=$1 styled=$2 first=$3 last=$4
-  local row raw content pending_seen=0 footer_re leading_blank=1 placeholder_position=0
-  footer_re=${FM_COMPOSER_LEFTBAR_FOOTER_RE:-$FM_COMPOSER_LEFTBAR_FOOTER_RE_DEFAULT}
-  row=$first
-  while [ "$row" -le "$last" ]; do
-    raw=$(_fm_composer_screen_row "$row" "$screen")
-    content=$(_fm_composer_row_content "$raw" "$styled")
-    case "$content" in
-      '┃'*) content=${content#┃} ;;
-    esac
-    fm_composer_normalize_trim_var content
-    if [ -z "$content" ]; then row=$((row + 1)); continue; fi
-    if [ "$leading_blank" = 1 ] && [ "$row" -gt "$first" ]; then
-      placeholder_position=1
-    else
-      placeholder_position=0
-    fi
-    leading_blank=0
-    if [ "$placeholder_position" = 1 ] \
-       && fm_composer_idle_matches "$content" "${FM_COMPOSER_IDLE_RE:-$FM_COMPOSER_IDLE_RE_DEFAULT}" insensitive; then
-      row=$((row + 1)); continue
-    fi
-    if [ "$row" -eq "$last" ] \
-       && fm_composer_idle_matches "$content" "$footer_re" sensitive; then
-      row=$((row + 1)); continue
-    fi
-    pending_seen=1
-    row=$((row + 1))
-  done
-  if [ "$pending_seen" = 1 ]; then
-    if [ "$styled" = 1 ]; then printf 'pending'; else printf 'unknown'; fi
-  else
-    printf 'empty'
-  fi
-}
-
-_fm_composer_leftbar_floor_row() {  # <trimmed-row>
-  local row=$1 blocks
-  case "$row" in
-    '╹▀'*) blocks=${row#╹} ;;
-    *) return 1 ;;
-  esac
-  [ -z "${blocks//▀/}" ]
-}
-
 _fm_composer_select_cursorless() {
   local plain=$1 generic=-1 next boundary raw trimmed
   FM_COMPOSER_SELECTED_KIND=
@@ -792,12 +701,6 @@ _fm_composer_select_cursorless() {
     FM_COMPOSER_SELECTED_FIRST=$((FM_COMPOSER_SCAN_BOX_TOP + 1))
     FM_COMPOSER_SELECTED_LAST=$((FM_COMPOSER_SCAN_BOX_BOTTOM - 1))
     FM_COMPOSER_SELECTED_AMBIG=$FM_COMPOSER_SCAN_BOX_AMBIG
-  fi
-  if [ "$FM_COMPOSER_SCAN_LEFTBAR_END" -gt "$generic" ]; then
-    generic=$FM_COMPOSER_SCAN_LEFTBAR_END
-    FM_COMPOSER_SELECTED_KIND=leftbar
-    FM_COMPOSER_SELECTED_FIRST=$FM_COMPOSER_SCAN_LEFTBAR_START
-    FM_COMPOSER_SELECTED_LAST=$FM_COMPOSER_SCAN_LEFTBAR_END
   fi
   if [ "$FM_COMPOSER_SCAN_INCOMPLETE_BOX_FROM" -gt "$generic" ]; then
     FM_COMPOSER_SELECTED_KIND=
@@ -820,20 +723,8 @@ _fm_composer_select_cursorless() {
     FM_COMPOSER_SELECTED_KIND=
     return 1
   fi
-  if [ "$FM_COMPOSER_SELECTED_KIND" = box ] \
-     || [ "$FM_COMPOSER_SELECTED_KIND" = leftbar ]; then
-    boundary=$FM_COMPOSER_SELECTED_LAST
-    if [ "$FM_COMPOSER_SELECTED_KIND" = box ]; then
-      boundary=$FM_COMPOSER_SCAN_BOX_BOTTOM
-    else
-      next=$((boundary + 1))
-      raw=$(_fm_composer_screen_row "$next" "$plain")
-      trimmed=$raw
-      fm_composer_normalize_trim_var trimmed
-      if _fm_composer_leftbar_floor_row "$trimmed"; then
-        boundary=$next
-      fi
-    fi
+  if [ "$FM_COMPOSER_SELECTED_KIND" = box ]; then
+    boundary=$FM_COMPOSER_SCAN_BOX_BOTTOM
     next=$((boundary + 1))
     raw=$(_fm_composer_screen_row "$next" "$plain")
     trimmed=$raw
@@ -847,9 +738,8 @@ _fm_composer_select_cursorless() {
 }
 
 fm_composer_extract_selected_content() {  # <caps> <screen>
-  local caps=$1 screen=$2 styled=0 kv plain row raw content glyph joined='' footer_re prompt_row=-1
-  local leading_blank=1 placeholder_position=0 prompt_is_shell=0
-  footer_re=${FM_COMPOSER_LEFTBAR_FOOTER_RE:-$FM_COMPOSER_LEFTBAR_FOOTER_RE_DEFAULT}
+  local caps=$1 screen=$2 styled=0 kv plain row raw content glyph joined='' prompt_row=-1
+  local placeholder_position=0 prompt_is_shell=0
   while IFS= read -r kv; do
     [ "$kv" = styled=1 ] && styled=1
   done <<EOF
@@ -864,18 +754,6 @@ EOF
     content=$(_fm_composer_row_content "$raw" "$styled")
     placeholder_position=0
     case "$FM_COMPOSER_SELECTED_KIND" in
-      leftbar)
-        case "$content" in '┃'*) content=${content#┃} ;; esac
-        fm_composer_normalize_trim_var content
-        if [ -z "$content" ]; then
-          :
-        elif [ "$leading_blank" = 1 ] && [ "$row" -gt "$FM_COMPOSER_SELECTED_FIRST" ]; then
-          placeholder_position=1
-          leading_blank=0
-        else
-          leading_blank=0
-        fi
-        ;;
       box)
         if [ "$prompt_row" -lt 0 ] \
            && fm_composer_leading_prompt_glyph_var glyph "$content"; then
@@ -895,18 +773,13 @@ EOF
     # A styled agent-glyph placeholder disappears above when ghost stripping
     # proves it is furniture. If the same placeholder-looking bytes survive
     # styling, they are real user input and must remain in the extracted content
-    # (the zellij paste proof depends on observing exactly what was typed).
-    # OpenCode's left-bar hint and legacy shell-glyph boxed placeholders have no
-    # such styling proof, so their structurally fixed positions remain the two
-    # idle-regex exceptions here.
+    # when observing exactly what was typed. Shell-glyph boxed placeholders
+    # have no such styling proof, so their structurally fixed position remains
+    # the idle-regex exception here.
     if [ -z "$content" ] \
-       || { { [ "$FM_COMPOSER_SELECTED_KIND" = leftbar ] \
-              || { [ "$FM_COMPOSER_SELECTED_KIND" = box ] && [ "$prompt_is_shell" = 1 ]; }; } \
+       || { [ "$FM_COMPOSER_SELECTED_KIND" = box ] && [ "$prompt_is_shell" = 1 ] \
             && [ "$placeholder_position" = 1 ] \
-            && fm_composer_idle_matches "$content" "${FM_COMPOSER_IDLE_RE:-$FM_COMPOSER_IDLE_RE_DEFAULT}" insensitive; } \
-       || { [ "$FM_COMPOSER_SELECTED_KIND" = leftbar ] \
-            && [ "$row" -eq "$FM_COMPOSER_SELECTED_LAST" ] \
-            && fm_composer_idle_matches "$content" "$footer_re" sensitive; }; then
+            && fm_composer_idle_matches "$content" "${FM_COMPOSER_IDLE_RE:-$FM_COMPOSER_IDLE_RE_DEFAULT}" insensitive; }; then
       row=$((row + 1))
       continue
     fi
@@ -946,13 +819,6 @@ EOF
         "$((FM_COMPOSER_SCAN_BOX_TOP + 1))" "$((FM_COMPOSER_SCAN_BOX_BOTTOM - 1))"
       return 0
     fi
-    if [ "$FM_COMPOSER_SCAN_LEFTBAR_START" -ge 0 ] \
-       && [ "$cy" -ge "$FM_COMPOSER_SCAN_LEFTBAR_START" ] \
-       && [ "$cy" -le "$FM_COMPOSER_SCAN_LEFTBAR_END" ]; then
-      _fm_composer_classify_leftbar "$screen" "$styled" \
-        "$FM_COMPOSER_SCAN_LEFTBAR_START" "$FM_COMPOSER_SCAN_LEFTBAR_END"
-      return 0
-    fi
     if [ "$FM_COMPOSER_SCAN_PI_PAIR_FOUND" = 1 ] \
        && [ "$cy" -gt "$FM_COMPOSER_SCAN_PI_OPEN" ] \
        && [ "$cy" -lt "$FM_COMPOSER_SCAN_PI_CLOSE" ]; then
@@ -983,37 +849,7 @@ EOF
       _fm_composer_classify_rows "$screen" "$styled" "$FM_COMPOSER_SELECTED_AMBIG" \
         "$FM_COMPOSER_SELECTED_FIRST" "$FM_COMPOSER_SELECTED_LAST"
       ;;
-    leftbar)
-      _fm_composer_classify_leftbar "$screen" "$styled" \
-        "$FM_COMPOSER_SELECTED_FIRST" "$FM_COMPOSER_SELECTED_LAST"
-      ;;
   esac
-}
-
-# fm_composer_submit_retry_core: the ONE verify-and-retry-Enter submit loop
-# for the cursor-less backends (cmux, orca, zellij), parameterised by the
-# adapter's send-key and composer-state functions. The caller has already
-# typed the text ONCE (send_literal) and settled; this loop submits with
-# Enter, re-reading the composer verdict, and retries Enter ONLY - never
-# retypes, because a swallowed Enter leaves the text in the composer and
-# retyping would duplicate it. Proven pending (and pending-unproven) retries
-# consume the budget; any other verdict returns immediately, so `unknown`
-# stays a loud refusal rather than a blind retry into an unreadable pane.
-# tmux and herdr keep richer cores that consume this same shared verdict plus
-# fm_composer_queued_enter_verdict; no shape knowledge lives in any loop.
-fm_composer_submit_retry_core() {  # <send-key-fn> <state-fn> <target> <retries> <enter-sleep> [expected-label]
-  local send_key_fn=$1 state_fn=$2 target=$3 retries=$4 sleep_s=$5 expected_label=${6:-} i=0 state
-  while :; do
-    "$send_key_fn" "$target" Enter "$expected_label" || true
-    sleep "$sleep_s"
-    state=$("$state_fn" "$target" "$expected_label")
-    case "$state" in
-      pending|pending-unproven) ;;
-      *) printf '%s' "$state"; return 0 ;;
-    esac
-    i=$((i + 1))
-    [ "$i" -lt "$retries" ] || { printf '%s' "$state"; return 0; }
-  done
 }
 
 # fm_composer_queued_enter_verdict: the ONE busy-queued-Enter policy.

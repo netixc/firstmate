@@ -14,13 +14,12 @@
 # records, never from conversation memory: the archived away-posture record
 # (bin/fm-afk-contract.sh), the supervision outcome store
 # (bin/fm-branch-outcome.sh), the held set in the backlog (tasks-axi), and the
-# status logs. Its order is fixed: supervisor health across the away window
+# status logs. Its order is fixed: Pi supervision health across the away window
 # first, then every mandate clause the captain recorded, including superseded
 # in-session read-backs (this release records clauses and does not execute them,
 # and the brief says so), then what is
 # waiting on the captain, then what was tried and failed or could not be fixed,
-# then what the away session handled, then cost. The health snapshot is taken
-# BEFORE the daemon shutdown so the shutdown itself cannot read as a gap.
+# then what the away session handled, then cost.
 #
 # THE GATE. `blocked:` is the crewmate protocol's firstmate-actionable verb. A
 # live task's open blocked event must be remediated and closed with
@@ -35,10 +34,10 @@
 # that phase as well. Replacement records carry the original entry boundary and
 # superseded mandates are included as the phase-1 fail-safe.
 #
-# The durable state/.afk-return-catchup file is written BEFORE daemon shutdown,
-# so a crash between stopping, wake presentation, and blocker handling fails
-# closed. It retains the presented wake, buffered-escalation, wedge-marker,
-# health, and posture-record evidence until every live open blocker is closed
+# The durable state/.afk-return-catchup file is written before posture archival,
+# so a crash between archival, wake presentation, and blocker handling stops
+# safely. It retains the presented wake, health, and posture-record evidence
+# until every live open blocker is closed
 # and `check` succeeds. Repeated begin/check calls are idempotent. `guard` and
 # `catchup-summary` never mutate state and are suitable for ordinary read
 # entrypoints such as fm-bearings-snapshot.sh. `guard` separates its two
@@ -120,9 +119,9 @@ remove_superseded_record() {  # <path> <file>
   mv "$pending" "$file"
 }
 
-# The epoch the away window started at, from the gate's retained contract row,
-# else from the live record (before it is archived), else from the legacy away
-# flag's own timestamp, else unknown (empty).
+# The epoch the posture window started at, from the gate's retained contract
+# row, else from the live away record, else from the quiet marker's timestamp,
+# else unknown (empty).
 gate_contract_epoch() {
   awk -F '\t' '$1 == "contract" { print $2; exit }' "$GATE" 2>/dev/null || true
 }
@@ -246,13 +245,6 @@ print_blockers() {  # <file>
   done < "$file"
 }
 
-clear_delivery_artifacts() {
-  rm -f \
-    "$STATE/.subsuper-escalations" \
-    "$STATE/.subsuper-escalations.since" \
-    "$STATE/.subsuper-inject-wedged"
-}
-
 # The lifecycle retention reasons the gate kept, one per line, empty when the
 # gate was retained for open blockers alone.
 gate_retention_reasons() {  # <file>
@@ -328,17 +320,9 @@ health_snapshot() {  # <evidence-file>
       lines="GAP: watcher downtime was detected during the away window (recovery marker present)"
     fi
   fi
-  if [ -e "$STATE/.afk" ] && ! fm_afk_daemon_owns_supervision "$STATE"; then
-    lines="$lines
-GAP: the away daemon was not running at return (the away flag stood with no live daemon)"
-  fi
   if [ "$beat_age" -ge "$RETURN_GRACE" ]; then
     lines="$lines
 GAP: the watcher beat was ${beat_age}s old at return (grace ${RETURN_GRACE}s)"
-  fi
-  if [ -s "$STATE/.subsuper-inject-wedged" ]; then
-    lines="$lines
-delivery wedged: $(head -1 "$STATE/.subsuper-inject-wedged" 2>/dev/null || true)"
   fi
   if [ -z "$(printf '%s' "$lines" | tr -d '[:space:]')" ]; then
     lines="supervision ran through the away window with no detected gap (watcher beat ${beat_age}s old at return)"
@@ -441,7 +425,7 @@ render_return_brief() {  # <evidence-file> <blockers-file> <since-epoch>
     render_mandate_record "$record"
     [ "$MANDATE_COUNT" -gt 0 ] || printf '  (none recorded)\n'
   else
-    printf '  (no away-posture record for this window; legacy away flag only)\n'
+    printf '  (quiet posture; no away-posture record for this window)\n'
   fi
 
   # 3. waiting on the captain.
@@ -524,7 +508,7 @@ EOF
 }
 
 return_reconcile() {
-  local evidence blockers drain_err drained wake_ack_line wake_ack_through wake_ack_generation wedge escalations lifecycle_ok=1 since contract_since superseded_record retained_record
+  local evidence blockers drain_err drained wake_ack_line wake_ack_through wake_ack_generation lifecycle_ok=1 since contract_since superseded_record retained_record
   local archived_contract tag kind text retained_live restored_epoch
   evidence=$(mktemp "$STATE/.afk-return-evidence.XXXXXX") || return 1
   blockers=$(mktemp "$STATE/.afk-return-blockers.XXXXXX") || { rm -f "$evidence"; return 1; }
@@ -575,7 +559,7 @@ return_reconcile() {
 $(cat "$evidence")
 EOF
 
-  if [ -e "$STATE/.afk" ] || [ -e "$STATE/.afk-daemon-terminal" ] || fm_afk_contract_present "$STATE"; then
+  if [ -e "$STATE/.afk" ] || fm_afk_contract_present "$STATE"; then
     if ! "$SCRIPT_DIR/fm-afk-launch.sh" stop; then
       lifecycle_ok=0
       append_evidence lifecycle 'away-mode shutdown failed; lifecycle state preserved for retry' "$evidence"
@@ -647,15 +631,6 @@ EOF
     done
   fi
 
-  if [ -s "$STATE/.subsuper-inject-wedged" ]; then
-    wedge=$(head -1 "$STATE/.subsuper-inject-wedged" 2>/dev/null || true)
-    append_evidence wedge "$wedge" "$evidence"
-  fi
-  if [ -s "$STATE/.subsuper-escalations" ]; then
-    escalations=$(cat "$STATE/.subsuper-escalations" 2>/dev/null || true)
-    append_evidence escalation "$escalations" "$evidence"
-  fi
-
   if store_rows_load "$since"; then
     remove_evidence lifecycle 'outcome store unreadable, catch-up stays gated' "$evidence" || lifecycle_ok=0
   else
@@ -701,7 +676,6 @@ EOF
   fi
 
   rm -f "$GATE"
-  clear_delivery_artifacts
   rm -f "$evidence" "$blockers" "$drain_err"
   printf 'fm-afk-return: catch-up clear; ordinary captain work may proceed\n'
   return 0

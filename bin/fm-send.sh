@@ -8,8 +8,7 @@
 #   tmux window search, because a "successful" send to the wrong endpoint is
 #   worse than a loud failure.
 # Special keys instead of text: fm-send.sh <target> --key Enter
-# Key support is backend-specific: tmux/herdr support Escape, Enter, and C-c;
-# Orca currently supports Enter and C-c only, and rejects Escape.
+# The tmux and Herdr backends support Escape, Enter, and C-c.
 #
 # Two data planes:
 #
@@ -69,8 +68,8 @@
 # pending-reply expectation stays armed because this outcome is not a proven
 # failure); any other nonzero = the send failed and nothing may be assumed
 # delivered. Submission dispatches through the target's recorded backend; the
-# tmux adapter shares its composer/submit core with the away-mode daemon via
-# bin/fm-tmux-lib.sh. Tune with FM_SEND_RETRIES (default 3) / FM_SEND_SLEEP
+# tmux adapter owns that composer/submit core in bin/fm-tmux-lib.sh. Tune with
+# FM_SEND_RETRIES (default 3) / FM_SEND_SLEEP
 # (0.4). Slash
 # commands get a longer pre-Enter settle so completion popups do not swallow
 # Enter.
@@ -196,11 +195,10 @@
 #
 # After a successful TYPED-plane submit fm-send pauses FM_SEND_SETTLE seconds
 # (default 1, 0 disables) before returning: submit confirmation only proves the
-# text was accepted, but the harness needs a beat to spin up the turn before its
+# text was accepted, but Pi needs a beat to spin up the turn before its
 # busy footer appears, so an immediate peek would otherwise see the stale idle
-# pane. The pause is typed-plane-only; the inbox plane, the shared submit core
-# (used by the away-mode daemon, which only needs "submitted"), and the --key
-# path do not pay it.
+# pane. The pause is typed-plane-only; the inbox plane and --key path do not
+# pay it.
 set -eu
 
 FM_SEND_ORIGINAL_ARGS=("$@")
@@ -658,9 +656,8 @@ fm_send_feed_resolved_holds() {  # <answer-text>
 # matching an explicit target
 # back to recorded meta, or from strict explicit-target shape validation.
 # Do not add a separate passive liveness preflight here. Active send paths own
-# backend readiness: herdr, for example, must route through its session-aware
-# target_ready path before sending, while zellij verifies pane labels in its
-# send implementation. A failed backend send is still surfaced below as a hard
+# backend readiness: Herdr must route through its session-aware target_ready
+# path before sending. A failed backend send is still surfaced below as a hard
 # error with the attempted resolution attached.
 
 if [ "${1:-}" = "--key" ]; then

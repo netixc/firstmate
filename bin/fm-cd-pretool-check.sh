@@ -15,7 +15,7 @@
 # Usage:
 #   bin/fm-cd-pretool-check.sh --command '<cmd>'
 #
-# OpenCode and Pi adapters extract and pass the exact command string.
+# The Pi adapter extracts and passes the exact command string.
 #
 # Exit/output contract (identical shape to bin/fm-arm-pretool-check.sh):
 #   ALLOW - exit 0 and no output.
@@ -24,7 +24,7 @@
 #           non-firstmate repo): exit 0 with no output, exactly like ALLOW.
 #   FAIL OPEN - missing Node or policy owner, or an invalid policy response.
 #
-# OpenCode and Pi consume exit 2 plus stderr.
+# Pi consumes exit 2 plus stderr.
 set -u
 
 CMD=""

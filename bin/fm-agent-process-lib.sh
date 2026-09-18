@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Backend-neutral harness-process identity.
+# Backend-neutral Pi process identity.
 # Sourced by bin/backends/tmux.sh and bin/backends/herdr.sh. This file is
 # sourced by scripts and has no side effects on source.
 #
 # Why one owner: every runtime backend that proves an agent is alive does it by
 # attributing operating-system processes - the pane's foreground process group
 # on tmux, Herdr's `pane process-info` view plus the pane shell's descendants
-# on Herdr - and the two must agree on what a given process name means, or a
-# harness one backend recognizes silently reads as a dead pane on the other.
+# on Herdr - and the two must agree on what exact Pi identity means, or Pi can
+# read as a dead pane on one backend.
 # The classifier moved here verbatim from the tmux adapter, where it was born;
 # docs/tmux-backend.md "Agent liveness probe" owns the empirical basis for the
 # names below, and tests/fm-tmux-agent-liveness.test.sh plus
@@ -16,7 +16,7 @@
 # shellcheck source=bin/fm-session-lock-lib.sh
 . "$(dirname -- "${BASH_SOURCE[0]}")/fm-session-lock-lib.sh"
 # fm_agent_process_classify_name: the single owner of the process-name
-# vocabulary shared by every liveness signal - `agent` for a verified harness,
+# vocabulary shared by every liveness signal - `agent` for exact Pi identity,
 # `shell` for an idle login/interactive shell, `other` for anything else.
 # Keeping one classifier means independent name sources (a kernel process
 # name, an argv[0], a rendered pane title) can never drift into disagreeing
@@ -26,7 +26,7 @@ fm_agent_process_classify_name() {  # <path> [argv0] -> agent|shell|other
   base=${path##*/}
   base=${base#-}
   case "$base" in
-    *opencode*|pi|pi-signed|pi-launcher|Pi) printf 'agent' ;;
+    pi) printf 'agent' ;;
     zsh|bash|sh|dash|ash|ksh|mksh|tcsh|csh|fish) printf 'shell' ;;
     *)
       if fm_harness_path_name "$path" >/dev/null || fm_harness_path_name "$argv0" >/dev/null; then
@@ -39,8 +39,8 @@ fm_agent_process_classify_name() {  # <path> [argv0] -> agent|shell|other
 }
 
 # fm_agent_process_classify: one process, from every identity surface a
-# backend can hand over, as agent|shell|other. Any single surface naming a
-# verified harness carries `agent`, because a false negative is the one outcome
+# backend can hand over, as agent|shell|other. Any single surface naming an
+# exact Pi executable carries `agent`, because a false negative is the one outcome
 # that launches a duplicate agent onto a live worktree; `shell` needs every
 # readable surface to agree the process is a shell; anything else is `other`.
 #
@@ -55,8 +55,8 @@ fm_agent_process_classify() {  # <name> <argv0> <args> [pid] -> agent|shell|othe
   by_name=$(fm_agent_process_classify_name "$name" "$argv0")
   [ "$by_name" != agent ] || { printf 'agent'; return 0; }
   if [ -n "$argv0" ]; then
-    # argv[0] is classified as a path in its own right, so a bare `pi` or a
-    # `-zsh` login name reads by basename and an install path by component.
+    # argv[0] is classified as a path in its own right, so only its exact
+    # executable basename can identify `pi` (or a login shell such as `-zsh`).
     by_argv0=$(fm_agent_process_classify_name "$argv0" "$argv0")
     [ "$by_argv0" != agent ] || { printf 'agent'; return 0; }
   else

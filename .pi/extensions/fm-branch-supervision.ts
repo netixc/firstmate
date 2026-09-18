@@ -16,12 +16,11 @@
 // presentUnprocessedOutcomes).
 // Main's captain/assistant dialog is mirrored into the branch as read-only
 // fm-main-mirror context from Pi's
-// before_agent_start prompt and at main's turn_end. Pi-only by construction: this
-// file lives in .pi/extensions, so no
-// other harness ever loads it. Supervision is default-on for every task once
-// this Pi session owns the fleet lock: no captain grant file is required.
-// Away mode (or a broken branch between its bounded recovery probes) keeps
-// today's wake-to-main behavior untouched regardless.
+// before_agent_start prompt and at main's turn_end. This file lives in Pi's
+// extension directory. Supervision is default-on for every task once this Pi
+// session owns the fleet lock, including during away or quiet posture: no
+// captain grant file is required. A broken branch between its bounded recovery
+// probes keeps today's wake-to-main behavior untouched.
 //
 // Prefix stability (the cache contract, owner: bin/fm-branch-prompt.sh
 // header): the branch's system prompt is the generator's byte-stable output,
@@ -123,7 +122,6 @@ const fmHome = process.env.FM_HOME || process.env.FM_ROOT_OVERRIDE || root;
 const fmRoot = process.env.FM_ROOT_OVERRIDE || root;
 const state = process.env.FM_STATE_OVERRIDE || `${fmHome}/state`;
 const config = process.env.FM_CONFIG_OVERRIDE || `${fmHome}/config`;
-const afkFlag = join(state, ".afk");
 const sessionsDir = join(state, "branch-session");
 const sessionPointer = join(state, ".branch-session");
 const mirrorCursorFile = join(state, ".branch-mirror-cursor");
@@ -204,10 +202,6 @@ const scriptEnv = {
 
 function offerEligible(offer: BranchDispatchOffer): boolean {
   return offer.eligible === true;
-}
-
-function afkActive(): boolean {
-  return existsSync(afkFlag);
 }
 
 // Pi persists provider failures as ordinary assistant messages and resolves
@@ -1546,7 +1540,6 @@ ${context.command}
     // effects.
     if (!offerEligible(offer)) return;
     if (!generationOwnsLockSync(generation)) return; // cold start pre-lock, secondary session, or shutdown
-    if (afkActive()) return; // the away daemon owns supervision while afk
     const recoveryProbe = Boolean(
       branchBroken &&
       providerRecovery &&

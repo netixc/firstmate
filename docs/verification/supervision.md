@@ -2,17 +2,13 @@
 
 Audience: maintainer verification.
 
-This record supports current session-start, turn-end, watcher-continuity, and wedge-alarm guarantees.
+This record supports current session-start, turn-end, and watcher-continuity guarantees.
 Operator behavior and active limits remain in the linked current guides.
 Task-specific chronology, temporary paths, run identifiers, and delivery transcripts remain in private reports or PR evidence.
 
 ## Native session-start delivery
 
-The cross-harness transport pass ran on 2026-07-17 with OpenCode 1.17.18 and Pi 0.80.10.
-
-OpenCode was checked in both headless and interactive modes.
-`client.session.promptAsync` accepted the nudge in both cases; the persistent TUI completed the generated turn, while `opencode run` exited before another turn.
-This is the current headless fail-open limit.
+The native transport pass ran on 2026-07-17 with Pi 0.80.10.
 
 Pi command shape:
 
@@ -24,13 +20,12 @@ pi -p -e .pi/extensions/fm-primary-turnend-guard.ts \
 
 Observed result: `PI_SMOKE_DONE`, with one session-start execution.
 That cold positional-prompt check established eventual custom-message delivery, but it did not submit immediately after `/new` while native digest generation was still running, so its earlier race-free inference is superseded by the provider-prerequisite evidence below.
-The installed pi-signed 0.82.0 wrapper repeated the shared Pi primary extension and session-start path on 2026-07-27.
-[`runtime-backends.md`](runtime-backends.md#tmux) owns the shared-ancestry evidence and authoritative selection-marker boundary.
+[`runtime-backends.md`](runtime-backends.md#plain-pi-runtime-identity) owns the authoritative plain-Pi identity boundary.
 
 ### Run-tier source vocabulary and context-reset injection
 
 The run tier depends on three facts only the vendor can supply: the session-open source it reports, whether hook stdout reaches model context on a context-RESET open rather than only a cold one, and whether a worker the hook detaches survives the hook returning.
-The first two were measured on 2026-08-05 against a throwaway Firstmate-shaped lab carrying each harness's own tracked registration with a recorder standing in for `bin/fm-sessionstart-run.sh`.
+The first two were measured on 2026-08-05 against a throwaway Firstmate-shaped lab carrying Pi's tracked registration with a recorder standing in for `bin/fm-sessionstart-run.sh`.
 Each open printed a source-stamped token, and the model was asked to quote that token back, so producing hook stdout could never be mistaken for delivering it.
 The third is recorded below.
 
@@ -51,7 +46,7 @@ compact
 ```
 
 A new Pi process continuing a session reports `startup`, while Pi's `resume` reason is reserved for an in-process session switch.
-The current adapter classification and baseline mechanics are owned by [`../sessionstart-nudge.md`](../sessionstart-nudge.md#harness-transports) and the `bin/fm-session-start.sh` header.
+Pi's current transport and baseline mechanics are owned by [`../sessionstart-nudge.md`](../sessionstart-nudge.md#pi-transport) and the `bin/fm-session-start.sh` header.
 Their continuation classification is covered by portable tests, not claimed as live validation in this record.
 
 ### Pi `/new` provider prerequisite
@@ -76,7 +71,6 @@ The immediate case submitted its first prompt only after the native `clear` chil
 After release, the first payload reported one native context and no manual result, the session persisted one matching custom message, and the fixture recorded one native execution.
 The control case let native generation complete before prompt submission and produced the same first-payload result.
 The portable public-event regression in `tests/fm-sessionstart-nudge.test.sh` separately covers interruption, process-tree retirement, two rapid replacements, stale completion, empty output, spawn error, timeout output, truncation, ineligible stand-down, and compaction cancellation.
-Pi and pi-signed load the same tracked extension bytes; pi-signed was not installed on this host for a separate 0.84.0 live rerun.
 
 ### Post-start instruction refresh
 
@@ -110,7 +104,6 @@ Each pass polled `state/<id>.busy-state` while a real turn ran.
 | Harness | Version verified | Semantic source | Observed result |
 | --- | --- | --- | --- |
 | Pi | 0.82.0 | Extension `agent_start` / `agent_settled` with `ctx.isIdle()` | The spawn seed `busy source=fm-spawn`, then `busy source=pi-ext event=agent-start`, then `idle source=pi-ext event=agent-settled`; the turn-end marker was still touched. |
-| OpenCode | 1.17.18 | Plugin `session.status` | In a real TUI pane: seed, then `busy source=opencode-plugin event=session-busy`, then `idle source=opencode-plugin event=session-status-idle`. |
 Deterministic entry points:
 
 ```sh
@@ -121,11 +114,10 @@ tests/fm-crew-state.test.sh
 
 ## Turn-end guard
 
-The blocking and bounded-follow-up mechanisms were validated across the supported primary runtimes on 2026-07-08 through 2026-09-05.
+The bounded follow-up mechanism was validated on Pi across 2026-07-08 through 2026-09-05.
 
 | Harness | Version verified | Mechanism | Observed result |
 | --- | --- | --- | --- |
-| OpenCode | 1.17.6 | Passive `session.idle` callback | Throwing could not block, while `promptAsync` scheduled one TUI follow-up; headless remained fail-open. |
 | Pi | 0.80.5 | Passive `agent_settled` callback | Exactly one guard follow-up ran for an unhealthy cycle, with no recursion across tool turns. |
 Session-lock ownership in `bin/fm-session-lock-lib.sh` is decided against a session's whole contiguous recognized-runtime ancestry rather than one chosen pid.
 `tests/fm-session-lock-ancestry.test.sh` pins the supported runtime reporting semantics behind a deterministic process table.
@@ -177,10 +169,10 @@ Observed output, before and after the model correction, then with the recorded P
 ●  1 task(s) in flight, but no live watcher process holds this home lock (last beat: 0s ago).
 ```
 
-The broader relevant regression pass was rerun on 2026-08-02 without live-home or daemon mutation.
+The broader relevant regression pass was rerun on 2026-08-02 without touching a live home.
 
 ```sh
-bin/fm-test-run.sh tests/fm-watch-triage.test.sh tests/fm-watcher-lock.test.sh tests/fm-afk-inject-e2e.test.sh tests/fm-afk-return.test.sh tests/fm-x-mode.test.sh tests/fm-backend.test.sh tests/fm-backend-tmux-smoke.test.sh tests/fm-secondmate-safety.test.sh
+bin/fm-test-run.sh tests/fm-watch-triage.test.sh tests/fm-watcher-lock.test.sh tests/fm-afk-launch.test.sh tests/fm-afk-return.test.sh tests/fm-x-mode.test.sh tests/fm-backend.test.sh tests/fm-backend-tmux-smoke.test.sh tests/fm-secondmate-safety.test.sh
 ```
 
 Observed output:
@@ -191,17 +183,10 @@ FM_TEST_SUMMARY total=8 failed=0 skipped_gate=0 duration_ms=617507
 
 ## Watcher continuity
 
-The cross-harness evidence combines the supported-runtime live passes against isolated project and home state.
-No credential material was copied into a fixture.
+The live evidence uses isolated project and home state and copies no credential material into fixtures.
 
-```text
-OpenCode 1.17.18
-Pi 0.80.10
-```
-
-| Harness | Exact opt-in command | Observed guarantee |
+| Runtime | Exact opt-in command | Observed guarantee |
 | --- | --- | --- |
-| OpenCode | `FM_OPENCODE_LIVE_E2E=1 tests/fm-opencode-primary-live-e2e.test.sh` | A verified successor existed before prompt handling, with no model re-arm or turn-end fallback. |
 | Pi | `FM_PI_LIVE_E2E=1 tests/fm-pi-primary-live-e2e.test.sh` | One initial tool call led to extension-owned successors and clean child retirement on exit. |
 
 Pi 0.81.1 repeated the continuity and clean-exit lifecycle on 2026-07-23 after the Calm presentation changes.
@@ -218,7 +203,7 @@ Observed guarantee: after ordinary `session_shutdown` for `/new`, `/resume`, `/f
 A fresh module rebind also received exactly once the actionable close whose first delivery was still in flight at shutdown, while retaining one live successor.
 Stale prior-generation tool callbacks could not mutate the active child, repeated transitions kept exactly one live arm cycle, and terminal `quit` still refused late rearm.
 The strict no-emit check used the installed Pi SDK declarations to hold the lifecycle event contract.
-Plain Pi and pi-signed share the same tracked `.pi/extensions/fm-primary-pi-watch.ts` path, so both inherit the generation owner; other primary harnesses are not applicable because they do not use this Pi extension lifecycle.
+Plain Pi uses the tracked `.pi/extensions/fm-primary-pi-watch.ts` generation owner.
 
 On 2026-09-02 the same suite, the strict typecheck, and the credential-free real-SDK guard were rerun against `@earendil-works/pi-coding-agent` 0.84.4 after the extension stopped waiting for `before_agent_start` before settling a main delivery; [`runtime-backends.md`](runtime-backends.md#2026-09-02-streaming-time-watcher-delivery) owns the exact commands and output.
 Observed guarantee: a wake delivered while main was streaming was followed by a verified successor and by delivery of the next actionable close, a replacement replayed only the follow-up Pi had not consumed, an exhausted restoration delivered its typed failure without launching an arm past the retry bound, and a verified successor that failed while a branch settlement still held its wake took the ordinary bounded retry once that delivery settled.
@@ -249,36 +234,3 @@ tests/fm-watch-recovery-loop.test.sh
 tests/fm-wake-queue.test.sh
 tests/fm-turnend-guard.test.sh
 ```
-
-## Wedge-alarm channels
-
-The two real notification channels were bounded manually on 2026-07-10 on macOS 26.5.2 with Herdr 0.7.3.
-Automated suites never execute these real notification commands.
-
-Argv-safe Notification Center command:
-
-```sh
-/usr/bin/osascript \
-  -e 'on run argv' \
-  -e 'display notification (item 1 of argv) with title "FIRSTMATE TEST - IGNORE" sound name "Basso"' \
-  -e 'end run' \
-  'FIRSTMATE TEST - IGNORE (wedge-alarm channel verification)'
-```
-
-Observed output: no stdout, exit 0, and one banner with the supplied body.
-
-Herdr command:
-
-```sh
-herdr notification show 'FIRSTMATE TEST - IGNORE' \
-  --body 'FIRSTMATE TEST - IGNORE (wedge-alarm channel verification)' \
-  --sound request
-```
-
-Observed output:
-
-```json
-{"id":"cli:notification:show","result":{"reason":"shown","shown":true,"type":"notification_show"}}
-```
-
-The safe command-channel contract is covered without a notification by `tests/fm-daemon.test.sh`: the summary reaches both `$1` and stdin, every channel is process-group bounded, and a failed channel falls through.

@@ -9,7 +9,7 @@
 # exactly wrong for a lifecycle command: a marked "/quit" arrives as ordinary
 # chat ("[fm-from-firstmate] /quit") that the agent reasons ABOUT instead of
 # executing. bin/fm-control.sh is the CONTROL plane: allowlisted lifecycle
-# verbs addressed to an exact task id, with the per-harness mechanics owned
+# verbs addressed to an exact task id, with Pi mechanics owned
 # here rather than improvised per harness in agent prose.
 #
 # This file owns three capability tables plus their pure artifact-path tables
@@ -19,7 +19,7 @@
 #   1. Verb allowlist. There is no arbitrary-text and no generic raw-key entry
 #      point on the control plane; a caller either names an allowlisted verb or
 #      is refused.
-#   2. Per-harness control mechanics: which key interrupts a running turn, how
+#   2. Pi control mechanics: which key interrupts a running turn, how
 #      many times it must be sent, whether the composer needs clearing after
 #      that key, which adapter-owned cancellation acknowledgement is observable,
 #      which command exits the agent, and which task kinds the adapter is
@@ -34,11 +34,8 @@
 #      stopped. A verb whose postcondition cannot be proven on the recorded
 #      backend is refused rather than performed blind.
 #
-# `resume` is deliberately NOT a verb. It is not deterministic across the
-# verified adapters: opencode resumes the most recent session for the cwd with
-# --continue, while pi and pi-signed have no verified pane-resume contract at
-# all. `relaunch`
-# covers the same need deterministically for every adapter,
+# `resume` is deliberately NOT a verb because Pi has no verified pane-resume
+# contract. `relaunch` covers the same need deterministically,
 # because the brief on disk - not a harness-private session - is the durable
 # instruction.
 
@@ -58,28 +55,21 @@ fm_control_verb_allowed() {  # <verb>
   return 1
 }
 
-# The harnesses whose control mechanics are verified. Mirrors AGENTS.md
-# section 4's verified-adapter list; an unverified adapter is refused rather
+# Pi is the only runtime whose control mechanics are supported. Mirrors
+# AGENTS.md section 4; any other runtime is refused rather
 # than guessed at, exactly as a spawn on it would be.
 fm_control_harness_supported() {  # <harness>
   case "${1-}" in
-    opencode|pi|pi-signed) return 0 ;;
+    pi) return 0 ;;
   esac
   return 1
 }
 
-# The verified adapter a RECORDED harness value belongs to. Every table below
-# is keyed by the exact verified adapter name, but a task launched from a raw
-# command records the command's basename instead (bin/fm-spawn.sh derives
-# harness= that way), which is why several adapters match a prefix here.
-# This is the one place that prefix rule is stated. `pi` and
-# `pi-signed` are exact because a `pi*` prefix would swallow the signed adapter,
-# and an unrecognized value returns nonzero rather than being guessed into a family.
+# The Pi adapter a recorded harness value belongs to. An unrecognized
+# value returns nonzero rather than being guessed into a family.
 fm_control_harness_family() {  # <recorded-harness>
   case "${1-}" in
     pi) printf 'pi' ;;
-    pi-signed) printf 'pi-signed' ;;
-    opencode*) printf 'opencode' ;;
     *) return 1 ;;
   esac
 }
@@ -96,17 +86,15 @@ fm_control_harness_supports_kind() {  # <harness> <kind>
 # The key that cancels a running turn.
 fm_control_interrupt_key() {  # <harness>
   case "${1-}" in
-    opencode|pi|pi-signed) printf 'Escape' ;;
+    pi) printf 'Escape' ;;
     *) return 1 ;;
   esac
 }
 
-# How many times the interrupt key must be delivered. OpenCode needs a double
-# Escape; every other verified adapter interrupts on a single press.
+# How many times the interrupt key must be delivered.
 fm_control_interrupt_repeat() {  # <harness>
   case "${1-}" in
-    opencode) printf '2' ;;
-    pi|pi-signed) printf '1' ;;
+    pi) printf '1' ;;
     *) return 1 ;;
   esac
 }
@@ -116,14 +104,14 @@ fm_control_interrupt_repeat() {  # <harness>
 # with no verified mechanics returns nonzero, matching the tables above.
 fm_control_interrupt_clear_key() {  # <harness>
   case "${1-}" in
-    opencode|pi|pi-signed) ;;
+    pi) ;;
     *) return 1 ;;
   esac
 }
 
 fm_control_interrupt_ack_source() {  # <harness>
   case "${1-}" in
-    opencode|pi|pi-signed) printf 'none' ;;
+    pi) printf 'none' ;;
     *) return 1 ;;
   esac
 }
@@ -131,34 +119,23 @@ fm_control_interrupt_ack_source() {  # <harness>
 # The command that exits the agent from its own composer.
 fm_control_exit_command() {  # <harness>
   case "${1-}" in
-    opencode) printf '/exit' ;;
-    pi|pi-signed) printf '/quit' ;;
+    pi) printf '/quit' ;;
     *) return 1 ;;
   esac
 }
 
-# Which named keys a backend adapter can deliver. Every session provider
-# normalizes Enter, Ctrl+C, and the Ctrl+U composer clear; Orca's terminal API
-# exposes only an interrupt and an Enter, so it can deliver neither Escape nor
-# Ctrl+U (bin/backends/orca.sh's fm_backend_orca_send_key).
+# Which named keys a backend adapter can deliver.
 fm_control_backend_supports_key() {  # <backend> <key>
   local backend=${1-} key=${2-}
   case "$backend" in
-    tmux|herdr|zellij|cmux)
+    tmux|herdr)
       case "$key" in Escape|Enter|C-c|C-u) return 0 ;; esac
-      ;;
-    orca)
-      case "$key" in Enter|C-c) return 0 ;; esac
       ;;
   esac
   return 1
 }
 
-# Whether <backend> has a recovery-grade agent-state classifier. Only tmux and
-# herdr implement fm_backend_agent_state; zellij, orca, and cmux report
-# `unverified`, so no reading of theirs can prove an agent stopped. The control
-# plane refuses a stop-proving verb there instead of reporting an unprovable
-# transition as success.
+# Whether <backend> has a recovery-grade agent-state classifier.
 fm_control_backend_state_verified() {  # <backend>
   case "${1-}" in
     tmux|herdr) return 0 ;;
@@ -176,7 +153,6 @@ fm_control_harness_wiring_paths() {  # <harness> <worktree> <state-dir> <id>
   local harness=${1-} wt=${2-} state=${3-} id=${4-}
   [ -n "$wt" ] && [ -n "$state" ] && [ -n "$id" ] || return 1
   case "$harness" in
-    opencode) printf '%s\n' "$wt/.opencode/plugins/fm-busy-state.js" ;;
-    pi|pi-signed) printf '%s\n' "$state/$id.pi-ext.ts" ;;
+    pi) printf '%s\n' "$state/$id.pi-ext.ts" ;;
   esac
 }

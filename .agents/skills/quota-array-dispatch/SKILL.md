@@ -24,12 +24,12 @@ Deterministic shell owns only schema, configuration, and version validation plus
 The canonical shell helper for a worker that has already performed its model-selection reasoning and now needs to pick the first viable candidate is `bin/fm-quota-choose.sh`.
 Pass it the intake's already-captured default TOON or permitted JSON fallback through stdin or `--snapshot`; it never takes another quota snapshot, so it selects from the same quota state as the intake.
 Pass each candidate as `harness:model`, with earlier candidates preferred.
-The helper maps each harness to its primary provider family and applies the provider-wide scopes plus the exact model or product scopes for the model.
+The helper maps Pi to its configured primary provider family and applies provider-wide scopes plus the exact model or product scopes for the model.
 An `exhausted_now` runway vetoes the candidate.
 The helper selects a candidate only when its applicable quota has a known `effectivePercentRemaining` greater than zero.
-This is an optional narrow helper with a known limitation: it maps each harness to one primary provider family only, so a candidate whose established provider differs from that primary family is checked against the wrong quota row.
+This is an optional narrow helper with a known limitation: it maps Pi to one primary provider family only, so a candidate whose established provider differs from that family is checked against the wrong quota row.
 Authoritative multi-provider routing - including provider discovery from the harness catalog and quota matching by that explicit provider - stays owned by this skill's intake procedure above and AGENTS.md section 4, not by the helper.
-Use it only when the brief already fixed the candidate order and every candidate's provider is the harness's primary family.
+Use it only when the brief already fixed the candidate order and every candidate's provider is Pi's configured primary family.
 It does not replace the reasoning-class, runway-feasibility, or authentication gates above.
 Firstmate can optionally arm `bin/fm-procevent-quota.sh` for a recurring mid-task check that wakes when the tracked provider drops below its configured threshold or its runway becomes `exhausted_now`.
 
@@ -61,7 +61,7 @@ It cannot override a hard-gate failure, and it is never hidden inside a new comp
 ### 1. Eligibility
 
 Deterministic shell must never map a model to a provider, a provider to a credential store, or a name prefix to a family.
-You establish those relations yourself, in the open, from the candidate's own authoritative catalog (`harness-adapters` owns the per-harness discovery surface) plus the one intake snapshot.
+You establish those relations yourself, in the open, from Pi's authoritative catalog (`harness-adapters` owns the discovery surface) plus the one intake snapshot.
 
 Confirm the catalog lists the candidate's model and record the provider family it reports.
 A model the catalog does not list is concrete contradictory evidence: block that candidate and quote the catalog result.
@@ -70,7 +70,7 @@ A provider-level or `all_models`/`all_products` scope bounds every model you est
 A named-model or named-product scope is an additional bound for that model alone.
 Match the candidate to its `quota[]` row by that established provider and scope; a stale, auth-required, or unmeasurable scope is named in `attention[]` instead of a fabricated number.
 
-A candidate authenticates through its own tuple's surface; another harness's CLI can never gate it, and `harness=pi` with `model=xai/grok-*` is Pi using the xAI provider through Pi.
+A candidate authenticates through its own tuple's surface; `harness=pi` with `model=xai/grok-*` is Pi using the xAI provider through Pi.
 `quota-axi auth --json` lists each provider's credential sources independently, so read the one source the candidate actually uses rather than collapsing a provider to a single status.
 A provider can carry a healthy source beside a missing or expired one; the unused source's state is not the candidate's state.
 A Pi-hosted family may authenticate through the vendor's own store with no `pi:`-prefixed source at all, which is normal and never evidence against the candidate.
@@ -84,7 +84,7 @@ Uncertainty and ineligibility are different findings:
 - Reserve login wording for that proven-unusable case, and name the harness, model, surface, and evidence.
 
 When a credential's local classification is the only thing standing between a candidate and a block, get ground truth from the candidate's own authoritative surface before blocking.
-Never launch another harness's CLI, and never probe a credential store the candidate does not use.
+Use only Pi's catalog, and never probe a credential store the candidate does not use.
 
 Malformed configuration is an actionable error, not a candidate to rank around.
 
