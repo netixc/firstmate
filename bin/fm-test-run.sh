@@ -48,7 +48,7 @@
 #                   dedicated required Herdr lane owns that coverage)
 #   --fail-on-gate-skip <token>
 #                   after each script, fail the run if any output line contains
-#                   "skip: <token>" (e.g. --fail-on-gate-skip 'herdr not found').
+#                   "skip: <token>" (e.g. --fail-on-gate-skip 'herdr absent').
 #                   The required Herdr CI lane uses this so a missing pin cannot
 #                   silently pass as a gate skip.
 #   --jobs N        run the selected scripts with up to N concurrent workers.
@@ -314,7 +314,7 @@ family_for_basename() {
     fm-backend-herdr-agent-exit-shell-e2e.test.sh|\
     fm-herdr-attached-viewer-live-e2e.test.sh|fm-herdr-session-cleanup-e2e.test.sh|\
     fm-backend-herdr-smoke.test.sh|fm-backend-herdr-workspace-per-home-e2e.test.sh|\
-    fm-control-herdr-smoke.test.sh)
+    fm-control-herdr-smoke.test.sh|fm-pi-lifecycle-wrappers-live-e2e.test.sh)
       printf '%s\n' real-herdr-gated
       ;;
     fm-backlog-handoff.test.sh|fm-on.test.sh|fm-remote-backlog-handoff.test.sh|\
@@ -347,8 +347,7 @@ family_for_basename() {
     fm-pi-primary-live-e2e.test.sh|fm-pi-codex-native.test.sh|\
     fm-pi-spawn-profile-live-e2e.test.sh|\
     fm-sessionstart-hook-live-e2e.test.sh|fm-sessionstart-instruction-refresh-live-e2e.test.sh|\
-    fm-quota-array-dispatch-live-e2e.test.sh|fm-send-secondmate-marker-herdr-e2e.test.sh|\
-    fm-send-inbox-doorbell-live-e2e.test.sh)
+    fm-quota-array-dispatch-live-e2e.test.sh|fm-send-inbox-doorbell-live-e2e.test.sh)
       printf '%s\n' live-harness-optin
       ;;
     fm-backend-herdr.test.sh|fm-backend-tmux-smoke.test.sh|fm-backend.test.sh|\
@@ -713,7 +712,7 @@ tests/fm-send-inbox-doorbell-live-e2e.test.sh 22
 tests/fm-send-inbox.test.sh 38956
 tests/fm-send-remote-delivery.test.sh 27686
 tests/fm-send-resolve-key.test.sh 19619
-tests/fm-send-secondmate-marker-herdr-e2e.test.sh 51
+tests/fm-pi-lifecycle-wrappers-live-e2e.test.sh 120
 tests/fm-send-secondmate-marker.test.sh 6252
 tests/fm-session-lock-ancestry.test.sh 1414
 tests/fm-session-start.test.sh 156952

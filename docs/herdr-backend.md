@@ -1,8 +1,9 @@
 # Herdr runtime backend
 
 Herdr is an agent-native terminal backend with native per-pane agent state and push events.
-Firstmate requires Herdr protocol 14 or newer; broad backend verification covers versions 0.7.1, 0.7.3, 0.7.4, 0.7.5, and 0.8.0, while protocol-16 features remain gated by availability.
-Default-on presentation spaces have a higher floor of Herdr 0.8.0 for the reason given under [Presentation spaces](#presentation-spaces).
+Firstmate's production dependency floor is Herdr 0.9.0 and protocol 22; both release and protocol are validated, and the required Linux and macOS CI lanes install that exact release.
+Older-version evidence remains only where it documents the origin of a defensive fallback, not as a supported runtime.
+Default-on presentation spaces retain their historical Herdr 0.8.0 capability floor, which the production floor now exceeds.
 Herdr provides the terminal session while Treehouse continues to provide task worktrees.
 [`configuration.md`](configuration.md#runtime-backend-configbackend--fm_backend) owns shared backend selection and metadata semantics.
 
@@ -12,8 +13,9 @@ Pick Herdr when you want native busy, idle, and blocked state and accept the act
 
 Prerequisites:
 
-- Herdr protocol 14 or newer, installed from [herdr.dev](https://herdr.dev).
+- Herdr 0.9.0 or newer with protocol 22 or newer, installed from [herdr.dev](https://herdr.dev).
 - `jq` for JSON responses.
+- `lsof` for exact process-ownership proof during endpoint cleanup.
 - The universal harness and toolchain requirements in [`configuration.md`](configuration.md#toolchain).
 - `python3` only for optional protocol-16 presentation-space ordering and native event subscription.
 
@@ -26,12 +28,13 @@ It is also auto-detected when the primary runs natively under `HERDR_ENV=1` and 
 A tmux pane nested inside Herdr resolves to tmux because the innermost multiplexer wins.
 An auto-detected Herdr spawn prints an opt-out notice.
 
-Spawn stops before creating a Herdr container or acquiring a task worktree when `herdr`, `jq`, or the protocol floor is unavailable.
+Spawn stops before creating a Herdr container or acquiring a task worktree when `herdr`, `jq`, `lsof`, the 0.9.0 release floor, or the protocol-22 floor is unavailable.
+Cleanup also checks `lsof` before any Herdr endpoint mutation, so removing that dependency after launch preserves the endpoint, isolated copy, and durable records for retry instead of silently leaving a reparented task process behind.
 No separate first-run provisioning is required.
 
 The required CI lane uses the pinned installers in `bin/fm-install-herdr.sh` and `bin/fm-install-treehouse.sh`.
 Those script headers own release assets, checksums, download bounds, and post-install gates.
-Real harness credential tests remain opt-in rather than part of default CI.
+The credential-safe real Pi lifecycle regression is required in that lane; tests that actually need provider credentials remain opt-in.
 
 ## Client selection
 
@@ -79,7 +82,8 @@ Closing its last tab can remove the workspace, and the next spawn recreates it.
 
 ## Presentation spaces
 
-Each new crewmate or scout is placed in a disposable one-task workspace by default, on Herdr 0.8.0 and newer.
+Each new crewmate or scout is placed in a disposable one-task workspace by default.
+The retained capability gate is Herdr 0.8.0, which every supported 0.9.0+ runtime exceeds.
 A home opts out by writing `off` into local gitignored `config/herdr-presentation-spaces`, and forces the projection on by writing `on`.
 An absent file leaves the choice to the version floor below, an empty file and the value `on` are both a deliberate opt-in, values are compared with whitespace stripped and case ignored, and an unrecognized value warns and follows the unconfigured default rather than failing a spawn over a purely visual setting.
 The empty file is the historical presence-based opt-in form, so every home that had already enabled the projection stays enabled with no migration step, and no previously enabled home can be turned off by the default or by the floor.
@@ -94,7 +98,7 @@ The floor reads both the installed client's protocol and version and the selecte
 The unconfigured default is rechecked after the server is started or adopted and before any presentation journal or workspace is created, while an unreadable server state or release is treated as unsupported rather than guessed at.
 An explicit `on` is honored below the floor, so a home that deliberately opted in is never silently downgraded; it accepts that documented focus move, and the exact prior-tab restore stays its backstop.
 The floor has a single owner, the spawn-time gate, so cleanup for a projection that already exists always runs and never strands a workspace, whatever release the home is on now.
-Upgrading Herdr to 0.8.0 or newer is the fix; writing `off` is the immediate mitigation for a home that cannot upgrade yet.
+The older-release mitigation was upgrading Herdr to 0.8.0 or writing `off`; supported deployments must now upgrade to Herdr 0.9.0 or newer regardless of presentation preference.
 The setting is inherited into secondmate homes through the normal configuration-convergence owner, and the default needs no special convergence: the primary's absent file and the secondmate's absent file both mean the same unconfigured default, so leaving it converges a secondmate to that same default rather than turning it off, and only an explicit primary `off` propagates the opt-out.
 A secondmate agent itself always stays in its ordinary parent workspace; only children launched by that home are eligible.
 An unconverged opt-out keeps the default projection in that home until convergence.
@@ -144,6 +148,7 @@ If lock, snapshot, pane identity, or restoration is ambiguous, cleanup warns and
 Recovery is deliberately conservative and presentation-only.
 An existing journal suppresses another projected create.
 Before any recovery mutation, Firstmate holds both the task spawn lock and the named-session presentation lock.
+Same-identity recovery waits up to 15 seconds for another home's in-flight recovery on that session, then refuses; fresh presentation keeps the five-second bound and may fall back flat because it has no old endpoint to duplicate.
 A same-identity version 2 binding may replace one exact agent-free restart husk in place only when the physical home, session, metadata endpoint, unique token match, workspace shape and labels, parent identity and placement, and non-target focus snapshot all agree.
 The replacement tab and pane are created and verified before the old pane is rechecked and closed, then the journal advances atomically to the replacement endpoint before metadata publication.
 The reclaim path never moves, closes, deletes, or renames a workspace and never touches a parent, sibling, captain, or foreign pane.
@@ -279,7 +284,7 @@ A registration alone never proves an agent.
 Herdr keeps a Pi registration (`agent get` still reports `agent=pi` with its last status) after the Pi process has exited to a plain shell whenever a nested interactive shell sits under the pane's top shell, which is the crew shape `treehouse get` leaves behind (measured on Herdr 0.9.0 - [verification](verification/runtime-backends.md) "Stale agent registration"; upstream issue #4115).
 So before a registered agent counts as live, the pane classifier reads `pane process-info` and the real process table through the shared harness-process classifier in `bin/fm-agent-process-lib.sh`, the same rule the tmux adapter proves liveness with: a harness in the foreground process group, or still a descendant of the pane shell, keeps the registration live; a foreground that is nothing but shells with no harness descendant is a `stale-agent` pane, agent-free with that explicit reason; a foreground holding anything else keeps the registration live, but only after the same bounded settle window the idle-shell proof uses, because an idle shell transiently hosts prompt helpers such as starship in its foreground group and the first agent or shell sample in that window decides; an unreadable process view makes the pane `unknown`, trusting neither the registration nor its absence.
 No registered status outranks the process view, because an agent killed mid-turn leaves `working` behind just as a quit one leaves `idle`, and the native busy verdict is verified the same way so a shell-only pane never reads busy.
-The `pane process-info` subcommand that this process-level proof depends on is present in every supported release client from the 0.7.1 floor upward (measured 2026-09-10 on the pinned 0.7.1, 0.7.3, 0.7.4, and 0.7.5 release clients - [verification](verification/runtime-backends.md) "Stale agent registration").
+The `pane process-info` subcommand that this process-level proof depends on is present at the supported 0.9.0 floor; earlier 0.7.1 through 0.7.5 measurements are retained as historical evidence in [runtime backend verification](verification/runtime-backends.md) under "Stale agent registration."
 The response shape the adapter parses (`result.type` of `pane_process_info`, `process_info.shell_pid`, and `foreground_processes` entries carrying `name`, `argv0`, `argv`, and `cmdline`) is verified live only on Herdr 0.9.0, with the idle-shell proof's narrower parse previously verified on 0.7.5.
 A server response below 0.9.0 has not been measured for this parse.
 An unreadable or unparseable process view reads `unknown`, which refuses lifecycle verbs and recovery rather than trusting the registration.

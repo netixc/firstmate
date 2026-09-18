@@ -226,15 +226,19 @@ jobs:
           path: ${{ runner.temp }}/fm-test/fm-test-timing-portable-serial-${{ matrix.shard }}.json
           if-no-files-found: warn
 
-  # Required real-Herdr lane: pinned install, serial real-herdr-gated family,
-  # hard-fail on "skip: herdr not found". Starts on Linux x86_64; if a genuine
-  # platform invariant fails (focus, cleanup, default-session tripwire), keep
-  # the failure evidence and move the job to macOS rather than skip assertions.
+  # Required real-Herdr lane: pinned install and the complete serial family on
+  # both hosted Linux x86_64 and hosted macOS. Both platforms hard-fail when the
+  # binary or credential-safe real Pi prerequisite is unavailable.
   tests-herdr:
-    name: Behavior tests (Herdr)
-    runs-on: ubuntu-latest
-    # Healthy runs finish around 7 minutes. This job cap is a last-resort hang
-    # tripwire, not the expected end of the lane. The family-run step owns the
+    name: Behavior tests (Herdr, ${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    runs-on: ${{ matrix.os }}
+    # Healthy runs finish below 20 minutes with the real Pi lifecycle guard.
+    # This job cap is a last-resort hang tripwire, not the expected end of the lane.
+    # The family-run step owns the
     # tighter bound so a wedged suite fails fast with always() cleanup and
     # timing artifacts still uploaded (docs/fm-test-portable-shards.md).
     timeout-minutes: 75
@@ -242,10 +246,25 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+      - name: Install Linux lifecycle dependencies
+        if: runner.os == 'Linux'
+        run: |
+          set -eu
+          if ! command -v lsof >/dev/null || ! command -v tmux >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y lsof tmux
+          fi
+      - name: Install macOS tmux reference backend
+        if: runner.os == 'macOS'
+        run: |
+          set -eu
+          command -v tmux >/dev/null || brew install tmux
       - name: Require tools for real Herdr
         run: |
           set -eu
           command -v jq >/dev/null || { echo "::error::jq is required"; exit 1; }
+          command -v lsof >/dev/null || { echo "::error::lsof is required"; exit 1; }
+          command -v tmux >/dev/null || { echo "::error::tmux is required for the reference lifecycle run"; exit 1; }
           command -v python3 >/dev/null || { echo "::error::python3 is required"; exit 1; }
           command -v curl >/dev/null || { echo "::error::curl is required"; exit 1; }
           command -v tar >/dev/null || { echo "::error::tar is required"; exit 1; }
@@ -274,17 +293,22 @@ jobs:
           printf '%s\n' "$status"
           version=$(printf '%s' "$status" | jq -r '.client.version // empty')
           protocol=$(printf '%s' "$status" | jq -r '.client.protocol // empty')
-          [ "$version" = "0.7.4" ] || {
-            echo "::error::expected exact Herdr pin 0.7.4, got ${version:-<empty>}"
+          [ "$version" = "0.9.0" ] || {
+            echo "::error::expected exact Herdr pin 0.9.0, got ${version:-<empty>}"
             exit 1
           }
           case "$protocol" in
             ''|*[!0-9]*) echo "::error::could not read client protocol"; exit 1 ;;
           esac
-          [ "$protocol" -ge 16 ] || {
-            echo "::error::herdr protocol $protocol is below the required floor 16"
+          [ "$protocol" -ge 22 ] || {
+            echo "::error::herdr protocol $protocol is below the required floor 22"
             exit 1
           }
+      - name: Install Pi for credential-safe production lifecycle coverage
+        run: |
+          set -eu
+          npm install -g @earendil-works/pi-coding-agent
+          npm ls -g --depth 0 @earendil-works/pi-coding-agent
       - name: Start default Herdr session for fleet-state tripwire
         run: |
           set -eu
@@ -317,17 +341,19 @@ jobs:
           mkdir -p "$RUNNER_TEMP/fm-herdr"
           bin/fm-herdr-ci-cleanup.sh snapshot "$RUNNER_TEMP/fm-herdr/sessions-before.json"
       - name: Run real-Herdr family (serial, required)
-        # Comfortably above the ~7 min healthy wall and far below the 75 min
+        # Comfortably above the sub-20-minute healthy wall and far below the 75 min
         # job backstop. A hang must fail this step so cleanup still runs.
-        timeout-minutes: 20
+        timeout-minutes: 35
         run: |
           set -eu
           mkdir -p "$RUNNER_TEMP/fm-test"
-          # Serial only. Fail if any script reports herdr not found. Live
-          # harness credential tests stay outside this family (opt-in env only).
+          # Serial only. Herdr and the credential-safe real Pi lifecycle
+          # regression are mandatory in this lane; neither may gate-skip.
           bin/fm-test-run.sh --family real-herdr-gated \
-            --fail-on-gate-skip 'herdr not found' \
-            --json "$RUNNER_TEMP/fm-test/fm-test-timing-herdr.json"
+            --fail-on-gate-skip 'herdr absent' \
+            --fail-on-gate-skip 'pi absent' \
+            --fail-on-gate-skip 'tmux absent' \
+            --json "$RUNNER_TEMP/fm-test/fm-test-timing-herdr-${RUNNER_OS}.json"
       - name: Cleanup job-owned Herdr lab sessions
         if: always()
         run: |
@@ -342,9 +368,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: fm-test-timing-herdr
+          name: fm-test-timing-herdr-${{ runner.os }}
           path: |
-            ${{ runner.temp }}/fm-test/fm-test-timing-herdr.json
+            ${{ runner.temp }}/fm-test/fm-test-timing-herdr-${{ runner.os }}.json
             ${{ runner.temp }}/fm-herdr/sessions-before.json
             ${{ runner.temp }}/fm-herdr/default-server.log
           if-no-files-found: warn

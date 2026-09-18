@@ -151,9 +151,35 @@ CAPS
   pass "the already-measured lane bounds are unchanged"
 }
 
+test_required_herdr_matrix_keeps_linux_macos_and_lifecycle_guards() {
+  local json oses run pi_step
+  json=$(ruby -ryaml -rjson -e '
+job = YAML.load_file(ARGV[0]).fetch("jobs").fetch("tests-herdr")
+run_step = job.fetch("steps").find { |s| s.is_a?(Hash) && s["name"] == "Run real-Herdr family (serial, required)" }
+pi_step = job.fetch("steps").find { |s| s.is_a?(Hash) && s["name"] == "Install Pi for credential-safe production lifecycle coverage" }
+puts JSON.generate(
+  "oses" => job.fetch("strategy").fetch("matrix").fetch("os"),
+  "run" => run_step && run_step["run"],
+  "pi_step" => !pi_step.nil?
+)
+' "$CI_WORKFLOW") || fail "could not read the required Herdr matrix contract"
+  oses=$(python3 -c 'import json,sys; print(" ".join(json.load(sys.stdin)["oses"]))' <<<"$json")
+  run=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["run"] or "")' <<<"$json")
+  pi_step=$(python3 -c 'import json,sys; print(str(json.load(sys.stdin)["pi_step"]).lower())' <<<"$json")
+  [ "$oses" = "ubuntu-latest macos-14" ] \
+    || fail "required Herdr CI must cover hosted Linux and macOS, got: $oses"
+  [ "$pi_step" = true ] || fail "required Herdr CI no longer installs plain Pi for lifecycle coverage"
+  for needle in "--family real-herdr-gated" "--fail-on-gate-skip 'herdr absent'" \
+    "--fail-on-gate-skip 'pi absent'" "--fail-on-gate-skip 'tmux absent'"; do
+    case "$run" in *"$needle"*) ;; *) fail "required Herdr family step lost: $needle" ;; esac
+  done
+  pass "required Herdr CI keeps hosted Linux/macOS and hard-fails missing Herdr, Pi, or tmux lifecycle coverage"
+}
+
 test_pr_pushes_supersede_within_one_pr
 test_separate_prs_do_not_cancel_each_other
 test_main_pushes_are_never_cancelled
 test_every_job_has_a_finite_timeout
 test_previously_unbounded_jobs_keep_their_caps
 test_measured_lanes_keep_their_existing_bounds
+test_required_herdr_matrix_keeps_linux_macos_and_lifecycle_guards

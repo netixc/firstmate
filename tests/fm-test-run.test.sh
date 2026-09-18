@@ -1685,11 +1685,11 @@ puts JSON.generate(
     || fail "could not read step timeout from parsed workflow"
   [ "$job_timeout" = 75 ] \
     || fail "tests-herdr job backstop must stay 75 minutes, got $job_timeout"
-  [ "$step_timeout" = 20 ] \
-    || fail "family-run step timeout must be 20 minutes, got $step_timeout"
+  [ "$step_timeout" = 35 ] \
+    || fail "family-run step timeout must be 35 minutes, got $step_timeout"
   [ "$step_timeout" -lt "$job_timeout" ] \
     || fail "family-run step timeout must be below the job backstop"
-  pass "Herdr CI family-run step times out at 20 min under a 75 min job backstop"
+  pass "Herdr CI family-run step times out at 35 min under a 75 min job backstop"
 }
 
 test_aggregate_json() {

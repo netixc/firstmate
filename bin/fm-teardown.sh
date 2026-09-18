@@ -906,6 +906,14 @@ fi
 fm_backend_validate_task_endpoint "$META" "$ID" || exit 1
 BACKEND=$FM_BACKEND_VALIDATED_BACKEND
 T=$FM_BACKEND_VALIDATED_TARGET
+# Herdr has no safe process-group fallback after its pane closes: leaked task
+# descendants can be reparented and outlive the endpoint. lsof is therefore a
+# preflight dependency, not an optional cleanup enhancement. Refuse before any
+# backend mutation when the exact cwd-based process proof is unavailable.
+if [ "$BACKEND" = herdr ] && ! command -v lsof >/dev/null 2>&1; then
+  echo "REFUSED: lsof is required to identify leaked processes for Herdr task $ID; nothing was changed. Install lsof and retry cleanup." >&2
+  exit 1
+fi
 WT=$(fm_meta_get "$META" worktree)
 PROJ=$(fm_meta_get "$META" project)
 if [ "${FM_TEARDOWN_GUARD_DONE:-0}" != 1 ]; then
@@ -1898,15 +1906,20 @@ reap_task_backend_process_group() {  # <label>
 # - both unique per task and never shared - before either is removed. TERM
 # first, then KILL after a short grace period for anything still alive; a
 # process that exits on its own between the two passes is simply absent from
-# the recheck. A missing lsof uses the backend process-group fallback; an lsof
-# scan error refuses before destructive teardown.
+# the recheck. A missing lsof uses the tmux process-group fallback; Herdr has
+# no equivalent and refuses in the preflight above. An lsof scan error refuses
+# before destructive worktree cleanup.
 reap_task_worktree_processes() {  # <label> <dir>...
   local label=$1 pids pid identity current_pids i pass=1 max_passes=3
   local -a tracked_pids tracked_identities remaining_pids remaining_identities
   shift
   if ! command -v lsof >/dev/null 2>&1; then
-    reap_task_backend_process_group "$label"
-    return 0
+    if [ "$BACKEND" = tmux ]; then
+      reap_task_backend_process_group "$label"
+      return 0
+    fi
+    echo "REFUSED: lsof is required to identify leaked processes for $BACKEND task $ID; preserving the worktree/tasktmp and durable task records for retry." >&2
+    return 1
   fi
   while [ "$pass" -le "$max_passes" ]; do
     if ! task_pids_under_roots "$@"; then
