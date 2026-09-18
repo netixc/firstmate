@@ -350,6 +350,7 @@ jobs:
           # Serial only. Herdr and the credential-safe real Pi lifecycle
           # regression are mandatory in this lane; neither may gate-skip.
           bin/fm-test-run.sh --family real-herdr-gated \
+            --fail-on-gate-skip 'herdr not found' \
             --fail-on-gate-skip 'live: herdr absent' \
             --fail-on-gate-skip 'live: pi absent' \
             --fail-on-gate-skip 'live: tmux absent' \
