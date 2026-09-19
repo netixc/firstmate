@@ -77,6 +77,8 @@ bin/fm-test-run.sh \
 ```
 
 The dedicated tmux cell removes ambient tmux variables, uses a socket-bound wrapper, keeps an independent control window, and proves invalid metadata never invokes the backend.
+Herdr cleanup additionally treats `lsof` as a preflight dependency because a closed Herdr pane has no safe process-group fallback for reparented task descendants.
+`tests/fm-teardown.test.sh` proves both sides: with `lsof`, an exact cwd-bound leaked process is reaped before the isolated copy is returned; without `lsof`, cleanup refuses before endpoint mutation and preserves every durable task record.
 
 ## Composer classification matrix
 
@@ -102,10 +104,10 @@ The portable enqueue and retry ladder remain covered by `tests/fm-task-inbox.tes
 
 ## Herdr
 
-The compatibility floor is protocol 14.
-The whole real-Herdr lane's latest active verification uses both Herdr 0.7.4 protocol 16 and Herdr 0.8.0 protocol 19 on macOS aarch64, while focused Herdr 0.7.5 protocol 17, earlier protocol-16, protocol-14, and 0.7.3 evidence is retained where it defines current behavior or fallbacks.
-Protocol 17 keeps every protocol-16 feature gate satisfied; the event and workspace-move floors remain 16.
-Default-on presentation projection has its own floor at Herdr 0.8.0, protocol 19, verified below.
+The production floor is Herdr 0.9.0 and protocol 22; both signals are required.
+The pinned installer and the required real-Herdr CI matrix exercise that exact floor on hosted Linux x86_64 and hosted macOS.
+Earlier 0.7.x and 0.8.0 measurements below remain historical evidence for defensive fallback behavior, not supported-runtime claims.
+The event and workspace-move capability gates remain protocol 16, and the retained presentation capability gate remains Herdr 0.8.0 / protocol 19, but every supported production runtime exceeds all three.
 
 Core read-only probes:
 
@@ -115,11 +117,11 @@ herdr status --json | jq -c '{client:.client.protocol,server:.server.protocol}'
 herdr api schema --json | jq -c '.schemas.subscription_event["$defs"].SubscriptionEventKind.enum'
 ```
 
-Observed protocol-16 compatibility shapes:
+Active floor shape, observed 2026-09-18 on macOS aarch64:
 
 ```text
-herdr 0.7.5
-{"client":17,"server":17}
+herdr 0.9.0
+{"client":22,"server":22}
 ["pane.output_matched","pane.agent_status_changed","pane.scroll_changed"]
 ```
 
@@ -383,7 +385,7 @@ ok - version floor: an unconfigured home stays projected on herdr 0.8.0 and the 
 evidence: herdr=0.8.0 protocol=19 steal_live=0 floor_verdict=0 default-session-tripwire=armed
 ```
 
-The same guarded named-lab command passed on 2026-09-03 against Herdr 0.8.2 after this regression joined the required `real-herdr-gated` lane.
+The same guarded named-lab command passed on 2026-09-03 against Herdr 0.8.2 when this regression joined the then-required `real-herdr-gated` lane; that pre-0.9.0 result is retained as historical fallback evidence.
 It reported `steal_live=0 floor_verdict=0 default-session-tripwire=armed`, with the fleet's default session unchanged before and after.
 
 Part C is the case the suite could not reach before: a doomed pane whose shell holds a persistent background child fails the lone-idle-shell proof on every sample, so the plan takes the plain explicit close, in the geometry where the closing workspace's right neighbour is a spacer rather than the focused anchor.
@@ -456,7 +458,7 @@ tests/fm-backend-herdr.test.sh
 
 Observed guarantees: every measured release classifies as the table records; either the protocol or the version signal alone carries an at-or-above verdict, and each divergent pair flips once the carrying signal is removed; client and running selected-session server verdicts compose conservatively, an unreadable server-running state and losing both release signals report indeterminate and fall back flat, the default is rechecked after server ensure before projection publication, an unconfigured home is projected only at or above the floor, an explicit `on`, including the historical empty opt-in file, is honored below it, and the below-floor warning is emitted once per home per detected release rather than once per spawn.
 
-The whole real-Herdr lane was run on 2026-08-05 against both the CI-pinned Herdr 0.7.4 protocol 16, which is below the floor, and Herdr 0.8.0 protocol 19, which is at it:
+The pre-0.9.0 real-Herdr lane was run on 2026-08-05 against both the then-CI-pinned Herdr 0.7.4 protocol 16, which is below the floor, and Herdr 0.8.0 protocol 19, which is at the presentation floor:
 
 ```sh
 HERDR_LAB_HELPER=bin/fm-herdr-lab.sh bin/fm-test-run.sh --lane real-herdr-gated
@@ -514,11 +516,25 @@ Real captures verified these active distinctions:
 - A bare shell prompt has no safe agent-composer container and is unknown.
 
 `tests/fm-composer-ghost.test.sh`, `tests/fm-composer-lib.test.sh`, and the Herdr composer cases pin the exact captured ANSI bytes.
-The U+2063 operational and routed-request separators were exercised through a real Pi-on-Herdr path; the byte-exact active regression is:
+The required credential-safe real Pi regression now exercises the current durable transport rather than the retired typed-marker path.
+It drives production spawn, send, interrupt, exit, relaunch, and cleanup wrappers; reads and acts on the exact numeric inbox record; moves it into `handled/`; verifies pending-reply correlation and the routed parent response; and proves direct terminal input stays unmarked.
+The extension registers an explicit credential-free fixture model, records any attempted provider stream as a failure, and aborts at `agent_start`, after Pi has begun a real turn but before any provider request.
+This makes the guard independent of ambient credentials while preserving native busy-to-idle lifecycle reporting.
+The same script retains one tmux reference run:
 
 ```sh
-FM_SEND_MARKER_HERDR_E2E=1 \
-  tests/fm-send-secondmate-marker-herdr-e2e.test.sh
+tests/fm-pi-lifecycle-wrappers-live-e2e.test.sh
+```
+
+Observed 2026-09-19 on macOS aarch64 and on a supplementary Ubuntu 24.04 x86_64 LXC with Herdr 0.9.0 / protocol 22 and Pi 0.85.1:
+
+```text
+ok - real Pi/herdr: exact durable routing, handled acknowledgement, correlation, and routed response all hold
+ok - real Pi/herdr: interrupt, exit, and relaunch wrappers preserve the endpoint lifecycle
+ok - real Pi/herdr: direct terminal input stays unmarked
+ok - real Pi/herdr: production cleanup completed
+ok - real Pi/tmux: exact durable routing, handled acknowledgement, correlation, and routed response all hold
+ok - credential-safe real Pi lifecycle parity covers Herdr and the tmux reference backend
 ```
 
 ### Native blocked event

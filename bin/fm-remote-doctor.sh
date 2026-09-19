@@ -67,7 +67,7 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(CDPATH='' cd "$SCRIPT_DIR/.." && pwd -P)}"
 . "$SCRIPT_DIR/fm-tasks-axi-lib.sh"
 # shellcheck source=bin/fm-remote-herdr-owner-lib.sh
 . "$SCRIPT_DIR/fm-remote-herdr-owner-lib.sh"
-REQUIRED_TOOLS=(git jq herdr tasks-axi treehouse)
+REQUIRED_TOOLS=(git jq lsof herdr tasks-axi treehouse)
 HARNESS_TOOLS=(pi)
 OPTIONAL_TOOLS=(tmux no-mistakes gh)
 LAUNCH_AGENT_LABEL=dev.firstmate.herdr.fm-remote
@@ -451,7 +451,7 @@ report_required_tools() {
 
 report_required_tools_from_worker() {
   local job_id probe_stdout probe_stderr probe_exit line fact name value
-  local expected=6 count=0 valid=1 seen=' '
+  local expected=7 count=0 valid=1 seen=' '
   if ! job_id=$(fm_remote_job_stage "${HOME:-}" "$FM_ROOT" "${FM_HOME:-}" \
     fm-remote-doctor.sh --worker-tool-probe </dev/null); then
     set_check remote-job-probe "fixable: the remote job worker could not accept the required-tool probe" \
@@ -475,7 +475,7 @@ report_required_tools_from_worker() {
     fact=${line#required }
     name=${fact%%=*}
     value=${fact#*=}
-    case "$name" in git|jq|herdr|tasks-axi|treehouse|harness) ;; *) valid=0; continue ;; esac
+    case "$name" in git|jq|lsof|herdr|tasks-axi|treehouse|harness) ;; *) valid=0; continue ;; esac
     case "$seen" in *" $name "*) valid=0; continue ;; esac
     seen="$seen$name "
     count=$((count + 1))
@@ -563,17 +563,27 @@ fix_remote_job_worker() {
 # --- checks -----------------------------------------------------------------
 
 check_herdr() {
-  local resolved selected
+  local resolved selected version_error
   if resolved=$(command -v herdr 2>/dev/null) && [ -x "$resolved" ]; then
-    if herdr_adapter_load; then
-      fm_backend_herdr_client_select "$HERDR_SESSION_NAME"
-      selected=$(fm_backend_herdr_bin)
-      if [ "$selected" != herdr ] && [ "$selected" != "$resolved" ]; then
-        record herdr "ok: $selected (bypassing $resolved)"
-        return 0
-      fi
+    selected=$resolved
+    if ! herdr_adapter_load; then
+      record herdr "human: the Firstmate Herdr compatibility check could not load" \
+        "repair this Firstmate clone, then rerun this command"
+      return 0
     fi
-    record herdr "ok: $resolved"
+    fm_backend_herdr_client_select "$HERDR_SESSION_NAME"
+    selected=$(fm_backend_herdr_bin)
+    [ "$selected" != herdr ] || selected=$resolved
+    if ! version_error=$(fm_backend_herdr_version_check "$selected" 2>&1); then
+      record herdr "human: ${version_error#error: }" \
+        "install Herdr 0.9.0 or newer (protocol 22 or newer) on that account, then rerun this command"
+      return 0
+    fi
+    if [ "$selected" != "$resolved" ]; then
+      record herdr "ok: $selected (bypassing $resolved; release 0.9.0+ / protocol 22+)"
+      return 0
+    fi
+    record herdr "ok: $resolved (release 0.9.0+ / protocol 22+)"
     return 0
   fi
   record herdr "human: the herdr CLI does not resolve on the remote runtime PATH" \

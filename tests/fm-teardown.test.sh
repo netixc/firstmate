@@ -3369,6 +3369,57 @@ EOF
   pass "missing lsof falls back to reaping the tmux pane process group"
 }
 
+test_lsof_absent_refuses_herdr_before_endpoint_or_record_cleanup() {
+  local case_dir rc path_without_lsof
+  case_dir=$(make_case herdr-lsof-absent-refusal)
+  write_meta "$case_dir" no-mistakes ship
+  configure_flat_herdr_teardown_case "$case_dir"
+  land_shippable_commit "$case_dir"
+  path_without_lsof=$(make_path_without_lsof "$case_dir")
+  PATH="$path_without_lsof" command -v lsof >/dev/null 2>&1 \
+    && fail "herdr-lsof-absent-refusal: fixture path unexpectedly exposes lsof"
+
+  rc=0
+  FM_TEARDOWN_TEST_PATH="$path_without_lsof" \
+    run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr" || rc=$?
+
+  expect_code 1 "$rc" "herdr-lsof-absent-refusal: cleanup must refuse without its process-identity dependency"
+  assert_grep "REFUSED: lsof is required to identify leaked processes for Herdr task task-x1; nothing was changed" "$case_dir/stderr" \
+    "herdr-lsof-absent-refusal: cleanup did not explain the dependency refusal"
+  assert_present "$case_dir/wt" "herdr-lsof-absent-refusal: cleanup removed the worktree"
+  assert_present "$case_dir/state/task-x1.meta" "herdr-lsof-absent-refusal: cleanup removed task metadata"
+  assert_absent "$case_dir/closed" "herdr-lsof-absent-refusal: cleanup closed the endpoint before checking lsof"
+  pass "Herdr cleanup without lsof refuses before endpoint mutation and preserves every durable task record"
+}
+
+test_lsof_present_reaps_herdr_worktree_process() {
+  local case_dir rc pid
+  case_dir=$(make_case herdr-lsof-present-reap)
+  write_meta "$case_dir" no-mistakes ship
+  configure_flat_herdr_teardown_case "$case_dir"
+  land_shippable_commit "$case_dir"
+
+  ( cd "$case_dir/wt" && exec sleep 300 ) &
+  pid=$!
+  disown
+  sleep 0.3
+  kill -0 "$pid" 2>/dev/null || fail "herdr-lsof-present-reap: setup sleeper did not start"
+
+  rc=0
+  FM_FAKE_HERDR_LOG="$case_dir/herdr.log" FM_FAKE_HERDR_CLOSED="$case_dir/closed" \
+    run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr" || rc=$?
+
+  expect_code 0 "$rc" "herdr-lsof-present-reap: cleanup should succeed with lsof"
+  if kill -0 "$pid" 2>/dev/null; then
+    kill -KILL "$pid" 2>/dev/null || true
+    fail "herdr-lsof-present-reap: leaked worktree process survived cleanup"
+  fi
+  assert_grep "reaping leaked worktree process" "$case_dir/stderr" \
+    "herdr-lsof-present-reap: cleanup did not report reaping the exact process"
+  assert_absent "$case_dir/state/task-x1.meta" "herdr-lsof-present-reap: successful cleanup left task metadata"
+  pass "Herdr cleanup with lsof reaps a leaked worktree process and completes"
+}
+
 test_lsof_error_refuses_before_removal() {
   local case_dir rc
   case_dir=$(make_case lsof-error-refusal)
@@ -3741,6 +3792,8 @@ test_own_autonomous_run_is_left_alone
 test_leaked_worktree_process_is_reaped
 test_leaked_tasktmp_process_is_reaped
 test_lsof_absent_reaps_tmux_process_group
+test_lsof_absent_refuses_herdr_before_endpoint_or_record_cleanup
+test_lsof_present_reaps_herdr_worktree_process
 test_lsof_error_refuses_before_removal
 test_reused_pid_identity_is_not_force_killed
 test_exec_changed_process_is_still_reaped

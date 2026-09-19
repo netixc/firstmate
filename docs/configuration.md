@@ -134,7 +134,8 @@ Any value other than `tmux` or `herdr` is rejected.
 The session-start secondmate liveness sweep uses the recovery-grade `fm_backend_agent_state` classifier where verified.
 The comment above that function in `bin/fm-backend.sh` is the single owner of its detailed state contract and recovery authorization.
 `fm_backend_agent_alive` projects those detailed results to `alive`, `dead`, or `unknown` for callers that need only coarse presence.
-A Herdr spawn version-gates the installed `herdr` protocol and requires `jq`; dependency or version failures are terminal for that selected backend and never trigger a silent fallback.
+A Herdr spawn requires release 0.9.0 or newer, protocol 22 or newer, `jq`, and `lsof`; dependency or version failures are terminal for that selected backend and never trigger a silent fallback.
+Cleanup preflights `lsof` before mutating a Herdr endpoint because no safe post-close process-group fallback can identify a reparented task descendant.
 
 Task metadata records `backend=` only for Herdr; an absent `backend=` means tmux.
 Every new task records `endpoint_task_id=` as the cleanup binding between the metadata filename and its opaque runtime endpoint.
@@ -391,7 +392,7 @@ This section is the single owner of that universal toolchain list; backend guide
 In that list, no-mistakes runs the validation pipeline, gh-axi and chrome-devtools-axi cover GitHub and browser operations, and tasks-axi plus quota-axi back backlog mutations and quota-aware array dispatch.
 Lavish is a presentation-only dependency for visual decisions and reports; nonvisual work can proceed with plain text when it is unavailable.
 The per-backend delta is required only for the backend resolved from `FM_BACKEND`, then `config/backend`, then runtime auto-detection, then default `tmux`, so a home is never told to install a tool an inactive backend or feature would need.
-That delta is owned in code by `fm_backend_required_tools` in `bin/fm-backend.sh`: `tmux` or `herdr`, `jq` for Herdr's JSON output, and the `treehouse` worktree provider used by both backends.
+That delta is owned in code by `fm_backend_required_tools` in `bin/fm-backend.sh`: `tmux` or `herdr`, `jq` for Herdr's JSON output, `lsof` for Herdr's exact cleanup proof, and the `treehouse` worktree provider used by both backends.
 An unknown resolved backend emits `BACKEND_INVALID` and blocks dispatch instead of silently dropping its dependency delta or falling back to tmux.
 A Herdr home is never told tmux is missing.
 When `config/crew-dispatch.json` exists, bootstrap also requires `jq` for dispatch profile validation.

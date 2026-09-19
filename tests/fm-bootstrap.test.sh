@@ -517,13 +517,13 @@ make_fake_toolchain_no_tmux() {  # <case-dir> <extra-cli...>
   shift
   fakebin=$(make_fake_toolchain "$dir")
   rm -f "$fakebin/tmux"
-  fm_fake_exit0 "$fakebin" jq "$@"
+  fm_fake_exit0 "$fakebin" jq lsof "$@"
   printf '%s\n' "$fakebin"
 }
 
 test_session_provider_backends_do_not_require_tmux() {
   local backend cli case_dir fakebin out
-  # Herdr requires its own CLI, jq, and Treehouse, never tmux. With all genuine
+  # Herdr requires its own CLI, jq, lsof, and Treehouse, never tmux. With all genuine
   # dependencies present and tmux absent,
   # bootstrap must be silent.
   while IFS='^' read -r backend cli; do
@@ -539,7 +539,7 @@ test_session_provider_backends_do_not_require_tmux() {
   done <<'ROWS'
 herdr^herdr
 ROWS
-  pass "bootstrap: session-provider backends require their own CLI + jq + treehouse, never tmux"
+  pass "bootstrap: session-provider backends require their own CLI + jq + lsof + treehouse, never tmux"
 }
 
 test_session_provider_backends_gate_own_cli_not_tmux() {
@@ -634,6 +634,33 @@ SH
 herdr
 ROWS
   pass "bootstrap: JSON-emitting backends require jq (their genuine dep), never tmux"
+}
+
+test_herdr_requires_lsof_for_exact_cleanup() {
+  local case_dir fakebin bash_env out
+  case_dir="$TMP_ROOT/herdr-missing-lsof"
+  mkdir -p "$case_dir/home/config"
+  printf '%s\n' manual > "$case_dir/home/config/backlog-backend"
+  printf '%s\n' herdr > "$case_dir/home/config/backend"
+  fakebin=$(make_fake_toolchain_no_tmux "$case_dir" herdr)
+  rm -f "$fakebin/lsof"
+  bash_env="$case_dir/no-lsof.bash"
+  cat > "$bash_env" <<'SH'
+command() {
+  if [ "${1:-}" = -v ] && [ "${2:-}" = lsof ]; then
+    return 1
+  fi
+  builtin command "$@"
+}
+lsof() {
+  return 127
+}
+SH
+  out=$(PATH="$fakebin:$BASE_PATH" BASH_ENV="$bash_env" FM_HOME="$case_dir/home" FM_ROOT_OVERRIDE="$case_dir/home" \
+    FM_FAKE_TREEHOUSE_LEASE_HELP=1 "$ROOT/bin/fm-bootstrap.sh")
+  assert_contains "$out" "MISSING: lsof" "backend=herdr must report lsof as an explicit cleanup dependency"
+  assert_not_contains "$out" "MISSING: tmux" "backend=herdr must not substitute tmux when lsof is missing"
+  pass "bootstrap: Herdr explicitly requires lsof for exact endpoint cleanup"
 }
 
 test_treehouse_lease_check_follows_resolved_backend() {
@@ -1086,6 +1113,7 @@ test_session_provider_backends_gate_own_cli_not_tmux
 test_herdr_install_requires_manual_action
 test_unknown_backend_reports_invalid_configuration
 test_json_backends_require_jq_not_tmux
+test_herdr_requires_lsof_for_exact_cleanup
 test_treehouse_lease_check_follows_resolved_backend
 test_fleet_sync_timeout_scales_with_origin_backed_project_count
 test_fleet_sync_timeout_floor_preserves_small_fleets

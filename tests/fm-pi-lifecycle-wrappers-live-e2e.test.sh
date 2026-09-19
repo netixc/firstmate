@@ -122,7 +122,7 @@ export default function (pi: any) {
     },
   });
   pi.on("project_trust", () => ({ trusted: "yes", remember: false }));
-  pi.on("before_agent_start", (event: any, ctx: any) => {
+  pi.on("before_agent_start", (event: any) => {
     const prompt = String(event.prompt ?? "");
     record({ kind: "prompt", home: process.env.FM_HOME ?? "", prompt });
     const match = prompt.match(/list '([^']+)'\\/\\*\\.msg/);
@@ -149,6 +149,8 @@ export default function (pi: any) {
         appendFileSync(join(actedDir, basename(inbox, ".inbox")), body + "\\n");
       }
     }
+  });
+  pi.on("agent_start", (_event: any, ctx: any) => {
     ctx.abort();
   });
 }

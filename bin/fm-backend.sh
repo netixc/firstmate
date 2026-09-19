@@ -148,7 +148,7 @@ fm_backend_validate_spawn() {  # <name>
 fm_backend_required_tools() {  # <backend>
   case "$1" in
     tmux)  printf '%s' 'tmux treehouse' ;;
-    herdr) printf '%s' 'herdr jq treehouse' ;;
+    herdr) printf '%s' 'herdr jq lsof treehouse' ;;
     *) return 1 ;;
   esac
 }
