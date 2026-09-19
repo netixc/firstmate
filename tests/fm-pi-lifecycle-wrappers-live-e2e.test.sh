@@ -220,7 +220,7 @@ wait_for_handled_count() { # <handled-dir> <count>
 run_backend_lifecycle() { # <herdr|tmux>
   local backend=$1 id="live-${1}" parent="$TMP_ROOT/${1}-parent" mate="$TMP_ROOT/${1}-mate"
   local request="durable request for $1" request_two="second durable request for $1" direct="direct terminal input for $1"
-  local meta target body corr pending phase got handled_count corr_two body_two order
+  local meta target body corr pending phase got handled_count corr_two body_two order record
   local -a handled_records
 
   mkdir -p "$parent/state" "$parent/data" "$parent/config" "$parent/projects"
@@ -260,7 +260,11 @@ run_backend_lifecycle() { # <herdr|tmux>
     || fail "$backend: worker did not acknowledge both durable inbox records"
   handled_count=$(find "$parent/state/$id.inbox/handled" -maxdepth 1 -type f -name '*.msg' | wc -l | tr -d ' ')
   [ "$handled_count" -eq 2 ] || fail "$backend: expected exactly two handled inbox records"
-  mapfile -t handled_records < <(find "$parent/state/$id.inbox/handled" -maxdepth 1 -type f -name '*.msg' -print | sort)
+  handled_records=()
+  while IFS= read -r record; do
+    [ -n "$record" ] || continue
+    handled_records[${#handled_records[@]}]=$record
+  done < <(find "$parent/state/$id.inbox/handled" -maxdepth 1 -type f -name '*.msg' -print | sort)
   [ "${#handled_records[@]}" -eq 2 ] || fail "$backend: handled inbox records were not discoverable"
   body=$(fm_task_inbox_body "${handled_records[0]}") || fail "$backend: first handled record body could not be read"
   body_two=$(fm_task_inbox_body "${handled_records[1]}") || fail "$backend: second handled record body could not be read"
