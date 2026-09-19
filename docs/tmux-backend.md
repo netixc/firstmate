@@ -1,6 +1,7 @@
 # tmux runtime backend
 
-tmux is Firstmate's supported default session backend and reference baseline for secondmate homes.
+tmux is Firstmate's retained rollback session backend for explicit endpoints that already exist.
+It remains a verified implementation and reference baseline, but cannot create fresh task or secondmate endpoints.
 [`configuration.md`](configuration.md#runtime-backend-configbackend--fm_backend) owns shared backend selection and metadata semantics.
 
 ## Setup
@@ -8,39 +9,36 @@ tmux is Firstmate's supported default session backend and reference baseline for
 Install tmux with `brew install tmux` or your platform package manager.
 The universal harness and toolchain requirements are in [`configuration.md`](configuration.md#toolchain).
 
-tmux is the hard default when no explicit setting or runtime auto-detection selects another backend.
-Select it explicitly with local `config/backend` containing `tmux`, with `FM_BACKEND=tmux` for one launch, or by asking Firstmate to use tmux.
-An explicit selection is also the opt-out from Herdr runtime auto-detection.
+Fresh work defaults to Herdr.
+A local `config/backend` containing `tmux`, `FM_BACKEND=tmux`, or an explicit `--backend tmux` request refuses before endpoint or isolated-copy creation and explains that tmux is rollback-only.
+Runtime markers do not opt fresh work into tmux.
 
-No provisioning is required before the first task.
+Keep tmux installed while this home has an exact existing `backend=tmux` record.
+Bootstrap detects that recorded rollback need and reports a missing tmux executable even though fresh work resolves to Herdr.
 
 ## Watching the crew
 
-For the best visible experience, launch the primary harness inside a tmux session:
+An explicit existing rollback record names the tmux session and exact `fm-<id>` window it was created with.
+Firstmate no longer creates or adopts a tmux session for fresh work.
+To inspect a retained endpoint, attach to its recorded session:
 
 ```sh
-tmux new -s firstmate
+tmux attach -t <recorded-session>
 ```
 
-Crew tasks become windows in that session.
-`tmux display-message -p '#S'` prints its name.
-If the primary harness runs outside tmux, Firstmate creates or reuses a detached session named `firstmate`:
-
-```sh
-tmux attach -t firstmate
-```
-
-Each task window is named `fm-<id>`.
+`tmux display-message -p '#S'` prints the attached session name.
 
 ```sh
 tmux list-windows -t <session-name>
 tmux select-window -t <session-name>:fm-<id>
 ```
 
-Typing into an attached task window is authoritative direct intervention.
-Routine supervision does not require attachment: `bin/fm-peek.sh <id>` captures a bounded tail and `FM_HOME=<home> bin/fm-send.sh <id> '<text>'` steers the recorded endpoint.
+Typing into an attached rollback task window is authoritative direct intervention.
+Routine supervision does not require attachment: `bin/fm-peek.sh <id>` captures a bounded tail and `FM_HOME=<home> bin/fm-send.sh <id> '<text>'` steers an exact recorded endpoint.
+Unrecorded tmux window names and backend-less records are refused rather than inferred.
 
-Verify setup by spawning a small task and confirming its `fm-<id>` window appears in the selected session.
+Do not verify tmux by spawning a new Firstmate task.
+Use the retained adapter regression entry points below or inspect an explicit existing rollback record.
 
 ## Current behavior and safety
 
@@ -90,7 +88,7 @@ Without that baseline, an `unknown` verdict is preserved untouched, so a busy-lo
 
 ## Limits and regression entry points
 
-- tmux is the reference path and supports secondmate homes.
+- tmux supports exact existing task and secondmate rollback records but no fresh creation.
 
 ```sh
 tests/fm-backend-tmux-smoke.test.sh

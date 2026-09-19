@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # fm-send strict target resolution and key delivery reporting.
 #
-# A send that cannot be tied to a recorded task/lane or to an explicit
-# well-formed backend target must fail loudly. These tests pin the historical
+# A send that cannot be tied to a recorded task/lane with an explicit backend
+# identity must fail loudly. These tests pin the historical
 # silent-fallback failures: missing FM_HOME, unresolved selectors, prefixless
-# herdr pane ids, dead explicit endpoints, and the healthy exact/fm-id paths.
+# Herdr pane ids, unrecorded explicit endpoints, and healthy exact/fm-id paths.
 # They also verify that a key send reports whether delivery actually succeeded.
 set -u
 
@@ -154,18 +154,19 @@ test_prefixless_herdr_pane_id_fails() {
   pass "fm-send strict: prefixless herdr pane ids are rejected before tmux fallback"
 }
 
-test_unmatched_single_colon_target_must_exist() {
+test_unrecorded_single_colon_target_refuses() {
   local dir fb home err log rc
-  dir="$TMP_ROOT/dead-explicit"; mkdir -p "$dir"
-  fb=$(make_stubs "$dir"); home=$(setup_home deadexplicit); err="$dir/send.err"; log="$dir/tmux.log"; : > "$log"
+  dir="$TMP_ROOT/unrecorded-explicit"; mkdir -p "$dir"
+  fb=$(make_stubs "$dir"); home=$(setup_home unrecordedexplicit); err="$dir/send.err"; log="$dir/tmux.log"; : > "$log"
 
-  PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" FM_TMUX_LOG="$log" FM_FAKE_TMUX_DEAD_TARGET=sess:missing FM_SEND_SETTLE=0 \
-    "$SEND" sess:missing "hello" >/dev/null 2>"$err"; rc=$?
-  [ "$rc" -ne 0 ] || fail "dead explicit tmux-shaped target should fail"
-  assert_contains "$(cat "$err")" "not a live tmux endpoint" "dead explicit target diagnostic should name the assumed backend"
-  assert_contains "$(cat "$err")" "backend=tmux" "dead explicit target diagnostic should name the tried backend"
-  [ ! -s "$log" ] || fail "dead explicit target still attempted a send"$'\n'"$(cat "$log")"
-  pass "fm-send strict: unmatched single-colon explicit targets must verify live before sending"
+  PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" FM_TMUX_LOG="$log" \
+    FM_GATE_REFUSE_BYPASS='' FM_SEND_SETTLE=0 \
+    "$SEND" sess:unrecorded "hello" >/dev/null 2>"$err"; rc=$?
+  [ "$rc" -ne 0 ] || fail "live but unrecorded tmux-shaped target should fail"
+  assert_contains "$(cat "$err")" "no matching task metadata" "unrecorded explicit target diagnostic should name the missing identity"
+  assert_contains "$(cat "$err")" "refusing to guess tmux or herdr" "unrecorded explicit target diagnostic should refuse backend inference"
+  [ ! -s "$log" ] || fail "unrecorded explicit target still attempted a send"$'\n'"$(cat "$log")"
+  pass "fm-send strict: unrecorded single-colon targets refuse without backend inference"
 }
 
 test_fm_prefixed_herdr_session_is_an_explicit_target() {
@@ -174,14 +175,16 @@ test_fm_prefixed_herdr_session_is_an_explicit_target() {
   fb=$(make_stubs "$dir"); home=$(setup_home fmremote); err="$dir/send.err"; log="$dir/tmux.log"; herdr_log="$dir/herdr.log"
   : > "$log"
   : > "$herdr_log"
+  fm_write_meta "$home/state/remote.meta" \
+    "window=fm-remote:w1:p2" "backend=herdr" "herdr_session=fm-remote" \
+    "herdr_pane_id=w1:p2" "kind=secondmate"
 
   PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" FM_TMUX_LOG="$log" FM_HERDR_LOG="$herdr_log" FM_SEND_SETTLE=0 \
     "$SEND" fm-remote:w1:p2 --key Enter >/dev/null 2>"$err"; rc=$?
   expect_code 0 "$rc" "an fm-prefixed Herdr session target should be accepted as explicit"
-  assert_grep 'pane get w1:p2 --session fm-remote' "$herdr_log" "fm-prefixed Herdr target was not verified in its session"
-  assert_grep 'pane send-keys w1:p2 enter --session fm-remote' "$herdr_log" "fm-prefixed Herdr target was not sent its key in its session"
+  assert_grep 'pane send-keys w1:p2 enter --session fm-remote' "$herdr_log" "recorded fm-prefixed Herdr target was not sent its key in its session"
   assert_no_grep '--session default' "$herdr_log" "fm-prefixed Herdr target fell back to the default session"
-  pass "fm-send strict: fm-prefixed Herdr sessions remain explicit backend targets"
+  pass "fm-send strict: recorded fm-prefixed Herdr sessions retain their explicit backend identity"
 }
 
 test_healthy_fm_id_send_still_works() {
@@ -236,6 +239,6 @@ test_key_send_exit_status_follows_delivery
 test_unset_fm_home_fails
 test_unresolvable_target_does_not_tmux_fallback
 test_prefixless_herdr_pane_id_fails
-test_unmatched_single_colon_target_must_exist
+test_unrecorded_single_colon_target_refuses
 test_fm_prefixed_herdr_session_is_an_explicit_target
 test_healthy_fm_id_send_still_works

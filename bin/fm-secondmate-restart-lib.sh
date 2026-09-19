@@ -50,7 +50,7 @@ FM_SECONDMATE_RESTART_HARNESS=""
 FM_SECONDMATE_RESTART_HOST=""
 FM_SECONDMATE_RESTART_REASON=""
 fm_secondmate_restart_capable() {  # <meta-file>
-  local meta=$1 kind window remote_host backend harness family
+  local meta=$1 kind window remote_host backend route_backend harness family
   FM_SECONDMATE_RESTART_PLACEMENT=""
   FM_SECONDMATE_RESTART_BACKEND=""
   FM_SECONDMATE_RESTART_HARNESS=""
@@ -73,17 +73,23 @@ fm_secondmate_restart_capable() {  # <meta-file>
   fi
   harness=$(fm_meta_get "$meta" harness)
   remote_host=$(fm_meta_get "$meta" remote_host)
+  if ! backend=$(fm_backend_of_meta "$meta" 2>/dev/null); then
+    FM_SECONDMATE_RESTART_REASON="its durable record has no unambiguous explicit runtime backend"
+    return 1
+  fi
   if [ -n "$remote_host" ]; then
     FM_SECONDMATE_RESTART_PLACEMENT=remote
     FM_SECONDMATE_RESTART_HOST=$remote_host
-    # A remote mate's endpoint record lives on its host; the parent's own record
-    # names the backend that launch established there, and the remote route
-    # accepts nothing but herdr.
-    backend=$(fm_meta_get "$meta" remote_backend)
-    [ -n "$backend" ] || backend=herdr
+    # A remote mate's endpoint record lives on its host. Both the parent's
+    # general endpoint identity and the route-specific identity must explicitly
+    # name Herdr; neither may be inferred during the transition.
+    route_backend=$(fm_meta_get "$meta" remote_backend)
+    if [ "$backend" != herdr ] || [ "$route_backend" != herdr ]; then
+      FM_SECONDMATE_RESTART_REASON="its remote route does not carry matching explicit Herdr backend identities"
+      return 1
+    fi
   else
     FM_SECONDMATE_RESTART_PLACEMENT=local
-    backend=$(fm_backend_of_meta "$meta")
   fi
   FM_SECONDMATE_RESTART_BACKEND=$backend
   if ! fm_control_backend_state_verified "$backend"; then

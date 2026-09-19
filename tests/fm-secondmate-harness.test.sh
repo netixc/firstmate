@@ -515,48 +515,44 @@ spawn_secondmate_capture() {
     "$ROOT/bin/fm-spawn.sh" "$id" "$home" "$@" --secondmate
 }
 
-test_spawn_backend_precedence_over_inherited_config() {
+test_spawn_refuses_inherited_tmux_backend() {
   local w sm meta launchlog out status
-  w="$TMP_ROOT/spawn-backend-env-precedence"
+  w="$TMP_ROOT/spawn-backend-inherited-tmux"
   sm="$w/sm"
   launchlog="$w/launch.log"
   mkdir -p "$w/home/config"
-  printf 'herdr\n' > "$w/home/config/backend"
+  printf 'tmux\n' > "$w/home/config/backend"
   make_seeded_home "$sm" sm
 
-  out=$(FM_BACKEND=tmux spawn_secondmate_capture \
+  out=$(FM_GATE_REFUSE_BYPASS='' FM_BACKEND='' spawn_secondmate_capture \
     "$w" sm "$sm" "$launchlog" 2>&1); status=$?
-  expect_code 0 "$status" \
-    "FM_BACKEND=tmux should beat inherited config/backend=herdr"$'\n'"$out"
-
+  [ "$status" -ne 0 ] || fail "inherited config/backend=tmux created a future secondmate endpoint"
+  assert_contains "$out" "rollback-only" \
+    "inherited tmux secondmate refusal did not explain the rollback-only boundary"
   meta="$w/home/state/sm.meta"
-  [ "$(cat "$sm/config/backend")" = herdr ] \
-    || fail "backend precedence fixture did not inherit config/backend=herdr"
-  assert_no_grep '^backend=' "$meta" \
-    "FM_BACKEND=tmux did not beat inherited config/backend=herdr"
-  pass "B5b spawn: FM_BACKEND wins over inherited config/backend"
+  [ ! -e "$meta" ] || fail "inherited tmux refusal published secondmate metadata"
+  [ ! -s "$launchlog" ] || fail "inherited tmux refusal launched a secondmate command"
+  pass "B5b spawn: inherited config/backend=tmux cannot create a future secondmate endpoint"
 }
 
-test_spawn_explicit_backend_precedence_over_env_and_inherited_config() {
+test_spawn_refuses_explicit_tmux_backend() {
   local w sm meta launchlog out status
-  w="$TMP_ROOT/spawn-backend-flag-precedence"
+  w="$TMP_ROOT/spawn-backend-explicit-tmux"
   sm="$w/sm"
   launchlog="$w/launch.log"
   mkdir -p "$w/home/config"
   printf 'herdr\n' > "$w/home/config/backend"
   make_seeded_home "$sm" sm
 
-  out=$(FM_BACKEND=herdr spawn_secondmate_capture \
+  out=$(FM_GATE_REFUSE_BYPASS='' FM_BACKEND=herdr spawn_secondmate_capture \
     "$w" sm "$sm" "$launchlog" --backend tmux 2>&1); status=$?
-  expect_code 0 "$status" \
-    "explicit --backend tmux should beat FM_BACKEND=herdr and inherited config/backend=herdr"$'\n'"$out"
-
+  [ "$status" -ne 0 ] || fail "explicit --backend tmux created a future secondmate endpoint"
+  assert_contains "$out" "rollback-only" \
+    "explicit tmux secondmate refusal did not explain the rollback-only boundary"
   meta="$w/home/state/sm.meta"
-  [ "$(cat "$sm/config/backend")" = herdr ] \
-    || fail "explicit backend precedence fixture did not inherit config/backend=herdr"
-  assert_no_grep '^backend=' "$meta" \
-    "explicit --backend tmux did not beat FM_BACKEND=herdr and inherited config/backend=herdr"
-  pass "B5c spawn: explicit --backend wins over FM_BACKEND and inherited config/backend"
+  [ ! -e "$meta" ] || fail "explicit tmux refusal published secondmate metadata"
+  [ ! -s "$launchlog" ] || fail "explicit tmux refusal launched a secondmate command"
+  pass "B5c spawn: explicit --backend tmux cannot create a future secondmate endpoint"
 }
 
 # A bare "<harness>" secondmate-harness file (today's format) must launch with
@@ -2391,8 +2387,8 @@ test_spawn_crew_resolution_when_secondmate_pin_absent
 test_spawn_with_no_runtime_config_uses_own_pi
 test_spawn_explicit_harness_wins
 test_spawn_unknown_secondmate_harness_refused
-test_spawn_backend_precedence_over_inherited_config
-test_spawn_explicit_backend_precedence_over_env_and_inherited_config
+test_spawn_refuses_inherited_tmux_backend
+test_spawn_refuses_explicit_tmux_backend
 test_spawn_bare_harness_no_model_effort_flag
 test_spawn_secondmate_harness_model_token
 test_spawn_secondmate_harness_model_and_effort_tokens

@@ -257,6 +257,7 @@ make_remote_ledger_fleet() {  # <parent-home> <count>
       "$id" "$i" "$remote_home" >> "$parent/data/secondmates.md"
     fm_write_meta "$parent/state/$id.meta" \
       "kind=secondmate" "mode=secondmate" "harness=pi" \
+      "backend=herdr" "remote_backend=herdr" \
       "remote_host=host-$i" "remote_root=/remote/root" "home=$remote_home"
     write_remote_home_summary "$remote_home" 1000
     i=$((i + 1))

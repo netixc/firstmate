@@ -8,7 +8,8 @@
 #          Lines: "MISSING: <tool> (install: <command>)",
 #                 "PRESENTATION_UNAVAILABLE: lavish-axi (requires >=<floor>; install: <command>) - nonvisual work may proceed with plain-text decisions and reports; install or upgrade before using Lavish",
 #                 "MISSING_MANUAL: <tool> (instructions: <url>)", "NEEDS_GH_AUTH",
-#                 "BACKEND_INVALID: <name> (known: <names>)",
+#                 "BACKEND_INVALID: <name> (known: <names>)" or the actionable
+#                 rollback-only tmux refusal,
 #                 "STARTUP_MEMORY_BUDGET: invalid config/startup-memory-budget - <reason>",
 #                 "CREW_DISPATCH: invalid config/crew-dispatch.json - <reason>",
 #                 "FLEET_SYNC: <repo>: skipped|recovered|STUCK: <detail>",
@@ -728,6 +729,14 @@ secondmate_liveness_one() {  # <meta> <id>
   [ -n "$window" ] || return 0
   harness=$(fm_meta_get "$meta" harness)
   remote_host=$(fm_meta_get "$meta" remote_host)
+  if ! backend=$(fm_backend_of_meta "$meta" 2>/dev/null); then
+    echo "SECONDMATE_LIVENESS: secondmate $id: skipped: endpoint metadata has no unambiguous explicit backend identity; repair, migrate, or retire it before recovery"
+    return 0
+  fi
+  if [ -n "$remote_host" ] && [ "$backend" != herdr ]; then
+    echo "SECONDMATE_LIVENESS: secondmate $id: skipped: remote parent record backend is '$backend', expected explicit herdr; repair, migrate, or retire it before recovery"
+    return 0
+  fi
   if [ -n "$remote_host" ]; then
     remote_rc=0
     fm_remote_readiness_ensure "$SCRIPT_DIR" "$id" || remote_rc=$?
@@ -795,7 +804,6 @@ secondmate_liveness_one() {  # <meta> <id>
     esac
     return 0
   fi
-  backend=$(fm_backend_of_meta "$meta")
   target=$(fm_backend_target_of_meta "$meta")
   [ -n "$target" ] || target="$window"
   agent_state=$(fm_backend_agent_state "$backend" "$target" 2>/dev/null) || agent_state=unreadable
@@ -889,18 +897,28 @@ missing_tool_diagnostic() {
   echo "MISSING: $tool (install: $(install_cmd "$tool"))"
 }
 
-# Required-tool detection follows the RESOLVED backend, not a one-size default:
-# a universal toolchain every home needs plus the backend-specific delta owned by
-# fm_backend_required_tools (bin/fm-backend.sh). A Herdr home is never told tmux
-# is missing. A backend value with no verified dependency set is reported before
-# the universal checks continue.
+# Required-tool detection follows the RESOLVED fresh backend plus any explicit
+# rollback backend this home's existing endpoint records still need. The
+# backend-specific delta is owned by fm_backend_required_tools
+# (bin/fm-backend.sh). A clean Herdr-only home is not told tmux is missing, but
+# one explicit backend=tmux record keeps tmux installation detection active.
+# A configured backend with no verified dependency set is reported before the
+# universal checks continue.
 COMMON_TOOLS="node git gh no-mistakes gh-axi chrome-devtools-axi tasks-axi quota-axi"
 BACKEND=$(fm_backend_name)
 BACKEND_VALID=1
-if ! BACKEND_TOOLS=$(fm_backend_required_tools "$BACKEND"); then
+if [ "$BACKEND" = tmux ] && [ "${FM_GATE_REFUSE_BYPASS:-}" != 1 ]; then
+  BACKEND_VALID=0
+  BACKEND_TOOLS=$(fm_backend_required_tools herdr)
+elif ! BACKEND_TOOLS=$(fm_backend_required_tools "$BACKEND"); then
   BACKEND_VALID=0
   BACKEND_TOOLS=""
 fi
+for backend_meta in "$STATE"/*.meta; do
+  [ -f "$backend_meta" ] || continue
+  [ "$(grep -c '^backend=tmux$' "$backend_meta" 2>/dev/null || true)" -eq 1 ] || continue
+  fm_backend_list_contains "$BACKEND_TOOLS" tmux || BACKEND_TOOLS="$BACKEND_TOOLS tmux"
+done
 TOOLS="$BACKEND_TOOLS $COMMON_TOOLS"
 NO_MISTAKES_MIN=1.46.0
 # AXI-FAMILY FLOOR POLICY. Every axi-family floor is the CURRENT LATEST published
@@ -1406,11 +1424,14 @@ fi
 # leaves this machine, so it stays on the session-start critical path.
 detect_local_tools() {
   if [ "$BACKEND_VALID" -eq 0 ]; then
-    echo "BACKEND_INVALID: $BACKEND (known: $FM_BACKEND_KNOWN)"
+    if [ "$BACKEND" = tmux ]; then
+      echo "BACKEND_INVALID: tmux is rollback-only for fresh work; remove the tmux override or select herdr"
+    else
+      echo "BACKEND_INVALID: $BACKEND (known: $FM_BACKEND_KNOWN)"
+    fi
   fi
   for t in $BACKEND_TOOLS; do
-    fm_backend_required_tool_available "$BACKEND" "$t" \
-      || missing_tool_diagnostic "$t"
+    command -v "$t" >/dev/null || missing_tool_diagnostic "$t"
   done
   for t in $COMMON_TOOLS; do
     command -v "$t" >/dev/null || missing_tool_diagnostic "$t"

@@ -351,6 +351,7 @@ test_remote_secondmate_is_refused_by_placement() {
       echo "home=$dir/wt-t1"
       echo "remote_host=example.invalid"
       echo "remote_root=/srv/fm"
+      echo "backend=herdr"
       echo "remote_backend=herdr"
       echo "remote_target=fm:pane-1"
     } > "$dir/home/state/t1.meta.tmp"

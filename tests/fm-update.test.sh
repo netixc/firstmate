@@ -262,6 +262,7 @@ harness=pi
 kind=secondmate
 home=/srv/sm1
 remote_host=remote-mac
+backend=herdr
 remote_backend=herdr
 EOF
   printf -- '- sm1 - remote domain (host: remote-mac; root: /srv/fm; home: /srv/sm1; scope: things; projects: p; added 2026-09-03)\n' \

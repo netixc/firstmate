@@ -343,19 +343,21 @@ window_kind() {
   echo unknown
 }
 
-# window_backend: the backend recorded in the meta whose window= matches <w>,
-# defaulting to tmux (absent backend= means tmux; the P1 compatibility
-# contract) when no matching meta carries the field, or none matches at all.
+# window_backend: the explicit backend recorded in the meta whose window=
+# matches <w>. An absent or ambiguous identity returns unknown so supervision
+# surfaces the task instead of targeting a guessed runtime.
 window_backend() {
   local w=$1 meta backend
   meta=$(fm_backend_meta_for_window "$w" "$STATE" 2>/dev/null || true)
   if [ -n "$meta" ]; then
-    backend=$(grep '^backend=' "$meta" | cut -d= -f2- || true)
-    [ -n "$backend" ] || backend=tmux
-    echo "$backend"
+    if backend=$(fm_backend_of_meta "$meta" 2>/dev/null); then
+      echo "$backend"
+    else
+      echo unknown
+    fi
     return 0
   fi
-  echo tmux
+  echo unknown
 }
 
 window_harness() {
@@ -564,7 +566,8 @@ signal_turnend_panes_churned() {  # <file> ...
     rec_task=${meta##*/}
     rec_task=${rec_task%.meta}
     kind=$(fm_meta_get "$meta" kind)
-    backend=$(fm_backend_of_meta "$meta")
+    backend=$(fm_backend_of_meta "$meta" 2>/dev/null || true)
+    [ -n "$backend" ] || return 1
     w=$(fm_meta_get "$meta" window)
     key=
     [ -n "$w" ] && key=$(window_key "$w")

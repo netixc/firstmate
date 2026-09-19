@@ -138,6 +138,7 @@ mode=secondmate
 yolo=off
 remote_host=$host
 remote_root=/remote/root
+backend=herdr
 remote_backend=herdr
 remote_herdr_session=fm-remote
 remote_target=fm-remote:p1

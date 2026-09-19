@@ -5,8 +5,9 @@
 # (e.g. primary config/crew-dispatch.json makes a secondmate use the same dispatch
 # profile rules, primary config/crew-harness=pi keeps a secondmate's workers on
 # Pi too, and primary config/backlog-backend=manual makes that home
-# hand-edit backlog files too, primary config/backend pins that home's local
-# runtime-backend default for future spawns, primary config/startup-memory-budget
+# hand-edit backlog files too, primary config/backend carries that home's local
+# runtime-backend request for future spawns (tmux then refuses as rollback-only),
+# primary config/startup-memory-budget
 # bounds that home's startup-memory curation, and primary
 # config/herdr-presentation-spaces carries the same Herdr presentation-projection
 # preference - an absent primary file and an absent destination file both mean

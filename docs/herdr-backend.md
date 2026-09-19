@@ -9,7 +9,8 @@ Herdr provides the terminal session while Treehouse continues to provide task wo
 
 ## Setup
 
-Pick Herdr when you want native busy, idle, and blocked state and accept the active limits below.
+Herdr is required for every fresh Firstmate task and future second mate during the current staged migration.
+The retained tmux adapter is rollback-only for explicit existing records.
 
 Prerequisites:
 
@@ -22,11 +23,11 @@ Prerequisites:
 Herdr is dual-licensed AGPL-3.0-or-later or commercial.
 Firstmate invokes its CLI as a separate process.
 
-Select Herdr with local `config/backend` containing `herdr`, `FM_BACKEND=herdr` for one launch, or an explicit request to Firstmate.
-A remote second-mate agent is the one case with no choice: it always runs on Herdr, and [`remote-secondmates.md`](remote-secondmates.md) owns that requirement and the readiness its host must meet.
-It is also auto-detected when the primary runs natively under `HERDR_ENV=1` and is not inside tmux.
-A tmux pane nested inside Herdr resolves to tmux because the innermost multiplexer wins.
-An auto-detected Herdr spawn prints an opt-out notice.
+An absent backend setting defaults to Herdr.
+Local `config/backend` containing `herdr`, `FM_BACKEND=herdr`, or an explicit per-task `--backend herdr` reaches the same path.
+A remote second-mate agent also always runs on Herdr, and [`remote-secondmates.md`](remote-secondmates.md) owns the additional readiness its host must meet.
+Runtime markers such as `HERDR_ENV=1` and `$TMUX` do not select fresh work, including when tmux is nested inside Herdr.
+A `tmux` value from an explicit flag, environment, or inherited configuration is refused as rollback-only rather than silently replaced.
 
 Spawn stops before creating a Herdr container or acquiring a task worktree when `herdr`, `jq`, `lsof`, the 0.9.0 release floor, or the protocol-22 floor is unavailable.
 Cleanup also checks `lsof` before any Herdr endpoint mutation, so removing that dependency after launch preserves the endpoint, isolated copy, and durable records for retry instead of silently leaving a reparented task process behind.
@@ -206,6 +207,9 @@ The current structural gate removes label inference from cleanup authority.
 `tests/fm-backend-herdr-prune-safety-e2e.test.sh` reproduces the collision in an isolated named session and proves the adopted pane remains untouched.
 
 ## Endpoint metadata
+
+Every fresh record carries the explicit backend line below.
+A missing backend field is transition ambiguity and refuses before Herdr or tmux is targeted.
 
 ```text
 backend=herdr

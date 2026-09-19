@@ -60,7 +60,7 @@ Full detail on every feature lives in [docs/architecture.md](docs/architecture.m
 
 - The plain npm-installed Pi CLI.
 - Git and the GitHub CLI, authenticated through `gh auth login`.
-- Plain `pi`, plus either the default tmux backend or Herdr 0.9.0+ / protocol 22+ with `jq` and `lsof`.
+- Herdr 0.9.0+ / protocol 22+ with `jq` and `lsof` for every newly started task, plus tmux only while an explicit existing rollback endpoint needs it.
 
 The first mate detects and offers to install supported missing tools after you approve.
 Backend-specific setup is linked in [Documentation](#documentation).
@@ -108,7 +108,7 @@ Pi's `/supervision-model` command pins a cheaper model and a shallower reasoning
 
 ### Session backends
 
-Setup guides for tmux (the default) and Herdr are linked in [Documentation](#documentation) below.
+The Herdr setup guide and the tmux rollback-reference guide are linked in [Documentation](#documentation) below.
 
 ## How It Works
 

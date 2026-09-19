@@ -124,12 +124,13 @@ Every routine firstmate backlog command therefore runs through [`bin/fm-tasks-ax
 ## Runtime backend (config/backend / FM_BACKEND)
 
 The runtime session-provider backend controls where task windows are created, captured, sent to, watched, and closed.
-The only supported backends are `tmux`, the default and verified reference backend, and `herdr`, which has its own required CI lane; see [`docs/tmux-backend.md`](tmux-backend.md) and [`docs/herdr-backend.md`](herdr-backend.md).
-Treehouse provides isolated task worktrees for both backends.
-New spawns choose the backend in this order: an explicit `--backend` flag authorized for that exact task, then `FM_BACKEND`, then the first non-empty line of local gitignored `config/backend`, then runtime auto-detection from `$TMUX` or `HERDR_ENV=1`, then default `tmux`.
-When both markers are present, `$TMUX` wins because it is the innermost session layer.
-Auto-detected Herdr prints a stderr notice naming `config/backend` and `--backend tmux` as opt-outs; auto-detected tmux stays silent.
-Any value other than `tmux` or `herdr` is rejected.
+The supported implementation set remains `tmux` and `herdr`, but Herdr is the only backend allowed to create a fresh endpoint; see [`docs/tmux-backend.md`](tmux-backend.md) and [`docs/herdr-backend.md`](herdr-backend.md).
+Treehouse continues to provide isolated task worktrees for both adapters.
+New spawns resolve a requested backend in this order: an explicit `--backend` flag authorized for that exact task, then `FM_BACKEND`, then the first non-empty line of local gitignored `config/backend`, then default `herdr`.
+`$TMUX` and `HERDR_ENV=1` remain runtime diagnostics but do not select fresh work, so launching Firstmate inside tmux cannot create another tmux endpoint and a nested marker cannot override the Herdr default.
+An explicit or inherited `tmux` value is recognized and refused before endpoint or isolated-copy creation with the correction to remove that override or select Herdr.
+Any value other than `tmux` or `herdr` is rejected as unknown.
+This is a staged transition rather than tmux removal: exact existing records carrying `backend=tmux` remain readable, controllable, safely relaunchable in place, and cleanable through the retained adapter.
 
 The session-start secondmate liveness sweep uses the recovery-grade `fm_backend_agent_state` classifier where verified.
 The comment above that function in `bin/fm-backend.sh` is the single owner of its detailed state contract and recovery authorization.
@@ -137,23 +138,24 @@ The comment above that function in `bin/fm-backend.sh` is the single owner of it
 A Herdr spawn requires release 0.9.0 or newer, protocol 22 or newer, `jq`, and `lsof`; dependency or version failures are terminal for that selected backend and never trigger a silent fallback.
 Cleanup preflights `lsof` before mutating a Herdr endpoint because no safe post-close process-group fallback can identify a reparented task descendant.
 
-Task metadata records `backend=` only for Herdr; an absent `backend=` means tmux.
+Every new local task and secondmate record carries `backend=herdr`; a remote secondmate parent record carries both `backend=herdr` and its route-specific `remote_backend=herdr`.
+A missing, empty, duplicate, or unknown `backend=` field is ambiguous at the transition boundary and refuses before any runtime is targeted; it is never reinterpreted as Herdr or tmux.
+Explicit existing `backend=tmux` records are the sole tmux rollback scope.
 Every new task records `endpoint_task_id=` as the cleanup binding between the metadata filename and its opaque runtime endpoint.
 A Herdr task additionally records `herdr_session=`, `herdr_workspace_id=`, `herdr_tab_id=`, and `herdr_pane_id=`.
 Task selectors for `fm-peek.sh`, `fm-send.sh`, and `fm-crew-state.sh` resolve centrally through `fm_backend_resolve_selector`.
-A selector containing `:` is passed through as an explicit backend endpoint escape hatch.
-Otherwise an exact task id matching `state/<id>.meta` wins before the legacy `fm-<id>` label fallback, so task ids that themselves start with `fm-` route to their own metadata instead of being stripped.
-A metadata-routed selector returns the recorded `window=` target, and a matching explicit target can recover the recorded backend when metadata contains the same endpoint.
-Only metadata-routed task selectors carry secondmate-marker and runtime context; explicit endpoint escape hatches do not.
-These five sentences are the single owner of the task-selector vocabulary; backend guides and other documents point here instead of restating the resolution order.
+An exact task id matching `state/<id>.meta` wins before the legacy `fm-<id>` label fallback, so task ids that themselves start with `fm-` route to their own metadata instead of being stripped.
+A matching explicit `window=` target may resolve through that same record, but an unrecorded target or bare live-window name is refused because it carries no backend identity.
+Every successful local selector therefore carries the task's explicit backend, secondmate marker, and runtime context from metadata.
+These three sentences are the single owner of the task-selector vocabulary; backend guides and other documents point here instead of restating the resolution order.
 `fm-teardown.sh <id>` takes a task id directly and validates the complete metadata-only endpoint identity before any runtime dispatch or cleanup mutation.
 Missing, empty, duplicate, malformed, backend-inconsistent, or task-mismatched endpoint records are preserved and refused.
-Legacy tmux metadata remains cleanup-compatible when its exact window name is `fm-<id>`; opaque Herdr endpoints require their recorded `endpoint_task_id=` binding.
+Explicit existing tmux metadata remains cleanup-compatible when its exact window name is `fm-<id>`; backend-less legacy metadata must be repaired or explicitly migrated before lifecycle work, and opaque Herdr endpoints require their recorded `endpoint_task_id=` binding.
 
 `FM_HOME` determines Herdr's home label: the primary home uses `firstmate`, and a secondmate home marked by `.fm-secondmate-home` uses `2ndmate-<secondmate-id>`.
 [`herdr-backend.md`](herdr-backend.md#watching-and-task-containers) owns launcher-bound workspace placement, label-only fallback, collision handling, and recovery behavior.
 The local `config/herdr-presentation-spaces` file opts a home out of, or explicitly in to, Herdr's default-on disposable single-task visual projection; [Presentation spaces](herdr-backend.md#presentation-spaces) owns its values and lifecycle.
-That setting and `config/backend` are inherited into secondmate homes under the primary-authoritative contract owned by [`secondmate-provisioning`](../.agents/skills/secondmate-provisioning/SKILL.md).
+That setting and `config/backend` are inherited into secondmate homes under the primary-authoritative contract owned by [`secondmate-provisioning`](../.agents/skills/secondmate-provisioning/SKILL.md); inheritance never weakens the fresh-Herdr boundary, so an inherited tmux request refuses.
 For normal Herdr operations, `HERDR_SESSION` selects the named session, but destructive test cleanup must use the explicit guarded path in [`docs/herdr-backend.md`](herdr-backend.md), never `herdr server stop`.
 
 ## Away and quiet posture
@@ -391,10 +393,10 @@ The essential universal toolchain is node, git, gh with GitHub auth via `gh auth
 This section is the single owner of that universal toolchain list; backend guides' prerequisites point here and add only their backend-specific tools.
 In that list, no-mistakes runs the validation pipeline, gh-axi and chrome-devtools-axi cover GitHub and browser operations, and tasks-axi plus quota-axi back backlog mutations and quota-aware array dispatch.
 Lavish is a presentation-only dependency for visual decisions and reports; nonvisual work can proceed with plain text when it is unavailable.
-The per-backend delta is required only for the backend resolved from `FM_BACKEND`, then `config/backend`, then runtime auto-detection, then default `tmux`, so a home is never told to install a tool an inactive backend or feature would need.
-That delta is owned in code by `fm_backend_required_tools` in `bin/fm-backend.sh`: `tmux` or `herdr`, `jq` for Herdr's JSON output, `lsof` for Herdr's exact cleanup proof, and the `treehouse` worktree provider used by both backends.
-An unknown resolved backend emits `BACKEND_INVALID` and blocks dispatch instead of silently dropping its dependency delta or falling back to tmux.
-A Herdr home is never told tmux is missing.
+The fresh-work backend delta resolves from `FM_BACKEND`, then `config/backend`, then default `herdr`, so runtime markers never change installation requirements.
+That delta is owned in code by `fm_backend_required_tools` in `bin/fm-backend.sh`: `tmux` or `herdr`, `jq` for Herdr's JSON output, `lsof` for Herdr's exact cleanup proof, and the `treehouse` worktree provider used by both adapters.
+An unknown resolved backend emits `BACKEND_INVALID` and blocks dispatch instead of silently dropping its dependency delta or falling back.
+A clean Herdr-only home is not told tmux is missing, while the presence of any exact existing `backend=tmux` endpoint record adds tmux to bootstrap's required-tool detection until that rollback record is retired.
 When `config/crew-dispatch.json` exists, bootstrap also requires `jq` for dispatch profile validation.
 When Relay is opted in, bootstrap also requires `curl` and `jq` before arming the relay poll shim.
 `tasks-axi` and `quota-axi` are essential bootstrap tools in every profile.
@@ -895,7 +897,7 @@ FM_DATA_OVERRIDE=        # alternate data dir, mainly for tests
 FM_PROJECTS_OVERRIDE=    # alternate projects dir, mainly for tests
 FM_CONFIG_OVERRIDE=      # alternate config dir, mainly for tests
 FM_PROC_ROOT_OVERRIDE=   # alternate /proc root for Linux process-identity reads in fm-wake-lib.sh and fm-teardown.sh, mainly for tests
-FM_BACKEND=             # optional backend override for new spawns; accepts only tmux or herdr
+FM_BACKEND=             # optional fresh-backend request; herdr is accepted, tmux is recognized but refused as rollback-only
 FM_TRACE_CONTEXT=       # optional trace-context override; see "Trace context propagation"
 FM_TASK_ID=             # internal task-worker marker fm-spawn.sh exports into ship and scout panes, never set by hand; bin/fm-test-run.sh refuses to execute in the repository primary checkout while it is set
 HERDR_SESSION=default  # herdr-only: named session for normal backend ops; not enough for destructive cleanup (docs/herdr-backend.md)

@@ -6,6 +6,49 @@ This record contains reusable version-scoped evidence for active runtime guarant
 The backend guides own current setup, safety boundaries, and limitations.
 Exact task chronology, branch names, temporary homes, local paths, process ids, thread ids, and delivery transcripts remain in private reports or PR evidence.
 
+## Herdr-only fresh endpoint transition
+
+Observed 2026-09-19 at safeguard revision `f80e731f608256c46777a3679987335e7b68d01f`.
+Portable production-boundary coverage proves that the absent setting defaults to Herdr regardless of `$TMUX` or `HERDR_ENV`, every explicit tmux source refuses before mutation, every new record is explicit, an unrecorded or backend-less endpoint refuses before runtime dispatch, and an explicit existing tmux record remains readable, relaunchable, and cleanable:
+
+```sh
+bin/fm-test-run.sh \
+  tests/fm-backend.test.sh \
+  tests/fm-control-relaunch.test.sh \
+  tests/fm-teardown-endpoint-safety.test.sh
+```
+
+Relevant observed lines:
+
+```text
+ok - fm_backend_name: runtime markers never select fresh endpoints; Herdr remains the silent default
+ok - fm-spawn.sh: explicit flag, environment, and inherited config cannot create fresh tmux endpoints
+ok - recorded tmux rollback endpoints remain readable while backend-less records refuse before targeting
+ok - fm-control relaunch: a same-harness relaunch replaces the agent in the same endpoint and worktree
+ok - fm-teardown: exact tmux cleanup preserves invalid and prefix-matched neighbors while removing only the recorded target
+```
+
+Secondmate and startup coverage proves inherited tmux refusal, explicit Herdr metadata on future secondmates, and tmux installation detection only while an explicit rollback record exists:
+
+```sh
+bin/fm-test-run.sh \
+  tests/fm-secondmate-harness.test.sh \
+  tests/fm-session-start.test.sh \
+  tests/fm-backend-autodetect-smoke.test.sh \
+  tests/fm-backend-herdr-workspace-per-home-e2e.test.sh
+```
+
+The real default-path smoke produced:
+
+```text
+ok - real Herdr: fm-spawn.sh defaults fresh work to Herdr without a runtime marker or selection notice
+ok - real Herdr: default spawn records backend=herdr and Herdr session/workspace/tab/pane fields in meta
+ok - real herdr: isolated lab session removed and default fleet session unchanged
+```
+
+The real-Herdr tests remain in the required Linux and macOS Herdr lanes and use only guarded non-default named labs with the production-default tripwire.
+This stage does not claim tmux removal or reinterpret backend-less records.
+
 ## Plain Pi runtime identity
 
 `bin/fm-harness.sh` accepts only the plain npm-installed Pi CLI identity `pi`.
@@ -20,8 +63,9 @@ Generic Node/Python processes, argument strings, parent directory names, mixed-c
 Provider/model identifiers such as `codex-native/*` are profile axes behind Pi and never runtime identities.
 
 The authoritative executable checked for this contraction was `/opt/homebrew/bin/pi`, version 0.85.1, resolving to `@earendil-works/pi-coding-agent/dist/bundle/cli.js`.
-The live guard launches that executable through a real isolated `fm-spawn.sh` path, records the exact arguments, removes only the final task prompt to avoid a provider call, then executes Pi with the requested provider/model, effort, and generated extension unchanged.
-It proves the recorded runtime remains `pi`, the process has exact Pi identity, and cleanup removes the private tmux endpoint and worktree:
+The live guard launches that executable through a real isolated `fm-spawn.sh` path under the repository test-fixture bypass, records the exact arguments, removes only the final task prompt to avoid a provider call, then executes Pi with the requested provider/model, effort, and generated extension unchanged.
+That bypass exercises a private tmux endpoint only to preserve live rollback-adapter coverage; ordinary Firstmate operation cannot select it for fresh work.
+The guard proves the recorded runtime remains `pi`, the process has exact Pi identity, and cleanup removes the private tmux endpoint and worktree:
 
 ```sh
 bin/fm-test-run.sh tests/fm-pi-spawn-profile-live-e2e.test.sh

@@ -698,6 +698,7 @@ fm_write_meta "$REMOTE_HOME/state/rsm.meta" \
   "home=/remote/home" \
   "remote_host=remote-mac" \
   "remote_root=/remote/root" \
+  "backend=herdr" \
   "remote_backend=herdr" \
   "remote_herdr_session=fm-remote" \
   "remote_target=fm-remote:w1:p1"

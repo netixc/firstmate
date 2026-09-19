@@ -632,9 +632,11 @@ prefetch_task_observations() {  # <meta> <id>
     crew_state_json "$id" "$meta" "$status_capture" > "$current_file" &
     current_pid=$!
     kind=$(meta_value "$meta" kind)
-    backend=$(fm_backend_of_meta "$meta")
+    if ! backend=$(fm_backend_of_meta "$meta" 2>/dev/null); then
+      backend=unknown
+    fi
     target=$(fm_backend_target_of_meta "$meta")
-    if [ -n "$target" ]; then
+    if [ "$backend" != unknown ] && [ -n "$target" ]; then
       if fm_backend_target_exists "$backend" "$target" "fm-$id" >/dev/null 2>&1; then
         endpoint_exists=true
       else
@@ -719,7 +721,7 @@ prefetch_task_current_states() {
 }
 
 task_json_lines() {
-  local meta original_meta id kind harness mode yolo project worktree home projects spawn_gen backend target status_log report_path
+  local meta original_meta id kind harness mode yolo project worktree home projects spawn_gen backend route_backend target status_log report_path
   local remote_host remote_root current_file endpoint_file observation_line index=0
   local pr pr_source event_json current_json endpoint_exists agent_alive meta_json status_json report_json worktree_json home_json
   local last_event_raw current_state current_source pending_decision blocked_event report_present=0 pr_from_status
@@ -743,11 +745,18 @@ task_json_lines() {
     remote_host=$(meta_value "$meta" remote_host)
     remote_root=$(meta_value "$meta" remote_root)
     if [ -n "$remote_host" ]; then
-      backend=$(meta_value "$meta" remote_backend)
-      [ -n "$backend" ] || backend=unknown
+      route_backend=$(meta_value "$meta" remote_backend)
+      if backend=$(fm_backend_of_meta "$meta" 2>/dev/null) \
+        && [ "$backend" = herdr ] && [ "$route_backend" = herdr ]; then
+        :
+      else
+        backend=unknown
+      fi
       target=$(meta_value "$meta" remote_target)
     else
-      backend=$(fm_backend_of_meta "$meta")
+      if ! backend=$(fm_backend_of_meta "$meta" 2>/dev/null); then
+        backend=unknown
+      fi
       target=$(fm_backend_target_of_meta "$meta")
     fi
     status_log="$SNAPSHOT_TASK_DIR/$id.status"

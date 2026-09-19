@@ -11,6 +11,8 @@
 #      prints the remote pane tail; the local adapters are never consulted.
 #   2. An unreachable host fails loudly naming the host, without claiming the
 #      mate is dead.
+#   3. Backend-less remote metadata refuses as ambiguous before either runtime
+#      transport is touched.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -28,6 +30,7 @@ make_stubs() {  # <dir> -> echoes fakebin dir
   cat > "$fb/fake-ssh" <<'SH'
 #!/usr/bin/env bash
 cat > /dev/null
+[ -z "${FM_FAKE_SSH_TOUCHED:-}" ] || printf 'ssh\n' >> "$FM_FAKE_SSH_TOUCHED"
 [ -z "${FM_FAKE_REMOTE_CAPTURE:-}" ] || printf '%s\n' "$FM_FAKE_REMOTE_CAPTURE"
 exit "${FM_FAKE_SSH_RC:-0}"
 SH
@@ -52,6 +55,7 @@ setup_remote_home() {  # <name> -> echoes home dir with remote meta + registry
     "mode=secondmate" \
     "remote_host=remote-mac" \
     "remote_root=/remote/root" \
+    "backend=herdr" \
     "remote_backend=herdr" \
     "remote_herdr_session=fm-remote" \
     "remote_target=fm-remote:w1:p1"
@@ -104,7 +108,32 @@ test_remote_peek_unreachable_fails_loudly_without_death_claim() {
   pass "fm-peek remote: an unreachable host fails loudly without a false death claim"
 }
 
+test_remote_peek_backendless_refuses_before_transport() {
+  local dir fb home touched ssh_touched rc err
+  dir="$TMP_ROOT/peek-backendless"; mkdir -p "$dir"
+  fb=$(make_stubs "$dir")
+  home=$(setup_remote_home peek-backendless)
+  grep -v '^backend=' "$home/state/rsm.meta" > "$home/state/rsm.meta.tmp"
+  mv "$home/state/rsm.meta.tmp" "$home/state/rsm.meta"
+  touched="$dir/tmux-touched"; : > "$touched"
+  ssh_touched="$dir/ssh-touched"; : > "$ssh_touched"
+
+  env PATH="$fb:$PATH" \
+    FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" FM_GATE_REFUSE_BYPASS='' \
+    FM_SSH_BIN="$fb/fake-ssh" FM_FAKE_SSH_TOUCHED="$ssh_touched" \
+    FM_FAKE_TMUX_TOUCHED="$touched" \
+    "$PEEK" rsm >"$dir/out" 2>"$dir/err"; rc=$?
+  err=$(cat "$dir/err")
+  [ "$rc" -ne 0 ] || fail "backend-less remote metadata unexpectedly reached capture"
+  assert_contains "$err" "no usable explicit backend identity" \
+    "backend-less remote refusal did not explain its ambiguity"
+  [ ! -s "$ssh_touched" ] || fail "backend-less remote metadata reached the remote transport"
+  [ ! -s "$touched" ] || fail "backend-less remote metadata reached the local tmux adapter"
+  pass "fm-peek remote: backend-less metadata refuses before every runtime transport"
+}
+
 test_remote_peek_reads_remote_pane
 test_remote_peek_unreachable_fails_loudly_without_death_claim
+test_remote_peek_backendless_refuses_before_transport
 
 echo "all fm-peek-remote tests passed"

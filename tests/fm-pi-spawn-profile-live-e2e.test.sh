@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Real plain-Pi spawn proof.
 #
-# Drives fm-spawn.sh and fm-teardown.sh through a private tmux socket and a
-# scratch Treehouse project. A test executable named `pi` records the argv
+# Drives fm-spawn.sh and fm-teardown.sh through the retained tmux rollback
+# adapter on a private test-only socket and a scratch Treehouse project. A test
+# executable named `pi` records the argv
 # fm-spawn produced, removes only the final task prompt to avoid a provider call,
 # then execs the installed npm Pi CLI with its profile and extension unchanged. This
 # proves the provider/model, effort, generated extension, metadata identity,
@@ -103,9 +104,8 @@ assert_present "$META" "real Pi spawn did not publish task metadata"
 grep -Fx 'harness=pi' "$META" >/dev/null || fail "spawn did not record plain Pi identity"
 grep -Fx "model=$MODEL" "$META" >/dev/null || fail "spawn did not preserve the requested provider/model"
 grep -Fx "effort=$EFFORT" "$META" >/dev/null || fail "spawn did not preserve the requested effort"
-if grep -q '^backend=' "$META"; then
-  fail "default tmux spawn should encode its backend by omitting backend= metadata"
-fi
+grep -Fx 'backend=tmux' "$META" >/dev/null \
+  || fail "the rollback-adapter fixture did not record its explicit tmux identity"
 WT=$(sed -n 's/^worktree=//p' "$META" | tail -1)
 [ -n "$WT" ] && [ -d "$WT" ] || fail "spawn did not create an isolated worktree"
 [ "$(cd "$WT" && pwd -P)" != "$(cd "$PROJECT" && pwd -P)" ] \

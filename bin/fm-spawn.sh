@@ -53,11 +53,11 @@
 #   --backend <name> is the explicit runtime session-provider backend for this
 #   exact task only (docs/configuration.md "Runtime backend" owns when that flag
 #   is authorized). Without it, the script resolves FM_BACKEND, then
-#   config/backend, then runtime auto-detection from the runtime firstmate's
-#   environment: $TMUX or HERDR_ENV=1, then tmux.
-#   Spawn-capable backends are tmux and Herdr. An auto-detected Herdr spawn
-#   prints a notice; auto-detected tmux stays silent. Default tmux spawns do not
-#   write backend= to meta; absent backend= means tmux.
+#   config/backend, then Herdr. Runtime markers do not select a fresh endpoint.
+#   Herdr is the only fresh-spawn backend. A tmux value from any explicit or
+#   inherited source is refused as rollback-only, while a safe relaunch may
+#   reuse an already-recorded explicit backend=tmux endpoint. Every fresh task
+#   record carries backend=herdr; a missing backend identity is ambiguous.
 #   Herdr requires release 0.9.0+, protocol 22+, jq, lsof, and Treehouse.
 #   A backend spawn refusal (missing dependency, version gate, unauthenticated
 #   socket, or unsupported secondmate mode) is terminal for that selected backend;
@@ -503,6 +503,7 @@ fi
 spawn_remote_secondmate() {
   local id=$1 remote host root home harness model effort backend out rc meta tmp
   local remote_backend remote_target remote_harness remote_herdr_session registry_lock remote_lock remote_generation
+  local existing_backend existing_remote_backend
   local remote_traceparent remote_recorded_traceparent sm_primary_head sync_out sync_rc
   local -a launch_args
   id=${POS[0]:-}
@@ -586,11 +587,15 @@ spawn_remote_secondmate() {
   fi
   meta="$STATE/$id.meta"
   if [ -e "$meta" ] || [ -L "$meta" ]; then
+    existing_backend=$(fm_backend_of_meta "$meta" 2>/dev/null || true)
+    existing_remote_backend=$(fm_meta_get "$meta" remote_backend)
     if ! fm_backlog_record_present "$meta" "task record" "$STATE" \
       || [ "$(fm_meta_get "$meta" kind)" != secondmate ] \
       || [ "$(fm_meta_get "$meta" remote_host)" != "$host" ] \
       || [ "$(fm_meta_get "$meta" remote_root)" != "$root" ] \
-      || [ "$(fm_meta_get "$meta" home)" != "$home" ]; then
+      || [ "$(fm_meta_get "$meta" home)" != "$home" ] \
+      || [ "$existing_backend" != herdr ] \
+      || [ "$existing_remote_backend" != herdr ]; then
       fm_lock_release "$registry_lock" || true
       fm_lock_release "$SPAWN_TASK_LOCK" || true
       echo "error: existing metadata for $id does not identify this remote secondmate route" >&2
@@ -741,6 +746,7 @@ spawn_remote_secondmate() {
     echo "projects=$(secondmate_registry_field "$DATA/secondmates.md" "$id" projects)"
     echo "remote_host=$host"
     echo "remote_root=$root"
+    echo "backend=$remote_backend"
     echo "remote_backend=$remote_backend"
     echo "remote_herdr_session=$remote_herdr_session"
     echo "remote_target=$remote_target"
@@ -1073,13 +1079,11 @@ if [ "$KIND" = secondmate ]; then
   fi
   [ "$remote_spawn_rc" -eq 3 ] || exit "$remote_spawn_rc"
 fi
-# Backend selection (data/fm-backend-design-d7): explicit --backend, else
-# FM_BACKEND env, else config/backend, else runtime auto-detection, else
-# default tmux (fm_backend_name). fm_backend_validate_spawn refuses unknown or
-# non-spawn-capable backends. The resolved value is
-# recorded in meta only when it is NOT tmux (fm-teardown.sh and fm-watch.sh's
-# window_backend/fm_backend_of_meta already treat an absent backend= as tmux),
-# so the default path's meta stays byte-identical.
+# Backend selection: explicit --backend, else FM_BACKEND, else config/backend,
+# else Herdr (fm_backend_name). Runtime markers never select a fresh endpoint.
+# fm_backend_validate_spawn refuses unknown backends and the rollback-only tmux
+# backend before project, home, endpoint, or worktree creation. Every fresh
+# local or remote task record carries the selected explicit backend identity.
 if [ "$RELAUNCH" -eq 0 ]; then
   if [ "$BACKEND_SET" -eq 1 ]; then
     BACKEND=$BACKEND_ARG
@@ -1129,7 +1133,10 @@ if [ "$RELAUNCH" -eq 1 ]; then
   fm_backend_validate_task_endpoint "$RELAUNCH_META" "$ID" || exit 1
   BACKEND=$FM_BACKEND_VALIDATED_BACKEND
   RELAUNCH_TARGET=$FM_BACKEND_VALIDATED_TARGET
-  fm_backend_validate_spawn "$BACKEND" || exit 1
+  # A relaunch reuses an existing endpoint rather than creating one, so an
+  # explicit rollback backend remains valid here even though it cannot be
+  # selected by a fresh spawn.
+  fm_backend_validate "$BACKEND" || exit 1
   fm_backend_source "$BACKEND" || exit 1
   # A relaunch must PROVE the previous agent is gone before it launches another
   # one into the same endpoint, and only tmux and herdr have a recovery-grade
@@ -1848,7 +1855,7 @@ herdr_projection_existing_meta_allows_flat() {  # <meta>
   HERDR_RECOVERY_WORKSPACE_ID=""
   HERDR_RECOVERY_TAB_ID=""
   HERDR_RECOVERY_PANE_ID=""
-  old_backend=$(fm_backend_of_meta "$meta")
+  old_backend=$(fm_backend_of_meta "$meta") || return 1
   old_target=$(fm_backend_target_of_meta "$meta")
   [ -n "$old_target" ] || {
     echo "error: existing metadata for $ID has no endpoint; refusing duplicate launch while its herdr presentation journal is quarantined" >&2
@@ -2488,10 +2495,9 @@ preserve_relaunch_meta() {
   [ -z "${BUSY_GEN:-}" ] || echo "busy_gen=$BUSY_GEN"
   echo "spawn_gen=$SPAWN_GEN"
   # Default-off writes no traceparent= line.
-  # backend= is written only for a non-default (non-tmux) backend, so the
-  # default path's meta stays byte-identical (absent backend= means tmux;
-  # data/fm-backend-design-d7's P1 compatibility contract).
-  [ "$BACKEND" = tmux ] || echo "backend=$BACKEND"
+  # Endpoint identity is always explicit. Fresh records are Herdr-only, while
+  # a safe relaunch preserves an already-recorded explicit tmux identity.
+  echo "backend=$BACKEND"
   if [ "$BACKEND" = herdr ]; then
     echo "herdr_session=$HERDR_SES"
     echo "herdr_workspace_id=$HERDR_WORKSPACE_ID"

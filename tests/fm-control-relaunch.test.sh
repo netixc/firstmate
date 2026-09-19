@@ -153,6 +153,7 @@ EOF
   {
     echo "window=fmses:fm-$id"
     echo "endpoint_task_id=$id"
+    echo "backend=tmux"
     echo "worktree=$wt"
     echo "project=$proj"
     echo "harness=$harness"
@@ -301,7 +302,7 @@ test_same_harness_relaunch_keeps_identity_and_reuses_the_endpoint() {
   add_ship_task "$dir" rl1 pi
   gen_before=$("$ROOT/bin/fm-busy-event.sh" arm "$dir/home/state" rl1)
   printf 'busy_gen=%s\n' "$gen_before" >> "$dir/home/state/rl1.meta"
-  out=$(run_control "$dir" rl1 relaunch --note "stopped mid-refactor"); rc=$?
+  out=$(FM_GATE_REFUSE_BYPASS='' run_control "$dir" rl1 relaunch --note "stopped mid-refactor"); rc=$?
   expect_code 0 "$rc" "a same-harness relaunch should succeed"$'\n'"$out"
   assert_contains "$out" "relaunched rl1 harness=pi from=pi" "the outcome should name the transition"
   [ "$(meta_field "$dir" rl1 window)" = "fmses:fm-rl1" ] \

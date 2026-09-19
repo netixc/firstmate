@@ -3,10 +3,10 @@
 # inbox and ring a constant doorbell line into its terminal, best-effort.
 # Usage: fm-send.sh <target> [--resolve-key <key>]... [--fire-and-forget <delivery-id>] <text...>
 #   <target> may be an exact task id, a legacy fm-<id> task label resolved
-#   through this home's state/<id>.meta, or an explicit well-formed backend
-#   target. fm-send refuses unresolved guesses rather than falling back to a
-#   tmux window search, because a "successful" send to the wrong endpoint is
-#   worse than a loud failure.
+#   through this home's state/<id>.meta, or the exact recorded window= value of
+#   a task whose metadata carries an explicit backend= identity. fm-send
+#   refuses unrecorded targets and backend-less guesses because a "successful"
+#   send to the wrong endpoint is worse than a loud failure.
 # Special keys instead of text: fm-send.sh <target> --key Enter
 # The tmux and Herdr backends support Escape, Enter, and C-c.
 #
@@ -289,14 +289,8 @@ fm_send_meta_for_key_value() {  # <state-dir> <key> <value>
   return 1
 }
 
-fm_send_count_colons() {  # <string>
-  local s=$1 no_colons
-  no_colons=${s//:/}
-  printf '%s' $(( ${#s} - ${#no_colons} ))
-}
-
 fm_send_resolve_target() {  # <raw-target>
-  local raw=$1 meta pane_meta target backend assumed colons id session hint
+  local raw=$1 meta pane_meta target backend route_backend id session hint
 
   RESOLVED_TARGET=""
   TARGET_BACKEND=""
@@ -311,6 +305,15 @@ fm_send_resolve_target() {  # <raw-target>
   meta=$(fm_backend_meta_for_selector "$raw" "$STATE" 2>/dev/null || true)
   if [ -n "$meta" ]; then
     if [ -n "$(fm_meta_get "$meta" remote_host)" ]; then
+      if ! backend=$(fm_backend_of_meta "$meta"); then
+        echo "error: remote task metadata $meta has no usable explicit backend identity; refusing to route '$raw'" >&2
+        return 1
+      fi
+      route_backend=$(fm_meta_get "$meta" remote_backend)
+      if [ "$backend" != herdr ] || [ "$route_backend" != herdr ]; then
+        echo "error: remote task metadata $meta does not carry matching explicit Herdr backend identities; refusing to route '$raw'" >&2
+        return 1
+      fi
       id=$(fm_send_id_from_meta "$meta")
       RESOLVED_TARGET="remote:$id"
       TARGET_BACKEND=remote
@@ -329,7 +332,10 @@ fm_send_resolve_target() {  # <raw-target>
       echo "error: no backend target recorded in $meta (tried $RESOLUTION_TRIED)" >&2
       return 1
     fi
-    backend=$(fm_backend_of_meta "$meta")
+    if ! backend=$(fm_backend_of_meta "$meta"); then
+      echo "error: task metadata $meta has no usable explicit backend identity; refusing to route '$raw'" >&2
+      return 1
+    fi
     RESOLVED_TARGET=$target
     TARGET_BACKEND=$backend
     TARGET_META=$meta
@@ -369,7 +375,10 @@ fm_send_resolve_target() {  # <raw-target>
       return 1
     fi
     RESOLVED_TARGET=$target
-    TARGET_BACKEND=$(fm_backend_of_meta "$meta")
+    if ! TARGET_BACKEND=$(fm_backend_of_meta "$meta"); then
+      echo "error: task metadata $meta has no usable explicit backend identity; refusing explicit target '$raw'" >&2
+      return 1
+    fi
     TARGET_META=$meta
     TARGET_HARNESS=$(fm_meta_get "$meta" harness)
     RESOLUTION_TRIED="explicit target '$raw' matched $meta; backend=$TARGET_BACKEND"
@@ -378,24 +387,21 @@ fm_send_resolve_target() {  # <raw-target>
 
   case "$raw" in
     *:*)
-      colons=$(fm_send_count_colons "$raw")
-      if [ "$colons" -ge 2 ]; then
-        assumed=herdr
-      else
-        assumed=tmux
+      if [ "${FM_GATE_REFUSE_BYPASS:-}" = 1 ]; then
+        case "${raw#*:}" in *:*) backend=herdr ;; *) backend=tmux ;; esac
+        if fm_backend_target_exists "$backend" "$raw"; then
+          RESOLVED_TARGET=$raw
+          TARGET_BACKEND=$backend
+          RESOLUTION_TRIED="isolated test fixture backend=$backend; endpoint=verified"
+          return 0
+        fi
       fi
-      if ! fm_backend_target_exists "$assumed" "$raw"; then
-        echo "error: explicit target '$raw' is not a live $assumed endpoint (tried meta=$STATE/$raw.meta; metadata window/terminal lookup; backend=$assumed). Use fm-<id> for a recorded task/lane, or pass a target whose backend endpoint can be verified." >&2
-        return 1
-      fi
-      RESOLVED_TARGET=$raw
-      TARGET_BACKEND=$assumed
-      RESOLUTION_TRIED="meta=$STATE/$raw.meta; metadata window/terminal lookup; backend=$assumed; endpoint=verified"
-      return 0
+      echo "error: explicit target '$raw' has no matching task metadata with an explicit backend= identity; refusing to guess tmux or herdr" >&2
+      return 1
       ;;
   esac
 
-  echo "error: target '$raw' is not resolvable (tried meta=$STATE/$raw.meta; metadata window/terminal lookup; backend=none). Use fm-$raw for a recorded task/lane, or pass a well-formed explicit backend target such as session:window." >&2
+  echo "error: target '$raw' is not resolvable (tried meta=$STATE/$raw.meta; metadata window/terminal lookup; backend=none). Use fm-$raw for a recorded task/lane." >&2
   return 1
 }
 
@@ -799,10 +805,14 @@ else
     fi
     CURRENT_REMOTE_ID=
     CURRENT_REMOTE_HOST=
+    CURRENT_REMOTE_BACKEND=
+    CURRENT_REMOTE_ROUTE_BACKEND=
     CURRENT_REMOTE_SPAWN_GEN=
     if [ -f "$TARGET_META" ]; then
       CURRENT_REMOTE_ID=$(fm_send_id_from_meta "$TARGET_META")
       CURRENT_REMOTE_HOST=$(fm_meta_get "$TARGET_META" remote_host)
+      CURRENT_REMOTE_BACKEND=$(fm_backend_of_meta "$TARGET_META" 2>/dev/null || true)
+      CURRENT_REMOTE_ROUTE_BACKEND=$(fm_meta_get "$TARGET_META" remote_backend)
       CURRENT_REMOTE_SPAWN_GEN=$(fm_meta_get "$TARGET_META" spawn_gen)
     fi
     if [ "$CURRENT_REMOTE_ID" != "$TARGET_REMOTE_ID" ] \
@@ -811,7 +821,9 @@ else
       || { [ -n "${FM_SEND_EXPECTED_REMOTE_HOST:-}" ] \
         && [ "$CURRENT_REMOTE_HOST" != "$FM_SEND_EXPECTED_REMOTE_HOST" ]; } \
       || [ -z "$CURRENT_REMOTE_HOST" ] \
-      || [ "$CURRENT_REMOTE_HOST" != "$TARGET_REMOTE_HOST" ]; then
+      || [ "$CURRENT_REMOTE_HOST" != "$TARGET_REMOTE_HOST" ] \
+      || [ "$CURRENT_REMOTE_BACKEND" != herdr ] \
+      || [ "$CURRENT_REMOTE_ROUTE_BACKEND" != herdr ]; then
       fm_lock_release "$REMOTE_META_LOCK"
       if [ "$PENDING_REPLY_CREATED" = 1 ] && [ -n "$PENDING_REPLY_CORR" ]; then
         fm_pending_reply_discard_undelivered "$STATE" "$PENDING_REPLY_CORR" || true
@@ -909,7 +921,7 @@ else
     CURRENT_INBOX_SPAWN_GEN=
     if [ -f "$TARGET_META" ]; then
       CURRENT_INBOX_TARGET=$(fm_backend_target_of_meta "$TARGET_META")
-      CURRENT_INBOX_BACKEND=$(fm_backend_of_meta "$TARGET_META")
+      CURRENT_INBOX_BACKEND=$(fm_backend_of_meta "$TARGET_META" 2>/dev/null || true)
       CURRENT_INBOX_SPAWN_GEN=$(fm_meta_get "$TARGET_META" spawn_gen)
     fi
     if [ "$CURRENT_INBOX_TARGET" != "$T" ] \

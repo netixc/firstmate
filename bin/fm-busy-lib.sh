@@ -219,7 +219,10 @@ fm_busy_classify_live() {  # <backend> <target> <harness> <id> <state-dir> [expe
 fm_busy_classify_meta() {  # <meta-file> <id> <state-dir>
   local meta=$1 id=$2 state=$3 backend target harness
   [ -f "$meta" ] || { printf 'unknown missing'; return 0; }
-  backend=$(fm_backend_of_meta "$meta")
+  if ! backend=$(fm_backend_of_meta "$meta"); then
+    printf 'unknown backend-identity'
+    return 0
+  fi
   target=$(fm_backend_target_of_meta "$meta")
   harness=$(fm_meta_get "$meta" harness)
   if [ -z "$target" ]; then

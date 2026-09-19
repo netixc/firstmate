@@ -415,6 +415,7 @@ setup_remote_case() {  # <case-dir> <id> <ssh-mode>
     echo "effort=default"
     echo "home=$dir/$id-home"
     echo "remote_host=remote-mac"
+    echo "backend=herdr"
     echo "remote_backend=herdr"
     echo "remote_target=fm-remote:2ndmate-$id"
   } > "$dir/home/state/$id.meta"

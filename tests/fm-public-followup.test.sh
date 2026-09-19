@@ -2439,7 +2439,8 @@ make_remote_route() {  # <home> <secondmate-id>
 - $id - remote lane (host: remote-mac; root: $REMOTE_FIXTURE_ROOT; home: $remote_home; scope: relay work; projects: firstmate; added 2026-08-02)
 EOF
   fm_write_meta "$home/state/$id.meta" "kind=secondmate" "home=$remote_home" \
-    "remote_host=remote-mac" "remote_root=$REMOTE_FIXTURE_ROOT"
+    "remote_host=remote-mac" "remote_root=$REMOTE_FIXTURE_ROOT" \
+    "backend=herdr" "remote_backend=herdr"
   printf '%s\n' "$remote_home"
 }
 
@@ -2605,7 +2606,8 @@ test_remote_retire_refuses_reassigned_route() {
 - mate - replacement lane (host: remote-mac; root: $REMOTE_FIXTURE_ROOT; home: $replacement; scope: relay work; projects: firstmate; added 2026-08-03)
 EOF
   fm_write_meta "$home/state/mate.meta" "kind=secondmate" "home=$replacement" \
-    "remote_host=remote-mac" "remote_root=$REMOTE_FIXTURE_ROOT"
+    "remote_host=remote-mac" "remote_root=$REMOTE_FIXTURE_ROOT" \
+    "backend=herdr" "remote_backend=herdr"
   fm_write_meta "$replacement/state/work-reused.meta" \
     "status=working" "x_request=req-remote-replacement" "x_request_ts=1700000000" "x_followups=1"
 

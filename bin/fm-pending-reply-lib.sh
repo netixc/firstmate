@@ -1501,14 +1501,16 @@ fm_pending_reply_tick() {  # <state-dir>
       awaiting_report|recovery_sent) ;;
       *) continue ;;
     esac
-    backend=tmux
+    backend=
     target=
     busy=unknown
     sm_home=
     harness=
     if [ -f "$meta" ]; then
       remote_host=$(fm_meta_get "$meta" remote_host)
-      backend=$(fm_backend_of_meta "$meta")
+      if ! backend=$(fm_backend_of_meta "$meta" 2>/dev/null); then
+        backend=
+      fi
       target=$(fm_backend_target_of_meta "$meta")
       sm_home=$(fm_meta_get "$meta" home)
       harness=$(fm_meta_get "$meta" harness)
@@ -1516,7 +1518,7 @@ fm_pending_reply_tick() {  # <state-dir>
         target="remote:$task_id"
         sm_home=
       fi
-      if [ -n "$target" ]; then
+      if [ -n "$backend" ] && [ -n "$target" ]; then
         label="fm-$task_id"
         observation=
         found=0

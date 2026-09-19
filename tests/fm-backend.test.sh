@@ -114,8 +114,8 @@ test_backend_name_precedence() {
   # source time, from FM_CONFIG_OVERRIDE); a later FM_CONFIG_OVERRIDE=... prefix
   # on the function call itself does not re-bind it, so these calls set
   # FM_BACKEND_CONFIG_DIR directly.
-  [ "$(unset TMUX HERDR_ENV __CFBundleIdentifier; FM_BACKEND='' FM_BACKEND_CONFIG_DIR="$cfg" fm_backend_name)" = tmux ] \
-    || fail "fm_backend_name should default to tmux with no env/config/detection markers"
+  [ "$(unset TMUX HERDR_ENV __CFBundleIdentifier; FM_BACKEND='' FM_BACKEND_CONFIG_DIR="$cfg" fm_backend_name)" = herdr ] \
+    || fail "fm_backend_name should default to herdr with no env/config markers"
 
   printf 'tmux\n' > "$cfg/backend"
   [ "$(unset TMUX HERDR_ENV; FM_BACKEND='' FM_BACKEND_CONFIG_DIR="$cfg" fm_backend_name)" = tmux ] \
@@ -124,7 +124,7 @@ test_backend_name_precedence() {
   [ "$(unset TMUX HERDR_ENV; FM_BACKEND=tmux FM_BACKEND_CONFIG_DIR="$cfg" fm_backend_name)" = tmux ] \
     || fail "FM_BACKEND env should win over config/backend"
 
-  pass "fm_backend_name: FM_BACKEND env > config/backend > default tmux"
+  pass "fm_backend_name: FM_BACKEND env > config/backend > default herdr"
 }
 
 # fm_backend_detect: environment-marker runtime auto-detection.
@@ -152,36 +152,28 @@ test_backend_detect_precedence() {
   pass "fm_backend_detect: no markers -> undetected, HERDR_ENV=1 -> herdr, \$TMUX -> tmux, nested tmux wins"
 }
 
-# fm_backend_name's auto-detect step fires only when neither the environment nor
-# config names a backend. Herdr is announced; tmux remains the silent default.
-test_backend_name_autodetect_notice() {
-  local dir cfg out errfile
+# Runtime markers remain diagnosable through fm_backend_detect, but they no
+# longer select fresh work. With no explicit source, every marker shape resolves
+# to Herdr without a notice.
+test_backend_name_ignores_runtime_markers() {
+  local dir cfg out errfile marker_env
 
-  dir="$TMP_ROOT/name-autodetect"; cfg="$dir/config-empty"; mkdir -p "$cfg"
+  dir="$TMP_ROOT/name-runtime-markers"; cfg="$dir/config-empty"; mkdir -p "$cfg"
   errfile="$dir/err.txt"
 
-  : > "$errfile"
-  out=$(unset TMUX HERDR_ENV __CFBundleIdentifier; FM_BACKEND='' FM_BACKEND_CONFIG_DIR="$cfg" fm_backend_name 2>"$errfile")
-  [ "$out" = tmux ] || fail "fm_backend_name should default to tmux with no detection markers, got '$out'"
-  [ -s "$errfile" ] && fail "fm_backend_name must stay silent with no detection markers"$'\n'"$(cat "$errfile")"
+  for marker_env in none herdr tmux nested; do
+    : > "$errfile"
+    case "$marker_env" in
+      none) out=$(unset TMUX HERDR_ENV __CFBundleIdentifier; FM_BACKEND='' FM_BACKEND_CONFIG_DIR="$cfg" fm_backend_name 2>"$errfile") ;;
+      herdr) out=$(unset TMUX; HERDR_ENV=1 FM_BACKEND='' FM_BACKEND_CONFIG_DIR="$cfg" fm_backend_name 2>"$errfile") ;;
+      tmux) out=$(unset HERDR_ENV; TMUX='fake,1,0' FM_BACKEND='' FM_BACKEND_CONFIG_DIR="$cfg" fm_backend_name 2>"$errfile") ;;
+      nested) out=$(TMUX='fake,1,0' HERDR_ENV=1 FM_BACKEND='' FM_BACKEND_CONFIG_DIR="$cfg" fm_backend_name 2>"$errfile") ;;
+    esac
+    [ "$out" = herdr ] || fail "runtime marker case $marker_env selected '$out', expected herdr"
+    [ ! -s "$errfile" ] || fail "runtime marker case $marker_env emitted a selection notice"$'\n'"$(cat "$errfile")"
+  done
 
-  : > "$errfile"
-  out=$(unset TMUX; HERDR_ENV=1 FM_BACKEND='' FM_BACKEND_CONFIG_DIR="$cfg" fm_backend_name 2>"$errfile")
-  [ "$out" = herdr ] || fail "fm_backend_name should auto-detect Herdr from HERDR_ENV=1, got '$out'"
-  assert_contains "$(cat "$errfile")" "herdr backend" \
-    "fm_backend_name did not print a notice when auto-detecting Herdr"
-
-  : > "$errfile"
-  out=$(unset HERDR_ENV; TMUX='fake,1,0' FM_BACKEND='' FM_BACKEND_CONFIG_DIR="$cfg" fm_backend_name 2>"$errfile")
-  [ "$out" = tmux ] || fail "fm_backend_name should auto-detect tmux from \$TMUX, got '$out'"
-  [ -s "$errfile" ] && fail "auto-detecting tmux must stay silent"$'\n'"$(cat "$errfile")"
-
-  : > "$errfile"
-  out=$(TMUX='fake,1,0' HERDR_ENV=1 FM_BACKEND='' FM_BACKEND_CONFIG_DIR="$cfg" fm_backend_name 2>"$errfile")
-  [ "$out" = tmux ] || fail "nested tmux-in-Herdr should auto-detect tmux, got '$out'"
-  [ -s "$errfile" ] && fail "nested tmux-in-Herdr auto-detect must stay silent"$'\n'"$(cat "$errfile")"
-
-  pass "fm_backend_name: auto-detect selects Herdr with notice or tmux silently"
+  pass "fm_backend_name: runtime markers never select fresh endpoints; Herdr remains the silent default"
 }
 
 # Explicit configuration (FM_BACKEND env or config/backend) always wins over
@@ -244,36 +236,46 @@ test_backend_source_shell_portable() {
 
 test_backend_validate_spawn_accepts_supported() {
   local out
-  fm_backend_validate_spawn tmux 2>/dev/null || fail "fm_backend_validate_spawn should accept tmux"
-  fm_backend_validate_spawn herdr 2>/dev/null || fail "fm_backend_validate_spawn should accept Herdr"
-  out=$(fm_backend_validate_spawn bogus 2>&1) && fail "fm_backend_validate_spawn should still refuse unknown backends"
+  FM_GATE_REFUSE_BYPASS='' fm_backend_validate_spawn herdr 2>/dev/null \
+    || fail "fm_backend_validate_spawn should accept Herdr"
+  out=$(FM_GATE_REFUSE_BYPASS='' fm_backend_validate_spawn tmux 2>&1) \
+    && fail "fm_backend_validate_spawn should refuse fresh tmux creation"
+  assert_contains "$out" "rollback-only" "fresh tmux refusal did not explain the retained rollback scope"
+  assert_contains "$out" "select herdr" "fresh tmux refusal did not give an actionable Herdr correction"
+  out=$(FM_GATE_REFUSE_BYPASS='' fm_backend_validate_spawn bogus 2>&1) \
+    && fail "fm_backend_validate_spawn should still refuse unknown backends"
   assert_contains "$out" "unknown backend 'bogus'" "fm_backend_validate_spawn did not preserve unknown-backend validation"
-  out=$(fm_backend_validate_spawn "tmux herdr" 2>&1) && fail "fm_backend_validate_spawn should refuse a multi-token backend name"
+  out=$(FM_GATE_REFUSE_BYPASS='' fm_backend_validate_spawn "tmux herdr" 2>&1) \
+    && fail "fm_backend_validate_spawn should refuse a multi-token backend name"
   assert_contains "$out" "unknown backend 'tmux herdr'" "fm_backend_validate_spawn accepted a multi-token backend name"
-  pass "fm_backend_validate_spawn: all implemented lifecycle backends are spawn-supported"
+  pass "fm_backend_validate_spawn: Herdr creates fresh endpoints and tmux is rollback-only"
 }
 
 test_meta_get_and_backend_of_meta() {
-  local meta=$TMP_ROOT/meta-get.meta edge=$TMP_ROOT/meta-get-edge.meta
+  local meta=$TMP_ROOT/meta-get.meta edge=$TMP_ROOT/meta-get-edge.meta out
   fm_write_meta "$meta" "window=firstmate:fm-x1" "harness=pi"
   [ "$(fm_meta_get "$meta" window)" = "firstmate:fm-x1" ] || fail "fm_meta_get did not read window="
   [ "$(fm_meta_get "$meta" missing)" = "" ] || fail "fm_meta_get should print nothing for an absent key"
-  [ "$(fm_backend_of_meta "$meta")" = tmux ] || fail "fm_backend_of_meta should default absent backend= to tmux"
+  out=$(FM_GATE_REFUSE_BYPASS='' fm_backend_of_meta "$meta" 2>&1) \
+    && fail "fm_backend_of_meta should refuse an absent backend identity"
+  assert_contains "$out" "refusing to guess tmux or herdr" \
+    "backend-less metadata refusal did not explain the ambiguity"
 
   printf 'backend=tmux\n' >> "$meta"
-  [ "$(fm_backend_of_meta "$meta")" = tmux ] || fail "fm_backend_of_meta should read an explicit backend=tmux"
+  [ "$(FM_GATE_REFUSE_BYPASS='' fm_backend_of_meta "$meta")" = tmux ] \
+    || fail "fm_backend_of_meta should read an explicit backend=tmux rollback record"
 
   printf 'token=first\ntoken=last=value' > "$edge"
   [ "$(fm_meta_get "$edge" token)" = "last=value" ] \
     || fail "fm_meta_get did not preserve last-value or no-final-newline semantics"
 
-  pass "fm_meta_get / fm_backend_of_meta: read last key=value and default backend to tmux"
+  pass "fm_meta_get / fm_backend_of_meta: require one explicit known backend identity"
 }
 
 test_resolve_selector_three_forms() {
   local state=$TMP_ROOT/resolve-state fakebin out
   mkdir -p "$state"
-  fm_write_meta "$state/task1.meta" "window=firstmate:fm-task1"
+  fm_write_meta "$state/task1.meta" "window=firstmate:fm-task1" "backend=tmux"
   fm_write_meta "$state/dotfiles-d6.meta" "window=default:wA:p2" "backend=herdr"
   fm_write_meta "$state/fm-turnend-all-harnesses-v9.meta" "window=default:wB:p3" "backend=herdr"
 
@@ -318,10 +320,12 @@ SH
   # Only a NON fm-* bare name falls through to the live-window search.
   assert_contains "$out" "no metadata for fm-adhoc" "an fm-* selector must always require meta, not silently fall back to a live search"
 
-  out=$(PATH="$fakebin:$PATH" fm_backend_resolve_selector 'adhoc' "$state")
-  [ "$out" = "firstmate:adhoc" ] || fail "an ad hoc bare name should resolve via the tmux live-window fallback, got '$out'"
+  out=$(PATH="$fakebin:$PATH" fm_backend_resolve_selector 'adhoc' "$state" 2>&1) \
+    && fail "an ad hoc bare name without metadata should be refused"
+  assert_contains "$out" "unrecorded backend targets are ambiguous" \
+    "unrecorded bare target refusal did not explain its ambiguity"
 
-  pass "fm_backend_resolve_selector: session:window literal, exact task id first, legacy fm-<id> label fallback, ad hoc bare name via tmux list-windows"
+  pass "fm_backend_resolve_selector: recorded selectors resolve and unrecorded bare targets refuse"
 }
 
 test_backend_of_selector_matches_explicit_target_meta() {
@@ -330,8 +334,8 @@ test_backend_of_selector_matches_explicit_target_meta() {
   fm_write_meta "$state/herdr-task.meta" "window=default:w1:p2" "backend=herdr"
   fm_write_meta "$state/dotfiles-d6.meta" "window=default:wA:p2" "backend=herdr"
   fm_write_meta "$state/fm-turnend-all-harnesses-v9.meta" "window=default:wB:p3" "backend=herdr"
-  fm_write_meta "$state/tmux-task.meta" "window=firstmate:fm-tmux-task"
-  fm_write_meta "$state/custom-window-task.meta" "window=custom-window"
+  fm_write_meta "$state/tmux-task.meta" "window=firstmate:fm-tmux-task" "backend=tmux"
+  fm_write_meta "$state/custom-window-task.meta" "window=custom-window" "backend=tmux"
 
   [ "$(fm_backend_of_selector 'dotfiles-d6' 'default:wA:p2' "$state")" = herdr ] \
     || fail "bare non-fm task id selector should use its recorded backend"
@@ -343,12 +347,13 @@ test_backend_of_selector_matches_explicit_target_meta() {
     || fail "raw window selector matching metadata should not require tmux fallback"
   [ "$(fm_backend_of_selector 'default:w1:p2' 'default:w1:p2' "$state")" = herdr ] \
     || fail "explicit backend target matching metadata should use that task's backend"
-  [ "$(fm_backend_of_selector 'firstmate:fm-tmux-task' 'firstmate:fm-tmux-task' "$state")" = tmux ] \
-    || fail "explicit tmux-shaped target with absent backend= should default to tmux"
-  [ "$(fm_backend_of_selector 'manual:outside' 'manual:outside' "$state")" = tmux ] \
-    || fail "explicit target with no matching metadata should keep the tmux compatibility default"
+  [ "$(FM_GATE_REFUSE_BYPASS='' fm_backend_of_selector 'firstmate:fm-tmux-task' 'firstmate:fm-tmux-task' "$state")" = tmux ] \
+    || fail "explicit tmux rollback target should use its recorded backend"
+  if FM_GATE_REFUSE_BYPASS='' fm_backend_of_selector 'manual:outside' 'manual:outside' "$state" >/dev/null 2>&1; then
+    fail "explicit target with no matching metadata should refuse backend inference"
+  fi
 
-  pass "fm_backend_of_selector: exact task ids, legacy fm-<id> labels, and matching explicit targets inherit metadata backend"
+  pass "fm_backend_of_selector: recorded selectors inherit explicit backend identity and unrecorded targets refuse"
 }
 
 # --- old vs new: fm-send.sh --------------------------------------------------
@@ -755,86 +760,71 @@ test_spawn_refuses_unknown_fm_backend_env() {
   pass "fm-spawn.sh honors FM_BACKEND and refuses an unimplemented value loudly"
 }
 
-test_spawn_default_backend_writes_no_meta_field() {
-  local proj wt data id state config out
-  proj="$TMP_ROOT/nobackend-project"; wt="$TMP_ROOT/nobackend-wt"; data="$TMP_ROOT/nobackend-data"
-  id="nobackendz3"
-  fm_git_worktree "$proj" "$wt" "fm/$id"
-  local fb
-  fb=$(make_spawn_fakebin "$TMP_ROOT/nobackend-fake" "$wt")
-  mkdir -p "$data/$id"; write_spawn_brief "$data/$id/brief.md" "$id"
-  state="$TMP_ROOT/nobackend-state"; config="$TMP_ROOT/nobackend-config"
-  mkdir -p "$state" "$config"
+test_spawn_refuses_fresh_tmux_from_every_explicit_source() {
+  local config out status source
+  config="$TMP_ROOT/fresh-tmux-config"
+  mkdir -p "$config"
+  printf 'tmux\n' > "$config/backend"
 
-  out=$(PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$ROOT" HOME="$SPAWN_HOME" \
-    FM_STATE_OVERRIDE="$state" FM_DATA_OVERRIDE="$data" FM_CONFIG_OVERRIDE="$config" \
-    FM_PROJECTS_OVERRIDE="$TMP_ROOT/unused-projects" FM_SPAWN_NO_GUARD=1 TMUX="fake,1,0" \
-    FM_TMUX_LOG="$TMP_ROOT/nobackend.log" \
-    "$ROOT/bin/fm-spawn.sh" "$id" "$proj" --harness pi --mode no-mistakes --yolo off --backend tmux 2>&1)
-  expect_code 0 $? "explicit --backend tmux should spawn successfully"$'\n'"$out"
-  assert_no_grep 'backend=' "$state/$id.meta" \
-    "an explicit --backend tmux (the default) must not write backend= to meta (P1 compatibility contract)"
-  rm -rf "/tmp/fm-$id"
-  pass "fm-spawn.sh: an explicit --backend tmux resolves silently and writes no backend= (missing means tmux)"
+  for source in flag env config; do
+    case "$source" in
+      flag)
+        out=$(FM_GATE_REFUSE_BYPASS='' FM_BACKEND='' FM_CONFIG_OVERRIDE="$TMP_ROOT/no-config" \
+          FM_SPAWN_NO_GUARD=1 "$ROOT/bin/fm-spawn.sh" fresh-tmux projects/none \
+          --harness pi --mode no-mistakes --yolo off --backend tmux 2>&1)
+        ;;
+      env)
+        out=$(FM_GATE_REFUSE_BYPASS='' FM_BACKEND=tmux FM_CONFIG_OVERRIDE="$TMP_ROOT/no-config" \
+          FM_SPAWN_NO_GUARD=1 "$ROOT/bin/fm-spawn.sh" fresh-tmux projects/none \
+          --harness pi --mode no-mistakes --yolo off 2>&1)
+        ;;
+      config)
+        out=$(env -u FM_BACKEND FM_GATE_REFUSE_BYPASS= FM_CONFIG_OVERRIDE="$config" \
+          FM_SPAWN_NO_GUARD=1 "$ROOT/bin/fm-spawn.sh" fresh-tmux projects/none \
+          --harness pi --mode no-mistakes --yolo off 2>&1)
+        ;;
+    esac
+    status=$?
+    [ "$status" -ne 0 ] || fail "fresh tmux spawn from $source unexpectedly succeeded"
+    assert_contains "$out" "rollback-only" "fresh tmux $source refusal did not name rollback-only scope"
+    assert_contains "$out" "select herdr" "fresh tmux $source refusal did not provide the Herdr correction"
+  done
+
+  pass "fm-spawn.sh: explicit flag, environment, and inherited config cannot create fresh tmux endpoints"
 }
 
-test_spawn_explicit_backend_flag_beats_autodetect_herdr_env() {
-  local proj wt data id state config out fb
-  proj="$TMP_ROOT/explicit-backend-project"; wt="$TMP_ROOT/explicit-backend-wt"; data="$TMP_ROOT/explicit-backend-data"
-  id="explicitbackendz4"
-  fm_git_worktree "$proj" "$wt" "fm/$id"
-  fb=$(make_spawn_fakebin "$TMP_ROOT/explicit-backend-fake" "$wt")
-  mkdir -p "$data/$id"; write_spawn_brief "$data/$id/brief.md" "$id"
-  state="$TMP_ROOT/explicit-backend-state"; config="$TMP_ROOT/explicit-backend-config"
-  mkdir -p "$state" "$config"
+test_recorded_tmux_reads_and_backendless_refuses() {
+  local state fb log out status
+  state="$TMP_ROOT/transition-selector-state"
+  fb=$(make_peek_fakebin "$TMP_ROOT/transition-selector-fake" "rollback endpoint")
+  log="$TMP_ROOT/transition-selector.log"
+  mkdir -p "$state"
+  fm_write_meta "$state/rollback.meta" \
+    "window=firstmate:fm-rollback" "backend=tmux" "harness=pi"
 
-  # HERDR_ENV=1 is present (as if firstmate itself were running under herdr),
-  # but an explicit --backend tmux flag must still win outright.
-  out=$(PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$ROOT" HOME="$SPAWN_HOME" \
-    FM_STATE_OVERRIDE="$state" FM_DATA_OVERRIDE="$data" FM_CONFIG_OVERRIDE="$config" \
-    FM_PROJECTS_OVERRIDE="$TMP_ROOT/unused-projects" FM_SPAWN_NO_GUARD=1 TMUX="fake,1,0" HERDR_ENV=1 \
-    FM_TMUX_LOG="$TMP_ROOT/explicit-backend.log" \
-    "$ROOT/bin/fm-spawn.sh" "$id" "$proj" --harness pi --mode no-mistakes --yolo off --backend tmux 2>&1)
-  expect_code 0 $? "explicit --backend tmux should spawn successfully even with HERDR_ENV=1 set"$'\n'"$out"
-  assert_no_grep 'backend=' "$state/$id.meta" \
-    "an explicit --backend tmux must win over an ambient HERDR_ENV=1 auto-detect marker"
-  rm -rf "/tmp/fm-$id"
-  pass "fm-spawn.sh: explicit --backend tmux wins over an ambient HERDR_ENV=1 auto-detect marker"
-}
+  : > "$log"
+  out=$(FM_GATE_REFUSE_BYPASS='' FM_STATE_OVERRIDE="$state" FM_TMUX_LOG="$log" \
+    PATH="$fb:$PATH" "$ROOT/bin/fm-peek.sh" rollback 5 2>/dev/null)
+  [ "$out" = "rollback endpoint" ] || fail "explicit backend=tmux rollback record was not readable"
+  assert_contains "$(cat "$log")" $'\x1f''firstmate:fm-rollback' \
+    "explicit tmux rollback read did not target the exact recorded endpoint"
 
-test_spawn_autodetect_nesting_resolves_tmux_silently() {
-  local proj wt data id state config out fb
-  proj="$TMP_ROOT/nest-project"; wt="$TMP_ROOT/nest-wt"; data="$TMP_ROOT/nest-data"
-  id="nestbackendz5"
-  fm_git_worktree "$proj" "$wt" "fm/$id"
-  fb=$(make_spawn_fakebin "$TMP_ROOT/nest-fake" "$wt")
-  mkdir -p "$data/$id"; write_spawn_brief "$data/$id/brief.md" "$id"
-  state="$TMP_ROOT/nest-state"; config="$TMP_ROOT/nest-config"
-  mkdir -p "$state" "$config"
+  fm_write_meta "$state/ambiguous.meta" "window=firstmate:fm-ambiguous" "harness=pi"
+  : > "$log"
+  out=$(FM_GATE_REFUSE_BYPASS='' FM_STATE_OVERRIDE="$state" FM_TMUX_LOG="$log" \
+    PATH="$fb:$PATH" "$ROOT/bin/fm-peek.sh" ambiguous 5 2>&1)
+  status=$?
+  [ "$status" -ne 0 ] || fail "backend-less endpoint metadata unexpectedly reached a runtime"
+  assert_contains "$out" "refusing to guess tmux or herdr" \
+    "backend-less endpoint refusal did not explain transition ambiguity"
+  [ ! -s "$log" ] || fail "backend-less endpoint refusal invoked tmux"
 
-  # No --backend, no FM_BACKEND, no config/backend: nothing is explicitly
-  # configured, so auto-detect runs. $TMUX and HERDR_ENV=1 are both present
-  # (tmux nested inside a herdr pane) - the full fm-spawn.sh pipeline, not just
-  # fm_backend_name, must resolve this to tmux and stay completely silent about
-  # it (today's default path, byte-identical).
-  out=$(PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$ROOT" HOME="$SPAWN_HOME" \
-    FM_STATE_OVERRIDE="$state" FM_DATA_OVERRIDE="$data" FM_CONFIG_OVERRIDE="$config" \
-    FM_PROJECTS_OVERRIDE="$TMP_ROOT/unused-projects" FM_SPAWN_NO_GUARD=1 TMUX="fake,1,0" HERDR_ENV=1 \
-    FM_TMUX_LOG="$TMP_ROOT/nest.log" \
-    "$ROOT/bin/fm-spawn.sh" "$id" "$proj" --harness pi --mode no-mistakes --yolo off 2>&1)
-  expect_code 0 $? "fm-spawn.sh should auto-detect tmux and spawn successfully for nested tmux-in-herdr"$'\n'"$out"
-  assert_no_grep 'backend=' "$state/$id.meta" \
-    "auto-detected nested tmux-in-herdr must resolve to tmux (missing backend= means tmux)"
-  case "$out" in
-    *NOTICE*) fail "auto-detecting tmux (even nested inside herdr) must stay silent, no NOTICE expected"$'\n'"$out" ;;
-  esac
-  rm -rf "/tmp/fm-$id"
-  pass "fm-spawn.sh: auto-detect resolves nested tmux-in-herdr to tmux and stays silent end to end"
+  pass "recorded tmux rollback endpoints remain readable while backend-less records refuse before targeting"
 }
 
 test_backend_name_precedence
 test_backend_detect_precedence
-test_backend_name_autodetect_notice
+test_backend_name_ignores_runtime_markers
 test_backend_name_explicit_beats_detection
 test_backend_validate_refuses_unknown
 test_backend_source_shell_portable
@@ -848,6 +838,5 @@ test_spawn_symlinked_project_prefix_avoids_false_refusal
 test_teardown_conformance_old_vs_new
 test_spawn_refuses_unknown_backend_flag
 test_spawn_refuses_unknown_fm_backend_env
-test_spawn_default_backend_writes_no_meta_field
-test_spawn_explicit_backend_flag_beats_autodetect_herdr_env
-test_spawn_autodetect_nesting_resolves_tmux_silently
+test_spawn_refuses_fresh_tmux_from_every_explicit_source
+test_recorded_tmux_reads_and_backendless_refuses

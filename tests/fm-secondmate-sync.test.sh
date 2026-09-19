@@ -1242,7 +1242,7 @@ test_bootstrap_syncs_remote_home_to_primary_commit() {
   printf -- '- sm - remote fixture (host: host-sm; root: %s; home: %s; scope: remote work; projects: alpha; added 2026-08-02)\n' \
     "$w/coderoot" "$w/sm" > "$home/data/secondmates.md"
   fm_write_secondmate_meta "$home/state/sm.meta" "$w/sm"
-  printf 'remote_host=host-sm\n' >> "$home/state/sm.meta"
+  printf 'remote_host=host-sm\nbackend=herdr\nremote_backend=herdr\n' >> "$home/state/sm.meta"
   mkdir -p "$w/sm/state/parent-route"
   fm_write_meta "$w/sm/state/parent-route/sm.meta" \
     'window=fm-remote:p1' 'endpoint_task_id=sm' 'worktree=-' 'project=-' \
@@ -1285,7 +1285,7 @@ test_bootstrap_reports_outdated_host_actionably() {
   printf -- '- sm - remote fixture (host: host-sm; root: %s; home: %s; scope: remote work; projects: alpha; added 2026-08-02)\n' \
     "$w/coderoot" "$w/sm" > "$home/data/secondmates.md"
   fm_write_secondmate_meta "$home/state/sm.meta" "$w/sm"
-  printf 'remote_host=host-sm\n' >> "$home/state/sm.meta"
+  printf 'remote_host=host-sm\nbackend=herdr\nremote_backend=herdr\n' >> "$home/state/sm.meta"
 
   fakebin=$(make_remote_leg_ssh_stub "$w")
   fm_fake_exit0 "$fakebin" gh treehouse tmux node

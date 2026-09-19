@@ -185,6 +185,7 @@ setup_remote_parent_home() {  # <name> <remote-home> -> echoes home dir
     "yolo=off" \
     "remote_host=remote-mac" \
     "remote_root=/remote/root" \
+    "backend=herdr" \
     "remote_backend=herdr" \
     "remote_herdr_session=fm-remote" \
     "remote_target=fm-remote:p1"

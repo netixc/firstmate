@@ -2,7 +2,8 @@
 # Credential-safe real Pi lifecycle regression through production wrappers.
 #
 # Runs the same spawn -> durable send -> interrupt -> exit -> relaunch ->
-# cleanup path once on Herdr and once on the tmux reference backend. The Pi
+# cleanup path once on Herdr and once on the retained tmux rollback adapter in
+# an isolated test-only endpoint. The Pi
 # extension grants session-only trust, handles the production durable inbox,
 # routes a correlated reply through fm-secondmate-report.sh, and must abort each
 # turn before its credential-free provider fixture is invoked.
@@ -244,9 +245,8 @@ run_backend_lifecycle() { # <herdr|tmux>
   [ -f "$meta" ] || fail "$backend: spawn did not publish task metadata"
   [ "$(fm_meta_get "$meta" kind)" = secondmate ] || fail "$backend: spawn did not record kind=secondmate"
   [ "$(fm_backend_of_meta "$meta")" = "$backend" ] || fail "$backend: spawn recorded the wrong backend"
-  if [ "$backend" = tmux ]; then
-    ! grep -q '^backend=' "$meta" || fail "tmux: backend-less metadata compatibility changed"
-  fi
+  grep -Fqx "backend=$backend" "$meta" \
+    || fail "$backend: spawn did not publish an explicit backend identity"
   target=$(fm_backend_target_of_meta "$meta")
   wait_for_capture_count "$mate" "Credential-safe lifecycle secondmate" 1 \
     || fail "$backend: real Pi did not load and abort the startup charter"

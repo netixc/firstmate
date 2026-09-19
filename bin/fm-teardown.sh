@@ -328,8 +328,6 @@ TREEHOUSE_SLOT_LOCK_REQUIRED=0
 if [ -f "$META" ] && [ ! -L "$META" ]; then
   TEARDOWN_LOCK_KIND=$(fm_meta_get "$META" kind)
   [ -n "$TEARDOWN_LOCK_KIND" ] || TEARDOWN_LOCK_KIND=ship
-  TEARDOWN_LOCK_BACKEND=$(fm_meta_get "$META" backend)
-  [ -n "$TEARDOWN_LOCK_BACKEND" ] || TEARDOWN_LOCK_BACKEND=tmux
   TEARDOWN_LOCK_WT=$(fm_meta_get "$META" worktree)
   TEARDOWN_LOCK_PROJECT=$(fm_meta_get "$META" project)
   if [ "$TEARDOWN_LOCK_KIND" != secondmate ] \
@@ -795,9 +793,18 @@ remote_outbox_cleanup() {
 }
 
 remote_secondmate_teardown() {
-  local remote_host remote_root remote_home kind route_host route_root route_home out rc tmp rec phase task_id
+  local remote_host remote_root remote_home backend route_backend kind route_host route_root route_home out rc tmp rec phase task_id
   remote_host=$(fm_meta_get "$META" remote_host)
   [ -n "$remote_host" ] || return 3
+  if ! backend=$(fm_backend_of_meta "$META" 2>/dev/null); then
+    echo "REFUSED: remote secondmate metadata has no unambiguous explicit backend identity" >&2
+    return 1
+  fi
+  route_backend=$(fm_meta_get "$META" remote_backend)
+  if [ "$backend" != herdr ] || [ "$route_backend" != herdr ]; then
+    echo "REFUSED: remote secondmate metadata does not carry matching explicit Herdr backend identities" >&2
+    return 1
+  fi
   kind=$(fm_meta_get "$META" kind)
   [ "$kind" = secondmate ] || { echo "REFUSED: remote placement metadata is valid only for a secondmate" >&2; return 1; }
   remote_root=$(fm_meta_get "$META" remote_root)
@@ -2699,7 +2706,7 @@ validate_firstmate_home_children_removal() {
     child_wt=$(meta_value "$child_meta" worktree)
     child_kind=$(meta_value "$child_meta" kind)
     [ -n "$child_kind" ] || child_kind=ship
-    child_backend=$(fm_backend_of_meta "$child_meta")
+    child_backend=$(fm_backend_of_meta "$child_meta") || return 1
     if [ "$child_kind" = secondmate ]; then
       child_home=$(meta_value "$child_meta" home)
       [ -n "$child_home" ] || child_home=$child_wt
@@ -2858,7 +2865,7 @@ cleanup_firstmate_home_children() {
     child_proj=$(meta_value "$child_meta" project)
     child_kind=$(meta_value "$child_meta" kind)
     [ -n "$child_kind" ] || child_kind=ship
-    child_backend=$(fm_backend_of_meta "$child_meta")
+    child_backend=$(fm_backend_of_meta "$child_meta") || return 1
     child_t=$(fm_backend_target_of_meta "$child_meta")
     if [ -n "$child_t" ]; then
       if [ "$child_backend" = herdr ]; then

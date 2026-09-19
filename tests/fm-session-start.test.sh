@@ -1031,7 +1031,7 @@ EOF
 
 test_herdr_backend_diagnostics_follow_real_session_start() {
   local mode rec root home fakebin mask out
-  for mode in configured autodetected; do
+  for mode in configured default-with-marker; do
     rec=$(new_world "herdr-$mode")
     IFS='|' read -r root home fakebin <<EOF
 $rec
@@ -1052,13 +1052,13 @@ command() {
 SH
     if [ "$mode" = configured ]; then
       printf '%s\n' herdr > "$home/config/backend"
-      out=$(TMUX='' HERDR_ENV='' BASH_ENV="$mask" run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
-      assert_not_contains "$out" "NOTICE: auto-detected herdr backend" \
+      out=$(FM_BACKEND='' TMUX='' HERDR_ENV='' BASH_ENV="$mask" run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+      assert_not_contains "$out" "auto-detected herdr backend" \
         "an explicit Herdr home should not be reported as auto-detected"
     else
-      out=$(TMUX='' HERDR_ENV=1 BASH_ENV="$mask" run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
-      assert_contains "$out" "NOTICE: auto-detected herdr backend from HERDR_ENV=1" \
-        "session start did not preserve the Herdr backend auto-detection fallback"
+      out=$(FM_BACKEND='' TMUX='fake,1,0' HERDR_ENV=1 BASH_ENV="$mask" run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+      assert_not_contains "$out" "auto-detected herdr backend" \
+        "runtime markers should not produce a backend-selection notice"
     fi
     assert_contains "$out" "SESSION START - $home" "the real session-start path did not run in the throwaway home"
     assert_not_contains "$out" "MISSING: tmux" "Herdr session start falsely required masked tmux"
@@ -1066,7 +1066,26 @@ SH
     assert_not_contains "$out" "MISSING: jq" "Herdr session start missed its available JSON dependency"
     assert_not_contains "$out" "MISSING: treehouse" "Herdr session start missed its available worktree provider"
   done
-  pass "session start: configured and auto-detected Herdr homes never require tmux"
+
+  rec=$(new_world "herdr-explicit-tmux-rollback")
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_primary "$fakebin"
+  rm -f "$fakebin/tmux"
+  fm_fake_exit0 "$fakebin" herdr jq
+  printf '%s\n' manual > "$home/config/backlog-backend"
+  printf '%s\n' herdr > "$home/config/backend"
+  fm_write_meta "$home/state/rollback.meta" \
+    "window=firstmate:fm-rollback" "endpoint_task_id=rollback" \
+    "worktree=$home/rollback" "project=$home/project" "harness=pi" \
+    "kind=scout" "backend=tmux"
+  out=$(FM_BACKEND='' TMUX='' HERDR_ENV='' run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+  assert_contains "$out" "MISSING: tmux" \
+    "an explicit existing backend=tmux rollback record did not keep tmux installation detection active"
+
+  pass "session start: Herdr is the marker-independent default, while explicit tmux rollback records keep tmux installation detection active"
 }
 
 # --- status tail bounding -----------------------------------------------------

@@ -405,6 +405,7 @@ setup_remote_home() {  # <name> -> echoes home dir with remote meta + registry
     "yolo=off" \
     "remote_host=remote-mac" \
     "remote_root=/remote/root" \
+    "backend=herdr" \
     "remote_backend=herdr" \
     "remote_herdr_session=fm-remote" \
     "remote_target=fm-remote:w1:p1"

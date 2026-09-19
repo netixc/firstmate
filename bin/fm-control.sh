@@ -287,6 +287,11 @@ fi
 # operator about a correctly configured remote route. Name the placement
 # instead, using the same `remote_host` signal bin/fm-send.sh routes on.
 if [ -n "$(fm_meta_get "$META" remote_host)" ]; then
+  REMOTE_BACKEND=$(fm_backend_of_meta "$META" 2>/dev/null || true)
+  REMOTE_ROUTE_BACKEND=$(fm_meta_get "$META" remote_backend)
+  if [ "$REMOTE_BACKEND" != herdr ] || [ "$REMOTE_ROUTE_BACKEND" != herdr ]; then
+    die "task $ID has ambiguous or inconsistent remote backend metadata; repair, migrate, or retire its record before lifecycle work"
+  fi
   die "task $ID is a remotely placed secondmate on $(fm_meta_get "$META" remote_host); its agent runs outside this home, so no lifecycle action here could verify that it interrupted, stopped, or came back. Drive its lifecycle on that host, and reconcile it through the secondmate recovery path rather than this plane"
 fi
 

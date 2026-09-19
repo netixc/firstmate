@@ -210,11 +210,11 @@ SH
   write_remote_registry_line "$home/data/secondmates.md" charlie host-charlie "$charlie_root" "$charlie_home"
 
   fm_write_secondmate_meta "$home/state/alpha.meta" "$alpha_home"
-  printf 'remote_host=host-alpha\n' >> "$home/state/alpha.meta"
+  printf 'remote_host=host-alpha\nbackend=herdr\nremote_backend=herdr\n' >> "$home/state/alpha.meta"
   fm_write_secondmate_meta "$home/state/bravo.meta" "$bravo_home"
-  printf 'remote_host=host-bravo\n' >> "$home/state/bravo.meta"
+  printf 'remote_host=host-bravo\nbackend=herdr\nremote_backend=herdr\n' >> "$home/state/bravo.meta"
   fm_write_secondmate_meta "$home/state/charlie.meta" "$charlie_home"
-  printf 'remote_host=host-charlie\n' >> "$home/state/charlie.meta"
+  printf 'remote_host=host-charlie\nbackend=herdr\nremote_backend=herdr\n' >> "$home/state/charlie.meta"
 
   fm_git_init_commit "$home/projects/alpha"
   fm_git_add_origin "$home/projects/alpha" "$dir/alpha.origin.git"

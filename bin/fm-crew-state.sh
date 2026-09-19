@@ -199,6 +199,11 @@ LOG_VERB=$(status_line_verb "$LOG_LINE")
 # down or dead mate; only the remote host's own dead/missing verdict may say
 # the endpoint is actually gone.
 if [ -n "$REMOTE_HOST" ]; then
+  if ! REMOTE_BACKEND=$(fm_backend_of_meta "$META" 2>/dev/null); then
+    emit unknown remote-endpoint "task metadata has no unambiguous explicit backend identity"
+  fi
+  [ "$REMOTE_BACKEND" = herdr ] \
+    || emit unknown remote-endpoint "remote parent metadata records backend '$REMOTE_BACKEND', expected herdr"
   if ! REMOTE_STATE=$(FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-on.sh" "$ID" \
     fm-remote-secondmate-control.sh state "$ID" < /dev/null 2>/dev/null); then
     REMOTE_STATE=
@@ -229,10 +234,12 @@ fi
 # pane_readable is consulted ONLY in the no-run fallback below. The run-step path
 # stays authoritative regardless of pane liveness - judge by the run-step, not the
 # shell - so a finished crew whose endpoint has closed still reports its run-step
-# state (e.g. done) instead of being masked as unknown. Backend-aware
-# (fm_backend_of_meta defaults absent backend= to tmux, the P1 contract): a
-# herdr task is read through fm_backend_capture instead of a bare tmux probe.
-TASK_BACKEND=$(fm_backend_of_meta "$META")
+# state (e.g. done) instead of being masked as unknown. Endpoint reads require
+# one explicit backend identity; a backend-less record is transition ambiguity,
+# never permission to probe tmux or Herdr.
+if ! TASK_BACKEND=$(fm_backend_of_meta "$META" 2>/dev/null); then
+  emit unknown endpoint "task metadata has no unambiguous explicit backend identity"
+fi
 BACKEND_TARGET=$(fm_backend_target_of_meta "$META")
 EXPECTED_LABEL="fm-$ID"
 pane_readable() {  # <target>

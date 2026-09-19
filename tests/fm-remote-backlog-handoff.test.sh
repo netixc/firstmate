@@ -75,6 +75,7 @@ kind=secondmate
 mode=secondmate
 remote_host=remote-mac
 remote_root=$REMOTE_ROOT
+backend=herdr
 remote_backend=herdr
 remote_herdr_session=fm-remote
 remote_target=fm-remote:w1:p1

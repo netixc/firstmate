@@ -123,7 +123,10 @@ resolve_local_transport() { # <id> <resolved-home>
     set_transport direct 'recorded endpoint belongs to another home'
     return 0
   fi
-  backend=$(fm_backend_of_meta "$meta")
+  if ! backend=$(fm_backend_of_meta "$meta" 2>/dev/null); then
+    set_transport deferred 'recorded endpoint has no unambiguous explicit backend identity'
+    return 0
+  fi
   target=$(fm_backend_target_of_meta "$meta")
   [ -n "$target" ] || target=$(fm_meta_get "$meta" window)
   if [ -z "$target" ]; then

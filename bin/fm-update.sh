@@ -116,9 +116,14 @@ FF_RESTART_WINDOWS=""
 FF_STEER_WINDOWS=""
 
 secondmate_agent_may_be_alive() {  # <id>
-  local id=$1 meta="$STATE/$1.meta" remote_host state=unreadable
+  local id=$1 meta="$STATE/$1.meta" remote_host backend route_backend state=unreadable
   remote_host=$(fm_meta_get "$meta" remote_host)
   if [ -n "$remote_host" ]; then
+    backend=$(fm_backend_of_meta "$meta" 2>/dev/null || true)
+    route_backend=$(fm_meta_get "$meta" remote_backend)
+    if [ "$backend" != herdr ] || [ "$route_backend" != herdr ]; then
+      return 0
+    fi
     state=$("$SCRIPT_DIR/fm-on.sh" "$id" \
       fm-remote-secondmate-control.sh state "$id" < /dev/null 2>/dev/null) || state=unreadable
   elif fm_backend_validate_task_endpoint "$meta" "$id" >/dev/null 2>&1; then

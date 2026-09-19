@@ -175,9 +175,8 @@ It owns task endpoint creation, bounded capture, text and key sends, current-pat
 `bin/fm-backend.sh` centralizes backend selection, metadata helpers, cleanup identity validation, selector resolution, and operation dispatch.
 The only adapters are `bin/backends/tmux.sh`, the verified reference backend documented in [`docs/tmux-backend.md`](tmux-backend.md), and `bin/backends/herdr.sh`, which has its own required CI lane documented in [`docs/herdr-backend.md`](herdr-backend.md).
 [`configuration.md`](configuration.md#runtime-backend-configbackend--fm_backend) owns new-spawn selection precedence and authorization.
-Runtime auto-detection is innermost-first: `$TMUX` wins over `HERDR_ENV=1`; auto-detected Herdr prints a one-time opt-out notice and auto-detected tmux stays silent.
-Unknown backend names are rejected.
-For compatibility, default tmux tasks do not write `backend=tmux`; every reader treats a missing `backend=` field as tmux.
+Fresh endpoint creation is Herdr-only and every new record states `backend=herdr`; runtime markers never select a backend, an explicit tmux request refuses as rollback-only, and unknown names are rejected.
+Tmux remains implemented for exact existing records carrying `backend=tmux`, while a missing backend field is transition ambiguity that refuses before runtime dispatch.
 
 `fm-watch.sh` decides each window's busy state through the semantic contract above rather than by polling rendered text.
 Herdr's native `agent.get` verdict participates only as evidence of activity: native `busy` is accepted when the task has no lifecycle record, while native `idle` is not, because it can appear while a worker blocks on a long-running foreground tool call.
@@ -394,7 +393,7 @@ The procedure and outcome vocabulary are owned by the [`/updatefirstmate` skill]
 
 ## Restart-proof
 
-Fleet state lives in each task's session-provider backend (tmux by default or Herdr when selected or auto-detected), no-mistakes run records, status event logs, local markdown under `data/` including `data/captain.md`, `data/captain-shared.md`, and `data/learnings.md`, and persistent secondmate homes.
+Fleet state lives in each task's explicitly recorded session-provider backend (Herdr for fresh work or tmux for a retained rollback endpoint), no-mistakes run records, status event logs, local markdown under `data/` including `data/captain.md`, `data/captain-shared.md`, and `data/learnings.md`, and persistent secondmate homes.
 For herdr, respawning after a server-restored layout closes and replaces confirmed no-agent or dead task-tab husks instead of requiring manual tab cleanup.
 At session start, confirmed-dead secondmate agent endpoints are closed and relaunched through the same secondmate spawn path, while ambiguous liveness reads are left untouched to avoid duplicate supervisors.
 Use `/stow` before an intentional reset when the conversation may hold durable knowledge that has not yet been written to disk; after that, the next firstmate session can reconcile and carry on.

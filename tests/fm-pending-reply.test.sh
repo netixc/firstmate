@@ -1153,7 +1153,8 @@ test_remote_repost_waits_for_the_reply_channel() {
 
   fm_write_meta "$state/ios.meta" \
     "window=fm-remote:w1:p1" "harness=pi" "kind=secondmate" "mode=secondmate" \
-    "remote_host=remote-mac" "remote_root=/remote/root" "remote_backend=herdr"
+    "remote_host=remote-mac" "remote_root=/remote/root" \
+    "backend=herdr" "remote_backend=herdr"
   corr=$(fm_pending_reply_create "$home" "$state" "ios" "status of the iOS build")
   fm_pending_reply_mark_delivered "$state" "$corr"
   fm_pending_reply_observe_busy "$state" "$corr" busy
@@ -1211,7 +1212,8 @@ test_mirrored_remote_reply_never_triggers_a_repost() {
 
   fm_write_meta "$state/ios.meta" \
     "window=fm-remote:w1:p1" "harness=pi" "kind=secondmate" "mode=secondmate" \
-    "remote_host=remote-mac" "remote_root=/remote/root" "remote_backend=herdr"
+    "remote_host=remote-mac" "remote_root=/remote/root" \
+    "backend=herdr" "remote_backend=herdr"
   corr=$(fm_pending_reply_create "$home" "$state" "ios" "did the build go green")
   fm_pending_reply_mark_delivered "$state" "$corr"
   fm_pending_reply_mark_turn_completed "$state" "$corr" request

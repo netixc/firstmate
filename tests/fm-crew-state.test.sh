@@ -1911,6 +1911,7 @@ setup_remote_case() {  # <name> -> echoes case dir with remote meta + registry
     "mode=secondmate" \
     "remote_host=remote-mac" \
     "remote_root=/remote/root" \
+    "backend=herdr" \
     "remote_backend=herdr" \
     "remote_herdr_session=fm-remote" \
     "remote_target=fm-remote:w1:p1"

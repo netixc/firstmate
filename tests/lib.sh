@@ -47,6 +47,13 @@ umask 022
 # strips this to verify real refusal.
 export FM_GATE_REFUSE_BYPASS=1
 
+# Most established behavior fixtures intentionally exercise the retained tmux
+# rollback adapter with fake or private endpoints. Pin that backend explicitly
+# so the production Herdr-only default does not silently turn unrelated tests
+# into Herdr tests. Backend-transition regressions clear both this value and the
+# gate bypass when they verify the public fresh-spawn refusal.
+export FM_BACKEND=${FM_BACKEND:-tmux}
+
 # Clear the task-worker marker bin/fm-spawn.sh exports into ship and scout
 # panes. This suite builds git-init fixture repositories whose primary checkout
 # it runs a copied bin/fm-test-run.sh in, and that runner refuses the primary

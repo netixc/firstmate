@@ -128,7 +128,7 @@ pass "event_wait_or_sleep: one cached capability probe owns validation across bo
 # --- event_wait_or_sleep: a tmux-only home never runs the event path ----------
 
 reset_state
-fm_write_meta "$STATE_DIR/tk4.meta" "window=fmses:fm-tk4" "kind=ship"   # no backend= -> tmux
+fm_write_meta "$STATE_DIR/tk4.meta" "window=fmses:fm-tk4" "kind=ship" "backend=tmux"
 # shellcheck disable=SC2329 # Runtime override called by the isolated watcher.
 fm_backend_wait_transition() { printf 'CALLED\n' > "$TMP/wtcalled"; return 1; }
 event_wait_or_sleep

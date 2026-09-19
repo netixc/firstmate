@@ -2,15 +2,16 @@
 # fm-backend.sh - runtime-backend selection, meta helpers, selector resolution,
 # and dispatch for firstmate's session-provider abstraction.
 #
-# tmux and Herdr are the complete supported backend set. Selection is explicit
-# through `--backend`, `FM_BACKEND`, or `config/backend`, with runtime
-# auto-detection only when no explicit choice exists.
+# tmux and Herdr are the complete supported backend set. Fresh endpoint
+# creation is Herdr-only. Selection honors `--backend`, `FM_BACKEND`, or
+# `config/backend` so an obsolete tmux choice can be refused explicitly, then
+# defaults to Herdr without runtime-marker auto-detection.
 #
-# Compatibility contract: a task's meta may omit `backend=`; every reader here
-# treats that as `tmux` (fm_backend_of_meta), and fm-spawn.sh does not write
-# `backend=tmux` for a default-backend task, so existing and newly spawned
-# default-path metas stay byte-identical. Only a task spawned on Herdr carries
-# an explicit `backend=` line.
+# Every endpoint record must carry one explicit `backend=` identity. A missing
+# field is ambiguous at this transition boundary and is refused rather than
+# reinterpreted as either backend. The tmux adapter remains available for exact
+# read, control, relaunch, and cleanup of already-recorded `backend=tmux`
+# rollback endpoints.
 #
 # Event-source framing (herdr-addendum "Events as the core abstraction"): a
 # backend's supervision surface is conceptually an EVENT SOURCE - it produces
@@ -35,7 +36,7 @@ FM_BACKEND_CONFIG_DIR="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 # section 4's harness-verification discipline. Herdr is verified against its
 # required real-binary CI lane but newer than tmux's long-proven default path.
 FM_BACKEND_KNOWN="tmux herdr"
-FM_BACKEND_SPAWN="tmux herdr"
+FM_BACKEND_SPAWN="herdr"
 
 # fm_backend_list_contains: whitespace-delimited membership without relying on
 # shell word splitting. fm-backend.sh is normally sourced by bash scripts, but
@@ -65,6 +66,9 @@ fm_backend_is_known() {  # <name>
 # HERDR_SOCKET_PATH/HERDR_PANE_ID) into every process it manages a pane for;
 # HERDR_ENV=1 alone (no $TMUX) selects Herdr.
 #
+# FM_BACKEND_DETECTED is a public diagnostic result consumed by callers that
+# source this library.
+# shellcheck disable=SC2034
 fm_backend_detect() {
   FM_BACKEND_DETECTED=""
   if [ -n "${TMUX:-}" ]; then
@@ -80,17 +84,17 @@ fm_backend_detect() {
   return 1
 }
 
-# fm_backend_name: resolve the ACTIVE backend for a NEW spawn, absent an
+# fm_backend_name: resolve the backend requested for a NEW spawn, absent an
 # explicit per-task override. Precedence: FM_BACKEND env, then config/backend
 # (a single word on its first non-empty line, mirroring config/crew-harness),
-# then runtime auto-detection (fm_backend_detect), then default tmux. A
-# per-task `--backend` flag is parsed by the caller (fm-spawn.sh) and takes
-# precedence over this resolution entirely; it is not read here. Auto-detect
-# fires only when nothing was explicitly configured, so an explicit setting
-# always wins. Selecting Herdr via auto-detect prints one loud stderr notice;
-# auto-detecting tmux stays silent because it is the default path.
+# then Herdr. A per-task `--backend` flag is parsed by the caller (fm-spawn.sh)
+# and takes precedence over this resolution entirely; it is not read here.
+# Runtime markers remain available through fm_backend_detect for diagnostics,
+# but never select a fresh endpoint. This deliberately lets an obsolete
+# explicit tmux setting reach fm_backend_validate_spawn's actionable refusal
+# instead of silently replacing the operator's request.
 fm_backend_name() {
-  local line v detected
+  local line v
   if [ -n "${FM_BACKEND:-}" ]; then
     printf '%s' "$FM_BACKEND"
     return 0
@@ -104,17 +108,7 @@ fm_backend_name() {
       fi
     done < "$FM_BACKEND_CONFIG_DIR/backend"
   fi
-  # Called directly (not in a command substitution) so the detect signal
-  # globals survive into the notice below.
-  if fm_backend_detect >/dev/null; then
-    detected=$FM_BACKEND_DETECTED
-    if [ "$detected" = herdr ]; then
-      echo "NOTICE: auto-detected herdr backend from HERDR_ENV=1. Set config/backend or pass --backend tmux to override it." >&2
-    fi
-    printf '%s' "$detected"
-    return 0
-  fi
-  printf 'tmux'
+  printf 'herdr'
 }
 
 # fm_backend_validate: refuse an unknown backend LOUDLY. Silent on success.
@@ -131,7 +125,16 @@ fm_backend_validate_spawn() {  # <name>
   local name=$1
   fm_backend_validate "$name" || return 1
   fm_backend_list_contains "$FM_BACKEND_SPAWN" "$name" && return 0
-  echo "error: backend '$name' does not support task spawning yet (spawn-supported: $FM_BACKEND_SPAWN)" >&2
+  if [ "$name" = tmux ]; then
+    # The repository's behavior suites use FM_GATE_REFUSE_BYPASS only with
+    # isolated fake/private endpoints so pre-transition tmux fixture coverage
+    # can keep exercising unrelated launch mechanics. No Firstmate operation
+    # sets this marker.
+    [ "${FM_GATE_REFUSE_BYPASS:-}" = 1 ] && return 0
+    echo "error: backend 'tmux' is rollback-only and cannot create a fresh endpoint; remove the tmux override or select herdr. Existing records with explicit backend=tmux remain available for safe read, control, relaunch, and cleanup." >&2
+    return 1
+  fi
+  echo "error: backend '$name' does not support fresh endpoint creation (spawn-supported: $FM_BACKEND_SPAWN)" >&2
   return 1
 }
 
@@ -174,12 +177,28 @@ fm_meta_get() {  # <meta-file> <key>
   printf '%s' "$value"
 }
 
-# fm_backend_of_meta: the backend recorded in <meta-file>, defaulting to
-# `tmux` when the field is absent - the P1 compatibility contract.
+# fm_backend_of_meta: read one explicit, known backend identity from
+# <meta-file>. Missing, empty, duplicate, or unknown values are ambiguous and
+# refuse rather than guessing. FM_GATE_REFUSE_BYPASS preserves backend-less
+# tmux fixture records only inside the repository's isolated behavior suites;
+# no Firstmate operation sets that marker.
 fm_backend_of_meta() {  # <meta-file>
-  local v
-  v=$(fm_meta_get "$1" backend)
-  printf '%s' "${v:-tmux}"
+  local meta=$1 count v
+  count=$(grep -c '^backend=' "$meta" 2>/dev/null || true)
+  if [ "$count" -eq 0 ] && [ "${FM_GATE_REFUSE_BYPASS:-}" = 1 ]; then
+    printf 'tmux'
+    return 0
+  fi
+  if [ "$count" -ne 1 ]; then
+    echo "error: endpoint metadata $meta has a missing or ambiguous backend= identity; refusing to guess tmux or herdr" >&2
+    return 1
+  fi
+  v=$(fm_meta_get "$meta" backend)
+  if [ -z "$v" ] || ! fm_backend_is_known "$v"; then
+    echo "error: endpoint metadata $meta has an empty or unknown backend= identity '${v:-missing}'; refusing to target it" >&2
+    return 1
+  fi
+  printf '%s' "$v"
 }
 
 fm_backend_target_of_meta() {  # <meta-file>
@@ -242,7 +261,13 @@ fm_backend_validate_task_endpoint() {  # <meta-file> <task-id>
   esac
   backend_count=$(grep -c '^backend=' "$meta" 2>/dev/null || true)
   case "$backend_count" in
-    0) backend=tmux ;;
+    0)
+      if [ "${FM_GATE_REFUSE_BYPASS:-}" = 1 ]; then
+        backend=tmux
+      else
+        backend=
+      fi
+      ;;
     1) backend=$(fm_backend_meta_exact_value "$meta" backend) || backend= ;;
     *) backend= ;;
   esac
@@ -348,12 +373,17 @@ fm_backend_meta_for_selector() {  # <raw-target> <state-dir>
 fm_backend_of_selector() {  # <raw-target> <resolved-target> <state-dir>
   local raw=$1 resolved=$2 state=$3 meta
   meta=$(fm_backend_meta_for_selector "$raw" "$state" 2>/dev/null || true)
-  [ -n "$meta" ] && { fm_backend_of_meta "$meta"; return 0; }
+  [ -n "$meta" ] && { fm_backend_of_meta "$meta"; return $?; }
   if [ -n "$resolved" ]; then
     meta=$(fm_backend_meta_for_window "$resolved" "$state" 2>/dev/null || true)
-    [ -n "$meta" ] && { fm_backend_of_meta "$meta"; return 0; }
+    [ -n "$meta" ] && { fm_backend_of_meta "$meta"; return $?; }
   fi
-  printf 'tmux'
+  if [ "${FM_GATE_REFUSE_BYPASS:-}" = 1 ]; then
+    printf 'tmux'
+    return 0
+  fi
+  echo "error: endpoint '$raw' has no recorded backend identity in $state; refusing to guess tmux or herdr" >&2
+  return 1
 }
 
 fm_backend_expected_label_of_selector() {  # <raw-target> <state-dir>
@@ -400,9 +430,10 @@ fm_backend_source() {  # <name>
 #   "fm-<id>"          legacy task window label fallback routed through
 #                      <state-dir>/<id>.meta when no exact
 #                      <state-dir>/fm-<id>.meta exists.
-#   anything else      first matched against recorded `window=`/`terminal=`
-#                      metadata, then treated as an ad hoc bare window name and
-#                      resolved by searching the legacy tmux live inventory.
+#   anything else      matched against recorded `window=`/`terminal=` metadata;
+#                      unrecorded bare names are refused. The tmux adapter's
+#                      live inventory remains available for explicit rollback
+#                      implementation tests, not as endpoint identity.
 fm_backend_resolve_selector() {  # <raw-target> <state-dir>
   local raw=$1 state=$2 meta window
   case "$raw" in
@@ -420,7 +451,7 @@ fm_backend_resolve_selector() {  # <raw-target> <state-dir>
   fi
   case "$raw" in
     fm-*)
-      echo "error: no metadata for $raw in $state; pass session:window to target a window outside this firstmate home" >&2
+      echo "error: no metadata for $raw in $state; lifecycle operations require a recorded endpoint with an explicit backend identity" >&2
       return 1
       ;;
     *)
@@ -431,8 +462,8 @@ fm_backend_resolve_selector() {  # <raw-target> <state-dir>
         printf '%s' "$window"
         return 0
       fi
-      fm_backend_source tmux || return 1
-      fm_backend_tmux_resolve_bare_selector "$raw"
+      echo "error: no endpoint metadata for '$raw' in $state; unrecorded backend targets are ambiguous" >&2
+      return 1
       ;;
   esac
 }

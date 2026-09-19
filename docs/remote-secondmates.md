@@ -8,7 +8,8 @@ The remote second-mate agent itself always runs on the [Herdr backend](herdr-bac
 `fm-remote` is reserved for remote fleet work and must not be used for personal work.
 The user's interactive Herdr session remains `default` and is not a remote-secondmate prerequisite.
 Herdr's remote-session server belongs to the host's own GUI login session rather than to the SSH connection, so the agent's endpoint survives every disconnection the primary's supervision depends on.
-Local second mates are unaffected and keep their ordinary backend and session selection, as do the workers a remote second mate supervises inside its own home.
+Local second mates and every worker a remote second mate supervises follow the fleet-wide Herdr-only fresh-endpoint contract.
+An inherited or explicit tmux request refuses before endpoint creation; only an exact existing `backend=tmux` record retains rollback operations.
 
 ## Prerequisites
 
@@ -148,7 +149,8 @@ A known provisioning failure rolls back the new route, while SSH exit 255 preser
 Seeding also writes a durable `.fm-secondmate-parent` record next to the home's `.fm-secondmate-home` identity marker, naming this home's route to its parent as `local` or `remote`.
 The promised-public-reply subsystem is same-filesystem by construction, so a remote route can never carry a delegated public-reply promise; `bin/fm-teardown.sh`'s cleanup gate reads this record to treat a remote parent as out of scope rather than an unresolved binding.
 
-Local secondmates keep the existing route form and need no migration.
+Local secondmates keep the existing route form and need no routing-table migration.
+Every future local launch still passes the Herdr preflight and records `backend=herdr`; a local home inheriting `config/backend=tmux` refuses rather than creating an endpoint.
 A fleet may contain local and remote routes together.
 Use `bin/fm-home-seed.sh validate` to validate either form.
 
@@ -166,7 +168,7 @@ An explicit request for any other backend is refused rather than honored, and th
 An existing remote endpoint recorded in another Herdr session, including `default`, is classified as unverified and left untouched; launch, liveness recovery, control, and retirement refuse it until an operator explicitly migrates it instead of attempting a live cutover.
 A launch after a host has drifted out of readiness fails with the doctor's own gap text instead of leaving a half-created endpoint.
 Raw launch commands are not accepted for remote secondmates.
-A remote secondmate runs on Herdr; no other backend is accepted for that remote agent.
+A remote secondmate runs on Herdr; no other backend is accepted for that remote agent, and its parent record explicitly carries both `backend=herdr` and `remote_backend=herdr`.
 
 Startup liveness recovery relaunches a dead or missing remote second mate through this same command, so recovery passes the same readiness gate rather than a weaker one.
 

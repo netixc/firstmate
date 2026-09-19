@@ -2,7 +2,7 @@
 # Print the tail of a crewmate endpoint (bounded, for cheap diagnosis).
 # Usage: fm-peek.sh <target> [lines=40]
 #   <target> may be an exact task id, a legacy fm-<id> task label resolved
-#   through this home's state/<id>.meta, or an explicit backend target.
+#   through this home's state/<id>.meta, or that record's exact window= target.
 # A selector whose meta records remote_host= is a remote secondmate: its pane
 # lives on that host, so the capture routes over fm-on.sh to the host-local
 # capture (fm-remote-secondmate-control.sh), clamped to that command's
@@ -25,6 +25,15 @@ N=${2:-40}
 
 REMOTE_META=$(fm_backend_meta_for_selector "$RAW_TARGET" "$STATE" 2>/dev/null || true)
 if [ -n "$REMOTE_META" ] && [ -n "$(fm_meta_get "$REMOTE_META" remote_host)" ]; then
+  if ! REMOTE_BACKEND=$(fm_backend_of_meta "$REMOTE_META"); then
+    echo "error: remote task metadata $REMOTE_META has no usable explicit backend identity; refusing capture" >&2
+    exit 1
+  fi
+  REMOTE_ROUTE_BACKEND=$(fm_meta_get "$REMOTE_META" remote_backend)
+  if [ "$REMOTE_BACKEND" != herdr ] || [ "$REMOTE_ROUTE_BACKEND" != herdr ]; then
+    echo "error: remote task metadata $REMOTE_META does not carry matching explicit Herdr backend identities; refusing capture" >&2
+    exit 1
+  fi
   REMOTE_ID=${REMOTE_META##*/}
   REMOTE_ID=${REMOTE_ID%.meta}
   REMOTE_HOST=$(fm_meta_get "$REMOTE_META" remote_host)

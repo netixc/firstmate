@@ -253,13 +253,15 @@ test_supported_backend_endpoint_records_validate() {
 
   id=tmux-task
   fm_write_meta "$dir/home/state/$id.meta" \
-    "window=firstmate:fm-$id" "worktree=$dir/worktree" "project=$dir/project"
+    "window=firstmate:fm-$id" "backend=tmux" \
+    "worktree=$dir/worktree" "project=$dir/project"
   fm_backend_validate_task_endpoint "$dir/home/state/$id.meta" "$id" || fail "valid tmux endpoint refused"
   [ "$FM_BACKEND_VALIDATED_BACKEND:$FM_BACKEND_VALIDATED_TARGET" = "tmux:firstmate:fm-$id" ] || fail "tmux endpoint validation returned wrong identity"
 
   id=tmux-spaced-session
   fm_write_meta "$dir/home/state/$id.meta" \
-    "window=team work:fm-$id" "worktree=$dir/worktree" "project=$dir/project"
+    "window=team work:fm-$id" "backend=tmux" \
+    "worktree=$dir/worktree" "project=$dir/project"
   fm_backend_validate_task_endpoint "$dir/home/state/$id.meta" "$id" || fail "valid tmux endpoint with a spaced session name refused"
   [ "$FM_BACKEND_VALIDATED_TARGET" = "team work:fm-$id" ] || fail "tmux validation changed the spaced session identity"
 
@@ -277,6 +279,13 @@ test_supported_backend_endpoint_records_validate() {
     fail "an unknown backend endpoint was accepted"
   fi
 
+  id=backendless-task
+  fm_write_meta "$dir/home/state/$id.meta" \
+    "window=firstmate:fm-$id" "worktree=$dir/worktree" "project=$dir/project"
+  if FM_GATE_REFUSE_BYPASS='' fm_backend_validate_task_endpoint "$dir/home/state/$id.meta" "$id"; then
+    fail "backend-less transition metadata was accepted as a runtime identity"
+  fi
+
   for backend in tmux herdr; do
     set +e
     fm_backend_kill "$backend" "" >/dev/null 2>&1
@@ -284,7 +293,7 @@ test_supported_backend_endpoint_records_validate() {
     set -e
     [ "$target" -ne 0 ] || fail "$backend generic kill accepted an empty target"
   done
-  pass "cleanup identity: tmux and Herdr validate while unknown and empty backend targets refuse"
+  pass "cleanup identity: explicit tmux and Herdr validate while backend-less, unknown, and empty targets refuse"
 }
 
 test_tmux_empty_target_refuses_without_invocation() {
@@ -390,10 +399,10 @@ SH
     || fail "missing exact target cleanup removed its prefix-matched neighbor"
 
   fm_write_meta "$dir/home/state/$target_id.meta" \
-    "window=$session:$target" "endpoint_task_id=$target_id" \
+    "window=$session:$target" "endpoint_task_id=$target_id" "backend=tmux" \
     "worktree=$dir/nonexistent-worktree" "project=$dir/nonexistent-project" \
     "kind=scout" "mode=no-mistakes"
-  env -u TMUX -u TMUX_PANE FM_TEST_TMUX_SOCKET="$socket_id" \
+  env -u TMUX -u TMUX_PANE FM_GATE_REFUSE_BYPASS= FM_TEST_TMUX_SOCKET="$socket_id" \
     FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" FM_RUNTIME_LOG="$dir/runtime.log" \
     PATH="$dir/fakebin:$PATH" "$TEARDOWN" "$target_id" --force \
     > "$dir/valid.out" 2> "$dir/valid.err" \
