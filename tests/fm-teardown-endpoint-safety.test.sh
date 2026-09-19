@@ -161,7 +161,7 @@ test_non_pool_teardown_ignores_task_set_lock() {
   dir=$(make_case non-pool-task-set-lock)
   fm_write_meta "$dir/home/state/$id.meta" \
     "window=isolated:fm-$id" "endpoint_task_id=$id" \
-    "worktree=$dir/missing-worktree" "project=$dir/project" "kind=scout"
+    "worktree=$dir/missing-worktree" "project=$dir/project" "backend=tmux" "kind=scout"
   lock="$dir/home/state/.task-set.lock"
   ready="$dir/task-set-lock-ready"
   (
@@ -197,7 +197,7 @@ test_metadata_lock_serializes_destructive_cleanup() {
   dir=$(make_case metadata-lock)
   fm_write_meta "$dir/home/state/$id.meta" \
     "window=isolated:fm-$id" "endpoint_task_id=$id" \
-    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+    "worktree=$dir/worktree" "project=$dir/project" "backend=tmux" "kind=scout"
   lock="$dir/home/state/.meta-$id.lock"
   ready="$dir/meta-lock-ready"
   release="$dir/meta-lock-release"

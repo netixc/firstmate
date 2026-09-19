@@ -595,7 +595,27 @@ esac
 exit 0
 SH
   chmod +x "$fb/tmux"
-  fm_fake_exit0 "$fb" treehouse
+  cat > "$fb/herdr" <<'SH'
+#!/usr/bin/env bash
+set -u
+count_file="${FM_HERDR_POLL_COUNT:?}"
+case "${1:-} ${2:-}" in
+  "status --json") printf '%s\n' '{"client":{"version":"0.9.0","protocol":22},"server":{"running":true}}' ;;
+  "workspace list") printf '%s\n' '{"result":{"workspaces":[]}}' ;;
+  "workspace create") printf '%s\n' '{"result":{"workspace":{"workspace_id":"w1"},"tab":{"tab_id":"w1:t1"},"root_pane":{"pane_id":"w1:p1"}}}' ;;
+  "tab list") printf '%s\n' '{"result":{"tabs":[]}}' ;;
+  "tab create") printf '%s\n' '{"result":{"tab":{"tab_id":"w1:t2"},"root_pane":{"pane_id":"w1:p2"}}}' ;;
+  "pane get")
+    printf x >> "$count_file"
+    if [ "$(wc -c < "$count_file")" -le 1 ]; then cwd=$FM_HERDR_INITIAL_PATH; else cwd=$FM_HERDR_WORKTREE_PATH; fi
+    jq -n --arg cwd "$cwd" '{result:{pane:{foreground_cwd:$cwd}}}'
+    ;;
+  *) : ;;
+esac
+exit 0
+SH
+  chmod +x "$fb/herdr"
+  fm_fake_exit0 "$fb" treehouse sleep
   printf '%s\n' "$fb"
 }
 
@@ -627,7 +647,12 @@ run_spawn_symlink_case() {  # <label> <physical|logical>
   mkdir -p "$state" "$config"
   log="$TMP_ROOT/symlink-spawn-$label.log"
 
-  out=$(run_spawn_case "$ROOT" "$fb" "$log" "$state" "$data" "$config" "$proj" -- "$id" "$proj" --harness pi --mode no-mistakes --yolo off 2>&1)
+  printf 'off\n' > "$config/herdr-presentation-spaces"
+  : > "$TMP_ROOT/herdr-poll-$label"
+  out=$(FM_HERDR_INITIAL_PATH="$initial_path" FM_HERDR_WORKTREE_PATH="$wt" \
+    FM_HERDR_POLL_COUNT="$TMP_ROOT/herdr-poll-$label" \
+    run_spawn_case "$ROOT" "$fb" "$log" "$state" "$data" "$config" "$proj" -- \
+    "$id" "$proj" --harness pi --mode no-mistakes --yolo off --backend herdr 2>&1)
   rc=$?
   expect_code 0 "$rc" "fm-spawn.sh should succeed for a project reached through a symlinked prefix when the backend reports $first_reply cwd"$'\n'"$out"
   assert_contains "$out" "worktree=$wt" \
@@ -707,10 +732,10 @@ test_teardown_conformance_old_vs_new() {
   mkdir -p "$state_old" "$state_new" "$config_old" "$config_new"
 
   fm_write_meta "$state_old/$id.meta" \
-    "window=firstmate:fm-$id" "worktree=$wt" "project=$proj" "harness=pi" "kind=scout" "mode=no-mistakes" "yolo=off" \
+    "window=firstmate:fm-$id" "backend=tmux" "worktree=$wt" "project=$proj" "harness=pi" "kind=scout" "mode=no-mistakes" "yolo=off" \
     "decisions_reviewed=1" "decision_keys="
   fm_write_meta "$state_new/$id.meta" \
-    "window=firstmate:fm-$id" "worktree=$wt" "project=$proj" "harness=pi" "kind=scout" "mode=no-mistakes" "yolo=off" \
+    "window=firstmate:fm-$id" "backend=tmux" "worktree=$wt" "project=$proj" "harness=pi" "kind=scout" "mode=no-mistakes" "yolo=off" \
     "decisions_reviewed=1" "decision_keys="
   touch "$state_old/.last-watcher-beat" "$state_new/.last-watcher-beat"
 
