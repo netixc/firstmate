@@ -387,15 +387,6 @@ fm_send_resolve_target() {  # <raw-target>
 
   case "$raw" in
     *:*)
-      if [ "${FM_GATE_REFUSE_BYPASS:-}" = 1 ]; then
-        case "${raw#*:}" in *:*) backend=herdr ;; *) backend=tmux ;; esac
-        if fm_backend_target_exists "$backend" "$raw"; then
-          RESOLVED_TARGET=$raw
-          TARGET_BACKEND=$backend
-          RESOLUTION_TRIED="isolated test fixture backend=$backend; endpoint=verified"
-          return 0
-        fi
-      fi
       echo "error: explicit target '$raw' has no matching task metadata with an explicit backend= identity; refusing to guess tmux or herdr" >&2
       return 1
       ;;

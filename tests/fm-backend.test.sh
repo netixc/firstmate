@@ -419,6 +419,8 @@ test_send_tmux_contract() {
   local fb log home rc
   fb=$(make_send_fakebin "$TMP_ROOT/send-fake")
   home="$TMP_ROOT/send-home"; mkdir -p "$home/state"
+  fm_write_meta "$home/state/send-task.meta" \
+    "window=sess:win" "backend=tmux" "harness=pi"
   log="$TMP_ROOT/send-new.log"
 
   # Case 1: --key path - target verified, named key sent, no typing.
@@ -480,6 +482,8 @@ test_peek_conformance_old_vs_new() {
   old_bin=$(build_old_bin peek-old)
   fb=$(make_peek_fakebin "$TMP_ROOT/peek-fake" "$payload")
   home="$TMP_ROOT/peek-home"; mkdir -p "$home/state"
+  fm_write_meta "$home/state/peek-task.meta" \
+    "window=sess:win" "backend=tmux" "harness=pi"
   log_old="$TMP_ROOT/peek-old.log"; log_new="$TMP_ROOT/peek-new.log"
   # A fresh non-git dir keeps fm-guard.sh's worktree-tangle check inert (it warns
   # to stderr, discarded below) - neither run needs FM_ROOT for anything beyond

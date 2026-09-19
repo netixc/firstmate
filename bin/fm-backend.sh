@@ -126,11 +126,6 @@ fm_backend_validate_spawn() {  # <name>
   fm_backend_validate "$name" || return 1
   fm_backend_list_contains "$FM_BACKEND_SPAWN" "$name" && return 0
   if [ "$name" = tmux ]; then
-    # The repository's behavior suites use FM_GATE_REFUSE_BYPASS only with
-    # isolated fake/private endpoints so pre-transition tmux fixture coverage
-    # can keep exercising unrelated launch mechanics. No Firstmate operation
-    # sets this marker.
-    [ "${FM_GATE_REFUSE_BYPASS:-}" = 1 ] && return 0
     echo "error: backend 'tmux' is rollback-only and cannot create a fresh endpoint; remove the tmux override or select herdr. Existing records with explicit backend=tmux remain available for safe read, control, relaunch, and cleanup." >&2
     return 1
   fi
@@ -179,16 +174,10 @@ fm_meta_get() {  # <meta-file> <key>
 
 # fm_backend_of_meta: read one explicit, known backend identity from
 # <meta-file>. Missing, empty, duplicate, or unknown values are ambiguous and
-# refuse rather than guessing. FM_GATE_REFUSE_BYPASS preserves backend-less
-# tmux fixture records only inside the repository's isolated behavior suites;
-# no Firstmate operation sets that marker.
+# refuse rather than guessing.
 fm_backend_of_meta() {  # <meta-file>
   local meta=$1 count v
   count=$(grep -c '^backend=' "$meta" 2>/dev/null || true)
-  if [ "$count" -eq 0 ] && [ "${FM_GATE_REFUSE_BYPASS:-}" = 1 ]; then
-    printf 'tmux'
-    return 0
-  fi
   if [ "$count" -ne 1 ]; then
     echo "error: endpoint metadata $meta has a missing or ambiguous backend= identity; refusing to guess tmux or herdr" >&2
     return 1
@@ -261,13 +250,7 @@ fm_backend_validate_task_endpoint() {  # <meta-file> <task-id>
   esac
   backend_count=$(grep -c '^backend=' "$meta" 2>/dev/null || true)
   case "$backend_count" in
-    0)
-      if [ "${FM_GATE_REFUSE_BYPASS:-}" = 1 ]; then
-        backend=tmux
-      else
-        backend=
-      fi
-      ;;
+    0) backend= ;;
     1) backend=$(fm_backend_meta_exact_value "$meta" backend) || backend= ;;
     *) backend= ;;
   esac
@@ -377,10 +360,6 @@ fm_backend_of_selector() {  # <raw-target> <resolved-target> <state-dir>
   if [ -n "$resolved" ]; then
     meta=$(fm_backend_meta_for_window "$resolved" "$state" 2>/dev/null || true)
     [ -n "$meta" ] && { fm_backend_of_meta "$meta"; return $?; }
-  fi
-  if [ "${FM_GATE_REFUSE_BYPASS:-}" = 1 ]; then
-    printf 'tmux'
-    return 0
   fi
   echo "error: endpoint '$raw' has no recorded backend identity in $state; refusing to guess tmux or herdr" >&2
   return 1

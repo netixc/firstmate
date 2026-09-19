@@ -907,7 +907,7 @@ missing_tool_diagnostic() {
 COMMON_TOOLS="node git gh no-mistakes gh-axi chrome-devtools-axi tasks-axi quota-axi"
 BACKEND=$(fm_backend_name)
 BACKEND_VALID=1
-if [ "$BACKEND" = tmux ] && [ "${FM_GATE_REFUSE_BYPASS:-}" != 1 ]; then
+if [ "$BACKEND" = tmux ]; then
   BACKEND_VALID=0
   BACKEND_TOOLS=$(fm_backend_required_tools herdr)
 elif ! BACKEND_TOOLS=$(fm_backend_required_tools "$BACKEND"); then
