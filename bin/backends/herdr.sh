@@ -56,9 +56,10 @@
 # stored pane id blindly: fm_backend_herdr_list_live. The presentation journal
 # is deliberately excluded from that path.
 #
-# Requires: herdr (CLI + socket), jq (JSON parsing). Bootstrap detects these
-# through fm_backend_required_tools only when herdr is the resolved backend;
-# this adapter also gates them again before spawning.
+# Requires: herdr 0.9.0+ / protocol 22+ (CLI + socket), jq (JSON parsing),
+# and lsof (exact endpoint process ownership). Bootstrap detects these through
+# fm_backend_required_tools only when herdr is the resolved backend; this
+# adapter also gates them again before spawning.
 
 # FM_HOME fallback: every real caller (fm-spawn.sh, fm-peek.sh, fm-send.sh,
 # fm-teardown.sh, fm-watch.sh, fm-crew-state.sh) already sets FM_HOME as a
@@ -93,14 +94,17 @@ FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 # shellcheck source=bin/fm-agent-process-lib.sh
 . "$FM_BACKEND_HERDR_ROOT/bin/fm-agent-process-lib.sh"
 
-FM_BACKEND_HERDR_MIN_PROTOCOL=14
+# Production dependency floor. Require the release as well as the protocol:
+# protocol alone cannot prove that a development or backported client carries
+# the release behavior exercised in the required CI lane.
+FM_BACKEND_HERDR_MIN_VERSION=0.9.0
+FM_BACKEND_HERDR_MIN_PROTOCOL=22
 # events.subscribe (the native pane.agent_status_changed push stream) and its
 # subscription_event schema first shipped at protocol 16 (verified: herdr
 # 0.7.3). Below this, or with the events surface absent from `herdr api schema`,
 # the event fast-path fails closed to the watcher's poll loop
-# (fm_backend_herdr_events_capable). Distinct from FM_BACKEND_HERDR_MIN_PROTOCOL
-# (14): the adapter's spawn/capture/send primitives work on 14, only the push
-# subscriber needs 16.
+# (fm_backend_herdr_events_capable). This historical feature gate stays 16 even
+# though the production dependency floor is now protocol 22.
 FM_BACKEND_HERDR_MIN_EVENTS_PROTOCOL=16
 # workspace.move first appears in the protocol-16 schema.
 # The installed CLI does not expose it as a workspace subcommand, so the
@@ -507,30 +511,50 @@ fm_backend_herdr_client_select() {  # <session> [force]
   return 0
 }
 
-# fm_backend_herdr_tool_check: refuse loudly if herdr or jq is missing.
+# fm_backend_herdr_tool_check: refuse loudly if a required Herdr lifecycle
+# dependency is missing. lsof is explicit rather than an optional branch:
+# endpoint cleanup uses it to prove exact process ownership before acting.
 fm_backend_herdr_tool_check() {
   command -v herdr >/dev/null 2>&1 || { echo "error: backend=herdr selected but the 'herdr' CLI is not installed (https://herdr.dev) (dual-licensed AGPL-3.0-or-later/commercial)" >&2; return 1; }
   command -v jq >/dev/null 2>&1 || { echo "error: backend=herdr selected but 'jq' is not installed (required to parse herdr's JSON output)" >&2; return 1; }
+  command -v lsof >/dev/null 2>&1 || { echo "error: backend=herdr selected but 'lsof' is not installed (required to prove exact endpoint process ownership during cleanup)" >&2; return 1; }
   return 0
 }
 
-# fm_backend_herdr_version_check: refuse loudly on a missing/incompatible
-# herdr client. Verified locally: v0.7.1, protocol 14 (herdr status --json's
-# .client.protocol; client info is session-independent, unlike .server).
-fm_backend_herdr_version_check() {
+# fm_backend_herdr_version_check: refuse loudly unless both the release and
+# protocol meet the production floor. Client info is session-independent,
+# unlike .server, so this check intentionally uses the selected PATH client.
+fm_backend_herdr_version_check() {  # [client-binary]
   fm_backend_herdr_tool_check || return 1
-  local status protocol version
-  status=$(herdr status --json 2>/dev/null) || { echo "error: 'herdr status --json' failed; is herdr installed correctly?" >&2; return 1; }
+  local client_bin=${1:-herdr} status protocol version version_rc=0
+  local version_major version_minor version_patch version_extra
+  status=$("$client_bin" status --json 2>/dev/null) || { echo "error: '$client_bin status --json' failed; is herdr installed correctly?" >&2; return 1; }
   protocol=$(printf '%s' "$status" | jq -r '.client.protocol // empty' 2>/dev/null)
   version=$(printf '%s' "$status" | jq -r '.client.version // empty' 2>/dev/null)
   case "$protocol" in
     ''|*[!0-9]*)
-      echo "error: could not read herdr client protocol from 'herdr status --json'; refusing to use an unverified herdr build" >&2
+      echo "error: could not read herdr client protocol from '$client_bin status --json'; refusing to use an unverified herdr build" >&2
       return 1
       ;;
   esac
+  IFS=. read -r version_major version_minor version_patch version_extra <<< "$version"
+  case "$version_major" in ''|*[!0-9]*) version_rc=2 ;; esac
+  case "$version_minor" in ''|*[!0-9]*) version_rc=2 ;; esac
+  case "$version_patch" in ''|*[!0-9]*) version_rc=2 ;; esac
+  [ -z "$version_extra" ] || version_rc=2
+  if [ "$version_rc" -eq 0 ]; then
+    fm_backend_herdr_version_at_least "$version" "$FM_BACKEND_HERDR_MIN_VERSION" || version_rc=$?
+  fi
+  if [ "$version_rc" -eq 2 ]; then
+    echo "error: could not read a comparable stable herdr client release from '$client_bin status --json'; required release is $FM_BACKEND_HERDR_MIN_VERSION or newer" >&2
+    return 1
+  fi
+  if [ "$version_rc" -ne 0 ]; then
+    echo "error: herdr version ${version:-unknown} is older than required release $FM_BACKEND_HERDR_MIN_VERSION (protocol $FM_BACKEND_HERDR_MIN_PROTOCOL); update herdr before using backend=herdr" >&2
+    return 1
+  fi
   if [ "$protocol" -lt "$FM_BACKEND_HERDR_MIN_PROTOCOL" ]; then
-    echo "error: herdr protocol $protocol (version ${version:-unknown}) is older than the verified minimum $FM_BACKEND_HERDR_MIN_PROTOCOL; update herdr (herdr update) before using backend=herdr" >&2
+    echo "error: herdr protocol $protocol (version $version) is older than required protocol $FM_BACKEND_HERDR_MIN_PROTOCOL; update herdr before using backend=herdr" >&2
     return 1
   fi
   return 0

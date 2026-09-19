@@ -200,7 +200,7 @@ This family is the residual set that used to sit in `unclassified`, and it exist
 `tests/fm-test-run.test.sh` covers that split behaviorally: two `standalone` members run concurrently while an unmapped basename is refused under `--jobs` and still runs serially.
 
 Two scripts left the residual set rather than joining it.
-`tests/fm-backend-herdr-focus-flash-e2e.test.sh` is a real-Herdr lab regression and is now `real-herdr-gated`, which also moves it out of the portable serial lane and into the required Herdr lane; it had been gate-skipping on Linux CI, so that real-Herdr regression was not running anywhere.
+`tests/fm-backend-herdr-focus-flash-e2e.test.sh` is a real-Herdr lab regression and is now `real-herdr-gated`, which moves it out of the portable serial lane and into the required Herdr lane on both Linux and macOS.
 Its current live-backend result is recorded under [workspace-removal focus safety](verification/runtime-backends.md#workspace-removal-focus-safety).
 
 One member needs a current Pi to pass at all.
@@ -220,8 +220,8 @@ Curated `--family`, `--lane`, and `--all` selections remain serial unless the ca
 | `standalone` | 28 | 724.6s | 261.1s | 2.78x | 463.5s |
 | total | 60 | 2714.1s | 1000.9s | 2.71x | 1713.2s (28.6 min) |
 
-No test was removed, weakened, or skipped to get there.
-The three families retain the same coverage guarantees; what changed is one crash injection that no longer races, one equivalent condition-based assertion that no longer reads the host's speed, and a family map that no longer files a real-Herdr regression and an opt-in live script where they cannot run.
+No candidate in these admitted families was removed, weakened, or skipped to get there.
+The three families retain the same coverage guarantees; what changed is one crash injection that no longer races, one equivalent condition-based assertion that no longer reads the host's speed, and a family map that routes real-Herdr regressions, including the credential-safe Pi lifecycle guard, into the required Herdr lane rather than leaving them in portable serial.
 
 ## Scope
 

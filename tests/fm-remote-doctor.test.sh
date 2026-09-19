@@ -281,7 +281,7 @@ case "${1:-} ${2:-}" in
         running=true
       fi
     fi
-    printf '{"client":{"version":"0.7.5","protocol":16},"server":{"running":%s,"socket":"%s"}}\n' "$running" "$FM_FAKE_HERDR_SOCKET"
+    printf '{"client":{"version":"0.9.0","protocol":22},"server":{"running":%s,"socket":"%s"}}\n' "$running" "$FM_FAKE_HERDR_SOCKET"
     ;;
   "server "*|"server ")
     printf 'true\n' > "$FM_FAKE_HERDR_RUNNING"
@@ -431,6 +431,18 @@ assert_contains "$DOCTOR_OUT" 'check herdr=human:' "--fix stopped reporting the 
 assert_not_contains "$DOCTOR_OUT" 'fix herdr=applied' "--fix claimed to have installed herdr"
 assert_no_dangerous_calls "the doctor reached for auto-login, FileVault, or the keychain"
 pass "a missing herdr CLI is a human gap that --fix never claims to close"
+
+# --- an installed client below the production floor is never ready ----------
+
+new_case Linux with-herdr gui
+perl -pi -e 's/"version":"0\.9\.0","protocol":22/"version":"0.8.9","protocol":22/' "$CASE_BIN/herdr"
+doctor
+expect_code 1 "$DOCTOR_RC" "a host below Herdr 0.9.0 was reported ready"
+assert_contains "$DOCTOR_OUT" 'check herdr=human: herdr version 0.8.9 is older than required release 0.9.0' \
+  "the doctor did not enforce the Herdr release floor"
+assert_contains "$DOCTOR_OUT" 'action: herdr: install Herdr 0.9.0 or newer (protocol 22 or newer)' \
+  "the doctor did not provide the exact Herdr upgrade action"
+pass "an installed remote Herdr client must meet release 0.9.0 as well as protocol 22"
 
 # --- an absent launch agent is a fixable gap that --fix installs -------------
 

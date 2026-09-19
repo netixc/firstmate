@@ -48,7 +48,8 @@
 #                   dedicated required Herdr lane owns that coverage)
 #   --fail-on-gate-skip <token>
 #                   after each script, fail the run if any output line contains
-#                   "skip: <token>" (e.g. --fail-on-gate-skip 'herdr not found').
+#                   "skip: <token>" (repeatable; e.g. --fail-on-gate-skip
+#                   'herdr absent').
 #                   The required Herdr CI lane uses this so a missing pin cannot
 #                   silently pass as a gate skip.
 #   --jobs N        run the selected scripts with up to N concurrent workers.
@@ -175,7 +176,7 @@ BASE_REF=origin/main
 JSON_PATH=
 SCRIPTS=()
 EXCLUDE_FAMILIES=()
-FAIL_ON_GATE_SKIP=
+FAIL_ON_GATE_SKIPS=()
 JOBS=1
 JOBS_EXPLICIT=0
 JOBS_MAX=8
@@ -314,7 +315,7 @@ family_for_basename() {
     fm-backend-herdr-agent-exit-shell-e2e.test.sh|\
     fm-herdr-attached-viewer-live-e2e.test.sh|fm-herdr-session-cleanup-e2e.test.sh|\
     fm-backend-herdr-smoke.test.sh|fm-backend-herdr-workspace-per-home-e2e.test.sh|\
-    fm-control-herdr-smoke.test.sh)
+    fm-control-herdr-smoke.test.sh|fm-pi-lifecycle-wrappers-live-e2e.test.sh)
       printf '%s\n' real-herdr-gated
       ;;
     fm-backlog-handoff.test.sh|fm-on.test.sh|fm-remote-backlog-handoff.test.sh|\
@@ -347,8 +348,7 @@ family_for_basename() {
     fm-pi-primary-live-e2e.test.sh|fm-pi-codex-native.test.sh|\
     fm-pi-spawn-profile-live-e2e.test.sh|\
     fm-sessionstart-hook-live-e2e.test.sh|fm-sessionstart-instruction-refresh-live-e2e.test.sh|\
-    fm-quota-array-dispatch-live-e2e.test.sh|fm-send-secondmate-marker-herdr-e2e.test.sh|\
-    fm-send-inbox-doorbell-live-e2e.test.sh)
+    fm-quota-array-dispatch-live-e2e.test.sh|fm-send-inbox-doorbell-live-e2e.test.sh)
       printf '%s\n' live-harness-optin
       ;;
     fm-backend-herdr.test.sh|fm-backend-tmux-smoke.test.sh|fm-backend.test.sh|\
@@ -713,7 +713,7 @@ tests/fm-send-inbox-doorbell-live-e2e.test.sh 22
 tests/fm-send-inbox.test.sh 38956
 tests/fm-send-remote-delivery.test.sh 27686
 tests/fm-send-resolve-key.test.sh 19619
-tests/fm-send-secondmate-marker-herdr-e2e.test.sh 51
+tests/fm-pi-lifecycle-wrappers-live-e2e.test.sh 120
 tests/fm-send-secondmate-marker.test.sh 6252
 tests/fm-session-lock-ancestry.test.sh 1414
 tests/fm-session-start.test.sh 156952
@@ -1169,11 +1169,19 @@ select_all() {
 select_family() {
   local want=$1 s base fam found=0
   [ -n "$want" ] || die "--family requires a name"
+  if [ "$want" = real-herdr-gated ]; then
+    s=tests/fm-pi-lifecycle-wrappers-live-e2e.test.sh
+    if [ -x "$ROOT/$s" ]; then
+      add_script "$s"
+      found=1
+    fi
+  fi
   while IFS= read -r s; do
     [ -n "$s" ] || continue
     base=$(basename "$s")
     fam=$(family_for_basename "$base")
     if [ "$fam" = "$want" ]; then
+      [ "$s" = tests/fm-pi-lifecycle-wrappers-live-e2e.test.sh ] && continue
       add_script "$s"
       found=1
     fi
@@ -1632,6 +1640,17 @@ detect_gate_skip_token() {
   grep -F -q "skip: $token" "$file" 2>/dev/null
 }
 
+required_gate_skip_token() {
+  local file=$1 token
+  for token in "${FAIL_ON_GATE_SKIPS[@]+${FAIL_ON_GATE_SKIPS[@]}}"; do
+    if detect_gate_skip_token "$file" "$token"; then
+      printf '%s\n' "$token"
+      return 0
+    fi
+  done
+  return 1
+}
+
 apply_exclude_families() {
   local s fam keep ex
   local -a kept=()
@@ -1865,11 +1884,11 @@ while [ "$#" -gt 0 ]; do
       ;;
     --fail-on-gate-skip)
       [ "$#" -gt 1 ] || die "--fail-on-gate-skip requires a token (e.g. 'herdr not found')"
-      FAIL_ON_GATE_SKIP=$2
+      FAIL_ON_GATE_SKIPS+=("$2")
       shift 2
       ;;
     --fail-on-gate-skip=*)
-      FAIL_ON_GATE_SKIP=${1#--fail-on-gate-skip=}
+      FAIL_ON_GATE_SKIPS+=("${1#--fail-on-gate-skip=}")
       shift
       ;;
     -h|--help)
@@ -1996,8 +2015,8 @@ apply_exclude_families
 if [ "${#EXCLUDE_FAMILIES[@]}" -gt 0 ]; then
   SELECTION_DESC="${SELECTION_DESC};exclude-family=$(IFS=,; printf '%s' "${EXCLUDE_FAMILIES[*]}")"
 fi
-if [ -n "$FAIL_ON_GATE_SKIP" ]; then
-  SELECTION_DESC="${SELECTION_DESC};fail-on-gate-skip=$FAIL_ON_GATE_SKIP"
+if [ "${#FAIL_ON_GATE_SKIPS[@]}" -gt 0 ]; then
+  SELECTION_DESC="${SELECTION_DESC};fail-on-gate-skip=$(IFS=,; printf '%s' "${FAIL_ON_GATE_SKIPS[*]}")"
 fi
 if [ "$LIST_ONLY" -eq 1 ] || [ "$LIST_SCHEDULED" -eq 1 ]; then
   if [ "$LIST_SCHEDULED" -eq 1 ]; then
@@ -2214,8 +2233,8 @@ record_script_result() {
   family=$(family_for_basename "$base")
   expected=$(expected_gate_skip_for_family "$family")
 
-  if [ -n "$FAIL_ON_GATE_SKIP" ] && detect_gate_skip_token "$out" "$FAIL_ON_GATE_SKIP"; then
-    log "required gate skip token seen in $script: skip: $FAIL_ON_GATE_SKIP"
+  if token=$(required_gate_skip_token "$out"); then
+    log "required gate skip token seen in $script: skip: $token"
     rc=1
   fi
 

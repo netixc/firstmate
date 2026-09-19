@@ -60,7 +60,7 @@ Full detail on every feature lives in [docs/architecture.md](docs/architecture.m
 
 - The plain npm-installed Pi CLI.
 - Git and the GitHub CLI, authenticated through `gh auth login`.
-- Plain `pi`, plus either the default tmux backend or Herdr and its documented dependencies.
+- Plain `pi`, plus either the default tmux backend or Herdr 0.9.0+ / protocol 22+ with `jq` and `lsof`.
 
 The first mate detects and offers to install supported missing tools after you approve.
 Backend-specific setup is linked in [Documentation](#documentation).
