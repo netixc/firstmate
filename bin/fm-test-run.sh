@@ -1169,11 +1169,19 @@ select_all() {
 select_family() {
   local want=$1 s base fam found=0
   [ -n "$want" ] || die "--family requires a name"
+  if [ "$want" = real-herdr-gated ]; then
+    s=tests/fm-pi-lifecycle-wrappers-live-e2e.test.sh
+    if [ -x "$ROOT/$s" ]; then
+      add_script "$s"
+      found=1
+    fi
+  fi
   while IFS= read -r s; do
     [ -n "$s" ] || continue
     base=$(basename "$s")
     fam=$(family_for_basename "$base")
     if [ "$fam" = "$want" ]; then
+      [ "$s" = tests/fm-pi-lifecycle-wrappers-live-e2e.test.sh ] && continue
       add_script "$s"
       found=1
     fi

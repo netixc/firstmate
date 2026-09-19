@@ -1005,6 +1005,8 @@ test_exclude_family() {
     || fail "exclude-family must retain pure-contract-unit scripts"
   # Explicit family mode still works; exclude of a different family is a no-op.
   listed=$("$RUNNER" --list --family real-herdr-gated)
+  [ "${listed%%$'\n'*}" = "tests/fm-pi-lifecycle-wrappers-live-e2e.test.sh" ] \
+    || fail "real-herdr-gated must run the Pi lifecycle probe before stress-heavy Herdr tests"
   printf '%s\n' "$listed" | grep -Fq 'tests/fm-backend-herdr-smoke.test.sh' \
     || fail "family real-herdr-gated must list smoke test"
   pass "exclude-family drops the named primary family after selection"
