@@ -874,7 +874,7 @@ No reasoning-effort axis was found; `gemini --help` on 0.58.0 exposes no effort,
 ## Herdr
 
 The compatibility floor is protocol 14.
-The whole real-Herdr lane's latest active verification uses both Herdr 0.7.4 protocol 16 and Herdr 0.8.0 protocol 19 on macOS aarch64, while focused Herdr 0.7.5 protocol 17, earlier protocol-16, protocol-14, and 0.7.3 evidence is retained where it defines current behavior or fallbacks.
+The required CI lane remains pinned to Herdr 0.7.4 protocol 16, while the latest complete presentation and plain-Pi production-wrapper verification ran on Herdr 0.9.0 protocol 22 on macOS aarch64; Herdr 0.8.0 protocol 19, focused Herdr 0.7.5 protocol 17, earlier protocol-16, protocol-14, and 0.7.3 evidence is retained where it defines current behavior or fallbacks.
 Protocol 17 keeps every protocol-16 feature gate satisfied; the event and workspace-move floors remain 16.
 Default-on presentation projection has its own floor at Herdr 0.8.0, protocol 19, verified below.
 
@@ -1134,8 +1134,26 @@ ok - real Herdr lab validation completed on Herdr 0.8.0 with the default-session
 ```
 
 The projected spawn in that run used the historical empty opt-in file, so a home that had already enabled the projection keeps it without any migration step.
-One concurrent cross-home recovery case refused under contention on a loaded machine and passed on an immediate rerun; recovery-path presentation lock contention is a deliberate hard refusal rather than a flat fallback, which default-on now makes reachable from any Herdr home.
-That run measured the default-on projection on Herdr 0.8.0 only, while the focus-flash regression below was last run on 0.7.5 before the flip, so neither run covered a defective release under default-on projection; the version floor and the focus-flash suite's Part C close that gap.
+
+The complete projection suite ran again on 2026-09-19 against Herdr 0.9.0 protocol 22:
+
+```sh
+HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
+  tests/fm-backend-herdr-presentation-e2e.test.sh
+```
+
+That run first reproduced a real concurrent recovery defect: the first cross-home recovery retained the shared presentation-session lock through generic pane setup and worker launch, so a second recovery whose exact presentation mutation was otherwise independent exhausted the lock budget and refused.
+The deterministic regression pauses the first recovery at its first generic `pane send-text`, starts the second recovery, and requires both to complete while the first remains paused.
+The lock now releases immediately after projected endpoint creation or exact reclaim, binding, ordering, and focus restoration; the abort path reacquires it before exact projected-pane cleanup.
+All 25 assertions passed, including:
+
+```text
+ok - real Herdr lab: concurrent cross-home recoveries release the session lock after exact presentation mutation, replace exact husks, and preserve focus
+ok - real Herdr lab validation completed on Herdr 0.9.0 with the default-session tripwire intact
+```
+
+This establishes the lock boundary from observed mutation ownership rather than treating a loaded-machine rerun as sufficient evidence.
+The earlier 0.8.0 run measured the default-on projection only, while the focus-flash regression below was last run on 0.7.5 before the flip; the version floor and the focus-flash suite's Part C close that older coverage gap.
 
 The restored-shell session-start cleanup ran on 2026-07-24 against Herdr 0.7.5 protocol 17:
 
@@ -1321,6 +1339,13 @@ FM_SEND_MARKER_HERDR_E2E=1 \
   tests/fm-send-secondmate-marker-herdr-e2e.test.sh
 ```
 
+It was reverified on 2026-09-19 against Herdr 0.9.0 and Pi 0.85.1 after steering moved to durable inbox records: the real Pi input hook read and acknowledged that record, its body contained exactly one from-firstmate marker plus the correlation and request, and direct terminal input remained unmarked.
+
+```text
+ok - real Pi/Herdr: exact-id FM_HOME send delivers exactly one from-firstmate marker and acknowledges its durable record
+ok - real Pi/Herdr: direct captain terminal input stays unmarked
+```
+
 ### Native blocked event
 
 The protocol-16 event path was measured on 2026-07-11 with Herdr 0.7.3 and Python 3.13:
@@ -1341,6 +1366,31 @@ ok - real herdr: the watcher fast-path enqueues a stale wake naming the task win
 Polling remained active and is covered as the fallback for capability, connect, subscribe, and repeated reader failure.
 
 ### Agent lifecycle control
+
+A credential-safe production-wrapper lifecycle ran on 2026-09-19 against Herdr 0.9.0 protocol 22, Pi 0.85.1, and Treehouse 2.3.0:
+
+```sh
+FM_PI_LIFECYCLE_LIVE_E2E=1 \
+HERDR_LAB_HELPER=bin/fm-herdr-lab.sh \
+  bin/fm-test-run.sh tests/fm-pi-lifecycle-wrappers-live-e2e.test.sh
+```
+
+The guard uses one non-default named Herdr lab, a real plain Pi process, the production `fm-spawn.sh`, `fm-send.sh`, `fm-control.sh`, and `fm-teardown.sh` entry points, and the current task-local production Pi extension.
+Its launch turns use a deterministic local offline provider, while Pi's input hook performs and acknowledges the durable inbox action before any provider turn, so the run touches no operator model credential or token.
+It waits for the initial launch prompt and four stable native idle samples before steering; this is the structural readiness signal that separates process-alive from turn-complete.
+Observed output:
+
+```text
+ok - real Pi/Herdr: production spawn reached a credential-safe session in a fresh isolated worktree
+ok - real Pi/Herdr: durable instruction delivery and handled acknowledgement complete through production wrappers
+ok - real Pi/Herdr: interrupt and graceful exit leave the exact pane as a recoverable dead shell
+ok - real Pi/Herdr: same-endpoint relaunch preserves the isolated worktree
+ok - real Pi/Herdr: exact cleanup returns the isolated worktree and removes task endpoint, inbox, and worker records
+ok - credential-safe plain Pi lifecycle completed on Herdr with the default session unchanged
+```
+
+Treehouse intentionally retains the returned clean worktree as a reusable pool entry; exact task cleanup means the lease has been returned and the task's endpoint, inbox, extension, and durable records are gone, not that Treehouse's pool registration is destroyed.
+The test belongs to the existing `live-harness-optin` family rather than introducing another runner.
 
 Herdr is one of the two backends whose recovery-grade agent-state classifier the control plane may trust ([agent-control.md](../agent-control.md)), so its lifecycle gating is measured against the real binary; reverified 2026-08-08 on Herdr 0.8.0, and first measured 2026-08-02 on Herdr 0.7.5 with identical results:
 

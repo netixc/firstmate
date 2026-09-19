@@ -29,6 +29,7 @@ MOVE_CALL_LOG="$TMP_ROOT/workspace-move-calls.log"
 FOCUS_AUDIT_LOG="$TMP_ROOT/focus-audit.log"
 ACTIVE_SEEDED_CONTROL="$TMP_ROOT/active-seeded-control"
 POST_CREATE_ABORT_CONTROL="$TMP_ROOT/post-create-abort-control"
+RECOVERY_LOCK_SCOPE_CONTROL="$TMP_ROOT/recovery-lock-scope-control"
 mkdir -p "$FAKEBIN"
 : > "$HERDR_CALL_LOG"
 : > "$TREEHOUSE_CALL_LOG"
@@ -36,7 +37,7 @@ mkdir -p "$FAKEBIN"
 : > "$FOCUS_AUDIT_LOG"
 REAL_MOVER="$ROOT/bin/backends/herdr-workspace-move.py"
 export REAL_HERDR REAL_TREEHOUSE REAL_MOVER HERDR_CALL_LOG TREEHOUSE_CALL_LOG TREEHOUSE_LOCK_DIR MOVE_CALL_LOG FOCUS_AUDIT_LOG HERDR_ORIGINAL_PATH HERDR_LAB_HELPER
-export ACTIVE_SEEDED_CONTROL POST_CREATE_ABORT_CONTROL TMP_ROOT
+export ACTIVE_SEEDED_CONTROL POST_CREATE_ABORT_CONTROL RECOVERY_LOCK_SCOPE_CONTROL TMP_ROOT
 
 # Log every production-adapter call, remove its already-validated trailing
 # session flag, and send the operation through the lab helper so that helper
@@ -174,6 +175,11 @@ if [ "$status" -eq 0 ] && [ "$mutation" = tab-create ]; then
       mkdir -p "$POST_CREATE_ABORT_CONTROL/$task"
       printf '%s\n' "$(printf '%s' "$out" | jq -r '.result.root_pane.pane_id')" > "$POST_CREATE_ABORT_CONTROL/$task/task-pane"
       ;;
+    fm-resume-wave-primary)
+      if [ -d "$RECOVERY_LOCK_SCOPE_CONTROL" ]; then
+        printf '%s\n' "$(printf '%s' "$out" | jq -r '.result.root_pane.pane_id')" > "$RECOVERY_LOCK_SCOPE_CONTROL/primary-pane"
+      fi
+      ;;
   esac
 fi
 if [ "$status" -eq 0 ] && [ "${1:-} ${2:-}" = "pane get" ] && [ -d "$POST_CREATE_ABORT_CONTROL" ]; then
@@ -191,6 +197,15 @@ fi
 if [ "$refusal_probe" -eq 1 ]; then
   refusal_after=$(focus_snapshot || printf ambiguous/ambiguous)
   printf 'seeded-prune-refusal\t%s\t%s\t%s\n' "$refusal_before" "$refusal_after" "${3:-}" >> "$FOCUS_AUDIT_LOG"
+fi
+if [ "$status" -eq 0 ] && [ "${1:-} ${2:-}" = "pane send-text" ] \
+   && [ -f "$RECOVERY_LOCK_SCOPE_CONTROL/primary-pane" ] \
+   && [ "${3:-}" = "$(cat "$RECOVERY_LOCK_SCOPE_CONTROL/primary-pane")" ] \
+   && mkdir "$RECOVERY_LOCK_SCOPE_CONTROL/block-claimed" 2>/dev/null; then
+  : > "$RECOVERY_LOCK_SCOPE_CONTROL/primary-blocked"
+  while [ ! -e "$RECOVERY_LOCK_SCOPE_CONTROL/release-primary" ]; do
+    sleep 0.05
+  done
 fi
 [ -z "$out" ] || printf '%s\n' "$out"
 exit "$status"
@@ -278,8 +293,20 @@ export HERDR_SESSION="$HERDR_LAB_SESSION" HERDR_LAB_SESSION
 LAB_READY=0
 RECORDED_WORKTREES=""
 LOCK_CONTENTION_OWNER_PID=
+RECOVERY_PRIMARY_PID=
+RECOVERY_BRAVO_PID=
 cleanup_all() {
-  local wt
+  local wt pid
+  if [ -d "$RECOVERY_LOCK_SCOPE_CONTROL" ]; then
+    : > "$RECOVERY_LOCK_SCOPE_CONTROL/release-primary"
+  fi
+  for pid in "$RECOVERY_PRIMARY_PID" "$RECOVERY_BRAVO_PID"; do
+    [ -n "$pid" ] || continue
+    kill "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+  done
+  RECOVERY_PRIMARY_PID=
+  RECOVERY_BRAVO_PID=
   if [ -n "$LOCK_CONTENTION_OWNER_PID" ]; then
     kill "$LOCK_CONTENTION_OWNER_PID" 2>/dev/null || true
     wait "$LOCK_CONTENTION_OWNER_PID" 2>/dev/null || true
@@ -1318,12 +1345,33 @@ PATH="$HERDR_ORIGINAL_PATH" "$HERDR_LAB_HELPER" stop "$HERDR_LAB_SESSION" >/dev/
 PATH="$HERDR_ORIGINAL_PATH" "$HERDR_LAB_HELPER" provision "$HERDR_LAB_SESSION" \
   || fail "could not reprovision the isolated session for concurrent recovery"
 CONCURRENT_RECOVERY_FOCUS=$(focus_snapshot)
+mkdir -p "$RECOVERY_LOCK_SCOPE_CONTROL"
 spawn_task "$PRIMARY_WAVE_ID" "$HOME_DIR" "$RECOVERY_PROJECT_DIR" > "$TMP_ROOT/primary-wave-resume.out" 2> "$TMP_ROOT/primary-wave-resume.err" &
-PRIMARY_WAVE_PID=$!
+RECOVERY_PRIMARY_PID=$!
+RECOVERY_BLOCK_WAIT=0
+while [ ! -e "$RECOVERY_LOCK_SCOPE_CONTROL/primary-blocked" ] \
+   && kill -0 "$RECOVERY_PRIMARY_PID" 2>/dev/null \
+   && [ "$RECOVERY_BLOCK_WAIT" -lt 200 ]; do
+  sleep 0.05
+  RECOVERY_BLOCK_WAIT=$((RECOVERY_BLOCK_WAIT + 1))
+done
+[ -e "$RECOVERY_LOCK_SCOPE_CONTROL/primary-blocked" ] || {
+  : > "$RECOVERY_LOCK_SCOPE_CONTROL/release-primary"
+  wait "$RECOVERY_PRIMARY_PID" 2>/dev/null || true
+  RECOVERY_PRIMARY_PID=
+  fail "primary recovery did not reach the post-presentation launch boundary: $(cat "$TMP_ROOT/primary-wave-resume.err")"
+}
 spawn_task "$BRAVO_WAVE_ID" "$SECOND_HOME_B" "$RECOVERY_PROJECT_DIR" > "$TMP_ROOT/bravo-wave-resume.out" 2> "$TMP_ROOT/bravo-wave-resume.err" &
-BRAVO_WAVE_PID=$!
-wait "$PRIMARY_WAVE_PID" || fail "concurrent primary recovery failed: $(cat "$TMP_ROOT/primary-wave-resume.err")"
-wait "$BRAVO_WAVE_PID" || fail "concurrent secondmate recovery failed: $(cat "$TMP_ROOT/bravo-wave-resume.err")"
+RECOVERY_BRAVO_PID=$!
+if wait "$RECOVERY_BRAVO_PID"; then BRAVO_WAVE_STATUS=0; else BRAVO_WAVE_STATUS=$?; fi
+RECOVERY_BRAVO_PID=
+: > "$RECOVERY_LOCK_SCOPE_CONTROL/release-primary"
+if wait "$RECOVERY_PRIMARY_PID"; then PRIMARY_WAVE_STATUS=0; else PRIMARY_WAVE_STATUS=$?; fi
+RECOVERY_PRIMARY_PID=
+[ "$PRIMARY_WAVE_STATUS" -eq 0 ] \
+  || fail "concurrent primary recovery failed: $(cat "$TMP_ROOT/primary-wave-resume.err")"
+[ "$BRAVO_WAVE_STATUS" -eq 0 ] \
+  || fail "concurrent secondmate recovery failed while the primary was paused after its presentation mutation: $(cat "$TMP_ROOT/bravo-wave-resume.err")"
 PRIMARY_WAVE_NEW_WT=$(remember_meta_worktree "$PRIMARY_WAVE_META")
 BRAVO_WAVE_NEW_WT=$(remember_meta_worktree "$BRAVO_WAVE_META")
 PRIMARY_WAVE_NEW_PANE=$(grep '^herdr_pane_id=' "$PRIMARY_WAVE_META" | cut -d= -f2-)
@@ -1347,7 +1395,7 @@ teardown_task "$BRAVO_WAVE_ID" "$SECOND_HOME_B" > "$TMP_ROOT/bravo-wave-teardown
 "$REAL_TREEHOUSE" return --force "$BRAVO_WAVE_OLD_WT" >/dev/null 2>&1 || true
 "$REAL_TREEHOUSE" return --force "$PRIMARY_WAVE_NEW_WT" >/dev/null 2>&1 || true
 "$REAL_TREEHOUSE" return --force "$BRAVO_WAVE_NEW_WT" >/dev/null 2>&1 || true
-pass "real Herdr lab: concurrent cross-home recoveries replace exact husks under one session lock with no focus drift"
+pass "real Herdr lab: concurrent cross-home recoveries release the session lock after exact presentation mutation, replace exact husks, and preserve focus"
 
 # Seed a legacy old-format primary projection and a flat secondmate tab; correction must not migrate them.
 LEGACY_OUT=$(lab workspace create --cwd "$PROJECT_DIR" --label "firstmate/legacy-seed · p:AbCdEfGhIjKlMnOpQrStUv" --no-focus) \
