@@ -220,8 +220,8 @@ Curated `--family`, `--lane`, and `--all` selections remain serial unless the ca
 | `standalone` | 28 | 724.6s | 261.1s | 2.78x | 463.5s |
 | total | 60 | 2714.1s | 1000.9s | 2.71x | 1713.2s (28.6 min) |
 
-No test was removed, weakened, or skipped to get there.
-The three families retain the same coverage guarantees; what changed is one crash injection that no longer races, one equivalent condition-based assertion that no longer reads the host's speed, and a family map that no longer files a real-Herdr regression and an opt-in live script where they cannot run.
+No candidate in these admitted families was removed, weakened, or skipped to get there.
+The three families retain the same coverage guarantees; what changed is one crash injection that no longer races, one equivalent condition-based assertion that no longer reads the host's speed, and a family map that routes real-Herdr regressions, including the credential-safe Pi lifecycle guard, into the required Herdr lane rather than leaving them in portable serial.
 
 ## Scope
 

@@ -277,7 +277,7 @@ run_backend_lifecycle() { # <herdr|tmux>
   [ -n "$corr" ] || fail "$backend: first routed request did not carry a pending-reply correlation"
   [ -n "$corr_two" ] || fail "$backend: second routed request did not carry a pending-reply correlation"
   [ -f "$ACTED_DIR/$id" ] || fail "$backend: exact inbox actions were not recorded"
-  order=$(jq -r --arg home "$mate" 'select(.kind == "inbox" and (.inbox | startswith($home))) | .file' "$CAPTURE" | tail -2 | paste -sd, -)
+  order=$(jq -r --arg state "$parent/state" 'select(.kind == "inbox" and (.inbox | startswith($state))) | .file' "$CAPTURE" | tail -2 | paste -sd, -)
   [ "$order" = "2.msg,010.msg" ] || fail "$backend: durable inbox records were not processed in numeric order (observed $order)"
   [ -z "$(find "$parent/state" -maxdepth 1 -type d -name '*.inbox' ! -name "$id.inbox" -print -quit)" ] \
     || fail "$backend: send created an inbox for a task other than $id"
