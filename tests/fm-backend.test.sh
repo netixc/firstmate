@@ -790,25 +790,30 @@ test_spawn_refuses_unknown_fm_backend_env() {
 }
 
 test_spawn_refuses_fresh_tmux_from_every_explicit_source() {
-  local config out status source
+  local config out status source neutral_cwd
   config="$TMP_ROOT/fresh-tmux-config"
+  neutral_cwd="$TMP_ROOT/fresh-tmux-cwd"
   mkdir -p "$config"
+  mkdir -p "$neutral_cwd"
   printf 'tmux\n' > "$config/backend"
 
   for source in flag env config; do
     case "$source" in
       flag)
-        out=$(FM_GATE_REFUSE_BYPASS='' FM_BACKEND='' FM_CONFIG_OVERRIDE="$TMP_ROOT/no-config" \
+        out=$(cd "$neutral_cwd" && env -u NO_MISTAKES_GATE \
+          FM_GATE_REFUSE_BYPASS='' FM_BACKEND='' FM_CONFIG_OVERRIDE="$TMP_ROOT/no-config" \
           FM_SPAWN_NO_GUARD=1 "$ROOT/bin/fm-spawn.sh" fresh-tmux projects/none \
           --harness pi --mode no-mistakes --yolo off --backend tmux 2>&1)
         ;;
       env)
-        out=$(FM_GATE_REFUSE_BYPASS='' FM_BACKEND=tmux FM_CONFIG_OVERRIDE="$TMP_ROOT/no-config" \
+        out=$(cd "$neutral_cwd" && env -u NO_MISTAKES_GATE \
+          FM_GATE_REFUSE_BYPASS='' FM_BACKEND=tmux FM_CONFIG_OVERRIDE="$TMP_ROOT/no-config" \
           FM_SPAWN_NO_GUARD=1 "$ROOT/bin/fm-spawn.sh" fresh-tmux projects/none \
           --harness pi --mode no-mistakes --yolo off 2>&1)
         ;;
       config)
-        out=$(env -u FM_BACKEND FM_GATE_REFUSE_BYPASS= FM_CONFIG_OVERRIDE="$config" \
+        out=$(cd "$neutral_cwd" && env -u NO_MISTAKES_GATE -u FM_BACKEND \
+          FM_GATE_REFUSE_BYPASS= FM_CONFIG_OVERRIDE="$config" \
           FM_SPAWN_NO_GUARD=1 "$ROOT/bin/fm-spawn.sh" fresh-tmux projects/none \
           --harness pi --mode no-mistakes --yolo off 2>&1)
         ;;
