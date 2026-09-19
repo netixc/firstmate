@@ -55,11 +55,11 @@ A new task shape earns its way in only when existing primitives genuinely cannot
 ## The fleet outlives any vendor
 
 The first mate is not another harness and not another orchestrator app.
-The experience it creates is a new way of working, built around plain Pi workers in the supported tmux and Herdr session backends.
-It is an agent distro, not an app: instructions, skills, scripts, and state conventions for plain Pi, running workers in tmux or Herdr sessions.
+The experience it creates is a new way of working, built around plain Pi workers in Herdr, with a retained tmux adapter for explicit existing rollback endpoints.
+It is an agent distro, not an app: instructions, skills, scripts, and state conventions for plain Pi, running fresh workers in Herdr sessions while preserving safe operations on existing tmux endpoints.
 The first mate can read, understand, and evolve every part of itself: plain instructions, scripts, and text records keep the whole system introspectable, hot-modifiable, and self-evolving by the very agent that runs it.
 When something is not working well, the captain can ask the first mate and it figures it out; captains using their own firstmate to improve the shared surface is how the fleet evolves in the open.
-The supported runtime and session adapters earn trust through verification, and the fleet keeps sailing when either supported session backend degrades.
+The supported runtime and session adapters earn trust through verification, and the fleet keeps sailing when Herdr or a retained tmux rollback endpoint degrades.
 Contracts bind to semantics a vendor actually exposes, never to the pixels of today's UI.
 Quota, model, and effort choices stay inspectable and captain-owned; the first mate never downgrades the intelligence doing the work without the captain's standing, explicit permission.
 

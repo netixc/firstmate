@@ -452,10 +452,10 @@ test_reused_pool_slot_refuses_before_touching_the_other_task() {
   # been handed to another task, whose worker is live in it right now.
   fm_write_meta "$dir/home/state/$id.meta" \
     "window=firstmate:fm-$id" "endpoint_task_id=$id" \
-    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+    "worktree=$dir/worktree" "project=$dir/project" "backend=tmux" "kind=scout"
   fm_write_meta "$dir/home/state/$other.meta" \
     "window=firstmate:fm-$other" "endpoint_task_id=$other" \
-    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+    "worktree=$dir/worktree" "project=$dir/project" "backend=tmux" "kind=scout"
   # Staged in this shell, not a command substitution: a background child of a
   # $(...) subshell does not outlive it, and the point of this worker is to be
   # alive in the slot while teardown runs.
@@ -485,11 +485,11 @@ test_reused_pool_slot_refuses_before_touching_the_other_task() {
   mark_case_as_treehouse_pool "$dir"
   fm_write_meta "$dir/home/state/$id.meta" \
     "window=firstmate:fm-$id" "endpoint_task_id=$id" \
-    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+    "worktree=$dir/worktree" "project=$dir/project" "backend=tmux" "kind=scout"
   fm_write_meta "$dir/home/state/$other.meta" \
     "window=firstmate:fm-$other" "endpoint_task_id=$other" \
     "worktree=$dir/worktree" "home=$dir/worktree" \
-    "project=$dir/project" "kind=secondmate"
+    "project=$dir/project" "backend=tmux" "kind=secondmate"
   set +e
   run_case "$dir" "$id" > "$dir/stdout" 2> "$dir/stderr"
   rc=$?
@@ -518,10 +518,10 @@ test_cross_home_pool_slot_collision_refuses() {
     > "$dir/home/data/secondmates.md"
   fm_write_meta "$dir/home/state/$id.meta" \
     "window=firstmate:fm-$id" "endpoint_task_id=$id" \
-    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+    "worktree=$dir/worktree" "project=$dir/project" "backend=tmux" "kind=scout"
   fm_write_meta "$second_home/state/$other.meta" \
     "window=firstmate:fm-$other" "endpoint_task_id=$other" \
-    "worktree=$dir/worktree" "project=$second_project" "kind=scout"
+    "worktree=$dir/worktree" "project=$second_project" "backend=tmux" "kind=scout"
 
   set +e
   run_case "$dir" "$id" > "$dir/stdout" 2> "$dir/stderr"
@@ -545,12 +545,12 @@ test_sole_slot_record_still_tears_down() {
   mark_case_as_treehouse_pool "$dir"
   fm_write_meta "$dir/home/state/$id.meta" \
     "window=firstmate:fm-$id" "endpoint_task_id=$id" \
-    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+    "worktree=$dir/worktree" "project=$dir/project" "backend=tmux" "kind=scout"
   # A neighbouring task on its OWN slot must not look like a collision.
   mkdir -p "$dir/other-worktree"
   fm_write_meta "$dir/home/state/neighbour.meta" \
     "window=firstmate:fm-neighbour" "endpoint_task_id=neighbour" \
-    "worktree=$dir/other-worktree" "project=$dir/project" "kind=scout"
+    "worktree=$dir/other-worktree" "project=$dir/project" "backend=tmux" "kind=scout"
   ( cd "$dir/other-worktree" && exec sleep 30 ) &
   worker=$!
 
@@ -588,7 +588,7 @@ SH
   chmod +x "$dir/fakebin/tmux"
   fm_write_meta "$dir/home/state/$id.meta" \
     "window=firstmate:fm-$id" "endpoint_task_id=$id" \
-    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+    "worktree=$dir/worktree" "project=$dir/project" "backend=tmux" "kind=scout"
 
   run_case "$dir" "$id" > "$dir/stdout" 2> "$dir/stderr" \
     || fail "teardown refused its recorded endpoint after it changed directory: $(cat "$dir/stderr")"
@@ -704,7 +704,7 @@ test_remote_seeded_home_returns_its_uncontested_slot() {
   write_remote_parent_record "$dir/home"
   fm_write_meta "$dir/home/state/$id.meta" \
     "window=firstmate:fm-$id" "endpoint_task_id=$id" \
-    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+    "worktree=$dir/worktree" "project=$dir/project" "backend=tmux" "kind=scout"
 
   set +e
   run_case "$dir" "$id" > "$dir/stdout" 2> "$dir/stderr"
@@ -746,10 +746,10 @@ test_remote_seeded_home_still_refuses_a_slot_its_child_holds() {
     > "$dir/home/data/secondmates.md"
   fm_write_meta "$dir/home/state/$id.meta" \
     "window=firstmate:fm-$id" "endpoint_task_id=$id" \
-    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+    "worktree=$dir/worktree" "project=$dir/project" "backend=tmux" "kind=scout"
   fm_write_meta "$child_home/state/$other.meta" \
     "window=firstmate:fm-$other" "endpoint_task_id=$other" \
-    "worktree=$dir/worktree" "project=$child_project" "kind=scout"
+    "worktree=$dir/worktree" "project=$child_project" "backend=tmux" "kind=scout"
 
   set +e
   run_case "$dir" "$id" > "$dir/stdout" 2> "$dir/stderr"
@@ -792,7 +792,7 @@ test_remote_layout_homes_serialize_on_one_project_lock() {
   git clone -q "$dir/project" "$child_project"
   fm_write_meta "$dir/home/state/$id.meta" \
     "window=firstmate:fm-$id" "endpoint_task_id=$id" \
-    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+    "worktree=$dir/worktree" "project=$dir/project" "backend=tmux" "kind=scout"
 
   # The local child takes the lock its own home derives and stays alive holding
   # it, standing in for a slot allocation running in that home right now.
@@ -860,7 +860,7 @@ test_reassigned_pool_slot_finishes_own_cleanup_without_touching_the_slot() {
   mark_case_as_treehouse_pool "$dir"
   fm_write_meta "$dir/home/state/$id.meta" \
     "window=firstmate:fm-$id" "endpoint_task_id=$id" \
-    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+    "worktree=$dir/worktree" "project=$dir/project" "backend=tmux" "kind=scout"
   claim_pool_slot "$dir" "$other" "$dir/other-home"
   # Staged in this shell, not a command substitution: a background child of a
   # $(...) subshell does not outlive it, and the point of this worker is to be
@@ -894,7 +894,7 @@ test_reassigned_pool_slot_finishes_own_cleanup_without_touching_the_slot() {
     || fail "clean-slot fixture is not clean: $(git -C "$dir/worktree" status --porcelain)"
   fm_write_meta "$dir/home/state/$id.meta" \
     "window=firstmate:fm-$id" "endpoint_task_id=$id" \
-    "worktree=$dir/worktree" "project=$dir/project" "kind=ship"
+    "worktree=$dir/worktree" "project=$dir/project" "backend=tmux" "kind=ship"
   claim_pool_slot "$dir" "$other" "$dir/other-home"
   ( cd "$dir/worktree" && exec sleep 30 ) &
   worker=$!
@@ -917,7 +917,7 @@ test_reassigned_pool_slot_finishes_own_cleanup_without_touching_the_slot() {
   mark_case_as_treehouse_pool "$dir"
   fm_write_meta "$dir/home/state/$id.meta" \
     "window=firstmate:fm-$id" "endpoint_task_id=$id" \
-    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+    "worktree=$dir/worktree" "project=$dir/project" "backend=tmux" "kind=scout"
   printf 'not-a-claim\n' > "$dir/pool/1/.fm-slot-owner"
 
   set +e
@@ -945,7 +945,7 @@ test_own_and_absent_slot_claims_still_tear_down() {
   mark_case_as_treehouse_pool "$dir"
   fm_write_meta "$dir/home/state/$id.meta" \
     "window=firstmate:fm-$id" "endpoint_task_id=$id" \
-    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+    "worktree=$dir/worktree" "project=$dir/project" "backend=tmux" "kind=scout"
   claim_pool_slot "$dir" "$id"
 
   run_case "$dir" "$id" > "$dir/stdout" 2> "$dir/stderr" \
@@ -959,7 +959,7 @@ test_own_and_absent_slot_claims_still_tear_down() {
   mark_case_as_treehouse_pool "$dir"
   fm_write_meta "$dir/home/state/$id.meta" \
     "window=firstmate:fm-$id" "endpoint_task_id=$id" \
-    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+    "worktree=$dir/worktree" "project=$dir/project" "backend=tmux" "kind=scout"
 
   run_case "$dir" "$id" > "$dir/stdout" 2> "$dir/stderr" \
     || fail "teardown of an unclaimed slot failed: $(cat "$dir/stderr")"
