@@ -102,6 +102,18 @@ workflow_jobs() {
 group_of() { printf '%s\n' "$1" | cut -f1; }
 cancel_of() { printf '%s\n' "$1" | cut -f2; }
 
+test_branch_filters_cover_main_and_integration_prs() {
+  ruby -ryaml - "$CI_WORKFLOW" <<'RUBY' || fail "CI branch-filter contract"
+events = YAML.load_file(ARGV[0]).fetch(true)
+push_branches = events.fetch("push").fetch("branches")
+pr_branches = events.fetch("pull_request").fetch("branches")
+raise "pushes must remain limited to main" unless push_branches == ["main"]
+expected = ["main", "integration/pi-herdr-v2"]
+raise "pull requests must cover #{expected.join(" and ")}; got #{pr_branches.inspect}" unless pr_branches == expected
+RUBY
+  pass "CI runs for main and integration pull requests while pushes remain main-only"
+}
+
 test_pr_pushes_supersede_within_one_pr() {
   local first second
   first=$(resolve_concurrency pull_request 108 900001) || fail "could not resolve PR concurrency"
@@ -250,6 +262,7 @@ RUBY
 }
 
 test_ci_matrices_match_executable_partitions
+test_branch_filters_cover_main_and_integration_prs
 test_pr_pushes_supersede_within_one_pr
 test_separate_prs_do_not_cancel_each_other
 test_main_pushes_are_never_cancelled

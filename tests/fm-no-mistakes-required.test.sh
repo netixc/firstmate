@@ -6,6 +6,7 @@ set -u
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 ACTION_REF=32d396ac0f29135daf7fcb9964aba9d5f4e796d6
+WORKFLOW="$ROOT/.github/workflows/no-mistakes-required.yml"
 TMP_ROOT=$(fm_test_tmproot fm-no-mistakes-required)
 VERIFY="$TMP_ROOT/verify.py"
 OLD_SHA=1111111111111111111111111111111111111111
@@ -26,6 +27,20 @@ run_verifier() {
   local body=$1 head=$2
   PR_BODY="$body" PR_HEAD_SHA="$head" PR_AUTHOR=regression PR_NUMBER=3006 \
     python3 "$VERIFY" 2>&1
+}
+
+test_branch_filter_covers_main_and_integration_prs() {
+  command -v ruby >/dev/null 2>&1 || fail "ruby is required to parse the no-mistakes workflow"
+  ruby -ryaml - "$WORKFLOW" <<'RUBY' || fail "no-mistakes branch-filter contract"
+events = YAML.load_file(ARGV[0]).fetch(true)
+pull_request = events.fetch("pull_request")
+expected_types = ["opened", "edited", "synchronize", "reopened"]
+raise "pull-request event types changed" unless pull_request.fetch("types") == expected_types
+expected_branches = ["main", "integration/pi-herdr-v2"]
+actual = pull_request.fetch("branches")
+raise "pull requests must cover #{expected_branches.join(" and ")}; got #{actual.inspect}" unless actual == expected_branches
+RUBY
+  pass "no-mistakes compliance runs for main and integration pull requests"
 }
 
 test_matching_head_and_completed_steps_pass() {
@@ -66,6 +81,7 @@ test_missing_head_fails() {
   pass "shared action rejects an attestation with no head_sha"
 }
 
+test_branch_filter_covers_main_and_integration_prs
 fetch_shared_verifier
 test_matching_head_and_completed_steps_pass
 test_mismatched_head_fails_with_both_shas

@@ -3226,6 +3226,14 @@ EOF
       exit 1
     fi
     T="$HERDR_SES:$HERDR_PANE_ID"
+    if [ "$HERDR_PROJECTED" -eq 1 ]; then
+      # Projection create or reclaim, exact binding publication, ordering, and
+      # focus restoration are complete. Generic shell setup and worker launch
+      # do not mutate presentation state, so they must not retain the shared
+      # session lock and starve an unrelated home's recovery. A later abort
+      # reacquires this lock before exact projected-pane cleanup.
+      spawn_herdr_presentation_order_lock_release
+    fi
     ;;
   zellij)
     ZELLIJ_SES=$(fm_backend_zellij_container_ensure) || exit 1
@@ -4585,7 +4593,6 @@ spawn_send_literal "$T" "$LAUNCH"
 sleep 0.3
 if [ "${HERDR_PROJECTED:-0}" -eq 1 ]; then
   HERDR_PROJECTION_ABORT_CLEANUP=0
-  spawn_herdr_presentation_order_lock_release
 fi
 spawn_send_key "$T" Enter
 if [ "$HARNESS" = kimi ]; then

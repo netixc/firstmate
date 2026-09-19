@@ -4,9 +4,10 @@
 # This is opt-in because it launches a real interactive Pi process and a real
 # isolated Herdr lab session.
 # It exercises the end-user command shape against metadata written by a real
-# fm-spawn.sh --secondmate launch, captures Pi's before_agent_start prompt bytes,
-# and proves both sides of the routing boundary:
-#   - exact task id through explicit FM_HOME receives exactly one marker;
+# fm-spawn.sh --secondmate launch, captures Pi's input and before_agent_start
+# bytes, and proves both sides of the routing boundary:
+#   - exact task id through explicit FM_HOME receives exactly one marker in its
+#     durable inbox record and acknowledges that record;
 #   - direct terminal input remains unmarked.
 #
 # Every Herdr call, including calls made inside the production backend adapter,
@@ -88,18 +89,42 @@ Stay idle and do not initiate work.
 EOF
 
 # A separate explicit Pi extension grants session-only project trust, records
-# before_agent_start prompt bytes, and aborts before any provider request.
+# before_agent_start prompt bytes, handles the durable inbox doorbell through
+# Pi's input hook, and aborts every real turn before any provider request.
 # The PATH wrapper adds only that test resource while preserving the production
 # secondmate launch and its own extension arguments unchanged.
 CAPTURE_JSON=$(printf '%s' "$CAPTURE" | jq -Rs .)
 CAPTURE_EXTENSION="$TMP_ROOT/fm-send-marker-capture.ts"
 cat > "$CAPTURE_EXTENSION" <<EOF
-import { appendFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, readdirSync, renameSync } from "node:fs";
+import { join } from "node:path";
 const capturePath = $CAPTURE_JSON;
 export default function (pi: any) {
   pi.on("project_trust", () => ({ trusted: "yes", remember: false }));
+  pi.on("input", (event) => {
+    const prompt = String(event.text ?? "");
+    const match = prompt.match(/list '([^']+)'\\/\\*\\.msg/);
+    if (!match) return { action: "continue" };
+    const inbox = match[1];
+    const handled = join(inbox, "handled");
+    mkdirSync(handled, { recursive: true });
+    const records = readdirSync(inbox)
+      .filter((name) => /^\\d+\\.msg$/.test(name))
+      .map((name) => ({ name, sequence: Number(name.slice(0, -4)) }))
+      .sort((left, right) => left.sequence - right.sequence);
+    for (const record of records) {
+      const source = join(inbox, record.name);
+      const raw = readFileSync(source, "utf8");
+      const separator = raw.indexOf("\\n--\\n");
+      if (separator < 0) throw new Error("missing inbox separator in " + source);
+      const body = raw.slice(separator + 4);
+      appendFileSync(capturePath, \`\${JSON.stringify({ kind: "inbox", prompt, body, hex: Buffer.from(body, "utf8").toString("hex") })}\\n\`);
+      renameSync(source, join(handled, record.name));
+    }
+    return { action: "handled" };
+  });
   pi.on("before_agent_start", (event, ctx) => {
-    appendFileSync(capturePath, \`\${JSON.stringify({ prompt: event.prompt, hex: Buffer.from(event.prompt, "utf8").toString("hex") })}\\n\`);
+    appendFileSync(capturePath, \`\${JSON.stringify({ kind: "prompt", prompt: event.prompt, hex: Buffer.from(event.prompt, "utf8").toString("hex") })}\\n\`);
     ctx.abort();
   });
 }
@@ -158,13 +183,23 @@ wait_for_idle || fail "real Pi did not become idle after the startup capture"
 
 PATH="$FAKEBIN:$ORIGINAL_PATH" FM_GATE_REFUSE_BYPASS=1 FM_HOME="$SENDER_HOME" \
   "$ROOT/bin/fm-send.sh" "$ID" "$REQUEST" >/dev/null
-wait_for_prompt "$REQUEST" || fail "real Pi did not receive the exact-id fm-send request"
-GOT=$(jq -r --arg needle "$REQUEST" 'select(.prompt | contains($needle)) | .prompt' "$CAPTURE" | tail -1)
-[ "$GOT" = "${FM_FROMFIRST_MARK}${REQUEST}" ] \
-  || fail "real Pi exact-id prompt did not contain exactly one terminal-safe marker"$'\n'"--- bytes ---"$'\n'"$(printf '%s' "$GOT" | od -An -tx1)"
+HANDLED="$SENDER_HOME/state/$ID.inbox/handled/001.msg"
+for _ in $(seq 1 240); do
+  [ -f "$HANDLED" ] && break
+  sleep 0.25
+done
+[ -f "$HANDLED" ] || fail "real Pi did not acknowledge the exact-id durable inbox record"
+GOT=$(jq -r --arg needle "$REQUEST" 'select(.kind == "inbox" and (.body | contains($needle))) | .body' "$CAPTURE" | tail -1)
+fm_message_from_firstmate "$GOT" \
+  || fail "real Pi exact-id inbox body did not contain the terminal-safe marker"$'\n'"--- bytes ---"$'\n'"$(printf '%s' "$GOT" | od -An -tx1)"
+REST=${GOT#"$FM_FROMFIRST_MARK"}
+case "$REST" in
+  *"$FM_FROMFIRST_MARK"*) fail "real Pi exact-id inbox body contained more than one marker" ;;
+esac
+assert_contains "$REST" "$REQUEST" "real Pi exact-id inbox body lost the requested text"
 printf 'evidence: exact-id received-hex=%s\n' "$(printf '%s' "$GOT" | od -An -tx1 | tr -d ' \n')"
-pass "real Pi/Herdr: exact-id FM_HOME send delivers exactly one from-firstmate marker"
-wait_for_idle || fail "real Pi did not become idle after the exact-id capture"
+pass "real Pi/Herdr: exact-id FM_HOME send delivers exactly one from-firstmate marker and acknowledges its durable record"
+wait_for_idle || fail "real Pi did not remain idle after handling the exact-id doorbell"
 
 # Direct terminal input bypasses fm-send's metadata-routed transformation and
 # therefore remains conversational captain input.
