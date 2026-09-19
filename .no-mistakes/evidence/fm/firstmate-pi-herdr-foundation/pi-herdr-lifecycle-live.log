@@ -1,0 +1,16 @@
+ok - real Pi/Herdr: production spawn reached a credential-safe session in a fresh isolated worktree
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no live watcher process holds this home lock (last beat: 8s ago).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the requested message WILL still be sent.
+●  repair missing watcher supervision according to the session-start block for this harness; do not use shell &.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ok - real Pi/Herdr: durable instruction delivery and handled acknowledgement complete through production wrappers
+ok - real Pi/Herdr: interrupt and graceful exit leave the exact pane as a recoverable dead shell
+ok - real Pi/Herdr: same-endpoint relaunch preserves the isolated worktree
+WARNING: watcher still down (same stale episode; last beat: 18s ago, grace 300s) - full banner already printed this episode.
+teardown: reaping leaked worktree process(es) for pi-herdr-life: 37985 43011
+teardown: force-killing leaked worktree process(es) for pi-herdr-life: 37985
+ok - real Pi/Herdr: exact cleanup returns the isolated worktree and removes task endpoint, inbox, and worker records
+ok - credential-safe plain Pi lifecycle completed on Herdr with the default session unchanged

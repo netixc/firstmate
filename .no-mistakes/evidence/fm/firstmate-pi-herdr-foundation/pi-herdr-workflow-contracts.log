@@ -1,0 +1,14 @@
+ok - CI matrices cover every executable serial lane and canonical lint root exactly once
+ok - CI runs for main and integration pull requests while pushes remain main-only
+ok - a newer push to one PR supersedes that PR's in-flight CI
+ok - distinct PRs get distinct concurrency groups
+ok - every main push keeps its own group and is never cancelled
+ok - every ci.yml job carries a finite timeout
+ok - every ci.yml job belongs to one of the three timeout tiers
+ok - fast tier jobs share one 5 minute tripwire
+ok - normal tier jobs share one 30 minute budget
+ok - Herdr keeps a 20 minute step tripwire under a 75 minute job backstop
+ok - no-mistakes compliance runs for main and integration pull requests
+ok - shared action accepts a matching head_sha with completed required steps
+ok - shared action rejects a mismatched head_sha and names both SHAs
+ok - shared action rejects an attestation with no head_sha
