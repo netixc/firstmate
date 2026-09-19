@@ -302,7 +302,7 @@ test_same_harness_relaunch_keeps_identity_and_reuses_the_endpoint() {
   add_ship_task "$dir" rl1 pi
   gen_before=$("$ROOT/bin/fm-busy-event.sh" arm "$dir/home/state" rl1)
   printf 'busy_gen=%s\n' "$gen_before" >> "$dir/home/state/rl1.meta"
-  out=$(FM_GATE_REFUSE_BYPASS='' run_control "$dir" rl1 relaunch --note "stopped mid-refactor"); rc=$?
+  out=$(run_control "$dir" rl1 relaunch --note "stopped mid-refactor"); rc=$?
   expect_code 0 "$rc" "a same-harness relaunch should succeed"$'\n'"$out"
   assert_contains "$out" "relaunched rl1 harness=pi from=pi" "the outcome should name the transition"
   [ "$(meta_field "$dir" rl1 window)" = "fmses:fm-rl1" ] \
@@ -586,6 +586,7 @@ test_secondmate_relaunch_picks_up_the_configured_harness_pin() {
   {
     echo "window=fmses:fm-sm3"
     echo "endpoint_task_id=sm3"
+    echo "backend=tmux"
     echo "worktree=$dir/smhome"
     echo "project=$dir/smhome"
     echo "harness=pi"
@@ -625,6 +626,7 @@ test_secondmate_relaunch_rejects_unsupported_configured_harness_before_stop() {
   {
     echo "window=fmses:fm-sm5"
     echo "endpoint_task_id=sm5"
+    echo "backend=tmux"
     echo "worktree=$dir/smhome"
     echo "project=$dir/smhome"
     echo "harness=pi"
@@ -661,6 +663,7 @@ test_secondmate_relaunch_ignores_invalid_configured_effort_before_stop() {
   {
     echo "window=fmses:fm-sm6"
     echo "endpoint_task_id=sm6"
+    echo "backend=tmux"
     echo "worktree=$dir/smhome"
     echo "project=$dir/smhome"
     echo "harness=pi"
@@ -698,6 +701,7 @@ test_explicit_secondmate_harness_ignores_configured_profile_axes() {
   {
     echo "window=fmses:fm-sm4"
     echo "endpoint_task_id=sm4"
+    echo "backend=tmux"
     echo "worktree=$dir/smhome"
     echo "project=$dir/smhome"
     echo "harness=pi"
@@ -976,11 +980,12 @@ test_secondmate_relaunch_checkpoints_child_work_and_spares_the_charter() {
   printf 'sm1\n' > "$dir/smhome/.fm-secondmate-home"
   printf '# charter\n' > "$dir/smhome/data/charter.md"
   printf '# agents\n' > "$dir/smhome/AGENTS.md"
-  printf 'window=x:fm-c1\n' > "$dir/smhome/state/c1.meta"
-  printf 'window=x:fm-c2\n' > "$dir/smhome/state/c2.meta"
+  printf 'window=x:fm-c1\nbackend=tmux\n' > "$dir/smhome/state/c1.meta"
+  printf 'window=x:fm-c2\nbackend=tmux\n' > "$dir/smhome/state/c2.meta"
   {
     echo "window=fmses:fm-sm1"
     echo "endpoint_task_id=sm1"
+    echo "backend=tmux"
     echo "worktree=$dir/smhome"
     echo "project=$dir/smhome"
     echo "harness=pi"
@@ -1020,6 +1025,7 @@ test_secondmate_relaunch_refuses_an_unmarked_home() {
   {
     echo "window=fmses:fm-sm2"
     echo "endpoint_task_id=sm2"
+    echo "backend=tmux"
     echo "worktree=$dir/smhome"
     echo "project=$dir/smhome"
     echo "harness=pi"
@@ -1048,6 +1054,7 @@ test_secondmate_checkpoint_refuses_unreadable_child_state() {
   {
     echo "window=fmses:fm-sm5"
     echo "endpoint_task_id=sm5"
+    echo "backend=tmux"
     echo "worktree=$dir/smhome"
     echo "project=$dir/smhome"
     echo "harness=pi"

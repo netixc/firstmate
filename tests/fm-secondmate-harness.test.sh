@@ -856,6 +856,7 @@ add_sm_worktree() {
   printf '%s\n' "$id" > "$w/$id/.fm-secondmate-home"
   {
     printf 'window=firstmate:fm-%s\n' "$id"
+    printf 'backend=tmux\n'
     printf 'kind=secondmate\n'
     printf 'home=%s/%s\n' "$w" "$id"
   } > "$w/home/state/$id.meta"
