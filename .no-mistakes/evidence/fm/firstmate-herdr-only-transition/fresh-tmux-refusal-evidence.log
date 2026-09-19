@@ -1,0 +1,4 @@
+$ fresh tmux selection refusal (flag, environment, inherited config)
+flag rc=1: error: backend 'tmux' is rollback-only and cannot create a fresh endpoint; remove the tmux override or select herdr. Existing records with explicit backend=tmux remain available for safe read, control, relaunch, and cleanup.
+env rc=1: error: backend 'tmux' is rollback-only and cannot create a fresh endpoint; remove the tmux override or select herdr. Existing records with explicit backend=tmux remain available for safe read, control, relaunch, and cleanup.
+config rc=1: error: backend 'tmux' is rollback-only and cannot create a fresh endpoint; remove the tmux override or select herdr. Existing records with explicit backend=tmux remain available for safe read, control, relaunch, and cleanup.

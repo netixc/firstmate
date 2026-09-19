@@ -1,0 +1,14 @@
+$ fresh tmux selection refusal (flag, environment, inherited config)
+flag rc=3: error: no-mistakes gate agent must not drive the fleet (NO_MISTAKES_GATE set)
+env rc=3: error: no-mistakes gate agent must not drive the fleet (NO_MISTAKES_GATE set)
+config rc=3: error: no-mistakes gate agent must not drive the fleet (NO_MISTAKES_GATE set)
+
+$ backend-less endpoint refusal before runtime targeting
+backendless rc=1: ●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  repair a missing or failed watcher cycle with the Pi tool fm_watch_arm_pi, or restart Pi with -e /Users/control/.no-mistakes/worktrees/874f0de57f61/01M2WGCFXEKRCNNQNA3CKT6110/.pi/extensions/fm-primary-turnend-guard.ts -e /Users/control/.no-mistakes/worktrees/874f0de57f61/01M2WGCFXEKRCNNQNA3CKT6110/.pi/extensions/fm-primary-pi-watch.ts if the extensions are not loaded.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+error: endpoint metadata /tmp/fm-backend-phase.wFC7Uw/state/ambiguous.meta has a missing or ambiguous backend= identity; refusing to guess tmux or herdr
