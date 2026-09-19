@@ -6,6 +6,7 @@ on:
     types: [opened, edited, synchronize, reopened]
     branches:
       - main
+      - integration/pi-herdr-v2
 
 permissions:
   contents: read
