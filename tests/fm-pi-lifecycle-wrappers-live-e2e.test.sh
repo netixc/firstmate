@@ -129,7 +129,14 @@ export default function (pi: any) {
     if (match) {
       const inbox = match[1];
       mkdirSync(join(inbox, "handled"), { recursive: true });
-      const files = readdirSync(inbox).filter((name) => /^\\d+\\.msg$/.test(name)).sort();
+      let files = readdirSync(inbox).filter((name) => /^\\d+\\.msg$/.test(name));
+      if (files.length < 2) return;
+      if (files.length >= 2 && files.includes("001.msg") && files.includes("002.msg")) {
+        renameSync(join(inbox, "001.msg"), join(inbox, "010.msg"));
+        renameSync(join(inbox, "002.msg"), join(inbox, "2.msg"));
+        files = ["010.msg", "2.msg"];
+      }
+      files.sort((left, right) => Number.parseInt(left, 10) - Number.parseInt(right, 10));
       for (const name of files) {
         const source = join(inbox, name);
         const raw = readFileSync(source, "utf8");
@@ -200,37 +207,11 @@ wait_for_capture_count() { # <home> <needle> <count>
   return 1
 }
 
-find_inbox_record() { # <inbox>
-  local inbox=$1 candidate name found='' count=0
-  for candidate in "$inbox"/*.msg "$inbox/handled"/*.msg; do
-    [ -f "$candidate" ] || continue
-    name=${candidate##*/}
-    case "${name%.msg}" in
-      ''|*[!0-9]*) continue ;;
-    esac
-    found=$candidate
-    count=$((count + 1))
-  done
-  [ "$count" -eq 1 ] || return 1
-  printf '%s\n' "$found"
-}
-
-wait_for_inbox_record() { # <inbox>
-  local inbox=$1 record _
+wait_for_handled_count() { # <handled-dir> <count>
+  local handled=$1 count=$2 found _
   for _ in $(seq 1 240); do
-    if record=$(find_inbox_record "$inbox"); then
-      printf '%s\n' "$record"
-      return 0
-    fi
-    sleep 0.25
-  done
-  return 1
-}
-
-wait_for_handled() { # <handled-record>
-  local handled=$1 _
-  for _ in $(seq 1 240); do
-    [ -f "$handled" ] && return 0
+    found=$(find "$handled" -maxdepth 1 -type f -name '*.msg' | wc -l | tr -d ' ')
+    [ "$found" -ge "$count" ] && return 0
     sleep 0.25
   done
   return 1
@@ -238,8 +219,9 @@ wait_for_handled() { # <handled-record>
 
 run_backend_lifecycle() { # <herdr|tmux>
   local backend=$1 id="live-${1}" parent="$TMP_ROOT/${1}-parent" mate="$TMP_ROOT/${1}-mate"
-  local request="durable request for $1" direct="direct terminal input for $1"
-  local meta target record handled body corr pending phase got
+  local request="durable request for $1" request_two="second durable request for $1" direct="direct terminal input for $1"
+  local meta target body corr pending phase got handled_count corr_two body_two order
+  local -a handled_records
 
   mkdir -p "$parent/state" "$parent/data" "$parent/config" "$parent/projects"
   printf 'pi\n' > "$parent/config/secondmate-harness"
@@ -272,22 +254,29 @@ run_backend_lifecycle() { # <herdr|tmux>
 
   prod "$backend" "$parent" "$ROOT/bin/fm-send.sh" "$id" "$request" >/dev/null \
     || fail "$backend: production send wrapper failed"
-  record=$(wait_for_inbox_record "$parent/state/$id.inbox") \
-    || fail "$backend: send did not leave exactly one numeric task inbox record"
-  record="$parent/state/$id.inbox/${record##*/}"
-  handled="$parent/state/$id.inbox/handled/${record##*/}"
-  wait_for_handled "$handled" || fail "$backend: worker did not acknowledge the durable inbox record"
-  [ ! -e "$record" ] || fail "$backend: acknowledged inbox record remained unhandled"
-  [ -f "$handled" ] || fail "$backend: acknowledged inbox record was not moved into handled/"
-  body=$(fm_task_inbox_body "$handled") || fail "$backend: handled record body could not be read"
-  assert_contains "$body" "$request" "$backend: handled record was not routed to the exact requested task"
-  fm_message_from_firstmate "$body" || fail "$backend: secondmate inbox body lost its Firstmate routing marker"
+  prod "$backend" "$parent" "$ROOT/bin/fm-send.sh" "$id" "$request_two" >/dev/null \
+    || fail "$backend: production send wrapper failed for the second record"
+  wait_for_handled_count "$parent/state/$id.inbox/handled" 2 \
+    || fail "$backend: worker did not acknowledge both durable inbox records"
+  handled_count=$(find "$parent/state/$id.inbox/handled" -maxdepth 1 -type f -name '*.msg' | wc -l | tr -d ' ')
+  [ "$handled_count" -eq 2 ] || fail "$backend: expected exactly two handled inbox records"
+  mapfile -t handled_records < <(find "$parent/state/$id.inbox/handled" -maxdepth 1 -type f -name '*.msg' -print | sort)
+  [ "${#handled_records[@]}" -eq 2 ] || fail "$backend: handled inbox records were not discoverable"
+  body=$(fm_task_inbox_body "${handled_records[0]}") || fail "$backend: first handled record body could not be read"
+  body_two=$(fm_task_inbox_body "${handled_records[1]}") || fail "$backend: second handled record body could not be read"
+  assert_contains "$body" "$request" "$backend: first handled record was not routed to the exact requested task"
+  assert_contains "$body_two" "$request_two" "$backend: second handled record was not routed to the exact requested task"
+  fm_message_from_firstmate "$body" || fail "$backend: first inbox body lost its Firstmate routing marker"
+  fm_message_from_firstmate "$body_two" || fail "$backend: second inbox body lost its Firstmate routing marker"
   corr=$(fm_pending_reply_extract_corr "$body")
-  [ -n "$corr" ] || fail "$backend: routed request did not carry a pending-reply correlation"
-  [ -f "$ACTED_DIR/$id" ] || fail "$backend: exact inbox action was not recorded"
+  corr_two=$(fm_pending_reply_extract_corr "$body_two")
+  [ -n "$corr" ] || fail "$backend: first routed request did not carry a pending-reply correlation"
+  [ -n "$corr_two" ] || fail "$backend: second routed request did not carry a pending-reply correlation"
+  [ -f "$ACTED_DIR/$id" ] || fail "$backend: exact inbox actions were not recorded"
+  order=$(jq -r --arg home "$mate" 'select(.kind == "inbox" and (.inbox | startswith($home))) | .file' "$CAPTURE" | tail -2 | paste -sd, -)
+  [ "$order" = "2.msg,010.msg" ] || fail "$backend: durable inbox records were not processed in numeric order (observed $order)"
   [ -z "$(find "$parent/state" -maxdepth 1 -type d -name '*.inbox' ! -name "$id.inbox" -print -quit)" ] \
     || fail "$backend: send created an inbox for a task other than $id"
-
   pending=$(fm_pending_reply_path "$parent/state" "$corr")
   [ -f "$pending" ] || fail "$backend: parent pending-reply record is missing"
   [ "$(fm_pending_reply_get "$pending" task_id)" = "$id" ] \
@@ -298,7 +287,17 @@ run_backend_lifecycle() { # <herdr|tmux>
     || fail "$backend: correlated parent response did not resolve the pending reply"
   phase=$(fm_pending_reply_get "$pending" phase)
   [ "$phase" = resolved ] || fail "$backend: pending reply remained in phase $phase"
-  pass "real Pi/$backend: exact durable routing, handled acknowledgement, correlation, and routed response all hold"
+  pending=$(fm_pending_reply_path "$parent/state" "$corr_two")
+  [ -f "$pending" ] || fail "$backend: second parent pending-reply record is missing"
+  [ "$(fm_pending_reply_get "$pending" task_id)" = "$id" ] \
+    || fail "$backend: second pending-reply correlation points at the wrong task"
+  grep -Eq "^done \[corr=$corr_two\]: live routed response \(via-helper\)$" "$parent/state/$id.status" \
+    || fail "$backend: second correlated response did not return through the parent status channel"
+  fm_pending_reply_try_resolve "$parent/state" "$corr_two" \
+    || fail "$backend: second correlated parent response did not resolve the pending reply"
+  phase=$(fm_pending_reply_get "$pending" phase)
+  [ "$phase" = resolved ] || fail "$backend: second pending reply remained in phase $phase"
+  pass "real Pi/$backend: numeric inbox order, exact durable routing, handled acknowledgement, correlation, and routed responses all hold"
 
   prod "$backend" "$parent" "$ROOT/bin/fm-control.sh" "$id" interrupt >/dev/null \
     || fail "$backend: production interrupt wrapper failed"
