@@ -1112,7 +1112,7 @@ Observed restart-reclaim guarantees:
 ```text
 ok - real Herdr lab: Hi Bit and Wheelhouse-style same-identity restarts reclaim one nested space with exact focus and idempotence
 ok - real Herdr lab: secondmate restart binding and reclaim stay isolated to the exact child home and parent
-ok - real Herdr lab: concurrent cross-home recoveries replace exact husks under one session lock with no focus drift
+ok - real Herdr lab: concurrent cross-home recoveries replace exact husks under the presentation lock's mutation window with no focus drift
 ok - real Herdr lab: missing, renamed, and duplicate tokens trigger zero destructive or adoptive calls, and live duplicate risk refuses launch
 ok - real Herdr lab validation completed on Herdr 0.7.5 with the default-session tripwire intact
 ```
